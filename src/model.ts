@@ -1,4 +1,5 @@
 import type { AgentImage, AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
+import type { AutofixEvent } from './git/autofix.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -11,36 +12,22 @@ import { longThreadFromUrl } from './longThread.ts';
 import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
-export type Size = 1 | 2 | 3;
-export type StepStatus = 'done' | 'running' | 'ready' | 'waiting' | 'blocked' | 'dropped';
+export type StepStatus = 'done' | 'running' | 'ready' | 'blocked' | 'dropped';
 export type ThreadStatus = 'running' | 'needs-you' | 'review' | 'settled';
 export type LineSlot = 1 | 2 | 3 | 4 | 5;
 
-export type StepLink =
-  | { mode: 'provided-by'; threadId: string; stepId: string }
-  | { mode: 'provides-for'; threadIds: string[] }
-  | { mode: 'race'; threadId: string; stepId: string }
-  | { mode: 'related'; threadId: string; stepId: string };
-
+/** One item of the agent's own to-do list, mirrored as it plans (`applyPlan`); never the goal, which is its criteria. */
 export interface Step {
   id: string;
   title: string;
-  size: Size;
   status: StepStatus;
-  progress: number;
-  footprint: string[];
   addedAt: number;
   addedBy: Author;
-  revision: number;
   startedAt?: number;
   doneAt?: number;
   droppedAt?: number;
+  /** Why it's blocked or was dropped. */
   note?: string;
-  link?: StepLink;
-  sharedKey?: string;
-  gate?: boolean;
-  acceptance?: { text: string; command?: string };
-  owner?: Provider;
 }
 
 /** What done means for a goal: checkable (a command Mochi can run) or judged (a sentence). */
@@ -54,8 +41,8 @@ export interface Criterion {
   check?: { status: 'running' | 'passed' | 'failed'; at: number; ms?: number; output?: string };
 }
 
-/** Met when its check passed, or the agent claimed it and no check failed since. */
-export const isMet = (c: Criterion) => c.check?.status === 'passed' || (!!c.claim && c.check?.status !== 'failed');
+/** Met when its check passed. One with a command counts only then; one you judge also counts once the agent claims it or you confirm it. */
+export const isMet = (c: Criterion, isConfirmed = false) => c.check?.status === 'passed' || (!c.command && (!!c.claim || isConfirmed));
 
 /** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
 export interface TurnReport {
@@ -65,9 +52,21 @@ export interface TurnReport {
   left: string[];
   /** The one thing that needs you, if anything. */
   question?: string;
+  /** What changed, in your terms: the next-move card's opening lines. */
+  summary?: string;
+  /** The next move as one question naming the exact thing ("Commit the cookie fix and its test?"). */
+  next?: string;
+  /** The agent's answers to `next`, its pick first: the next-move card's buttons. */
+  options?: NextOption[];
 }
 
-/** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
+/** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
+export interface NextOption {
+  label: string;
+  reply: string;
+  isDraft?: boolean;
+}
+
 /** A goal the agent wrote after its first look: waiting for your Accept, or applied with an Undo (Settings › Goals and checks). */
 export interface GoalProposal {
   goal: string;
@@ -93,6 +92,10 @@ export interface IdleCheck {
   accepted: string[];
   /** You chose Open anyway: open_pr goes ahead past this turn's critical gaps. */
   canOpenPr?: boolean;
+  /** You said this turn got you what you wanted: what only you can check counts as met, until your next message. */
+  isConfirmed?: boolean;
+  /** You answered this turn's next-move card (or wrote instead); it stays in the chat as a record, not a card. */
+  isMoveAnswered?: boolean;
 }
 
 /** What the agent's last turn says, read by a model: a question it asked in prose, things it says it didn't verify. */
@@ -101,6 +104,7 @@ export interface TurnAudit {
   unverified: { text: string; quote: string }[];
 }
 
+/** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
 export interface Similar {
   threadId: string;
   relation: 'same' | 'related';
@@ -137,6 +141,9 @@ export interface ActivityEntry {
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
+  /** Events only: what kind of action, for its icon (`EventLine`), and the page it happened on, shown as favicon and host. */
+  glyph?: EventGlyph;
+  site?: string;
   /** `subagent` entries: the row in `Thread.subagents` this one shows, where it was started. */
   subagentId?: string;
   /** Wall-clock milliseconds, stamped on live agents' entries; `at` is the app clock's minute. */
@@ -147,7 +154,7 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
-  /** Your messages: thumbnails (data URLs) of the images sent with it. Tool entries: images the call returned, as absolute paths. */
+  /** Your messages: the images sent with it, as `shownImage` gives them. Tool entries: images the call returned, as absolute paths. */
   images?: string[];
   /** Tool entries: the image this call made, shown as its own card in the transcript. */
   generated?: GeneratedImage;
@@ -155,12 +162,31 @@ export interface ActivityEntry {
   widget?: McpWidget;
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
   turnUndo?: { start: number; isUndone: boolean };
+  /** Events only: a next-move card you answered, kept where it was: its summary, its question and what you picked (none when you wrote instead). */
+  nextMove?: { summary?: string; question: string; answer?: string };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
   from?: ThreadRef;
+  /** Messages: an Auto-fix event Mochi sent the agent about one of the thread's PRs; `text` is the event, the row shows `title`. */
+  autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
+  /** Events only: a sub-thread handed its result back here. */
+  subThread?: { threadId: string; title: string; text: string };
   /** Tool entries: the message this `send_to_thread` call delivered. */
   sent?: ThreadRef & { text: string };
   /** Events only: the harness compacted the conversation here. */
   compaction?: Compaction;
+  /** Events only: the thread moved to the other agent here. */
+  handoff?: Handoff;
+}
+
+/** A handoff to the other agent: drafting while a model writes `prompt`, started once the new agent has it as its first message. */
+export interface Handoff {
+  from: Provider;
+  to: Provider;
+  status: 'drafting' | 'started' | 'failed';
+  prompt?: string;
+  /** Why `prompt` is the local summary instead of a model's draft. */
+  fallback?: 'timeout' | 'error';
+  error?: string;
 }
 
 /**
@@ -180,6 +206,14 @@ export interface Compaction {
 }
 
 /** Another thread, with its title when the entry was written; a renamed or deleted thread still reads. `threadId` is missing only on messages migrated from the old `From "…":` prefix whose sender is gone. */
+export interface SubThreadLink {
+  threadId: string;
+  /** The parent's criterion this sub-thread covers; handing back claims it. Unset when nested by hand. */
+  criterionId?: string;
+  /** Its result went back to the parent (`subthread-handback`); the parent stops waiting on it. */
+  handedBackAt?: number;
+}
+
 export interface ThreadRef {
   threadId?: string;
   title: string;
@@ -198,6 +232,8 @@ export interface GeneratedImage {
 export interface McpCall {
   server: string;
   tool: string;
+  /** The connector account it acted as, when the profile has several on the server (`__mochi_account`). */
+  account?: string;
 }
 
 /**
@@ -224,6 +260,9 @@ export interface McpWidgetResource {
   meta?: Record<string, unknown>;
 }
 
+/** The icon an action's line in a thread gets; everything else keeps the flag. */
+export type EventGlyph = 'click' | 'type' | 'browse';
+
 export interface WebLink {
   url: string;
   title?: string;
@@ -246,6 +285,7 @@ export interface Source {
 /** What the agent reports about its session: what it can reach, not what it used. Fields can arrive separately (Codex lists them after start), so each is optional. */
 export interface AgentInfo {
   model?: string;
+  effort?: string;
   cwd?: string;
   /** In the agent's own terms: Claude's permission mode, Codex's approval policy and sandbox. */
   permissionMode?: string;
@@ -282,6 +322,8 @@ export interface PullRequest {
   title: string;
   /** Live PRs from `gh`; the demo fixtures have none, so their rows don't open anything. */
   url?: string;
+  /** Auto-fix is on (`src/git/autofix.ts`) since this epoch ms. */
+  autofixSince?: number;
 }
 
 /**
@@ -291,6 +333,8 @@ export interface PullRequest {
  * worktree or switched to in the folder, instead of created.
  */
 export interface Repo {
+  /** The initial automatic name, eligible for renaming once the task has a summary. */
+  autoBranch?: string;
   project: string;
   branch: string;
   path?: string;
@@ -316,6 +360,8 @@ export interface Thread {
   criteria?: Criterion[];
   /** Open until you dismiss them on the goal card. */
   similar?: Similar[];
+  /** A sub-thread: the thread it was started for or nested under, and the parent's criterion it covers when known. */
+  parent?: SubThreadLink;
   /** You removed the goal: drafts don't bring it back, an edit does. */
   isGoalOff?: boolean;
   /** The latest `report`; a newer message from you starts a turn it no longer describes. */
@@ -334,6 +380,8 @@ export interface Thread {
   sources: Source[];
   context: { used: number; max: number };
   orbitSlot?: number;
+  /** Where its pin sorts among all your computers' pins (`pinOrderOf`); unset while unpinned. */
+  pinOrder?: number;
   settledAt?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };
@@ -353,6 +401,8 @@ export interface Thread {
   queued?: QueuedMessage[];
   /** Why the queue stopped sending; cleared by your next send or Resume. */
   queuePause?: QueuePause;
+  /** How many `activity` entries you had seen when you last had it open, on any device; more now is unread. */
+  seenActivity?: number;
 }
 
 /** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
@@ -369,17 +419,19 @@ export interface QueuedMessage {
   typedSkills: string[];
 }
 
-/** An image you sent: what the agent gets, and the small copy (`thumb`, a data URL) the transcript shows. */
+/** An image you sent: what the agent gets, a small copy (`thumb`, a data URL), and where the original was kept (`original`). */
 export interface SentImage extends AgentImage {
   thumb: string;
+  /** A file path on desktop, the data URL in the web build; unset for images sent from a phone or before originals were kept. */
+  original?: string;
 }
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
 
-/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a Mochi background agent (`start_background_agent`). */
+/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a task delegated to another provider (`delegate_task`). */
 export interface Subagent {
   id: string;
-  /** `mochi`: a background agent Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
+  /** `mochi`: a delegated task Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
   origin: 'native' | 'mochi';
   provider: Provider;
   name: string;
@@ -402,6 +454,8 @@ export interface Subagent {
   /** Mochi agents: the folder they run in, and whether it is a worktree of their own (else the parent's, shared). */
   cwd?: string;
   hasOwnWorktree?: boolean;
+  /** Mochi agents: it ended on its own and its report hasn't reached this thread's agent yet (`dueReports`). */
+  isReportDue?: boolean;
 }
 
 export interface SubagentStep {
@@ -417,6 +471,8 @@ export interface SubagentStep {
 
 export interface LiveRun {
   isWorking: boolean;
+  /** How the last turn ended, for an alert on another computer that only sees it stop working. */
+  turnEnd?: 'done' | 'interrupted' | 'failed';
   /** Mochi launched this agent and it hasn't reported anything yet. */
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
@@ -432,14 +488,14 @@ export interface LiveRun {
   eventSeq?: number;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
-  /** Background agents' reports, sent to the agent ahead of your next message. */
+  /** Codex compaction restore notes, sent to the agent ahead of your next message. */
   notes?: string[];
   /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
   restart?: { forkAt: string } | { seed: string };
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'collision' | 'setting' | 'run';
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'collision' | 'setting' | 'run';
 
 export interface QueueItem {
   id: string;
@@ -450,7 +506,6 @@ export interface QueueItem {
   code?: string;
   blocks: { steps: number; threads: number };
   questions?: AgentQuestion[];
-  overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
   /** Two live threads of one project edited the same files (repo-relative). */
   collision?: { otherThreadId: string; files: string[] };
   requestId?: string;
@@ -461,13 +516,19 @@ export interface QueueItem {
   /** A `ci` card: the PR and the first failed check, whose log "Send failing log to agent" fetches. */
   ci?: { pr: number; url: string; check?: { name: string; link?: string } };
   createdAt: number;
+  /** You looked at it, on any device. */
+  isSeen?: boolean;
 }
 
 /** What a Mochi widget asks and waits on: a delete naming exactly what goes, or a browser escalation. */
 export interface ToolWidget {
   callId: string;
   options?: { id: string; label: string }[];
+  /** `options` are radio buttons: one must be picked. */
+  pick?: 'one';
   isDestructive?: boolean;
+  /** Something only you can do in the browser (a sign-in, a code); Mochi closes it itself once the page shows it's done. */
+  isHandoff?: boolean;
   /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
   edits?: FileEdit[];
   /** Mochi's own facts under the title, like which other profiles share the account. */
@@ -590,8 +651,8 @@ export const DEFAULT_SPACES: Space[] = [
   { id: 'liane', name: 'Liane', icon: 'layers', plans: { claude: 'Max', codex: 'Plus' }, github: '' },
 ];
 
-function step(id: string, title: string, size: Size, footprint: string[], rest: Partial<Step> = {}): Step {
-  return { id, title, size, status: 'ready', progress: 0, footprint, addedAt: 0, addedBy: 'harness', revision: 1, ...rest };
+function step(id: string, title: string, rest: Partial<Step> = {}): Step {
+  return { id, title, status: 'ready', addedAt: 0, addedBy: 'harness', ...rest };
 }
 
 function at(start: number, minutes: number) {
@@ -616,26 +677,26 @@ function rateLimiting(): Thread {
       { n: 2, at: at(s, 92), label: 'Added per-key overrides', by: 'you' },
     ],
     steps: [
-      step('rl1', 'Agree limit tiers per plan', 1, ['docs/api/limits.md'], { status: 'done', progress: 1, addedAt: s, startedAt: s, doneAt: at(s, 20), addedBy: 'claude' }),
-      step('rl2', 'Design limits schema', 2, ['packages/db/schema/limits.ts'], { status: 'done', progress: 1, addedAt: s, startedAt: at(s, 20), doneAt: at(s, 58), addedBy: 'claude' }),
-      step('rl3', 'Rate limit by IP address', 1, ['apps/api/middleware/ip.ts'], { status: 'dropped', addedAt: s, droppedAt: at(s, 64), addedBy: 'claude', note: 'Dropped: tiers decision limits API keys only' }),
-      step('rl4', 'Wire limits into gateway config', 1, ['apps/api/gateway.ts'], { status: 'done', progress: 1, addedAt: s, startedAt: at(s, 58), doneAt: at(s, 84), addedBy: 'claude' }),
-      step('rl5', 'Add Redis client', 2, ['packages/cache/redis.ts', 'packages/cache/index.ts'], { status: 'running', progress: 0.12, addedAt: s, startedAt: at(s, 96), addedBy: 'claude' }),
-      step('rl6', 'Token bucket middleware', 3, ['apps/api/middleware/ratelimit.ts'], { addedAt: s, addedBy: 'claude' }),
-      step('rl7', 'Per-key overrides', 2, ['packages/db/schema/limits.ts', 'apps/api/middleware/ratelimit.ts'], { addedAt: at(s, 92), addedBy: 'you', revision: 2 }),
-      step('rl8', 'Load test at 2k req/s', 2, ['scripts/load/ratelimit.k6.js'], { addedAt: s, addedBy: 'claude' }),
-      step('rl9', 'Document 429 responses', 1, ['docs/api/errors.md'], { addedAt: s, addedBy: 'claude' }),
+      step('rl1', 'Agree limit tiers per plan', { status: 'done', addedAt: s, startedAt: s, doneAt: at(s, 20), addedBy: 'claude' }),
+      step('rl2', 'Design limits schema', { status: 'done', addedAt: s, startedAt: at(s, 20), doneAt: at(s, 58), addedBy: 'claude' }),
+      step('rl3', 'Rate limit by IP address', { status: 'dropped', addedAt: s, droppedAt: at(s, 64), addedBy: 'claude', note: 'Dropped: tiers decision limits API keys only' }),
+      step('rl4', 'Wire limits into gateway config', { status: 'done', addedAt: s, startedAt: at(s, 58), doneAt: at(s, 84), addedBy: 'claude' }),
+      step('rl5', 'Add Redis client', { status: 'running', addedAt: s, startedAt: at(s, 96), addedBy: 'claude' }),
+      step('rl6', 'Token bucket middleware', { addedAt: s, addedBy: 'claude' }),
+      step('rl7', 'Per-key overrides', { addedAt: at(s, 92), addedBy: 'you' }),
+      step('rl8', 'Load test at 2k req/s', { addedAt: s, addedBy: 'claude' }),
+      step('rl9', 'Document 429 responses', { addedAt: s, addedBy: 'claude' }),
     ],
     activity: [
       { at: s, who: 'you', kind: 'message', text: 'Rate limit the public API by plan tier. Free 60/min, Pro 600/min, Enterprise custom.' },
       { at: at(s, 1), who: 'claude', kind: 'reasoning', seconds: 11, text: 'Every public route already requires an API key, so limiting by key is stricter than by IP and avoids punishing shared NAT addresses. A token bucket in Redis keeps limits consistent across the 4 API instances; an in-memory limiter would let each instance allow the full rate.' },
       { at: at(s, 2), who: 'claude', kind: 'message', text: 'Plan: tiers doc, schema, gateway wiring, Redis-backed token bucket, load test, docs. I will rate limit by API key, not IP, since every public route needs a key.' },
       { at: at(s, 92), who: 'you', kind: 'message', text: 'Also add per-key overrides, sales wants to raise limits for a few customers.' },
-      { at: at(s, 93), who: 'harness', kind: 'event', text: 'Goal v2: +1 step "Per-key overrides"' },
+      { at: at(s, 93), who: 'harness', kind: 'event', text: 'Goal v2: added per-key overrides' },
       { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Skill sizing-the-change', skill: 'sizing-the-change' },
       { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp linear: get_issue', mcp: { server: 'linear', tool: 'get_issue' } },
       { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp mochi: get_goal', mcp: { server: 'mochi', tool: 'get_goal' } },
-      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp mochi: add_step', mcp: { server: 'mochi', tool: 'add_step' } },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp mochi: propose_goal', mcp: { server: 'mochi', tool: 'propose_goal' } },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Search redis token bucket rate limiter lua script atomic', links: DEMO_LINKS['Search redis token bucket rate limiter lua script atomic'] },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', links: DEMO_LINKS['Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/'] },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts' },
@@ -686,10 +747,10 @@ function adminDashboard(): Thread {
     orbitSlot: 2,
     revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [
-      step('ad1', 'Usage query endpoint', 2, ['apps/api/routes/admin/usage.ts'], { status: 'done', progress: 1, addedAt: s, startedAt: s, doneAt: at(s, 38), addedBy: 'codex' }),
-      step('ad2', 'Charts page', 3, ['apps/web/routes/admin/usage.tsx'], { status: 'running', progress: 0.7, addedAt: s, startedAt: at(s, 40), addedBy: 'codex' }),
-      step('ad3', 'Export CSV', 1, ['apps/api/routes/admin/usage.csv.ts'], { addedAt: s, addedBy: 'codex' }),
-      step('ad4', 'Empty and loading states', 1, ['apps/web/routes/admin/usage.tsx'], { addedAt: s, addedBy: 'codex' }),
+      step('ad1', 'Usage query endpoint', { status: 'done', addedAt: s, startedAt: s, doneAt: at(s, 38), addedBy: 'codex' }),
+      step('ad2', 'Charts page', { status: 'running', addedAt: s, startedAt: at(s, 40), addedBy: 'codex' }),
+      step('ad3', 'Export CSV', { addedAt: s, addedBy: 'codex' }),
+      step('ad4', 'Empty and loading states', { addedAt: s, addedBy: 'codex' }),
     ],
     activity: [
       { at: s, who: 'you', kind: 'message', text: 'Build the admin usage dashboard. Per key, per day, exportable. It has to stay fast at 10k keys.' },
@@ -738,10 +799,10 @@ function flakyCheckout(): Thread {
     startedAt: s,
     revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [
-      step('e1', 'Reproduce in CI', 1, ['.github/workflows/e2e.yml'], { status: 'done', progress: 1, addedAt: s, startedAt: s, doneAt: at(s, 22), addedBy: 'codex' }),
-      step('e2', 'Isolate the flaky assertion', 2, ['e2e/checkout.spec.ts'], { status: 'done', progress: 1, addedAt: s, startedAt: at(s, 22), doneAt: at(s, 48), addedBy: 'codex' }),
-      step('e3', 'Stabilize Stripe webhook timing', 2, ['e2e/fixtures/stripe.ts'], { status: 'blocked', progress: 0.1, addedAt: s, startedAt: at(s, 48), addedBy: 'codex', note: 'Waiting on your answer' }),
-      step('e4', 'Run 20× in CI', 1, ['.github/workflows/e2e.yml'], { addedAt: s, addedBy: 'codex' }),
+      step('e1', 'Reproduce in CI', { status: 'done', addedAt: s, startedAt: s, doneAt: at(s, 22), addedBy: 'codex' }),
+      step('e2', 'Isolate the flaky assertion', { status: 'done', addedAt: s, startedAt: at(s, 22), doneAt: at(s, 48), addedBy: 'codex' }),
+      step('e3', 'Stabilize Stripe webhook timing', { status: 'blocked', addedAt: s, startedAt: at(s, 48), addedBy: 'codex', note: 'Waiting on your answer' }),
+      step('e4', 'Run 20× in CI', { addedAt: s, addedBy: 'codex' }),
     ],
     activity: [
       { at: s, who: 'you', kind: 'message', text: 'checkout.spec fails about 1 in 6 runs on CI only. Find out why and fix it.' },
@@ -759,8 +820,7 @@ function flakyCheckout(): Thread {
 
 function authMigration(): Thread {
   const s = 560;
-  const done = (id: string, title: string, size: Size, a: number, b: number, fp: string[]) =>
-    step(id, title, size, fp, { status: 'done', progress: 1, addedAt: s, startedAt: at(s, a), doneAt: at(s, b), addedBy: 'claude' });
+  const done = (id: string, title: string, a: number, b: number) => step(id, title, { status: 'done', addedAt: s, startedAt: at(s, a), doneAt: at(s, b), addedBy: 'claude' });
   return {
     id: 'auth',
     spaceId: 'latitude',
@@ -777,13 +837,13 @@ function authMigration(): Thread {
       { n: 2, at: at(s, 140), label: 'Split into two PRs', by: 'claude' },
     ],
     steps: [
-      done('au1', 'Install and configure Better Auth', 1, 0, 25, ['apps/api/auth.ts']),
-      done('au2', 'Port email + password sign-in', 2, 25, 70, ['apps/api/auth.ts', 'apps/web/routes/login.tsx']),
-      done('au3', 'Port GitHub OAuth', 2, 70, 110, ['apps/api/auth.ts']),
-      done('au4', 'Session schema migration', 2, 110, 150, ['packages/db/migrations/0042_sessions.sql']),
-      done('au5', 'Second opinion review (Codex)', 1, 150, 175, []),
-      step('au6', 'Backfill existing sessions', 2, ['scripts/backfill-sessions.ts'], { status: 'blocked', progress: 0.2, addedAt: at(s, 140), revision: 2, startedAt: at(s, 230), addedBy: 'claude', note: 'Waiting for approval to run a migration' }),
-      done('au7', 'Delete legacy auth module', 1, 180, 205, ['apps/api/legacy-auth/']),
+      done('au1', 'Install and configure Better Auth', 0, 25),
+      done('au2', 'Port email + password sign-in', 25, 70),
+      done('au3', 'Port GitHub OAuth', 70, 110),
+      done('au4', 'Session schema migration', 110, 150),
+      done('au5', 'Second opinion review (Codex)', 150, 175),
+      step('au6', 'Backfill existing sessions', { status: 'blocked', addedAt: at(s, 140), startedAt: at(s, 230), addedBy: 'claude', note: 'Waiting for approval to run a migration' }),
+      done('au7', 'Delete legacy auth module', 180, 205),
     ],
     activity: [
       { at: s, who: 'you', kind: 'message', text: 'Move us to Better Auth. Keep sessions alive.' },
@@ -821,8 +881,8 @@ function onboardingEmails(): Thread {
     startedAt: s,
     revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [
-      step('o1', 'Email templates', 2, ['emails/'], { status: 'done', progress: 1, addedAt: s, startedAt: s, doneAt: at(s, 40), addedBy: 'claude' }),
-      step('o2', 'Schedule sequence', 2, ['apps/worker/onboarding.ts'], { status: 'done', progress: 1, addedAt: s, startedAt: at(s, 40), doneAt: at(s, 90), addedBy: 'claude' }),
+      step('o1', 'Email templates', { status: 'done', addedAt: s, startedAt: s, doneAt: at(s, 40), addedBy: 'claude' }),
+      step('o2', 'Schedule sequence', { status: 'done', addedAt: s, startedAt: at(s, 40), doneAt: at(s, 90), addedBy: 'claude' }),
     ],
     activity: [],
     prs: [{ number: 471, state: 'merged', title: 'Onboarding sequence' }],
@@ -845,9 +905,9 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
     orbitSlot: slot,
     revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: titles.map((t, i) => {
-      const base = step(`${id}${i}`, t, 2, [], { addedAt: s, addedBy: provider });
-      if (i < doneCount) return { ...base, status: 'done', progress: 1, startedAt: s + i * 30, doneAt: s + (i + 1) * 30 };
-      if (i === doneCount) return { ...base, status: 'running', progress: 0.3, startedAt: s + i * 30 };
+      const base = step(`${id}${i}`, t, { addedAt: s, addedBy: provider });
+      if (i < doneCount) return { ...base, status: 'done', startedAt: s + i * 30, doneAt: s + (i + 1) * 30 };
+      if (i === doneCount) return { ...base, status: 'running', startedAt: s + i * 30 };
       return base;
     }),
     activity: [{ at: s, who: 'you', kind: 'message', text: title }],

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import { useDiffTheme } from '../themes/highlight';
-import { AlertTriangle, Code, Document, Export, Eye } from 'reicon-react';
+import { AlertTriangle, Code, File, Share, Eye } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -82,7 +82,7 @@ function BinaryState() {
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Document />
+          <File />
         </EmptyMedia>
         <EmptyTitle>No preview</EmptyTitle>
         <EmptyDescription>This is a binary file or too large to edit here.</EmptyDescription>
@@ -140,7 +140,7 @@ export function OpenInMenu({ root, path, line }: { root: string; path: string; l
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <TooltipIconButton label="Open in editor" hint={editors.map((e) => EDITOR_NAMES[e]).join(', ')}>
-          <Export />
+          <Share />
         </TooltipIconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

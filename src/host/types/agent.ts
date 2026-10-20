@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
+import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
@@ -27,6 +27,8 @@ export interface AgentStartOptions {
   forkAt?: string;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
+  /** Settings › Goals and checks › Goals is off: the session gets no goal instructions, tools or nudge. Read at session start. */
+  isGoalsOff?: boolean;
 }
 
 export type SeqAgentEvent = AgentEvent & { seq?: number };
@@ -42,8 +44,10 @@ export type AgentEvent =
   | { threadId: string; type: 'worktree'; path: string }
   /** Main is preparing the new worktree before the agent's first turn; each event carries the whole setup so far. */
   | { threadId: string; type: 'setup'; setup: WorktreeSetup }
-  /** A project folder thread's agent runs on this branch of the project's checkout. */
+  /** The thread's agent runs on this branch: a project folder thread's checkout, or a worktree's temp branch named after its title. */
   | { threadId: string; type: 'branch'; branch: string; isDetached?: boolean }
+  /** Main named a new thread from its first message (`StartWorkspace.titlePrompt`) before its agent started. */
+  | { threadId: string; type: 'title'; title: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }
@@ -146,6 +150,10 @@ export interface StartWorkspace {
   branch: string;
   base?: string;
   isExisting?: boolean;
+  /** The thread's first start: its new branch must not exist yet. A restart after cleanup checks out the one it left. */
+  isNew?: boolean;
+  /** With `isNew`, on a temp branch: main asks for a title while the worktree is set up and renames the branch after it before the agent starts. */
+  titlePrompt?: string;
 }
 
 /**
@@ -197,9 +205,6 @@ export interface AgentQuestion {
 export interface AgentPlanItem {
   title: string;
   status: 'pending' | 'running' | 'done';
-  progress?: number;
-  size?: Size;
-  files?: string[];
 }
 
 /** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. `answers` holds each question's picked labels and typed text, in question order; empty means skipped. */
@@ -269,9 +274,6 @@ export interface AgentReviewRequest {
 /** A review's stream under the id `review` returned: what it is doing (`step`), then one `done` with its answer (structured output or text) or one `error`. */
 export type AgentReviewEvent = { id: string; type: 'step'; text: string } | { id: string; type: 'done'; result: unknown } | { id: string; type: 'error'; text: string };
 
-/** The statuses an agent may set on a step through Mochi's tools. */
-export const STEP_STATUSES = ['ready', 'running', 'waiting', 'blocked', 'done', 'dropped'] as const satisfies readonly StepStatus[];
-
 /** A Mochi tool an agent called (`electron/mcp`); the renderer runs it on the store and answers with `toolResult`. */
 export interface AgentToolCall {
   id: string;
@@ -302,6 +304,8 @@ export interface AgentHost {
   interrupt(threadId: string): Promise<void>;
   /** After a failed setup step: run the failed step again, or start the agent without the rest of the setup. */
   setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
+  /** You named the thread: a start still naming it (`titlePrompt`) leaves its title and branch as they are. */
+  keepTitle(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
@@ -351,6 +355,7 @@ export const agentMethods = {
   compactInstructions: 'invoke',
   interrupt: 'invoke',
   setupChoice: 'invoke',
+  keepTitle: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
   settle: 'invoke',

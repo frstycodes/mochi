@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { setPrefs, usePrefs } from '../settings/prefs';
-import { Danger, Document, Folder, RowHorizontal, RowVertical } from 'reicon-react';
+import { Danger, File, Folder, Columns, List, Rows } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ChangeList, type ChangeActions, type DiffStyle, type LineNote } from '../git/ChangeList';
-import { fileKey, filesForStep } from '../git/files';
+import { changeSections, fileKey, reviewNote } from '../git/files';
+import { ChangeTree } from '../git/ChangeTree';
+import { ComparePicker, type Compare } from '../git/ComparePicker';
 import { ShipBar } from '../git/ShipBar';
 import { useConfirm } from '../git/useConfirm';
 import { useGitAction, useGitDiff } from '../git/useGit';
@@ -18,6 +19,8 @@ import { useWorktreePath } from '../git/worktrees';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
+import { cn } from '@/lib/utils';
+import { TooltipIconButton } from '../ui';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { DiffStat } from '../WorkLog';
@@ -30,55 +33,36 @@ export function ChangesTab({ thread, tab }: PaneTabProps) {
   return <Changes key={cwd} thread={thread} cwd={cwd} tabId={tab.id} />;
 }
 
-const ALL_STEPS = 'all';
-
 function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: string }) {
   usePaneMenu();
-  const [scope, setScope] = useState<DiffScope>('branch');
-  const [stepId, setStepId] = useState(ALL_STEPS);
+  const [compare, setCompare] = useState<Compare>({ scope: 'branch' });
+  const [isTreeOpen, setTreeOpen] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
+  const diffColumn = useRef<HTMLDivElement>(null);
   const { diffStyle } = usePrefs();
-  const diffQuery = useGitDiff(cwd, scope, thread.repo?.base);
+  const diffQuery = useGitDiff(cwd, compare.scope, compare.base ?? thread.repo?.base);
   const { run } = useGitAction(diffQuery.refresh);
   const { confirm, dialog } = useConfirm();
-  const actions = useChangeActions({ thread, cwd, canStage: scope === 'uncommitted', diffStyle, run, confirm });
+  const canStage = compare.scope === 'uncommitted';
+  const actions = useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm });
 
   const diff = diffQuery.data;
-  const steps = thread.steps.filter((s) => s.footprint.length > 0);
-  const files = filesForStep(diff?.files ?? [], steps.find((s) => s.id === stepId));
+  const files = diff?.files ?? [];
+  const sections = changeSections(files, canStage);
   const isEmpty = !!diff && diff.files.length === 0;
-  const isFilteredEmpty = !!diff && !isEmpty && files.length === 0;
+
+  const reveal = (file: DiffFile) => {
+    setSelected(fileKey(file));
+    diffColumn.current?.querySelector(`[data-file-key="${CSS.escape(fileKey(file))}"]`)?.scrollIntoView({ block: 'start' });
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PaneTitle>
-        <Select value={scope} onValueChange={(v) => setScope(v as DiffScope)}>
-          <SelectTrigger size="sm" aria-label="Compare" className="-ml-1.5 shrink-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="branch">Branch</SelectItem>
-              <SelectItem value="uncommitted">Uncommitted</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        {steps.length > 0 && (
-          <Select value={stepId} onValueChange={setStepId}>
-            <SelectTrigger size="sm" aria-label="Filter by step" className="min-w-0 max-w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value={ALL_STEPS}>All steps</SelectItem>
-                {steps.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.title}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        )}
+        <TooltipIconButton label={isTreeOpen ? 'Hide the file tree' : 'Show the file tree'} aria-pressed={isTreeOpen} onClick={() => setTreeOpen((o) => !o)} className={cn('-ml-1.5 shrink-0 text-muted-foreground', isTreeOpen && 'bg-accent text-foreground')}>
+          <List />
+        </TooltipIconButton>
+        <ComparePicker cwd={cwd} compare={compare} threadBase={thread.repo?.base} onChange={setCompare} />
       </PaneTitle>
       <PaneActions>
         {files.length > 0 && (
@@ -89,10 +73,10 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
         <AskAboutHunk threadId={thread.id} files={files} />
         <ToggleGroup type="single" size="sm" variant="outline" spacing={0} value={diffStyle} onValueChange={(v) => v && setPrefs({ diffStyle: v as DiffStyle })} aria-label="Diff layout">
           <ToggleGroupItem value="unified" aria-label="Unified diff">
-            <RowVertical />
+            <Rows />
           </ToggleGroupItem>
           <ToggleGroupItem value="split" aria-label="Split diff">
-            <RowHorizontal />
+            <Columns />
           </ToggleGroupItem>
         </ToggleGroup>
         <WorktreeMenu cwd={cwd} base={thread.repo?.base} diff={diff} run={run} confirm={confirm}>
@@ -101,15 +85,21 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
       </PaneActions>
       {!!diffQuery.error && !diff && <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />}
       {diffQuery.isLoading && <ChangesSkeleton />}
-      {isEmpty && <NoChanges scope={scope} />}
-      {isFilteredEmpty && <NoStepChanges />}
-      {/* Radix lays the viewport content out as `display: table`, which grows to the widest diff line instead of scrolling it. */}
+      {isEmpty && <NoChanges scope={compare.scope} />}
       {files.length > 0 && (
-        <ScrollArea type="scroll" className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
-          <ChangeList key={`${scope}:${stepId}`} files={files} actions={actions} />
-        </ScrollArea>
+        <div className="flex min-h-0 flex-1 border-t">
+          {isTreeOpen && (
+            <ScrollArea type="scroll" className="w-60 max-w-[40%] shrink-0 border-r">
+              <ChangeTree sections={sections} selected={selected} onSelect={reveal} />
+            </ScrollArea>
+          )}
+          {/* Radix lays the viewport content out as `display: table`, which grows to the widest diff line instead of scrolling it. */}
+          <ScrollArea ref={diffColumn} type="scroll" className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
+            <ChangeList key={`${compare.scope}:${compare.base}`} sections={sections} actions={actions} />
+          </ScrollArea>
+        </div>
       )}
-      {!!diff && <ShipBar thread={thread} cwd={cwd} diff={diff} canCommit={scope === 'uncommitted'} run={run} confirm={confirm} />}
+      {!!diff && <ShipBar thread={thread} cwd={cwd} diff={diff} canCommit={canStage} run={run} confirm={confirm} />}
       {dialog}
     </div>
   );
@@ -141,8 +131,7 @@ function useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm }: Ch
   };
 
   const sendNote = (note: LineNote, text: string) => {
-    const where = note.side === 'deletions' ? `${note.path}, removed line ${note.line}` : `${note.path}:${note.line}`;
-    dispatch({ type: 'say', threadId: thread.id, entry: { who: 'you', kind: 'message', text: `Review note on \`${where}\`\n\n${text}` } });
+    dispatch({ type: 'say', threadId: thread.id, entry: { who: 'you', kind: 'message', text: reviewNote(note.path, note.side, note.line, text) } });
     setNotes((all) => all.map((n) => (n.id === note.id ? { ...n, id: `${n.id}:${Date.now()}`, text, isSent: true } : n)));
   };
 
@@ -160,7 +149,7 @@ function useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm }: Ch
   };
 }
 
-function revertRequest(target: ChangeTarget) {
+export function revertRequest(target: ChangeTarget) {
   const name = target.path.slice(target.path.lastIndexOf('/') + 1);
   if (target.untracked && !target.patch)
     return { title: `Delete ${name}?`, description: `${target.path} was never committed, so it can't be recovered.`, confirm: 'Delete file', cancel: 'Keep file', isDestructive: true };
@@ -177,7 +166,7 @@ function sum(files: DiffFile[], key: 'added' | 'removed') {
   return files.reduce((n, f) => n + f[key], 0);
 }
 
-function ChangesSkeleton() {
+export function ChangesSkeleton() {
   return (
     <div className="flex flex-col gap-0.5 px-2" aria-busy aria-label="Loading changes">
       {[52, 38, 64, 44].map((w) => (
@@ -205,12 +194,12 @@ function NoFolder() {
   );
 }
 
-function NoChanges({ scope }: { scope: DiffScope }) {
+export function NoChanges({ scope }: { scope: DiffScope }) {
   return (
     <Empty className="flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Document />
+          <File />
         </EmptyMedia>
         <EmptyTitle>No changes</EmptyTitle>
         <EmptyDescription>{scope === 'branch' ? 'This branch matches its base. Edits land here as the agent makes them.' : 'Everything is committed.'}</EmptyDescription>
@@ -219,21 +208,7 @@ function NoChanges({ scope }: { scope: DiffScope }) {
   );
 }
 
-function NoStepChanges() {
-  return (
-    <Empty className="flex-1">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Document />
-        </EmptyMedia>
-        <EmptyTitle>No changes for this step</EmptyTitle>
-        <EmptyDescription>None of the changed files are in this step's footprint.</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
-function DiffError({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function DiffError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <Empty className="flex-1">
       <EmptyHeader>

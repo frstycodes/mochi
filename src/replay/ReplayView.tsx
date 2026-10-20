@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ArrowDown2, Backward10Seconds, DocumentText, Export, Forward10Seconds, Pause, Play, SkipNext, SkipPrev, VideoPlay, X } from 'reicon-react';
+import { ChevronDownSmall, Rewind10, FileText, Share, Forward10, Pause, Play, SkipForwardAlt, SkipBack, VideoPlay, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,7 @@ import { isTyping } from '../keys';
 import { Shortcut } from '../Shortcut';
 import { HarnessContext, useHarness, type State } from '../store';
 import { TITLE_BAR, TitleBar } from '../TitleBar';
+import { summarize } from '../summary';
 import { TooltipIconButton } from '../ui';
 import { DiffStat, DiffView, Expand } from '../WorkLog';
 import type { ReplayExport } from './export';
@@ -94,7 +95,7 @@ function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: 
       <span className="flex-1" />
       {!!onExport && (
         <Button variant="outline" size="sm" className="rounded-full" onClick={onExport}>
-          <Export data-icon="inline-start" />
+          <Share data-icon="inline-start" />
           <span className="max-sm:sr-only">Export replay</span>
         </Button>
       )}
@@ -276,19 +277,19 @@ function Transport({ playback, isCapped, files }: { playback: Playback; isCapped
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-0.5">
           <TooltipIconButton label="Previous event" hint="← (Shift+← for the previous marker)" disabled={n === 0} onClick={() => seekStep(n - 1)}>
-            <SkipPrev />
+            <SkipBack />
           </TooltipIconButton>
           <Button size="icon" className="rounded-full" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
-            {isPlaying ? <Pause weight="Filled" /> : <Play weight="Filled" />}
+            {isPlaying ? <Pause filled /> : <Play filled />}
           </Button>
           <TooltipIconButton label="Next event" hint="→ (Shift+→ for the next marker)" disabled={n >= times.length} onClick={() => seekStep(n + 1)}>
-            <SkipNext />
+            <SkipForwardAlt />
           </TooltipIconButton>
           <TooltipIconButton label="Back 10 seconds" hint="J" className="max-sm:hidden" onClick={() => seek(clock - 10_000)}>
-            <Backward10Seconds />
+            <Rewind10 />
           </TooltipIconButton>
           <TooltipIconButton label="Forward 10 seconds" hint="L" className="max-sm:hidden" onClick={() => seek(clock + 10_000)}>
-            <Forward10Seconds />
+            <Forward10 />
           </TooltipIconButton>
         </div>
         <span className="tabular type-meta text-muted-foreground">
@@ -418,7 +419,7 @@ function FilesSheet({ children }: { children: ReactNode }) {
     <Sheet>
       <SheetTrigger asChild>
         <Button variant="outline" size="sm" className="rounded-full md:hidden">
-          <DocumentText data-icon="inline-start" />
+          <FileText data-icon="inline-start" />
           Files
         </Button>
       </SheetTrigger>
@@ -434,12 +435,12 @@ function FilesSheet({ children }: { children: ReactNode }) {
 
 /**
  * The diff as the nearest checkpoint at or before this point saved it; before any checkpoint (or with none saved), the
- * files the agent had touched so far, from the steps' footprints.
+ * files the agent had touched so far, from its tool calls.
  */
 function ReplayFiles({ source, thread, now }: { source: CheckpointSource; thread: Thread; now: number }) {
   const index = source.list.findLastIndex((c) => c.at <= now);
   const files = useCheckpointFiles(source, index);
-  const touched = [...new Set(thread.steps.flatMap((s) => (s.startedAt === undefined ? [] : s.footprint)))];
+  const touched = summarize(thread.activity.filter((a) => a.at <= now)).files.map((f) => f.path);
   const checkpoint = source.list[index];
   const caption = checkpoint ? `As saved at “${checkpoint.label}”` : 'No checkpoint saved by this point';
   return (
@@ -491,7 +492,7 @@ function DiffFileRow({ file }: { file: DiffFile }) {
         <FilePath path={file.path} />
         <span className="flex-1" />
         <DiffStat added={file.added} removed={file.removed} />
-        <ArrowDown2 aria-hidden className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', isOpen && 'rotate-180')} />
+        <ChevronDownSmall aria-hidden className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', isOpen && 'rotate-180')} />
       </button>
       <Expand isOpen={isOpen}>
         <div className="px-1 pt-1 pb-2">{file.binary ? <p className="px-1 type-meta text-muted-foreground">Binary file</p> : <DiffView patch={file.patch} />}</div>

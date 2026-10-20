@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUp, CheckCircle, InfoCircle, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { EventLine, MochiWidget } from '../chat/MochiWidget';
+import { ArrowUp, CheckCircle, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from '@/toast/store';
@@ -34,6 +35,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
+import { CoinIcon, McpServerIcon, PluginIcon, SkillIcon } from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
 import { BoardView } from '../BoardView';
 import { seedQueue, type LineSlot, type QueueItem, type Thread } from '../model';
@@ -41,13 +43,20 @@ import { queueToast, useResolvedQueueToasts } from '../QueueToast';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
 import { ReportCard } from '../goals/ReportCard';
+import { PromptInputProvider } from '@/components/ai-elements/prompt-input';
 import { VizThreadProvider } from '../viz/WidgetVisual';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { turnChanges } from '../chat/turnChanges';
 import { PipLayer } from '../Browser';
+import { DriveBar } from '../browser/Toolbar';
 import { SidePane } from '../SidePane';
 import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
+import { NextMoveBlock } from './sections/next-move';
+import { SummaryGoalBlock } from './sections/summary-goal';
+import { ThreadRowVariantsBlock } from './sections/thread-rows';
+import { SubThreadsBlock } from './sections/sub-threads';
+import { SubThreadGroupingBlock } from './sections/sub-thread-grouping';
 import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
@@ -161,7 +170,7 @@ function Overview() {
     <section className="flex flex-col gap-3">
       <h1 className="type-display">Mochi design system</h1>
       <p className="max-w-[62ch] type-prose text-muted-foreground">
-        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and reicon, themed from DESIGN.md. Dark first, cool neutrals,
+        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and Solar icons, themed from DESIGN.md. Dark first, cool neutrals,
         squircle corners, hairline separation.
       </p>
       <p className="flex flex-wrap items-center gap-1.5 type-caption text-subtle-foreground">
@@ -324,7 +333,7 @@ function Foundations() {
             <ProviderMark provider="claude" size={20} />
             <ProviderMark provider="codex" size={20} />
             <Separator orientation="vertical" className="h-6" />
-            {(['running', 'blocked', 'waiting', 'ready', 'done', 'dropped'] as const).map((s) => (
+            {(['running', 'blocked', 'ready', 'done', 'dropped'] as const).map((s) => (
               <span key={s} className="flex items-center gap-1.5 type-caption text-muted-foreground">
                 <StepStatusIcon status={s} />
                 {stepLabel(s)}
@@ -428,7 +437,7 @@ function Actions() {
         </Block>
         <Block title="Toggle and toggle group" use="Separate bordered toggles. The selected one gets a stronger border and a fill.">
           <div className="flex flex-wrap items-center gap-3">
-            <ToggleGroup type="single" variant="outline" size="sm" spacing={1} defaultValue="claude" aria-label="Agent">
+            <ToggleGroup type="single" variant="outline" size="sm" defaultValue="claude" aria-label="Agent">
               <ToggleGroupItem value="claude">
                 <ProviderMark provider="claude" size={14} />
                 Claude
@@ -452,6 +461,12 @@ function Actions() {
 }
 
 const DEVICE_SPECIMENS = ['mac', 'windows', 'linux', 'phone', undefined] satisfies (DeviceKind | undefined)[];
+const OBJECT_ICONS = [
+  ['Skill', SkillIcon],
+  ['Plugin', PluginIcon],
+  ['MCP server', McpServerIcon],
+  ['Spend', CoinIcon],
+] as const;
 
 function Display() {
   return (
@@ -494,6 +509,23 @@ function Display() {
                 <span key={kind ?? 'unknown'} className="flex items-center gap-1.5">
                   <DeviceIcon kind={kind} />
                   {kind ?? 'unknown'}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Block>
+        <Block title="Object icons" use="Mochi's own concepts (skills, plugins, MCP servers, spend), lit like Mochi; the same in both themes.">
+          <div data-design="object-icons" className="flex flex-col gap-4">
+            <div className="flex items-end gap-6">
+              {OBJECT_ICONS.map(([label, Icon]) => (
+                <Icon key={label} className="size-12" />
+              ))}
+            </div>
+            <div className="flex items-center gap-6 type-meta text-muted-foreground">
+              {OBJECT_ICONS.map(([label, Icon]) => (
+                <span key={label} className="flex items-center gap-1.5">
+                  <Icon />
+                  {label}
                 </span>
               ))}
             </div>
@@ -570,12 +602,12 @@ function Feedback() {
         <Block title="Alert" use="Inline explanations. Status colour always comes with an icon.">
           <div className="flex flex-col gap-2">
             <Alert>
-              <InfoCircle />
+              <Info />
               <AlertTitle>Overlap caught before any duplicate work</AlertTitle>
               <AlertDescription>Two threads want to add a Redis client. Decide in the Queue.</AlertDescription>
             </Alert>
             <Alert variant="destructive">
-              <Warning />
+              <WarningAlt />
               <AlertTitle>Setup script failed in feat/admin-usage</AlertTitle>
               <AlertDescription>pnpm install exited with code 1. The agent is paused until it passes.</AlertDescription>
             </Alert>
@@ -605,7 +637,7 @@ function Feedback() {
                 <CheckCircle />
               </EmptyMedia>
               <EmptyTitle>Nothing needs you</EmptyTitle>
-              <EmptyDescription>Questions, approvals and overlaps show up here, most blocking first.</EmptyDescription>
+              <EmptyDescription>Questions and approvals show up here, most blocking first.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         </Block>
@@ -662,9 +694,16 @@ function Conversation() {
             ))}
           </div>
         </Block>
-        <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, overlaps.">
+        <Block title="Action lines" use="An agent's browser actions in a thread: an icon for the kind of action and the page as its favicon and host, never the full URL.">
+          <div className="flex flex-col gap-2">
+            <EventLine text='Claude clicked "Sandesh Pandey sandesh@withp…"' glyph="click" site="https://accounts.google.com/signin/oauth/error?authError=x" at={Date.now()} />
+            <EventLine text='Claude typed into "Text field for emails" and pressed Enter' glyph="type" site="https://console.cloud.google.com/auth/audience" at={Date.now()} />
+            <EventLine text="Claude opened a page outside your machine" glyph="browse" site="https://api.slack.com/apps" at={Date.now()} />
+          </div>
+        </Block>
+        <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, handoffs.">
           <Marker variant="separator">
-            <MarkerContent className="type-caption">Goal v2: +1 step "Per-key overrides"</MarkerContent>
+            <MarkerContent className="type-caption">Goal v2: + Done when: Every 429 carries Retry-After</MarkerContent>
           </Marker>
         </Block>
       </Grid>
@@ -694,7 +733,7 @@ function Recipes() {
           use="Codex-style card under its header toggle: goal, changes, context, PRs, skills used, tools called, sources. Hover the goal for the full timeline."
         >
           <div className="flex h-[560px] justify-end overflow-hidden rounded-xl border">
-            <SummaryPanel thread={rl} className="m-3 w-[300px] rounded-xl bg-popover shadow-popover" />
+            <SummaryPanel thread={rl} className="m-3 w-[300px]" />
           </div>
         </Block>
         <Block title="Idle verdict rows" use="An idle thread's row says why it stopped, read by Mochi: a toned chip, then the reason. Working rows keep their shimmer.">
@@ -716,10 +755,17 @@ function Recipes() {
             <ProposalCard thread={{ ...rl, proposal: proposalFixture(rl.activity.at(-1)?.at ?? 0, 'applied') }} />
           </div>
         </Block>
+        <NextMoveBlock rl={rl} />
+        <SummaryGoalBlock rl={rl} />
+        <ThreadRowVariantsBlock rl={rl} />
+        <SubThreadsBlock rl={rl} />
+        <SubThreadGroupingBlock rl={rl} />
         {verdictFixtures(rl).map(({ label, thread }) => (
-          <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, one line of evidence (goal ring, status icons, a badge only where it needs you, the PR chip), gaps as call rows, one primary." wide>
+          <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, the agent's summary, one line of evidence, gaps as call rows, then one question with the move as the primary with its shortcut, and one other answer." wide>
             <VizThreadProvider value={rl.id}>
-              <ReportCard thread={thread} />
+              <PromptInputProvider>
+                <ReportCard thread={thread} />
+              </PromptInputProvider>
             </VizThreadProvider>
           </Block>
         ))}
@@ -729,7 +775,9 @@ function Recipes() {
           wide
         >
           <VizThreadProvider value={rl.id}>
-            <ReportCard thread={reportFixture(rl)} />
+            <PromptInputProvider>
+              <ReportCard thread={reportFixture(rl)} />
+            </PromptInputProvider>
           </VizThreadProvider>
         </Block>
         <Block
@@ -738,7 +786,9 @@ function Recipes() {
           wide
         >
           <VizThreadProvider value={rl.id}>
-            <ReportCard thread={metReportFixture(rl)} />
+            <PromptInputProvider>
+              <ReportCard thread={metReportFixture(rl)} />
+            </PromptInputProvider>
           </VizThreadProvider>
         </Block>
         <Block
@@ -754,6 +804,23 @@ function Recipes() {
         </Block>
         <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
           <QueueDecision item={decision} showThread />
+        </Block>
+        <Block title="Handoff" use="An agent hands you the tab for what only you can do. The card sits where it asked and the bar tops the pane; Done in either, or the page showing you're done, lets it carry on." wide>
+          <div className="flex flex-col gap-3">
+            <MochiWidget
+              item={{
+                id: 'q-handoff-demo',
+                kind: 'approval',
+                threadId: rl.id,
+                title: 'Sign in to GitHub',
+                detail: "Claude carries on once the page shows you're done, or when you click Done.",
+                blocks: { steps: 0, threads: 1 },
+                createdAt: rl.startedAt,
+                tool: { callId: 'q-handoff-demo', isHandoff: true },
+              }}
+            />
+            <DriveBar thread={rl} pageId="design/handoff" hasTakenOver handoff="Sign in to GitHub" />
+          </div>
         </Block>
         <Block title="Same files" use="Two live threads of one project edited the same file; never pauses either agent." wide>
           <QueueDecision
@@ -793,7 +860,7 @@ function Recipes() {
             )}
           </div>
         </Block>
-        <Block title="Metro board" use="Threads as lines, steps as stations, shared steps as interchanges." wide>
+        <Block title="Metro board" use="Threads as lines, each agent's plan items as stations." wide>
           <div className="h-[460px] overflow-hidden rounded-xl border">
             <BoardView />
           </div>
@@ -840,7 +907,7 @@ function Rules() {
         </Pair>
         <Pair rule="Status needs an icon or a word, not colour alone.">
           <span className="flex items-center gap-2 type-meta">
-            <Warning className="size-4 text-warning" />
+            <WarningAlt className="size-4 text-warning" />
             Needs you: answer the Stripe question
           </span>
           <span className="flex items-center gap-2 type-meta">

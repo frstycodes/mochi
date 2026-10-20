@@ -1,13 +1,15 @@
 import { isAbsolute } from 'node:path';
-import { CONCURRENCY_RANGE, type AgentSettingsPatch, type HarnessSettings, type SettingsHost } from '../../src/host/types/settings.ts';
+import { CONCURRENCY_RANGE, IMAGE_GEN_HARNESSES, type AgentSettingsPatch, type ImageGenHarness, type HarnessSettings, type SettingsHost } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
 import { fromClaude, SERVER_NAME, type ConfigChange, type ConfigPart } from '../../src/settings/agentConfig.ts';
+import { APP_ICONS, type AppIcon } from '../../src/settings/settingOptions.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '../agents/profileConfig.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
-import { detect } from '../settings/detect.ts';
+import { detect, latestVersion, updateHarness } from '../settings/detect.ts';
 import { noteLogin } from '../agents/models.ts';
+import { isNewerVersion } from '../../src/settings/parse.ts';
 import { integer, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 export const settings = {
@@ -22,6 +24,18 @@ export const settings = {
     if (!account) throw new Error('No such account');
     const install = await detect(account);
     noteLogin(account.id, install.login);
+    return install;
+  },
+  async latestVersion(_sender, provider) {
+    return latestVersion(validProvider(provider));
+  },
+  async updateHarness(_sender, provider) {
+    const id = validProvider(provider);
+    await updateHarness(id);
+    const account = accountsState().accounts.find((a) => a.provider === id && !a.configDir)!;
+    const install = await detect(account);
+    const latest = await latestVersion(id);
+    if (isNewerVersion(latest, install.version)) throw new Error(`Update finished, but Mochi still finds ${HARNESSES[id].name} ${install.version ?? 'at an unknown version'} at ${install.path ?? 'the configured path'}. Check that this is the executable your package manager updated.`);
     return install;
   },
   async accounts() {
@@ -149,6 +163,10 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
     if (typeof p.prepareWorktrees !== 'boolean') throw new TypeError('prepareWorktrees must be true or false');
     patch.prepareWorktrees = p.prepareWorktrees;
   }
+  if (p.appIcon !== undefined) {
+    if (!APP_ICONS.some((icon) => icon.value === p.appIcon)) throw new TypeError(`appIcon must be one of ${APP_ICONS.map((icon) => icon.value).join(', ')}`);
+    patch.appIcon = p.appIcon as AppIcon;
+  }
   if (p.worktreeInclude !== undefined) patch.worktreeInclude = string(p.worktreeInclude, 'worktreeInclude', 4096);
   if (p.setupCommands !== undefined) {
     patch.setupCommands = {};
@@ -156,6 +174,10 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
       const text = string(command, 'setup command', 4096).trim();
       if (text) patch.setupCommands[absolutePath(folder, 'project folder')] = text;
     }
+  }
+  if (p.imageGen !== undefined) {
+    if (!(IMAGE_GEN_HARNESSES as readonly unknown[]).includes(p.imageGen)) throw new TypeError(`imageGen must be one of ${IMAGE_GEN_HARNESSES.join(', ')}`);
+    patch.imageGen = p.imageGen as ImageGenHarness;
   }
   if (p.sideChatModel !== undefined) {
     const side = record(p.sideChatModel, 'sideChatModel');

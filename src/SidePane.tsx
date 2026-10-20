@@ -1,6 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { Reorder } from 'motion/react';
-import { Add, X } from 'reicon-react';
+import { Globe, Plus, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ import { NoPanes } from './pane/NoPanes';
 import { cancelDrag, endDrag, moveDrag, startDrag } from './layout/drag';
 import { splitTabIds } from './layout/tree';
 import { PreviewContext } from './layout/SplitContext';
+import { pageKey, usePage } from './browser/pages';
 import { useSize } from './browser/PageSurface';
 import { useHarness } from './store';
 import { layoutOf, shownTab } from './store/panes';
@@ -32,7 +33,11 @@ const DRAG_THRESHOLD = 4;
 export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; chat?: ReactNode }) {
   const areaRef = useRef<HTMLDivElement>(null);
   const size = useSize(areaRef);
-  const layout = useVisibleLayout(thread.id, pane);
+  const { dispatch } = useHarness();
+  // A divider drag stays local until release: through the store, every move re-rendered the app and rewrote the saved panes.
+  const [draft, setDraft] = useState<ResizePatch>();
+  const visible = useVisibleLayout(thread.id, pane);
+  const layout = draft ? { ...visible, ...draft } : visible;
   const chatMin = chat ? CHAT_MIN_W : 0;
   // The panes sit GAP below the window's top edge (the layout already leaves GAP at the bottom), so their cards never touch it.
   const paneH = Math.max(0, size.h - GAP);
@@ -43,6 +48,12 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const entering = useEnteringPanes(kinds);
   const isSliding = entering.isSlide || leaving.some((l) => l.isSlide);
   const [isResizing, setResizing] = useState(false);
+  const onResizing = (isOn: boolean) => {
+    setResizing(isOn);
+    if (isOn || !draft) return;
+    dispatch({ type: 'pane-resize', threadId: thread.id, patch: draft });
+    setDraft(undefined);
+  };
   const move = usePaneMove(thread.id, pane, resolved, areaRef);
   const onKeyDown = usePaneKeys(thread.id, pane, layout);
   useEscapeExpand(thread.id, !!layout.expanded);
@@ -78,7 +89,7 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
         <LeavingPane key={`leaving:${kind}`} kind={kind} rect={rect} isSlide={isSlide} />
       ))}
       {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
-      {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onResizing={setResizing} />}
+      {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onPreview={(patch) => setDraft((d) => ({ ...d, ...patch }))} onResizing={onResizing} />}
       {!!move.indicator && <span aria-hidden className="pointer-events-none absolute z-30 rounded-full bg-foreground/50" style={move.indicator} />}
     </div>
   );
@@ -213,12 +224,12 @@ function PaneCard({
       hidden={rect.isHidden}
       onPointerDownCapture={focus}
       onFocusCapture={focus}
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      // Expanded, the card drops its chrome and sits flush with the thread area's edges instead of the layout's inset rect.
+      style={isExpanded ? { left: 0, top: 0, width: '100%', height: '100%' } : { left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       className={cn(
-        'pane-card absolute flex flex-col overflow-hidden rounded-lg border bg-card outline-none',
+        'pane-card absolute flex flex-col overflow-hidden bg-card outline-none',
         !!entering && 'pane-card-entering',
-        showFocus && isFocused ? 'border-foreground/20' : 'border-border',
-        isExpanded && 'z-20',
+        isExpanded ? 'z-20' : cn('rounded-lg border', showFocus && isFocused ? 'border-foreground/20' : 'border-border'),
         isMoving && 'opacity-60',
       )}
     >
@@ -267,6 +278,8 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
             <Reorder.Item
               as="div"
               value={tab.id}
+              // Tabs land in place when opened, closed or reordered: no layout animation, only the drag itself follows the pointer.
+              transition={{ duration: 0 }}
               className={cn('group/tab relative flex h-7 min-w-14 flex-[0_1_10rem] items-center rounded-md', tab.id === shown?.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60')}
             >
               <button
@@ -280,8 +293,9 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
                   e.preventDefault();
                   step(tab.id, e.key === 'ArrowLeft' ? -1 : 1);
                 }}
-                className="flex h-full min-w-0 flex-1 cursor-default items-center pr-0.5 pl-2 type-meta"
+                className="flex h-full min-w-0 flex-1 cursor-default items-center gap-1.5 pr-0.5 pl-2 type-meta"
               >
+                {tab.kind === 'browser' && <TabFavicon threadId={thread.id} tab={tab} />}
                 <span className="truncate">{tabTitle(tab)}</span>
               </button>
               <Button
@@ -299,11 +313,19 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
       </Reorder.Group>
       {kind !== 'visual' && (
         <Button variant="ghost" size="icon-sm" aria-label="New tab" className="shrink-0 text-muted-foreground" onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind })}>
-          <Add />
+          <Plus />
         </Button>
       )}
     </PaneTitle>
   );
+}
+
+/** A browser tab's page icon, or a globe while the page names none or it fails to load. */
+function TabFavicon({ threadId, tab }: { threadId: string; tab: PaneTab }) {
+  const { favicon } = usePage(pageKey(threadId, tab.id), tab.url ?? '');
+  const [broken, setBroken] = useState<string | null>(null);
+  if (!favicon || favicon === broken) return <Globe aria-hidden className="size-3.5 shrink-0" />;
+  return <img src={favicon} alt="" aria-hidden onError={() => setBroken(favicon)} className="size-3.5 shrink-0 rounded-xs object-contain" />;
 }
 
 function EmptyPanes({ thread, rect }: { thread: Thread; rect: PaneRect }) {
@@ -314,13 +336,15 @@ function EmptyPanes({ thread, rect }: { thread: Thread; rect: PaneRect }) {
   );
 }
 
+type ResizePatch = Pick<PaneLayout, 'weights' | 'share' | 'columnWeights'>;
+
 /**
- * Invisible until hovered: chat | columns, between columns, and between two open panes of a column. Each drag writes the
- * layout's share or weights; double-click resets them.
+ * Invisible until hovered: chat | columns, between columns, and between two open panes of a column. Each drag previews the
+ * layout's share or weights, committed by `onResizing(false)`; double-click resets them.
  */
-function Dividers({ threadId, layout, resolved, width, hasChat, onResizing }: { threadId: string; layout: PaneLayout; resolved: ResolvedLayout; width: number; hasChat: boolean; onResizing: (isResizing: boolean) => void }) {
+function Dividers({ threadId, layout, resolved, width, hasChat, onPreview, onResizing }: { threadId: string; layout: PaneLayout; resolved: ResolvedLayout; width: number; hasChat: boolean; onPreview: (patch: ResizePatch) => void; onResizing: (isResizing: boolean) => void }) {
   const { dispatch } = useHarness();
-  const resize = (patch: Pick<PaneLayout, 'weights' | 'share' | 'columnWeights'>) => dispatch({ type: 'pane-resize', threadId, patch });
+  const reset = (patch: ResizePatch) => dispatch({ type: 'pane-resize', threadId, patch });
   const { columns, rects } = resolved;
   if (!columns.length) return null;
   const rows = columns.flatMap((c) =>
@@ -334,13 +358,13 @@ function Dividers({ threadId, layout, resolved, width, hasChat, onResizing }: { 
   return (
     <>
       {hasChat && (
-        <Divider axis="x" style={{ left: columns[0].x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(x) => resize({ share: shareAt(width, x + GAP / 2) })} onReset={() => resize({ share: undefined })} />
+        <Divider axis="x" style={{ left: columns[0].x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(x) => onPreview({ share: shareAt(width, x + GAP / 2) })} onReset={() => reset({ share: undefined })} />
       )}
       {columns.slice(1).map((c, i) => (
-        <Divider key={c.kinds[0]} axis="x" style={{ left: c.x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the columns" onResizing={onResizing} onMove={(x) => resize(resizeColumns(layout, columns, i, x - columns[i].x))} onReset={() => resize({ columnWeights: undefined })} />
+        <Divider key={c.kinds[0]} axis="x" style={{ left: c.x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the columns" onResizing={onResizing} onMove={(x) => onPreview(resizeColumns(layout, columns, i, x - columns[i].x))} onReset={() => reset({ columnWeights: undefined })} />
       ))}
       {rows.map((r) => (
-        <Divider key={r.key} axis="y" style={{ left: r.x, width: r.w, top: r.y, height: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(_, y) => resize(resizeRows(layout, r.upper, r.lower, y - r.top))} onReset={() => resize({ weights: { ...layout.weights, [r.upper.kind]: 1, [r.lower.kind]: 1 } })} />
+        <Divider key={r.key} axis="y" style={{ left: r.x, width: r.w, top: r.y, height: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(_, y) => onPreview(resizeRows(layout, r.upper, r.lower, y - r.top))} onReset={() => reset({ weights: { ...layout.weights, [r.upper.kind]: 1, [r.lower.kind]: 1 } })} />
       ))}
     </>
   );

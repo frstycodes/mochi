@@ -6,6 +6,7 @@ import type { Action, State } from '../store/index.tsx';
 import { toSaved } from '../store/persist.ts';
 import { runRemoteCommand } from './commands.ts';
 import { setStreaming, streamPosition } from './tap.ts';
+import { closeIdleShells, SWEEP_MS } from './terminals.ts';
 
 /** Streams the store to main while remote is on, answers its snapshot requests and runs devices' commands. */
 export function useRemoteBridge(state: State, dispatch: Dispatch<Action>) {
@@ -16,7 +17,8 @@ export function useRemoteBridge(state: State, dispatch: Dispatch<Action>) {
   const answerSnapshots = () => {
     const { epoch, seq } = streamPosition();
     if (!epoch || waiting.current.length === 0 || latest.current.streamed !== seq) return;
-    const saved = JSON.stringify(toSaved(latest.current));
+    // Side chats aren't saved with the store, but a device opening one should see what was asked before it connected.
+    const saved = JSON.stringify({ ...toSaved(latest.current), sidechats: latest.current.sidechats });
     for (const id of waiting.current.splice(0)) host.remote.snapshot(id, epoch, seq, saved).catch((error: unknown) => console.error('Sending the snapshot failed', error));
   };
 
@@ -41,6 +43,11 @@ export function useRemoteBridge(state: State, dispatch: Dispatch<Action>) {
       offSnapshot();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const timer = setInterval(() => closeIdleShells(Date.now()), SWEEP_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(
     () =>

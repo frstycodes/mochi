@@ -2,7 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode,
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
-import { Edit, Forbidden, Inbox, Route } from 'reicon-react';
+import { Edit, Folder, Ban, Inbox, Route } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -11,6 +11,7 @@ import { BoardView } from '../BoardView';
 import { HANDOFF_TRANSITION, isHandingOff } from '../Composer';
 import { NewThreadView } from '../NewThreadView';
 import { PANE_TABS, tabTitle } from '../pane/tabs';
+import { ProjectsView } from '../ProjectsView';
 import { QueueView } from '../QueueView';
 import { useHarness } from '../store';
 import { saveLayouts } from '../store/layout';
@@ -140,7 +141,8 @@ function LeafContent({ leafId, view }: { leafId: string; view: View }) {
   if (view.kind === 'tab') return <TabLeaf threadId={view.threadId} tabId={view.tabId} />;
   const thread = view.kind === 'thread' ? state.threads.find((t) => t.id === view.id) : undefined;
   // A thread or tab that no longer exists (deleted, or saved by a launch that showed demo data) opens a new thread.
-  const kind = view.kind === 'board' || view.kind === 'queue' ? view.kind : 'new';
+  const kind = view.kind in PAGES ? (view.kind as PageKind) : 'new';
+  const { icon: Icon, title, component: Page } = PAGES[kind];
   return (
     <>
       {/* Keyed: another thread is a fresh view, so its pane, summary and chat open in their own state instead of animating from the last thread's. */}
@@ -150,16 +152,28 @@ function LeafContent({ leafId, view }: { leafId: string; view: View }) {
         {!thread && (
           <PageLeaf key={kind}>
             <LeafBar>
-              {kind === 'board' ? <Route className="size-4 text-muted-foreground" /> : kind === 'new' ? <Edit className="size-4 text-muted-foreground" /> : <Inbox className="size-4 text-muted-foreground" />}
-              {kind === 'board' ? 'Board' : kind === 'new' ? 'New thread' : 'Queue'}
+              <Icon className="size-4 text-muted-foreground" />
+              {title}
             </LeafBar>
-            <div className="min-h-0 flex-1">{kind === 'board' ? <BoardView /> : kind === 'new' ? <NewThreadView /> : <QueueView />}</div>
+            <div className="min-h-0 flex-1">
+              <Page />
+            </div>
           </PageLeaf>
         )}
       </AnimatePresence>
     </>
   );
 }
+
+/** The views that are a page rather than a thread. */
+const PAGES = {
+  new: { icon: Edit, title: 'New thread', component: NewThreadView },
+  queue: { icon: Inbox, title: 'Queue', component: QueueView },
+  board: { icon: Route, title: 'Board', component: BoardView },
+  projects: { icon: Folder, title: 'Projects', component: ProjectsView },
+} satisfies Record<Exclude<View['kind'], 'thread' | 'tab'>, unknown>;
+
+type PageKind = keyof typeof PAGES;
 
 const PAGE_EXIT = { leave: (isHandoff: boolean) => ({ opacity: 0, transition: isHandoff ? HANDOFF_TRANSITION : { duration: 0 } }) };
 
@@ -250,7 +264,7 @@ function RefusedZone({ reason }: { reason: string }) {
   return (
     <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/40 p-4">
       <span className="flex max-w-72 items-center gap-1.5 rounded-xl bg-popover px-3 py-2 type-caption text-foreground shadow-popover">
-        <Forbidden className="size-3.5 shrink-0 text-muted-foreground" />
+        <Ban className="size-3.5 shrink-0 text-muted-foreground" />
         {reason}
       </span>
     </div>

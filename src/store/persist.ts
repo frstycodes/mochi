@@ -6,6 +6,7 @@ import type { AttachedAgent, WorktreeSetup } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
+import { failDrafts } from '../rewind/handoff.ts';
 import type { State } from './index.tsx';
 
 /** What the desktop app saves between launches: your own (live) threads and the slices that refer to them. Demo threads start fresh every launch. */
@@ -62,13 +63,27 @@ function readSaved(json: string | null): Saved | null {
 function restoreSavedThreads(saved: Saved, attached: Attached): Saved {
   // A Mochi tool card waits on the old page's run of the call; after a reload the new page runs it again and asks anew.
   const reasked = new Set(saved.queue.filter((q) => q.tool && attached.has(q.threadId)).map((q) => q.id));
-  const threads = migrateReceived(saved.threads.map((t) => (attached.has(t.id) ? reattachThread(t, attached.get(t.id)!, reasked) : restoreThread(t, saved.now))));
+  // A save from before read state reads as all seen, not as every thread unread at once.
+  const threads = migrateReceived(saved.threads.map((t) => (attached.has(t.id) ? reattachThread(t, attached.get(t.id)!, reasked) : restoreThread(t, saved.now))))
+    .map(migrateWaitingSteps)
+    .map((t) => ({ ...t, seenActivity: t.seenActivity ?? t.activity.length }));
   // Agent requests wait on a live call, which a restart ended; a reload didn't, so an attached agent's still wait on you.
-  return { ...saved, threads, queue: saved.queue.filter((q) => (!q.requestId || attached.has(q.threadId)) && !q.tool) };
+  // Overlap cards saved before that feature was removed have nothing left to answer them.
+  return { ...saved, threads, queue: saved.queue.filter((q) => (!q.requestId || attached.has(q.threadId)) && !q.tool && (q.kind as string) !== 'overlap') };
+}
+
+/** A step an overlap held was saved `waiting`, a status that went with overlaps; it's up next again. */
+function migrateWaitingSteps(thread: Thread): Thread {
+  if (!thread.steps.some((s) => (s.status as string) === 'waiting')) return thread;
+  return { ...thread, steps: thread.steps.map((s) => ((s.status as string) === 'waiting' ? { ...s, status: 'ready' } : s)) };
 }
 
 function reattachThread(thread: Thread, isWorking: boolean, reasked: Set<string>): Thread {
-  const activity = thread.activity.filter((e) => !(e.card?.isOpen && reasked.has(e.card.id)));
+  // The draft ran in the window that reloaded; its answer never comes.
+  const activity = failDrafts(
+    thread.activity.filter((e) => !(e.card?.isOpen && reasked.has(e.card.id))),
+    'Stopped when the window reloaded',
+  );
   return { ...thread, activity, live: { ...thread.live!, isWorking, isDetached: false } };
 }
 
@@ -83,7 +98,10 @@ function restoreThread(thread: Thread, now: number): Thread {
   // Sending the queue on launch would spend usage unasked.
   const restored = pauseQueue({ ...thread, live, ...(criteria && { criteria }), ...(idle && { idle }), ...(reviews && { reviews }), ...(subagents && { subagents }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
   // An image still being made when Mochi quit never lands; its card says so instead of generating forever.
-  const activity = restored.activity.map((e) => (e.generated?.status === 'running' ? { ...e, generated: { ...e.generated, status: 'failed' as const, error: 'Stopped when Mochi quit' } } : e));
+  const activity = failDrafts(
+    restored.activity.map((e) => (e.generated?.status === 'running' ? { ...e, generated: { ...e.generated, status: 'failed' as const, error: 'Stopped when Mochi quit' } } : e)),
+    'Stopped when Mochi quit',
+  );
   if (!thread.live!.isWorking) return { ...restored, activity };
   return { ...restored, activity: [...activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
 }

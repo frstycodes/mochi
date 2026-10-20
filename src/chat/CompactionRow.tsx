@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Compress } from 'reicon-react';
+import { ChevronRight, Minimize } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
@@ -19,7 +19,7 @@ export function CompactionRow({ compaction, at, provider }: { compaction: Compac
     <div className="-mx-2 flex flex-col">
       <div className={cn('group/log relative isolate flex h-7 w-fit max-w-full min-w-0 items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground', hasBody && 'hover:bg-accent/60 hover:text-foreground')}>
         {hasBody && <button type="button" aria-expanded={isOpen} aria-label="Compaction details" onClick={() => setOpen((o) => !o)} className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2" />}
-        <Compress aria-hidden className="size-4 shrink-0" />
+        <Minimize aria-hidden className="size-4 shrink-0" />
         <CompactionLine compaction={compaction} kept={kept} />
         {hasBody && <ChevronRight aria-hidden className={cn('size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none', isOpen && 'rotate-90')} />}
       </div>

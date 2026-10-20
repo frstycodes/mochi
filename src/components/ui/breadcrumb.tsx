@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
-import { ChevronRight as ChevronRightIcon, MoreH as MoreHorizontalIcon } from 'reicon-react'
+import { ChevronRight as ChevronRightIcon, More as MoreHorizontalIcon } from '@/icons'
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -103,7 +103,7 @@ function BreadcrumbEllipsis({
       )}
       {...props}
     >
-      <MoreHorizontalIcon weight="Filled"
+      <MoreHorizontalIcon filled
       />
       <span className="sr-only">More</span>
     </span>

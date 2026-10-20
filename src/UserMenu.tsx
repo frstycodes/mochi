@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { ChevronDown, Flash, Login, Logout, Monitor, Moon, Pause, Play, Refresh, RefreshCircle, Setting2, Sun, UserCircle, UserEdit } from 'reicon-react';
+import { ChevronDown, Login, Logout, Monitor, Moon, Pause, Play, Refresh, RefreshCircle, Settings, Sun, UserCircle, UserEdit } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,7 +49,7 @@ export function UserMenu() {
       <DropdownMenuContent side="top" align="start" className="w-56">
         <AccountItems {...mochiAccount} />
         <DropdownMenuItem onSelect={() => openSettings()}>
-          <Setting2 />
+          <Settings />
           Settings
           <BoundShortcut command="go-settings" className="ml-auto" />
         </DropdownMenuItem>
@@ -64,10 +64,6 @@ export function UserMenu() {
               <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
                 <IconSwap id={state.paused ? 'play' : 'pause'}>{state.paused ? <Play /> : <Pause />}</IconSwap>
                 {state.paused ? 'Resume simulation' : 'Pause simulation'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatch({ type: 'trigger-overlap' })}>
-                <Flash />
-                Trigger an overlap
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
                 <Refresh />

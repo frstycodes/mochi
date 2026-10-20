@@ -1,9 +1,8 @@
-import { ChevronRight, CloseCircle, TickCircle } from 'reicon-react';
+import { ChevronRight, XCircle, CheckBadge } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
-import { isWorking } from '../agentPhase';
 import type { Author, Criterion, Revision, Thread } from '../model';
 import { clock } from '../progress';
 import { PROVIDER_NAME } from '../rewind/handoff';
@@ -11,13 +10,9 @@ import { CriteriaList } from './CriteriaList';
 import { revisionDiff } from './edit';
 import { currentReport } from './report';
 import { ReportList, ReportQuestion } from './ReportCard';
-import { StepLine } from './steps';
 
-/** The expanded goal: the outcome, what done means with its checks, the agent's checklist while it works, and the goal's history. */
+/** The expanded goal: the outcome, what done means with its checks, the agent's last report, and the goal's history. */
 export function GoalDetails({ thread }: { thread: Thread }) {
-  const steps = thread.steps.filter((s) => s.status !== 'dropped');
-  const isShowingSteps = isWorking(thread) && steps.length > 0;
-
   return (
     <div className="flex flex-col gap-5">
       <p className="type-title text-pretty">{thread.goal}</p>
@@ -27,17 +22,6 @@ export function GoalDetails({ thread }: { thread: Thread }) {
         </DetailSection>
       )}
       <LatestReport thread={thread} />
-      {isShowingSteps && (
-        <DetailSection title="Working on" hint="The agent's own checklist">
-          <ol className="flex flex-col gap-1">
-            {steps.map((s) => (
-              <li key={s.id}>
-                <StepLine step={s} />
-              </li>
-            ))}
-          </ol>
-        </DetailSection>
-      )}
       <DetailSection title="History">
         <ol className="flex flex-col">
           {goalEvents(thread).map((e) => (
@@ -129,7 +113,7 @@ const DIFF_TONE = { '+': 'text-success', '−': 'text-destructive', '~': 'text-s
 
 function CriterionEventRow({ criterion: c, kind }: { criterion: Criterion; kind: 'claim' | 'check' }) {
   const event = kind === 'claim' ? claimEvent(c) : checkEvent(c);
-  const Icon = event.isFailed ? CloseCircle : TickCircle;
+  const Icon = event.isFailed ? XCircle : CheckBadge;
   return (
     <div className="flex min-w-0 items-start gap-2 px-1 py-1 type-meta">
       <Icon aria-hidden className={cn('mt-0.5 size-3.5 shrink-0', event.isFailed ? 'text-destructive' : kind === 'check' ? 'text-success' : 'text-subtle-foreground')} />

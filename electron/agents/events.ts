@@ -7,6 +7,7 @@ type SeqEvent = AgentEvent & { seq: number };
 
 const taps = new Set<Tap>();
 const busy = new Set<string>();
+const busyTaps = new Set<() => void>();
 let whenClosed: Tap = () => {};
 
 // Starts at the clock so a number saved last launch is always below this launch's.
@@ -17,7 +18,7 @@ const MAX_KEPT = 500;
 
 /** Every thread agent event goes through here: watchers see it first, then open windows get it; with no main window (the one holding the store), `whenClosed` keeps it. */
 export function emitAgentEvent(event: AgentEvent) {
-  if (event.type === 'turn-end' || event.type === 'limit') busy.delete(event.threadId);
+  if (event.type === 'turn-end' || event.type === 'limit') markIdle(event.threadId);
   const numbered = { ...event, seq: ++seq };
   remember(numbered);
   for (const tap of taps) tap(event);
@@ -49,8 +50,22 @@ export function keepWhenClosed(keep: Tap) {
 }
 
 /** A thread's agent has a turn in flight, from `start` / `send` until it ends or hits its limit. */
-export const markBusy = (threadId: string) => void busy.add(threadId);
-export const markIdle = (threadId: string) => void busy.delete(threadId);
+export const markBusy = (threadId: string) => setBusy(threadId, true);
+export const markIdle = (threadId: string) => setBusy(threadId, false);
 export const isBusy = (threadId: string) => busy.has(threadId);
+export const isAnyBusy = () => busy.size > 0;
+
+/** Fires when the first turn starts or the last one ends. */
+export function onBusyChange(tap: () => void) {
+  busyTaps.add(tap);
+  return () => void busyTaps.delete(tap);
+}
+
+function setBusy(threadId: string, isBusy: boolean) {
+  const was = busy.size > 0;
+  if (isBusy) busy.add(threadId);
+  else busy.delete(threadId);
+  if (was !== busy.size > 0) busyTaps.forEach((tap) => tap());
+}
 
 export const openWindows = () => BrowserWindow.getAllWindows().filter((w) => !w.webContents.isDestroyed());

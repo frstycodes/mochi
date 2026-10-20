@@ -34,6 +34,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     theme: storedTheme,
     settings: host.settings,
     themes: host.themes,
+    library: host.library,
     remote: host.remote,
     isDesktop: host.isDesktop,
     git: host.git,

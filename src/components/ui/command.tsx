@@ -13,7 +13,7 @@ import {
   InputGroup,
   InputGroupAddon,
 } from "@/components/ui/input-group"
-import { Search as SearchIcon, Check as CheckIcon } from 'reicon-react'
+import { Search as SearchIcon, Check as CheckIcon } from '@/icons'
 
 function Command({
   className,
@@ -23,7 +23,7 @@ function Command({
     <CommandPrimitive
       data-slot="command"
       className={cn(
-        "flex size-full flex-col overflow-hidden rounded-xl! bg-popover p-1 text-popover-foreground",
+        "flex size-full flex-col overflow-hidden rounded-xl! bg-transparent p-1 text-popover-foreground",
         className
       )}
       {...props}
@@ -52,10 +52,12 @@ function CommandDialog({
       </DialogHeader>
       <DialogContent
         className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
+          "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0 shadow-overlay animate-none!",
           className
         )}
         showCloseButton={showCloseButton}
+        // Toggled from the keyboard many times a day, so it appears and goes instantly, like Raycast.
+        overlayClassName="animate-none!"
       >
         {children}
       </DialogContent>
@@ -138,7 +140,7 @@ function CommandSeparator({
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={cn("-mx-1 h-px bg-border", className)}
+      className={cn("mx-1.5 h-px bg-border", className)}
       {...props}
     />
   )

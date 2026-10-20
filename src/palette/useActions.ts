@@ -1,5 +1,5 @@
 import { useTheme } from 'next-themes';
-import { Star } from 'reicon-react';
+import { Star } from '@/icons';
 import { usePrefs } from '../settings/prefs';
 import { splitStarred } from '../themes/groups';
 import { useThemesState } from '../themes/store';

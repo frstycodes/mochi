@@ -11,7 +11,9 @@ import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
+import { dueReports } from '../runtime/subagents.ts';
 import { runTool } from '../runtime/tools.ts';
+import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
 import type { ToolUndo } from '../runtime/undo.ts';
 import type { LayoutAction, LayoutState } from './layout.ts';
@@ -32,13 +34,11 @@ import { recordAction } from '../replay/recorder.ts';
 import { tapAction } from '../remote/tap.ts';
 import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
-import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
 import { useIdleChecks } from '../goals/useIdleChecks';
 import { useAutoSimplify } from '../simplify/useSimplify.ts';
 import { usePrSync } from '../git/usePrSync.ts';
 
 export type { View } from './layout.ts';
-export type { OverlapMode } from './threads.ts';
 export { rankQueue };
 export { mirrorState, reducer } from './root.ts';
 
@@ -137,6 +137,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
       if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
+      if (event.type === 'autofix') return apply({ type: 'autofix', threadId: event.threadId, event: event.event });
       apply(event.type === 'ci' ? { type: 'ci-result', event } : { type: 'schedule-run', event });
     };
     const off = host.schedule.onEvent(onSchedule);
@@ -154,7 +155,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
           latest.current = reducer(latest.current, action);
         },
       );
-      void runTool(call, env).then((result) => host.agent.toolResult(call.id, result));
+      void (import.meta.env.DEV && call.threadId === '__dev__' ? runDevTool(call, env) : runTool(call, env)).then((result) => host.agent.toolResult(call.id, result));
     };
     const off = host.agent.onToolCall(onToolCall);
     // Asked only once listening, so a call main sends meanwhile arrives once, by one route or the other.
@@ -162,6 +163,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     return off;
   }, [dispatch]);
   useQueueRunner(state, dispatch);
+  useDelegatedReports(state.threads, dispatch);
   useCompactInstructions(state.threads);
   useRemoteBridge(state, dispatch);
   useLimitResumes(state.threads, dispatch);
@@ -170,7 +172,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   useAutoTitles(state.threads, dispatch);
-  useGoalDrafts(state.threads, dispatch);
   useIdleChecks(state.threads, dispatch);
   useAutoSimplify(state.threads, dispatch);
   usePrSync(state.threads, dispatch);
@@ -192,6 +193,20 @@ function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
       else sendMessage(dispatch, state, thread, message, { queuedId: message.id });
     }
   }, [state, dispatch]);
+}
+
+/** Sends each finished delegated task's report to its thread's agent right away, steering a turn in flight; `dueReports` says which. */
+function useDelegatedReports(threads: Thread[], dispatch: Dispatch<Action>) {
+  // The report applies on the next render; until then the same one is still due.
+  const sent = useRef(new Set<string>());
+  useEffect(() => {
+    for (const { thread, subagent } of dueReports(threads)) {
+      const key = `${thread.id}:${subagent.id}`;
+      if (sent.current.has(key)) continue;
+      sent.current.add(key);
+      dispatch({ type: 'delegate-report', threadId: thread.id, subagentId: subagent.id });
+    }
+  }, [threads, dispatch]);
 }
 
 /** Resumes threads you set to Resume at reset once their reset passes; one timer for the earliest. */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ArrowUpRight, Copy, DocumentCode, Global, Pip, Play, Plug, TerminalSquare, Trash3 } from 'reicon-react';
+import { ArrowUpRight, Copy, FileCode, Globe, Pip, Play, Plug, Terminal, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +66,7 @@ function Ports({ thread, pane, cwd }: { thread: Thread; pane: Pane; cwd: string 
                     actions={
                       <>
                         <TooltipIconButton label="Open in pane" hint={`Shows localhost:${p.port} in Preview`} onClick={() => openers.openPort(p.port)}>
-                          <Global />
+                          <Globe />
                         </TooltipIconButton>
                         <TooltipIconButton label="Open in floating window" hint="Keeps it on top while you work" onClick={() => openInPip(p.port)}>
                           <Pip />
@@ -78,7 +78,7 @@ function Ports({ thread, pane, cwd }: { thread: Thread; pane: Pane; cwd: string 
                           <Copy />
                         </TooltipIconButton>
                         <TooltipIconButton label="Stop process" hint={`Asks before stopping pid ${p.pid}`} onClick={() => setKilling(p)}>
-                          <Trash3 />
+                          <Trash />
                         </TooltipIconButton>
                       </>
                     }
@@ -127,7 +127,7 @@ function Ports({ thread, pane, cwd }: { thread: Thread; pane: Pane; cwd: string 
   );
 }
 
-const SOURCE_ICONS = { 'package.json': TerminalSquare, 'launch.json': DocumentCode } satisfies Record<RunTarget['source'], unknown>;
+const SOURCE_ICONS = { 'package.json': Terminal, 'launch.json': FileCode } satisfies Record<RunTarget['source'], unknown>;
 
 function RunTargetItem({ target, onRun }: { target: RunTarget; onRun: () => void }) {
   const Icon = SOURCE_ICONS[target.source];
@@ -173,7 +173,7 @@ function NoPorts() {
 function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
   const { dispatch } = useHarness();
   const openers = usePaneOpeners(thread.id);
-  const listening = usePorts(thread.id, cwd, openers.openPort);
+  const listening = usePorts(thread.id, cwd);
   const [targets, setTargets] = useState<RunTarget[]>();
   const [threadPort, setThreadPort] = useState<number>();
   useEffect(() => {

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Copy, Document, Export, FolderOpen } from 'reicon-react';
+import { Copy, File, Share, FolderOpen } from '@/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { host } from '@/host';
 import { copyText } from '../clipboard';
@@ -18,13 +18,13 @@ export function FileContextMenu({ root, path, onOpen, children }: { root: string
             <ContextMenuGroup>
               {!!onOpen && (
                 <ContextMenuItem onSelect={onOpen}>
-                  <Document />
+                  <File />
                   Open
                 </ContextMenuItem>
               )}
               {editors.map((editor) => (
                 <ContextMenuItem key={editor} onSelect={() => openInEditor(editor, root, path)}>
-                  <Export />
+                  <Share />
                   Open in {EDITOR_NAMES[editor]}
                 </ContextMenuItem>
               ))}

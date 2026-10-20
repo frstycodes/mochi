@@ -1,29 +1,28 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
 import { gateRefusal, prGate } from '../goals/verdict.ts';
-import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
-import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
+import type { AgentModel, AgentPlanItem, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
 import type { BranchList, CheckRun } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
+import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
-import { draftFrom, type GoalDraft } from '../goals/edit.ts';
+import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread } from '../model.ts';
 import { projectRef } from '../projects.ts';
-import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
+import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
-import { AGENT_CONTROL, THREAD_MODELS } from '../settings/settingOptions.ts';
+import { AGENT_CONTROL } from '../settings/settingOptions.ts';
 import { AGENT_CONTROLS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { BROWSER_TOOLS } from './browserTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
-import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
-import { defaultModelOf, effortRank, modelTier } from './models.ts';
-import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
+import { controlsOf, DEFAULT_CONTROLS } from './controls.ts';
+import { resolveRun } from './models.ts';
+import { APPROVAL_TIMEOUT_MS, isGoalTool, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
 import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
 
@@ -57,10 +56,12 @@ export interface ToolEnv {
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   /** Installed color themes and Settings › Remote access, read for `get_settings`. */
   themes: Pick<ThemesHost, 'list'>;
+  /** The profile library's connector accounts, read for `list_connectors`; adding one is the user's, on the widget. */
+  library: Pick<LibraryHost, 'list' | 'oauthApps' | 'ownAppRedirect' | 'addConnector' | 'onAuthorize' | 'onDeviceCode' | 'runSetup' | 'updateSetupStep'>;
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
+  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
   now?: () => number;
 }
 
@@ -72,8 +73,14 @@ export interface ToolContext<A = Record<string, unknown>> {
   dispatch: (action: Action) => void;
   /** Asks the user on a widget mid-run (browser escalation); throws when the setting doesn't allow it or they deny. */
   confirm: (approval: Approval) => Promise<string[]>;
+  /** Asks the user to pick one of `options` on a widget, at any agent setting: a question, not a permission. */
+  choose: (question: { title: string; detail?: string; options: string[] }) => Promise<string>;
+  /** Waits on a widget for something only the user can do, at any agent setting; throws when they cancel it. */
+  waitOn: (approval: Approval) => Promise<string[]>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
+  /** When waiting on the user must end; a batch's steps share their batch's, so it never outlasts the harness's timeout. */
+  deadline: number;
   /** A config write `ask` previewed: `run` applies exactly these changes, refused if a file changed since (`befores`). */
   write?: { spaceId: string; changes: ConfigChange[]; befores: Record<string, string> };
 }
@@ -83,12 +90,20 @@ export interface Approval {
   title: string;
   detail: string;
   options?: { id: string; label: string }[];
+  /** A question with one answer: `options` become radio buttons, one must be picked, and its id comes back. */
+  pick?: 'one';
   /** Shown whole on the widget, like a script about to run. */
   code?: string;
   /** A delete: the widget's primary is a red Delete. */
   isDestructive?: boolean;
   /** The record line when the user says no, like "Kept \"Fix e2e\"". */
   denied?: string;
+  /** The record line when the user says yes, in place of "Approved: <title>". */
+  approved?: string;
+  /** A handoff: the widget reads as the user's turn, with Done. */
+  isHandoff?: boolean;
+  /** Settles the widget as approved, with its answer as the one option, without the user; aborted once they answer. */
+  until?: (signal: AbortSignal) => Promise<string>;
   edits?: FileEdit[];
   notes?: string[];
 }
@@ -102,6 +117,9 @@ export interface Outcome {
   isFinal?: boolean;
   /** Puts it back when the store snapshot can't, like stopping and removing a thread the call started. */
   undo?: () => void;
+  /** Its line's icon and the page it acted on (favicon and host), for browser actions. */
+  glyph?: EventGlyph;
+  site?: string;
 }
 
 export type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
@@ -120,19 +138,20 @@ const levelLabel = (control: AgentControl) => AGENT_CONTROL.options.find((o) => 
  * Runs a Mochi tool an agent called (RUNTIME.md › Mochi tools): checks scope and the level the setting allows, asks on
  * a widget in the thread for deletes and settings, runs the handler on the store, logs it, and toasts with Undo.
  */
-export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentToolResult> {
+export async function runTool(call: AgentToolCall, env: ToolEnv, deadline = Date.now() + APPROVAL_TIMEOUT_MS): Promise<AgentToolResult> {
   const caller = env.getState().threads.find((t) => t.id === call.threadId);
   if (!caller) return fail(`No thread ${call.threadId}`);
   if (!Object.hasOwn(TOOL_TABLE, call.name)) return fail(`No Mochi tool ${call.name}`);
   const name = call.name as ToolName;
   const parsed = z.object(TOOL_TABLE[name].shape).safeParse(call.args);
   if (!parsed.success) return fail(parsed.error.issues.map((i) => `${i.path.join('.') || 'args'}: ${i.message}`).join('; '));
-  const ctx = context(env, caller, parsed.data, name);
+  const ctx = context(env, caller, parsed.data, name, deadline);
   const spec = SPECS[name] as ToolSpec<ToolName>;
   const tier = tierOf(name);
   const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);
   try {
     if (isChosen && policy === 'off') throw new Error(`The user turned ${name} off for agents in Settings › Mochi access. Don't call it again unless they turn it back on.`);
+    if (isGoalTool(name) && !env.prefs.get().goals) throw new Error('The user turned goals off in Settings › Goals and checks. Carry on without a goal and don\'t call goal tools again.');
     if (!isChosen) gate(ctx, name, LEVEL[tier]);
     const approval = spec.ask?.(ctx) ?? (policy === 'ask' ? approvalFor(ctx, name) : undefined);
     // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.
@@ -162,8 +181,8 @@ let nextCard = 0;
 const RUN = Date.now().toString(36);
 export const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
 
-function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): ToolContext<A> {
-  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), cards: [] };
+function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName, deadline: number): ToolContext<A> {
+  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), waitOn: (approval) => ask(ctx, approval), cards: [], deadline };
   return ctx;
 }
 
@@ -197,20 +216,32 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = cardId('tool', ctx.caller.id);
-  const { options, isDestructive, edits, notes } = approval;
-  const tool = { callId: id, options, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
+  const { options, pick, isDestructive, isHandoff, edits, notes } = approval;
+  const tool = { callId: id, options, pick, isDestructive, isHandoff, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
+  const watch = new AbortController();
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
-    const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
+    const timer = setTimeout(() => resolve(null), Math.max(0, ctx.deadline - Date.now()));
     waiting.set(id, (d) => (clearTimeout(timer), resolve(d)));
+    approval.until?.(watch.signal).then((answer) => decideTool(id, { isApproved: true, options: [answer] }), () => undefined);
   });
+  watch.abort();
   waiting.delete(id);
-  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? `Approved: ${approval.title}` : (approval.denied ?? `Denied: ${approval.title}`);
+  const picked = pick && options?.find((o) => o.id === decision?.options?.[0])?.label;
+  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : (approval.approved ?? `Approved: ${approval.title}`)) : (approval.denied ?? `Denied: ${approval.title}`);
   ctx.dispatch({ type: 'card-record', queueId: id, text });
-  if (!decision) throw new Error(`Nobody answered in ${APPROVAL_TIMEOUT_MS / 60_000} minutes; nothing was done.`);
+  if (!decision) throw new Error('Nobody answered in time; nothing was done.');
   if (!decision.isApproved) throw new Error(`The user denied it: ${approval.title} Nothing was done.`);
   ctx.cards.push(id);
   return decision.options ?? [];
+}
+
+async function choose(ctx: ToolContext<unknown>, { title, detail = '', options }: { title: string; detail?: string; options: string[] }) {
+  const [answer] = await ask(ctx, { title, detail, options: options.map((o) => ({ id: o, label: o })), pick: 'one', denied: `No answer to: ${title}` });
+  // An answer isn't an approval: the card keeps its own record, and the call logs what it changed on a line of its own.
+  ctx.cards.pop();
+  if (!answer) throw new Error(`No answer was picked: ${title}`);
+  return answer;
 }
 
 /** A widget joins the queue and the caller's thread, at the point the agent asked. */
@@ -227,9 +258,10 @@ export function card(ctx: ToolContext<unknown>, id: string, kind: QueueItem['kin
 function record(ctx: ToolContext<unknown>, name: ToolName, outcome: Outcome, before: State) {
   const changed = outcome.changed!;
   const asked = ctx.cards.at(-1);
-  if (asked) return ctx.dispatch({ type: 'card-record', queueId: asked, text: capitalize(changed) });
+  const { glyph, site } = outcome;
+  if (asked) return ctx.dispatch({ type: 'card-record', queueId: asked, text: capitalize(changed), ...(glyph && { glyph }), ...(site && { site }) });
   const text = `${authorName(ctx.caller.providers[0])} ${changed}`;
-  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text } });
+  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text, ...(glyph && { glyph }), ...(site && { site }) } });
   if (!isQuiet(name)) ctx.env.toast(text, outcome.isFinal ? undefined : (outcome.undo ?? snapshotUndo(ctx.env, before)));
 }
 
@@ -264,7 +296,7 @@ const THREAD_SPECS = {
           ...summary(thread),
           goal: thread.goal,
           branch: thread.repo?.branch ?? null,
-          steps: thread.steps.map(stepOf),
+          plan: thread.steps.filter((s) => s.status !== 'dropped').map(({ title, status }) => ({ title, status })),
           lastActivity: thread.activity.slice(-5).map((a) => ({ who: a.who, kind: a.kind, text: a.text.slice(0, 300) })),
           pullRequests: thread.prs,
           waitingOnUser: state().queue.filter((q) => q.threadId === thread.id).map((q) => ({ kind: q.kind, title: q.title })),
@@ -303,7 +335,7 @@ const THREAD_SPECS = {
       const pinned = [...lists.pinned, ...threads.map((t) => t.id)];
       if (pinned.length > PIN_SLOTS.length) throw new Error(`Only ${PIN_SLOTS.length} threads can be pinned and ${lists.pinned.length} already are; unpin one first`);
       if (threads.some((t) => t.status === 'settled')) throw new Error('Settled threads can’t be pinned; reactivate_thread first');
-      dispatch({ type: 'reorder', pinned, unpinned: lists.unpinned.filter((id) => !pinned.includes(id)) });
+      dispatch({ type: 'reorder', pinned, unpinned: lists.unpinned.filter((id) => !pinned.includes(id)), at: Date.now() });
       return { changed: `pinned ${count(threads)}`, result: { pinned: sidebar(state(), caller).pinned } };
     },
   },
@@ -312,7 +344,7 @@ const THREAD_SPECS = {
       const threads = targets(state(), caller, args.threadIds).filter(isPinned);
       const lists = sidebar(state(), caller);
       const ids = threads.map((t) => t.id);
-      dispatch({ type: 'reorder', pinned: lists.pinned.filter((id) => !ids.includes(id)), unpinned: [...ids, ...lists.unpinned] });
+      dispatch({ type: 'reorder', pinned: lists.pinned.filter((id) => !ids.includes(id)), unpinned: [...ids, ...lists.unpinned], at: Date.now() });
       return { changed: `unpinned ${count(threads)}`, result: { pinned: sidebar(state(), caller).pinned } };
     },
   },
@@ -321,7 +353,7 @@ const THREAD_SPECS = {
       const lists = sidebar(state(), caller);
       if (args.pinnedOrder) {
         const order = targets(state(), caller, args.pinnedOrder).map((t) => t.id);
-        dispatch({ type: 'reorder', pinned: order, unpinned: [...lists.pinned.filter((id) => !order.includes(id)), ...lists.unpinned.filter((id) => !order.includes(id))] });
+        dispatch({ type: 'reorder', pinned: order, unpinned: [...lists.pinned.filter((id) => !order.includes(id)), ...lists.unpinned.filter((id) => !order.includes(id))], at: Date.now() });
         return { changed: 'reordered the pinned threads', result: sidebar(state(), caller) };
       }
       const anchorId = args.before ?? args.after;
@@ -334,7 +366,7 @@ const THREAD_SPECS = {
       if (!list.includes(anchor.id)) throw new Error(`"${anchor.title}" isn't in the sidebar's active list`);
       const next = dropPin(lists.pinned, lists.unpinned, moving.id, toPinned, list.indexOf(anchor.id) + (args.after ? 1 : 0));
       if (!next) throw new Error(`Pinned is full (${PIN_SLOTS.length}); unpin one first`);
-      dispatch({ type: 'reorder', ...next });
+      dispatch({ type: 'reorder', ...next, at: Date.now() });
       return { changed: `moved "${moving.title}" ${args.after ? 'below' : 'above'} "${anchor.title}"`, result: sidebar(state(), caller) };
     },
   },
@@ -349,10 +381,15 @@ const THREAD_SPECS = {
     run: async ({ state, caller, args, dispatch, env }) => {
       const prompt = args.prompt.trim();
       if (!prompt) throw new Error('prompt is required');
+      const parent = subThreadLink(caller, args);
       const provider = providerOf(args.provider, caller);
-      const controls = await newThreadControls(env, caller, provider, args);
       const project = projectRef(caller.repo);
-      const workspace = project ? await newWorktree(env, project, prompt) : undefined;
+      // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
+      const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
+      // Always its own worktree, whatever the composer's Worktree box says: parallel agents sharing one folder trip over each
+      // other's changes and make worktrees Mochi can't see. Its branch gets a temp name until its title names it.
+      const workspace = project ? { mode: 'worktree' as const, ...(base && { base }) } : undefined;
+      const controls = await newThreadControls(env, caller, provider, args);
       const before = state();
       dispatch({
         type: 'create',
@@ -363,6 +400,7 @@ const THREAD_SPECS = {
         controls,
         isLive: !!caller.live,
         isBackground: true,
+        ...(parent && { parent }),
       });
       const created = state().threads.find((t) => !before.threads.some((s) => s.id === t.id))!;
       return { changed: `started "${created.title}"`, result: summary(created), undo: () => dispatch({ type: 'delete', threadIds: [created.id] }) };
@@ -403,65 +441,7 @@ const THREAD_SPECS = {
 } satisfies Partial<Specs>;
 
 const GOAL_SPECS = {
-  get_goal: { run: ({ state, caller, args }) => ({ result: goalOf(target(state(), caller, args.threadId)) }) },
-  set_step_status: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      const step = stepIn(thread, args.stepId);
-      dispatch({ type: 'step-status', threadId: thread.id, stepId: step.id, status: args.status as StepStatus, by: caller.providers[0] });
-      return { changed: `marked "${step.title}" ${args.status}`, result: goalOf(target(state(), caller, thread.id)) };
-    },
-  },
-  add_step: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      const title = args.title.trim();
-      if (!title) throw new Error('title is required');
-      const draft = draftFrom(thread);
-      draft.steps.push({ title, size: 1, gate: false, isRemoved: false, isLocked: false });
-      editGoal(dispatch, thread, caller, draft);
-      return { changed: `added the step "${title}"`, result: goalOf(target(state(), caller, thread.id)) };
-    },
-  },
-  edit_goal: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      if (args.goal === undefined && !args.criteria?.length) throw new Error('Pass goal, criteria, or both');
-      const draft = draftFrom(thread);
-      if (args.goal !== undefined) draft.goal = args.goal;
-      for (const c of args.criteria ?? []) {
-        const step = draft.steps.find((s) => s.id === c.stepId);
-        if (!step) throw new Error(`No open step ${c.stepId} in "${thread.title}"; get_goal lists them`);
-        step.acceptance = { text: c.text, command: c.command };
-      }
-      if (!editGoal(dispatch, thread, caller, draft, state)) throw new Error('Nothing changed; the goal already reads like that');
-      return { changed: `edited the goal of "${thread.title}"`, result: goalOf(target(state(), caller, thread.id)) };
-    },
-  },
-  reorder_steps: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      const draft = draftFrom(thread);
-      const unknown = args.order.filter((id) => !draft.steps.some((s) => s.id === id));
-      if (unknown.length) throw new Error(`No open steps ${unknown.join(', ')} in "${thread.title}"; get_goal lists them`);
-      const rank = (id?: string) => (id && args.order.includes(id) ? args.order.indexOf(id) : args.order.length);
-      draft.steps = [...draft.steps].sort((a, b) => rank(a.id) - rank(b.id));
-      if (!editGoal(dispatch, thread, caller, draft, state)) throw new Error('The steps are already in that order');
-      return { changed: `reordered the steps of "${thread.title}"`, result: goalOf(target(state(), caller, thread.id)) };
-    },
-  },
-  drop_step: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      const step = stepIn(thread, args.stepId);
-      if (step.status === 'done') throw new Error(`"${step.title}" is done; done steps stay`);
-      if (step.status === 'dropped') throw new Error(`"${step.title}" is already dropped`);
-      const draft = draftFrom(thread);
-      draft.steps = draft.steps.map((s) => (s.id === step.id ? { ...s, isRemoved: true } : s));
-      editGoal(dispatch, thread, caller, draft);
-      return { changed: `dropped "${step.title}"${args.reason ? `: ${args.reason}` : ''}`, result: goalOf(target(state(), caller, thread.id)) };
-    },
-  },
+  get_goal: { run: ({ state, caller, args }) => ({ result: goalOf(target(state(), caller, args.threadId), state().threads) }) },
   open_pr: {
     run: async ({ env, state, caller, args, dispatch }) => {
       const cwd = caller.repo && env.cwdOf(caller);
@@ -469,18 +449,20 @@ const GOAL_SPECS = {
       const { current, defaultBranch } = await env.git.branches(cwd);
       if (!current) throw new Error(`${cwd} is on a detached HEAD, so there is no branch to push. Commit on this thread's own branch, not in another worktree`);
       if (current === defaultBranch) throw new Error(`${cwd} is on ${defaultBranch}; open_pr would push straight to it. Commit on a branch of its own first`);
+      const isGoalsOn = env.prefs.get().goals;
       // Checks run again here: open_pr usually comes mid-turn, before the idle pass would have run them.
-      for (const c of caller.criteria ?? []) {
+      for (const c of isGoalsOn ? (caller.criteria ?? []) : []) {
         if (!c.command) continue;
         const result = await env.git.runCheck(cwd, c.command).catch((error: Error) => ({ exitCode: null, output: error.message, ms: 0 }));
         dispatch({ type: 'criterion-check', threadId: caller.id, criterionId: c.id, result });
       }
       const checked = target(state(), caller, caller.id);
-      const gate = prGate(checked, env.prefs.get().prGaps);
+      const gate = isGoalsOn ? prGate(checked, env.prefs.get().prGaps) : { blocking: [], noted: [] };
       if (gate.blocking.length) throw new Error(gateRefusal(checked, gate.blocking));
       const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
+      const base = await parentBase(env, state(), caller, githubUser);
       await env.git.push(cwd, githubUser);
-      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(checked, args.why, gate.noted) }, githubUser);
+      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(checked, args.why, gate.noted), ...(base && { base }) }, githubUser);
       const opened = openedPr(url, args.title.trim());
       if (opened) dispatch({ type: 'prs-seen', threadId: caller.id, prs: [opened] });
       return { changed: `opened ${url}`, result: { url } };
@@ -489,7 +471,6 @@ const GOAL_SPECS = {
   propose_goal: {
     run: ({ state, env, caller, args, dispatch }) => {
       if (caller.isGoalOff) throw new Error('The user removed this thread\'s goal; carry on without one');
-      if (caller.proposal && caller.proposal.state !== 'waiting' && caller.proposal.state !== 'undone') throw new Error('This thread already has the goal you proposed; edit_goal changes it');
       const isApplied = env.prefs.get().proposedGoals === 'apply';
       const criteria = args.criteria.map((c) => ({ text: c.text.trim(), ...(c.command?.trim() && { command: c.command.trim() }) }));
       dispatch({ type: 'goal-propose', threadId: caller.id, goal: args.goal.trim(), criteria, basis: args.basis?.trim() || undefined, by: caller.providers[0], isApplied });
@@ -509,9 +490,10 @@ const GOAL_SPECS = {
   },
   report_turn: {
     run: ({ state, caller, args, dispatch }) => {
-      if (!caller.goal) throw new Error('This thread has no goal; there is nothing to report against');
+      if (!caller.goal && caller.proposal?.state !== 'waiting') throw new Error('This thread has no goal; propose a researched goal before reporting');
       if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
-      dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }) } });
+      const { summary, next, options } = args;
+      dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }), ...(summary?.trim() && { summary: summary.trim() }), ...(next?.trim() && { next: next.trim() }), ...(options && { options: options.map((o) => ({ label: o.label.trim(), reply: o.reply.trim(), ...(o.isDraft && { isDraft: true }) })) }) } });
       return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
     },
   },
@@ -519,13 +501,9 @@ const GOAL_SPECS = {
   settle_goal: {
     run: ({ state, caller, args, dispatch }) => {
       const [thread] = others(state(), caller, [args.threadId], 'settle');
-      const draft = draftFrom(thread);
-      const open = draft.steps.filter((s) => !s.isLocked);
-      draft.steps = draft.steps.map((s) => (s.isLocked ? s : { ...s, isRemoved: true }));
-      if (open.length) editGoal(dispatch, thread, caller, draft);
       dispatch({ type: 'say', threadId: thread.id, entry: { who: caller.providers[0], kind: 'event', text: `Goal settled by ${authorName(caller.providers[0])}: ${args.reason}` } });
       dispatch({ type: 'settle', threadId: thread.id });
-      return { changed: `settled the goal of "${thread.title}"${open.length ? `, dropping ${open.length} open ${open.length === 1 ? 'step' : 'steps'}` : ''}`, result: goalOf(target(state(), caller, thread.id)) };
+      return { changed: `settled the goal of "${thread.title}"`, result: goalOf(target(state(), caller, thread.id)) };
     },
   },
 } satisfies Partial<Specs>;
@@ -598,34 +576,45 @@ const USER_SPECS = {
 } satisfies Partial<Specs>;
 
 const AGENT_SPECS = {
-  start_background_agent: {
-    run: ({ state, caller, args, dispatch }) => {
-      if (!caller.live) throw new Error('Background agents run only in a live desktop thread.');
-      if (args.worktree === 'new' && !caller.repo) throw new Error('This chat has no project, so there is no repository to make a worktree in. Use worktree: same.');
-      const id = `bg${(caller.subagents ?? []).filter((s) => s.origin === 'mochi').length + 1}`;
-      const agent = { id, name: args.name.trim(), prompt: args.prompt.trim(), provider: providerOf(args.provider, caller), hasOwnWorktree: args.worktree === 'new', ...(args.model && { model: args.model }) };
-      dispatch({ type: 'bg-start', threadId: caller.id, agent });
-      const started = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === id);
-      if (!started) throw new Error('The background agent did not start');
-      return { changed: `started background agent "${agent.name}"`, result: agentOf(started), isFinal: true };
+  update_plan: {
+    run: ({ caller, args, dispatch }) => {
+      if (!args.items && !args.advance) throw new Error('Pass {"items": [...]} (the whole plan) or {"advance": true}');
+      const items = args.items ? args.items.map((i) => ({ title: i.title.trim(), status: PLAN_STATUS[i.status] })) : advanced(caller.steps);
+      dispatch({ type: 'agent', event: { threadId: caller.id, type: 'plan', items } });
+      return { result: `Plan shown (${items.length} steps).` };
     },
   },
-  list_background_agents: {
-    run: ({ caller, args, env }) => ({ result: { agents: (caller.subagents ?? []).filter((s) => !args.status || s.status === args.status).map((s) => agentOf(s, env.now?.() ?? Date.now())) } }),
-  },
-  stop_background_agent: {
+  delegate_task: {
     run: ({ state, caller, args, dispatch }) => {
-      const subagent = caller.subagents?.find((s) => s.id === args.id);
-      if (!subagent) throw new Error(`No agent ${args.id} in this thread; ids come from list_background_agents`);
-      if (subagent.status !== 'running') throw new Error(`"${subagent.name}" already ${subagent.status === 'done' ? 'finished' : subagent.status}`);
-      dispatch({ type: 'bg-stop', threadId: caller.id, subagentId: subagent.id });
-      const after = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === subagent.id);
-      return { changed: `stopped background agent "${subagent.name}"`, result: agentOf(after ?? subagent), isFinal: true };
+      if (!caller.live) throw new Error('Delegated tasks run only in a live desktop thread.');
+      if (args.worktree === 'new' && !caller.repo) throw new Error('This chat has no project, so there is no repository to make a worktree in. Use worktree: same.');
+      const id = `bg${(caller.subagents ?? []).filter((s) => s.origin === 'mochi').length + 1}`;
+      const agent = { id, name: args.name.trim(), prompt: args.prompt.trim(), provider: args.provider, hasOwnWorktree: args.worktree === 'new', ...(args.model && { model: args.model }) };
+      dispatch({ type: 'bg-start', threadId: caller.id, agent });
+      const started = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === id);
+      if (!started) throw new Error('The delegated task did not start');
+      return { changed: `delegated "${agent.name}" to ${agent.provider}`, result: { id, name: agent.name, provider: agent.provider, status: started.status }, isFinal: true };
     },
   },
 } satisfies Partial<Specs>;
 
-const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, ...SETTINGS_TOOLS } satisfies Specs;
+const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, browser_batch: { run: runBatch }, ...SETTINGS_TOOLS } satisfies Specs;
+
+/** Each step runs as its own call: its policy, its approvals and its line in the thread, until one fails. */
+async function runBatch(ctx: ToolContext<Args<'browser_batch'>>): Promise<Outcome> {
+  const steps: { name: string; result: unknown }[] = [];
+  let image: Outcome['image'];
+  for (const [i, { name, input = {} }] of ctx.args.actions.entries()) {
+    const stop = (error: string) => new Error(JSON.stringify({ steps, failed: { step: i + 1, name, error } }));
+    if (!name.startsWith('browser_') || name === 'browser_batch') throw stop('A batch runs browser_* tools other than browser_batch');
+    if (Date.now() >= ctx.deadline) throw stop('The batch ran out of time; this step and the rest did not run');
+    const result = await runTool({ id: `${ctx.caller.id}-batch-${i}`, threadId: ctx.caller.id, name, args: input }, ctx.env, ctx.deadline);
+    if (result.isError) throw stop(result.text);
+    image = result.image ?? image;
+    steps.push({ name, result: JSON.parse(result.text) });
+  }
+  return { result: { steps }, ...(image && { image }) };
+}
 
 // {HELPERS}
 
@@ -649,19 +638,7 @@ function others(state: State, caller: Thread, ids: string[], verb: string) {
 
 function reportOf(thread: Thread) {
   const { goal, criteria = [], report, prs, status } = thread;
-  return { threadId: thread.id, title: thread.title, status, goal, criteria: criteria.map(({ id, text, claim }) => ({ id, text, claimed: claim?.evidence ?? null })), report: report ?? null, prs: prs.map(({ number, state, title }) => ({ number, state, title })) };
-}
-
-function stepIn(thread: Thread, stepId: string) {
-  const step = thread.steps.find((s) => s.id === stepId);
-  if (!step) throw new Error(`No step ${stepId} in "${thread.title}"; get_goal lists the step ids`);
-  return step;
-}
-
-/** True when the draft changed the goal or its plan. */
-function editGoal(dispatch: (a: Action) => void, thread: Thread, caller: Thread, draft: GoalDraft, state?: () => State) {
-  dispatch({ type: 'edit-goal', threadId: thread.id, draft, by: caller.providers[0] });
-  return !state || state().threads.find((t) => t.id === thread.id) !== thread;
+  return { threadId: thread.id, title: thread.title, status, goal, criteria: criteria.map(({ id, text, claim, check }) => ({ id, text, claimed: claim?.evidence ?? null, check: check?.status ?? null })), report: report ?? null, prs: prs.map(({ number, state, title }) => ({ number, state, title })) };
 }
 
 function sidebar(state: State, caller: Thread) {
@@ -672,42 +649,39 @@ const isPinned = (t: Thread) => t.orbitSlot !== undefined && t.status !== 'settl
 
 const providerOf = (provider: Provider | undefined, caller: Thread) => provider ?? caller.providers[0];
 
+/** The link a sub-thread starts with: to the caller and the criterion it covers. One level deep, so a sub-thread can't start one. */
+function subThreadLink(caller: Thread, args: { criterionId?: string; isSubThread?: boolean }) {
+  if (!args.criterionId && !args.isSubThread) return undefined;
+  if (caller.parent) throw new Error('This thread is a sub-thread itself; sub-threads nest one level deep. Do the work here, or ask its parent thread to start another');
+  if (args.criterionId && !caller.criteria?.some((c) => c.id === args.criterionId)) throw new Error(`No criterion ${args.criterionId}; get_goal lists them`);
+  return { threadId: caller.id, ...(args.criterionId && { criterionId: args.criterionId }) };
+}
+
 /**
- * An agent-started thread always gets its own worktree, whatever the composer's Worktree box says: parallel agents sharing
- * one folder trip over each other's changes and make worktrees Mochi can't see. Its branch is named from the prompt.
+ * A sub-thread's PR goes into its parent's branch, so the parent's PR stays the one you review. The parent's branch is pushed
+ * first: GitHub needs it to exist. None for a thread on its own, or nested under a thread in another project.
  */
-async function newWorktree(env: ToolEnv, project: string, prompt: string) {
-  const list = await env.git.branches(project).catch(() => null);
-  const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
-  return { mode: 'worktree' as const, branch: uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken) };
+async function parentBase(env: ToolEnv, state: State, caller: Thread, githubUser: string | undefined) {
+  const parent = caller.parent && parentOf(state.threads, caller);
+  if (!parent?.repo || parent.repo.project !== caller.repo?.project || parent.repo.isDetached) return undefined;
+  const parentCwd = env.cwdOf(parent);
+  if (!parentCwd) return undefined;
+  await env.git.push(parentCwd, githubUser);
+  return parent.repo.branch;
 }
 
-/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Mochi access allows them. */
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
-  const inherited = provider === caller.providers[0] ? caller.controls : undefined;
-  if (!picked.model && !picked.effort) return inherited;
-  const rule = env.prefs.get().threadModels;
-  const setting = `"${THREAD_MODELS.label}" is "${THREAD_MODELS.options.find((o) => o.value === rule)!.label}" in Settings › Mochi access`;
-  if (rule === 'default') throw new Error(`${setting}: call again without model and effort, or ask the user to change that setting`);
   const models = await env.models(provider, caller.spaceId);
+  const origin = env.getState().threads.find((t) => t.id === caller.id) ?? caller;
+  const sameProvider = provider === origin.providers[0];
+  const current = sameProvider ? controlsOf(origin) : DEFAULT_CONTROLS[provider];
+  const model = picked.model ?? (sameProvider ? origin.agent?.model ?? current.model : current.model);
+  const effort = picked.effort ?? (sameProvider ? origin.agent?.effort ?? current.effort : current.effort);
   if (picked.model && models.length && !models.some((m) => m.id === picked.model)) throw new Error(`${picked.model} isn't offered; use one of ${models.map((m) => m.id).join(', ')}`);
-  const current = inherited ? controlsOf(caller) : DEFAULT_CONTROLS[provider];
-  const next = { ...current, ...(picked.model && { model: picked.model }), ...(picked.effort && { effort: picked.effort }) };
-  const dearer = dearerPart(current, next, models);
-  if (rule === 'cheaper' && dearer) throw new Error(`${dearer} costs more than this thread's default. ${setting}; ask the user to change it if they want this`);
-  return next;
-}
-
-/** What in `next` costs more than `current`, or null; a model or effort Mochi can't rank counts as more. */
-function dearerPart(current: ThreadControls, next: ThreadControls, models: AgentModel[]) {
-  const defaultModel = current.model || defaultModelOf(models)?.id || '';
-  if (next.model && next.model !== defaultModel) {
-    const [from, to] = [modelTier(defaultModel), modelTier(next.model)];
-    if (from === undefined || to === undefined || to > from) return next.model;
-  }
-  const [from, to] = [effortRank(current.effort), effortRank(next.effort)];
-  if (to < 0 || to > from) return `${next.effort} effort`;
-  return null;
+  const resolved = resolveRun(models, model, effort, current.speed);
+  const offered = models.find((m) => m.id === resolved.model);
+  if (picked.effort && offered && !offered.efforts.includes(picked.effort)) throw new Error(`${picked.effort} effort isn't offered by ${offered.id}; use one of ${offered.efforts.join(', ') || 'the model default'}`);
+  return { ...current, model: resolved.model ?? '', effort: resolved.effort ?? '' };
 }
 
 const count = (threads: Thread[]) => (threads.length === 1 ? `"${threads[0].title}"` : `${threads.length} threads`);
@@ -718,12 +692,10 @@ const asObject = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v
 
 const fail = (text: string): AgentToolResult => ({ text, isError: true });
 
-function agentOf(s: Subagent, now = Date.now()) {
-  return { id: s.id, name: s.name, status: s.status, origin: s.origin, provider: s.provider, tokens: s.tokens, elapsedSeconds: Math.round(((s.endedAt ?? now) - s.startedAt) / 1000), ...(s.result && { result: s.result.slice(0, 4000) }), ...(s.error && { error: s.error }) };
-}
-
-function goalOf(thread: Thread) {
-  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, steps: thread.steps.map(stepOf), ...(isDraftGoal(thread) && { isDraft: true, next: DRAFT_NEXT }) };
+/** `threads`, when given, lists the thread's sub-threads and which criterion each covers. */
+function goalOf(thread: Thread, threads?: Thread[]) {
+  const subs = threads ? subThreadsOf(threads, thread.id).map((t) => ({ threadId: t.id, title: t.title, criterionId: t.parent?.criterionId ?? null, status: t.status, isHandedBack: !!t.parent?.handedBackAt })) : [];
+  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, ...(subs.length && { subThreads: subs }), ...(isDraftGoal(thread) && { isDraft: true, next: DRAFT_NEXT }), ...(!thread.goal && !thread.isGoalOff && { next: thread.proposal?.state === 'waiting' ? 'Your researched goal is waiting for acceptance. Keep working and report progress; claim criteria after acceptance.' : 'For a task with a checkable outcome, research the code and request first, then call propose_goal with the concrete outcome and checkable criteria. A question, a chat or a small one-step change needs no goal.' }), ...(thread.proposal?.state === 'waiting' && { proposal: thread.proposal }) };
 }
 
 /** A goal only Mochi's drafter has written: guessed from the first message, never checked against the code, so the agent replaces it with propose_goal. */
@@ -735,8 +707,16 @@ const DRAFT_NEXT = "This goal is Mochi's guess from the user's first message, no
 
 const DRAFT_REFUSAL = `Call propose_goal first. ${DRAFT_NEXT}`;
 
-function stepOf(s: Thread['steps'][number]) {
-  return { id: s.id, title: s.title, status: s.status, size: s.size, ...(s.acceptance && { acceptance: s.acceptance }), ...(s.note && { note: s.note }) };
+const PLAN_STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
+
+/** The thread's plan one step on: the running step done, the next open one running. */
+function advanced(steps: Step[]): AgentPlanItem[] {
+  const items = steps.flatMap((s): AgentPlanItem[] => (s.status === 'dropped' ? [] : [{ title: s.title, status: s.status === 'done' || s.status === 'running' ? s.status : 'pending' }]));
+  const running = items.findIndex((i) => i.status === 'running');
+  if (running >= 0) items[running].status = 'done';
+  const next = items.findIndex((i, k) => k > running && i.status === 'pending');
+  if (next >= 0) items[next].status = 'running';
+  return items;
 }
 
 export function summary(thread: Thread) {

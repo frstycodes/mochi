@@ -1,4 +1,4 @@
-import { ArrowUp, Broom, Document, MessageAdd, MessageQuestion, Send, X, type IconComponent } from 'reicon-react';
+import { ArrowUp, Broom, File, MessagePlus, MessageQuestion, SendAlt, X, type IconComponent } from '@/icons';
 import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageActions, MessageContent, MessageResponse } from '@/components/ai-elements/message';
@@ -86,7 +86,7 @@ function HeaderAction({ label, icon: Icon, ...props }: { label: string; icon: Ic
   );
 }
 
-function EmptySideChat() {
+export function EmptySideChat() {
   return (
     <ConversationEmptyState className="min-h-0 flex-1">
       <MessageQuestion className="size-6 text-muted-foreground" aria-hidden />
@@ -98,7 +98,7 @@ function EmptySideChat() {
   );
 }
 
-function Question({ message }: { message: SideMessage }) {
+export function Question({ message }: { message: SideMessage }) {
   return (
     <Message from="user">
       <MessageContent className="type-prose">
@@ -109,9 +109,10 @@ function Question({ message }: { message: SideMessage }) {
   );
 }
 
-function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 'message' | 'thread') => void }) {
+/** `onPromote` unset: another computer's answer, which can't be sent on from here. */
+export function Answer({ message, onPromote }: { message: SideMessage; onPromote?: (to: 'message' | 'thread') => void }) {
   const isThinking = !!message.isStreaming && !message.text;
-  const canPromote = !message.isStreaming && !message.promotedTo;
+  const canPromote = !!onPromote && !message.isStreaming && !message.promotedTo;
   return (
     <Message from="assistant" className="max-w-full">
       <MessageContent className="w-full type-prose">
@@ -122,12 +123,12 @@ function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 
       </MessageContent>
       {canPromote && (
         <MessageActions className="-ml-2">
-          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote('message')}>
-            <Send aria-hidden />
+          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote?.('message')}>
+            <SendAlt aria-hidden />
             Send to thread
           </Button>
-          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote('thread')}>
-            <MessageAdd aria-hidden />
+          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote?.('thread')}>
+            <MessagePlus aria-hidden />
             New thread
           </Button>
         </MessageActions>
@@ -137,7 +138,7 @@ function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 
   );
 }
 
-const SOURCE_ICONS = { diff: DiffIcon, terminal: TerminalIcon, file: Document } satisfies Record<QuoteSource, IconComponent>;
+const SOURCE_ICONS = { diff: DiffIcon, terminal: TerminalIcon, file: File } satisfies Record<QuoteSource, IconComponent>;
 
 function QuoteCard({ quote, onRemove }: { quote: Quote; onRemove?: () => void }) {
   const Icon = SOURCE_ICONS[quote.source];

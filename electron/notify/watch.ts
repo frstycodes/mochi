@@ -9,6 +9,7 @@ import { emitAgentEvent, onAgentEvent } from '../agents/events.ts';
 import { githubAccount } from '../git/gh.ts';
 import { resolveRequest } from '../ipc/agent.ts';
 import { readPr } from '../ipc/git.ts';
+import { pollAutofix } from './autofix.ts';
 import { createWindow, mainWindow } from '../window.ts';
 
 /**
@@ -16,7 +17,7 @@ import { createWindow, mainWindow } from '../window.ts';
  * The renderer sends `config` on every change; main only alerts while no Mochi window is in front (the renderer toasts then).
  */
 // ponytail: config and CI baselines are in memory; a relaunch re-baselines CI silently. Persist them if a restart mid-run must still report.
-let config: WatchConfig = { threads: [], kinds: [], quiet: { isOn: false, start: 22, end: 8 }, muted: [], needsYou: [], dockBadge: true };
+let config: WatchConfig = { threads: [], autofix: [], kinds: [], quiet: { isOn: false, start: 22, end: 8 }, muted: [], needsYou: [], dockBadge: true };
 /** Thread id → approvals and questions waiting on you that main saw arrive, for the badge between renderer syncs. */
 const requests = new Map<string, Set<string>>();
 let needsYou = new Set<string>();
@@ -188,4 +189,5 @@ export async function pollCi(deliver: (event: ScheduleEvent) => void) {
     deliver({ type: 'ci', threadId: thread.id, result });
     alert({ threadId: thread.id, kind: 'ci', title: thread.title, body: ciTitle(result) });
   }
+  await pollAutofix(config.autofix, deliver, alert);
 }

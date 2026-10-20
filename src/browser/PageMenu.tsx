@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUpRightSquare, Clipboard, Code, Copy, DocumentDownload, Gallery, Link, Refresh, Scissor, SearchNormal, TextSelect } from 'reicon-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Clipboard, Code, Copy, FileDownload, Image, Link, Refresh, Scissors, SearchAlt, TextSelect } from '@/icons';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { host } from '@/host';
 import type { BrowserContextMenu, BrowserMenuCommand } from '@/host/types/browser';
@@ -37,10 +37,10 @@ export function PageMenu({ thread, pageId, page, menu, at }: { thread: Thread; p
       <DropdownMenuContent align="start" side="bottom" sideOffset={2} className="w-60" onCloseAutoFocus={(e) => e.preventDefault()}>
         {!!menu.linkUrl && (
           <Section>
-            <Item icon={<ArrowUpRightSquare />} onSelect={() => openTab(menu.linkUrl)}>
+            <Item icon={<ExternalLink />} onSelect={() => openTab(menu.linkUrl)}>
               Open link in new tab
             </Item>
-            <Item icon={<ArrowUpRightSquare />} onSelect={() => openExternally(menu.linkUrl)}>
+            <Item icon={<ExternalLink />} onSelect={() => openExternally(menu.linkUrl)}>
               {openInLabel('link')}
             </Item>
             <Item icon={<Link />} onSelect={() => copyText(menu.linkUrl, 'Link copied')}>
@@ -50,10 +50,10 @@ export function PageMenu({ thread, pageId, page, menu, at }: { thread: Thread; p
         )}
         {isImage && (
           <Section>
-            <Item icon={<Gallery />} onSelect={() => openTab(menu.srcUrl)}>
+            <Item icon={<Image />} onSelect={() => openTab(menu.srcUrl)}>
               Open image in new tab
             </Item>
-            <Item icon={<DocumentDownload />} onSelect={() => run('save-image', menu.srcUrl)}>
+            <Item icon={<FileDownload />} onSelect={() => run('save-image', menu.srcUrl)}>
               Save image
             </Item>
             <Item icon={<Copy />} onSelect={() => run('copy-image')}>
@@ -66,7 +66,7 @@ export function PageMenu({ thread, pageId, page, menu, at }: { thread: Thread; p
         )}
         {menu.isEditable ? (
           <Section>
-            <Item icon={<Scissor />} keys={['mod', 'X']} disabled={!menu.canCut} onSelect={() => run('cut')}>
+            <Item icon={<Scissors />} keys={['mod', 'X']} disabled={!menu.canCut} onSelect={() => run('cut')}>
               Cut
             </Item>
             <Item icon={<Copy />} keys={['mod', 'C']} disabled={!menu.canCopy} onSelect={() => run('copy')}>
@@ -85,7 +85,7 @@ export function PageMenu({ thread, pageId, page, menu, at }: { thread: Thread; p
               <Item icon={<Copy />} keys={['mod', 'C']} onSelect={() => run('copy')}>
                 Copy
               </Item>
-              <Item icon={<SearchNormal />} onSelect={() => openTab(engine.url + encodeURIComponent(selection))}>
+              <Item icon={<SearchAlt />} onSelect={() => openTab(engine.url + encodeURIComponent(selection))}>
                 <span className="truncate">
                   Search {engine.name} for “{selection.length > SELECTION_PREVIEW ? `${selection.slice(0, SELECTION_PREVIEW)}…` : selection}”
                 </span>

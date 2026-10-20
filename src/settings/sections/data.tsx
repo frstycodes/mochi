@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Trash3 } from 'reicon-react';
+import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { PINS_STORAGE_KEY, replaceAllPins, useAllPins } from '../../chat/pins';
@@ -72,22 +72,24 @@ export function DataSection() {
         <ClearRow id="clearPins" label="Pins" area={usage.pins} onClear={clearPins} />
         <ClearRow id="clearSideChats" label="Side chats" area={usage.sidechats} onClear={clearSideChats} />
         <ClearRow id="clearTerminals" label="Terminal history" area={usage.terminals} onClear={clearTerminals} />
-        <SettingsRow
-          id="clearEverything"
-          label="Everything"
-          description="Resets your settings too"
-          control={
-            <Button id={settingControlId('clearEverything')} variant="outline" size="sm" onClick={() => void clearEverything()}>
-              <Trash3 data-icon="inline-start" className="text-destructive" />
-              Clear everything
-            </Button>
-          }
-        />
       </SettingsGroup>
       <SettingsGroup id="replay" title="Developer" footer="Turning recording off keeps what's already recorded.">
         {host.isDesktop && <CatalogRow settingKey="demoData" />}
         <CatalogRow settingKey="recordReplays" />
         <ClearRow id="clearReplays" label="Replay recordings" area={replays.usage} onClear={() => void clearReplays()} />
+      </SettingsGroup>
+      <SettingsGroup title="Start over" footer="Agent accounts and API keys stay.">
+        <SettingsRow
+          id="clearEverything"
+          label="Clear everything"
+          description="Pins, side chats, terminal history, layouts and every setting go back to their defaults, and Mochi reloads"
+          control={
+            <Button id={settingControlId('clearEverything')} variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => void clearEverything()}>
+              <Trash data-icon="inline-start" />
+              Clear everything
+            </Button>
+          }
+        />
       </SettingsGroup>
       {dialog}
     </div>

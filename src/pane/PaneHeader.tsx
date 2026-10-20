@@ -1,6 +1,6 @@
-import { createContext, useContext, useLayoutEffect, useState, type PointerEvent, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ExitFullscreen, Fullscreen, X } from 'reicon-react';
+import { ExitFullscreen, Fullscreen, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -8,6 +8,7 @@ import { ActionItems } from '../menus/ActionItems';
 import { BROWSER_PANE_MENU, PANE_MENU } from '../menus/menus';
 import { IconSwap, OverflowIcon, TooltipIconButton } from '../ui';
 import type { PaneTabKind } from '../model';
+import { useCaptionInset } from '../windowCaptions';
 import { PANE_TABS } from './tabs';
 
 interface Slots {
@@ -66,8 +67,10 @@ export function PaneHeader({
 }) {
   const { title, icon: Icon } = PANE_TABS[kind];
   const hasOwnMenu = useContext(SlotsContext)?.hasMenu;
+  const header = useRef<HTMLElement>(null);
+  useCaptionInset(header);
   return (
-    <header data-pane-header onPointerDown={onDragStart} className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
+    <header ref={header} data-pane-header onPointerDown={onDragStart} className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
       <PaneTitleSlot>
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <h2 className="truncate type-meta font-medium">{title}</h2>

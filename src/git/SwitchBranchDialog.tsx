@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Warning } from 'reicon-react';
+import { ChevronDown, WarningAlt } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -77,7 +77,7 @@ function SwitchBranchContent({ workspace, target, onClose }: { workspace: Worksp
       </DialogHeader>
       {sharers.length > 0 && (
         <p className="flex gap-1.5 text-foreground">
-          <Warning aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <WarningAlt aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
           {sessionsWarning(sharers.length)}
         </p>
       )}

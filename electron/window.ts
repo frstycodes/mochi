@@ -1,21 +1,10 @@
 import { app, BrowserWindow, Menu, nativeTheme, screen, shell, type Rectangle } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { release } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
 const background = () => (nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9');
-
-/**
- * The shell window's sidebar shows the native material through a transparent page (`data-material` in CSS): vibrancy on macOS,
- * Mica on Windows 11 22H2 (build 22621) and up. Older Windows and Linux keep the solid sidebar: Electron exposes no blur there.
- */
-const material = (): Electron.BrowserWindowConstructorOptions | undefined => {
-  if (process.platform === 'darwin') return { vibrancy: 'sidebar', visualEffectState: 'followWindow', backgroundColor: '#00000000' };
-  if (process.platform === 'win32' && Number(release().split('.')[2]) >= 22621) return { backgroundMaterial: 'mica', backgroundColor: '#00000000' };
-};
-const materialWindows = new WeakSet<BrowserWindow>();
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
@@ -56,9 +45,24 @@ export function trafficLightsAt(zoom: number) {
   return { x: 16, y: Math.round((HEADER_PX * zoom - LIGHTS_PX) / 2) };
 }
 
+/** Windows' min / max / close drawn over the page's top-right corner, as tall as the 44px headers at the page zoom; symbols in DESIGN.md `foreground`. */
+function captionsAt(zoom: number): Electron.TitleBarOverlay {
+  return { color: '#00000000', symbolColor: nativeTheme.shouldUseDarkColors ? '#f2f2f5' : '#1c1b21', height: Math.round(HEADER_PX * zoom) };
+}
+
+/** `hiddenInset` only exists on macOS: Windows gets no native title bar (and so no menu bar) through `titleBarOverlay`. Linux keeps its frame. */
+const titleBar = (): Electron.BrowserWindowConstructorOptions =>
+  process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: captionsAt(1) } : { titleBarStyle: 'hiddenInset', trafficLightPosition: trafficLightsAt(1) };
+
+/** Re-fits the native window buttons to the page's current zoom and theme. */
+export function fitWindowButtons(win: BrowserWindow) {
+  const zoom = win.webContents.getZoomFactor();
+  if (process.platform === 'darwin') win.setWindowButtonPosition(trafficLightsAt(zoom));
+  if (process.platform === 'win32') win.setTitleBarOverlay(captionsAt(zoom));
+}
+
 export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
-  const shellMaterial = route ? undefined : material();
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -66,10 +70,8 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     minHeight: 480,
     ...(isMain ? savedBounds() : bounds),
     show: false,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: trafficLightsAt(1),
+    ...titleBar(),
     backgroundColor: background(),
-    ...shellMaterial,
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -77,10 +79,6 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
       nodeIntegration: false,
     },
   });
-  if (shellMaterial) {
-    materialWindows.add(win);
-    win.webContents.on('dom-ready', () => void win.webContents.executeJavaScript("document.documentElement.toggleAttribute('data-material', true)"));
-  }
   win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => win.webContents.send('windows:onFullScreenChange', true));
   win.on('leave-full-screen', () => win.webContents.send('windows:onFullScreenChange', false));
@@ -101,7 +99,12 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   return win;
 }
 
-nativeTheme.on('updated', () => BrowserWindow.getAllWindows().forEach((win) => !materialWindows.has(win) && win.setBackgroundColor(background())));
+nativeTheme.on('updated', () =>
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.setBackgroundColor(background());
+    fitWindowButtons(win);
+  }),
+);
 
 // Electron shows no context menu by default. The app's own menus preventDefault, so this only fires where none exists:
 // text fields and selected text get the native edit menu, everything else stays without one.

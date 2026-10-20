@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react';
+import { createContext, useEffect, useReducer } from 'react';
 import { host } from '@/host';
 
 // ponytail: one listing per folder shared by every chat link, re-listed when older than this on the next mount; files the
@@ -6,6 +6,12 @@ import { host } from '@/host';
 const TTL_MS = 15_000;
 
 const listings = new Map<string, { files: Set<string> | null; at: number; loading?: Promise<void> }>();
+
+/**
+ * Another computer's thread: its folder's files as that computer listed them. Links resolve against these, never against a
+ * folder here that happens to share the path.
+ */
+export const RemoteFilesContext = createContext<ReadonlySet<string> | null>(null);
 
 /** The folder's files (`.gitignore` honoured) as a set for existence checks; null until listed or when listing failed. */
 export function useWorktreeFiles(root: string | null) {

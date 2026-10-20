@@ -32,10 +32,11 @@ const ARROWS = { left: 'left', right: 'right', up: 'up', down: 'down' } as const
 export const COMMANDS = {
   palette: { title: 'Command palette', group: 'General', scope: 'global', keys: ['mod', 'K'] },
   'go-settings': { title: 'Settings', group: 'General', scope: 'global', keys: ['mod', ','] },
-  'go-new': { title: 'New thread', group: 'General', scope: 'global', keys: ['N'] },
+  'go-new': { title: 'New thread', group: 'General', scope: 'global', keys: ['mod', 'N'] },
   'layout-overview': { title: 'Show all sessions', group: 'General', scope: 'global', keys: ['mod', 'up'] },
 
   'thread-pin': { title: 'Pin or unpin thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', 'P'] },
+  'thread-rename': { title: 'Rename thread', group: 'Threads', scope: 'global', keys: ['F2'] },
   'pinned-previous': { title: 'Previous pinned thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', '['] },
   'pinned-next': { title: 'Next pinned thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', ']'] },
   ...numbered(PINS, (n) => [`pinned-${n}`, { title: `Pinned thread ${n}`, group: 'Threads', scope: 'global', keys: ['mod', String(n)] }]),
@@ -91,7 +92,7 @@ export const FIXED_KEYS: { keys: Key[]; what: string }[] = [
   { keys: ['mod', 'Z'], what: 'Undo while annotating a page (Shift for redo)' },
   { keys: ['left', 'right'], what: 'Step through files, photos and replays' },
   { keys: ['1'], what: 'Answer a drift card (1 to 3)' },
-  { keys: ['mod', 'Enter'], what: 'Send a review comment or a note on a change' },
+  { keys: ['mod', 'Enter'], what: 'Take the next move from an empty composer; send a review comment or a note on a change' },
   { keys: ['mod', 'C'], what: 'Text editing, and every key inside a terminal or the simulator' },
 ];
 
@@ -191,6 +192,24 @@ export function bindingOf(id: CommandId, overrides: Overrides = getPrefs().keybi
 }
 
 export const isCustom = (id: CommandId, overrides: Overrides) => Object.hasOwn(overrides, id) && overrides[id] !== chordText(defaultKeys(id));
+
+/** What Settings › Keyboard's filter narrows to. `chord` is a pressed shortcut to look up; `isChangedOnly` keeps your rebinds. */
+export interface ShortcutFilter {
+  query: string;
+  chord: Key[] | null;
+  isChangedOnly: boolean;
+}
+
+/** The commands a filter shows: words match the title or group, a chord matches what a command is bound to now. */
+export function filterCommands(ids: CommandId[], { query, chord, isChangedOnly }: ShortcutFilter, overrides: Overrides = getPrefs().keybindings, isMac = IS_MAC) {
+  const q = query.trim().toLowerCase();
+  const pressed = chord && chordText(chord);
+  return ids.filter((id) => {
+    if (isChangedOnly && !isCustom(id, overrides)) return false;
+    if (pressed && chordText(bindingOf(id, overrides, isMac)) !== pressed) return false;
+    return !q || `${COMMANDS[id].title} ${COMMANDS[id].group}`.toLowerCase().includes(q);
+  });
+}
 
 /** `mod+shift+K` as stored and as agents write it: modifiers in a fixed order, then one key. */
 export function chordText(keys: Key[] | null) {

@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { PaneActions, PaneTitle } from './PaneHeader';
-import { Camera, CloseCircle, Code, Home, Link, LockKeyhole, Mobile, Moon, Play, Power, Record, StopCircle, Sun, Tablet, Text, TickCircle, X } from 'reicon-react';
+import { Camera, XCircle, Code, Home, Link, LockKeyhole, Phone, Moon, Play, Power, Record, StopCircle, Sun, Tablet, Text, CheckBadge, X } from '@/icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -103,7 +103,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
 }
 
 const FAMILIES = [
-  { family: 'iphone', label: 'iPhone', icon: Mobile },
+  { family: 'iphone', label: 'iPhone', icon: Phone },
   { family: 'ipad', label: 'iPad', icon: Tablet },
 ] as const;
 
@@ -250,8 +250,8 @@ function BuildStatus({ build, onShowLog, onDismiss }: { build: BuildState; onSho
   return (
     <div role="status" className="mx-2 flex h-9 shrink-0 items-center gap-2 rounded-xl bg-card pr-1 pl-3 ring-1 ring-border">
       {isBuilding && <Spinner aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />}
-      {result?.isOk && <TickCircle aria-hidden className="size-3.5 shrink-0 text-success" />}
-      {result && !result.isOk && <CloseCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />}
+      {result?.isOk && <CheckBadge aria-hidden className="size-3.5 shrink-0 text-success" />}
+      {result && !result.isOk && <XCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />}
       <span className="shrink-0 type-meta text-foreground">{isBuilding ? 'Building' : result?.isOk ? 'Built' : 'Build failed'}</span>
       <span className="min-w-0 flex-1 truncate font-mono type-caption text-muted-foreground" title={detail}>
         {detail}
@@ -291,7 +291,7 @@ function NoSimulatorsState({ error }: { error: string }) {
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Mobile />
+          <Phone />
         </EmptyMedia>
         <EmptyTitle>No simulators</EmptyTitle>
         <EmptyDescription>{error}</EmptyDescription>
@@ -304,7 +304,7 @@ function ShutDownState({ device, onBoot }: { device: Simulator; onBoot: () => vo
   return (
     <Empty>
       <EmptyHeader>
-        <EmptyMedia variant="icon">{device.family === 'ipad' ? <Tablet /> : <Mobile />}</EmptyMedia>
+        <EmptyMedia variant="icon">{device.family === 'ipad' ? <Tablet /> : <Phone />}</EmptyMedia>
         <EmptyTitle>{device.name} is shut down</EmptyTitle>
         <EmptyDescription>{device.runtime}</EmptyDescription>
       </EmptyHeader>

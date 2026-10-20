@@ -1,6 +1,6 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import { toast } from '@/toast/store';
-import { Check, Copy, Download, Maximize, Pip, SidebarRight } from 'reicon-react';
+import { Check, Copy, Download, Maximize, Pip, SidebarRight } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';

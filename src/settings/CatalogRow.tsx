@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { useTheme } from 'next-themes';
-import { TickCircle } from 'reicon-react';
+import { CheckBadge } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -13,7 +13,7 @@ import { authorName, type Author, type Provider, type Space } from '../model';
 import { updateProfile } from '../profiles';
 import { useHarness } from '../store';
 import { useAgentSettings } from './AgentSettings';
-import { findSetting, settingsCatalog, valueLabel, type Setting, type SettingSources, type SettingWrite } from './catalog';
+import { findSetting, isSharedSetting, settingsCatalog, valueLabel, type Setting, type SettingSources, type SettingWrite } from './catalog';
 import { CommitInput, FolderInput, NumberInput, SettingsChoice, SettingsRow, SettingsSelect, settingControlId } from './parts';
 import { setPrefs, usePrefs } from './prefs';
 import { InstructionsRow, useConfigWriter, useProfileConfig } from './ProfileAgentConfig';
@@ -21,6 +21,8 @@ import { AccountSelect, GitHubAccountSelect, IconPicker } from './sections/profi
 import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
 import { ThemePicker } from './ThemePicker';
+import { AppIconPicker } from './AppIconPicker';
+import { useShareSetting } from '../remote/SharedSettingsNotice';
 import { useRemoteStatus } from '../remote/useRemoteStatus';
 import { parseChord } from '../keymap';
 import { Shortcut } from '../Shortcut';
@@ -73,16 +75,19 @@ function rowIdOf(setting: Setting, profile?: Space) {
   if (setting.key.startsWith('profile.') && profile) return `${profile.id}-${setting.key.slice('profile.'.length)}`;
   if (setting.key.startsWith('alert.')) return `alert-${setting.key.slice('alert.'.length)}`;
   if (setting.key.startsWith('utility.')) return `utility-${setting.key.slice('utility.'.length)}`;
+  if (setting.key.startsWith('animation.')) return `animation-${setting.key.slice('animation.'.length)}`;
   if (setting.key.startsWith('keybinding.')) return `shortcut-${setting.key.slice('keybinding.'.length)}`;
   return setting.key.replace(/\.(\w)/g, (_, c: string) => c.toUpperCase());
 }
 
 function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWritten }: { setting: Setting; sources: SettingSources; profile?: Space; rowId: string; suggestion?: RowSuggestion; onConfigWritten: () => void }) {
   const apply = useSettingWriter(profile, onConfigWritten);
+  const share = useShareSetting();
   const value = setting.read(sources);
   const set = (next: string) => {
     const write = setting.write(next, sources);
-    if (write) void apply.write(write);
+    if (!write) return;
+    void apply.write(write).then((isSaved) => isSaved && isSharedSetting(setting.key) && share(setting.key, next));
   };
   const line = !!suggestion && <SuggestionLine setting={setting} value={value} suggestion={suggestion} onUse={() => set(suggestion.value)} />;
   const { control } = setting;
@@ -102,6 +107,16 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
       </StarredModelsRow>
     );
   const description = suggestion ? (setting.description ?? setting.context) : setting.description;
+  if (control.type === 'appIcon' && value !== undefined)
+    return (
+      <>
+        <SettingsRow id={rowId} label={setting.label} description={description}>
+          <AppIconPicker id={settingControlId(rowId)} value={value} onChange={set} />
+          {line}
+        </SettingsRow>
+        {apply.dialog}
+      </>
+    );
   if (control.type === 'text' && control.isMultiline && value !== undefined)
     return (
       <>
@@ -128,7 +143,7 @@ function Unavailable() {
   return <span className="type-meta text-muted-foreground">{host.isDesktop ? 'Reading…' : 'Needs the desktop app'}</span>;
 }
 
-function SettingControl({ setting, value, rowId, onChange }: { setting: Setting; value: string; rowId: string; onChange: (value: string) => void }) {
+export function SettingControl({ setting, value, rowId, onChange }: { setting: Setting; value: string; rowId: string; onChange: (value: string) => void }) {
   const { control } = setting;
   const id = settingControlId(rowId);
   switch (control.type) {
@@ -198,7 +213,7 @@ function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Settin
   if (value === suggestion.value)
     return (
       <p className="flex items-center gap-1.5 type-meta text-muted-foreground">
-        <TickCircle aria-hidden className="size-3.5 text-success" />
+        <CheckBadge aria-hidden className="size-3.5 text-success" />
         Set to {who}'s suggestion
       </p>
     );

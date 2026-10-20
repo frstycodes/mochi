@@ -35,8 +35,8 @@ test("a call prefers the agent's own description, else reads from its verb", () 
   assert.equal(describeCall({ text: 'Edit src/Composer.tsx  +3 −1' }), 'Edited Composer.tsx');
   assert.equal(describeCall({ text: 'Search redis token bucket' }), 'Searched the web for “redis token bucket”');
   assert.equal(describeCall({ text: 'Run pnpm test' }), 'Ran the tests');
-  assert.equal(describeCall({ text: 'Mcp claude.ai Linear: get_issue' }), 'Called get_issue on claude.ai Linear');
+  assert.equal(describeCall({ text: 'Mcp claude.ai Linear: get_issue' }), 'Called get issue on claude.ai Linear');
   assert.equal(describeCall({ text: 'Mcp mochi: rename_thread' }), 'Renamed a thread');
-  assert.equal(describeCall({ text: 'Mcp mochi: some_future_tool' }), 'Called some_future_tool on mochi');
-  assert.equal(describeCall({ text: 'Skill ui' }), 'Used the ui skill');
+  assert.equal(describeCall({ text: 'Mcp mochi: some_future_tool' }), 'Called some future tool on Mochi');
+  assert.equal(describeCall({ text: 'Skill ui' }), 'Used the Ui skill');
 });

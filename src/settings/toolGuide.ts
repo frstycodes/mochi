@@ -1,7 +1,7 @@
 import type { ToolName } from '../runtime/toolTable.ts';
 
 /** Settings › Mochi access shows tools in these groups, in this order. */
-export const TOOL_GROUPS = ['Threads', 'Goals and progress', 'Background agents', 'Reading the browser', 'Using the browser', 'Your screen', 'Reaching you', 'Settings and profiles'] as const;
+export const TOOL_GROUPS = ['Threads', 'Goals and progress', 'Delegated tasks', 'Reading the browser', 'Using the browser', 'Your screen', 'Reaching you', 'Settings and profiles'] as const;
 
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 
@@ -11,7 +11,7 @@ export type ToolGroup = (typeof TOOL_GROUPS)[number];
  */
 export const TOOL_GUIDE = {
   list_threads: { group: 'Threads', label: 'List threads', description: 'See the threads in this profile: titles, status, project and which are pinned.' },
-  get_thread: { group: 'Threads', label: 'Read a thread', description: "See one thread's goal, steps, recent activity, pull requests and what it's waiting on you for." },
+  get_thread: { group: 'Threads', label: 'Read a thread', description: "See one thread's goal, its agent's plan, recent activity, pull requests and what it's waiting on you for." },
   rename_thread: { group: 'Threads', label: 'Rename threads', description: 'Give a thread a new title. You get an Undo toast.' },
   settle_thread: { group: 'Threads', label: 'Settle threads', description: 'Move finished or abandoned threads out of the active list and stop their agents. Never its own thread.' },
   reactivate_thread: { group: 'Threads', label: 'Reactivate threads', description: 'Bring settled threads back to the active list.' },
@@ -23,22 +23,16 @@ export const TOOL_GUIDE = {
   send_to_thread: { group: 'Threads', label: 'Message other threads', description: "Send a message to another thread's agent, as if you typed it in that thread." },
   delete_thread: { group: 'Threads', label: 'Delete threads', description: 'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.' },
 
-  get_goal: { group: 'Goals and progress', label: 'Read goals', description: "See a thread's goal, what done means, and its steps." },
-  set_step_status: { group: 'Goals and progress', label: 'Update step status', description: 'Mark goal steps running or done, so you can see progress.' },
-  add_step: { group: 'Goals and progress', label: 'Add steps', description: "Add a step to a thread's plan." },
-  edit_goal: { group: 'Goals and progress', label: 'Edit goals', description: "Rewrite a thread's goal or a step's acceptance criteria, as a new revision." },
-  reorder_steps: { group: 'Goals and progress', label: 'Reorder steps', description: "Change the order of a goal's steps." },
-  drop_step: { group: 'Goals and progress', label: 'Drop steps', description: "Remove a step that's no longer needed. Done steps stay." },
+  get_goal: { group: 'Goals and progress', label: 'Read goals', description: "See a thread's goal and what done means, with each criterion's claim and check." },
   open_pr: { group: 'Goals and progress', label: 'Open pull requests', description: 'Push its branch and open the pull request, with the description written from the goal and its report.' },
-  propose_goal: { group: 'Goals and progress', label: 'Propose goals', description: 'Propose a thread’s goal and its criteria after a first look at the code. How it lands is under Goals and checks.' },
+  propose_goal: { group: 'Goals and progress', label: 'Propose goals', description: 'Propose a thread’s goal and its criteria after a first look at the code, and again when what done means changes. How it lands is under Goals and checks.' },
   claim_criterion: { group: 'Goals and progress', label: 'Claim criteria', description: 'Say a criterion is met, with evidence you can check. Mochi still checks it itself.' },
-  report_turn: { group: 'Goals and progress', label: 'Report turns', description: 'Sum up a turn for you: decisions made, what’s left, and at most one question.' },
+  report_turn: { group: 'Goals and progress', label: 'Report turns', description: 'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.' },
   get_report: { group: 'Goals and progress', label: 'Read reports', description: "Read another thread's latest report, to coordinate without reading its transcript." },
-  settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Drop a goal's open steps with a reason and settle its thread. Never its own thread." },
+  settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Close out a goal with a reason and settle its thread. Never its own thread." },
 
-  start_background_agent: { group: 'Background agents', label: 'Start background agents', description: 'Start an agent that works alongside it, in the same worktree or a fresh one, on this profile’s account.' },
-  list_background_agents: { group: 'Background agents', label: 'List background agents', description: 'See its background agents and subagents, their status, cost so far and results.' },
-  stop_background_agent: { group: 'Background agents', label: 'Stop background agents', description: 'Stop one of its background agents. Partial work stays in the worktree.' },
+  update_plan: { group: 'Goals and progress', label: 'Keep a plan', description: 'Show its plan under its latest message and tick steps off as it works.' },
+  delegate_task: { group: 'Delegated tasks', label: 'Delegate tasks', description: 'Hand a task to the other provider (or a model its own subagents lack), in the same worktree or a fresh one, on this profile’s account. Its report comes back to the agent when it finishes.' },
 
   browser_tabs: { group: 'Reading the browser', label: 'List browser tabs', description: "See the thread's browser tabs: address, title and which is active." },
   browser_snapshot: { group: 'Reading the browser', label: 'Read pages', description: 'Read the page as text: headings, buttons, fields and links.' },
@@ -60,6 +54,8 @@ export const TOOL_GUIDE = {
   browser_forward: { group: 'Using the browser', label: 'Go forward', description: 'Go forward a page in a tab.' },
   browser_reload: { group: 'Using the browser', label: 'Reload', description: 'Reload a tab.' },
   browser_dialog: { group: 'Using the browser', label: 'Answer page dialogs', description: 'Press OK or Cancel on an alert or confirm the page shows.' },
+  browser_handoff: { group: 'Using the browser', label: 'Hand you the browser', description: 'Bring a tab to you for something only you can do, like signing in, then carry on once you’re done.' },
+  browser_batch: { group: 'Using the browser', label: 'Run several steps at once', description: 'Run a few browser steps in one go. Each step still asks you wherever it would on its own.' },
   browser_set_device: { group: 'Using the browser', label: 'Change device size', description: 'Show the page at a phone, tablet or laptop size.' },
 
   open_pane_tab: { group: 'Your screen', label: 'Open pane tabs', description: "Open the preview, changes, terminal, files or side chat in a thread's side pane." },
@@ -77,6 +73,10 @@ export const TOOL_GUIDE = {
   set_keybinding: { group: 'Settings and profiles', label: 'Suggest shortcuts', description: 'Show a shortcut change in the thread. Only you apply it.' },
   list_profiles: { group: 'Settings and profiles', label: 'List profiles', description: 'See the profiles, their accounts and sign-in state, and their GitHub accounts.' },
   add_mcp_server: { group: 'Settings and profiles', label: 'Suggest MCP servers', description: 'Show an MCP server, filled in, for you to add to a profile. Never with secrets.' },
+  list_connectors: { group: 'Settings and profiles', label: 'List connectors', description: 'See your connector accounts, whether each is signed in, and the services you can connect.' },
+  connect_account: { group: 'Settings and profiles', label: 'Suggest connector accounts', description: 'Show a Connect button for a service, for you to sign in to in your browser.' },
+  run_setup: { group: 'Settings and profiles', label: 'Run service setups', description: 'Run a service\'s known setup steps in its browser tab, like making a Slack token, keeping secrets from the agent.' },
+  update_setup_step: { group: 'Settings and profiles', label: 'Fix setup steps', description: 'Point a setup step at the button that works now, after a site changed.' },
   remove_mcp_server: { group: 'Settings and profiles', label: 'Remove MCP servers', description: "Remove an MCP server from a profile's config, showing you the file change. The file is backed up first." },
   remove_profile: { group: 'Settings and profiles', label: 'Remove profiles', description: 'Remove an empty profile. Its accounts and browser data stay on disk.' },
 } as const satisfies Record<ToolName, { group: ToolGroup; label: string; description: string }>;

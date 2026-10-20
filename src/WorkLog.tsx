@@ -4,7 +4,7 @@ import { useDiffTheme } from './themes/highlight';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Flag, Global, GlobalSearch, Note, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
@@ -20,7 +20,8 @@ import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { useVizThreadId } from './viz/WidgetVisual';
 import { fileLink } from './terminal/links';
 import { describeCall } from './chat/describe';
-import { McpIcon } from './chat/McpIcon';
+import { McpIcon, SkillMark } from './chat/McpIcon';
+import { useLibraryNames } from './library/names';
 import { PREVIEW_KINDS } from './files/kinds';
 import { patchSections } from './chat/turnChanges';
 import { outputLines } from './chat/output';
@@ -40,6 +41,7 @@ const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
  */
 export function WorkLog({ entries, skills = [], action }: { entries: ActivityEntry[]; skills?: AgentCommand[]; action?: CurrentAction }) {
   const [isOpen, setOpen] = useState(false);
+  useLibraryNames();
   const isLive = !!action;
   const tools = entries.filter((e) => e.kind === 'tool');
   const edits = tools.map(toolCall).filter((c) => c.verb === 'Edit' || c.verb === 'Write');
@@ -122,6 +124,7 @@ type ToolEntry = Pick<ActivityEntry, 'text' | 'description' | 'output' | 'exitCo
 /** One call: what it did in words, opening in place to the detail behind it. */
 export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunning: boolean; files: ThreadFiles | null }) {
   const [isOpen, setOpen] = useState(false);
+  useLibraryNames();
   const call = toolCall(entry);
   const run = runOf(entry);
   const detail = callDetail(entry, call, files);
@@ -163,7 +166,8 @@ function CallText({ call, description, hasOwnDescription, files }: { call: ToolC
   const openCallFile = useOpenCallFile(useVizThreadId());
   const name = call.target.split('/').pop() ?? call.target;
   const isFileLink = !!files && !hasOwnDescription && (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') && description.endsWith(name);
-  if (!isFileLink) return <span className="min-w-0 flex-1 truncate text-foreground" title={call.verb === 'Run' ? call.target : undefined}>{description}</span>;
+  const raw = call.verb === 'Run' || call.verb === 'Mcp' ? call.target : undefined;
+  if (!isFileLink) return <span className="min-w-0 flex-1 truncate text-foreground" title={raw}>{description}</span>;
   return (
     <span className="min-w-0 flex-1 truncate text-foreground">
       {description.slice(0, -name.length)}
@@ -201,7 +205,7 @@ function runOf(entry: ToolEntry): RunResult | undefined {
 function CallGlyph({ call, links = [] }: { call: ToolCall; links?: WebLink[] }) {
   if (call.verb === 'Search') {
     const hosts = [...new Set(links.map((l) => hostname(l.url)))].slice(0, 3);
-    if (!hosts.length) return <GlobalSearch className="size-4 shrink-0 text-muted-foreground" />;
+    if (!hosts.length) return <GlobeSearch className="size-4 shrink-0 text-muted-foreground" />;
     return (
       <span className="flex shrink-0 items-center">
         {hosts.map((host, i) => (
@@ -389,7 +393,7 @@ function ActionIcon({ action }: { action: CurrentAction }) {
     );
   }
   if (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-3.5 shrink-0" />;
-  if (call.verb === 'Skill') return <Note aria-hidden className="size-3.5 shrink-0 text-info" />;
+  if (call.verb === 'Skill') return <SkillMark skill={call.target} className="size-3.5" fallback={<Note aria-hidden className="size-3.5 shrink-0 text-info" />} />;
   if (call.verb === 'Mcp') return <McpIcon target={call.target} className="size-3.5" />;
   return null;
 }
@@ -467,19 +471,22 @@ export function Expand({ isOpen, children }: { isOpen: boolean; children: ReactN
 
 /** A skill the agent loaded: its name in the resolved-token colour and what it is for. */
 function SkillRow({ name, description }: { name: string; description?: string }) {
+  const { title } = useLibraryNames().skill(name);
   return (
     <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta">
-      <Note className="size-4 shrink-0 text-info" aria-hidden />
+      <SkillMark skill={name} fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />} />
       <span className="shrink-0 text-subtle-foreground">Using skill</span>
-      <span className="shrink-0 font-medium text-info">{name}</span>
+      <span className="shrink-0 font-medium text-info" title={name}>
+        {title}
+      </span>
       {!!description && <span className="min-w-0 truncate text-muted-foreground" title={description}>{description}</span>}
     </li>
   );
 }
 
 function ToolGlyph({ call }: { call: ToolCall }) {
-  if (call.verb === 'Run') return <TerminalSquare className="size-4 shrink-0 text-muted-foreground" />;
-  if (call.verb === 'Browser') return <Global className="size-4 shrink-0 text-muted-foreground" />;
+  if (call.verb === 'Run') return <Terminal className="size-4 shrink-0 text-muted-foreground" />;
+  if (call.verb === 'Browser') return <Globe className="size-4 shrink-0 text-muted-foreground" />;
   if (call.verb === 'Mcp') return <McpIcon target={call.target} className="size-4" />;
   return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-4 shrink-0" />;
 }

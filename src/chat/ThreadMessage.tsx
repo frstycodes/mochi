@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, DirectboxReceive, DirectboxSend } from 'reicon-react';
+import { ChevronRight, InboxIn, InboxOut, MagicStar } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, ThreadRef } from '../model';
@@ -31,8 +31,33 @@ export function ReceivedMessageRow({ entry, from, index }: { entry: ActivityEntr
   );
 }
 
+/** An Auto-fix event Mochi sent the agent, as the same kind of line: "CI failed on #12 · fixing"; open, the whole event. */
+export function AutofixEventRow({ entry, event, index }: { entry: ActivityEntry; event: NonNullable<ActivityEntry['autofix']>; index: number }) {
+  const [isOpen, setOpen] = useState(false);
+  return (
+    <div data-activity-index={index} className="-mx-2 flex flex-col">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-7 w-fit max-w-full min-w-0 cursor-default items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
+        <MagicStar aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate">{event.kind === 'enabled' ? 'Received a CI event' : event.title}</span>
+        {event.kind === 'enabled' && <span className="min-w-0 truncate text-subtle-foreground">{event.title}</span>}
+        <ChevronRight aria-hidden className={cn('size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none', isOpen && 'rotate-90')} />
+      </button>
+      <Expand isOpen={isOpen}>
+        <ThreadMessageBody text={entry.text} className="mx-2 mt-1">
+          Sent by Auto-fix {clock(entry.at)}
+        </ThreadMessageBody>
+      </Expand>
+    </div>
+  );
+}
+
 export function ThreadMessageIcon({ direction }: { direction: Direction }) {
-  const Icon = direction === 'from' ? DirectboxReceive : DirectboxSend;
+  const Icon = direction === 'from' ? InboxIn : InboxOut;
   return <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />;
 }
 
@@ -61,7 +86,7 @@ export function ThreadMessageBody({ text, className, children }: { text: string;
 }
 
 /** Above the row's own toggle (`z-10`), so the name opens the thread and the rest of the row opens the message. */
-function ThreadName({ peer }: { peer: ThreadRef }) {
+export function ThreadName({ peer }: { peer: ThreadRef }) {
   const { state, dispatch } = useHarness();
   const { thread, title } = usePeer(peer);
   if (!thread) return <span className="max-w-[50%] shrink-0 truncate text-foreground">{title}</span>;

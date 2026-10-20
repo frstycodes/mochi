@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Brush, Clock, Compass, Cpu, Database, Devices, Global, Hierarchy2, InfoCircle, Keyboard, MagicStar, Notification, People, Setting2, ShieldCheck, Stars, TerminalSquare, type IconComponent } from 'reicon-react';
+import { Brush, Clock, Connector, Compass, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -7,6 +7,10 @@ import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
 import { IDLE_ALERTS } from '../settingOptions';
 import { AboutSection } from './about';
+import { ConnectorsView } from '../../library/ConnectorsView';
+import { ConnectorPage } from '../../library/ConnectorPage';
+import { PluginsView } from '../../library/PluginsView';
+import { SkillsView } from '../../library/SkillsView';
 import { AccessSection, toolRowId } from './access';
 import { TOOL_NAMES } from '../../runtime/toolTable';
 import { TOOL_GUIDE } from '../toolGuide';
@@ -25,8 +29,9 @@ import { RemoteSection } from './remote';
 import { SchedulesSection } from './schedules';
 import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
+import { ANIMATIONS } from '../settingOptions';
 
-export const SECTION_GROUPS = ['Mochi', 'Agents', 'Workspace', 'System'] as const;
+export const SECTION_GROUPS = ['Mochi', 'Agents', 'Customize', 'Workspace', 'System'] as const;
 
 export interface SettingsSection {
   id: string;
@@ -34,6 +39,8 @@ export interface SettingsSection {
   title: string;
   icon: IconComponent;
   component: ComponentType;
+  /** One item's own page in this section (`openSubpage`), shown instead of the section under its own header. */
+  subpage?: ComponentType<{ id: string }>;
   /** Every row's id and label, for search and deep links; the section renders the rows. Rows that need the desktop app say so in the section. */
   settings: { id: string; label: string; keywords?: string }[];
 }
@@ -44,7 +51,7 @@ export const SETTINGS_SECTIONS = [
     id: 'general',
     group: 'Mochi',
     title: 'General',
-    icon: Setting2,
+    icon: Settings,
     component: GeneralSection,
     settings: [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread default' },
@@ -65,7 +72,11 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
-      { id: 'translucentSidebar', label: 'Translucent sidebar', keywords: 'vibrancy acrylic mica transparency blur' },
+      { id: 'appIcon', label: 'App icon', keywords: 'dock icon logo variant' },
+      ...Object.entries(ANIMATIONS).flatMap(([area, { label, items }]) => [
+        { id: `animations${area[0]!.toUpperCase()}${area.slice(1)}`, label, keywords: 'animation motion transition slide' },
+        ...items.map((item) => ({ id: `animation-${item.value}`, label: item.label, keywords: `${label} animation motion` })),
+      ]),
       { id: 'lightTheme', label: 'Light theme', keywords: 'color theme vs code' },
       { id: 'darkTheme', label: 'Dark theme', keywords: 'color theme vs code' },
       { id: 'installedThemes', label: 'Installed themes', keywords: 'uninstall remove color theme' },
@@ -102,7 +113,7 @@ export const SETTINGS_SECTIONS = [
     id: 'profiles',
     group: 'Mochi',
     title: 'Profiles',
-    icon: People,
+    icon: Users,
     component: ProfilesSection,
     // A getter: the rows follow the profiles, so search finds "Personal GitHub account" right after a rename.
     get settings() {
@@ -126,7 +137,8 @@ export const SETTINGS_SECTIONS = [
     settings: HARNESS_IDS.flatMap((id) => {
       const { name, apiKey } = HARNESSES[id];
       return [
-        { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check' },
+        { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check update upgrade' },
+        { id: `${id}Update`, label: `${name} update`, keywords: 'upgrade latest version' },
         { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
         { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
         { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },
@@ -152,7 +164,9 @@ export const SETTINGS_SECTIONS = [
         ];
       }),
       { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
-      ...UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr goal steps handoff summary audit transcript verdict' })),
+      { id: 'imageGen', label: 'Image generation', keywords: 'image picture generate codex gpt-image draw' },
+      { id: 'backgroundModel', label: 'Background model', keywords: 'background utility cheap model haiku luna every task all' },
+      ...UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr handoff summary audit transcript verdict' })),
     ],
   },
   {
@@ -162,6 +176,7 @@ export const SETTINGS_SECTIONS = [
     icon: Compass,
     component: GoalsSection,
     settings: [
+      { id: 'goals', label: 'Goals', keywords: 'goals off disable turn off kill switch criteria verdict propose' },
       { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
       { id: 'proposedGoals', label: 'Agent-proposed goals', keywords: 'propose goal accept apply undo agent writes criteria' },
@@ -191,7 +206,6 @@ export const SETTINGS_SECTIONS = [
     component: AccessSection,
     settings: [
       { id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' },
-      { id: 'threadModels', label: 'Models for threads agents start', keywords: 'tools model effort cheaper start thread' },
       ...TOOL_NAMES.map((name) => ({ id: toolRowId(name), label: TOOL_GUIDE[name].label, keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent` })),
     ],
   },
@@ -202,6 +216,37 @@ export const SETTINGS_SECTIONS = [
     icon: Clock,
     component: SchedulesSection,
     settings: [{ id: 'schedules', label: 'Scheduled and background threads', keywords: 'cron nightly trigger pull request pause resume run' }],
+  },
+  {
+    id: 'skills',
+    group: 'Customize',
+    title: 'Skills',
+    icon: Skill,
+    component: SkillsView,
+    settings: [{ id: 'skillsLibrary', label: 'Installed skills and their profiles', keywords: 'skill install github anthropics openai discover library profile' }],
+  },
+  {
+    id: 'plugins',
+    group: 'Customize',
+    title: 'Plugins',
+    icon: Plugin,
+    component: PluginsView,
+    settings: [{ id: 'pluginsLibrary', label: 'Installed plugins and their profiles', keywords: 'plugin marketplace install discover library profile' }],
+  },
+  {
+    id: 'connectors',
+    group: 'Customize',
+    title: 'Connectors',
+    icon: Connector,
+    component: ConnectorsView,
+    subpage: ConnectorPage,
+    settings: [
+      {
+        id: 'connectorsLibrary',
+        label: 'Connected accounts, their profiles, and each connector’s tools',
+        keywords: 'connector account mcp server sign in oauth custom gmail linear github discover library profile tool permission allow ask deny off disable enable approval read only destructive',
+      },
+    ],
   },
   {
     id: 'git',
@@ -224,7 +269,7 @@ export const SETTINGS_SECTIONS = [
     id: 'terminal',
     group: 'Workspace',
     title: 'Terminal',
-    icon: TerminalSquare,
+    icon: Terminal,
     component: TerminalSection,
     settings: [
       { id: 'shell', label: 'Shell', keywords: 'zsh bash fish' },
@@ -237,7 +282,7 @@ export const SETTINGS_SECTIONS = [
     id: 'browser',
     group: 'Workspace',
     title: 'Browser and simulator',
-    icon: Global,
+    icon: Globe,
     component: BrowserSection,
     settings: [
       { id: 'searchEngine', label: 'Search engine', keywords: 'duckduckgo google bing kagi address bar' },
@@ -254,10 +299,11 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'remoteEnabled', label: 'Let devices control this computer', keywords: 'remote control phone laptop server connect' },
       { id: 'remoteNetwork', label: 'Allow devices on this network', keywords: 'lan tailscale wifi firewall remote' },
+      { id: 'keepAwake', label: 'Keep this computer awake', keywords: 'sleep power battery lid caffeinate remote' },
       { id: 'machineName', label: 'Computer name', keywords: 'machine host name remote' },
       { id: 'remoteAnywhere', label: 'Reach this computer from anywhere', keywords: 'relay internet away remote account' },
-      { id: 'pairedDevices', label: 'Paired devices', keywords: 'remove trusted devices approve connected' },
-      { id: 'otherComputers', label: 'Your other computers', keywords: 'pair computer machine account relay' },
+      { id: 'members', label: 'Your computers', keywords: 'remove trusted devices members approve connected scopes pair' },
+      { id: 'otherComputers', label: 'Join your computers', keywords: 'join pair computer machine account relay code' },
     ],
   },
   {
@@ -281,7 +327,7 @@ export const SETTINGS_SECTIONS = [
     id: 'about',
     group: 'System',
     title: 'About',
-    icon: InfoCircle,
+    icon: Info,
     component: AboutSection,
     settings: [{ id: 'about', label: 'About Mochi', keywords: 'version electron chromium docs' }],
   },

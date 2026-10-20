@@ -1,12 +1,43 @@
 import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createInterface } from 'node:readline';
 import type { Account, AgentInstall, AgentLogin } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { parseClaudeAuth, parseCodexAccount, parseVersion } from '../../src/settings/parse.ts';
 import { accountEnv, resolveExecutable, userPath } from '../agents/config.ts';
+import { HARNESSES } from '../../src/settings/harnesses.ts';
 import { killTree, spawnable } from '../platform.ts';
 
 const TIMEOUT_MS = 10_000;
+const exec = promisify(execFile);
+
+export async function latestVersion(provider: Provider): Promise<string | null> {
+  try {
+    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(HARNESSES[provider].package)}/latest`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const data = await response.json() as { version?: unknown };
+    if (typeof data.version !== 'string') return null;
+    if (provider === 'codex') {
+      const binary = await fetch(`https://registry.npmjs.org/%40openai%2Fcodex/${data.version}-${process.platform}-${process.arch}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!binary.ok) return null;
+    }
+    return data.version;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateHarness(provider: Provider): Promise<void> {
+  const path = await resolveExecutable(provider);
+  if (!path) throw new Error(`${HARNESSES[provider].name} is not installed`);
+  const target = spawnable(path, ['update']);
+  try {
+    await exec(target.file, target.args, { env: { ...accountEnv(provider, null), PATH: await userPath() }, timeout: 180_000, maxBuffer: 1 << 20, shell: target.shell, windowsHide: true });
+  } catch (error) {
+    const failure = error as Error & { stderr?: string };
+    throw new Error(failure.stderr?.trim().split('\n').at(-1) || failure.message);
+  }
+}
 
 /** Asks the user's own install what this account's folder is logged in with. Reads no credential files; parses only what the tools print. */
 export async function detect(account: Account): Promise<AgentInstall> {

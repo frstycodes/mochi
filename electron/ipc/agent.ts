@@ -17,17 +17,22 @@ import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
-import { codexUrl, resolveToolCall, undeliveredToolCalls } from '../mcp/server.ts';
-import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
+import { codexUrl, resolveToolCall, setImageGenerator, undeliveredToolCalls } from '../mcp/server.ts';
+import { parseTitle, UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
+import { nameThread } from '../agents/naming.ts';
 import { threadSessions } from '../agents/settle.ts';
 import { killThreadSessions } from '../pty/sessions.ts';
 import { stopCompare } from '../browser/compare.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
 import { topLevel } from '../git/run.ts';
+import { codexToolConfig } from '../../src/library/connectorTools.ts';
+import { codexServerConfig } from '../../src/library/library.ts';
+import { sessionConnectors, sessionToolRules } from '../library/connectors.ts';
+import { sessionLibrary } from '../library/store.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -85,12 +90,18 @@ const codex = new CodexAdapter(
   undefined,
   undefined,
   codexUrl,
+  async (spaceId) => {
+    const [{ servers }, connectors, rules] = await Promise.all([sessionLibrary(spaceId, 'codex'), sessionConnectors(spaceId), sessionToolRules(spaceId)]);
+    const tools = Object.entries(rules).map(([key, keyRules]) => codexToolConfig(key, keyRules));
+    return { ...codexServerConfig(servers), ...Object.fromEntries(connectors.map(([name, url]) => [`mcp_servers.${name}.url`, url])), ...Object.assign({}, ...tools) };
+  },
 );
 codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
+setImageGenerator('codex', codex.generateImage.bind(codex));
 const starts = new Starts();
-// A Mochi background agent's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
+// A delegated task's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
 const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
 export const agent = {
@@ -137,6 +148,9 @@ export const agent = {
     string(threadId, 'threadId', 256);
     if (choice !== 'retry' && choice !== 'skip') throw new TypeError('choice must be retry or skip');
     if (!starts.choose(threadId as string, choice as SetupChoice)) throw new Error("This thread's worktree setup isn't waiting on you");
+  },
+  async keepTitle(_sender, threadId) {
+    starts.keepTitle(string(threadId, 'threadId', 256));
   },
   async resolve(_sender, requestId, decision) {
     return resolveRequest(requestId, decision);
@@ -256,11 +270,7 @@ export const agent = {
     if (!(UTILITY_TASKS as readonly unknown[]).includes(task)) throw new TypeError('task must be a background task');
     string(spaceId, 'spaceId', 256);
     string(prompt, 'prompt', 40_000);
-    const offers = (provider: Provider) => models(codex, provider, spaceId as string).then((list) => list.map((m) => m.id), () => []);
-    const startedAt = performance.now();
-    const answer = await utility(ASKERS, offers, agentSettings().utilityModels[task as UtilityTask], spaceId as string, task as UtilityTask, prompt as string);
-    console.info(`utility ${task as string}: ${answer ? `${answer.provider} ${answer.model}` : 'no model answered, local fallback'} in ${Math.round(performance.now() - startedAt)}ms`);
-    return answer?.text ?? null;
+    return runUtility(task as UtilityTask, spaceId as string, prompt as string);
   },
   async classify(_sender, prompt, thread) {
     string(prompt, 'prompt', 20_000);
@@ -272,13 +282,20 @@ export const agent = {
       const step = record(s, 'step');
       string(step.title, 'step.title');
       string(step.status, 'step.status', 32);
-      if (!Array.isArray(step.footprint) || step.footprint.some((f) => typeof f !== 'string')) throw new TypeError('step.footprint must be strings');
     }
     if (!Array.isArray(t.activity)) throw new TypeError('thread.activity must be an array');
     string(t.spaceId, 'thread.spaceId', 256);
     return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },
 } satisfies Handlers<AgentHost>;
+
+async function runUtility(task: UtilityTask, spaceId: string, prompt: string) {
+  const offers = (provider: Provider) => models(codex, provider, spaceId).then((list) => list.map((m) => m.id), () => []);
+  const startedAt = performance.now();
+  const answer = await utility(ASKERS, offers, agentSettings().utilityModels[task], spaceId, task, prompt);
+  console.info(`utility ${task}: ${answer ? `${answer.provider} ${answer.model}` : 'no model answered, local fallback'} in ${Math.round(performance.now() - startedAt)}ms`);
+  return answer?.text ?? null;
+}
 
 /** Stopping a session with no agent process is a no-op, so settling twice or settling then deleting never errors. */
 async function stopSession(threadId: string) {
@@ -323,11 +340,12 @@ export async function startAgent(threadId: unknown, options: unknown) {
   let isLaunching = false;
   try {
     const folder = await agentFolder(id, o.cwd);
-    const { cwd, setup } = await workspaceFolder(id, folder, startWorkspace(workspace, worktree), start);
+    const { cwd, setup, named } = await workspaceFolder(id, folder, startWorkspace(workspace, worktree), start, o.spaceId as string);
     // The renderer runs agent calls one after another, so a start that waited out the setup, or an app-server slow to answer,
     // would hold back the Stop (and every other thread's calls) behind it. It returns here; setup and launch report through events.
     isLaunching = true;
     void (setup ?? Promise.resolve())
+      .then(() => named?.())
       .then(() => {
         if (!start.signal.aborted) return launch(cwd);
         markIdle(id);
@@ -420,16 +438,24 @@ export function startWorkspace(value: unknown, legacyWorktree?: unknown): StartW
   if (value === undefined) return legacyWorktree === undefined ? undefined : { mode: 'worktree', branch: string(legacyWorktree, 'options.worktree', 255) };
   const w = record(value, 'options.workspace');
   if (w.mode !== 'worktree' && w.mode !== 'folder') throw new TypeError('options.workspace.mode must be worktree or folder');
-  if (w.isExisting !== undefined && typeof w.isExisting !== 'boolean') throw new TypeError('options.workspace.isExisting must be a boolean');
-  return { mode: w.mode, branch: string(w.branch, 'options.workspace.branch', 255), base: w.base === undefined ? undefined : string(w.base, 'options.workspace.base', 255), isExisting: w.isExisting as boolean | undefined };
+  for (const key of ['isExisting', 'isNew']) if (w[key] !== undefined && typeof w[key] !== 'boolean') throw new TypeError(`options.workspace.${key} must be a boolean`);
+  return {
+    mode: w.mode,
+    branch: string(w.branch, 'options.workspace.branch', 255),
+    base: w.base === undefined ? undefined : string(w.base, 'options.workspace.base', 255),
+    isExisting: w.isExisting as boolean | undefined,
+    isNew: w.isNew as boolean | undefined,
+    titlePrompt: w.titlePrompt === undefined ? undefined : string(w.titlePrompt, 'options.workspace.titlePrompt', 40_000),
+  };
 }
 
 /**
  * The folder the agent runs in. A worktree thread gets its own worktree, so the panes and the agent see the same files (a folder
  * that isn't a git repo runs the agent in place, but a refused existing branch fails the start). A project folder thread runs in
- * the project's checkout, switched to its branch first when it chose one; a dirty checkout refuses the switch.
+ * the project's checkout, switched to its branch first when it chose one; a dirty checkout refuses the switch. A new worktree
+ * with a `titlePrompt` asks for its title during the setup; `named` waits for it once the setup is through.
  */
-async function workspaceFolder(threadId: string, root: string, workspace: StartWorkspace | undefined, start: ReturnType<Starts['begin']>): Promise<{ cwd: string; setup?: Promise<unknown> }> {
+async function workspaceFolder(threadId: string, root: string, workspace: StartWorkspace | undefined, start: ReturnType<Starts['begin']>, spaceId: string): Promise<{ cwd: string; setup?: Promise<unknown>; named?: () => Promise<void> }> {
   if (!workspace) return { cwd: root };
   if (workspace.mode === 'folder') {
     const top = await topLevel(root).catch(() => null);
@@ -450,8 +476,10 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
   }
   const { dir, isNew } = await createWorktree(root, threadId, workspace.branch, workspace);
   broadcast({ threadId, type: 'worktree', path: dir });
+  const title = isNew && workspace.titlePrompt ? runUtility('title', spaceId, workspace.titlePrompt).then((text) => (text && parseTitle(text)) || null, () => null) : undefined;
+  const named = title && (() => nameThread(threadId, dir, workspace.branch, title, start, broadcast));
   const settings = agentSettings();
-  if (!isNew || !settings.prepareWorktrees) return { cwd: dir };
+  if (!isNew || !settings.prepareWorktrees) return { cwd: dir, named };
   const setup = topLevel(root).then((top) =>
     prepareWorktree({
       root: top,
@@ -464,7 +492,7 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
       signal: start.signal,
     }),
   );
-  return { cwd: dir, setup };
+  return { cwd: dir, setup, named };
 }
 
 function imageOf(value: unknown) {

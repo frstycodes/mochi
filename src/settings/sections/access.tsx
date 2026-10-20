@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, SearchNormal } from 'reicon-react';
+import { ChevronDown, SearchAlt } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { levelPolicy, POLICIES_BY_TIER, toolPolicy, type ToolPolicy } from '../../runtime/toolPolicy';
 import { tierOf, TOOL_NAMES, type Tier, type ToolName } from '../../runtime/toolTable';
-import { CatalogRow } from '../CatalogRow';
 import { useSettingsRoute } from '../open';
-import { SettingsCard, SettingsGroup, SettingsRow, SettingsSection, SettingsSelect } from '../parts';
-import { getPrefs, setPrefs, usePrefs } from '../prefs';
+import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect } from '../parts';
+import { AGENT_CONTROLS, getPrefs, setPrefs, usePrefs, type AgentControl } from '../prefs';
 import { TOOL_GROUPS, TOOL_GUIDE, type ToolGroup } from '../toolGuide';
 
 /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): the level, then each tool's own choice. */
@@ -20,14 +20,13 @@ export function AccessSection() {
   const groups = groupTools(query);
   return (
     <div className="flex flex-col gap-10">
-      <SettingsGroup title="Agents" footer="Every tool below follows this level unless you choose otherwise for it. Only you change these.">
-        <CatalogRow settingKey="agentControl" />
-        <CatalogRow settingKey="threadModels" />
-      </SettingsGroup>
+      <SettingsSection id="agentControl" title="What agents can do" footer="Every tool below follows this level unless you choose otherwise for it. Only you change it.">
+        <LevelPicker />
+      </SettingsSection>
       <SettingsSection title="Tools" footer="Allow runs a tool without asking: a line in the thread, and an Undo where it can be put back. Ask first waits on a card in the thread showing exactly what it was given. Deletes always ask, and settings are only ever suggested.">
         <InputGroup>
           <InputGroupAddon>
-            <SearchNormal />
+            <SearchAlt />
           </InputGroupAddon>
           <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter tools" aria-label="Filter tools" />
         </InputGroup>
@@ -37,6 +36,36 @@ export function AccessSection() {
       ))}
       {!groups.length && <p className="px-1 type-meta text-muted-foreground">No tool matches “{query.trim()}”.</p>}
     </div>
+  );
+}
+
+const LEVELS = {
+  read: { title: 'Read only', body: 'Agents can look at threads, goals, the browser and settings. Nothing changes.' },
+  changes: { title: 'Changes', body: 'Agents change threads, goals, panes and the browser on their own, with Undo. No deletes or settings.' },
+  everything: { title: 'Everything', body: 'Changes, plus deletes and settings suggestions, each waiting for you on a card first.' },
+} satisfies Record<AgentControl, { title: string; body: string }>;
+
+/** The agent-control level as three cards, so each says what it allows instead of a label cut short in a select. */
+function LevelPicker() {
+  const { agentControl } = usePrefs();
+  return (
+    <RadioGroup value={agentControl} onValueChange={(v) => setPrefs({ agentControl: v as AgentControl })} aria-label="What agents can do" className="@container">
+      <div className="grid gap-2 @lg:grid-cols-3">
+        {AGENT_CONTROLS.map((level) => (
+          <label
+            key={level}
+            htmlFor={`level-${level}`}
+            className="flex cursor-pointer gap-3 rounded-xl border bg-card p-3.5 transition-colors hover:bg-accent/40 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50"
+          >
+            <RadioGroupItem id={`level-${level}`} value={level} className="mt-0.5" />
+            <span className="flex flex-col gap-0.5">
+              <span className="type-body font-medium">{LEVELS[level].title}</span>
+              <span className="type-meta text-muted-foreground text-pretty">{LEVELS[level].body}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </RadioGroup>
   );
 }
 

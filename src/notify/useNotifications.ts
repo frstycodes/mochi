@@ -9,9 +9,11 @@ import { usePrefs } from '../settings/prefs';
 import { useHarness, type State } from '../store';
 import { isAddressed, isAlertKind, isQuiet, type Notice, type NoticeKind } from './model';
 import { saveNotifySettings } from './slice';
+import { useRemoteAlerts } from './useRemoteAlerts';
+import { useMachines, type FollowedView } from '../remote/useMachines';
 
 /** For watched threads main shows these itself (`electron/notify/watch.ts`), so the renderer doesn't alert them twice. */
-const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'review', 'ci'];
+const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'ci'];
 
 /** Side effects of the notification center: OS notifications while the window is in the background, toasts for watched threads while it's focused, main's watch config (OS alerts, CI, dock badge), and click-to-jump. */
 export function useNotifications() {
@@ -26,8 +28,9 @@ export function useNotifications() {
   const { alertKinds, watchedToasts, idleAlerts } = prefs;
   const view = state.views[state.spaceId];
   const viewedId = view?.kind === 'thread' ? view.id : undefined;
+  const { machines } = useMachines();
   // Threads change every tick; main only hears about it when what it needs changed.
-  const config = JSON.stringify(watchConfig(state, prefs));
+  const config = JSON.stringify(watchConfig(state, prefs, machines));
 
   useEffect(() => {
     const before = new Set(shown.current.map((n) => n.id));
@@ -59,6 +62,7 @@ export function useNotifications() {
   }, [items, quiet, state.watched, alertKinds, watchedToasts, idleAlerts, viewedId]);
 
   useAddressedOnView(viewedId);
+  useRemoteAlerts();
 
   useEffect(() => {
     host.notify.watch(JSON.parse(config) as WatchConfig).catch((error: unknown) => console.error('Syncing watched threads failed', error));
@@ -107,13 +111,21 @@ function subscribeFocus(onChange: () => void) {
   };
 }
 
-function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: string[]; dockBadge: boolean }): WatchConfig {
+function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: string[]; dockBadge: boolean }, machines: FollowedView[]): WatchConfig {
   const profiles = getProfiles();
   const threads = state.threads
     .filter((t) => state.watched.includes(t.id))
     .map((t) => ({ id: t.id, title: t.title, cwd: threadCwd(t) ?? undefined, githubUser: profiles.find((p) => p.id === t.spaceId)?.github || undefined }));
+  const autofix = state.threads.flatMap((t) => {
+    const cwd = threadCwd(t);
+    if (!t.live || t.status === 'settled' || !cwd) return [];
+    const githubUser = profiles.find((p) => p.id === t.spaceId)?.github || undefined;
+    return t.prs.flatMap((pr) => (pr.autofixSince && pr.state !== 'merged' ? [{ threadId: t.id, title: t.title, pr: pr.number, cwd, githubUser, since: pr.autofixSince }] : []));
+  });
   const { muted, quiet } = state.notifications;
-  return { threads, kinds: alertKinds, quiet, muted, needsYou: state.threads.filter((t) => t.status === 'needs-you').map((t) => t.id), dockBadge };
+  // Another computer's threads count toward the badge too, keyed by machine so ids never collide with this one's.
+  const remoteNeedsYou = machines.flatMap(({ machine, state }) => (state?.threads ?? []).filter((t) => t.status === 'needs-you').map((t) => `${machine.id}/${t.id}`));
+  return { threads, autofix, kinds: alertKinds, quiet, muted, needsYou: [...state.threads.filter((t) => t.status === 'needs-you').map((t) => t.id), ...remoteNeedsYou], dockBadge };
 }
 
 /** Opens what a notice is about: its queue item while that's still open, else its thread. */

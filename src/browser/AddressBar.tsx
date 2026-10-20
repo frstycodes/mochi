@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { ArrowUpRight, Global, Monitor, SearchNormal } from 'reicon-react';
+import { ArrowUpRight, Globe, Monitor, SearchAlt } from '@/icons';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -9,7 +9,6 @@ import type { Thread } from '@/model';
 import { usePrefs } from '../settings/prefs';
 import { useHarness } from '../store';
 import { usePorts } from '../terminal/ports';
-import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { TooltipIconButton } from '../ui';
 import { historyTitle, pageKey, updatePage, useAddressHistory, type Page } from './pages';
 import { openExternally, openInLabel } from './systemBrowser';
@@ -134,8 +133,7 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
 function useCandidates(thread: Thread, pageId: string) {
   const { state } = useHarness();
   const history = useAddressHistory();
-  const { openPort } = usePaneOpeners(thread.id);
-  const { ports } = usePorts(thread.id, threadCwd(thread) ?? null, openPort);
+  const { ports } = usePorts(thread.id, threadCwd(thread) ?? null);
   const tabs = state.panes.find((p) => p.threadId === thread.id)?.tabs;
   return useMemo<Candidate[]>(
     () => [
@@ -196,8 +194,8 @@ function OpenExternalButton({ url }: { url: string }) {
 }
 
 function RowIcon({ row }: { row: Row }) {
-  if (row.icon === 'search') return <SearchNormal className="text-muted-foreground" />;
-  if (row.icon === 'go') return <Global className="text-muted-foreground" />;
+  if (row.icon === 'search') return <SearchAlt className="text-muted-foreground" />;
+  if (row.icon === 'go') return <Globe className="text-muted-foreground" />;
   if (row.icon === 'server' || isLocal(row.url)) return <Monitor className="text-muted-foreground" />;
   return <SiteIcon url={row.url} />;
 }
@@ -212,7 +210,7 @@ function SiteIcon({ url }: { url: string }) {
       return null;
     }
   }, [url]);
-  if (!origin || hasFailed) return <Global className="text-muted-foreground" />;
+  if (!origin || hasFailed) return <Globe className="text-muted-foreground" />;
   return <img src={`${origin}/favicon.ico`} alt="" aria-hidden referrerPolicy="no-referrer" onError={() => setFailed(true)} className="size-4 shrink-0 rounded-xs" />;
 }
 

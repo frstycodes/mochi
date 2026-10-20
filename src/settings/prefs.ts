@@ -11,8 +11,8 @@ import type { ToolPolicies } from '../runtime/toolPolicy.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
-  /** Off: the sidebar stays solid instead of showing the window's vibrancy (macOS) or Mica (Windows 11). */
-  translucentSidebar: boolean;
+  /** Sidebar and side pane animations that run (`ANIMATIONS`); none by default. Reduce motion still stops them all. */
+  animations: string[];
   /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
   lightTheme: string;
   darkTheme: string;
@@ -34,6 +34,10 @@ export interface Prefs {
   permissions: SharedAccess;
   /** Side pane tabs pinned as icons in the thread header, in order. */
   headerPins: PaneTabKind[];
+  /** Sidebar destinations shown, by `SIDEBAR_ITEMS` id (Edit sidebar); the rest sit under More. */
+  sidebarItems: string[];
+  /** Off turns goals off everywhere: agents get no goal instructions, tools or nudge; no goal cards, checks, verdicts or drift guard. Stored goals stay for when it's back on. */
+  goals: boolean;
   /** Off sends every message straight through: no local score, no classifier call. */
   driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
@@ -70,8 +74,6 @@ export interface Prefs {
   agentControl: AgentControl;
   /** Per-tool choices over the level (`src/runtime/toolPolicy.ts`); a choice a tool's tier doesn't offer is ignored when read. */
   toolPolicies: ToolPolicies;
-  /** What model and effort `create_thread` may give a new thread (RUNTIME.md › Mochi tools). */
-  threadModels: ThreadModels;
   /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
   recordReplays: boolean;
   /** The rewind mode you last ran, offered first next time. */
@@ -79,10 +81,6 @@ export interface Prefs {
   /** Rebound shortcuts only, command id → chord text (`src/keymap.ts`); '' leaves a command without one. */
   keybindings: Record<string, string>;
 }
-
-export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
-
-export type ThreadModels = (typeof THREAD_MODELS_RULES)[number];
 
 export const AGENT_CONTROLS = ['read', 'changes', 'everything'] as const;
 
@@ -93,16 +91,17 @@ export const toggleStar = (starred: string[], id: string) => (starred.includes(i
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
-  translucentSidebar: true,
+  animations: [],
   lightTheme: 'mochi',
   darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
+  goals: true,
   idleChecks: 'edited',
   proposedGoals: 'ask',
   prGaps: 'block',
   idleAlerts: ['gaps', 'needs-you', 'stalled'],
-  alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
+  alertKinds: ['needs-you', 'done', 'failed', 'limit', 'ci', 'pr-review', 'run'],
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
@@ -112,15 +111,16 @@ export const DEFAULT_PREFS: Prefs = {
   agent: 'claude',
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
+  sidebarItems: ['queue', 'board', 'projects'],
   driftGuard: true,
-  whileWorking: 'queue',
+  whileWorking: 'steer',
   simplifyLength: 'short',
   simplifyNeedsFirst: true,
   simplifyRules: '',
   simplifyAuto: false,
   simplifyAutoWords: 150,
   branchFrom: 'current',
-  branchPrefix: '',
+  branchPrefix: 'mochi/',
   workspaceMode: 'worktree',
   diffStyle: 'unified',
   worktreeCleanup: '7',
@@ -132,7 +132,6 @@ export const DEFAULT_PREFS: Prefs = {
   demoData: false,
   agentControl: 'everything',
   toolPolicies: {},
-  threadModels: 'cheaper',
   recordReplays: true,
   rewindMode: 'files',
   keybindings: {},
@@ -188,11 +187,10 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) saved = parsed as Record<string, unknown>;
   } catch {}
   if (saved.branchFrom === undefined && legacyBranchFrom === 'base') saved.branchFrom = 'base';
-  // 'mochi/' was the old default; branches are now `type/slug` and a prefix is something you add.
-  if (saved.branchPrefix === 'mochi/') delete saved.branchPrefix;
+  // '' was the old default, saved with every pref since; a temp name needs the prefix to stand apart from your branches.
+  if (saved.branchPrefix === '') delete saved.branchPrefix;
   // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
-  if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
   if (!isStringRecord(saved.keybindings)) delete saved.keybindings;
   if (!isStringRecord(saved.toolPolicies)) delete saved.toolPolicies;

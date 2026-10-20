@@ -118,9 +118,9 @@ export function DataSection() {
               <AccordionTrigger>When does a thread settle?</AccordionTrigger>
               <AccordionContent className="text-muted-foreground">After 3 idle days, or once every linked PR is merged or closed. Open questions and running work block it.</AccordionContent>
             </AccordionItem>
-            <AccordionItem value="overlap">
-              <AccordionTrigger>What happens on an overlap?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">It lands in your queue as one decision: link, extract, race or keep both.</AccordionContent>
+            <AccordionItem value="done">
+              <AccordionTrigger>When is a goal done?</AccordionTrigger>
+              <AccordionContent className="text-muted-foreground">When every criterion counts: one with a command once Mochi's check passes, one without once the agent claims it with evidence.</AccordionContent>
             </AccordionItem>
           </Accordion>
         </Block>

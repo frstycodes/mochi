@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ArrowLeft, ChevronRight, Hierarchy, Send2, Stop } from 'reicon-react';
+import { ArrowLeft, ChevronRight, Hierarchy, Send, Stop } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -117,7 +117,7 @@ function StopAgent({ thread, subagent, name, className }: { thread: Thread; suba
   const { dispatch } = useHarness();
   return (
     <TooltipIconButton label="Stop agent" hint={`Stops ${name}; its work so far stays`} size="icon-sm" variant="ghost" className={className} onClick={() => dispatch({ type: 'bg-stop', threadId: thread.id, subagentId: subagent.id })}>
-      <Stop weight="Filled" className="size-3.5" />
+      <Stop filled className="size-3.5" />
     </TooltipIconButton>
   );
 }
@@ -164,7 +164,7 @@ function AgentTranscript({ thread, subagent }: { thread: Thread; subagent: Subag
                 {report}
               </MessageResponse>
               <Button size="sm" variant="secondary" className="w-fit rounded-full" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: reportOf(subagent), reason: 'A subagent report you sent on' })}>
-                <Send2 data-icon="inline-start" />
+                <Send data-icon="inline-start" />
                 Send to thread
               </Button>
             </div>
@@ -273,7 +273,7 @@ function NoAgents() {
           <Hierarchy />
         </EmptyMedia>
         <EmptyTitle>No agents yet</EmptyTitle>
-        <EmptyDescription>Subagents and background agents this thread's agent starts show here, with their logs and changes.</EmptyDescription>
+        <EmptyDescription>Subagents and delegated tasks this thread's agent starts show here, with their logs and changes.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

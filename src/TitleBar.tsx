@@ -1,14 +1,18 @@
-import type { ComponentProps } from 'react';
+import { useImperativeHandle, useRef, type ComponentProps } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import { LIGHTS_RESERVE, useToggleSlot } from './SidebarToggle';
+import { useCaptionInset } from './windowCaptions';
 
 /** The 44px bar every page starts with: drags the window on desktop, and while the sidebar is hidden clears the traffic lights and carries its trigger. `isFirst`: only the leftmost split sits under the lights; `isMulti`: several splits, so no trigger. */
-export function TitleBar({ isFirst = true, isMulti = false, className, children, ...props }: ComponentProps<'header'> & { isFirst?: boolean; isMulti?: boolean }) {
+export function TitleBar({ ref, isFirst = true, isMulti = false, className, children, ...props }: ComponentProps<'header'> & { isFirst?: boolean; isMulti?: boolean }) {
   const { hasTrigger, clearsLights } = useToggleSlot(isFirst, isMulti);
+  const header = useRef<HTMLElement>(null);
+  useImperativeHandle(ref, () => header.current!, []);
+  useCaptionInset(header);
   return (
     // The reserve goes last: tailwind-merge would let a caller's `px-*` drop it.
-    <header className={cn(TITLE_BAR, className, clearsLights && LIGHTS_RESERVE)} {...props}>
+    <header ref={header} className={cn(TITLE_BAR, className, clearsLights && LIGHTS_RESERVE)} {...props}>
       {hasTrigger && <SidebarTrigger className="text-muted-foreground" />}
       {children}
     </header>

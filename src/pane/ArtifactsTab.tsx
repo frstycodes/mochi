@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ArrowLeft, Chart, Code, FolderOpen, Gallery, Pip, Route, SidebarRight } from 'reicon-react';
+import { ArrowLeft, Chart, Code, FolderOpen, Image, Pip, Route, SidebarRight } from '@/icons';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -95,7 +95,7 @@ function FileItem({ file, age, onOpen }: { file: FileArtifact; age: string; onOp
   );
 }
 
-const VISUAL_ICONS = { chart: Chart, svg: Gallery, html: Code, 'harness-metro': Route, 'harness-diff': DiffIcon } satisfies Record<VizLanguage, unknown>;
+const VISUAL_ICONS = { chart: Chart, svg: Image, html: Code, 'harness-metro': Route, 'harness-diff': DiffIcon } satisfies Record<VizLanguage, unknown>;
 
 function VisualItem({ visual, age, onOpen, onPop }: { visual: VisualArtifact; age: string; onOpen: () => void; onPop: () => void }) {
   const Icon = VISUAL_ICONS[visual.language];

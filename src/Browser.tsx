@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { animate, motion, useDragControls, useMotionValue, type PanInfo } from 'motion/react';
-import { ChevronLeft, ChevronRight, ExitPip, X } from 'reicon-react';
+import { ChevronLeft, ChevronRight, ExitPip, X } from '@/icons';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { Annotator } from './browser/Annotate';
@@ -51,7 +51,7 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
       <BrowserToolbar thread={thread} pageId={pageId} page={page} />
       {page.device !== RESPONSIVE && <DeviceBar pageId={pageId} page={page} />}
       {!!page.find && <FindBar pageId={pageId} page={page} find={page.find} />}
-      {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} />}
+      {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} handoff={page.handoff} />}
       <div className="min-h-0 flex-1">
         {page.annotating ? (
           <Annotator thread={thread} pageId={pageId} image={page.annotating.image} name={page.annotating.name} />

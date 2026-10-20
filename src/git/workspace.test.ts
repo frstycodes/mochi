@@ -1,16 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { branchName, branchText, uniqueBranch, withHead } from './workspace.ts';
+import { branchFromTitle, branchText, tempBranch, withHead } from './workspace.ts';
 
-test('a new branch is the prefix plus the prompt as a slug, made unique against the branches that exist', () => {
-  assert.equal(branchName('', 'Fix the login bug!', 'new-3'), 'fix/login-bug');
-  assert.equal(branchName('', 'Add a dark mode toggle to settings', 'new-3'), 'feat/dark-mode-toggle-settings');
-  assert.equal(branchName('', 'please refactor the auth module', 'new-3'), 'refactor/auth-module');
-  assert.equal(branchName('', 'Café — résumé page, please do it now', 'new-3'), 'feat/cafe-resume-page-do-it');
-  assert.equal(branchName('sandesh/', 'update the README', 'new-3'), 'sandesh/feat/update-readme');
-  assert.equal(branchName('', '???', 'new-3'), 'new-3');
-  assert.equal(uniqueBranch('mochi/x', new Set(['mochi/x', 'mochi/x-2'])), 'mochi/x-3');
-  assert.equal(uniqueBranch('mochi/y', new Set(['mochi/x'])), 'mochi/y');
+test('a new branch starts on prefix + 8 hex, the same for the same seed, and takes its title as a slug, made unique', () => {
+  const temp = tempBranch('mochi/', 'latitude/new-3/120');
+  assert.match(temp, /^mochi\/[0-9a-f]{8}$/);
+  assert.equal(tempBranch('mochi/', 'latitude/new-3/120'), temp, 'pure: the reducer and the composer agree');
+  assert.notEqual(tempBranch('mochi/', 'latitude/new-4/120'), temp);
+  assert.match(tempBranch('', 'x'), /^[0-9a-f]{8}$/);
+
+  assert.equal(branchFromTitle(temp, 'Fix login redirect', new Set()), 'mochi/fix-login-redirect');
+  assert.equal(branchFromTitle(temp, 'Café — résumé page', new Set()), 'mochi/cafe-resume-page');
+  assert.equal(branchFromTitle('me/0badf00d', 'Dark mode toggle', new Set()), 'me/dark-mode-toggle');
+  assert.equal(branchFromTitle(temp, 'Fix login', new Set(['mochi/fix-login', 'mochi/fix-login-2'])), 'mochi/fix-login-3');
+  assert.equal(branchFromTitle(temp, '???', new Set()), null, 'no slug');
+  assert.equal(branchFromTitle('feat/my-branch', 'Fix login', new Set()), null, 'not a temp name');
 });
 
 test('the label names the branch, says "detached at" for a commit, and the head sets the mode the checkout really has', () => {

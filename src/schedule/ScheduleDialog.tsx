@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore, type FormEvent } from 'react';
-import { Trash3 } from 'reicon-react';
+import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -93,7 +93,7 @@ function ScheduleDialog({ thread, trigger, onClose }: { thread: Thread; trigger:
           <DialogFooter className="items-center">
             {!!trigger && (
               <Button type="button" variant="ghost" onClick={() => void remove()} className="mr-auto text-destructive">
-                <Trash3 data-icon="inline-start" />
+                <Trash data-icon="inline-start" />
                 Remove schedule
               </Button>
             )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Add, Trash3 } from 'reicon-react';
+import { Connector, Plugin, Plus, Skill, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,8 @@ import { AgentConfigRows } from '../ProfileAgentConfig';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS } from '../harnesses';
 import { CatalogRow } from '../CatalogRow';
-import { useLinkedTab } from '../open';
+import { openSettings, useLinkedTab } from '../open';
+import { useLibrary } from '../../library/useLibrary';
 import { DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
 
 /** One profile at a time behind a tab per profile: what it's called, how it looks in the sidebar, and what it signs in with. */
@@ -69,6 +70,7 @@ function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast
       {host.isDesktop && <GitHubAccountRow profile={profile} gh={gh} />}
       {host.isDesktop && HARNESS_IDS.map((provider) => <CatalogRow key={provider} settingKey={`profile.${provider}Account`} profile={profile} />)}
       <AgentConfigRows profile={profile} />
+      <LibraryRow profile={profile} />
       {host.isDesktop && <ClearBrowsingRow profile={profile} confirm={confirm} />}
       <RemoveProfileRow profile={profile} isLast={isLast} />
     </SettingsGroup>
@@ -168,6 +170,35 @@ export function AccountSelect({ id, provider, value, onChange }: { id: string; p
   return <SettingsSelect id={id} value={value} options={own.map((a) => ({ value: a.id, label: a.name }))} onChange={onChange} disabled={!accounts} />;
 }
 
+const LIBRARY_PAGES = [
+  { kind: 'skills', label: 'Skills', icon: Skill },
+  { kind: 'plugins', label: 'Plugins', icon: Plugin },
+  { kind: 'connectors', label: 'Connectors', icon: Connector },
+] as const;
+
+/** Skills, plugins and connectors are installed once and handed to profiles in Settings › Customize; the row says how many this one has. */
+function LibraryRow({ profile }: { profile: Space }) {
+  const { entries } = useLibrary(profile.id);
+  const on = entries?.filter((e) => e.isEnabled).length;
+  const open = (kind: (typeof LIBRARY_PAGES)[number]['kind']) => openSettings(kind);
+  return (
+    <SettingsRow
+      label="Skills, plugins and connectors"
+      description={on === undefined ? 'What this profile’s threads load beyond the account’s own setup.' : `${on} ${THREADS.select(on) === 'one' ? 'item' : 'items'} on. What this profile’s threads load beyond the account’s own setup.`}
+      control={
+        <div className="flex flex-wrap items-center gap-1.5">
+          {LIBRARY_PAGES.map(({ kind, label, icon: Icon }) => (
+            <Button key={kind} variant="outline" size="sm" onClick={() => open(kind)}>
+              <Icon data-icon="inline-start" />
+              {label}
+            </Button>
+          ))}
+        </div>
+      }
+    />
+  );
+}
+
 function ClearBrowsingRow({ profile, confirm }: { profile: Space; confirm: ReturnType<typeof useConfirm>['confirm'] }) {
   const rowId = `${profile.id}-browsing`;
   const clear = async () => {
@@ -212,7 +243,7 @@ function RemoveProfileRow({ profile, isLast }: { profile: Space; isLast: boolean
       label={<span className="text-muted-foreground">{block ?? 'Removes it from the sidebar. Its agent accounts and browser data stay on disk.'}</span>}
       control={
         <Button variant="outline" size="sm" disabled={!!block} onClick={remove}>
-          <Trash3 data-icon="inline-start" className="text-destructive" />
+          <Trash data-icon="inline-start" className="text-destructive" />
           Remove profile
         </Button>
       }
@@ -237,7 +268,7 @@ function AddProfileGroup({ isFull, onAdded }: { isFull: boolean; onAdded: (id: s
         <SettingsRow
           label={
             <button type="button" disabled={isFull} onClick={() => setName('')} className="flex items-center gap-1.5 text-foreground enabled:hover:underline enabled:hover:underline-offset-4 disabled:text-muted-foreground">
-              <Add aria-hidden className="size-4" />
+              <Plus aria-hidden className="size-4" />
               Add profile…
             </button>
           }

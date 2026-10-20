@@ -1,20 +1,21 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
+import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Hourglass, Stars } from 'reicon-react';
+import { ChevronDown, ChevronUp, Hourglass, Stars } from '@/icons';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, isMochiCard, type Provider, type QueuedMessage, type QueueItem, type Thread } from './model';
+import { authorName, isMochiCard, type Provider, type QueuedMessage, type QueueItem, type StepStatus, type Thread } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
@@ -26,6 +27,7 @@ import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
 import { SetupRow } from './chat/SetupRow';
+import { useLibraryNames } from './library/names';
 import { agentPhase, currentAction, isWorking, pendingWork, type CurrentAction } from './agentPhase';
 import { chatRows, finalReplies, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
@@ -35,10 +37,12 @@ import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
 import { ReportCard } from './goals/ReportCard';
+import { NextMoveRecord, PlanList, useNextMove, type PlanItem } from './goals/NextMove';
+import { SubThreadResultRow } from './goals/SubThreads';
 import { showsVerdictCard } from './goals/report';
 import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
-import { ReceivedMessageRow } from './chat/ThreadMessage';
+import { AutofixEventRow, ReceivedMessageRow } from './chat/ThreadMessage';
 import { turnChanges } from './chat/turnChanges';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
@@ -49,6 +53,7 @@ import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitEntry, LimitHint } from './chat/LimitCard';
 import { CompactionRow } from './chat/CompactionRow';
+import { HandoffRow } from './chat/HandoffRow';
 import { compactFocus, compactGate } from './chat/compact';
 import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
@@ -69,8 +74,13 @@ import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
 import { rememberedScroll, Transcript, type TranscriptHandle } from './chat/Transcript';
 
-/** `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread. */
-export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: boolean }) {
+export type MessageBar = ComponentType<{ thread: Thread; index: number; align: 'start' | 'end' }>;
+
+/**
+ * `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread.
+ * `messageBar` puts actions of its own back under the messages that would have them (another computer's thread).
+ */
+export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; isReadOnly?: boolean; messageBar?: MessageBar }) {
   const { state } = useHarness();
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
@@ -78,6 +88,8 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review' && r.kind !== 'changes');
   const liveWork = liveWorkIndex(rows);
+  // Its label names skills and servers as the library does.
+  useLibraryNames();
   const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
   // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
@@ -96,39 +108,41 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col" style={isReadOnly ? ({ '--composer-h': '0px' } as React.CSSProperties) : undefined}>
-      {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
-      <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
-        <VizThreadProvider value={thread.id}>
-          <ConversationContent scrollClassName="[scroll-timeline:--chat_y]" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-[calc(var(--chat-top,0px)+1.5rem)] pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
-            <div ref={messages} className="contents">
-              {hasGoal(thread) && <GoalCard thread={thread} />}
-              {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
-              <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
-                {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
-              </Transcript>
-              <ProposalCard thread={thread} />
-              <ReportCard thread={thread} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
-              <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
-            </div>
-          </ConversationContent>
-        </VizThreadProvider>
-        <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
-        {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
-        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
-        {!isReadOnly && <ScrollIntent onScrollUp={() => (composer.hold(), tray.collapse())} onReachBottom={() => (tray.expand(), !decisions.length && composer.release())} />}
-      </Conversation>
-      {!isReadOnly && (
-        <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
-          <PromptInputProvider key={thread.id}>
+    // The provider holds the message box's text for the whole chat: the next-move card fills it with the agent's draft.
+    <PromptInputProvider key={thread.id}>
+      <div data-chat={thread.id} className="relative flex min-h-0 flex-1 flex-col" style={isReadOnly ? ({ '--composer-h': '0px' } as React.CSSProperties) : undefined}>
+        {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
+        <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
+          <VizThreadProvider value={thread.id}>
+            <ConversationContent scrollClassName="[scroll-timeline:--chat_y]" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-[calc(var(--chat-top,0px)+1.5rem)] pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
+              <div ref={messages} className="contents">
+                {hasGoal(thread) && <GoalCard thread={thread} />}
+                {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
+                <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
+                  {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} messageBar={messageBar} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
+                </Transcript>
+                <ProposalCard thread={thread} />
+                <ReportCard thread={thread} isReadOnly={isReadOnly} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
+                <PlanList items={planItems(thread)} slot={thread.line} isWorking={isRunning} />
+                <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
+              </div>
+            </ConversationContent>
+          </VizThreadProvider>
+          <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
+          {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
+          <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
+          {!isReadOnly && <ScrollIntent onScrollUp={() => (composer.hold(), tray.collapse())} onReachBottom={() => (tray.expand(), !decisions.length && composer.release())} />}
+        </Conversation>
+        {!isReadOnly && (
+          <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
             <ImageDropTarget>
               <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
             </ImageDropTarget>
             <ComposerInbox threadId={thread.id} />
-          </PromptInputProvider>
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+      </div>
+    </PromptInputProvider>
   );
 }
 
@@ -166,7 +180,7 @@ function useComposerHeightVar() {
 }
 
 // isLive: the newest row of a running thread, the one still being written. Memoized: a scroll re-renders the virtualized list, and only rows that just mounted should render.
-const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; hasActions: boolean; action?: CurrentAction }) {
+const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, messageBar, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; messageBar?: MessageBar; hasActions: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'changes') return <TurnChangesCard thread={thread} turn={row.turn} isReadOnly={isReadOnly} />;
@@ -176,12 +190,16 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   }
   if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
   if (row.kind === 'widget') return <McpAppCard threadId={thread.id} widget={row.entry.widget!} />;
-  if (row.kind === 'thread-message') return <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
+  if (row.kind === 'thread-message') return row.entry.autofix ? <AutofixEventRow entry={row.entry} event={row.entry.autofix} index={row.index} /> : <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
+  if (row.kind === 'event' && row.entry.nextMove) return <NextMoveRecord record={row.entry.nextMove} />;
+  if (row.kind === 'event' && row.entry.subThread) return <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />;
+  if (row.kind === 'event' && row.entry.handoff) return <HandoffRow handoff={row.entry.handoff} at={row.entry.at} />;
   if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
-  if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
+  if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} glyph={row.entry.glyph} site={row.entry.site} />;
 
   const { entry } = row;
+  const Bar = isReadOnly ? messageBar : MessageActions;
   const isYou = entry.who === 'you';
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
   const message = (
@@ -213,7 +231,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
           )}
         </MessageContent>
       </Message>
-      {!isReadOnly && (isYou || hasActions) && <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
+      {!!Bar && (isYou || hasActions) && <Bar thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
     </div>
   );
   if (isReadOnly) return message;
@@ -341,7 +359,7 @@ function Composer({
   const root = projectRef(thread.repo);
   const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
-  const compact = compactGate(thread, isQueueing, decisions.length > 0);
+  const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
   const items = useMemo(() => slashItems.map((i) => (i.source === 'mochi' && i.name === 'compact' && offReason ? { ...i, disabledReason: offReason } : i)), [slashItems, offReason]);
   const slash = useSlashMenu(items);
@@ -365,6 +383,8 @@ function Composer({
     else dispatch({ type: 'compact', threadId: thread.id, focus });
   };
 
+  const recordUnanswered = useRecordUnanswered(thread);
+
   const edit = (message: QueuedMessage) => {
     dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id });
     // Whatever you were already typing stays; the queued text follows it.
@@ -381,9 +401,9 @@ function Composer({
         <div className="relative">
           <SlashMenu menu={slash} />
           <MentionMenu menu={mention} />
-          <ComposerCard className="in-data-image-over:border-ring">
+          <ComposerCard data-composer className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, steers: true })} />
+            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id })} />
             <MentionChips menu={mention} />
             <ComposerInput
               ref={editor}
@@ -409,7 +429,8 @@ function Composer({
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
                 const focus = compactFocus(trimmed);
                 if (focus !== null) return runCompact(focus, files.length > 0);
-                const images = await sentImages(files);
+                if (!isQueueing) recordUnanswered();
+                const images = await sentImages(files, (type, base64) => host.data.saveImage(type, base64));
                 const message = queuedMessage(trimmed, { ...(images.length > 0 && { images }), mentions: mention.mentions, isCommand: !!resolveToken(trimmed, slashItems), typedSkills: typedSkills(trimmed, slashItems) });
                 if (!isQueueing) return drift.submit(message);
                 dispatch({ type: 'queued-add', threadId: thread.id, message });
@@ -524,3 +545,20 @@ function jumpToQuote(transcript: TranscriptHandle | null, rows: ChatRow[], quote
   const i = rows.findLastIndex((r) => r.kind === 'message' && r.entry.text.includes(quote));
   if (i >= 0) transcript?.scrollToIndex(i, { align: 'center' });
 }
+
+/** Writing instead of answering keeps the card in the chat too, as its question with no answer. */
+function useRecordUnanswered(thread: Thread) {
+  const { dispatch } = useHarness();
+  const next = useNextMove(thread);
+  return () => {
+    if (!next?.question || !showsVerdictCard(thread)) return;
+    dispatch({ type: 'next-move-record', threadId: thread.id, record: { ...(next.report?.summary && { summary: next.report.summary }), question: next.question } });
+  };
+}
+
+/** The agent's plan as the chat's to-do list; dropped items leave it. */
+function planItems(thread: Thread): PlanItem[] {
+  return thread.steps.flatMap((s) => (s.status === 'dropped' ? [] : [{ title: s.title, status: PLAN_STATUS[s.status] }]));
+}
+
+const PLAN_STATUS = { done: 'done', running: 'running', ready: 'pending', blocked: 'pending' } satisfies Record<Exclude<StepStatus, 'dropped'>, PlanItem['status']>;

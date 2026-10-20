@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Thread } from './model.ts';
-import { activeThreads, dropPin, pinMany, pinnedThreads, reorderThreads, stepPin, togglePin } from './reorder.ts';
+import { activeThreads, dropAt, dropPin, nestBlocker, orderBetween, parentOf, pinAt, pinMany, pinnedThreads, pinOrderOf, reorderThreads, sidebarGroups, stepPin, togglePin } from './reorder.ts';
 
 const t = (id: string, orbitSlot?: number, lastAt = 0) => ({ id, orbitSlot, spaceId: 's', status: 'running', startedAt: 0, activity: lastAt ? [{ at: lastAt }] : [] }) as unknown as Thread;
 
 test('reorders listed threads in place and assigns pin slots in order', () => {
   const threads = [t('a', 1), t('other'), t('b'), t('c', 2)];
-  const out = reorderThreads(threads, ['c', 'b'], ['a']);
+  const out = reorderThreads(threads, ['c', 'b'], ['a'], 1000);
   assert.deepEqual(
     out.map((x) => [x.id, x.orbitSlot]),
     [['c', 1], ['other', undefined], ['b', 2], ['a', undefined]],
@@ -16,7 +16,7 @@ test('reorders listed threads in place and assigns pin slots in order', () => {
 
 test('refuses more pins than Orbit has slots', () => {
   const threads = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => t(id));
-  assert.equal(reorderThreads(threads, ['a', 'b', 'c', 'd', 'e', 'f'], []), threads);
+  assert.equal(reorderThreads(threads, ['a', 'b', 'c', 'd', 'e', 'f'], [], 1000), threads);
 });
 
 test('pinned order follows Orbit slots, not array order', () => {
@@ -48,14 +48,80 @@ test('drop inserts at the index of the target list', () => {
 
 test('bulk pin appends in selection order; bulk unpin puts them back at the top of Threads; overflow refuses all', () => {
   const threads = [t('a', 1), t('b'), t('c'), t('d')];
-  assert.deepEqual(pinMany(threads, 's', ['c', 'b']), { pinned: ['a', 'c', 'b'], unpinned: ['d'] });
+  assert.deepEqual(pinMany(threads, 's', ['c', 'b'], 1000), { pinned: ['a', 'c', 'b'], unpinned: ['d'] });
   const pinned = [t('a', 1), t('b', 2), t('c', 3), t('d')];
-  assert.deepEqual(pinMany(pinned, 's', ['a', 'c']), { pinned: ['b'], unpinned: ['c', 'a', 'd'] });
+  assert.deepEqual(pinMany(pinned, 's', ['a', 'c'], 1000), { pinned: ['b'], unpinned: ['c', 'a', 'd'] });
   const full = [t('a', 1), t('b', 2), t('c', 3), t('d', 4), t('e'), t('f'), t('g')];
-  assert.equal(pinMany(full, 's', ['e', 'f']), null);
+  assert.equal(pinMany(full, 's', ['e', 'f'], 1000), null);
 });
 
 test('unpinned threads list most recent activity first; pinned keep their slot order', () => {
   const threads = [t('old', undefined, 10), t('p2', 2, 5), t('new', undefined, 30), t('mid', undefined, 20), t('p1', 1, 1)];
   assert.deepEqual(activeThreads(threads, 's').map((x) => x.id), ['new', 'mid', 'old']);
+});
+
+test('a sub-thread nests under a live parent in its space and stands alone once that parent settles', () => {
+  const parent = t('p');
+  const child = { ...t('c'), parent: { threadId: 'p' } } as Thread;
+  assert.equal(parentOf([parent, child], child)?.id, 'p');
+  assert.equal(parentOf([{ ...parent, status: 'settled' } as Thread, child], child), undefined);
+  assert.equal(parentOf([{ ...parent, spaceId: 'other' } as Thread, child], child), undefined);
+});
+
+test('nesting is one level deep and never under itself', () => {
+  const threads = [t('p'), { ...t('c'), parent: { threadId: 'p' } } as Thread, t('x')];
+  assert.equal(nestBlocker(threads, 'x', 'p'), null);
+  assert.equal(nestBlocker(threads, 'x', 'x'), 'Not a thread to nest under');
+  assert.equal(nestBlocker(threads, 'x', 'c'), 'Sub-threads nest one level deep');
+  assert.equal(nestBlocker(threads, 'p', 'x'), 'It has sub-threads of its own');
+});
+
+test('the sidebar nests open sub-threads under their parent, pinned or not, and only counts settled ones', () => {
+  const threads = [t('p', 1), { ...t('a', undefined, 9), startedAt: 2, parent: { threadId: 'p' } }, { ...t('b', undefined, 1), startedAt: 1, parent: { threadId: 'p' } }, { ...t('done'), status: 'settled', parent: { threadId: 'p' } }, t('x')] as Thread[];
+  const { pinned, active } = sidebarGroups(threads, 's');
+  assert.deepEqual(pinned.map((g) => [g.thread.id, g.subs.map((s) => s.id), g.settledSubs]), [['p', ['b', 'a'], 1]]);
+  assert.deepEqual(active.map((g) => g.thread.id), ['x'], 'a sub-thread is never a row of its own while its parent is live');
+});
+
+test('a drag reorders on the edges of a row and nests in its middle; a sub-thread moves out only by leaving its group', () => {
+  const rows = [
+    { id: 'p', top: 0, height: 40, isPinned: true },
+    { id: 'a', top: 60, height: 40, isPinned: false },
+    { id: 'c', top: 100, height: 30, isPinned: false, parentId: 'a' },
+    { id: 'b', top: 140, height: 40, isPinned: false },
+  ];
+  const yes = () => true;
+  assert.deepEqual(dropAt(rows, 50, { id: 'b' }, 64, false, yes), { slot: { toPinned: false, index: 0 }, nestUnder: null }, 'top quarter of a: before it');
+  assert.deepEqual(dropAt(rows, 50, { id: 'b' }, 80, false, yes), { slot: null, nestUnder: 'a' }, 'middle of a: nest');
+  assert.deepEqual(dropAt(rows, 50, { id: 'b' }, 85, false, () => false), { slot: { toPinned: false, index: 1 }, nestUnder: null }, 'a row that cannot take it only reorders');
+  assert.deepEqual(dropAt(rows, 50, { id: 'b' }, 10, true, yes), { slot: null, nestUnder: 'p' }, 'pinned rows take sub-threads too');
+  assert.deepEqual(dropAt(rows, 50, { id: 'c', parentId: 'a' }, 115, false, yes), { slot: null, nestUnder: null }, 'within its own group: stays');
+  assert.deepEqual(dropAt(rows, 50, { id: 'c', parentId: 'a' }, 175, false, yes), { slot: { toPinned: false, index: 2 }, nestUnder: null }, 'below b: out, after it');
+  assert.deepEqual(dropAt(rows, 50, { id: 'b' }, 45, false, yes), { slot: { toPinned: true, index: 1 }, nestUnder: null }, 'above the label: pinned, as before');
+});
+
+const keyed = (id: string, orbitSlot: number, pinOrder: number) => ({ ...t(id, orbitSlot), pinOrder }) as Thread;
+
+test('a reorder keeps pin keys where it can, so pins stay put among another computer’s; a new pin at the end goes last everywhere', () => {
+  const threads = [keyed('a', 1, 100), keyed('b', 2, 200), t('c')];
+  const appended = reorderThreads(threads, ['a', 'b', 'c'], [], 5000);
+  assert.deepEqual(appended.map((x) => x.pinOrder), [100, 200, 5000]);
+  const swapped = reorderThreads(threads, ['b', 'a'], ['c'], 5000);
+  assert.deepEqual(swapped.map((x) => [x.id, x.orbitSlot, x.pinOrder]), [['b', 1, 200], ['a', 2, 201], ['c', undefined, undefined]], 'only the moved pin’s key changes, just past its neighbour');
+  const first = reorderThreads(threads, ['c', 'a', 'b'], [], 5000);
+  assert.deepEqual(first.map((x) => [x.id, x.pinOrder]), [['c', 99], ['a', 100], ['b', 200]], 'a new pin dropped first sorts before the old first');
+  assert.equal(pinOrderOf(t('legacy', 3)), 3, 'a pin from before keys sorts by its Orbit slot');
+});
+
+test('a pin moved between two of any computers’ pins takes the key between them; Orbit slots follow key order here', () => {
+  assert.equal(orderBetween(100, 200), 150);
+  assert.equal(orderBetween(200, undefined, 5000), 5000);
+  assert.equal(orderBetween(undefined, 100), 99);
+  const threads = [keyed('a', 1, 100), keyed('b', 2, 200), t('c')];
+  const moved = pinAt(threads, 's', 'b', 50)!;
+  assert.deepEqual(moved.map((x) => [x.id, x.orbitSlot, x.pinOrder]), [['a', 2, 100], ['b', 1, 50], ['c', undefined, undefined]]);
+  const added = pinAt(threads, 's', 'c', 150)!;
+  assert.deepEqual(added.map((x) => [x.id, x.orbitSlot]), [['a', 1], ['b', 3], ['c', 2]]);
+  const full = [1, 2, 3, 5, 7].map((slot, i) => keyed(`p${i}`, slot, slot * 10));
+  assert.equal(pinAt([...full, t('x')], 's', 'x', 1), null);
 });

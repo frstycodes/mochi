@@ -1,0 +1,653 @@
+{
+  "slack": {
+    "version": 2,
+    "domains": [
+      "api.slack.com",
+      "app.slack.com"
+    ],
+    "params": {
+      "workspace": {
+        "question": "Which Slack workspace should Mochi connect to?"
+      }
+    },
+    "steps": [
+      {
+        "id": "open",
+        "kind": "goto",
+        "url": "https://api.slack.com/apps",
+        "note": "Your Apps, where app configuration tokens are made"
+      },
+      {
+        "id": "generate",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Generate Token",
+          "exact": true
+        },
+        "note": "Opens \"Generate Your App Configuration Token\""
+      },
+      {
+        "id": "workspace",
+        "kind": "choose",
+        "target": {
+          "role": "combobox",
+          "name": "Select a team"
+        },
+        "param": "workspace",
+        "note": "Picks the workspace"
+      },
+      {
+        "id": "confirm",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Generate",
+          "exact": true
+        },
+        "note": "Generates the token"
+      },
+      {
+        "id": "copy",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy access token",
+          "within": {
+            "role": "row",
+            "name": "{workspace}"
+          }
+        },
+        "as": "slackConfigToken",
+        "note": "Copies the workspace's new access token into Mochi"
+      },
+      {
+        "id": "existing",
+        "kind": "jumpIfPresent",
+        "target": {
+          "role": "row",
+          "name": "Mochi {workspace}"
+        },
+        "to": "open-existing",
+        "note": "A Mochi app already in this workspace is reused, not made again"
+      },
+      {
+        "id": "new",
+        "kind": "end",
+        "note": "No Mochi app here yet: Mochi creates one from the token"
+      },
+      {
+        "id": "open-existing",
+        "kind": "click",
+        "target": {
+          "role": "link",
+          "name": "Mochi",
+          "exact": true,
+          "within": {
+            "role": "row",
+            "name": "Mochi {workspace}"
+          }
+        },
+        "note": "Opens the workspace's Mochi app"
+      },
+      {
+        "id": "client-id",
+        "kind": "capture",
+        "target": {
+          "role": "textbox",
+          "name": "Client ID"
+        },
+        "as": "slackClientId",
+        "note": "Reads the app's Client ID"
+      },
+      {
+        "id": "client-secret",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy client secret"
+        },
+        "as": "slackClientSecret",
+        "note": "Copies the app's Client Secret into Mochi (label not yet seen live)"
+      }
+    ]
+  },
+  "google-workspace": {
+    "version": 4,
+    "domains": [
+      "console.cloud.google.com"
+    ],
+    "params": {
+      "owner": {
+        "question": "Which Google account should own your Mochi app? A personal one if your work account can't make Cloud projects."
+      },
+      "suffix": {
+        "generate": "suffix"
+      },
+      "email": {
+        "question": "Which Google account should Mochi's app belong to?"
+      },
+      "signInEmail": {
+        "default": "{email}"
+      },
+      "agree": {
+        "question": "Agree to Google's API Services User Data Policy for your Mochi app?",
+        "options": [
+          "I agree"
+        ]
+      },
+      "publish": {
+        "question": "Publish your Mochi app so Google stops asking you to sign in again every 7 days? It stays unverified, and its consent page links to Mochi on GitHub and its privacy policy.",
+        "options": [
+          "Publish it"
+        ]
+      }
+    },
+    "steps": [
+      {
+        "id": "owner",
+        "kind": "ask",
+        "param": "owner",
+        "note": "Which account owns the app is yours to say"
+      },
+      {
+        "id": "projects",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/cloud-resource-manager?authuser={owner}",
+        "note": "Looks for a Mochi app you already have"
+      },
+      {
+        "id": "existing",
+        "kind": "read",
+        "target": {
+          "role": "gridcell",
+          "name": "mochi-"
+        },
+        "pattern": "^mochi-(\\d+)$",
+        "param": "suffix",
+        "to": "reuse",
+        "note": "Uses its project when there is one"
+      },
+      {
+        "id": "open",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/projectcreate?authuser={owner}",
+        "note": "A new Cloud project for your Mochi app"
+      },
+      {
+        "id": "name",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Project name"
+        },
+        "value": "Mochi",
+        "note": "Names the project Mochi"
+      },
+      {
+        "id": "edit-id",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Edit the project ID."
+        },
+        "note": "Opens the project ID"
+      },
+      {
+        "id": "id",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Project ID"
+        },
+        "value": "mochi-{suffix}",
+        "note": "Sets an ID Mochi can use in every later page"
+      },
+      {
+        "id": "create",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Create",
+          "exact": true
+        },
+        "note": "Creates the project"
+      },
+      {
+        "id": "apis",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com&project=mochi-{suffix}&authuser={owner}",
+        "note": "Enables Gmail, Calendar and Drive for it"
+      },
+      {
+        "id": "org-blocked",
+        "kind": "stopIf",
+        "target": {
+          "role": "heading",
+          "name": "Permission Required"
+        },
+        "reason": "This Google account can't create Cloud projects (its organization blocks it). Run again with params.owner, a personal Google account, and params.signInEmail, the account to connect.",
+        "note": "A Workspace organization that blocks new projects stops the run with what to do"
+      },
+      {
+        "id": "project-ready",
+        "kind": "wait",
+        "text": "You are going to make changes to project mochi-{suffix}",
+        "timeoutMs": 60000,
+        "note": "Waits until the new project can be changed, stopping at once if Google can't find it",
+        "stopText": "Failed to load.",
+        "reason": "Google shows no project mochi-{suffix} for this account. Wait a few seconds and run_setup with fromStep \"apis\"; if it fails again, ask which Google account should own the app."
+      },
+      {
+        "id": "confirm-project",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Confirms the project"
+      },
+      {
+        "id": "enable",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Enable",
+          "exact": true
+        },
+        "note": "Enables the APIs"
+      },
+      {
+        "id": "enabled",
+        "kind": "wait",
+        "text": "You have successfully enabled",
+        "timeoutMs": 120000,
+        "note": "Waits for the APIs"
+      },
+      {
+        "id": "consent",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/overview/create?project=mochi-{suffix}&authuser={owner}",
+        "note": "Sets up the consent screen"
+      },
+      {
+        "id": "app-name",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "App name"
+        },
+        "value": "Mochi",
+        "note": "Names the app Mochi"
+      },
+      {
+        "id": "support-email",
+        "kind": "choose",
+        "target": {
+          "role": "combobox"
+        },
+        "param": "email",
+        "note": "Picks your email for support"
+      },
+      {
+        "id": "next-info",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Next"
+      },
+      {
+        "id": "external",
+        "kind": "click",
+        "target": {
+          "role": "radio",
+          "name": "External",
+          "exact": true
+        },
+        "note": "Lets your own Google account use it"
+      },
+      {
+        "id": "next-audience",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Next"
+      },
+      {
+        "id": "contact",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Text field for emails"
+        },
+        "value": "{email}",
+        "submit": true,
+        "note": "Your email for Google's notices"
+      },
+      {
+        "id": "next-contact",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Next"
+      },
+      {
+        "id": "policy",
+        "kind": "ask",
+        "param": "agree",
+        "note": "Agreeing to Google's policy is yours to decide"
+      },
+      {
+        "id": "agree",
+        "kind": "click",
+        "target": {
+          "role": "checkbox",
+          "name": "I agree to the Google API services user data policy"
+        },
+        "note": "Agrees to the policy"
+      },
+      {
+        "id": "continue",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Continue",
+          "exact": true
+        },
+        "note": "Continue"
+      },
+      {
+        "id": "create-config",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Create",
+          "exact": true
+        },
+        "note": "Creates the consent screen"
+      },
+      {
+        "id": "configured",
+        "kind": "wait",
+        "text": "OAuth configuration created",
+        "note": "Waits for it"
+      },
+      {
+        "id": "audience",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/audience?project=mochi-{suffix}&authuser={owner}",
+        "note": "Testing allows only listed users: adds you"
+      },
+      {
+        "id": "add-user",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Add users",
+          "exact": true
+        },
+        "note": "Opens Add users"
+      },
+      {
+        "id": "test-user",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Text field for emails"
+        },
+        "value": "{signInEmail}",
+        "submit": true,
+        "note": "Adds the account that will sign in"
+      },
+      {
+        "id": "save-user",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Save",
+          "exact": true
+        },
+        "note": "Saves it"
+      },
+      {
+        "id": "publish",
+        "kind": "ask",
+        "param": "publish",
+        "note": "Publishing your app is yours to decide"
+      },
+      {
+        "id": "branding",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/branding?project=mochi-{suffix}&authuser={owner}",
+        "note": "Publishing needs a home page and privacy policy"
+      },
+      {
+        "id": "home-page",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Application home page"
+        },
+        "value": "https://github.com/frstycodes/mochi",
+        "note": "Mochi on GitHub as the home page"
+      },
+      {
+        "id": "privacy",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Application privacy policy link"
+        },
+        "value": "https://github.com/frstycodes/mochi/blob/main/PRIVACY.md",
+        "note": "Mochi's privacy policy"
+      },
+      {
+        "id": "add-domain",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Add domain",
+          "exact": true
+        },
+        "note": "Opens an authorised domain"
+      },
+      {
+        "id": "domain",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Authorised domain 1"
+        },
+        "value": "github.com",
+        "note": "Allows GitHub links on the consent page"
+      },
+      {
+        "id": "save-branding",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Save",
+          "exact": true
+        },
+        "note": "Saves the branding"
+      },
+      {
+        "id": "to-audience",
+        "kind": "click",
+        "target": {
+          "role": "link",
+          "name": "Audience"
+        },
+        "note": "Back to Audience, without leaving the page mid-save"
+      },
+      {
+        "id": "publish-app",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Publish app",
+          "exact": true
+        },
+        "note": "Publishes the app (enabled once the branding is saved)"
+      },
+      {
+        "id": "confirm-publish",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Confirm",
+          "exact": true
+        },
+        "note": "Confirms"
+      },
+      {
+        "id": "published",
+        "kind": "wait",
+        "text": "In production",
+        "note": "Waits for it: sign-ins no longer expire after 7 days"
+      },
+      {
+        "id": "client",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/clients/create?project=mochi-{suffix}&authuser={owner}",
+        "note": "Creates the Desktop client Mochi signs in with"
+      },
+      {
+        "id": "type",
+        "kind": "click",
+        "target": {
+          "role": "combobox",
+          "name": "Application type"
+        },
+        "note": "Opens Application type"
+      },
+      {
+        "id": "desktop",
+        "kind": "click",
+        "target": {
+          "role": "option",
+          "name": "Desktop app",
+          "exact": true
+        },
+        "note": "Picks Desktop app"
+      },
+      {
+        "id": "client-name",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Name",
+          "exact": true
+        },
+        "value": "Mochi",
+        "note": "Names it Mochi"
+      },
+      {
+        "id": "create-client",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Create",
+          "exact": true
+        },
+        "note": "Creates the client"
+      },
+      {
+        "id": "client-id",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": ".apps.googleusercontent.com"
+        },
+        "as": "googleClientId",
+        "note": "Copies its Client ID into Mochi"
+      },
+      {
+        "id": "client-secret",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy to clipboard: GOCSPX-"
+        },
+        "as": "googleClientSecret",
+        "note": "Copies its Client secret into Mochi"
+      },
+      {
+        "id": "done",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "OK",
+          "exact": true
+        },
+        "note": "Closes the dialog"
+      },
+      {
+        "id": "finished",
+        "kind": "end",
+        "note": "A new app is ready"
+      },
+      {
+        "id": "reuse",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/clients?project=mochi-{suffix}&authuser={owner}",
+        "note": "Opens your existing app's clients"
+      },
+      {
+        "id": "open-client",
+        "kind": "click",
+        "target": {
+          "role": "link",
+          "name": "Mochi",
+          "within": {
+            "role": "rowheader"
+          }
+        },
+        "note": "Opens its Desktop client"
+      },
+      {
+        "id": "client-ready",
+        "kind": "wait",
+        "text": "Client ID for Desktop",
+        "note": "Waits for it"
+      },
+      {
+        "id": "reused-id",
+        "kind": "capture",
+        "urlPattern": "/auth/clients/([^/?]+\\.apps\\.googleusercontent\\.com)",
+        "as": "googleClientId",
+        "note": "Reads its Client ID from the page address"
+      },
+      {
+        "id": "add-secret",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Add client secret",
+          "exact": true
+        },
+        "note": "Adds a new secret: Google never shows an old one again"
+      },
+      {
+        "id": "reused-secret",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy to clipboard: GOCSPX-"
+        },
+        "as": "googleClientSecret",
+        "note": "Copies the new secret into Mochi"
+      }
+    ]
+  }
+}

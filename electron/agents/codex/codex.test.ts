@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
-import { CodexAdapter, reply } from './adapter.ts';
+import { CodexAdapter, imageModel, reply } from './adapter.ts';
 import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
@@ -170,11 +170,13 @@ test('a thread runs at the speed it started with, and a message changes it for i
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'tiers.log');
-  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  const events: AgentEvent[] = [];
+  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
   // Lets each turn end before the next send.
   const settle = () => new Promise((r) => setTimeout(r, 150));
   try {
-    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority' });
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority', effort: 'max' });
+    assert.ok(events.some((e) => e.type === 'info' && e.info.effort === 'max'));
     await settle();
     await codex.send('t', 'again');
     await settle();
@@ -505,4 +507,12 @@ test("a completed file change carries one patch with a section per file, so each
     ].join('\n'),
   );
   assert.equal(changesPatch([{ path: '/repo/x.ts', kind: { type: 'update', move_path: null }, diff: '' }], '/repo'), '', 'an update without hunks adds nothing');
+});
+
+test("image generation runs on a model the account lists: the cheap one, else its default, never the user's config default", () => {
+  const model = (id: string, isDefault = false) => ({ id, name: id, description: '', efforts: [], speeds: [], isDefault });
+  assert.equal(imageModel([model('gpt-6-astra', true), model('gpt-6-luna')]), 'gpt-6-luna');
+  assert.equal(imageModel([model('gpt-6-nova'), model('gpt-6-astra', true)]), 'gpt-6-astra');
+  assert.equal(imageModel([model('gpt-6-nova')]), 'gpt-6-nova');
+  assert.equal(imageModel([]), null);
 });

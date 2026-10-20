@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, Global } from 'reicon-react';
+import { ChevronRight, Globe } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { toast } from '@/toast/store';
@@ -54,7 +54,7 @@ export function ImagesSection() {
             <CallList>
               <li className="flex flex-col">
                 <div className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta hover:bg-accent/60">
-                  <Global aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+                  <Globe aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-foreground">Took a screenshot of localhost:5173</span>
                   <ChevronRight aria-hidden className="size-3.5 shrink-0 rotate-90 text-subtle-foreground" />
                 </div>

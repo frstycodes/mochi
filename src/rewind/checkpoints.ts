@@ -56,7 +56,7 @@ export function threadAt(thread: Thread, t: number): Thread {
     const status = statusAt(s, t);
     if (!status) return [];
     const isLater = (at?: number) => at !== undefined && at > t;
-    return [{ ...s, status, progress: progressAt(s, status, t), startedAt: isLater(s.startedAt) ? undefined : s.startedAt, doneAt: isLater(s.doneAt) ? undefined : s.doneAt, droppedAt: isLater(s.droppedAt) ? undefined : s.droppedAt }];
+    return [{ ...s, status, startedAt: isLater(s.startedAt) ? undefined : s.startedAt, doneAt: isLater(s.doneAt) ? undefined : s.doneAt, droppedAt: isLater(s.droppedAt) ? undefined : s.droppedAt }];
   });
   return {
     ...thread,
@@ -66,13 +66,6 @@ export function threadAt(thread: Thread, t: number): Thread {
     activity: thread.activity.filter((a) => a.at <= t),
     revisions: thread.revisions.filter((r) => r.at <= t),
   };
-}
-
-function progressAt(step: Step, status: Step['status'], t: number) {
-  if (status === 'done') return 1;
-  if (status !== 'running' || step.startedAt === undefined) return 0;
-  if (step.doneAt === undefined) return step.progress;
-  return Math.min(0.99, (t - step.startedAt) / Math.max(1, step.doneAt - step.startedAt));
 }
 
 function statusFor(steps: Step[]): ThreadStatus {

@@ -1,4 +1,4 @@
-import { Clock } from 'reicon-react';
+import { Clock } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SettingsChoice } from '../settings/parts';

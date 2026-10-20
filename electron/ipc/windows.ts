@@ -1,8 +1,8 @@
-import { BrowserWindow, nativeTheme, shell, systemPreferences } from 'electron';
+import { BrowserWindow, Menu, nativeTheme, shell, systemPreferences } from 'electron';
 import { APPEARANCES, type Appearance, type ScreenAccess, type WindowsHost } from '../../src/host/types/windows.ts';
-import { openRoute, trafficLightsAt } from '../window.ts';
+import { fitWindowButtons, openRoute } from '../window.ts';
 import { captureAppWindow, listAppWindows } from '../windows/appWindows.ts';
-import { record, string, type Handlers } from './handlers.ts';
+import { integer, record, string, type Handlers } from './handlers.ts';
 
 export const windows = {
   async open(_sender, route) {
@@ -18,9 +18,15 @@ export const windows = {
     return BrowserWindow.fromWebContents(sender)?.isFullScreen() ?? false;
   },
   async zoomFactor(sender) {
+    const win = BrowserWindow.fromWebContents(sender);
+    if (win) fitWindowButtons(win);
+    return sender.getZoomFactor();
+  },
+  async showAppMenu(sender, x, y) {
+    const window = BrowserWindow.fromWebContents(sender);
+    if (!window) return;
     const zoom = sender.getZoomFactor();
-    BrowserWindow.fromWebContents(sender)?.setWindowButtonPosition(trafficLightsAt(zoom));
-    return zoom;
+    Menu.getApplicationMenu()?.popup({ window, x: Math.round(integer(x, 'x', 0, 100_000) * zoom), y: Math.round(integer(y, 'y', 0, 100_000) * zoom) });
   },
   async resetZoom(sender) {
     sender.setZoomLevel(0);

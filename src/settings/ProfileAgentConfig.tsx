@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Add, Download, Flash, FolderOpen, InfoCircle, Trash3 } from 'reicon-react';
+import { Plus, Download, Flash, FolderOpen, Info, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -184,7 +184,7 @@ function McpRow({ profile, config, review }: { profile: Space; config?: ProfileC
       <div className="flex flex-wrap gap-2">
         {!isAdding && (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <Add data-icon="inline-start" />
+            <Plus data-icon="inline-start" />
             Add server
           </Button>
         )}
@@ -242,7 +242,7 @@ function McpServerItem({ spaceId, provider, server, review }: { spaceId: string;
                   Test connection
                 </DropdownMenuItem>
                 <DropdownMenuItem variant="destructive" onSelect={() => void review(`Remove ${def.name}`, [{ kind: 'mcp-remove', provider, name: def.name }])}>
-                  <Trash3 />
+                  <Trash />
                   Remove server
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -321,7 +321,7 @@ function AddServerForm({ provider, taken, review, onDone, initialJson }: { provi
         void submit();
       }}
     >
-      <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
+      <ToggleGroup type="single" size="sm" variant="outline" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
         <ToggleGroupItem value="command">Command</ToggleGroupItem>
         <ToggleGroupItem value="json">JSON</ToggleGroupItem>
       </ToggleGroup>
@@ -498,7 +498,7 @@ function PerHarness({ text }: { text: (provider: Provider) => string }) {
 
 function HarnessPicker({ value, onChange }: { value: Provider; onChange: (provider: Provider) => void }) {
   return (
-    <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={value} onValueChange={(v) => v && onChange(v as Provider)}>
+    <ToggleGroup type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as Provider)}>
       {HARNESS_IDS.map((id) => (
         <ToggleGroupItem key={id} value={id}>
           <ProviderMark provider={id} size={14} />
@@ -535,7 +535,7 @@ function ReviewDialog({ pending, isWriting, onWrite, onCancel }: { pending: { ti
           <div className="-mx-6 flex min-h-0 flex-col gap-3 overflow-y-auto px-6">
             {!!preview.notes.length && (
               <Alert>
-                <InfoCircle />
+                <Info />
                 <AlertDescription>
                   <ul className="flex flex-col gap-1">
                     {preview.notes.map((n) => (

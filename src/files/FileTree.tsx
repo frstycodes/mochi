@@ -1,11 +1,13 @@
+import type { ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, Folder, FolderOpen } from 'reicon-react';
+import { ChevronRight, Folder, FolderOpen } from '@/icons';
 import { cn } from '@/lib/utils';
 import { FileContextMenu } from './FileContextMenu';
 import { Highlighted } from './Highlighted';
 import { toRanges, type TreeRow } from './tree';
 
-export function FileTree({ root, rows, isExpanded, selected, active, highlights, onToggle, onSelect }: { root: string; rows: TreeRow[]; isExpanded: (path: string) => boolean; selected: string | null; active: string | null; highlights?: Map<string, number[]>; onToggle: (path: string) => void; onSelect: (path: string) => void }) {
+/** `root` is this computer's folder for the context menu (reveal, open in an editor); another computer's tree has none. */
+export function FileTree({ root, rows, isExpanded, selected, active, highlights, onToggle, onSelect }: { root?: string; rows: TreeRow[]; isExpanded: (path: string) => boolean; selected: string | null; active: string | null; highlights?: Map<string, number[]>; onToggle: (path: string) => void; onSelect: (path: string) => void }) {
   return (
     <ul role="tree" aria-label="Files" className="flex flex-col px-1.5 pb-2">
       {rows.map(({ node, depth }) => {
@@ -14,7 +16,7 @@ export function FileTree({ root, rows, isExpanded, selected, active, highlights,
         const FolderIcon = isOpen ? FolderOpen : Folder;
         return (
           <li key={node.path} role="treeitem" aria-level={depth + 1} aria-expanded={isDir ? isOpen : undefined} aria-selected={node.path === selected} data-key={`path:${node.path}`}>
-            <FileContextMenu root={root} path={node.path} onOpen={isDir ? undefined : () => onSelect(node.path)}>
+            <RowMenu root={root} path={node.path} onOpen={isDir ? undefined : () => onSelect(node.path)}>
               <button
                 type="button"
                 tabIndex={-1}
@@ -30,10 +32,19 @@ export function FileTree({ root, rows, isExpanded, selected, active, highlights,
                 {isDir ? <FolderIcon aria-hidden className="size-3.5 shrink-0" /> : <FileIcon fileName={node.name} autoAssign aria-hidden className="size-3.5 shrink-0" />}
                 <Highlighted text={node.name} ranges={toRanges(highlights?.get(node.path) ?? [])} className="truncate" markClassName="font-semibold text-foreground" />
               </button>
-            </FileContextMenu>
+            </RowMenu>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+function RowMenu({ root, children, ...props }: { root?: string; path: string; onOpen?: () => void; children: ReactNode }) {
+  if (!root) return children;
+  return (
+    <FileContextMenu root={root} {...props}>
+      {children}
+    </FileContextMenu>
   );
 }

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type KeyboardEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronLeft, ChevronRight, Code, Copy, Document, Download, Eye, SidebarRight, X } from 'reicon-react';
+import { ChevronLeft, ChevronRight, Code, Copy, File, Download, Eye, SidebarRight, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -36,13 +36,13 @@ export function FileViewer() {
   return (
     <DialogPrimitive.Root open={!!file} onOpenChange={(open) => !open && openFiles(null)}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           onKeyDown={onKeyDown}
           // Focusing the first header button would pop its tooltip on open; the dialog itself still takes Esc and the arrows.
           onOpenAutoFocus={(e) => (e.preventDefault(), (e.currentTarget as HTMLElement).focus())}
-          className="fixed inset-0 z-50 flex flex-col outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none"
+          className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none"
         >
           {!!file && <FilePane key={`${index}:${viewerPath(file)}`} file={file} position={step && `${index + 1} of ${files.length}`} onStep={step} />}
           {files.length > 1 && <FileStrip files={files} index={index} onSelect={setIndex} />}
@@ -67,7 +67,8 @@ function FilePane({ file, position, onStep }: { file: ViewerFile; position?: str
 
   return (
     <>
-      <header className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
+      {/* Fills the window, so it always sits under Windows' caption buttons. */}
+      <header data-under-captions className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
         <FileIcon fileName={name} autoAssign aria-hidden className="size-4 shrink-0" />
         <DialogPrimitive.Title className="flex min-w-0 px-1 font-normal">
           <FilePath path={viewerPath(file)} />
@@ -166,7 +167,7 @@ function CantPreviewState({ file, content, reason }: { file: ViewerFile; content
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Document />
+          <File />
         </EmptyMedia>
         <EmptyTitle>Can't preview {viewerName(file)}</EmptyTitle>
         <EmptyDescription>{reason}</EmptyDescription>

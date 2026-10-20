@@ -1,5 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { Danger } from 'reicon-react';
+import { flushSync } from 'react-dom';
+import { Danger } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { host } from '@/host';
@@ -238,7 +239,8 @@ export function useSize(ref: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    // flushSync: a plain setState renders after the next paint, so layout sized from this (the chat beside the panes) showed one frame at the old width.
+    const ro = new ResizeObserver(([e]) => flushSync(() => setSize({ w: e.contentRect.width, h: e.contentRect.height })));
     ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);

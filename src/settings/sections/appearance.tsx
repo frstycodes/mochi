@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown, ClipboardText, Download, Edit2, Import, SearchNormal, Star, TickCircle, Trash3 } from 'reicon-react';
+import { ChevronDown, ClipboardText, Download, Pencil, Import, SearchAlt, Star, CheckBadge, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -12,7 +12,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { host } from '../../host';
-import { IS_MAC, IS_WINDOWS } from '../../keys';
 import { filterPackages, groupThemes, type PackageGroup } from '../../themes/groups';
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeKind, type ThemeSlot } from '../../themes/model';
 import type { MarketplaceExtension } from '../../themes/openVsx';
@@ -21,8 +20,9 @@ import { installExtension, removeCustomTheme, uninstallPackage, useApplyTheme, u
 import { OverflowIcon, TooltipIconButton } from '../../ui';
 import { CatalogRow } from '../CatalogRow';
 import { useLinkedTab } from '../open';
-import { SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId } from '../parts';
+import { ListIcon, SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId, SkeletonRows } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
+import { ANIMATIONS, type AnimationArea } from '../settingOptions';
 import { ThemePicker, ThemeSwatch, useChosenTheme, useThemeColors } from '../ThemePicker';
 
 export function AppearanceSection() {
@@ -33,8 +33,17 @@ export function AppearanceSection() {
       <SettingsGroup title="Mode">
         <CatalogRow settingKey="theme" />
         <CatalogRow settingKey="reduceMotion" />
-        {HAS_MATERIAL && <CatalogRow settingKey="translucentSidebar" />}
       </SettingsGroup>
+      <SettingsGroup title="App icon">
+        <CatalogRow settingKey="appIcon" label="Dock icon" />
+      </SettingsGroup>
+      <SettingsSection id="animations" title="Animations" footer="Off until you turn them on. Reduce motion stops these too.">
+        <div className="flex flex-col gap-3">
+          {(Object.keys(ANIMATIONS) as AnimationArea[]).map((area) => (
+            <AnimationAreaCard key={area} area={area} />
+          ))}
+        </div>
+      </SettingsSection>
       <SettingsSection id="colorTheme" title="Color theme" footer="Arrow through or hover a theme to preview it; nothing changes until you pick one.">
         <div className="@container">
           <div className="grid gap-3 @md:grid-cols-2">
@@ -48,8 +57,30 @@ export function AppearanceSection() {
   );
 }
 
-// Linux has no window material (electron/window.ts), so the switch would do nothing there.
-const HAS_MATERIAL = host.isDesktop && (IS_MAC || IS_WINDOWS);
+/** An area's switch for all its animations, with one switch per animation folded under it (open when a deep link names one). */
+function AnimationAreaCard({ area }: { area: AnimationArea }) {
+  const { items } = ANIMATIONS[area];
+  const [disclosure, setDisclosure] = useLinkedTab((settingId) => (items.some((item) => settingId === `animation-${item.value}`) ? 'open' : undefined), 'closed');
+  const isOpen = disclosure === 'open';
+  return (
+    <SettingsCard>
+      <CatalogRow settingKey={`animations.${area}`} />
+      <Collapsible open={isOpen} onOpenChange={(open) => setDisclosure(open ? 'open' : 'closed')} className="relative before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground">
+            <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-200', !isOpen && '-rotate-90')} />
+            Choose each animation
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {items.map((item) => (
+            <CatalogRow key={item.value} settingKey={`animation.${item.value}`} />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    </SettingsCard>
+  );
+}
 
 /** One appearance's theme as a small painted app; the whole card opens the picker. */
 function SlotCard({ slot }: { slot: ThemeSlot }) {
@@ -151,7 +182,7 @@ function Library() {
       {packages.length >= FILTER_FROM && (
         <InputGroup>
           <InputGroupAddon>
-            <SearchNormal />
+            <SearchAlt />
           </InputGroupAddon>
           <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter installed themes" aria-label="Filter installed themes" />
         </InputGroup>
@@ -213,7 +244,7 @@ function PackageRow({ group, themes, isOpen }: { group: PackageGroup; themes: Co
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem variant="destructive" onSelect={remove}>
-              <Trash3 />
+              <Trash />
               Remove {consequence}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -382,7 +413,7 @@ function ThemeRow({ theme, slot, label, kind, children }: { theme: ColorTheme | 
         <div className="flex items-center gap-1" onFocus={() => setThemePreview(theme)} onBlur={() => setThemePreview(null)}>
           {isUsed ? (
             <span className="flex h-6 items-center gap-1 px-2.5 type-meta text-muted-foreground">
-              <TickCircle aria-hidden className="size-3.5 text-success" />
+              <CheckBadge aria-hidden className="size-3.5 text-success" />
               In use
             </span>
           ) : (
@@ -410,7 +441,7 @@ function StarButton({ theme }: { theme: ColorTheme }) {
       onClick={() => setPrefs({ starredThemes: toggleStar(starredThemes, theme.id) })}
       className={isStarred ? 'text-warning! [&_*]:text-warning!' : 'text-muted-foreground'}
     >
-      <Star weight={isStarred ? 'Filled' : undefined} />
+      <Star filled={isStarred} />
     </TooltipIconButton>
   );
 }
@@ -427,10 +458,10 @@ function CustomThemeActions({ theme, file, onEdit }: { theme: ColorTheme; file: 
   return (
     <>
       <TooltipIconButton label="Edit" hint={host.isDesktop ? 'Opens the theme file in your JSON editor' : 'Edit the theme JSON here'} onClick={() => void edit()}>
-        <Edit2 />
+        <Pencil />
       </TooltipIconButton>
       <TooltipIconButton label="Delete" hint={`Deletes ${file}`} onClick={() => void remove()}>
-        <Trash3 />
+        <Trash />
       </TooltipIconButton>
     </>
   );
@@ -492,7 +523,7 @@ function Marketplace() {
     <>
       <InputGroup data-setting-id="themeMarketplace">
         <InputGroupAddon>
-          <SearchNormal />
+          <SearchAlt />
         </InputGroupAddon>
         <InputGroupInput id={settingControlId('themeSearch')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Open VSX themes" aria-label="Search Open VSX themes" />
       </InputGroup>
@@ -553,7 +584,7 @@ function ExtensionRow({ extension }: { extension: MarketplaceExtension }) {
     <SettingsRow
       label={
         <span ref={ref} className="flex min-w-0 items-center gap-2.5">
-          <ExtensionIcon url={extension.iconUrl} />
+          <ListIcon url={extension.iconUrl} />
           <span className="truncate">{extension.displayName}</span>
         </span>
       }
@@ -565,7 +596,7 @@ function ExtensionRow({ extension }: { extension: MarketplaceExtension }) {
           <Swatches extension={extension} inspected={inspected} isInstalled={isInstalled} onPreview={(t) => setThemePreview(t ?? rowPreview)} onUse={(t) => (isInstalled ? apply(installed.find((i) => i.id === t.id) ?? t) : install(t))} />
           {isInstalled ? (
             <span className="flex h-6 w-20 items-center justify-end gap-1 type-meta text-muted-foreground">
-              <TickCircle aria-hidden className="size-3.5 text-success" />
+              <CheckBadge aria-hidden className="size-3.5 text-success" />
               Installed
             </span>
           ) : (
@@ -635,12 +666,6 @@ function Swatches({
   );
 }
 
-function ExtensionIcon({ url }: { url?: string }) {
-  const [isBroken, setBroken] = useState(false);
-  if (!url || isBroken) return <span aria-hidden className="size-8 shrink-0 rounded-lg bg-muted" />;
-  return <img src={url} alt="" loading="lazy" onError={() => setBroken(true)} className="size-8 shrink-0 rounded-lg object-contain" />;
-}
-
 function SwatchSkeletons({ count }: { count: number }) {
   return (
     <div className="flex items-center gap-1">
@@ -651,18 +676,3 @@ function SwatchSkeletons({ count }: { count: number }) {
   );
 }
 
-const SKELETON_WIDTHS = ['w-40', 'w-28', 'w-48', 'w-32'];
-
-function SkeletonRows({ count }: { count: number }) {
-  return Array.from({ length: count }, (_, i) => (
-    <SettingsRow
-      key={i}
-      label={
-        <span className="flex items-center gap-2.5">
-          <Skeleton className="size-8 rounded-lg" />
-          <Skeleton className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`} />
-        </span>
-      }
-    />
-  ));
-}

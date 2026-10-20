@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { ChevronLeft, ChevronRight, Copy, Download, FolderOpen, Maximize, SearchZoomIn, SearchZoomOut, X } from 'reicon-react';
+import { ChevronLeft, ChevronRight, Copy, Download, FolderOpen, Maximize, ZoomIn, ZoomOut, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -8,7 +8,7 @@ import { REVEAL_LABEL } from '../chat/ImageGenCard';
 import { Shortcut } from '../Shortcut';
 import { TooltipIconButton } from '../ui';
 import { copyImage, openPhotos, saveImage, usePhotoRequest, type Photo } from './photos';
-import { FIT, clampPan, zoomAt, type View } from './zoom';
+import { FIT, clampPan, isBackdropClick, zoomAt, type View } from './zoom';
 
 const STEP = 1.5;
 
@@ -20,11 +20,13 @@ export function PhotoViewer() {
   const photos = request?.photos ?? [];
   const photo = photos[index];
   const go = (step: number) => photos.length > 1 && setIndex((i) => (i + step + photos.length) % photos.length);
+  const img = useRef<HTMLImageElement>(null);
+  const press = useRef({ x: 0, y: 0 });
 
   return (
     <DialogPrimitive.Root open={!!photo} onOpenChange={(open) => !open && openPhotos(null)}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/50 backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/50 backdrop-blur-sm duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           // Radix would focus the first toolbar button, opening its tooltip, which then takes the first Escape.
@@ -33,9 +35,12 @@ export function PhotoViewer() {
             if (e.key === 'ArrowLeft') go(-1);
             if (e.key === 'ArrowRight') go(1);
           }}
-          className="fixed inset-0 z-50 flex flex-col outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none"
+          onPointerDown={(e) => (press.current = { x: e.clientX, y: e.clientY })}
+          // While zoomed the stage holds pointer capture, so a click on the image lands on the stage: test the point, not the target.
+          onClick={(e) => !(e.target as Element).closest('button, a, input') && isBackdropClick({ x: e.clientX, y: e.clientY }, press.current, img.current?.getBoundingClientRect()) && openPhotos(null)}
+          className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none"
         >
-          {!!photo && <Stage key={photo.src} photo={photo} position={photos.length > 1 ? `${index + 1} of ${photos.length}` : undefined} onStep={photos.length > 1 ? go : undefined} />}
+          {!!photo && <Stage key={photo.src} img={img} photo={photo} position={photos.length > 1 ? `${index + 1} of ${photos.length}` : undefined} onStep={photos.length > 1 ? go : undefined} />}
           {photos.length > 1 && <Filmstrip photos={photos} index={index} onSelect={setIndex} />}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
@@ -44,12 +49,10 @@ export function PhotoViewer() {
 }
 
 /** One photo: fitted by default; pinch or Ctrl-scroll and double-click zoom at the pointer, drag or scroll pans while zoomed. Keyed by src, so a new photo starts fitted. */
-function Stage({ photo, position, onStep }: { photo: Photo; position?: string; onStep?: (step: number) => void }) {
+function Stage({ img, photo, position, onStep }: { img: RefObject<HTMLImageElement | null>; photo: Photo; position?: string; onStep?: (step: number) => void }) {
   const area = useRef<HTMLDivElement>(null);
-  const img = useRef<HTMLImageElement>(null);
   const [view, setView] = useState<View>(FIT);
   const drag = useRef<{ x: number; y: number; view: View } | null>(null);
-  const press = useRef({ x: 0, y: 0 });
 
   const measure = () => {
     const a = area.current!.getBoundingClientRect();
@@ -78,7 +81,6 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
     setView(clampPan({ ...view, x: view.x - e.deltaX, y: view.y - e.deltaY }, fitted, viewport));
   };
   const onPointerDown = (e: ReactPointerEvent) => {
-    press.current = { x: e.clientX, y: e.clientY };
     if (view.scale === 1 || e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = { x: e.clientX, y: e.clientY, view };
@@ -93,16 +95,17 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
 
   return (
     <>
-      <header className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
+      {/* Fills the window, so it always sits under Windows' caption buttons. Not a drag region: those swallow clicks, and a click on its empty space closes the viewer. */}
+      <header data-under-captions className="flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
         <DialogPrimitive.Title className="min-w-0 truncate px-1 type-title">{photo.name}</DialogPrimitive.Title>
         {!!position && <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular">{position}</span>}
         <span className="flex-1" />
         <TooltipIconButton label="Zoom out" hint={<Shortcut keys={['-']} />} disabled={!isZoomed} onClick={() => zoom(1 / STEP)}>
-          <SearchZoomOut />
+          <ZoomOut />
         </TooltipIconButton>
         <span className="w-11 text-center type-meta text-muted-foreground tabular">{Math.round(view.scale * 100)}%</span>
         <TooltipIconButton label="Zoom in" hint={<Shortcut keys={['+']} />} onClick={() => zoom(STEP)}>
-          <SearchZoomIn />
+          <ZoomIn />
         </TooltipIconButton>
         <TooltipIconButton label="Fit to window" hint={<Shortcut keys={['0']} />} disabled={!isZoomed} onClick={() => setView(FIT)}>
           <Maximize />
@@ -130,8 +133,6 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={() => (drag.current = null)}
-        // Around the image closes; a click that ended a pan doesn't.
-        onClick={(e) => e.target === e.currentTarget && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) < 4 && openPhotos(null)}
         onDoubleClick={(e) => e.target === img.current && (isZoomed ? setView(FIT) : zoom(2.5, e.clientX, e.clientY))}
         className={cn('relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden px-16 pb-4 select-none', isZoomed && 'cursor-grab active:cursor-grabbing')}
       >
@@ -186,7 +187,7 @@ function StepButton({ side, onClick }: { side: 'left' | 'right'; onClick: () => 
 
 function Filmstrip({ photos, index, onSelect }: { photos: Photo[]; index: number; onSelect: (i: number) => void }) {
   return (
-    <nav aria-label="Images" onClick={(e) => e.target === e.currentTarget && openPhotos(null)} className="flex shrink-0 justify-center gap-2 overflow-x-auto px-4 pt-1 pb-4">
+    <nav aria-label="Images" className="flex shrink-0 justify-center gap-2 overflow-x-auto px-4 pt-1 pb-4">
       {photos.map((p, i) => (
         <button
           key={`${p.src}:${i}`}

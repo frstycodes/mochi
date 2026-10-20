@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { toast } from '@/toast/store';
-import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
+import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from '@/icons';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
 import { BranchIcon, BranchName } from './git/BranchLabel';
@@ -65,11 +65,11 @@ export function useComposerHandoff(leafId: string) {
   return { isHandoff: !!layoutId, layout: { layoutId: reduce ? undefined : layoutId, layoutCrossfade: false, transition: HANDOFF_TRANSITION } };
 }
 
-/** The glass card. Holds an optional tray above a ComposerInput. */
-export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
+/** The glass card. Holds an optional tray above a ComposerInput; `isStatic` skips the height animation. */
+export function ComposerCard({ className, children, isStatic, ...props }: ComponentProps<'div'> & { isStatic?: boolean }) {
   return (
     <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-composer transition-colors has-[.cm-focused]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
-      <AutoHeight className="justify-end">{children}</AutoHeight>
+      {isStatic ? children : <AutoHeight className="justify-end">{children}</AutoHeight>}
     </div>
   );
 }
@@ -87,8 +87,6 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
-  /** Text only: no attachments or model controls, for a thread another computer starts with its own defaults. */
-  isTextOnly?: boolean;
   /** Beside send: the context ring. */
   meter?: ReactNode;
   /** Where the unsent text and attachments are kept (`threadDraftKey`, `newThreadDraftKey`); sending clears it. */
@@ -97,7 +95,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', isTextOnly, meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
   const catalog = useModels(useSpace().id);
   const model = optionFor(catalog[provider], controls.model, provider);
   const defaults = useNewThreadDefaults(catalog, model);
@@ -115,22 +113,18 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>
-          {!isTextOnly && (
-            <>
-              <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
-                  <Paperclip className="size-4" />
-                </PromptInputActionMenuTrigger>
-                <PromptInputActionMenuContent>
-                  <PromptInputActionAddAttachments />
-                  <PromptInputActionAddScreenshot />
-                </PromptInputActionMenuContent>
-              </PromptInputActionMenu>
-              <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} defaults={defaults.model} />
-              <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />
-              <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />
-            </>
-          )}
+          <PromptInputActionMenu>
+            <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
+              <Paperclip className="size-4" />
+            </PromptInputActionMenuTrigger>
+            <PromptInputActionMenuContent>
+              <PromptInputActionAddAttachments />
+              <PromptInputActionAddScreenshot />
+            </PromptInputActionMenuContent>
+          </PromptInputActionMenu>
+          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} defaults={defaults.model} />
+          <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />
+          <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />
         </PromptInputTools>
         <PromptInputTools>
           {meter}

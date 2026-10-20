@@ -29,6 +29,7 @@ export const windows: WindowsHost = {
   async zoomFactor() {
     return 1;
   },
+  async showAppMenu() {},
   async resetZoom() {},
   async setAppearance() {},
   async listApps() {

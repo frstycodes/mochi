@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
-import { ChevronDown, SidebarRight, TextalignLeft } from 'reicon-react';
-import type { FollowedMachine } from './host/types/remote';
-import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
+import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -29,8 +26,7 @@ import { layoutOf } from './store/panes';
 import { BoundShortcut } from './Shortcut';
 import { commandOf, paneCommand } from './keymap';
 import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop, type PinnableKind } from './pane/headerPins';
-import { AgentLoader } from './AgentLoader';
-import { agentPhase, isWorking } from './agentPhase';
+import { isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
@@ -46,13 +42,14 @@ import { SummaryPanel } from './SummaryPanel';
 import { TitleBar } from './TitleBar';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
-import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
+import { useSeen } from './notify/useSeen';
 
 export function ThreadView({ thread }: { thread: Thread }) {
   const { state, dispatch } = useHarness();
   const { isWide, isFocused } = useSplit();
+  useSeen({ threadId: thread.id }, 'open-and-leave');
   const pane = state.panes.find((p) => p.threadId === thread.id);
   const isPaneOpen = !!pane?.isOpen;
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
@@ -102,13 +99,13 @@ export function ThreadView({ thread }: { thread: Thread }) {
         {header}
       </div>
       <div
-        className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
+        className={cn('grid min-h-0 flex-1 overflow-hidden', summary.animates && 'transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none')}
         style={{ gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}` }}
       >
         <ChatView thread={thread} />
-        {isWide && <DockedSummary thread={thread} isOpen={summary.isDocked} />}
+        {isWide && <DockedSummary thread={thread} isOpen={summary.isDocked} animates={summary.animates} />}
       </div>
-      {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} />}
+      {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} animates={summary.animates} />}
       <div className="pointer-events-none absolute inset-x-0 top-1 bottom-36 z-30">
         <PipLayer thread={thread} />
       </div>
@@ -130,7 +127,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
             <SummaryPanel
               thread={thread}
               // Room for the sheet's close button, which otherwise covers the summary's menu.
-              className="h-full pt-8"
+              className="h-full px-3 pt-10 pb-3"
               onPaneOpened={() => {
                 setSummarySheetOpen(false);
                 setPaneTabOpen(true);
@@ -168,51 +165,60 @@ function usePaneShortcuts(isFocused: boolean, onToggle: (kind: PaneTabKind) => v
 /**
  * While the side pane is open the docked summary hides and the toggle opens a floating one instead.
  * Closing the pane docks the summary if the floating one was open, otherwise restores the docked state from before.
+ * Only the summary's own toggle animates it; the pane opening or closing moves it in one step.
  */
 function useSummaryState(isPaneOpen: boolean, isWide: boolean) {
   const [isDockedOpen, setDockedOpen] = useState(isWide);
   const [isFloatingOpen, setFloatingOpen] = useState(false);
   const [wasPaneOpen, setWasPaneOpen] = useState(isPaneOpen);
+  const [animates, setAnimates] = useState(false);
   if (isPaneOpen !== wasPaneOpen) {
     setWasPaneOpen(isPaneOpen);
+    setAnimates(false);
     if (!isPaneOpen && isFloatingOpen) setDockedOpen(true);
     setFloatingOpen(false);
   }
 
   const isDocked = !isPaneOpen && isDockedOpen;
   const isFloating = isPaneOpen && isFloatingOpen;
-  const toggle = () => (isPaneOpen ? setFloatingOpen((o) => !o) : setDockedOpen((o) => !o));
-  return { isDocked, isFloating, isShown: isDocked || isFloating, toggle };
+  const toggle = () => {
+    setAnimates(true);
+    if (isPaneOpen) setFloatingOpen((o) => !o);
+    else setDockedOpen((o) => !o);
+  };
+  return { isDocked, isFloating, isShown: isDocked || isFloating, animates, toggle };
 }
 
 /** The summary column grows from the right edge while the card itself rises out of the header toggle above it. */
-function DockedSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) {
+function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
   return (
     // Above the header's blur edge, which is for the scrolling chat only; the header's own controls stay clickable past it.
     <div className="pointer-events-none relative z-30 min-w-0 overflow-hidden pt-(--chat-top)" inert={!isOpen || undefined}>
       <div
         className={cn(
-          'pointer-events-auto h-full w-[300px] origin-top-right pr-3 pb-3 transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
-          isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
+          'pointer-events-auto h-full w-[300px] origin-top-right pr-3 pb-3',
+          isOpen ? 'scale-100 opacity-100' : 'scale-[0.97] opacity-0',
+          animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
         )}
       >
-        <SummaryPanel thread={thread} className="h-full rounded-xl border bg-card" />
+        <SummaryPanel thread={thread} className="h-full" />
       </div>
     </div>
   );
 }
 
-function FloatingSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) {
+function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
   return (
     <div
       inert={!isOpen || undefined}
       className={cn(
-        'pointer-events-none absolute top-11 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
-        isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
+        'pointer-events-none absolute top-11 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right',
+        isOpen ? 'scale-100 opacity-100' : 'scale-[0.97] opacity-0',
+        animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
       )}
     >
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
-      <SummaryPanel thread={thread} className={cn('max-h-full rounded-xl bg-popover shadow-float', isOpen && 'pointer-events-auto')} />
+      <SummaryPanel thread={thread} isFloating className={cn('max-h-full', isOpen && 'pointer-events-auto')} />
     </div>
   );
 }
@@ -243,8 +249,6 @@ function ThreadHeader({
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
       <TitleBar ref={header} isFirst={isFirst} isMulti={isMulti} data-pin-drop className={cn('@container transition-colors duration-150', pinDrop.isOver && 'bg-accent/40')}>
-        <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
-        <DeviceIndicator />
         <ThreadMenu thread={thread} />
         <LimitChip thread={thread} />
         {thread.prs.map((pr) => (
@@ -264,7 +268,7 @@ function ThreadHeader({
                   <span className="tabular">{progressLabel(progress)}</span>
                 </>
               ) : (
-                <TextalignLeft className="size-4" aria-hidden />
+                <TextAlignLeft className="size-4" aria-hidden />
               )}
             </Button>
           </TooltipTrigger>
@@ -287,29 +291,8 @@ function ThreadHeader({
   );
 }
 
-/** Where the agent runs: this computer, or `machine` for another computer's thread. A thread stays where it started. */
-export function DeviceIndicator({ machine }: { machine?: Pick<FollowedMachine, 'name' | 'kind'> }) {
-  const machineName = machine?.name;
-  const label = `Runs on ${machineName ?? 'this computer'}`;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span tabIndex={0} aria-label={label} className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
-          <DeviceIcon kind={machine ? machine.kind : THIS_DEVICE} className="size-4" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent className="flex-col items-start gap-0.5">
-        <span className="block font-medium">{label}</span>
-        <span className="block opacity-80">{machineName ? `The agent works in this thread's folder on ${machineName}; this computer steers it` : "The agent works in this thread's folder on your machine"}</span>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 /** The title opens the thread's actions, like Claude's: the same registry actions as the header's right-click menu, plus rewind's undo and fork comparisons. */
 function ThreadMenu({ thread }: { thread: Thread }) {
-  const isRenaming = useIsRenaming(thread.id);
-  if (isRenaming) return <TitleField thread={thread} />;
   return (
     <DropdownMenu>
       <h1 className="flex min-w-0">
@@ -325,43 +308,6 @@ function ThreadMenu({ thread }: { thread: Thread }) {
         <RewindMenuItems thread={thread} />
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/** The header title as a field: Enter or leaving it saves, Esc keeps the old title. */
-function TitleField({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
-  const ref = useRef<HTMLInputElement>(null);
-  // After the menu that started the rename has closed and handed focus back.
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      ref.current?.focus();
-      ref.current?.select();
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
-  const isCancelled = useRef(false);
-  const save = (title: string) => {
-    startRename(null);
-    if (!isCancelled.current && title.trim() && title.trim() !== thread.title) dispatch({ type: 'rename', threadId: thread.id, title: title.trim() });
-  };
-  return (
-    <h1 className="flex min-w-0 flex-1">
-      <Input
-        ref={ref}
-        defaultValue={thread.title}
-        aria-label="Thread title"
-        maxLength={120}
-        onBlur={(e) => save(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key !== 'Escape') return;
-          isCancelled.current = true;
-          startRename(null);
-        }}
-        className="h-7 max-w-md px-1.5 type-title"
-      />
-    </h1>
   );
 }
 

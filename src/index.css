@@ -105,8 +105,10 @@
   --scrim: oklch(0.99 0.002 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.64);
   --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
+  --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.2 0.02 285 / 0.08), 0 4px 10px -2px oklch(0.2 0.02 285 / 0.08), 0 16px 40px -8px oklch(0.2 0.02 285 / 0.22);
   --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-kbd: inset 0 -1px 0 oklch(0.25 0.02 285 / 0.16), inset 0 0 0 0.5px oklch(0.25 0.02 285 / 0.08);
   --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
@@ -150,8 +152,10 @@
     --scrim: oklch(0.12 0.006 285 / 0.72);
     --skeleton-highlight: oklch(1 0 285 / 0.04);
     --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+    --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
     --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+    --elev-kbd: inset 0 1px 0 oklch(1 0 0 / 0.07), inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
     --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
@@ -194,8 +198,10 @@
   --scrim: oklch(0.12 0.006 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.04);
   --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+  --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
   --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-kbd: inset 0 1px 0 oklch(1 0 0 / 0.07), inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
   --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
@@ -253,14 +259,18 @@
   --radius-4xl: 9999px;
 
   --shadow-popover: var(--elev-popover);
+  --shadow-overlay: var(--elev-overlay);
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
+  --shadow-kbd: var(--elev-kbd);
   --shadow-composer: var(--elev-composer);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Spring, damping 0.6 / response 0.28s: over animate-pop's 0.96 → 1 it peaks ~0.4% past full size and settles by 300ms. */
+  --ease-pop: linear(0, 0.023, 0.083, 0.17, 0.273, 0.383, 0.494, 0.602, 0.701, 0.79, 0.868, 0.933, 0.985, 1.026, 1.056, 1.076, 1.089, 1.094, 1.094, 1.09, 1.083, 1.074, 1.064, 1.053, 1.043, 1.033, 1.024, 1.016, 1.009, 1.004, 1);
 }
 
 @theme {
@@ -327,9 +337,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Desktop title bar: `hiddenInset` leaves no native one, so the 44px headers drag the window. Gated on `data-traffic-lights`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them or after a `DragStrip`, and overlays that can sit over them, opt back out. */
+/* Desktop title bar: `hiddenInset` (macOS) and `titleBarOverlay` (Windows) leave no native one, so the 44px headers drag the window. Gated on `data-window-drag`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them or after a `DragStrip`, and overlays that can sit over them, opt back out. */
 @utility app-drag {
-  :root[data-traffic-lights] & {
+  :root[data-window-drag] & {
     -webkit-app-region: drag;
     app-region: drag;
   }
@@ -358,23 +368,15 @@
     margin: 0;
     overflow: hidden;
   }
-  :root[data-traffic-lights] :is(.app-drag, [data-drag-strip] ~ *) :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
-  :root[data-traffic-lights] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
+  :root[data-window-drag] :is(.app-drag, [data-drag-strip] ~ *) :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
+  :root[data-window-drag] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
     @apply app-no-drag;
   }
 }
 
-/* The shell window's native material (vibrancy / Mica, electron/window.ts) shows through the docked sidebar only, unless Settings › Appearance › Translucent sidebar is off; the page beside it stays opaque. */
-:root[data-material]:not([data-solid-sidebar]) body {
-  background: transparent;
-}
-/* The wash sits on the container, not the inner panel, so it covers the border too: raw material under the 1px border read as a dark line. */
-:root[data-material]:not([data-solid-sidebar]) [data-slot='sidebar-container'] {
-  background: color-mix(in oklab, var(--sidebar) 60%, transparent);
-  border-color: color-mix(in oklab, var(--sidebar-border) 50%, transparent);
-}
-:root[data-material]:not([data-solid-sidebar]) [data-slot='sidebar-inner'] {
-  background: transparent;
+/* Windows' caption buttons (`useCaptionInset`) cover the top-right corner; unlayered so it beats the header's own `px-*`. The env() pair is the strip left of them; the fallback is three 46px buttons. */
+:root[data-captions] [data-under-captions] {
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px / var(--app-zoom, 1))) + 0.5rem);
 }
 
 /* Unlayered on purpose: the Artifact host wraps the page in its own skeleton, and its unlayered body colour beats `@layer base`, so text without a colour class turned light-theme dark on the dark theme. */
@@ -784,9 +786,67 @@
   transition: none;
 }
 
+/* Settings › Appearance › Animations: each one runs only while its id is a word in `data-animations` on <html>. */
+:root:not([data-animations~='sidebar-toggle']) :is([data-slot='sidebar-gap'], [data-slot='sidebar-container']),
+:root:not([data-animations~='sidebar-peek']) [data-sidebar-peek],
+:root:not([data-animations~='pane-slide']) .pane-layout-animating[data-motion='slide'] :is(.pane-card, .pane-chat),
+:root:not([data-animations~='pane-layout']) .pane-layout-animating:not([data-motion='slide']) :is(.pane-card, .pane-chat) {
+  transition: none;
+}
+:root:not([data-animations~='pane-slide']) .pane-card-entering[data-motion='slide'],
+:root:not([data-animations~='pane-pop']) .pane-card-entering:not([data-motion='slide']) {
+  animation: none;
+}
+:root:not([data-animations~='pane-slide']) .pane-card-leaving[data-motion='slide'],
+:root:not([data-animations~='pane-pop']) .pane-card-leaving:not([data-motion='slide']) {
+  display: none;
+}
+
 /* The toast countdown runs on an invisible element: `animationend` dismisses it, so pausing the animation pauses the timer. */
 @keyframes toast-countdown {
   to {
     opacity: 1;
   }
+}
+
+/* Menus, popovers, selects, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): scale and fade in from the trigger,
+   then leave with a slight blur. */
+@utility animate-pop {
+  /* Entrances fill backwards only: a transform left on after they finish makes the panel the containing block
+     for anything fixed inside it, which clipped submenus to their parent menu. */
+  &:not([data-state='closed'], [data-closed]) {
+    animation:
+      pop-scale var(--pop-duration, 300ms) var(--ease-pop) backwards,
+      pop-fade-in 180ms var(--ease-out) backwards;
+  }
+  &:is([data-state='closed'], [data-closed]) {
+    animation: pop-out 150ms var(--ease-out) both;
+  }
+  /* A tooltip shown while another was just open (Radix skip-delay) appears at once. */
+  &[data-state='instant-open'] {
+    animation: none;
+  }
+  @variant motion-reduce {
+    &:not([data-state='closed'], [data-closed]) {
+      animation: pop-fade-in 150ms var(--ease-out) backwards;
+    }
+    &[data-state='instant-open'] {
+      animation: none;
+    }
+    &:is([data-state='closed'], [data-closed]) {
+      animation: pop-fade-out 100ms var(--ease-out) both;
+    }
+  }
+}
+@keyframes pop-scale {
+  from { transform: scale(0.96); }
+}
+@keyframes pop-out {
+  to { opacity: 0; filter: blur(4px); transform: scale(0.96); }
+}
+@keyframes pop-fade-in {
+  from { opacity: 0; }
+}
+@keyframes pop-fade-out {
+  to { opacity: 0; }
 }

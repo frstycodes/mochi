@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUp, ArrowUpRight, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
+import { ArrowUp, ArrowUpRight, ChevronDown, ClockCircle, XCircle, MinusCircle, Sparkles, CheckBadge } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -70,7 +70,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   };
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 px-3 pt-2 pb-3">
+    <div className="flex shrink-0 flex-col gap-2 px-2 pt-2 pb-2">
       {canCommit && (
         <form
           className="flex flex-col gap-2"
@@ -99,11 +99,11 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
         </form>
       )}
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={push}>
+        <Button variant="ghost" size="sm" onClick={push} className="text-muted-foreground">
           <ArrowUp data-icon="inline-start" />
           Push
         </Button>
-        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading}>Create pull request</Button>}
+        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading} className="text-muted-foreground">Create pull request</Button>}
         {!!pr && pr.checks.length > 0 && <ChecksSummary checks={pr.checks} isOpen={isChecksOpen} onToggle={() => setChecksOpen((o) => !o)} />}
       </div>
       {!!pr && isChecksOpen && <CheckList checks={pr.checks} />}
@@ -147,12 +147,12 @@ function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
 }
 
 const CHECK = {
-  pass: { icon: TickCircle, className: 'text-success', label: 'Passed' },
-  fail: { icon: CloseCircle, className: 'text-destructive', label: 'Failed' },
+  pass: { icon: CheckBadge, className: 'text-success', label: 'Passed' },
+  fail: { icon: XCircle, className: 'text-destructive', label: 'Failed' },
   pending: { icon: ClockCircle, className: 'text-warning', label: 'Running' },
   skipping: { icon: MinusCircle, className: 'text-subtle-foreground', label: 'Skipped' },
   cancel: { icon: MinusCircle, className: 'text-subtle-foreground', label: 'Cancelled' },
-} satisfies Record<CheckState, { icon: typeof TickCircle; className: string; label: string }>;
+} satisfies Record<CheckState, { icon: typeof CheckBadge; className: string; label: string }>;
 
 // Worst state first, so the summary icon is the one that needs you.
 const SEVERITY = ['fail', 'pending', 'cancel', 'skipping', 'pass'] satisfies CheckState[];

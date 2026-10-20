@@ -1,6 +1,6 @@
 import { useId, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Compass } from 'reicon-react';
+import { Compass } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -12,6 +12,7 @@ import { goalProgress } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { Shortcut } from '../Shortcut';
 import { snapshot, useHarness } from '../store';
+import { openGoalEditor } from './GoalEditor';
 
 type BranchFrom = 'current' | 'base';
 
@@ -42,7 +43,11 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     dispatch({ type: 'drift-keep', threadId: thread.id });
   };
 
-  const addToGoal = () => resolve('scope-add', 'You chose Add to goal');
+  // The message already went to the agent; what's left is saying what done now means, in the goal's own editor.
+  const addToGoal = () => {
+    resolve('scope-add', 'You chose Add to goal');
+    openGoalEditor(thread.id);
+  };
 
   const newThread = () => {
     if (!pending) return;
@@ -133,7 +138,7 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
               <CardShortcut keys={['2']} />
             </Button>
             <Button variant="ghost" size="sm" onClick={guard.addToGoal} aria-keyshortcuts="3">
-              Add to goal
+              Add to goal…
               <CardShortcut keys={['3']} />
             </Button>
             {!!thread.repo && (

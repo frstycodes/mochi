@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
-import { Compress, MessageQuestion } from 'reicon-react';
+import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { revealIn } from '@/lib/revealIn';
 import { host } from '../host';
@@ -24,7 +24,7 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   if (!menu.isOpen) return null;
   const groups = [menu.matches.filter((m) => m.source === 'mochi'), menu.matches.filter((m) => m.source !== 'mochi')].filter((g) => g.length);
   return (
-    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-popover">
+    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-overlay">
       {groups.map((group) => (
         <div key={group[0].source} role="group" aria-label={groupName(group[0].source)} className="flex flex-col gap-0.5">
           <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
@@ -59,7 +59,7 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   );
 }
 
-const MOCHI_ICONS = { side: MessageQuestion, compact: Compress } satisfies Record<string, typeof MessageQuestion>;
+const MOCHI_ICONS = { side: MessageQuestion, compact: Minimize } satisfies Record<string, typeof MessageQuestion>;
 
 function SlashIcon({ item }: { item: SlashItem }) {
   if (item.source !== 'mochi') return <ProviderMark provider={item.source} size={14} className="mx-px" />;

@@ -1,5 +1,5 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Refresh, RefreshCircle, TriangleWarning, X } from 'reicon-react';
+import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Phone, PhoneRotate, Refresh, RefreshCircle, Warning, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -110,7 +110,7 @@ function ConsoleButton({ thread, pageId, page }: { thread: Thread; pageId: strin
           <ul className="flex flex-col gap-0.5 px-1.5">
             {page.console.map((c, i) => (
               <li key={i} className="flex gap-2 rounded-md px-1.5 py-1">
-                {c.level === 'error' ? <Danger aria-label="Error" className="mt-0.5 size-3.5 shrink-0 text-destructive" /> : <TriangleWarning aria-label="Warning" className="mt-0.5 size-3.5 shrink-0 text-warning" />}
+                {c.level === 'error' ? <Danger aria-label="Error" className="mt-0.5 size-3.5 shrink-0 text-destructive" /> : <Warning aria-label="Warning" className="mt-0.5 size-3.5 shrink-0 text-warning" />}
                 <div className="flex min-w-0 flex-col">
                   <span className="line-clamp-3 font-mono type-caption break-all text-foreground">{c.message}</span>
                   {!!c.source && (
@@ -183,7 +183,7 @@ function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; page
       </Tooltip>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuCheckboxItem checked={page.device !== RESPONSIVE} onCheckedChange={(on) => updatePage(pageId, { device: on ? DEVICES[1].id : RESPONSIVE })}>
-          <Mobile />
+          <Phone />
           Emulate a device
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem disabled={!isNative || !hasFolder} checked={page.isAutoReloading} onCheckedChange={() => toggleAutoReload(pageId, page, thread)}>
@@ -301,15 +301,18 @@ function SideInput({ label, value, onChange }: { label: string; value: number; o
   );
 }
 
-/** Agent driving indicator with take-over / give-back. */
-export function DriveBar({ thread, pageId, hasTakenOver }: { thread: Thread; pageId: string; hasTakenOver: boolean }) {
+/** Agent driving indicator with take-over / give-back; a handoff names what the agent needs, and giving back is Done. */
+export function DriveBar({ thread, pageId, hasTakenOver, handoff }: { thread: Thread; pageId: string; hasTakenOver: boolean; handoff: string | null }) {
   const agent = agentName(thread);
+  const text = handoff ? `${agent} needs you to: ${handoff}` : hasTakenOver ? `You have the browser. ${agent} waits until you give it back.` : `${agent} is driving this browser`;
   return (
     <div role="status" className="mx-2 mb-1.5 flex h-8 shrink-0 items-center gap-2 rounded-lg bg-muted/60 pr-1 pl-2.5 type-meta text-muted-foreground">
       <ProviderMark provider={thread.providers[0]} size={14} />
-      <span className="min-w-0 flex-1 truncate">{hasTakenOver ? `You have the browser. ${agent} waits until you give it back.` : `${agent} is driving this browser`}</span>
+      <span className={cn('min-w-0 flex-1 truncate', !!handoff && 'text-foreground')} title={text}>
+        {text}
+      </span>
       <Button size="xs" variant={hasTakenOver ? 'default' : 'outline'} className="rounded-full" onClick={() => updatePage(pageId, { hasTakenOver: !hasTakenOver })}>
-        {hasTakenOver ? `Give back to ${agent}` : 'Take over'}
+        {handoff ? 'Done' : hasTakenOver ? `Give back to ${agent}` : 'Take over'}
       </Button>
     </div>
   );

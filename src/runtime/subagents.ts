@@ -3,7 +3,7 @@ import type { Provider, Subagent, SubagentStep, Thread } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { log, mapThread } from '../store/threads.ts';
 
-/** A Mochi background agent to start for a thread (`start_background_agent`). */
+/** A task a thread's agent hands to another provider (`delegate_task`), run as a Mochi background agent. */
 export interface BackgroundStart {
   id: string;
   name: string;
@@ -54,7 +54,6 @@ export function applySubagent(state: State, thread: Thread, event: AgentSubagent
   let after = update((t) => ({
     ...t,
     subagents: t.subagents!.map((s) => (s.id === event.id ? next : s)),
-    steps: withFootprint(t, event.step?.files),
   }));
   if (event.phase === 'end' && next.origin === 'mochi') after = reportBack(after, thread.id, next);
   return after;
@@ -120,17 +119,25 @@ export function fromBackground(state: State, event: AgentEvent, apply: (state: S
     case 'resolved':
       return apply(state, { ...event, threadId: owner.id });
     case 'limit':
-      return as({
-        phase: 'end',
-        status: 'failed',
-        error: 'Usage limit reached',
-      });
+      return reportDue(
+        as({
+          phase: 'end',
+          status: 'failed',
+          error: 'Usage limit reached',
+        }),
+        owner.id,
+        subagent,
+      );
     case 'turn-end':
-      return as({
-        phase: 'end',
-        status: event.status === 'done' ? 'done' : event.status === 'failed' ? 'failed' : 'stopped',
-        ...(event.error && { error: event.error }),
-      });
+      return reportDue(
+        as({
+          phase: 'end',
+          status: event.status === 'done' ? 'done' : event.status === 'failed' ? 'failed' : 'stopped',
+          ...(event.error && { error: event.error }),
+        }),
+        owner.id,
+        subagent,
+      );
     default:
       return state;
   }
@@ -174,12 +181,17 @@ export function backgroundSession(threadId: string, id: string) {
   return `${threadId}--${id}`;
 }
 
-/** What a background agent is asked: the task, and that its last message is its report. */
+/** What a delegated agent is asked: the task, and that its last message is its report. */
 export function backgroundPrompt(start: BackgroundStart) {
-  return `${start.prompt}\n\nYou are a background agent started by another agent's thread. Work on your own; nobody can answer questions. End with a short report of what you did and found: it is sent back to that thread.`;
+  return `${start.prompt}\n\nAnother agent's thread delegated this task to you. Work on your own; nobody can answer questions. End with a short report of what you did and found: it is sent back to that agent.`;
 }
 
-/** The notes a thread's agent gets ahead of the next message, then cleared; a note the message already carries ("Send to thread") isn't repeated. */
+/** Delegated tasks that ended on their own and whose report hasn't gone to their thread's agent yet. */
+export function dueReports(threads: Thread[]) {
+  return threads.flatMap((thread) => (thread.live ? (thread.subagents ?? []).filter((s) => s.isReportDue).map((subagent) => ({ thread, subagent })) : []));
+}
+
+/** The notes (Codex compaction restores) a thread's agent gets ahead of the next message, then cleared; a note the message already carries isn't repeated. */
 export function withNotes(thread: Thread, text: string) {
   const notes = (thread.live?.notes ?? []).filter((n) => !text.includes(n));
   if (!notes.length) return text;
@@ -189,7 +201,7 @@ export function withNotes(thread: Thread, text: string) {
 
 /** How a finished agent's report reads to the parent's agent. */
 export function reportOf(s: Subagent) {
-  return `[${s.origin === 'mochi' ? 'Background agent' : 'Subagent'} "${s.name}" ${VERDICT[s.status]}${s.error ? `: ${s.error}` : ''}]${s.result ? `\n${s.result}` : ''}`;
+  return `[${s.origin === 'mochi' ? 'Delegated task' : 'Subagent'} "${s.name}" ${VERDICT[s.status]}${s.error ? `: ${s.error}` : ''}]${s.result ? `\n${s.result}` : ''}`;
 }
 
 const VERDICT = {
@@ -252,33 +264,29 @@ function withStep(steps: SubagentStep[], step: NonNullable<AgentSubagentEvent['s
   return steps.map((s) => (s.id === step.id ? { ...s, text: step.text, isDone: true, ...done } : s));
 }
 
-/** Files a subagent edits count toward the parent's running step, so overlap detection sees them. */
-function withFootprint(t: Thread, files?: string[]) {
-  if (!files?.length) return t.steps;
-  return t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...files])] } : s));
-}
-
-/** A finished background agent tells its thread: a line in the chat now, and a note its agent gets with your next message. */
+/** A finished delegated task logs a line in its thread's chat; its report goes to the agent separately (`dueReports`). */
 function reportBack(state: State, threadId: string, s: Subagent): State {
   return {
     ...state,
     threads: mapThread(state.threads, threadId, (t) =>
-      log(
-        {
-          ...t,
-          live: t.live && {
-            ...t.live,
-            notes: [...(t.live.notes ?? []), reportOf(s)],
-          },
-        },
-        {
-          at: state.now,
-          who: 'harness',
-          kind: 'event',
-          text: `Background agent "${s.name}" ${VERDICT[s.status]}`,
-          detail: 'Its report goes to the agent with your next message.',
-        },
-      ),
+      log(t, {
+        at: state.now,
+        who: 'harness',
+        kind: 'event',
+        text: `Delegated task "${s.name}" ${VERDICT[s.status]}`,
+      }),
     ),
+  };
+}
+
+/** A delegated task that ended on its own (not stopped by you) wakes its thread's agent with its report. */
+function reportDue(state: State, threadId: string, before: Subagent): State {
+  if (!isRunning(before)) return state;
+  return {
+    ...state,
+    threads: mapThread(state.threads, threadId, (t) => ({
+      ...t,
+      subagents: t.subagents?.map((s) => (s.id === before.id ? { ...s, isReportDue: true } : s)),
+    })),
   };
 }

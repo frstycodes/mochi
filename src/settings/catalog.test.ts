@@ -28,7 +28,7 @@ const sources: SettingSources = {
   accounts: { accounts: DEFAULT_ACCOUNTS, links: {} },
   config,
   colorThemes: [{ id: 'ext:a.b:Night', label: 'Night', kind: 'dark' }],
-  remote: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false },
+  remote: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true },
 };
 
 test('every setting reads its default and takes that value back', () => {
@@ -44,7 +44,7 @@ test('every setting reads its default and takes that value back', () => {
 test('writes land where the setting lives, and a value outside the control is refused', () => {
   const catalog = settingsCatalog({ profile: DEFAULT_SPACES[0], config });
   const write = (key: string, value: string) => catalog.find((s) => s.key === key)!.write(value, sources);
-  assert.deepEqual(write('alert.review', 'false'), { to: 'prefs', patch: { alertKinds: DEFAULT_PREFS.alertKinds.filter((k) => k !== 'review') } });
+  assert.deepEqual(write('alert.ci', 'false'), { to: 'prefs', patch: { alertKinds: DEFAULT_PREFS.alertKinds.filter((k) => k !== 'ci') } });
   assert.deepEqual(write('dockBadge', 'off'), { to: 'prefs', patch: { dockBadge: false } });
   assert.deepEqual(write('concurrency', '8'), { to: 'host', patch: { concurrency: 8 } });
   assert.deepEqual(write('projectsFolder', ' '), { to: 'prefs', patch: { projectsFolder: DEFAULT_PREFS.projectsFolder } }, 'emptied falls back');
@@ -78,4 +78,17 @@ test('every app setting sits in a titled group on its page; profile settings gro
     if (setting.section === 'profile') assert.equal(setting.group, undefined, setting.key);
     else assert.ok(setting.group, `${setting.key} has a group`);
   }
+});
+
+test('animations start off; an area switch sets all of its animations, each switch only its own', () => {
+  const catalog = settingsCatalog({ profile: DEFAULT_SPACES[0], config });
+  const find = (key: string) => catalog.find((s) => s.key === key)!;
+  assert.equal(find('animations.sidebar').read(sources), 'false');
+  assert.equal(find('animation.pane-slide').read(sources), 'false');
+  const someOn = { ...sources, prefs: { ...DEFAULT_PREFS, animations: ['sidebar-peek', 'pane-slide'] } };
+  assert.equal(find('animations.sidebar').read(someOn), 'true', 'on while any is');
+  assert.deepEqual(find('animations.sidebar').write('false', someOn), { to: 'prefs', patch: { animations: ['pane-slide'] } });
+  assert.deepEqual(find('animations.pane').write('true', someOn), { to: 'prefs', patch: { animations: ['sidebar-peek', 'pane-slide', 'pane-pop', 'pane-layout'] } });
+  assert.deepEqual(find('animation.sidebar-toggle').write('true', someOn), { to: 'prefs', patch: { animations: ['sidebar-peek', 'pane-slide', 'sidebar-toggle'] } });
+  assert.equal(find('animation.sidebar-toggle').write('maybe', someOn), null);
 });

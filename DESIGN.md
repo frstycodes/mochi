@@ -1,7 +1,7 @@
 ---
 name: Mochi
 version: 0.1 (draft for sign-off)
-base: shadcn/ui (radix-nova), AI Elements for agent UI, reicon-react icons, Tailwind v4
+base: shadcn/ui (radix-nova), AI Elements for agent UI, Solar icons (`@solar-icons/react`), Tailwind v4
 references: Linear (density, restraint, crisp hairlines), Raycast (floating windows, glass only over content, keyboard first), Codex (summary panel, collapsed work log)
 themes: dark-first, light designed alongside
 colors:
@@ -53,7 +53,7 @@ The signature artifacts are the chat (main view), the summary card with its floa
 - **No brand accent.** Primary actions are the inverted neutral (near-white on dark, near-black on light), like Raycast. Selection is the `accent` wash, never a hue.
 - **Spaces** carry no color. The sidebar stays the same neutral in every space; a space is told apart by its icon (briefcase, home, layers) and name, like Arc's space icons. Space hues tinted too much of the UI and fought the thread line colors.
 - **Thread lines** use the validated categorical order `chart-1…5`. A thread keeps its colour for life. Line colour marks identity only: the metro line, the progress ring, the dot next to a thread name. Text never wears a line colour.
-- **Status** is reserved: success (running), warning (needs you, overlap), destructive (failed). Always paired with an icon or label.
+- **Status** is reserved: success (running), warning (needs you), destructive (failed). Always paired with an icon or label.
 
 ## Color themes
 
@@ -130,7 +130,7 @@ Comfortably round, like Codex. Tiers: `sm` 8px (badges, kbd, checkboxes), `md` 1
 
 Corners are squircles. Where `corner-shape: squircle` is supported every radius token is multiplied by 1.84 (`--corner-scale`), which puts each corner's 45° point where the round fallback has it, so other browsers look equally round. Radii must come from the tokens: no `rounded-[Npx]`.
 
-Icons are reicon-react, outline weight, 16px in controls and 14px in dense rows. Real brand marks for Claude and Codex.
+Icons are Solar, Linear style (Bold for `filled`), 16px in controls and 14px in dense rows. Real brand marks for Claude and Codex. Components import icons from `@/icons` by our names, never from the library: `src/icons/solar.tsx` maps Solar onto them, so trying another library means writing one more mapper file. Glyphs Solar lacks (fork, the Terminal and Changes pane marks, Shift and Option keys) are `customIcon`s drawn on its 24px grid at 1.5 stroke.
 
 ## Components
 
@@ -142,7 +142,7 @@ Everything is composed from the shadcn primitives in `src/components/ui`. App co
 - **Composer**: the star of the thread, and the one glass surface in the main view: it floats over the bottom of the transcript (messages scroll under it, the transcript pads itself by the composer's measured height) with a translucent fill, 20px backdrop blur, a hairline edge and float shadow; solid under reduced transparency. The tray, attachments and input share that one tone, with no inner fills or footer strips. A soft fade behind the meta row keeps it readable over scrolling text. A 24px-radius card holding, top to bottom: the question tray, attachment previews (image thumbnails, file chips), the textarea, and a footer with attach, model, reasoning effort and a round send button. Under it: permissions, branch, and the Cmd-to-queue hint; where the agent runs (this Mac, the only place yet) shows as the device icon in the thread header. 16px text on phones.
 - **Model and effort pickers**: the model picker is a searchable popover grouped by harness (Claude Code, Codex) with each account plan, a star per model, a one-line note and context size. Hover either chip and scroll in any direction: a 3D carousel of free-floating tiles (no container) rises from it. The strip tracks the scroll 1:1 and moves with your fingers, the centre tile is lifted and enlarged, side tiles turn toward it and fall back in depth, each tile crossing the centre is a detent that selects it, and letting go snaps to the nearest one with a critically damped spring. Starred models only for the model chip.
 - **Question tray**: pending decisions for the thread sit inside the composer, above the text, so they stay on screen while the chat scrolls. Scrolling up through the chat folds the tray to a one-line "Waiting on you" bar; coming back to the latest message unfolds it. The bar toggles it by hand, and it caps at 40% of the viewport.
-- **Inline decision**: the same card as in the Queue. Questions and overlaps use shadcn `Questionnaire` (number keys, one choice, send); approvals use AI Elements `Confirmation` with the command shown.
+- **Inline decision**: the same card as in the Queue. Questions use shadcn `Questionnaire` (number keys, one choice, send); approvals use AI Elements `Confirmation` with the command shown.
 - **Summary column**: Codex's summary panel, extended for agents, docked to the right of the chat as a `card` surface (one step raised, hairline border). Opening it widens the column while the card rises out of the header toggle (scale 0.97 to 1, from its top-right corner). Contents: project and branch with an overflow menu; the goal (version, percentage, sparkline, pace, now / waiting / next steps), which opens the floating timeline on hover or with the expand button; Changes (+/−); Context usage; Pull requests; Skills used; Tools called; Sources. Lists longer than 3 show "View all".
 - **Side pane**: docked right and resizable, on the `sidebar` surface. Browser-style tabs (the active tab is a raised chip) plus `+`: Preview, Changes, Terminal and a new-tab page. Toggling it animates the split; dragging the handle never animates.
 - **Sidebar**: shadcn `Sidebar`, collapsible off-canvas. Header: the collapse toggle, then the space icon and name (plans in its tooltip). Search (Cmd K), New thread, Queue with a muted count, Board; pinned, active and settled threads. Footer: space icons (Ctrl 1–3 or a sideways swipe), theme, and a prototype menu.
@@ -176,6 +176,5 @@ Everything is composed from the shadcn primitives in `src/components/ui`. App co
 - Body text is 13px, meta 12px and captions 11px, matching Codex and T3 Code density; that is below the usual 14px floor for secondary text. Revisit if it reads small on non-Retina screens. Phones keep 16px in inputs so iOS doesn't zoom.
 - Light mode is designed but less exercised than dark.
 - Space icons are fixed per space until spaces get user-picked icons.
-- reicon has no git branch, merge or pull-request glyphs; `BranchUp` / `BranchDown` stand in for them.
 - Changes, PR and source rows in the summary panel open nothing yet; in the real app they open tabs in a side pane like Codex's (Changes, browser, Terminal, Files, Side chat, plugins).
 - Trackpad haptics for the model and effort dock need the desktop shell (`NSHapticFeedbackManager`); browsers have no API for it, so the web build only vibrates on phones.

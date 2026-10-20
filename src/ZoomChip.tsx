@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { SearchZoomIn, SearchZoomOut } from 'reicon-react';
+import { ZoomIn, ZoomOut } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,7 @@ export function ZoomChip({ zoom, onReset, className }: { zoom: number; onReset: 
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="outline" onClick={onReset} className="bg-popover px-2.5 tabular-nums shadow-float dark:bg-popover dark:hover:bg-muted" aria-label={`Zoom ${percent}%, reset to 100%`}>
-                {percent > 100 ? <SearchZoomIn aria-hidden /> : <SearchZoomOut aria-hidden />}
+                {percent > 100 ? <ZoomIn aria-hidden /> : <ZoomOut aria-hidden />}
                 {percent}%
               </Button>
             </TooltipTrigger>

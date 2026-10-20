@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Danger, History, StopCircle } from 'reicon-react';
+import { Danger, History, StopCircle } from '@/icons';
 import { ForkIcon } from '../ui';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -32,12 +32,11 @@ import { checkpointForMessage, checkpointPhrase, excerpt, rewindBlockedReason, S
 import { REWIND_MODE_ORDER, REWIND_MODES } from './modes';
 import { CompareForks } from './CompareForks';
 import type { ForkPoint } from './fork';
-import { HandoffDialog } from './HandoffDialog';
 import { PROVIDER_NAME } from './handoff';
 import { openRewind, useRewindRequest } from './requests';
 import { useRewindActions, type RewindTarget } from './useRewindActions';
 
-/** Hosts the rewind, fork, handoff and compare dialogs a thread's menus, step rows and timeline open. */
+/** Hosts the rewind, fork and compare dialogs a thread's menus, step rows and timeline open. */
 export function RewindLayer({ thread }: { thread: Thread }) {
   const request = useRewindRequest(thread.id);
   const close = () => openRewind(null);
@@ -46,7 +45,6 @@ export function RewindLayer({ thread }: { thread: Thread }) {
   if (request.kind === 'rewind' && request.message !== undefined) return <RewindConfirm thread={thread} target={{ kind: 'message', index: request.message }} initialMode={request.mode} onClose={close} />;
   if (request.kind === 'rewind') return <PointDialog thread={thread} mode="rewind" onClose={close} />;
   if (request.kind === 'fork') return <PointDialog thread={thread} mode="fork" initial={request.point} onClose={close} />;
-  if (request.kind === 'handoff') return <HandoffDialog thread={thread} stepId={request.stepId} onClose={close} />;
   return <CompareForks thread={thread} otherId={request.otherId} onClose={close} />;
 }
 

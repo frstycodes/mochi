@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Refresh, Trash3 } from 'reicon-react';
+import { Refresh, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Provider } from '../../model';
@@ -16,6 +17,7 @@ import { CommandLine, DesktopOnly, SettingsGroup, SettingsRow, settingControlId 
 /** Every harness from the registry, one tab each; nothing here names a specific harness. Deep links (`claudePath`) open their harness. */
 export function HarnessesSection() {
   const [shown, setShown] = useLinkedTab((settingId) => HARNESS_IDS.find((id) => settingId.startsWith(id)), HARNESS_IDS[0]);
+  const { isUpdateAvailable } = useAgentSettings();
   return (
     <div className="flex flex-col gap-10">
       <p className="type-meta text-muted-foreground">Mochi runs your own installs with the logins you set up in them. It never signs in for you and never sees your credentials.</p>
@@ -26,6 +28,7 @@ export function HarnessesSection() {
               <TabsTrigger key={provider} value={provider} className="flex-none px-2">
                 <ProviderMark provider={provider} size={14} />
                 {HARNESSES[provider].name}
+                {isUpdateAvailable(provider) && <span className="size-1.5 rounded-full bg-warning" aria-label="Update available" />}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -39,11 +42,12 @@ export function HarnessesSection() {
 }
 
 function HarnessSettings({ provider }: { provider: Provider }) {
-  const { installs, checkProvider, settings } = useAgentSettings();
+  const { installs, checkProvider, settings, latest, updating, restartNeeded, updateHarness, isUpdateAvailable } = useAgentSettings();
   const harness = HARNESSES[provider];
   const install = installs[defaultAccountId(provider)];
   const detected = install === 'checking' ? undefined : install;
   const isMissing = !!detected && !detected.path;
+  const needsRepair = !!detected?.path && !detected.version;
 
   return (
     <section aria-labelledby={`harness-${provider}`} className="flex flex-col gap-5">
@@ -60,17 +64,31 @@ function HarnessSettings({ provider }: { provider: Provider }) {
           <Refresh />
         </TooltipIconButton>
       </header>
-      {isMissing && (
-        <SettingsGroup footer={`If it's installed somewhere unusual, set its path below.`}>
+      {isMissing ? (
+        <SettingsGroup title="Not installed" footer="Installed somewhere unusual? Set its path here instead.">
           <SettingsRow label={`Install ${harness.name}`} description={<a href={harness.docs} target="_blank" rel="noreferrer" className="underline underline-offset-4">Setup guide</a>}>
             <CommandLine command={harness.install} />
           </SettingsRow>
+          {!!settings && <CatalogRow settingKey={`${provider}.path`} />}
         </SettingsGroup>
-      )}
-      {!!settings && (
-        <SettingsGroup>
-          <CatalogRow settingKey={`${provider}.path`} />
-        </SettingsGroup>
+      ) : (
+        !!settings && (
+          <SettingsGroup title="Install">
+            {needsRepair ? (
+              <SettingsRow label="Install needs repair" description={detected.login.state === 'unknown' ? detected.login.reason : 'The executable did not report a version.'}>
+                <CommandLine command={provider === 'codex' ? 'npm install -g @openai/codex@latest --include=optional' : harness.install} />
+              </SettingsRow>
+            ) : (
+              <SettingsRow
+                id={`${provider}Update`}
+                label={<span className="flex items-center gap-2">Version {isUpdateAvailable(provider) && <Badge variant="outline" className="text-warning">Update available</Badge>}</span>}
+                description={restartNeeded.includes(provider) ? `Installed ${detected?.version ?? 'new version'}. Restart Mochi to use it in existing sessions.` : latest[provider] === undefined ? 'Checking for updates…' : latest[provider] ? `Installed ${detected?.version ?? 'unknown'} · latest ${latest[provider]}` : 'Could not check the latest version'}
+                control={isUpdateAvailable(provider) ? <Button id={settingControlId(`${provider}Update`)} variant="outline" size="sm" disabled={!!updating} onClick={() => updateHarness(provider)}>{updating === provider ? 'Updating…' : `Update ${harness.name}`}</Button> : <span id={settingControlId(`${provider}Update`)} className="type-meta text-muted-foreground">{latest[provider] === undefined ? 'Checking' : latest[provider] ? 'Up to date' : 'Unavailable'}</span>}
+              />
+            )}
+            <CatalogRow settingKey={`${provider}.path`} />
+          </SettingsGroup>
+        )
       )}
       {!isMissing && <AccountsGroup provider={provider} />}
       <ProfilesGroup provider={provider} />
@@ -106,7 +124,7 @@ function ApiKeyGroup({ provider }: { provider: Provider }) {
           }
           control={
             <Button id={settingControlId(id)} variant="outline" size="sm" onClick={() => void saveApiKey(provider, null)}>
-              <Trash3 data-icon="inline-start" />
+              <Trash data-icon="inline-start" />
               Remove key
             </Button>
           }

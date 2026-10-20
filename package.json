@@ -28,6 +28,7 @@
     "@codemirror/lang-rust": "^6.0.2",
     "@codemirror/lang-yaml": "^6.1.3",
     "@codemirror/language": "^6.13.1",
+    "@codemirror/legacy-modes": "^6.5.1",
     "@codemirror/search": "^6.7.2",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.14",
@@ -41,6 +42,7 @@
     "@radix-ui/react-use-controllable-state": "^1.2.6",
     "@react-symbols/icons": "^1.4.1",
     "@shadcn/react": "^0.3.1",
+    "@solar-icons/react": "^2.3.2",
     "@streamdown/cjk": "^1.0.4",
     "@streamdown/code": "^2.0.0",
     "@streamdown/math": "^1.0.3",
@@ -72,11 +74,11 @@
     "react-dom": "^19.3.0",
     "react-resizable-panels": "^4.14.4",
     "recharts": "3.8.0",
-    "reicon-react": "^1.2.6",
     "shadcn": "^4.21.4",
     "shiki": "^4.5.0",
     "simple-icons": "^16.34.0",
     "streamdown": "^2.7.0",
+    "tldts": "^7.4.18",
     "tokenlens": "^1.3.1",
     "tw-animate-css": "^1.4.0",
     "use-stick-to-bottom": "^1.1.6",
@@ -85,13 +87,16 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.7",
     "@lobehub/icons-static-svg": "^1.95.1",
+    "@rolldown/plugin-babel": "^0.2.4",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.1.2",
+    "babel-plugin-react-compiler": "^1.0.0",
     "electron": "44.7.0",
     "electron-builder": "26.15.3",
     "tailwindcss": "^4.3.3",
@@ -109,11 +114,12 @@
       "dist-electron/**",
       "!node_modules/**",
       "node_modules/node-pty/package.json",
-      "node_modules/node-pty/lib/*.js",
+      "node_modules/node-pty/lib/**/*.js",
       "node_modules/node-pty/prebuilds/${platform}-${arch}/**",
       "node_modules/playwright-core/**"
     ],
     "afterPack": "scripts/after-pack.mjs",
+    "npmRebuild": false,
     "asarUnpack": [
       "node_modules/node-pty/prebuilds/**"
     ],
@@ -132,6 +138,15 @@
         {
           "from": "build/native/windows",
           "to": "windows"
+        },
+        {
+          "from": "build/icons",
+          "to": "icons",
+          "filter": ["*.png"]
+        },
+        {
+          "from": "build/native/uv",
+          "to": "uv"
         }
       ]
     },
@@ -140,8 +155,9 @@
       "icon": "build/icon.png",
       "extraResources": [
         {
-          "from": "build/icon.png",
-          "to": "icon.png"
+          "from": "build/icons",
+          "to": "icons",
+          "filter": ["*.png"]
         }
       ]
     },
@@ -151,8 +167,13 @@
       "category": "Development",
       "extraResources": [
         {
-          "from": "build/icon.png",
-          "to": "icon.png"
+          "from": "build/icons",
+          "to": "icons",
+          "filter": ["*.png"]
+        },
+        {
+          "from": "build/native/uv",
+          "to": "uv"
         }
       ]
     }

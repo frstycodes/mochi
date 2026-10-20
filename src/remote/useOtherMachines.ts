@@ -4,11 +4,11 @@ import { host } from '../host';
 import type { OtherMachine } from '../host/types/remote';
 import { ipcMessage } from '../settings/AgentSettings';
 
-/** Your account's other computers through the relay, and pairing with one. Loads only while signed in. */
+/** Computers on your account that aren't among yours yet, through the relay, and joining through one. Loads only while signed in. */
 export function useOtherMachines(isSignedIn: boolean) {
   const [machines, setMachines] = useState<OtherMachine[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pairing, setPairing] = useState<{ machine: OtherMachine; error?: string } | null>(null);
+  const [joining, setJoining] = useState<{ machine: OtherMachine; error?: string } | null>(null);
 
   const refresh = useCallback(() => {
     setError(null);
@@ -18,18 +18,17 @@ export function useOtherMachines(isSignedIn: boolean) {
     if (isSignedIn) void refresh();
   }, [isSignedIn, refresh]);
 
-  const pair = async (machine: OtherMachine) => {
-    setPairing({ machine });
+  const join = async (machine: OtherMachine) => {
+    setJoining({ machine });
     try {
-      await host.remote.pair(machine.id);
-      setPairing(null);
-      toast.success(`Paired with ${machine.name}`);
+      await host.remote.join(machine.id);
+      setJoining(null);
+      toast.success(`Joined your computers through ${machine.name}`);
       void refresh();
     } catch (e) {
-      setPairing((current) => (current?.machine.id === machine.id ? { machine, error: ipcMessage(e as Error) } : current));
+      setJoining((current) => (current?.machine.id === machine.id ? { machine, error: ipcMessage(e as Error) } : current));
     }
   };
-  const forget = (machine: OtherMachine) => host.remote.forgetMachine(machine.id).then(refresh);
 
-  return { machines, error, refresh, pairing, pair, forget, closePairing: () => setPairing(null) };
+  return { machines, error, refresh, joining, join, closeJoining: () => setJoining(null) };
 }

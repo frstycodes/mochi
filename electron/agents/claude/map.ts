@@ -1,22 +1,24 @@
 import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
+import { ACCOUNT_ARGUMENT } from '../../../src/library/connectors.ts';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, McpWidgetResult, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
+import { IMAGE_TOOL, imageCard } from '../../../src/runtime/imageTool.ts';
+import { MOCHI_SERVER } from '../../../src/runtime/toolTable.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
 import type { SaveImage } from '../images.ts';
 
 /**
- * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across
+ * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs and usage totals carry across
  * messages. `saveImage` keeps images a tool returns as files; without it they're dropped.
  */
-export function createMapper(threadId: string, cwd: string, saveImage?: SaveImage) {
+export function createMapper(threadId: string, cwd: string, saveImage?: SaveImage, effort?: string) {
   const tools = new Map<string, { name: string; input: Record<string, unknown> }>();
-  const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
   const agents = new Map<string, { taskId?: string }>();
   const reported = { input: 0, output: 0, cached: 0, costUsd: 0 };
@@ -46,8 +48,6 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     });
   }
 
-  const planFromTasks = (): AgentEvent => ({ threadId, type: 'plan', items: tasks.map(({ title, status }) => ({ title, status })) });
-
   const subagent = (id: string, phase: AgentSubagentEvent['phase'], fields: Omit<AgentSubagentEvent, 'threadId' | 'type' | 'id' | 'phase'> = {}): AgentSubagentEvent => ({ threadId, type: 'subagent', id, phase, ...fields });
 
   function toolStart(id: string, name: string, input: Record<string, unknown>): AgentEvent[] {
@@ -57,16 +57,9 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
       const { description, prompt, model, run_in_background } = input as Partial<AgentInput>;
       return [subagent(id, 'start', { toolId: id, name: description || 'Agent', ...(prompt && { prompt }), ...(model && { model }), isBackground: run_in_background === true })];
     }
+    if (name === IMAGE_CALL) return [{ threadId, type: 'tool', id, phase: 'start', text: 'Generate image', generated: imageCard(input) }];
     const description = callDescription(name, input);
-    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) };
-    if (name === 'TodoWrite') return [start, { threadId, type: 'plan', items: planFromTodos(input) }];
-    if (name !== 'TaskUpdate') return [start];
-    const task = tasks.find((t) => t.id === input.taskId);
-    if (!task) return [start];
-    if (input.status === 'deleted') tasks.splice(tasks.indexOf(task), 1);
-    else if (typeof input.status === 'string') task.status = STATUS[input.status as keyof typeof STATUS] ?? task.status;
-    if (typeof input.subject === 'string') task.title = input.subject;
-    return [start, planFromTasks()];
+    return [{ threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) }];
   }
 
   function toolEnd(block: ToolResultBlock, result: unknown): AgentEvent[] {
@@ -74,6 +67,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     if (!tool) return [];
     tools.delete(block.tool_use_id);
     if (AGENT_TOOLS.has(tool.name)) return agentEnd(block, result);
+    if (tool.name === IMAGE_CALL) return [{ threadId, type: 'tool', id: block.tool_use_id, phase: 'end', text: 'Generate image', generated: imageCard(tool.input, { text: resultText(block), isError: block.is_error }) }];
     const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block, result) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
     if (links) end.links = links;
@@ -82,10 +76,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     if (images.length) end.images = images;
     const widget = widgets.get(tool.name);
     if (widget && !block.is_error) end.widget = { ...widget, input: tool.input, result: widgetResult(block, result) };
-    const task = (result as { task?: { id?: unknown } } | undefined)?.task;
-    if (tool.name !== 'TaskCreate' || typeof task?.id !== 'string') return [end];
-    tasks.push({ id: task.id, title: String(tool.input.subject ?? ''), status: 'pending' });
-    return [end, planFromTasks()];
+    return [end];
   }
 
   /** What a finished call reports, the thread's own or a subagent's: its line, edited files, a command's exit code and output tail, an edit's patch. */
@@ -182,7 +173,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
         if (message.subtype === 'init') {
           servers = (message.mcp_servers ?? []).map((s) => s.name);
           skills = message.skills ?? [];
-          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }, ...typedSkills()];
+          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: { ...infoFromInit(message), ...(effort && { effort }) } }, ...typedSkills()];
         }
         if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name), commands: commandsFrom(message.commands) } }];
         if (message.subtype === 'status' || message.subtype === 'compact_boundary') return compaction(message);
@@ -354,17 +345,9 @@ const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 // `Task` is the Agent tool's name in Claude Code before 2.1.
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const TASK_STATUS = { completed: 'done', failed: 'failed', stopped: 'stopped' } as const;
-const STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
 
-/** Claude Code ships no plan tool under the SDK unless asked, and without TaskCreate/TaskUpdate a live thread never gets steps. */
-export function withPlanTools(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return { ...env, CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
-}
-
-export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
-  const todos = Array.isArray(input.todos) ? (input.todos as { content?: unknown; status?: unknown }[]) : [];
-  return todos.flatMap((t) => (typeof t.content === 'string' ? [{ title: t.content, status: STATUS[t.status as keyof typeof STATUS] ?? 'pending' }] : []));
-}
+/** Mochi's update_plan is the plan; Claude Code's own task list would be a second one nobody sees. */
+export const HIDDEN_PLAN_TOOLS = ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite'];
 
 /**
  * One line for the work log: the command for Bash, the path for file tools (relative to `cwd` when inside it), the tool name otherwise.
@@ -398,13 +381,22 @@ function tail(text: string) {
   return text.length > OUTPUT_MAX ? `…${text.slice(-OUTPUT_MAX)}` : text;
 }
 
-/** An Edit/Write result's `structuredPatch` as a unified diff `@pierre/diffs` can render. */
+/** An Edit/Write result's `structuredPatch` as a unified diff `@pierre/diffs` can render. A created file comes with no hunks, so its whole `content` is the one hunk. */
 export function patchOf(input: Record<string, unknown>, result: unknown) {
-  const hunks = (result as { structuredPatch?: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] } | undefined)?.structuredPatch;
+  const output = result as { type?: string; content?: unknown; structuredPatch?: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] } | undefined;
   const file = input.file_path ?? input.notebook_path;
-  if (!Array.isArray(hunks) || !hunks.length || typeof file !== 'string') return undefined;
+  if (typeof file !== 'string') return undefined;
   const name = path.basename(file);
-  return [`diff --git a/${name} b/${name}`, `--- a/${name}`, `+++ b/${name}`, ...hunks.flatMap((h) => [`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`, ...h.lines])].join('\n');
+  const hunks = output?.type === 'create' && !output.structuredPatch?.length && typeof output.content === 'string' ? createdHunks(output.content) : output?.structuredPatch;
+  if (!Array.isArray(hunks) || !hunks.length) return undefined;
+  const old = output?.type === 'create' ? '/dev/null' : `a/${name}`;
+  return [`diff --git a/${name} b/${name}`, `--- ${old}`, `+++ b/${name}`, ...hunks.flatMap((h) => [`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`, ...h.lines])].join('\n');
+}
+
+function createdHunks(content: string) {
+  if (!content) return [];
+  const lines = content.replace(/\n$/, '').split('\n');
+  return [{ oldStart: 0, oldLines: 0, newStart: 1, newLines: lines.length, lines: lines.map((l) => `+${l}`) }];
 }
 
 /** The skill a Skill call loads (its `skill` input, a leading `/` allowed) or the MCP server and tool an `mcp__` call runs. */
@@ -414,10 +406,14 @@ export function toolKind(name: string, input: Record<string, unknown>, servers: 
   const rest = name.slice('mcp__'.length);
   // Longest first: a server whose name runs into another's (`git`, `github`) matches by its own full prefix.
   const server = [...servers].sort((a, b) => b.length - a.length).find((s) => rest.startsWith(`${mcpToolPrefix(s)}__`));
-  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2) } };
+  const account = typeof input[ACCOUNT_ARGUMENT] === 'string' ? { account: input[ACCOUNT_ARGUMENT] } : {};
+  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2), ...account } };
   const split = rest.indexOf('__');
-  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2) } } : {};
+  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2), ...account } } : {};
 }
+
+/** Mochi's `generate_image`, shown as the same image card a Codex image gets rather than an MCP row. */
+const IMAGE_CALL = `mcp__${MOCHI_SERVER}__${IMAGE_TOOL}`;
 
 const VERBS = { Bash: 'Run', Read: 'Read', Edit: 'Edit', MultiEdit: 'Edit', Write: 'Write', NotebookEdit: 'Edit', WebSearch: 'Search', WebFetch: 'Fetch' } as const;
 

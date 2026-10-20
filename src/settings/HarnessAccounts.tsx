@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Add, Edit, Refresh, Trash3 } from 'reicon-react';
+import { Plus, Edit, Refresh, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -73,7 +73,7 @@ function AccountRow({ account }: { account: Account }) {
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" disabled={!!removeBlock} onSelect={() => void removeAccount(account.id)} className="flex-wrap">
-                <Trash3 />
+                <Trash />
                 Remove
                 <span className="w-full pl-6 type-caption text-muted-foreground">{removeBlock ?? 'Its folder and the login in it stay on disk'}</span>
               </DropdownMenuItem>
@@ -95,7 +95,7 @@ function AddAccountRow({ provider }: { provider: Provider }) {
       <SettingsRow
         label={
           <button type="button" onClick={() => setName('')} className="flex items-center gap-1.5 text-foreground hover:underline hover:underline-offset-4">
-            <Add aria-hidden className="size-4" />
+            <Plus aria-hidden className="size-4" />
             Add account…
           </button>
         }

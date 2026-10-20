@@ -28,6 +28,8 @@ export interface Page {
   hostId: string | null;
   url: string;
   title: string;
+  /** The page's own icon, from main; null until it names one. */
+  favicon: string | null;
   isLoading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
@@ -44,6 +46,8 @@ export interface Page {
   devtools: BrowserDevtools;
   isPicking: boolean;
   hasTakenOver: boolean;
+  /** What the agent handed you the tab for (`browser_handoff`), while it waits on you; you have the tab meanwhile. */
+  handoff: string | null;
   reloads: number;
   isAutoReloading: boolean;
   /** A capture waiting in the annotation editor, as a PNG data URL. */
@@ -201,9 +205,9 @@ if (host.isDesktop)
     const key = byHostId.get(event.id);
     if (!key) return;
     if (event.type === 'state') {
-      const { url, title, isLoading, canGoBack, canGoForward, error } = event;
+      const { url, title, favicon, isLoading, canGoBack, canGoForward, error } = event;
       // The first load reports an empty URL until it commits.
-      updatePage(key, { ...(url && { url }), title, isLoading, canGoBack, canGoForward, error });
+      updatePage(key, { ...(url && { url }), title, favicon, isLoading, canGoBack, canGoForward, error });
     } else if (event.type === 'console') {
       const { level, message, source, line } = event;
       updatePage(key, { console: [...(pages.get(key)?.console ?? []), { level, message, source, line }].slice(-CONSOLE_LIMIT) });
@@ -250,6 +254,7 @@ function seed(key: string, url: string): Page {
     hostId: null,
     url,
     title: '',
+    favicon: null,
     isLoading: false,
     canGoBack: false,
     canGoForward: false,
@@ -266,6 +271,7 @@ function seed(key: string, url: string): Page {
     devtools: 'closed',
     isPicking: false,
     hasTakenOver: false,
+    handoff: null,
     reloads: 0,
     isAutoReloading: false,
     annotating: null,

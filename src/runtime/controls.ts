@@ -43,5 +43,5 @@ export function initialControls(provider: Provider, defaultModel: string): Threa
 
 /** Main swaps a model the account doesn't offer (or none) for the account's default, an effort the model doesn't take for its own, and drops a speed it doesn't list. */
 export function agentOptions(controls: ThreadControls, provider: Provider) {
-  return { model: controls.model || undefined, effort: controls.effort, ...(controls.speed && { speed: controls.speed }), permissionMode: permissionModeOf(provider, controls.access) };
+  return { model: controls.model || undefined, effort: controls.effort, ...(controls.speed && { speed: controls.speed }), permissionMode: permissionModeOf(provider, controls.access), ...(!getPrefs().goals && { isGoalsOff: true }) };
 }

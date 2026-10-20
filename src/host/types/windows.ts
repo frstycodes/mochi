@@ -25,11 +25,13 @@ export interface WindowsHost {
   onMessage(listener: (message: unknown) => void): () => void;
   isFullScreen(): Promise<boolean>;
   onFullScreenChange(listener: (isFullScreen: boolean) => void): () => void;
-  /** The page zoom (⌘+ / ⌘−). Asking also re-centres the traffic lights on the headers at that zoom. */
+  /** The page zoom (⌘+ / ⌘−). Asking also re-fits the native window buttons (traffic lights, Windows' captions) to the headers at that zoom. */
   zoomFactor(): Promise<number>;
+  /** Pops the native application menu (File, Edit, View, Window) at `x`, `y` in CSS px; Windows has no menu bar to show it. */
+  showAppMenu(x: number, y: number): Promise<void>;
   /** Back to 100%, like ⌘0. */
   resetZoom(): Promise<void>;
-  /** Settings' Light / Dark / System for native chrome (menus, the sidebar's material), which otherwise follows the OS. */
+  /** Settings' Light / Dark / System for native chrome (menus), which otherwise follows the OS. */
   setAppearance(appearance: Appearance): Promise<void>;
   /** Other apps' windows on every Space (macOS) or on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
   listApps(): Promise<{ access: ScreenAccess; windows: AppWindow[] }>;
@@ -45,6 +47,7 @@ export const windowsMethods = {
   isFullScreen: 'invoke',
   onFullScreenChange: 'event',
   zoomFactor: 'invoke',
+  showAppMenu: 'invoke',
   resetZoom: 'invoke',
   setAppearance: 'invoke',
   listApps: 'invoke',

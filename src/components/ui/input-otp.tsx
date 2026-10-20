@@ -3,7 +3,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { OTPInput, OTPInputContext } from "input-otp"
-import { Minus as MinusIcon } from 'reicon-react'
+import { Minus as MinusIcon } from '@/icons'
 
 function InputOTP({
   className,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, DocumentCode } from 'reicon-react';
+import { ChevronRight, FileCode } from '@/icons';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -49,7 +49,7 @@ function ChangesCard({ thread, turn, isReadOnly, className }: { thread: Thread; 
           onClick={() => setOpen((o) => !o)}
           className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2"
         />
-        <DocumentCode aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        <FileCode aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <span className={cn('min-w-0 flex-1 truncate font-medium', undo.isUndone ? 'text-muted-foreground' : 'text-foreground')}>{title}</span>
         {!undo.isUndone && !isReadOnly && (
           <span className="relative z-10 -my-1">

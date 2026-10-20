@@ -1,68 +1,163 @@
-import { useState } from 'react';
-import { ChevronRight, CloseCircle, Hierarchy2, MessageText, TickCircle, Warning } from 'reicon-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronRight, XCircle, Hierarchy2, MessageText, CheckBadge, WarningAlt } from '@/icons';
+import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { GitMergeIcon, GitPullRequestIcon, REF_CHIP_CLASS, REF_TONE_CLASS } from '@/icons/github';
 import { TerminalIcon } from '@/icons/panes';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { authorName, isMet, type Thread, type TurnReport } from '../model';
+import { authorName, isMet, type NextOption, type Thread, type TurnReport } from '../model';
 import { ProgressRing } from '../ui';
 import { RefChip } from '../chat/ChatLink';
-import type { RefStatus, RefTone } from '../chat/refs';
+import type { RefTone } from '../chat/refs';
 import { openTurn } from '../chat/turnChanges';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
-import { useThreadPrs, type ThreadPr } from '../git/useThreadPrs';
+import type { ThreadPr } from '../git/useThreadPrs';
+import { isMod } from '../keys';
 import { useHarness } from '../store';
 import { CallList, Expand } from '../WorkLog';
-import { nextStep, showsVerdictCard, type NextStep } from './report';
-import { useIdleVerdict, VerdictIcon } from './VerdictChip';
-import { turnReport, verdictHeading, verdictTiles, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
+import { continuePrompt, withUnseenGaps, type Move } from './moves';
+import { SubThreadLineage, SubThreadList } from './SubThreads';
+import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveSummary, useNextMove } from './NextMove';
+import { showsVerdictCard } from './report';
+import { bareStates, idleVerdict, turnReport, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
 
 /**
- * The end of a turn of work, read in seconds: Mochi's verdict on why the agent stopped, the evidence behind it, the gaps with one
- * action each, then the agent's own decisions and what's left. `onJump` scrolls the transcript to the agent's quoted words.
+ * The end of a turn, in the chat: Mochi's verdict, the agent's summary, Mochi's evidence and gaps, then the agent's question with
+ * its own answers as buttons, or Mochi's move when it wrote none. Answering it, or writing instead, keeps it in the chat as a
+ * record (`next-move-record`); ⌘↵ takes the first answer while the message box is empty. Read-only (a replay, another computer's thread) shows the
+ * question without answers: they would act on this computer's store. `onJump` scrolls to the agent's quoted words.
  */
-export function ReportCard({ thread, onJump }: { thread: Thread; onJump?: (quote: string) => void }) {
-  const prs = useThreadPrs(thread);
-  const verdict = useIdleVerdict(thread);
-  if (!verdict || !showsVerdictCard(thread)) return null;
-  const states = prs.map((p) => p.state);
-  const heading = verdictHeading(verdict, thread);
-  const report = turnReport(thread);
+export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isReadOnly?: boolean; onJump?: (quote: string) => void }) {
+  const next = useNextMove(thread);
+  const answers = useMoveAnswers(thread);
+  const { textInput } = usePromptInputController();
+  const isShown = !!next && showsVerdictCard(thread);
+  const choices = isShown && !isReadOnly ? choicesFor(thread, next, answers) : [];
+  const card = useMoveShortcut(choices.length > 0 && !textInput.value.trim(), () => choices[0].run());
+  if (!isShown) return null;
+  const { verdict, prs, tiles, question, report } = next;
   const changes = openTurn(thread.activity);
-  const hasNotes = !!report && report.decisions.length + report.left.length > 0;
-  const isAsked = verdict.kind === 'needs-you';
-  const hasBody = isAsked || verdict.gaps.length > 0 || !!changes || hasNotes;
   return (
-    <Card size="sm" role="group" aria-label="Verdict">
-      <CardHeader className="flex flex-col gap-1">
-        <CardTitle className="flex items-center gap-2">
-          <VerdictIcon kind={verdict.kind} className={cn('size-4 shrink-0', ICON_CLASS[verdict.tone])} />
-          <span className="truncate">{heading.title}</span>
-          {!!heading.detail && <span className="truncate type-meta font-normal text-muted-foreground">{heading.detail}</span>}
-        </CardTitle>
-        <Evidence thread={thread} tiles={verdictTiles(thread, states, verdict)} prs={prs} />
-      </CardHeader>
-      {hasBody && (
-        <CardContent className="flex flex-col gap-3">
-          {isAsked && <AskedQuestion text={verdict.reason} />}
-          {verdict.gaps.length > 0 && <GapList thread={thread} gaps={verdict.gaps} onJump={onJump} />}
-          {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
-          {hasNotes && <AgentNotes thread={thread} report={report} />}
-        </CardContent>
-      )}
-      <VerdictFooter thread={thread} verdict={verdict} prStates={states.map((s) => s.status)} />
-    </Card>
+    <NextMoveCard ref={card} data-next-move={thread.id}>
+      <NextMoveHeader thread={thread} verdict={verdict} />
+      <NextMoveContent>
+        <SubThreadLineage thread={thread} />
+        {!!report?.summary && <NextMoveSummary>{report.summary}</NextMoveSummary>}
+        <Evidence thread={thread} tiles={tiles} prs={prs} />
+        <SubThreadList thread={thread} />
+        {verdict.gaps.length > 0 && <GapList thread={thread} gaps={verdict.gaps} onJump={onJump} />}
+        {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
+        {verdict.kind === 'waiting' && <p className="type-meta text-muted-foreground">Mochi asks when one finishes or needs you.</p>}
+        {!!question && (
+          <NextMoveAsk question={question}>{choices.length > 0 && <NextMoveActions labels={choices.map((c) => c.label)} onPick={(i) => choices[i].run()} />}</NextMoveAsk>
+        )}
+      </NextMoveContent>
+    </NextMoveCard>
   );
 }
 
-const ICON_CLASS = { success: 'text-success', warning: 'text-warning', destructive: 'text-destructive', muted: 'text-muted-foreground' } satisfies Record<Verdict['tone'], string>;
+/** The card's buttons: the agent's own answers with Close gaps for what it couldn't have seen, else Mochi's move and one other answer. */
+function choicesFor(thread: Thread, next: NonNullable<ReturnType<typeof useNextMove>>, answers: ReturnType<typeof useMoveAnswers>) {
+  const { ask, move, question, verdict, report, prs, context } = next;
+  if (ask) {
+    const options = ask.options.map((o) => ({ label: o.label, run: () => answers.option(o, ask.question, report) }));
+    return withUnseenGaps(options, thread, verdict, report, (m) => ({ label: m.label, run: () => answers.move(m, verdict, ask.question, report, []) }));
+  }
+  if (!move || !question) return [];
+  const other = otherAnswer(thread, verdict, prs);
+  return [
+    { label: move.label, run: () => answers.move(move, verdict, question, report, context.subPrs ?? []) },
+    { label: other.label, run: () => answers.other(other, question, report) },
+  ];
+}
 
+interface OtherAnswer {
+  label: string;
+  isOpenAnyway?: boolean;
+}
+
+/** What each answer does. The record goes first so it sits above the message a move sends. */
+function useMoveAnswers(thread: Thread) {
+  const { state, dispatch } = useHarness();
+  const { textInput } = usePromptInputController();
+  const agent = authorName(thread.session?.provider ?? thread.providers[0]);
+  const send = (text: string, reason: string, threadId = thread.id) => dispatch({ type: 'send', threadId, text, reason });
+  const record = (question: string, report: TurnReport | undefined, answer: string) =>
+    dispatch({ type: 'next-move-record', threadId: thread.id, record: { ...(report?.summary && { summary: report.summary }), question, answer } });
+  const move = (m: Move, verdict: Verdict, question: string, report: TurnReport | undefined, subPrs: number[]) => {
+    record(question, report, m.label);
+    const hasPlan = thread.steps.some((s) => s.status !== 'done' && s.status !== 'dropped');
+    // A move on a sub-thread (from its parent's card) acts there: its gaps go to its own agent, its result comes back here.
+    const target = (m.threadId && state.threads.find((t) => t.id === m.threadId)) || thread;
+    const gaps = target === thread ? verdict.gaps : (idleVerdict(target, bareStates(target))?.gaps ?? []);
+    ({
+      confirm: () => dispatch({ type: 'idle-update', threadId: thread.id, patch: { isConfirmed: true } }),
+      'close-gaps': () => send(closeGapsPrompt(gaps.filter((g) => !g.isAccepted)), 'Close gaps from the next move', target.id),
+      'hand-back': () => dispatch({ type: 'subthread-handback', threadId: target.id, evidence: handBackEvidence(target) }),
+      'merge-subs': () => send(`Merge these sub-thread pull requests into this branch with gh pr merge, then pull them in: ${subPrs.map((n) => `#${n}`).join(', ')}.`, 'Merge sub-thread PRs from the next move'),
+      continue: () => send(continuePrompt(report, hasPlan), `Continue with ${agent} from the next move`),
+      commit: () => send('Commit these changes on this branch with a Conventional Commits message.', 'Commit from the next move'),
+      'open-pr': () => send('Open the pull request for this work with open_pr.', 'Open pull request from the next move'),
+      settle: () => dispatch({ type: 'settle', threadId: thread.id }),
+    })[m.kind]();
+  };
+  const option = (o: NextOption, question: string, report: TurnReport | undefined) => {
+    record(question, report, o.label);
+    if (o.isDraft) return textInput.setInput(o.reply);
+    send(o.reply, `${o.label} from the next move`);
+  };
+  const other = (answer: OtherAnswer, question: string, report: TurnReport | undefined) => {
+    record(question, report, answer.label);
+    if (!answer.isOpenAnyway) return;
+    dispatch({ type: 'idle-update', threadId: thread.id, patch: { canOpenPr: true } });
+    send('Open the pull request with open_pr. I chose Open anyway: the gaps go in its description.', 'Open anyway from the next move');
+  };
+  return { option, move, other };
+}
+
+/** What a sub-thread hands back: its own summary of the work, and the PR it opened into the parent's branch. */
+function handBackEvidence(sub: Thread) {
+  const prs = sub.prs.filter((p) => p.state === 'open' || p.state === 'draft').map((p) => `PR #${p.number}`);
+  return [turnReport(sub)?.summary ?? `${sub.title} is finished`, ...prs].join(' · ');
+}
+
+/** Open anyway past critical gaps with no PR yet; else Not yet. */
+function otherAnswer(thread: Thread, verdict: Verdict, prs: ThreadPr[]): OtherAnswer {
+  const hasPr = prs.some((p) => p.state.status === 'open' || p.state.status === 'draft' || p.state.status === 'merged');
+  const isBlocked = verdict.gaps.some((g) => !g.isAccepted && g.severity === 'critical') && !!thread.repo && !hasPr;
+  if (isBlocked) return { label: 'Open anyway', isOpenAnyway: true };
+  return { label: 'Not yet' };
+}
+
+/** ⌘↵ (Ctrl+Enter elsewhere) takes the move while the card shows and the message box is empty. */
+function useMoveShortcut(isOn: boolean, take: () => void) {
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isOn) return;
+    // Capture, so it runs before the message box's own Enter (which would submit the empty box).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || !isMod(e) || !isFromChat(card.current, e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      take();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+  return card;
+}
+
+/** From this card's own chat (a split shows several), and from its message box or no field at all: ⌘↵ in a review comment sends that. */
+function isFromChat(card: HTMLElement | null, target: EventTarget | null) {
+  const chat = card?.closest('[data-chat]');
+  if (!chat || !(target instanceof Element) || !chat.contains(target)) return false;
+  return !target.closest('input, textarea, [contenteditable="true"]') || !!target.closest('[data-composer]');
+}
 
 /** What Mochi read, one fact each: an icon in its status colour and plain text; a fact asking for you becomes a toned badge, and a PR is its own chip. */
-function Evidence({ thread, tiles, prs }: { thread: Thread; tiles: Tile[]; prs: ThreadPr[] }) {
+export function Evidence({ thread, tiles, prs }: { thread: Thread; tiles: Tile[]; prs: ThreadPr[] }) {
   const chips = prs.filter((p) => !!p.githubRef);
+  if (!tiles.length) return null;
   return (
     <ul aria-label="Evidence" className="flex flex-wrap items-center gap-x-3.5 gap-y-1 type-meta text-subtle-foreground">
       {tiles.map((t) =>
@@ -86,14 +181,14 @@ function Evidence({ thread, tiles, prs }: { thread: Thread; tiles: Tile[]; prs: 
 
 function FactIcon({ thread, tile }: { thread: Thread; tile: Tile }) {
   const criteria = thread.criteria ?? [];
-  if (tile.id === 'criteria' && criteria.length > 0) return <ProgressRing met={criteria.filter(isMet).length} total={criteria.length} slot={thread.line} size={14} />;
+  if (tile.id === 'criteria' && criteria.length > 0) return <ProgressRing met={criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length} total={criteria.length} slot={thread.line} size={14} />;
   const className = cn('size-3.5 shrink-0', REF_TONE_CLASS[factTone(tile.bars)]);
   if (tile.id === 'pr') return tile.bars.includes('merged') ? <GitMergeIcon aria-hidden className={className} /> : <GitPullRequestIcon aria-hidden className={className} />;
   const Icon = FACT_ICONS[tile.id];
   return <Icon aria-hidden className={className} />;
 }
 
-const FACT_ICONS = { criteria: TickCircle, checks: TerminalIcon, git: Hierarchy2, agent: MessageText } satisfies Record<Exclude<Tile['id'], 'pr'>, unknown>;
+const FACT_ICONS = { criteria: CheckBadge, checks: TerminalIcon, git: Hierarchy2, agent: MessageText } satisfies Record<Exclude<Tile['id'], 'pr'>, unknown>;
 
 function factTone(bars: TileTone[]): RefTone {
   if (bars.includes('destructive')) return 'destructive';
@@ -104,15 +199,10 @@ function factTone(bars: TileTone[]): RefTone {
 }
 
 
-/** A question the agent asked in its reply, lifted out so it isn't lost in the prose; you answer in the composer. */
-function AskedQuestion({ text }: { text: string }) {
-  return <p className="type-body text-pretty">{text}</p>;
-}
-
 const SHOWN_GAPS = 5;
 
 /** Critical first (the verdict lists them so); past five, the rest wait behind Show more. Rows match the work log's call list. */
-function GapList({ thread, gaps, onJump }: { thread: Thread; gaps: Gap[]; onJump?: (quote: string) => void }) {
+export function GapList({ thread, gaps, onJump }: { thread: Thread; gaps: Gap[]; onJump?: (quote: string) => void }) {
   const [isAll, setIsAll] = useState(false);
   const shown = isAll ? gaps : gaps.slice(0, SHOWN_GAPS);
   const hidden = gaps.length - shown.length;
@@ -162,9 +252,9 @@ function GapRow({ thread, gap, onJump }: { thread: Thread; gap: Gap; onJump?: (q
 }
 
 function GapIcon({ gap }: { gap: Gap }) {
-  if (gap.isAccepted) return <TickCircle aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
-  if (gap.severity === 'critical') return <CloseCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />;
-  return <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />;
+  if (gap.isAccepted) return <CheckBadge aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
+  if (gap.severity === 'critical') return <XCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />;
+  return <WarningAlt aria-hidden className="size-3.5 shrink-0 text-warning" />;
 }
 
 function GapQuote({ quote, onJump }: { quote: string; onJump?: (quote: string) => void }) {
@@ -194,83 +284,8 @@ function AcceptGap({ thread, gap }: { thread: Thread; gap: Gap }) {
   );
 }
 
-/** The agent's own decisions and what it left, folded: the verdict above is Mochi's reading, this is the agent's word. */
-function AgentNotes({ thread, report }: { thread: Thread; report: TurnReport }) {
-  const agent = authorName(thread.session?.provider ?? thread.providers[0]);
-  return (
-    <Collapsible>
-      <CollapsibleTrigger className="group/notes flex items-center gap-1 type-meta text-muted-foreground hover:text-foreground">
-        {`${agent}'s notes`}
-        <ChevronRight aria-hidden className="size-3 transition-transform group-data-[state=open]/notes:rotate-90" />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="flex flex-col gap-2 pt-2">
-        <ReportList label="Decided" items={report.decisions} />
-        <ReportList label="Left" items={report.left} />
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-/** One primary per state: hand the gaps back, continue the plan, or the next step of a met goal. A question or a limit waits on you or the clock. */
-function VerdictFooter({ thread, verdict, prStates }: { thread: Thread; verdict: Verdict; prStates: RefStatus[] }) {
-  const { dispatch } = useHarness();
-  const agent = authorName(thread.session?.provider ?? thread.providers[0]);
-  const open = verdict.gaps.filter((g) => !g.isAccepted);
-  const send = (text: string, reason: string) => dispatch({ type: 'send', threadId: thread.id, text, reason });
-  const isBlocked = open.some((g) => g.severity === 'critical') && !!thread.repo && !prStates.some((s) => s === 'open' || s === 'draft' || s === 'merged');
-  const openAnyway = () => {
-    dispatch({ type: 'idle-update', threadId: thread.id, patch: { canOpenPr: true } });
-    send('Open the pull request with open_pr. I chose Open anyway: the gaps go in its description.', 'Open anyway from the verdict');
-  };
-  if (verdict.kind === 'gaps')
-    return (
-      <CardFooter className="gap-2">
-        {isBlocked && (
-          <Button size="sm" variant="outline" onClick={openAnyway}>
-            Open anyway
-          </Button>
-        )}
-        <Button size="sm" className="ml-auto" onClick={() => send(closeGapsPrompt(open), 'Close gaps from the verdict')}>
-          {`Ask ${agent} to close ${open.length} ${open.length === 1 ? 'gap' : 'gaps'}`}
-        </Button>
-      </CardFooter>
-    );
-  if (verdict.kind === 'stalled' && verdict.chip !== 'Limit')
-    return (
-      <CardFooter className="justify-end">
-        <Button size="sm" onClick={() => send(verdict.chip === 'Stopped' ? 'Continue the plan from where you stopped.' : 'Continue where you left off.', 'Continue from the verdict')}>
-          {verdict.chip === 'Stopped' ? 'Continue the plan' : `Continue with ${agent}`}
-        </Button>
-      </CardFooter>
-    );
-  if (verdict.kind !== 'done' || !thread.repo) return null;
-  const next = nextStep(prStates);
-  if (next === 'review') return null;
-  return (
-    <CardFooter className="justify-end">
-      <NextStepButton thread={thread} step={next} />
-    </CardFooter>
-  );
-}
-
 function closeGapsPrompt(gaps: Gap[]) {
   return `Mochi found these gaps when you went idle. Close each one, or say why it can't be:\n${gaps.map((g) => `- ${g.severity === 'critical' ? 'Critical' : 'Unverified'}: ${g.text}${g.quote ? ` (you wrote: "${g.quote}")` : ''}`).join('\n')}`;
-}
-
-/** The one thing a met goal waits on that you can do from here; a PR under review waits on GitHub, so its chip is enough. */
-function NextStepButton({ thread, step }: { thread: Thread; step: Exclude<NextStep, 'review'> }) {
-  const { dispatch } = useHarness();
-  if (step === 'settle')
-    return (
-      <Button size="sm" onClick={() => dispatch({ type: 'settle', threadId: thread.id })}>
-        Settle thread
-      </Button>
-    );
-  return (
-    <Button size="sm" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: 'Open the pull request for this work with open_pr.', reason: 'Open pull request from the report' })}>
-      Open pull request
-    </Button>
-  );
 }
 
 /** The one line in a report that asks for anything. */
