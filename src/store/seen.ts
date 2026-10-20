@@ -4,8 +4,10 @@ import type { State } from './index.tsx';
 /** Opened, here or on another device: the thread's activity so far and its open asks; or Queue cards looked at. Owned by the thread's computer. */
 export type SeenAction = { type: 'seen'; threadId?: string; queueIds?: string[] };
 
-/** Something landed in the thread since you last had it open. */
-export const isUnread = (thread: Thread) => thread.activity.length > (thread.seenActivity ?? 0);
+const hasUnseen = (thread: Thread) => thread.activity.length > (thread.seenActivity ?? 0);
+
+/** Something landed in the thread since you last had it open, counted once its turn ends, not on every message mid-turn. */
+export const isUnread = (thread: Thread) => !thread.live?.isWorking && hasUnseen(thread);
 
 export const isQueueUnread = (item: QueueItem) => !item.isSeen;
 
@@ -13,7 +15,8 @@ export const isQueueUnread = (item: QueueItem) => !item.isSeen;
 export function markSeen(state: State, { threadId, queueIds = [] }: SeenAction): State {
   const isMarked = (q: QueueItem) => !q.isSeen && (q.threadId === threadId || queueIds.includes(q.id));
   const thread = state.threads.find((t) => t.id === threadId);
-  const isThreadMarked = !!thread && isUnread(thread);
+  // Unseen, not unread: opening a working thread still catches up on what it said so far.
+  const isThreadMarked = !!thread && hasUnseen(thread);
   const hasQueue = state.queue.some(isMarked);
   if (!isThreadMarked && !hasQueue) return state;
   return {
