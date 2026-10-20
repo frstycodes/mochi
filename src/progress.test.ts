@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Step, Thread } from './model.ts';
 import { boardColumns, similarity, statusAt, timeAgo, goalProgress, progressLabel } from './progress.ts';
+import { setPrefs } from './settings/prefs.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 function step(id: string, rest: Partial<Step> = {}): Step {
   return { id, title: id, status: 'ready', addedAt: 0, addedBy: 'you', ...rest };

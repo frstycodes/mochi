@@ -151,7 +151,7 @@ export async function runTool(call: AgentToolCall, env: ToolEnv, deadline = Date
   const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);
   try {
     if (isChosen && policy === 'off') throw new Error(`The user turned ${name} off for agents in Settings › Mochi access. Don't call it again unless they turn it back on.`);
-    if (isGoalTool(name) && !env.prefs.get().goals) throw new Error('The user turned goals off in Settings › Goals and checks. Carry on without a goal and don\'t call goal tools again.');
+    if (isGoalTool(name) && !env.prefs.get().goals) throw new Error('Mochi has no goals any more. Carry on without one and don\'t call goal tools again.');
     if (!isChosen) gate(ctx, name, LEVEL[tier]);
     const approval = spec.ask?.(ctx) ?? (policy === 'ask' ? approvalFor(ctx, name) : undefined);
     // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.

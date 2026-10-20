@@ -27,7 +27,7 @@ export interface AgentStartOptions {
   forkAt?: string;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
-  /** Settings › Goals and checks › Goals is off: the session gets no goal instructions, tools or nudge. Read at session start. */
+  /** Goals are off (always, now they're retired): the session gets no goal instructions, tools or nudge. Read at session start. */
   isGoalsOff?: boolean;
   /** The profile's turned-off Claude Code or Codex items for this harness (`NativeItem.id`); main leaves them out of this session only. Read at session start. */
   nativeOff?: string[];

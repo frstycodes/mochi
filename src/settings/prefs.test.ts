@@ -72,3 +72,7 @@ test('removed thread model restrictions are discarded from saved preferences', (
   for (const threadModels of ['cheaper', 'default', 'any'])
     assert.equal(Object.hasOwn(parsePrefs(JSON.stringify({ threadModels })), 'threadModels'), false);
 });
+
+test('goals stay off: a saved goals: true from before they were retired is ignored', () => {
+  assert.equal(parsePrefs(JSON.stringify({ goals: true })).goals, false);
+});

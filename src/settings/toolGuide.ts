@@ -1,7 +1,7 @@
 import type { ToolName } from '../runtime/toolTable.ts';
 
 /** Settings › Mochi access shows tools in these groups, in this order. */
-export const TOOL_GROUPS = ['Threads', 'Goals and progress', 'Delegated tasks', 'Reading the browser', 'Using the browser', 'Your screen', 'Reaching you', 'Settings and profiles'] as const;
+export const TOOL_GROUPS = ['Threads', 'Progress', 'Delegated tasks', 'Reading the browser', 'Using the browser', 'Your screen', 'Reaching you', 'Settings and profiles'] as const;
 
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 
@@ -23,15 +23,15 @@ export const TOOL_GUIDE = {
   send_to_thread: { group: 'Threads', label: 'Message other threads', description: "Send a message to another thread's agent, as if you typed it in that thread." },
   delete_thread: { group: 'Threads', label: 'Delete threads', description: 'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.' },
 
-  get_goal: { group: 'Goals and progress', label: 'Read goals', description: "See a thread's goal and what done means, with each criterion's claim and check." },
-  open_pr: { group: 'Goals and progress', label: 'Open pull requests', description: 'Push its branch and open the pull request, with the description written from the goal and its report.' },
-  propose_goal: { group: 'Goals and progress', label: 'Propose goals', description: 'Propose a thread’s goal and its criteria after a first look at the code, and again when what done means changes. How it lands is under Goals and checks.' },
-  claim_criterion: { group: 'Goals and progress', label: 'Claim criteria', description: 'Say a criterion is met, with evidence you can check. Mochi still checks it itself.' },
-  report_turn: { group: 'Goals and progress', label: 'Report turns', description: 'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.' },
-  get_report: { group: 'Goals and progress', label: 'Read reports', description: "Read another thread's latest report, to coordinate without reading its transcript." },
-  settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Close out a goal with a reason and settle its thread. Never its own thread." },
+  get_goal: { group: 'Progress', label: 'Read goals', description: "See a thread's goal and what done means, with each criterion's claim and check." },
+  open_pr: { group: 'Progress', label: 'Open pull requests', description: 'Push its branch and open the pull request, with the description written from its report.' },
+  propose_goal: { group: 'Progress', label: 'Propose goals', description: 'Propose a thread’s goal and its criteria after a first look at the code, and again when what done means changes. How it lands is under Goals and checks.' },
+  claim_criterion: { group: 'Progress', label: 'Claim criteria', description: 'Say a criterion is met, with evidence you can check. Mochi still checks it itself.' },
+  report_turn: { group: 'Progress', label: 'Report turns', description: 'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.' },
+  get_report: { group: 'Progress', label: 'Read reports', description: "Read another thread's latest report, to coordinate without reading its transcript." },
+  settle_goal: { group: 'Progress', label: 'Close goals', description: "Close out a goal with a reason and settle its thread. Never its own thread." },
 
-  update_plan: { group: 'Goals and progress', label: 'Keep a plan', description: 'Show its plan under its latest message and tick steps off as it works.' },
+  update_plan: { group: 'Progress', label: 'Keep a plan', description: 'Show its plan under its latest message and tick steps off as it works.' },
   delegate_task: { group: 'Delegated tasks', label: 'Delegate tasks', description: 'Hand a task to the other provider (or a model its own subagents lack), in the same worktree or a fresh one, on this profile’s account. Its report comes back to the agent when it finishes.' },
 
   browser_tabs: { group: 'Reading the browser', label: 'List browser tabs', description: "See the thread's browser tabs: address, title and which is active." },

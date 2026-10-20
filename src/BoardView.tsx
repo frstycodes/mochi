@@ -3,6 +3,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Step, Thread } from './model';
 import { isWorking } from './agentPhase';
 import { boardColumns, goalProgress, progressLabel } from './progress';
+import { hasGoal } from './drift';
 import { useHarness, useSpaceThreads } from './store';
 import { ProgressRing, ProviderMarks, ThreadStatusIcon, lineColor, stepLabel } from './ui';
 
@@ -94,7 +95,7 @@ export function BoardView() {
 }
 
 function GoalStatus({ thread }: { thread: Thread }) {
-  if (!thread.goal) return null;
+  if (!hasGoal(thread)) return null;
   const progress = goalProgress(thread);
   return (
     <span className="flex min-w-0 items-center gap-1.5 tabular">

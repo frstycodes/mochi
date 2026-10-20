@@ -3,6 +3,10 @@ import { test } from 'node:test';
 import { bareState, type RefState } from '../chat/refs.ts';
 import type { Criterion, Step, Thread } from '../model.ts';
 import { failureLine, idleVerdict, verdictTiles } from './verdict.ts';
+import { setPrefs } from '../settings/prefs.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 const met = (id: string, command?: string): Criterion => ({ id, text: id, command, check: { status: 'passed', at: 1 } });
 const failed = (id: string, command: string): Criterion => ({ id, text: id, command, check: { status: 'failed', at: 1, output: '5 failed' } });

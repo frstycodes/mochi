@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { QueueItem, Step, Thread } from '../model.ts';
 import { diffNotices, groupBursts, isAddressed, isQuiet, type Notice } from './model.ts';
+import { setPrefs } from '../settings/prefs.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 const step = (rest: Partial<Step> = {}): Step => ({ id: 's1', title: 'Wire gateway', status: 'running', addedAt: 0, addedBy: 'you', ...rest });
 const thread = (rest: Partial<Thread> = {}): Thread =>

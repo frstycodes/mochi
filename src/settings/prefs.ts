@@ -36,7 +36,7 @@ export interface Prefs {
   headerPins: PaneTabKind[];
   /** Sidebar destinations shown, by `SIDEBAR_ITEMS` id (Edit sidebar); the rest sit under More. */
   sidebarItems: string[];
-  /** Off turns goals off everywhere: agents get no goal instructions, tools or nudge; no goal cards, checks, verdicts or drift guard. Stored goals stay for when it's back on. */
+  /** Off turns goals off everywhere: agents get no goal instructions, tools or nudge; no goal cards, checks, verdicts or drift guard. Always off: goals are retired, their code kept for now. */
   goals: boolean;
   /** Off sends every message straight through: no local score, no classifier call. */
   driftGuard: boolean;
@@ -96,7 +96,7 @@ export const DEFAULT_PREFS: Prefs = {
   darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
-  goals: true,
+  goals: false,
   idleChecks: 'edited',
   proposedGoals: 'ask',
   prGaps: 'block',
@@ -194,6 +194,8 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
   if (!isStringRecord(saved.keybindings)) delete saved.keybindings;
   if (!isStringRecord(saved.toolPolicies)) delete saved.toolPolicies;
+  // GAP: goals are retired (2026-10-20) and have no setting; a saved `true` from before must not bring them back.
+  delete saved.goals;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];

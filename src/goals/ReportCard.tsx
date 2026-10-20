@@ -39,7 +39,7 @@ export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isR
   const changes = openTurn(thread.activity);
   return (
     <NextMoveCard ref={card} data-next-move={thread.id}>
-      <NextMoveHeader thread={thread} verdict={verdict} />
+      {verdict.kind !== 'idle' && <NextMoveHeader thread={thread} verdict={verdict} />}
       <NextMoveContent>
         <SubThreadLineage thread={thread} />
         {!!report?.summary && <NextMoveSummary>{report.summary}</NextMoveSummary>}

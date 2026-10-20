@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { goalProgress, progressLabel } from './progress';
+import { hasGoal } from './drift';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -262,7 +263,7 @@ function ThreadPeek({ thread }: { thread: Thread }) {
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
         <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={18} isWorking={isWorking(thread)} />
-        <span className="tabular font-medium text-foreground">{progressLabel(progress)}</span>
+        {hasGoal(thread) && <span className="tabular font-medium text-foreground">{progressLabel(progress)}</span>}
         <span className="truncate text-muted-foreground">{running ? running.title : 'Nothing running'}</span>
       </div>
       {last && <div className="line-clamp-2 text-xs text-subtle-foreground">{last.text}</div>}
