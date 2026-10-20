@@ -602,7 +602,7 @@ const AGENT_SPECS = {
       if (args.items && !args.scope) throw new Error('Pass "scope" with "items": "first_task", "continuation" or "new_task"');
       if (args.scope === 'new_task') return offerNewThread(caller);
       const items = args.items ? args.items.map((i) => ({ title: i.title.trim(), status: PLAN_STATUS[i.status] })) : advanced(caller.steps);
-      dispatch({ type: 'agent', event: { threadId: caller.id, type: 'plan', items }, ms: Date.now() });
+      dispatch({ type: 'agent', event: { threadId: caller.id, type: 'plan', items, ...(args.scope === 'first_task' && { isFresh: true }) }, ms: Date.now() });
       return { result: `Plan shown (${items.length} steps).` };
     },
   },

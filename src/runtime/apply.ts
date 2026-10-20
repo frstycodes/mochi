@@ -57,7 +57,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       state = recordCreatedPr(state, thread, event);
       return event.files?.length && event.patch ? noteCollisions(state, thread.id) : state;
     case 'plan':
-      return applyPlan(state, thread, event.items);
+      return applyPlan(state, thread, event.items, event.isFresh);
     case 'subagent':
       return applySubagent(state, thread, event, who);
     case 'task':
@@ -174,14 +174,16 @@ export function undelivered({ title, decision }: Resolution, error: unknown): Om
 const MATCH = 0.6;
 
 /**
- * The agent's to-do list, mirrored: each item keeps its step (and when it started) by title, a step it no longer lists is
- * dropped, and a new item lands after the one it follows.
+ * The agent's to-do list, mirrored the way Claude Code shows its todos: `items` is the whole plan, shown as sent (order, titles,
+ * statuses). An item keeps its step (and when it started) by title or a close one; a step it no longer lists is dropped, done
+ * or not. A fresh plan matches nothing, so the previous plan's steps all drop.
  */
-function applyPlan(state: State, thread: Thread, items: AgentPlanItem[]): State {
+function applyPlan(state: State, thread: Thread, items: AgentPlanItem[], isFresh = false): State {
   const now = state.now;
   const provider = actor(thread);
   const claimed = new Set<string>();
   const matches = items.map((item) => {
+    if (isFresh) return undefined;
     const open = thread.steps.filter((s) => s.status !== 'dropped' && !claimed.has(s.id));
     const step = open.find((s) => s.title === item.title) ?? bestMatch(open, item.title);
     if (step) claimed.add(step.id);
@@ -191,28 +193,35 @@ function applyPlan(state: State, thread: Thread, items: AgentPlanItem[]): State 
   let threads = state.threads;
   items.forEach((item, i) => {
     const step = matches[i];
-    if (!step || item.status === 'pending') return;
+    if (!step) return;
+    if (step.title !== item.title) threads = mapThread(threads, thread.id, (t) => mapStep(t, step.id, (s) => ({ ...s, title: item.title })));
     if (item.status === 'done') {
       if (step.status !== 'done') threads = completeStep(threads, thread.id, step.id, now);
       return;
     }
-    if (step.status !== 'ready' && step.status !== 'running') return;
+    // A blocked step waits on you; the harness, not the plan, unblocks it.
+    if (step.status === 'blocked') return;
+    if (item.status === 'pending') {
+      threads = mapThread(threads, thread.id, (t) => mapStep(t, step.id, (s) => ({ ...s, status: 'ready', doneAt: undefined, doneMs: undefined })));
+      return;
+    }
     threads = mapThread(threads, thread.id, (t) => ({
-      ...mapStep(t, step.id, (s) => ({ ...s, status: 'running', startedAt: s.startedAt ?? now })),
+      ...mapStep(t, step.id, (s) => ({ ...s, status: 'running', startedAt: s.startedAt ?? now, doneAt: undefined, doneMs: undefined })),
       status: t.status === 'needs-you' ? t.status : 'running',
     }));
   });
 
-  const dropped = thread.steps.filter((s) => !claimed.has(s.id) && s.status !== 'done' && s.status !== 'dropped');
+  const dropped = thread.steps.filter((s) => !claimed.has(s.id) && s.status !== 'dropped');
   for (const step of dropped) {
-    threads = mapThread(threads, thread.id, (t) =>
-      log(mapStep(t, step.id, (s) => ({ ...s, status: 'dropped', droppedAt: now, note: `Dropped by ${NAMES[provider]}` })), { at: now, who: 'harness', kind: 'event', text: `${NAMES[provider]} dropped "${step.title}"` }),
-    );
+    const drop = (t: Thread) => mapStep(t, step.id, (s) => ({ ...s, status: 'dropped', droppedAt: now, note: isFresh ? 'Earlier plan' : `Dropped by ${NAMES[provider]}` }));
+    threads = mapThread(threads, thread.id, (t) => (isFresh ? drop(t) : log(drop(t), { at: now, who: 'harness', kind: 'event', text: `${NAMES[provider]} dropped "${step.title}"` })));
   }
 
-  const added = items.flatMap((item, i) => (matches[i] ? [] : [{ item, after: matches.slice(0, i).findLast(Boolean) }]));
-  const next = { ...state, threads };
-  return added.length ? addSteps(next, thread.id, provider, added) : next;
+  const added = items.filter((_, i) => !matches[i]);
+  if (added.length) threads = addSteps(threads, thread.id, provider, added, now);
+  let k = thread.steps.length;
+  const order = matches.map((m) => m?.id ?? `${thread.id}-s${k++}`);
+  return { ...state, threads: mapThread(threads, thread.id, (t) => ({ ...t, steps: inPlanOrder(t.steps, order) })) };
 }
 
 function bestMatch(steps: Step[], title: string) {
@@ -227,29 +236,30 @@ function bestMatch(steps: Step[], title: string) {
   return best;
 }
 
-/** Items the agent planned that the mirror doesn't have yet, logged as plan changes. */
-function addSteps(state: State, threadId: string, provider: Provider, added: { item: AgentPlanItem; after?: Step }[]): State {
-  const now = state.now;
-  const thread = state.threads.find((t) => t.id === threadId)!;
-  let steps = thread.steps;
-  const created: Step[] = [];
-  added.forEach(({ item, after }, k) => {
-    const step: Step = {
-      id: `${thread.id}-s${steps.length}`,
-      title: item.title,
-      status: item.status === 'pending' ? 'ready' : item.status,
-      addedAt: now,
-      addedBy: provider,
-      ...(item.status !== 'pending' && { startedAt: now }),
-      ...(item.status === 'done' && { doneAt: now }),
-    };
-    const anchor = k > 0 && added[k - 1].after === after ? created.at(-1) : after;
-    const at = anchor ? steps.findIndex((s) => s.id === anchor.id) + 1 : 0;
-    steps = [...steps.slice(0, at), step, ...steps.slice(at)];
-    created.push(step);
+/** Items the agent planned that the mirror doesn't have yet, appended and logged as plan changes. */
+function addSteps(threads: Thread[], threadId: string, provider: Provider, added: AgentPlanItem[], now: number): Thread[] {
+  return mapThread(threads, threadId, (t) => {
+    const created = added.map(
+      (item, k): Step => ({
+        id: `${t.id}-s${t.steps.length + k}`,
+        title: item.title,
+        status: item.status === 'pending' ? 'ready' : item.status,
+        addedAt: now,
+        addedBy: provider,
+        ...(item.status !== 'pending' && { startedAt: now }),
+        ...(item.status === 'done' && { doneAt: now }),
+      }),
+    );
+    const label = created.length === 1 ? `${NAMES[provider]} added "${created[0].title}"` : `${NAMES[provider]} found ${created.length} more steps`;
+    return log({ ...t, steps: [...t.steps, ...created] }, { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` });
   });
-  const label = created.length === 1 ? `${NAMES[provider]} added "${created[0].title}"` : `${NAMES[provider]} found ${created.length} more steps`;
-  return { ...state, threads: mapThread(state.threads, threadId, (t) => log({ ...t, steps }, { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` })) };
+}
+
+/** The plan's steps in the order the agent listed them, then the dropped ones as they were. */
+function inPlanOrder(steps: Step[], order: string[]): Step[] {
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const planned = new Set(order);
+  return [...order.map((id) => byId.get(id)!), ...steps.filter((s) => !planned.has(s.id))];
 }
 
 function waitOnYou(state: State, thread: Thread, item: Omit<QueueItem, 'threadId' | 'blocks' | 'createdAt'>, note: string): State {
