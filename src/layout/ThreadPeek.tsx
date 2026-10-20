@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
-import { PANE_TABS } from '../pane/tabs';
+// Not PANE_TABS: the chat's sub-thread rows use this peek, and pane/tabs imports the chat, so going through it is a cycle.
+import { BrowserTab } from '../pane/BrowserTab';
 import { useHarness } from '../store';
 import { PreviewContext } from './SplitContext';
 import { ProviderMark, ThreadStatusIcon } from '../ui';
@@ -22,7 +23,7 @@ const NESTED_PREVIEW = '[data-nested-preview]';
 const NESTED_PREVIEW_ACTIVE = `${NESTED_PREVIEW}:hover, ${NESTED_PREVIEW}:focus-within`;
 
 /** Hover a thread in the sidebar: its transcript tail and preview without switching to it, plus the watch toggle; pinned ones show their ⌘ digit. */
-export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread: Thread; pinNumber?: number; isDisabled: boolean; children: ReactNode }) {
+export function ThreadPeek({ thread, pinNumber, isDisabled, side = 'right', children }: { thread: Thread; pinNumber?: number; isDisabled: boolean; side?: 'right' | 'top'; children: ReactNode }) {
   const { state, dispatch } = useHarness();
   const isWatched = state.watched.includes(thread.id);
   const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
@@ -35,7 +36,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
       <HoverCardTrigger asChild onPointerOver={(e) => e.target instanceof Element && e.target.closest(NESTED_PREVIEW) && setOpen(false)}>
         {children}
       </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" sideOffset={12} className="flex w-80 flex-col gap-2.5 p-3">
+      <HoverCardContent side={side} align="start" sideOffset={side === 'right' ? 12 : 4} className="flex w-80 flex-col gap-2.5 p-3">
         <div className="flex items-center gap-2">
           <ThreadStatusIcon status={thread.status} />
           <span className="min-w-0 flex-1 truncate type-title">{thread.title}</span>
@@ -70,11 +71,10 @@ function PreviewThumb({ thread }: { thread: Thread }) {
   const pane = state.panes.find((p) => p.threadId === thread.id);
   const tab = pane?.tabs.find((t) => t.kind === 'browser');
   if (!pane || !tab) return null;
-  const Content = PANE_TABS.browser.component;
   return (
     <div aria-hidden inert className="pointer-events-none -mx-3 h-40 overflow-hidden bg-sidebar">
       <div className="origin-top-left" style={{ width: `${100 / THUMB_SCALE}%`, height: `${100 / THUMB_SCALE}%`, scale: THUMB_SCALE }}>
-        <Content thread={thread} pane={pane} tab={tab} />
+        <BrowserTab thread={thread} pane={pane} tab={tab} />
       </div>
     </div>
   );

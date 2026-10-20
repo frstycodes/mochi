@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
 import { goalProgress } from '../progress';
 import { isWorking } from '../agentPhase';
-import { threadDetail } from '../Sidebar';
+import { threadDetail } from '../threadRow';
 import { useHarness, type State } from '../store';
 
 /** What an overview card shows: plain data, so cards never mount a thread's live React tree. */
