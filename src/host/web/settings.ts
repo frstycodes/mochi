@@ -64,7 +64,7 @@ const DEMO_CONFIG: ProfileConfig = {
       { name: 'ponytail:ponytail', description: 'Forces the simplest solution that actually works', isSkill: true },
       { name: 'ponytail:ponytail-review', description: 'Review the diff for over-engineering', isSkill: true },
     ],
-    plugins: ['figma', 'ponytail'],
+    plugins: ['figma@claude-plugins-official', 'ponytail@ponytail'],
     projectInstructions: null,
   },
   codex: {

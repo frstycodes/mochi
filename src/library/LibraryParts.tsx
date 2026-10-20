@@ -109,14 +109,19 @@ function entryNotes(entry: LibraryEntry, entries: LibraryEntry[]) {
 
 export const LIST = new Intl.ListFormat('en', { type: 'conjunction' });
 
-/** One item with its identity: icon tile, name, what it is, and its actions on the right; `children` open under it. */
-export function LibraryRow({ name, icon, letter, description, meta, notes = [], actions, children }: { name: string; icon: string | null; letter?: string; description?: string | null; meta?: string; notes?: string[]; actions?: ReactNode; children?: ReactNode }) {
+/**
+ * One item with its identity: icon tile, name, what it is, and its actions on the right; `children` open under it.
+ * `status` is one muted line for a non-default state; `isDimmed` mutes the tile and name of something that won't load.
+ */
+export function LibraryRow({ name, icon, letter, description, meta, notes = [], status, isDimmed, actions, children }: { name: string; icon: string | null; letter?: string; description?: string | null; meta?: string; notes?: string[]; status?: ReactNode; isDimmed?: boolean; actions?: ReactNode; children?: ReactNode }) {
   return (
     <div className="relative flex flex-col gap-3 px-4 py-3 not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border">
       <div className="flex items-center gap-3">
-        <LibraryIcon key={icon} url={icon} letter={letter ?? name} />
+        <span className={cn('flex', isDimmed && 'opacity-60')}>
+          <LibraryIcon key={icon} url={icon} letter={letter ?? name} />
+        </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate type-body font-medium">{name}</span>
+          <span className={cn('truncate type-body font-medium', isDimmed && 'text-muted-foreground')}>{name}</span>
           {!!description && <span className="line-clamp-2 type-caption text-muted-foreground">{description}</span>}
           {!!meta && <span className="truncate type-caption text-subtle-foreground">{meta}</span>}
           {notes.map((note) => (
@@ -124,6 +129,7 @@ export function LibraryRow({ name, icon, letter, description, meta, notes = [], 
               {note}
             </span>
           ))}
+          {!!status && <span className="type-caption text-muted-foreground">{status}</span>}
         </div>
         {!!actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
