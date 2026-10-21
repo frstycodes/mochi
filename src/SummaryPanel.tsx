@@ -773,7 +773,7 @@ function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
         <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</DropdownMenuItem>
         {switches.length > 0 && <DropdownMenuSeparator />}
         {switches.map((s) => (
-          <DropdownMenuCheckboxItem key={s.id} checked={s.isOn} onCheckedChange={s.set}>
+          <DropdownMenuCheckboxItem key={s.id} checked={s.isOn} onCheckedChange={s.set} onSelect={(e) => e.preventDefault()}>
             {s.label}
           </DropdownMenuCheckboxItem>
         ))}
