@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { queuedMessage } from '../chat/outbox.ts';
+import { dueQueued, queuedMessage, sendSteerNow } from '../chat/outbox.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
@@ -81,4 +81,76 @@ test('read after its turn ended, a message starts the next turn', () => {
   s = applyAgentEvent(s, { threadId: id, type: 'steer-read', id: send.typed!.id });
   assert.equal(thread(s).live?.isWorking, true);
   assert.equal(thread(s).activity.at(-1)?.text, 'and the docs');
+});
+
+/** Dispatches like the store: each action's agent calls are logged against the state before it applies. */
+function store(start: State) {
+  let s = start;
+  const agent: unknown[] = [];
+  const dispatch = (action: Action) => {
+    agent.push(...calls(s, action));
+    s = threadsReducer(s, action);
+  };
+  return { dispatch, agent, get: () => s, apply: (fn: (s: State) => State) => (s = fn(s)) };
+}
+
+test('Send now takes the message back with the other unread ones, interrupts, and sends it first without pausing the queue', async () => {
+  const { s: start, id, thread } = working();
+  const [a, b, c] = ['run the linter', 'stop and answer this', 'then the docs'].map((draft) => steer(id, draft));
+  let s = [a, b, c].reduce(threadsReducer, start);
+  s = threadsReducer(s, { type: 'queued-add', threadId: id, message: queuedMessage('later', { mentions: [], isCommand: false, typedSkills: [] }) });
+  const st = store(s);
+  const unsteered: string[] = [];
+  const isSent = await sendSteerNow(st.dispatch, thread(st.get()), b.typed!.id, async (_, steerId) => (unsteered.push(steerId), true));
+
+  assert.equal(isSent, true);
+  assert.deepEqual(unsteered, [b, a, c].map((m) => m.typed!.id));
+  assert.deepEqual(st.agent, [{ method: 'interrupt', threadId: id }]);
+  assert.equal(thread(st.get()).steering, undefined);
+  assert.deepEqual(thread(st.get()).queued?.map((m) => m.draft), ['stop and answer this', 'run the linter', 'then the docs', 'later']);
+
+  st.apply((s) => applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'interrupted' }));
+  assert.equal(thread(st.get()).queuePause, undefined, 'the stop you asked for does not pause the queue');
+  assert.equal(thread(st.get()).isInterruptedToSend, undefined);
+  assert.equal(dueQueued(st.get())[0]?.message.id, b.typed!.id);
+
+  const due = dueQueued(st.get())[0].message;
+  st.apply((s) => threadsReducer(s, { type: 'send', threadId: id, text: due.draft, reason: '', steers: true, queuedId: due.id, typed: due }));
+  assert.equal(thread(st.get()).activity.at(-1)?.wasQueued, undefined, 'sent now, not marked queued');
+  st.apply((s) => applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'interrupted' }));
+  assert.equal(thread(st.get()).queuePause, 'interrupted', 'a later stop pauses it as usual');
+});
+
+test('Send now on a message the agent reads while the click is in flight neither sends it again nor interrupts', async () => {
+  const { s: start, id, thread } = working();
+  const send = steer(id, 'create a PR and merge');
+  const st = store(threadsReducer(start, send));
+  const isSent = await sendSteerNow(st.dispatch, thread(st.get()), send.typed!.id, async () => {
+    st.apply((s) => applyAgentEvent(s, { threadId: id, type: 'steer-read', id: send.typed!.id }));
+    return false;
+  });
+
+  assert.equal(isSent, false);
+  assert.deepEqual(st.agent, []);
+  assert.equal(thread(st.get()).queued?.length ?? 0, 0);
+  assert.equal(thread(st.get()).activity.filter((e) => e.text === 'create a PR and merge').length, 1);
+});
+
+test('Send now whose turn ended while the click was in flight leaves the next turn running and sends after it', async () => {
+  const { s: start, id, thread } = working();
+  const [a, b] = [steer(id, 'stop and answer this'), steer(id, 'and the docs')];
+  const st = store([a, b].reduce(threadsReducer, start));
+  await sendSteerNow(st.dispatch, thread(st.get()), a.typed!.id, async (_, steerId) => {
+    if (steerId === a.typed!.id) return true;
+    // Taking back the second one loses to the agent: the turn ended and reading it started the next.
+    st.apply((s) => applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'done' }));
+    st.apply((s) => applyAgentEvent(s, { threadId: id, type: 'steer-read', id: b.typed!.id }));
+    return false;
+  });
+
+  assert.deepEqual(st.agent, [], 'the turn the agent started with the other message keeps going');
+  assert.equal(thread(st.get()).live?.isWorking, true);
+  assert.deepEqual(thread(st.get()).queued?.map((m) => m.draft), ['stop and answer this']);
+  st.apply((s) => applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'done' }));
+  assert.equal(dueQueued(st.get())[0]?.message.id, a.typed!.id);
 });

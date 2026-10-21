@@ -52,6 +52,31 @@ export function moveQueued(ids: string[], id: string, step: -1 | 1) {
   return next;
 }
 
+/** Whether taking back `ids` (the clicked one first) stops the turn: only while the turn Send now was clicked in still runs. */
+export function interruptsToSend(thread: Thread, ids: string[]) {
+  const clicked = thread.steering?.find((s) => s.message.id === ids[0]);
+  return !!thread.live?.isWorking && clicked?.sendNow === 'pending';
+}
+
+/**
+ * Send now on a message the agent hasn't read: takes it back, then every other unread one after it, so it goes out first once the
+ * interrupted turn ends (`steer-requeue`). False when the agent already took it: it's delivered, so nothing is sent again and the
+ * turn it started keeps running.
+ */
+export async function sendSteerNow(dispatch: Dispatch<Action>, thread: Thread, id: string, unsteer: (threadId: string, steerId: string) => Promise<boolean>) {
+  dispatch({ type: 'steer-send-now', threadId: thread.id, id });
+  const ids: string[] = [];
+  try {
+    if (await unsteer(thread.id, id)) {
+      ids.push(id);
+      for (const { message } of thread.steering ?? []) if (message.id !== id && (await unsteer(thread.id, message.id))) ids.push(message.id);
+    }
+  } finally {
+    dispatch({ type: 'steer-requeue', threadId: thread.id, ids });
+  }
+  return ids.length > 0;
+}
+
 let nextId = 0;
 
 export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 'draft'>): QueuedMessage {

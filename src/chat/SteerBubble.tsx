@@ -1,4 +1,4 @@
-import { Check, CheckSingle, X } from '@/icons';
+import { ArrowUp, Check, CheckSingle, X } from '@/icons';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/toast/store';
@@ -6,6 +6,7 @@ import { TooltipIconButton } from '../ui';
 import { host } from '../host';
 import { authorName, type QueuedMessage, type Thread } from '../model';
 import { useHarness } from '../store';
+import { sendSteerNow } from './outbox';
 import { MessageImages } from './MessageImages';
 
 /** Your messages the agent hasn't read yet, under the live turn. Taking one back returns it to the composer, unless the agent already has it. */
@@ -17,25 +18,34 @@ export function PendingSteers({ thread, onTakeBack }: { thread: Thread; onTakeBa
     dispatch({ type: 'steer-take-back', threadId: thread.id, id: message.id });
     onTakeBack(message);
   };
-  return thread.steering?.map(({ message, entry }) => <SteerBubble key={message.id} text={message.draft} images={entry.images} agent={agent} onTakeBack={() => void takeBack(message)} />);
+  const sendNow = async (message: QueuedMessage) => {
+    if (!(await sendSteerNow(dispatch, thread, message.id, (threadId, steerId) => host.agent.unsteer(threadId, steerId)))) toast(`${agent} is already reading it`);
+  };
+  return thread.steering?.map(({ message, entry, sendNow: sending }) => (
+    <SteerBubble key={message.id} text={message.draft} images={entry.images} agent={agent} isSending={!!sending} onTakeBack={() => void takeBack(message)} onSendNow={() => void sendNow(message)} />
+  ));
 }
 
-/** A message you sent while the agent works, before the agent has read it: under the live turn, dimmed; hovering floats an X over its corner, and it or the bubble takes the message back. */
-export function SteerBubble({ text, images, agent, onTakeBack }: { text: string; images?: string[]; agent: string; onTakeBack?: () => void }) {
+/**
+ * A message you sent while the agent works, before the agent has read it: under the live turn, dimmed; hovering floats an X over its
+ * corner, and it or the bubble takes the message back. Send now in its bar stops the turn and sends it first; both are off while it goes.
+ */
+export function SteerBubble({ text, images, agent, isSending, onTakeBack, onSendNow }: { text: string; images?: string[]; agent: string; isSending?: boolean; onTakeBack?: () => void; onSendNow?: () => void }) {
+  const takeBack = isSending ? undefined : onTakeBack;
   return (
     <div data-pending-steer className="group/row flex flex-col gap-1">
       {!!images?.length && <MessageImages photos={images.map((src, i) => ({ src, name: `Image ${i + 1}` }))} className="justify-end opacity-60" />}
       <Message from="user">
         {/* The bubble takes a click too; the X is the button keyboards and screen readers get. */}
-        <div onClick={onTakeBack} className="group/bubble relative self-end">
+        <div onClick={takeBack} className="group/bubble relative self-end">
           <MessageContent className="type-prose whitespace-pre-wrap transition-colors group-[.is-user]:bg-secondary/50 group-[.is-user]:text-muted-foreground group-hover/bubble:group-[.is-user]:bg-secondary group-hover/bubble:group-[.is-user]:text-foreground">{text}</MessageContent>
-          {!!onTakeBack && (
+          {!!takeBack && (
             <TooltipIconButton
               label="Take back and edit"
               hint={`${agent} hasn’t read it yet. It goes back to the message box, unsent.`}
               onClick={(e) => {
                 e.stopPropagation();
-                onTakeBack();
+                takeBack();
               }}
               className="absolute -top-2.5 -right-2.5 size-6 rounded-full border bg-popover text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover/bubble:opacity-100 hover:bg-popover hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100 [&_svg]:size-3"
             >
@@ -44,7 +54,18 @@ export function SteerBubble({ text, images, agent, onTakeBack }: { text: string;
           )}
         </div>
       </Message>
-      <div className="flex justify-end pr-1">
+      <div className="flex items-center justify-end gap-0.5 pr-1">
+        {!!onSendNow && (
+          <TooltipIconButton
+            label="Send now"
+            hint={`Stops ${agent}’s turn and sends this first. Other waiting messages follow it.`}
+            disabled={isSending}
+            onClick={onSendNow}
+            className="text-subtle-foreground opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100"
+          >
+            <ArrowUp className="size-3.5" />
+          </TooltipIconButton>
+        )}
         <ReadMark agent={agent} isRead={false} />
       </div>
     </div>
