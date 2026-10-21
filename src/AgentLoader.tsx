@@ -18,6 +18,8 @@ export const MOCHI_FLAVORS = {
 export type MochiFlavor = keyof typeof MOCHI_FLAVORS;
 
 type Frame = ReturnType<typeof poseAttributes> & { props: Shape[][] };
+const IDLE = PHASES.indexOf('idle');
+const IDLE_FRAME_MS = 1000 / 30;
 
 /** Mochi, the logo's dome, acting out each phase with a prop (zzz, thought cloud, book, pencil, lens, question); phases blend instead of cutting. */
 export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: AgentPhase; flavor?: MochiFlavor; className?: string }) {
@@ -33,9 +35,14 @@ export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: A
   const frame = reduce ? frameAt(PHASES.map(() => 1), 0, oneHot(phase)) : first;
   const weights = reduce ? oneHot(phase) : morph.weights;
 
+  const paintedAt = useRef(0);
   useAnimationFrame((time, delta) => {
     if (reduce || !isOnScreen) return;
     stepWeights(morph.weights, morph.velocities, phase, Math.min(delta, 100) / 1000);
+    // Settled idle is a slow breath: 30fps reads the same as 120 and repaints (and re-runs the backdrop blurs) a quarter as often.
+    const isSettledIdle = phase === 'idle' && morph.weights[IDLE] > 0.999;
+    if (isSettledIdle && time - paintedAt.current < IDLE_FRAME_MS) return;
+    paintedAt.current = time;
     paint(refs, morph.weights, frameAt(morph.weights, time / 1000));
   });
 

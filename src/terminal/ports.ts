@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { host } from '../host';
-import type { ListeningPort } from '../host/types/ports';
-import { recordListeningPorts } from './devServer';
+import { host } from '../host/index.ts';
+import type { ListeningPort } from '../host/types/ports.ts';
+import { recordListeningPorts } from './devServer.ts';
 
 const POLL_MS = 3000;
 
@@ -11,17 +11,18 @@ interface Watcher {
 }
 
 const watchers = new Map<string, Watcher>();
+const polls = new Map<string, { timer: ReturnType<typeof setInterval>; users: number }>();
 const listeners = new Set<() => void>();
 
 /**
- * Listening ports under the thread's cwd. Polling starts on first use and keeps going after the tab unmounts.
- * GAP: one lsof per watched thread every 3s; move to a single main-process poller pushing events if many threads get watched.
+ * Listening ports under the thread's cwd, polled while something on screen uses them; the last result stays for `listeningPorts`.
+ * GAP: one lsof per mounted thread every 3s; move to a single main-process poller pushing events if many threads stay mounted.
  */
 export function usePorts(threadId: string, cwd: string | null) {
   useEffect(() => {
     // A folderless chat has no processes of its own to list.
-    if (!cwd || watchers.has(threadId)) return;
-    startWatcher(threadId, cwd);
+    if (!cwd) return;
+    return watchPorts(threadId, cwd);
   }, [threadId, cwd]);
   const watcher = useSyncExternalStore(subscribe, () => (cwd ? watchers.get(threadId) : undefined));
   return { ports: watcher?.ports, error: watcher?.error };
@@ -44,10 +45,23 @@ export function refreshPorts(threadId: string, cwd: string) {
   void poll(threadId, cwd);
 }
 
-function startWatcher(threadId: string, cwd: string) {
-  watchers.set(threadId, {});
+/** Polls `threadId` every 3s until the last caller's cleanup runs. */
+export function watchPorts(threadId: string, cwd: string) {
+  const watch = polls.get(threadId) ?? startPolling(threadId, cwd);
+  watch.users++;
+  return () => {
+    if (--watch.users > 0) return;
+    clearInterval(watch.timer);
+    polls.delete(threadId);
+  };
+}
+
+function startPolling(threadId: string, cwd: string) {
+  if (!watchers.has(threadId)) watchers.set(threadId, {});
   void poll(threadId, cwd);
-  setInterval(() => void poll(threadId, cwd), POLL_MS);
+  const watch = { timer: setInterval(() => void poll(threadId, cwd), POLL_MS), users: 0 };
+  polls.set(threadId, watch);
+  return watch;
 }
 
 async function poll(threadId: string, cwd: string) {
