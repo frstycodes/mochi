@@ -258,6 +258,15 @@ test('commands keep skills and custom commands with their argument hints, not Cl
   );
 });
 
+test('a Bash call without a description hands main its command to describe; one with a description does not', () => {
+  const { map } = createMapper('t1', CWD);
+  const call = (id: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name: 'Bash', input }] } } as unknown as SDKMessage)[0];
+  const bare = call('b1', { command: 'gh pr checks 260 --watch' });
+  assert.equal(bare.type === 'tool' && bare.command, 'gh pr checks 260 --watch');
+  const described = call('b2', { command: 'pnpm test', description: 'Run tests' });
+  assert.equal(described.type === 'tool' && described.command, undefined);
+});
+
 test('work-group rows: Bash keeps its own description, file paths read relative to the worktree, edits carry a renderable patch', () => {
   assert.equal(callDescription('Bash', { command: 'gh run watch 1', description: "Waited for PR 42's CI run to finish" }), "Waited for PR 42's CI run to finish");
   assert.equal(callDescription('Grep', { pattern: 'describeTool', path: '/repo/src' }), 'Searched for “describeTool” in src');

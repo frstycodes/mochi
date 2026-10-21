@@ -19,7 +19,7 @@ import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall, setImageGenerator, undeliveredToolCalls } from '../mcp/server.ts';
 import { commandPrompt, parseTitle, UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
-import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
+import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle, onAgentEvent } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
@@ -86,8 +86,9 @@ async function readWidget(threadId: string, server: string, uri: string): Promis
 const reviewers = new Map<string, (event: AgentEvent) => void>();
 const codex = new CodexAdapter(
   (event) => {
-    routeCodex(event);
-    if (event.type === 'tool' && event.command) void describeCommand(event.threadId, event.id, event.command);
+    const reviewer = reviewers.get(event.threadId);
+    if (reviewer) reviewer(event);
+    else broadcast(event);
   },
   undefined,
   undefined,
@@ -103,19 +104,18 @@ const codex = new CodexAdapter(
   },
   (spaceId) => profileInstructions(spaceId, 'codex'),
 );
-function routeCodex(event: AgentEvent) {
-  const reviewer = reviewers.get(event.threadId);
-  if (reviewer) reviewer(event);
-  else broadcast(event);
-}
-
 // One model call per distinct command per launch: agents rerun the same `pnpm test` all day.
 const commandTitles = new Map<string, Promise<string>>();
 const MAX_COMMAND_TITLES = 500;
 
-/** Codex sends no description of its commands, so the background model writes the line its row and the sidebar show. */
+// Every thread's events pass here, Claude's and Codex's; a review thread's never do, and its calls stay undescribed.
+onAgentEvent((event) => {
+  if (event.type === 'tool' && event.command) void describeCommand(event.threadId, event.id, event.command);
+});
+
+/** A command its agent sent without a description (always on Codex, sometimes on Claude) gets one from the background model, for its row and the sidebar. */
 async function describeCommand(threadId: string, id: string, command: string) {
-  const spaceId = codex.runOptions(threadId)?.spaceId;
+  const spaceId = (claudeRunOptions(threadId) ?? codex.runOptions(threadId))?.spaceId;
   if (!spaceId) return;
   if (commandTitles.size >= MAX_COMMAND_TITLES) commandTitles.clear();
   let title = commandTitles.get(command);
@@ -124,7 +124,7 @@ async function describeCommand(threadId: string, id: string, command: string) {
     commandTitles.set(command, title);
   }
   const description = await title;
-  if (description) routeCodex({ threadId, type: 'tool-description', id, description });
+  if (description) broadcast({ threadId, type: 'tool-description', id, description });
 }
 
 /** The profile's turned-off Codex items as thread config, read from the account's config (the thread's project included). */

@@ -63,7 +63,7 @@ export type AgentEvent =
    * `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills
    * the query in late). `skill`: the call loaded this skill (Claude's Skill tool, a skill Codex got with the message). `mcp`: the
    * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
-   * `command`: the shell command a call runs when its agent sends no `description` (Codex), for main to describe.
+   * `command`: the shell command a call runs when its agent sent no `description` (Codex always, Claude sometimes), for main to describe.
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; command?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage; /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget }
