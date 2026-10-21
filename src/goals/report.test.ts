@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { Thread } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { threadsReducer } from '../store/threads.ts';
-import { currentReport, nextStep, showsVerdictCard, turnReport } from './report.ts';
+import { currentReport, nextStep, showsVerdictCard, suggestedReply, turnReport } from './report.ts';
 
 test('a met goal waits on opening a PR, then on its review, then on settling once merged', () => {
   assert.equal(nextStep([]), 'open-pr');
@@ -44,4 +44,20 @@ test("a quick turn without its own report doesn't bring back the last turn's que
   const [second] = threadsReducer(at(5, first), { type: 'idle-start', threadId: 't' }).threads;
   assert.equal(turnReport(second), undefined);
   assert.equal(currentReport(second), null, 'the sidebar drops it too');
+});
+
+test("the composer suggests the agent's first answer to its next move, never its question, and nothing without answers", () => {
+  const at = (now: number, s: Thread) => ({ now, threads: [s], checkpoints: { t: [] }, checkpointSeq: 0 }) as unknown as State;
+  const ended = (report: Record<string, unknown>) => {
+    const t = { id: 't', goal: '', status: 'running', steps: [], activity: [], prs: [] } as unknown as Thread;
+    const [reported] = threadsReducer(at(5, t), { type: 'report', threadId: 't', report: { by: 'claude', decisions: [], left: [], ...report } as never }).threads;
+    return threadsReducer(at(5, reported), { type: 'idle-start', threadId: 't' }).threads[0];
+  };
+  const next = 'Should it commit both fixes and open a PR into `main`?';
+  const options = [{ label: 'Commit and PR', reply: 'Commit both fixes and open a PR into main.' }, { label: 'Only commit', reply: 'Just commit.' }];
+  assert.equal(suggestedReply(ended({ next, options })), 'Commit both fixes and open a PR into main.');
+  assert.equal(suggestedReply(ended({ next, question: next })), undefined);
+  assert.equal(suggestedReply(ended({ next, options: [] })), undefined);
+  assert.equal(suggestedReply(ended({ next, options, isSuperseded: true })), undefined);
+  assert.equal(suggestedReply({ ...ended({ next, options }), live: { isWorking: true } } as unknown as Thread), undefined);
 });

@@ -28,6 +28,12 @@ function isAnsweredUnturned(t: Thread, report: TurnReport) {
   return !!lastYou && lastYou.at > report.at;
 }
 
+/** Your likely next message for the empty composer: the agent's pick on its next-move card, in your voice; nothing without one. */
+export function suggestedReply(t: Thread) {
+  const report = currentReport(t)?.report;
+  return report?.isSuperseded ? undefined : report?.options?.[0]?.reply;
+}
+
 /** Whether the end-of-turn card shows: a thread gone idle, with a turn Mochi checked or the agent reported, nothing from you since, and its card not answered yet. */
 export function showsVerdictCard(t: Thread) {
   const since = t.idle?.at ?? t.report?.at;

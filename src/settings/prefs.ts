@@ -42,7 +42,7 @@ export interface Prefs {
   driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
   whileWorking: 'queue' | 'steer';
-  /** After a turn, a model guesses your next message for the empty composer (`useIdleChecks`); off makes no call. */
+  /** After a turn, the report's first next-move answer in the empty composer (`suggestedReply`). */
   promptSuggestions: boolean;
   simplifyLength: 'short' | 'detailed';
   simplifyNeedsFirst: boolean;
