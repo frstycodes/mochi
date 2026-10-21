@@ -3,6 +3,7 @@ import { WarningAlt } from '@/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHarness } from '../store';
 import { ChartVisual } from './ChartVisual';
+import { CodeFrame } from './CodeFrame';
 import { withThemeVars } from './exportVisual';
 import { metaTitle, parseFence, VIZ_LANGUAGES, type VizLanguage, type VizSpecs } from './fence';
 import { DiffVisual, MetroVisual } from './HarnessVisuals';
@@ -15,10 +16,10 @@ import { FileCode } from '../files/FileCode';
 import { ChatLink } from '../chat/ChatLink';
 import { rehypeRefs, rehypeRelativeLinks } from '../chat/rehypeRefs';
 
-/** Streamdown hooks for chat messages: fenced visuals plus table, image, file-path and PR/issue link overrides. Widgets need a VizThreadProvider above. */
+/** Streamdown hooks for chat messages: fenced visuals plus code block, table, image, file-path and PR/issue link overrides. Widgets need a VizThreadProvider above. */
 export const VIZ_PLUGINS = { renderers: [{ language: [...VIZ_LANGUAGES], component: FenceVisual }] } satisfies PluginConfig;
 
-export const VIZ_COMPONENTS = { table: SortableTable, img: ImageVisual, inlineCode: FileCode, a: ChatLink } satisfies Components;
+export const VIZ_COMPONENTS = { code: CodeFrame, table: SortableTable, img: ImageVisual, inlineCode: FileCode, a: ChatLink } satisfies Components;
 
 type SanitizeSchema = { protocols?: Record<string, string[] | undefined> };
 const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, SanitizeSchema];

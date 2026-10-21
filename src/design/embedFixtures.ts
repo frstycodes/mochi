@@ -26,3 +26,14 @@ export const TALL_WIDGET = `<style>
 export const CHART_FENCE = JSON.stringify({ type: 'bar', title: 'Deploys per day', x: 'day', series: ['deploys'], data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day, i) => ({ day, deploys: [4, 7, 3, 9, 6][i] })) });
 
 export const BROKEN_CHART_FENCE = '{ "type": "bar", "x": "day", "data": [ { "day": "Mon", ';
+
+/** Markdown for the Embeds section's code block and table, as an agent would write them. */
+export const CODE_MARKDOWN = '```diff\n- const frame = "bezeled";\n+ const frame = "flush";\n  render(frame);\n```';
+
+export const TABLE_MARKDOWN = `| Service | p95 (ms) | Errors |
+| --- | --- | --- |
+| api-gateway | 182 | 0.4% |
+| auth | 41 | 0.1% |
+| billing | 96 | 1.2% |`;
+
+export const MERMAID_MARKDOWN = '```mermaid\ngraph LR\n  A[Request] --> B{Cached?}\n  B -- yes --> C[Return]\n  B -- no --> D[Fetch] --> C\n```';

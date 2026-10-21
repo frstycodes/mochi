@@ -21,9 +21,11 @@ export interface VisualSource {
 
 /**
  * The embed frame for every inline visual, with its actions (side pane, pop out, copy, download, fullscreen).
+ * Without a `fence` (a diagram Streamdown draws, not a harness fence) there is no side pane or pop out, and `icon` names it.
  * `svg` returns the picture as an SVG document; omitted, the first `[data-visual-svg]` inside the body is serialized.
  */
-export function VisualFrame({ fence, title, source, svg, canPicture = true, children }: { fence: PaneVisual; title: string; source: VisualSource; svg?: () => string; canPicture?: boolean; children: ReactNode }) {
+export function VisualFrame({ title, source, svg, canPicture = true, children, ...kind }: ({ fence: PaneVisual } | { fence?: undefined; icon: IconComponent }) & { title: string; source: VisualSource; svg?: () => string; canPicture?: boolean; children: ReactNode }) {
+  const fence = kind.fence;
   const body = useRef<HTMLElement>(null);
   const isInPane = useContext(InPaneContext);
   const [isFullscreen, setFullscreen] = useState(false);
@@ -48,16 +50,24 @@ export function VisualFrame({ fence, title, source, svg, canPicture = true, chil
 
   return (
     <>
-      <EmbedFrame ref={body} icon={VISUAL_ICONS[fence.language]} title={title} isPadded={PADDED.has(fence.language)} className="my-3" actions={<VisualActions fence={fence} title={title} source={source} canPicture={canPicture} isInPane={isInPane} exportAs={exportAs} onFullscreen={() => setFullscreen(true)} />}>
+      <EmbedFrame ref={body} icon={kind.fence ? VISUAL_ICONS[kind.fence.language] : kind.icon} title={title} isPadded={!!fence && PADDED.has(fence.language)} className="my-3" actions={<VisualActions fence={fence} title={title} source={source} canPicture={canPicture} isInPane={isInPane} exportAs={exportAs} onFullscreen={() => setFullscreen(true)} />}>
         {children}
       </EmbedFrame>
-      <Dialog open={isFullscreen} onOpenChange={setFullscreen}>
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 overflow-auto sm:max-w-[min(calc(100vw-4rem),1100px)] [&_[data-slot=chart]]:h-[min(70dvh,640px)]">
-          <DialogTitle className="type-title">{title}</DialogTitle>
-          {isFullscreen && children}
-        </DialogContent>
-      </Dialog>
+      <FullscreenDialog title={title} isOpen={isFullscreen} onOpenChange={setFullscreen}>
+        {children}
+      </FullscreenDialog>
     </>
+  );
+}
+
+export function FullscreenDialog({ title, isOpen, onOpenChange, children }: { title: string; isOpen: boolean; onOpenChange: (isOpen: boolean) => void; children: ReactNode }) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 overflow-auto sm:max-w-[min(calc(100vw-4rem),1100px)] [&_[data-slot=chart]]:h-[min(70dvh,640px)]">
+        <DialogTitle className="type-title">{title}</DialogTitle>
+        {isOpen && children}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -66,10 +76,10 @@ export const VISUAL_ICONS = { chart: Chart, svg: Image, html: Grid, 'harness-met
 // Agent widgets and SVGs paint their own margins; the harness's own visuals need the frame to.
 const PADDED = new Set<VizLanguage>(['chart', 'harness-metro', 'harness-diff']);
 
-function VisualActions({ fence, title, source, canPicture, isInPane, exportAs, onFullscreen }: { fence: PaneVisual; title: string; source: VisualSource; canPicture: boolean; isInPane: boolean; exportAs: (what: 'png' | 'svg' | 'source') => () => void; onFullscreen: () => void }) {
+function VisualActions({ fence, title, source, canPicture, isInPane, exportAs, onFullscreen }: { fence?: PaneVisual; title: string; source: VisualSource; canPicture: boolean; isInPane: boolean; exportAs: (what: 'png' | 'svg' | 'source') => () => void; onFullscreen: () => void }) {
   return (
     <>
-      {!isInPane && <PaneButtons fence={fence} title={title} />}
+      {!isInPane && !!fence && <PaneButtons fence={fence} title={title} />}
       <CopyButton text={source.text} />
       <DropdownMenu>
         <Tooltip>
@@ -118,9 +128,27 @@ function PaneButtons({ fence, title }: { fence: PaneVisual; title: string }) {
 
 const COPIED_MS = 1500;
 
-function CopyButton({ text, label = 'Copy source' }: { text: string; label?: string }) {
+export function CopyButton({ text, label = 'Copy source' }: { text: string; label?: string }) {
+  const { isCopied, copy } = useCopy();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={() => copy(text)}>
+          <CopyIcon isCopied={isCopied} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{isCopied ? 'Copied' : label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function CopyIcon({ isCopied }: { isCopied: boolean }) {
+  return <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <Copy />}</IconSwap>;
+}
+
+export function useCopy() {
   const [isCopied, setCopied] = useState(false);
-  const copy = async () => {
+  const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -129,16 +157,7 @@ function CopyButton({ text, label = 'Copy source' }: { text: string; label?: str
       toast.error('Clipboard is not available');
     }
   };
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={copy}>
-          <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <Copy />}</IconSwap>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{isCopied ? 'Copied' : label}</TooltipContent>
-    </Tooltip>
-  );
+  return { isCopied, copy };
 }
 
 function fileName(title: string) {
