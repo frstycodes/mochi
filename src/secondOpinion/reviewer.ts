@@ -32,6 +32,14 @@ export function reviewerFor(thread: Thread): Reviewer {
   return hit.reason ? { provider, reason: hit.reason } : { provider };
 }
 
+/** `reviewerFor` that waits for the sign-in check instead of answering "Checking…", for an agent's own request. */
+export async function checkReviewer(thread: Thread): Promise<Reviewer> {
+  const reviewer = reviewerFor(thread);
+  if (!thread.live || !host.isDesktop || !thread.repo) return reviewer;
+  const reason = await reasonFor(thread.spaceId, reviewer.provider);
+  return reason ? { provider: reviewer.provider, reason } : { provider: reviewer.provider };
+}
+
 export function useReviewer(thread: Thread): Reviewer {
   useReviewerChecks();
   return reviewerFor(thread);

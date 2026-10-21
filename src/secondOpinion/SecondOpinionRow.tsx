@@ -80,7 +80,6 @@ function VerdictCard({ thread, review }: { thread: Thread; review: Review }) {
   const { dispatch } = useHarness();
   const files = useThreadFiles();
   const result = review.result!;
-  const primary = providerName(thread.providers[0]);
   const dismiss = () => dispatch({ type: 'review-update', threadId: thread.id, id: review.id, patch: { isDismissed: true } });
   return (
     <section data-file-scope aria-label={`${providerName(review.provider)}'s second opinion`} className="flex flex-col gap-3 rounded-xl border bg-card p-4">
@@ -99,13 +98,14 @@ function VerdictCard({ thread, review }: { thread: Thread; review: Review }) {
         </ul>
       )}
       <footer className="flex flex-wrap items-center justify-end gap-2">
+        {review.isAgentAsked && <p className="me-auto type-caption text-subtle-foreground">{providerName(thread.providers[0])} asked for this · sent to this thread</p>}
         <Button variant="ghost" size="sm" onClick={dismiss}>
           Dismiss
         </Button>
-        {result.findings.length > 0 && (
+        {!review.isAgentAsked && result.findings.length > 0 && (
           <Button variant="secondary" size="sm" disabled={review.isSent} onClick={() => sendFindings(thread, review, dispatch)}>
             <Send aria-hidden />
-            {review.isSent ? `Sent to ${primary}` : `Send findings to ${primary}`}
+            {review.isSent ? 'Sent to this thread' : 'Send findings to this thread'}
           </Button>
         )}
       </footer>

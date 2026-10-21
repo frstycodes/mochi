@@ -28,6 +28,7 @@ export const MOCHI_CALLS = {
   settle_goal: ['Settling the goal', 'Settled the goal'],
   update_plan: ['Updating the plan', 'Updated the plan'],
   delegate_task: ['Delegating a task', 'Delegated a task'],
+  ask_second_opinion: ['Asking for a second opinion', 'Asked for a second opinion'],
   browser_tabs: ['Looking at the browser tabs', 'Looked at the browser tabs'],
   browser_open: ['Opening a page', 'Opened a page'],
   browser_snapshot: ['Reading the page', 'Read the page'],

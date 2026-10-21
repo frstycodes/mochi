@@ -77,7 +77,7 @@ export type ThreadsAction =
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
    * `queuedId`: the queued message this sends, which leaves the queue. `steers`: joins the turn in flight instead of waiting for it to end (every `sendMessage`).
    */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** The images you attached, as the transcript shows them. */ shownImages?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** The message as you typed it: sent into a turn in flight, it waits in `steering` until the agent reads it. */ typed?: QueuedMessage; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef; /** An Auto-fix event; `prompt` is the event as the agent gets it. */ autofix?: ActivityEntry['autofix'] }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** The images you attached, as the transcript shows them. */ shownImages?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** The message as you typed it: sent into a turn in flight, it waits in `steering` until the agent reads it. */ typed?: QueuedMessage; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef; /** An Auto-fix event; `prompt` is the event as the agent gets it. */ autofix?: ActivityEntry['autofix']; /** The verdict of a second opinion the agent asked for. */ secondOpinion?: ActivityEntry['secondOpinion'] }
   /** `/compact`: the harness compacts the live session now. `queuedId`: it waited in the queue as typed. */
   | { type: 'compact'; threadId: string; focus: string; queuedId?: string }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
@@ -563,11 +563,11 @@ export function send(state: State, action: Extract<Action, { type: 'send' }>): S
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
       const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
-      const entry: ActivityEntry = { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }), ...(action.autofix && { autofix: action.autofix }) };
+      const entry: ActivityEntry = { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }), ...(action.autofix && { autofix: action.autofix }), ...(action.secondOpinion && { secondOpinion: action.secondOpinion }) };
       const going = live ? { ...sent, status: 'running' as const, live } : sent;
       // Into a turn in flight, it joins the transcript where the agent reads it (`readSteer`), not where you sent it.
       if (action.typed && t.live?.isWorking) return { ...going, steering: [...(t.steering ?? []), { message: action.typed, entry: { ...entry, isSeen: true }, reason: action.reason }] };
-      const said = log({ ...going, turn: { start: going.activity.length, ...((from || action.autofix) && { isAgentDriven: true as const }) } }, entry);
+      const said = log({ ...going, turn: { start: going.activity.length, ...((from || action.autofix || action.secondOpinion) && { isAgentDriven: true as const }) } }, entry);
       return action.drift ? applyDrift(said, action.drift, action.reason, now) : said;
     }),
   };

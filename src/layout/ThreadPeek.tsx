@@ -62,7 +62,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, side = 'right', chil
           <ul className="flex flex-col gap-2">
             {tail.map((a) => (
               <li key={a.at + a.text} className="flex gap-2">
-                <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.autofix ? <MagicStar aria-hidden className="size-4 text-muted-foreground" /> : a.who === 'you' && 'You'}</span>
+                <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.secondOpinion ? <ProviderMark provider={a.secondOpinion.provider} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.autofix ? <MagicStar aria-hidden className="size-4 text-muted-foreground" /> : a.who === 'you' && 'You'}</span>
                 <p className={cn('line-clamp-2 type-meta', a.who === 'you' ? 'text-foreground' : 'text-muted-foreground')}>{a.text}</p>
               </li>
             ))}

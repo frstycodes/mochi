@@ -34,6 +34,8 @@ export interface Review {
   isTruncated?: boolean;
   isSent?: boolean;
   isDismissed?: boolean;
+  /** The thread's own agent asked for it (`ask_second_opinion`): the verdict goes back to it on its own. */
+  isAgentAsked?: boolean;
 }
 
 /** Both providers' structured-output schema. Strict mode (OpenAI) wants every property required, so `line` is nullable instead of optional. */
@@ -120,10 +122,16 @@ export function reviewPrompt(thread: Pick<Thread, 'title' | 'goal' | 'criteria'>
 }
 
 /** The findings as a message to the thread's own agent. */
-export function findingsMessage(provider: Provider, verdict: Verdict) {
+export function findingsMessage(provider: Provider, verdict: Verdict, isAgentAsked?: boolean) {
   const name = provider === 'claude' ? 'Claude' : 'Codex';
   const items = verdict.findings.map((f) => `- [${f.severity}] ${f.file ? `\`${f.file}${f.line ? `:${f.line}` : ''}\` ` : ''}${f.text}`);
-  return [`${name} reviewed the diff (verdict: ${verdict.verdict}): ${verdict.summary}`, items.length ? `Findings:\n${items.join('\n')}` : '', 'Please address these, or tell me why not.'].filter(Boolean).join('\n\n');
+  const head = `${isAgentAsked ? '[Second opinion you asked for] ' : ''}${name} reviewed the diff (verdict: ${verdict.verdict}): ${verdict.summary}`;
+  const close = !isAgentAsked
+    ? 'Please address these, or tell me why not.'
+    : items.length
+      ? 'This is the reviewer, not the user. Weigh each finding: fix the ones that hold, and say in your reply which you set aside and why.'
+      : 'This is the reviewer, not the user. Nothing to change; carry on.';
+  return [head, items.length ? `Findings:\n${items.join('\n')}` : '', close].filter(Boolean).join('\n\n');
 }
 
 export const otherProvider = (provider: Provider): Provider => (provider === 'claude' ? 'codex' : 'claude');

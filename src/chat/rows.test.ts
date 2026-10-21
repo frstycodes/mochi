@@ -145,3 +145,12 @@ test('plan and turn-report calls have their own surfaces, so they get no work-lo
   assert.deepEqual(shape([mochi('update_plan'), e('tool', 'claude', 'Read src/a.ts'), mochi('update_plan'), e('message', 'claude', 'Done.'), mochi('report_turn')]), ['work(Read src/a.ts)', 'Done.']);
   assert.deepEqual(shape([mochi('rename_thread')]), ['work(Mcp mochi: rename_thread)'], 'other Mochi calls keep their rows');
 });
+
+test('a second opinion the agent asked for sits where its verdict reached the agent, in place of that message', () => {
+  const review = { id: 'so-1', provider: 'codex' as const, afterIndex: 1, startedAt: 0, status: 'done' as const, steps: [], isAgentAsked: true };
+  const label = (rows: ReturnType<typeof chatRows>) => rows.map((r) => (r.kind === 'review' ? `review(${r.review.id})` : r.kind === 'work' ? 'work' : r.kind === 'changes' ? 'changes' : r.entry.text));
+  const asked = [e('message', 'you', 'fix login'), e('tool', 'claude', 'Edit auth.ts'), e('message', 'claude', 'Done, checking with Codex.')];
+  assert.deepEqual(label(chatRows(asked, [{ ...review, status: 'running' }])), ['fix login', 'review(so-1)', 'work', 'Done, checking with Codex.'], 'while it runs, where it started');
+  const findings: ActivityEntry = { ...e('message', 'you', 'Codex reviewed the diff…'), secondOpinion: { reviewId: 'so-1', provider: 'codex' } };
+  assert.deepEqual(label(chatRows([...asked, findings, e('message', 'claude', 'Fixed the empty case.')], [review])), ['fix login', 'work', 'Done, checking with Codex.', 'review(so-1)', 'Fixed the empty case.']);
+});

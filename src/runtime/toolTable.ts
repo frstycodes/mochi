@@ -194,6 +194,13 @@ export const TOOL_TABLE = {
       worktree: z.enum(['same', 'new']).optional(),
     },
   },
+  ask_second_opinion: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Ask the other provider (Codex from a Claude thread, Claude from a Codex thread) to review your branch's diff against its base, read-only, with your goal as context. Use it before you call risky or wide changes done. Commit or at least save your edits first: it reviews what's on disk. Returns at once; its verdict and findings come to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
+    shape: {},
+  },
   // {BROWSER}
   browser_tabs: { tier: 'read', description: "List your thread's browser tabs in the side pane: tabId, url, title, loading, active.", shape: {} },
   browser_open: {

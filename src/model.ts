@@ -168,6 +168,8 @@ export interface ActivityEntry {
   wasQueued?: boolean;
   /** Your messages: sent into a running turn, and placed where the agent read it. */
   isSeen?: true;
+  /** Your messages: the verdict of a second opinion your agent asked for, sent on its own; the review's card renders here in its place. */
+  secondOpinion?: { reviewId: string; provider: Provider };
   /** Your messages: the images sent with it, as `shownImage` gives them. Tool entries: images the call returned, as absolute paths. */
   images?: string[];
   /** Tool entries: the image this call made, shown as its own card in the transcript. */
