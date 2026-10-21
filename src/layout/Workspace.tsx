@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
+import { COMPOSER_EDITABLE } from '../chat/ComposerEditor';
 import { BoardView } from '../BoardView';
 import { UsagePage } from '../usage/UsagePage';
 import { HANDOFF_TRANSITION, isHandingOff } from '../Composer';
@@ -305,7 +306,7 @@ function useFocusFollows(ref: RefObject<HTMLElement | null>, isFocused: boolean)
     const becameFocused = isFocused && !wasFocused.current;
     wasFocused.current = isFocused;
     if (!el || !becameFocused || el.contains(document.activeElement)) return;
-    (el.querySelector<HTMLElement>('textarea') ?? el).focus({ preventScroll: true });
+    (el.querySelector<HTMLElement>(COMPOSER_EDITABLE) ?? el).focus({ preventScroll: true });
   }, [ref, isFocused]);
 }
 
@@ -325,7 +326,7 @@ function useCaretInFocusedSplit(structure: string, focusId: string, isMulti: boo
     if (!isMulti) return;
     const el = document.querySelector<HTMLElement>(`[data-leaf-id="${latestFocus.current}"]`);
     if (!el || el.contains(document.activeElement)) return;
-    (el.querySelector<HTMLElement>('textarea') ?? el).focus({ preventScroll: true });
+    (el.querySelector<HTMLElement>(COMPOSER_EDITABLE) ?? el).focus({ preventScroll: true });
   }, [structure, isMulti]);
 }
 

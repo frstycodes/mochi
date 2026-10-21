@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { COMPOSER_EDITABLE } from '../chat/ComposerEditor';
 import { haptic } from '../haptic';
 import { LeafView, Workspace, WorkspaceEffects } from '../layout/Workspace';
 import type { Leaf } from '../layout/tree';
@@ -117,6 +118,6 @@ function useCaretFollowsPage(centerId: string) {
     previous.current = centerId;
     const active = document.activeElement;
     if (active && active !== document.body && !active.closest('[inert]')) return;
-    document.querySelector<HTMLElement>('[data-leaf-id] textarea')?.focus({ preventScroll: true });
+    document.querySelector<HTMLElement>(`[data-leaf-id] ${COMPOSER_EDITABLE}`)?.focus({ preventScroll: true });
   }, [centerId]);
 }
