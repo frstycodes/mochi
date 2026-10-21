@@ -1,8 +1,9 @@
 import type { ScheduleEvent, ScheduleRun } from '../host/types/schedule.ts';
-import type { PullRequest, QueueItem } from '../model.ts';
+import type { PullRequest, QueueItem, Thread } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { autofixBody, autofixPrompt, autofixTitle, type AutofixEvent } from '../git/autofix.ts';
 import { ciTitle } from '../notify/watch.ts';
+import { notePr, notePrsEnded, prEscalation } from '../runtime/subThreadNotes.ts';
 import { log, mapThread, send } from '../store/threads.ts';
 
 export type ScheduleAction =
@@ -78,10 +79,18 @@ function autofixSet(state: State, { threadId, pr, since }: Extract<Action, { typ
   return sent ? send(set, sent) : set;
 }
 
-/** An event from main: it goes to the agent like a message, unless Auto-fix was turned off meanwhile or main stopped it. */
+/** An event from main, dropped when Auto-fix was turned off meanwhile; a parent thread hears of it only when `prEscalation` or `notePrsEnded` says so. */
 function autofixEvent(state: State, threadId: string, event: AutofixEvent): State {
   const thread = state.threads.find((t) => t.id === threadId);
   if (!thread || thread.status === 'settled' || !thread.prs.some((p) => p.number === event.pr && p.autofixSince)) return state;
+  const escalation = prEscalation(thread, event);
+  const next = autofixApply(state, thread, event);
+  return notePrsEnded(escalation ? notePr(next, thread, event.pr, escalation) : next, thread);
+}
+
+/** It goes to the agent like a message, unless main stopped it. */
+function autofixApply(state: State, thread: Thread, event: AutofixEvent): State {
+  const threadId = thread.id;
   if (event.kind !== 'stopped') {
     const sent = autofixSend(state, threadId, event);
     return sent ? send(state, sent) : state;
