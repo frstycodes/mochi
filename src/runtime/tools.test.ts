@@ -1483,6 +1483,22 @@ test('the agent starts a card by its proposalId when you tell it to', async () =
   assert.match(await t.err('create_thread', { proposalId: 'rl-p9' }), /No proposal/);
 });
 
+test('a started card is a sub-thread like user_asked, from either Start or the agent; isTopLevel stays top-level', async () => {
+  const t = setup();
+  const subOf = (id: string) => ({ parent: t.thread(id).parent, base: t.thread(id).repo?.base });
+  const asked = subOf((await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Asked' })).id);
+  assert.deepEqual(asked, { parent: { threadId: 'rl' }, base: 'feat/api-rate-limits' });
+  const clicked = await t.ok('create_thread', { initiation: 'offer', ...brief('Clicked') });
+  t.env.dispatch({ type: 'proposal-start', threadId: 'rl', proposalId: clicked.taskId });
+  const told = await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Told') });
+  t.env.dispatch({ type: 'send', threadId: 'rl', text: 'start it', reason: '' });
+  await t.ok('create_thread', { proposalId: told.taskId });
+  const alone = await t.ok('create_thread', { initiation: 'own_initiative', isTopLevel: true, ...brief('Alone') });
+  t.env.dispatch({ type: 'proposal-start', threadId: 'rl', proposalId: alone.taskId });
+  const started = cardsOf(t.thread('rl')).map((p) => [p.title, subOf(p.threadId!)]);
+  assert.deepEqual(started, [['Clicked', asked], ['Told', asked], ['Alone', { parent: undefined, base: undefined }]]);
+});
+
 test('offer waits for New thread or Do it here, and answering it is final', async () => {
   const t = setup();
   const threads = t.state().threads.length;
