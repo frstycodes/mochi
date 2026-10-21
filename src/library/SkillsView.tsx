@@ -66,7 +66,7 @@ function InstalledSkills({ library, query, showDiscover }: Parameters<PagePart>[
           )}
         </SettingsCard>
       </SettingsSection>
-      <NativeSections kind="skill" query={query} />
+      <NativeSections kinds={['skill']} query={query} />
     </>
   );
 }

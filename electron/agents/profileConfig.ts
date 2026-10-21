@@ -30,6 +30,7 @@ import {
 } from '../../src/settings/agentConfig.ts';
 import { parseToml } from '../../src/settings/toml.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
+import { claudeAiConnectorsOf } from './claude/claudeAiConnectors.ts';
 import { accountFor, userPath } from './config.ts';
 
 /**
@@ -127,6 +128,7 @@ async function readProvider(spaceId: string, provider: Provider, projectRoot?: s
     config.mcpServers = provider === 'claude' ? claudeEntries(servers, settings) : codexServers(servers).map(({ def, enabled }) => entry(def, enabled, 'user'));
     config.skills = await readSkills(provider, files.skills, settings);
     config.plugins = provider === 'claude' ? await claudePlugins(files.dir) : codexPlugins(settings);
+    if (provider === 'claude') config.claudeAiConnectors = await claudeAiConnectorsOf(account.id);
     if (provider === 'claude') config.commands = await claudeCommands(files.dir, settings, projectRoot);
     if (projectRoot) {
       const local = join(projectRoot, INSTRUCTIONS_FILE[provider]);

@@ -55,7 +55,7 @@ function InstalledPlugins({ library, query, showDiscover }: Parameters<PagePart>
           }
         />
       </SettingsSection>
-      <NativeSections kind="plugin" query={query} />
+      <NativeSections kinds={['plugin']} query={query} />
     </>
   );
 }

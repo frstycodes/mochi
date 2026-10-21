@@ -72,7 +72,7 @@ function Connected({ library, query, showDiscover }: Parameters<PagePart>[0]) {
           <InstalledList entries={shownServers} library={library} query="" empty={null} />
         </SettingsSection>
       )}
-      <NativeSections kind="server" query={query} />
+      <NativeSections kinds={['server', 'connector']} query={query} />
     </>
   );
 }

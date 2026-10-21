@@ -155,8 +155,8 @@ Labels: RUN = verified by a run; SRC = verified by reading the SDK, CLI strings 
 | Project `.mcp.json` server | `settings.disabledMcpjsonServers: [name]` | RUN | Not connected |
 | MCP server | `disallowedTools: ["mcp__<server>"]` | RUN | Out of context, but still connects |
 | MCP server | `strictMcpConfig` + re-passing kept servers | RUN | Works but heavy: Mochi would copy every kept server |
-| All claude.ai connectors | `settings.disableClaudeAiConnectors: true` or env `ENABLE_CLAUDEAI_MCP_SERVERS=false` | RUN (debug log) | Not fetched |
-| One claude.ai connector | `deniedMcpServers: [{ serverName: "claude.ai <Name>" }]` | NV | RUN only for a proxy server passed explicitly, not one fetched from a real account |
+| All claude.ai connectors | `settings.disableClaudeAiConnectors: true` or env `ENABLE_CLAUDEAI_MCP_SERVERS=false` | RUN | Not fetched; `mcpServerStatus()` lists none |
+| One claude.ai connector | `deniedMcpServers: [{ serverName: "claude.ai <Name>" }]` | RUN | Not connected; absent from `mcpServerStatus()` (real account, 2026-10-21, SDK 0.3.296) |
 | Ruled out | `toggleMcpServer` | RUN | Writes `projects[cwd].disabledMcpServers` into `.claude.json` |
 | Ruled out | `settingSources` | RUN | Drops whole layers (`user` drops all plugins too) |
 
