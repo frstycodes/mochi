@@ -3,7 +3,7 @@ import type { McpServerDef } from '../settings/agentConfig.ts';
 import type { Provider } from '../model.ts';
 import type { DiskFile } from '../host/types/fs.ts';
 
-export type NativeKind = 'skill' | 'plugin' | 'server';
+export type NativeKind = 'skill' | 'plugin' | 'server' | 'connector';
 
 /** One of Claude Code's or Codex's own items, as an account's config loads it. Mochi never changes it; a profile can only leave it out (PROFILES-UX.md). */
 export interface NativeItem {
@@ -26,9 +26,9 @@ export interface NativeItem {
   def?: McpServerDef;
 }
 
-export const NATIVE_KIND_LABELS = { skill: 'Skill', plugin: 'Plugin', server: 'MCP server' } satisfies Record<NativeKind, string>;
+export const NATIVE_KIND_LABELS = { skill: 'Skill', plugin: 'Plugin', server: 'MCP server', connector: 'Connector' } satisfies Record<NativeKind, string>;
 
-/** Every item one account's config loads, skills, then plugins, then servers. */
+/** Every item one account's config loads, skills, then plugins, then servers, then claude.ai connectors. */
 export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
   const { provider, account } = config;
   const base = { provider, accountId: account.id };
@@ -70,7 +70,17 @@ export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
     isOffNatively: !enabled,
     def,
   }));
-  return [...skills, ...plugins, ...servers];
+  const connectors = (config.claudeAiConnectors ?? []).map((name) => ({
+    ...base,
+    id: id('connector', 'claude.ai', name),
+    kind: 'connector' as const,
+    name,
+    description: '',
+    where: 'Your claude.ai account',
+    file: null,
+    isOffNatively: false,
+  }));
+  return [...skills, ...plugins, ...servers, ...connectors];
 }
 
 /** The account's own folder, as the user would type it. */

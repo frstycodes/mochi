@@ -137,6 +137,8 @@ export interface ProviderConfig {
   commands: (AgentCommand & { isSkill: boolean })[];
   /** `<name>@<marketplace>`, the id both tools' settings key plugins by. */
   plugins: string[];
+  /** Claude only: the account's claude.ai connectors (`claude.ai Gmail`), as its sessions last reported them. */
+  claudeAiConnectors?: string[];
   /** The project's own instructions file, when the project has one; the tool reads it next to the account's. */
   projectInstructions: string | null;
   /** A config file that couldn't be read; the lists then show what could be. */

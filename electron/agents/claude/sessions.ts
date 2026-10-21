@@ -23,6 +23,7 @@ import { profileInstructions } from '../profileFolder.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { recordClaudeAiConnectors } from './claudeAiConnectors.ts';
 import { FORK_MISSING_NOTICE, FORK_REFUSED_NOTICE, forkPoint, MISSING_FORK_POINT, takeForkAt, transcriptUuids } from './fork.ts';
 
 /**
@@ -231,6 +232,7 @@ async function launch(session: Session) {
     const mode = (options.permissionMode as PermissionMode | undefined) ?? 'default';
     const permissions = permissionOptions(mode);
     const connectorRules = claudePermissions(toolRules);
+    const deniedConnectors = (native.deniedMcpServers ?? []).flatMap((d) => ('serverName' in d ? [d.serverName] : []));
     session.query = query({
       prompt: inbox(session, abort.signal),
       options: {
@@ -292,7 +294,10 @@ async function launch(session: Session) {
       session.mapper.map(message).forEach(emit);
       if (message.type !== 'result') continue;
       unreadAfterTwoTurns(session);
-      void session.query.mcpServerStatus().then((list) => emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } }), () => {});
+      void session.query.mcpServerStatus().then((list) => {
+        emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } });
+        void recordClaudeAiConnectors(session.account.id, list, deniedConnectors);
+      }, () => {});
       session.isBusy = session.inbox.length > 0;
       if (!session.isBusy && waiting.length) release(session);
     }
