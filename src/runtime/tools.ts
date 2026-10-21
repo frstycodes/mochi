@@ -1,11 +1,7 @@
 import { z } from 'zod';
-import { prBody } from '../git/prBody.ts';
-import { gateRefusal, prGate } from '../goals/verdict.ts';
-import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentPlanItem, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
-import type { BranchList, CheckRun } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
@@ -14,7 +10,7 @@ import { nextProposalId, PROPOSALS_PER_TURN, proposalBlocker, turnOf, turnPropos
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, isListed, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread, type ThreadProposal } from '../model.ts';
 import { projectRef } from '../projects.ts';
-import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
+import { activeThreads, dropPin, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_CONTROL } from '../settings/settingOptions.ts';
 import { AGENT_CONTROLS, type AgentControl, type Prefs } from '../settings/prefs.ts';
@@ -66,8 +62,6 @@ export interface ToolEnv {
   isDesktop: boolean;
   /** Starts a second opinion on `thread` from the other provider, resolving with the reviewer; throws why it can't. */
   askSecondOpinion: (thread: Thread) => Promise<Provider>;
-  /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
   now?: () => number;
 }
 
@@ -460,32 +454,6 @@ const THREAD_SPECS = {
 
 const GOAL_SPECS = {
   get_goal: { run: ({ state, caller, args }) => ({ result: goalOf(target(state(), caller, args.threadId), state().threads) }) },
-  open_pr: {
-    run: async ({ env, state, caller, args, dispatch }) => {
-      const cwd = caller.repo && env.cwdOf(caller);
-      if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
-      const { current, defaultBranch } = await env.git.branches(cwd);
-      if (!current) throw new Error(`${cwd} is on a detached HEAD, so there is no branch to push. Commit on this thread's own branch, not in another worktree`);
-      if (current === defaultBranch) throw new Error(`${cwd} is on ${defaultBranch}; open_pr would push straight to it. Commit on a branch of its own first`);
-      const isGoalsOn = env.prefs.get().goals;
-      // Checks run again here: open_pr usually comes mid-turn, before the idle pass would have run them.
-      for (const c of isGoalsOn ? (caller.criteria ?? []) : []) {
-        if (!c.command) continue;
-        const result = await env.git.runCheck(cwd, c.command).catch((error: Error) => ({ exitCode: null, output: error.message, ms: 0 }));
-        dispatch({ type: 'criterion-check', threadId: caller.id, criterionId: c.id, result });
-      }
-      const checked = target(state(), caller, caller.id);
-      const gate = isGoalsOn ? prGate(checked, env.prefs.get().prGaps) : { blocking: [], noted: [] };
-      if (gate.blocking.length) throw new Error(gateRefusal(checked, gate.blocking));
-      const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
-      const base = await parentBase(env, state(), caller, githubUser);
-      await env.git.push(cwd, githubUser);
-      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(checked, args.why, gate.noted), ...(base && { base }) }, githubUser);
-      const opened = openedPr(url, args.title.trim());
-      if (opened) dispatch({ type: 'prs-seen', threadId: caller.id, prs: [opened] });
-      return { changed: `opened ${url}`, result: { url } };
-    },
-  },
   propose_goal: {
     run: ({ state, env, caller, args, dispatch }) => {
       if (caller.isGoalOff) throw new Error('The user removed this thread\'s goal; carry on without one');
@@ -737,21 +705,6 @@ function startProposal({ state, caller, dispatch }: ToolContext<Args<'create_thr
   const created = state().threads.find((t) => !before.threads.some((s) => s.id === t.id));
   if (!created) throw new Error(`Couldn't start ${proposalId}`);
   return { changed: `started "${created.title}"`, result: summary(created), undo: () => dispatch({ type: 'delete', threadIds: [created.id] }) };
-}
-
-/**
- * A sub-thread's PR goes into its parent's branch, so the parent's PR stays the one you review. The parent's branch is pushed
- * first: GitHub needs it to exist. None for a thread on its own, one started from the default branch, or one nested under a
- * thread in another project.
- */
-async function parentBase(env: ToolEnv, state: State, caller: Thread, githubUser: string | undefined) {
-  if (!caller.repo?.base) return undefined;
-  const parent = caller.parent && parentOf(state.threads, caller);
-  if (!parent?.repo || parent.repo.project !== caller.repo?.project || parent.repo.isDetached) return undefined;
-  const parentCwd = env.cwdOf(parent);
-  if (!parentCwd) return undefined;
-  await env.git.push(parentCwd, githubUser);
-  return parent.repo.branch;
 }
 
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {

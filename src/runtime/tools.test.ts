@@ -30,7 +30,7 @@ const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidec
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
-function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/', gitBranches = null as string[] | null, gitCurrent = 'main' as string | null, failing = [] as string[] } = {}) {
+function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/' } = {}) {
   const view = { kind: 'thread', id: 'rl' } as const;
   let state = {
     ...initialThreads(undefined, true),
@@ -51,10 +51,8 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const removed: string[] = [];
   const evals: string[] = [];
   const answers: boolean[] = [];
-  const pushes: string[] = [];
   const opened: string[] = [];
   const drafted: { spaceId: string; prompt: string }[] = [];
-  const prs: { title: string; body: string; base?: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, goals: true, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
@@ -121,11 +119,6 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     },
     remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
-    git: {
-      branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
-      push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9'),
-      runCheck: async (_cwd, command) => (failing.includes(command) ? { exitCode: 1, output: 'ℹ tests 714\nℹ fail 5', ms: 9 } : { exitCode: 0, output: 'ok', ms: 9 }),
-    },
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
   const ok = async (name: string, args?: Record<string, unknown>, threadId?: string) => {
@@ -148,7 +141,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, drafted, connects, setupRuns, setupResults };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, opened, drafted, connects, setupRuns, setupResults };
   return t;
 }
 
@@ -254,7 +247,7 @@ test('create_thread starts each thread on a temp branch of its own, for its titl
 });
 
 test('create_thread gives the new thread its own worktree even when your Worktree box is unticked', async () => {
-  const t = setup({ gitBranches: ['main'] });
+  const t = setup();
   t.env.prefs.set({ workspaceMode: 'folder' });
   setPrefs({ workspaceMode: 'folder' });
   try {
@@ -336,15 +329,13 @@ test('create_thread nests under the calling thread; a top-level one waits on you
   assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x', isTopLevel: true, criterionId: 'c' }), /leave out isTopLevel/);
 });
 
-test('isFromDefaultBranch nests the thread but bases it and its PR on the default branch', async () => {
-  const t = setup({ gitBranches: ['main', 'feat/x'], gitCurrent: 'feat/x' });
+test('isFromDefaultBranch nests the thread but bases it on the default branch', async () => {
+  const t = setup();
   const stacked = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add the retry header' });
   const apart = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Unrelated cleanup', isFromDefaultBranch: true });
   assert.deepEqual(t.thread(apart.id).parent, { threadId: 'rl' });
   assert.equal(t.thread(apart.id).repo?.base, undefined);
-  await t.ok('open_pr', { title: 'feat: retry header', why: 'y' }, stacked.id);
-  await t.ok('open_pr', { title: 'chore: cleanup', why: 'y' }, apart.id);
-  assert.deepEqual(t.prs.map((pr) => pr.base), ['feat/api-rate-limits', undefined]);
+  assert.equal(t.thread(stacked.id).repo?.base, 'feat/api-rate-limits');
 });
 
 test("a new thread can't run above its parent: higher picks ask first, lower ones and permissions pass straight through", async () => {
@@ -1284,41 +1275,6 @@ test('claim_criterion records evidence; report and get_report give the turn as d
   assert.deepEqual([mine.criteria[0].claimed, mine.report.question, mine.report.decisions], ['curl -i shows Retry-After: 30', 'Switch the 429 body to JSON?', ['Kept the old 429 body']]);
   await t.ok('report_turn', { decisions: [], left: [], next: 'Commit the Retry-After fix?', options: [{ label: ' Commit ', reply: 'Commit it.' }, { label: 'Change the plan', reply: 'First:', isDraft: true }] });
   assert.deepEqual(t.thread('rl').report?.options, [{ label: 'Commit', reply: 'Commit it.' }, { label: 'Change the plan', reply: 'First:', isDraft: true }], "the agent's own buttons, trimmed");
-});
-
-test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and its checks', async () => {
-  const t = setup({ gitBranches: ['main', 'feat/rate-limit'], gitCurrent: 'feat/rate-limit' });
-  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }, { text: 'Tests pass', command: 'pnpm test' }] } });
-  const [first] = t.thread('rl').criteria!;
-  t.env.dispatch({ type: 'criterion-claim', threadId: 'rl', criterionId: first.id, evidence: 'curl -i shows it', by: 'claude' });
-  const r = await t.ok('open_pr', { title: 'feat(api): rate limit keys by plan', why: 'Enterprise keys need higher limits.' });
-  assert.equal(r.url, 'https://github.com/o/r/pull/9');
-  assert.deepEqual(t.pushes, ['/repo/rl']);
-  assert.equal(t.prs[0].title, 'feat(api): rate limit keys by plan');
-  assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [x] Tests pass: `pnpm test` passed'].join('\n'));
-});
-
-test('open_pr runs the checks first and refuses on a failing one with the same reason the card shows; Open anyway lets it through, noted', async () => {
-  const t = setup({ gitBranches: ['main', 'feat/rate-limit'], gitCurrent: 'feat/rate-limit', failing: ['pnpm test'] });
-  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: 'Tests pass', command: 'pnpm test' }] } });
-  const [tests] = t.thread('rl').criteria!;
-  t.env.dispatch({ type: 'criterion-claim', threadId: 'rl', criterionId: tests.id, evidence: 'all green', by: 'claude' });
-  const refusal = await t.err('open_pr', { title: 'fix: x', why: 'y' });
-  assert.match(refusal, /open_pr refused: 1 critical gap: Check fails: Tests pass \(ℹ fail 5\)\. Fix it, or ask the user to choose Open anyway/);
-  assert.equal(t.thread('rl').criteria![0].check?.status, 'failed', 'the claim no longer counts');
-  assert.deepEqual(t.pushes, []);
-  t.env.dispatch({ type: 'idle-start', threadId: 'rl' });
-  t.env.dispatch({ type: 'idle-update', threadId: 'rl', patch: { canOpenPr: true, audit: { unverified: [{ text: 'Not checked in the app', quote: "I haven't checked it in the app" }] } } });
-  await t.ok('open_pr', { title: 'fix: x', why: 'y' });
-  assert.match(t.prs[0].body, /## Not verified\n- \*\*Critical, opened anyway:\*\* Check fails: Tests pass\n- Not checked in the app \(agent: "I haven't checked it in the app"\)$/);
-});
-
-test('open_pr refuses a detached HEAD and the default branch, and pushes nothing', async () => {
-  const detached = setup({ gitBranches: ['main'], gitCurrent: null });
-  assert.match(await detached.err('open_pr', { title: 'fix: x', why: 'y' }), /detached HEAD/);
-  const onMain = setup({ gitBranches: ['main'] });
-  assert.match(await onMain.err('open_pr', { title: 'fix: x', why: 'y' }), /push straight to it/);
-  assert.deepEqual([...detached.pushes, ...onMain.pushes], []);
 });
 
 test('propose_goal waits for Accept by default; Keep leaves the draft; Apply with undo sets it and Undo puts the draft back', async () => {

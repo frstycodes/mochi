@@ -105,8 +105,6 @@ export interface IdleCheck {
   suggestion?: string;
   /** Gap ids you accepted this turn. */
   accepted: string[];
-  /** You chose Open anyway: open_pr goes ahead past this turn's critical gaps. */
-  canOpenPr?: boolean;
   /** You said this turn got you what you wanted: what only you can check counts as met, until your next message. */
   isConfirmed?: boolean;
   /** You answered this turn's next-move card (or wrote instead); it stays in the chat as a record, not a card. */

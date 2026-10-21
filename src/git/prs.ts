@@ -16,6 +16,10 @@ function isSame(a: PullRequest, b: PullRequest) {
   return a.state === b.state && a.title === b.title && a.url === b.url;
 }
 
+/** What the Open pull request buttons ask the agent; it picks the base, since a nested thread's parent branch is rarely the right one. */
+export const OPEN_PR_PROMPT =
+  'Open a pull request for this branch: commit what is left, push it, then run gh pr create with --base set explicitly (usually main, or the branch this one was cut from), a Conventional Commits title, and a body written from your turn report: What, Why, Checks. If a check or gap blocks it, tell me what is missing instead.';
+
 export interface GhPr {
   number: number;
   url: string;
@@ -33,6 +37,12 @@ export function prsOnBranches(rows: GhPr[], branches: Set<string>): { branch: st
     if (row.isCrossRepository || !branches.has(row.headRefName)) return [];
     return [{ branch: row.headRefName, pr: { number: row.number, state, title: row.title, url: row.url } }];
   });
+}
+
+/** Each worktree's PRs, matched by the branch it has checked out (`HEAD` when detached, which has none), so a PR opened any way lands on its thread. */
+export function prsByWorktree(worktrees: string[], branches: string[], rows: GhPr[]): { worktree: string; pr: PullRequest }[] {
+  const found = prsOnBranches(rows, new Set(branches.filter((b) => b !== 'HEAD')));
+  return worktrees.flatMap((worktree, i) => found.filter((f) => f.branch === branches[i]).map(({ pr }) => ({ worktree, pr })));
 }
 
 /** Auto-archive (`useAutoArchive`) is due: a PR has it on, every PR merged or closed, and the agent idle; until then it waits. */

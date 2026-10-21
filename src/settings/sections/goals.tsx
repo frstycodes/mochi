@@ -21,9 +21,6 @@ export function GoalsSection() {
           <SettingsGroup title="When a thread goes idle">
             <CatalogRow settingKey="idleChecks" />
           </SettingsGroup>
-          <SettingsGroup title="Before a pull request" footer="You can always choose Open anyway on the verdict card.">
-            <CatalogRow settingKey="prGaps" />
-          </SettingsGroup>
         </>
       )}
     </div>

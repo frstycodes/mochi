@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { PullRequest, Thread } from '../model.ts';
-import { autoMergeArgs, createdPr, isArchiveDue, prsOnBranches, recordPrs, type GhPr } from './prs.ts';
+import { autoMergeArgs, createdPr, isArchiveDue, prsByWorktree, prsOnBranches, recordPrs, type GhPr } from './prs.ts';
 
 const url = 'https://github.com/o/r/pull/7';
 
@@ -22,6 +22,15 @@ test("gh's list keeps the threads' branches in every state, never a fork's same-
   assert.deepEqual(
     prsOnBranches(rows, new Set(['feat/x'])).map(({ branch, pr }) => [branch, pr.number, pr.state]),
     [['feat/x', 7, 'open'], ['feat/x', 8, 'draft'], ['feat/x', 9, 'merged'], ['feat/x', 10, 'closed']],
+  );
+});
+
+test("a PR the agent opened with gh lands on the thread whose worktree has its branch checked out, whatever its base", () => {
+  const row = (over: Partial<GhPr>): GhPr => ({ number: 274, url, title: 'Fix', state: 'OPEN', isDraft: false, headRefName: 'refactor/x', isCrossRepository: false, ...over });
+  const rows = [row({}), row({ number: 275, headRefName: 'feat/parent' }), row({ number: 276, headRefName: 'refactor/x', isCrossRepository: true }), row({ number: 277, headRefName: 'HEAD' })];
+  assert.deepEqual(
+    prsByWorktree(['/wt/sub', '/wt/parent', '/wt/detached', '/wt/other'], ['refactor/x', 'feat/parent', 'HEAD', 'feat/none'], rows).map(({ worktree, pr }) => [worktree, pr.number]),
+    [['/wt/sub', 274], ['/wt/parent', 275]],
   );
 });
 

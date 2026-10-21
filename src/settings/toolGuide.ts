@@ -25,7 +25,6 @@ export const TOOL_GUIDE = {
   delete_thread: { group: 'Threads', label: 'Delete threads', description: 'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.' },
 
   get_goal: { group: 'Progress', label: 'Read goals', description: "See a thread's goal and what done means, with each criterion's claim and check." },
-  open_pr: { group: 'Progress', label: 'Open pull requests', description: 'Push its branch and open the pull request, with the description written from its report.' },
   propose_goal: { group: 'Progress', label: 'Propose goals', description: 'Propose a thread’s goal and its criteria after a first look at the code, and again when what done means changes. How it lands is under Goals and checks.' },
   claim_criterion: { group: 'Progress', label: 'Claim criteria', description: 'Say a criterion is met, with evidence you can check. Mochi still checks it itself.' },
   report_turn: { group: 'Progress', label: 'Report turns', description: 'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.' },

@@ -311,27 +311,6 @@ function doneDetail(thread: Thread, accepted: number) {
   return accepted ? `Every criterion met; you accepted ${accepted} ${accepted === 1 ? 'gap' : 'gaps'}` : 'Every criterion met, nothing left open';
 }
 
-/**
- * What stands between this thread and a PR: critical gaps block unless you chose Open anyway; unverified ones and those you
- * accepted go into the PR description. Read after open_pr ran the criteria checks again, so `failed` is current.
- */
-export function prGate(thread: Thread, policy: 'block' | 'warn' = 'block') {
-  const gaps = idleGaps(thread, []);
-  const isOpenAnyway = policy === 'warn' || !!thread.idle?.canOpenPr;
-  const blocking = isOpenAnyway ? [] : gaps.filter((g) => g.severity === 'critical' && !g.isAccepted);
-  return { blocking, noted: gaps.filter((g) => !blocking.includes(g)) };
-}
-
-/** The tool error the agent gets, naming each critical gap the way the card does. */
-export function gateRefusal(thread: Thread, blocking: Gap[]) {
-  const reasons = blocking.map((g) => {
-    const check = thread.criteria?.find((c) => c.id === g.criterionId)?.check;
-    const line = failureLine(check?.output);
-    return line ? `${g.text} (${line})` : g.text;
-  });
-  return `open_pr refused: ${blocking.length} critical ${blocking.length === 1 ? 'gap' : 'gaps'}: ${reasons.join('; ')}. Fix ${blocking.length === 1 ? 'it' : 'them'}, or ask the user to choose Open anyway on the verdict card.`;
-}
-
 /** The line of a failed check's output that says what failed: the first error-looking line, else the last. Node ends a crash with its version, so the last line alone reads "Node.js v26.0.0". */
 export function failureLine(output: string | undefined) {
   const lines = output?.trim().split('\n').map((l) => l.trim()).filter(Boolean) ?? [];

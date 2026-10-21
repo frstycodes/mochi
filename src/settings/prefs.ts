@@ -52,8 +52,6 @@ export interface Prefs {
   branchFrom: 'current' | 'base';
   /** When the agent goes idle, whether Mochi runs the goal's criterion checks (`useIdleChecks`). */
   idleChecks: 'edited' | 'always' | 'off';
-  /** What open_pr does with critical gaps: refuse until fixed or Open anyway, or open and list them. */
-  prGaps: 'block' | 'warn';
   /** A goal the agent proposes (`propose_goal`) waits for your Accept, or applies at once with an undo. */
   proposedGoals: 'ask' | 'apply';
   /** VerdictKind values that notify when a thread you aren't looking at goes idle. */
@@ -105,7 +103,6 @@ export const DEFAULT_PREFS: Prefs = {
   goals: false,
   idleChecks: 'edited',
   proposedGoals: 'ask',
-  prGaps: 'block',
   idleAlerts: ['gaps', 'needs-you', 'stalled'],
   alertKinds: ['needs-you', 'done', 'failed', 'limit', 'ci', 'pr-review', 'run'],
   watchedToasts: true,
