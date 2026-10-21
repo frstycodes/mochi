@@ -4,7 +4,7 @@ import type { DraftedCriterion } from '../utility/prompts.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type Handoff, type IdleCheck, type LineSlot, type PendingSteer, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadProposal, type ThreadRef, type TurnReport } from '../model.ts';
 import { addProposal, findProposal, proposalBlocker, updateProposal } from '../chat/proposals.ts';
 import { markSent } from '../chat/threadMessages.ts';
-import { orderQueue, pauseQueue } from '../chat/outbox.ts';
+import { interruptsToSend, orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
 import { shownImage } from '../chat/images.ts';
 import { sourcePrompt } from '../sources.ts';
@@ -84,6 +84,10 @@ export type ThreadsAction =
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
   /** A message sent into the running turn, taken back before the agent read it; the composer has it again. */
   | { type: 'steer-take-back'; threadId: string; id: string }
+  /** Send now clicked on a message the agent hasn't read: marks it while `sendSteerNow` takes it back. */
+  | { type: 'steer-send-now'; threadId: string; id: string }
+  /** The unread messages Send now took back, the clicked one first (none when the agent already had it): they head the queue. */
+  | { type: 'steer-requeue'; threadId: string; ids: string[] }
   /** Edit and remove both take a message out; Edit puts its text back in the composer itself. */
   | { type: 'queued-remove'; threadId: string; id: string }
   | { type: 'queued-order'; threadId: string; ids: string[] }
@@ -245,6 +249,10 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, queued: [...(t.queued ?? []), action.message] })) };
     case 'steer-take-back':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => withSteering(t, (t.steering ?? []).filter((s) => s.message.id !== action.id))) };
+    case 'steer-send-now':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => withSteering(t, (t.steering ?? []).map((s) => (s.message.id === action.id ? { ...s, sendNow: 'pending' as const } : s)))) };
+    case 'steer-requeue':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => requeueSteers(t, action.ids)) };
     case 'queued-remove':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => withQueue(t, (t.queued ?? []).filter((m) => m.id !== action.id))) };
     case 'queued-order':
@@ -408,6 +416,14 @@ export function readSteer(t: Thread, id: string, now: number): Thread {
   return pending.entry.drift ? applyDrift(said, pending.entry.drift, pending.reason, now) : said;
 }
 
+/** Taken-back steers head the queue, `ids` order first; the turn Send now was clicked in, if still running, is interrupted for them (`agentCalls`). */
+function requeueSteers(t: Thread, ids: string[]): Thread {
+  const taken = ids.flatMap((id) => t.steering?.find((s) => s.message.id === id)?.message ?? []).map((m, i) => (i === 0 ? { ...m, isSentNow: true as const } : m));
+  const steering = (t.steering ?? []).filter((s) => !ids.includes(s.message.id)).map((s) => (s.sendNow ? { ...s, sendNow: undefined } : s));
+  const requeued = { ...withSteering(t, steering), queued: [...taken, ...(t.queued ?? [])] };
+  return interruptsToSend(t, ids) ? { ...requeued, isInterruptedToSend: true } : requeued;
+}
+
 function withSteering(thread: Thread, steering: PendingSteer[]): Thread {
   return { ...thread, steering: steering.length ? steering : undefined };
 }
@@ -565,7 +581,7 @@ export function send(state: State, action: Extract<Action, { type: 'send' }>): S
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
       const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
-      const entry: ActivityEntry = { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }), ...(action.autofix && { autofix: action.autofix }), ...(action.secondOpinion && { secondOpinion: action.secondOpinion }) };
+      const entry: ActivityEntry = { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && !action.typed?.isSentNow && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }), ...(action.autofix && { autofix: action.autofix }), ...(action.secondOpinion && { secondOpinion: action.secondOpinion }) };
       const going = live ? { ...sent, status: 'running' as const, live } : sent;
       // Into a turn in flight, it joins the transcript where the agent reads it (`readSteer`), not where you sent it.
       if (action.typed && t.live?.isWorking) return { ...going, steering: [...(t.steering ?? []), { message: action.typed, entry: { ...entry, isSeen: true }, reason: action.reason }] };

@@ -1,4 +1,5 @@
 import { agentImage } from '../chat/images.ts';
+import { interruptsToSend } from '../chat/outbox.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
@@ -80,6 +81,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     }
     case 'interrupt':
       return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+    case 'steer-requeue': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      return thread && interruptsToSend(thread, action.ids) && hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+    }
     case 'rewind':
     case 'rewind-message':
     case 'rewind-undo': {

@@ -93,9 +93,10 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => clearLimit(t, now));
     case 'turn-end': {
       // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
-      const ended = thread.live ? update((t) => closeCompaction({ ...stopRunningSteps(t, now), live:{ ...t.live!, isWorking: false, turnEnd: event.status, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
+      const ended = thread.live ? update((t) => closeCompaction({ ...endSendNow(stopRunningSteps(t, now)), live:{ ...t.live!, isWorking: false, turnEnd: event.status, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
       if (isLimitEnd(thread)) return ended;
-      return noteParent(endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event), thread, event.status);
+      const isPaused = event.status === 'failed' || (event.status === 'interrupted' && !thread.isInterruptedToSend);
+      return noteParent(endTurn(isPaused ? { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) } : ended, thread, event), thread, event.status);
     }
   }
 }
@@ -304,6 +305,12 @@ function endTurn(state: State, thread: Thread, event: Extract<AgentEvent, { type
   if (event.status === 'failed') return update((t) => log({ ...t, status: 'needs-you' }, { at: now, who: 'harness', kind: 'event', text: `Turn failed${event.error ? `: ${event.error}` : ''}` }));
   // Whether the goal is met is the idle verdict's to say (`src/goals/verdict.ts`), once Mochi has checked the turn.
   return state;
+}
+
+/** A Send now still taking its message back no longer stops anything: the turn it was clicked in is over (`interruptsToSend`). */
+function endSendNow(t: Thread): Thread {
+  const steering = t.steering?.map((s) => (s.sendNow ? { ...s, sendNow: 'turn-ended' as const } : s));
+  return t.isInterruptedToSend || steering ? { ...t, isInterruptedToSend: undefined, steering } : t;
 }
 
 /** A step still running when the turn ends stops its clock; whether it's done is the agent's to say, not the turn end's. */
