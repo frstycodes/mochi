@@ -86,16 +86,16 @@ export function ThreadMessageBody({ text, className, children }: { text: string;
 }
 
 /** Above the row's own toggle (`z-10`), so the name opens the thread and the rest of the row opens the message. */
-export function ThreadName({ peer }: { peer: ThreadRef }) {
+export function ThreadName({ peer, className }: { peer: ThreadRef; className?: string }) {
   const { state, dispatch } = useHarness();
   const { thread, title } = usePeer(peer);
-  if (!thread) return <span className="max-w-[50%] shrink-0 truncate text-foreground">{title}</span>;
+  if (!thread) return <span className={cn('max-w-[50%] shrink-0 truncate text-foreground', className)}>{title}</span>;
   const open = () => {
     if (thread.spaceId !== state.spaceId) dispatch({ type: 'space', id: thread.spaceId });
     dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
   };
   return (
-    <button type="button" title={`Open “${title}”`} onClick={open} className="relative z-10 max-w-[50%] shrink-0 cursor-pointer truncate text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none">
+    <button type="button" title={`Open “${title}”`} onClick={open} className={cn('relative z-10 max-w-[50%] shrink-0 cursor-pointer truncate text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none', className)}>
       {title}
     </button>
   );

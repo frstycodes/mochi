@@ -15,6 +15,7 @@ import { nestBlocker, openSubtree, pinAt, reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
+import { notePrsEnded } from '../runtime/subThreadNotes.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, turnUndo, undoRewind, type Checkpoint, type RewindMode, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
@@ -433,7 +434,7 @@ export function seePrs(state: State, threadId: string, prs: PullRequest[]): Stat
   const recorded = next.map((pr) => (isNew(pr) ? withDefaults(pr) : pr));
   const enabled = recorded.filter((pr) => isNew(pr) && pr.autofixSince);
   const said = enabled.reduce((t, pr) => log(t, { at: state.now, who: 'harness', kind: 'event', text: autofixTitle({ kind: 'enabled', pr: pr.number }) }), { ...thread, prs: recorded });
-  return { ...state, threads: mapThread(state.threads, threadId, () => said) };
+  return notePrsEnded({ ...state, threads: mapThread(state.threads, threadId, () => said) }, thread);
 }
 
 export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {
