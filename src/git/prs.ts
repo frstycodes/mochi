@@ -55,7 +55,8 @@ export function autoMergeArgs(pr: number, allowed: MergeMethods | null): string[
   return ['pr', 'merge', String(pr), '--auto', method];
 }
 
-const GH_PR_CREATE = /\bgh\s+pr\s+create\b/;
+// Run as a command (at the start of the activity's `Run …` text or after `&&`, `;`, `|`, a newline), not quoted inside another one's argument.
+const GH_PR_CREATE = /(?:^(?:Run )?|&&|;|\||\n)\s*gh\s+pr\s+create\b/;
 const PR_URL = /https:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/\d+/g;
 const TITLE_FLAG = /(?:--title|-t)[ =](["'])(.*?)\1/;
 
