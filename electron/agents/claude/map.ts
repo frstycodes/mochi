@@ -225,13 +225,16 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
       }
       case 'assistant': {
         const { usage: u } = message.message;
-        if (u) context = { ...context, used: u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) };
+        const used = u ? u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) : context.used;
+        // The meter moves with each API call, not only at the turn's result; tokens and cost still wait for the result's totals.
+        const meter: AgentEvent[] = used && used !== context.used ? [{ threadId, type: 'usage', inputTokens: 0, outputTokens: 0, contextUsed: used, contextMax: context.max || undefined }] : [];
+        context = { ...context, used };
         // Text already arrived as stream_event deltas (includePartialMessages), so only thinking and tool calls are read here.
-        return message.message.content.flatMap((block): AgentEvent[] => {
+        return [...meter, ...message.message.content.flatMap((block): AgentEvent[] => {
           if (block.type === 'thinking' && block.thinking) return [{ threadId, type: 'reasoning', text: block.thinking }];
           if (block.type === 'tool_use') return toolStart(block.id, block.name, block.input as Record<string, unknown>);
           return [];
-        });
+        })];
       }
       case 'user': {
         const { content } = message.message;
