@@ -45,6 +45,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     remote: host.remote,
     isDesktop: host.isDesktop,
     git: host.git,
+    isFolder: (path) => host.fs.entries(path).then((found) => !!found, () => false),
     askSecondOpinion: (thread) => agentAskSecondOpinion(thread, dispatch),
   };
 }

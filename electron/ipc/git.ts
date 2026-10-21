@@ -306,11 +306,14 @@ export async function addWorktree(root: string, threadId: string, branch: string
 export async function createWorktree(root: string, threadId: string, branch: string, options: WorktreeOptions = {}) {
   const top = await mainRepo(root);
   if (!/^[\w-]+$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
-  const dir = join(worktreeRoot(), basename(top), threadId);
+  const dir = worktreeDir(top, threadId);
   if (existsSync(dir)) return { dir, isNew: false };
   await addBranchWorktree(top, dir, branch, options);
   return { dir, isNew: true };
 }
+
+/** Where the thread's own worktree of the repository at `repo` (its main checkout) goes. */
+export const worktreeDir = (repo: string, threadId: string) => join(worktreeRoot(), basename(repo), threadId);
 
 export function worktreeOptions(value: unknown): WorktreeOptions {
   if (value === undefined) return {};

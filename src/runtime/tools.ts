@@ -13,7 +13,8 @@ import type { ThemesHost } from '../host/types/themes.ts';
 import { nextProposalId, PROPOSALS_PER_TURN, proposalBlocker, turnOf, turnProposalCount } from '../chat/proposals.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, isListed, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread, type ThreadProposal } from '../model.ts';
-import { projectRef } from '../projects.ts';
+import { projectName, projectRef } from '../projects.ts';
+import { planMove } from './moves.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_CONTROL } from '../settings/settingOptions.ts';
@@ -67,7 +68,9 @@ export interface ToolEnv {
   /** Starts a second opinion on `thread` from the other provider, resolving with the reviewer; throws why it can't. */
   askSecondOpinion: (thread: Thread) => Promise<Provider>;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
+  /** Whether `path` is a folder on disk (`move_thread`'s checks). */
+  isFolder: (path: string) => Promise<boolean>;
+  git: { branches: (root: string) => Promise<BranchList>; branchNameError: (root: string, name: string) => Promise<string | null>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
   now?: () => number;
 }
 
@@ -325,6 +328,15 @@ const THREAD_SPECS = {
       const threads = others(state(), caller, args.threadIds, 'settle');
       for (const t of threads) dispatch({ type: 'settle', threadId: t.id });
       return { changed: `settled ${count(threads)}`, result: { threads: threads.map((t) => summary(target(state(), caller, t.id))) } };
+    },
+  },
+  move_thread: {
+    run: async ({ env, caller, args, dispatch }) => {
+      if (!env.isDesktop) throw new Error('Threads move only in the desktop app');
+      const move = await planMove(caller, args, { isFolder: env.isFolder, branches: env.git.branches, branchNameError: env.git.branchNameError, prefs: env.prefs.get() });
+      dispatch({ type: 'move-request', threadId: caller.id, move });
+      const result = { willMoveTo: move.root, workspace: move.workspace ?? null, next: 'End your turn now with one short line. Mochi moves the thread once it ends and resumes you there, on this same session, with a note.' };
+      return { changed: `will move this thread to ${projectName(move.root)} when its turn ends`, result, undo: () => dispatch({ type: 'move-cancel', threadId: caller.id }) };
     },
   },
   reactivate_thread: {

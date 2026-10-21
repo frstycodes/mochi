@@ -27,6 +27,7 @@ import { projectRef, repoFor } from '../projects.ts';
 import { autofixTitle } from '../git/autofix.ts';
 import { canAutofix } from '../git/autofixToggle.ts';
 import { recordPrs } from '../git/prs.ts';
+import { movedThread, unmovedThread, type MoveTarget, type PendingMove } from '../git/moveThread.ts';
 import { repoWorkspace, tempBranch, withHead, type WorkspaceDraft } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 import { getRestored } from './persist.ts';
@@ -67,6 +68,13 @@ export type ThreadsAction =
   | { type: 'subthread-handback'; threadId: string; evidence: string }
   /** What the thread's checkout really has (`useWorktreeRecovery`); `worktree`: its own worktree, found on disk. */
   | { type: 'repo-head'; threadId: string; head: Head; worktree?: string }
+  /** The agent's `move_thread`: runs once its turn ends (`useThreadMoves`); `move-cancel` drops it before then. */
+  | { type: 'move-request'; threadId: string; move: PendingMove }
+  | { type: 'move-cancel'; threadId: string }
+  /** `agent.move` set up the new folder: the thread rebinds and its agent resumes the same session there. */
+  | { type: 'move'; threadId: string; to: MoveTarget }
+  /** The move failed: the agent resumes where it was, told why. */
+  | { type: 'move-failed'; threadId: string; error: string }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
   | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
@@ -232,6 +240,14 @@ function reduce(state: State, action: Action): State {
       const { head, worktree } = action;
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withHead(t.repo, head, !!worktree), live: worktree && t.live ? { ...t.live, cwd: worktree } : t.live } : t)) };
     }
+    case 'move-request':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, move: action.move })) };
+    case 'move-cancel':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, move: undefined })) };
+    case 'move':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => movedThread(t, action.to, state.now)) };
+    case 'move-failed':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => unmovedThread(t, action.error, state.now)) };
     case 'workspace':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, threadTempBranch(t.spaceId, t.id, t.startedAt)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':

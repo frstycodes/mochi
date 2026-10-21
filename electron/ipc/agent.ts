@@ -3,7 +3,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { app } from 'electron';
-import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
+import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type MoveResult, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { McpWidgetResource, Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
@@ -20,7 +20,8 @@ import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall, setImageGenerator, undeliveredToolCalls } from '../mcp/server.ts';
 import { commandPrompt, parseTitle, UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle, onAgentEvent } from '../agents/events.ts';
-import { createWorktree } from './git.ts';
+import { createWorktree, worktreeDir } from './git.ts';
+import { moveCheckout } from '../git/move.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
 import { nameThread } from '../agents/naming.ts';
@@ -137,6 +138,8 @@ app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 setImageGenerator('codex', codex.generateImage.bind(codex));
 const starts = new Starts();
+/** Moved threads' new worktrees still being set up (`moveThread`); their next start waits for it. */
+const movedSetups = new Map<string, Promise<unknown>>();
 // A delegated task's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
 const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
@@ -200,6 +203,9 @@ export const agent = {
   },
   async stop(_sender, threadId) {
     return stopSession(string(threadId, 'threadId', 256));
+  },
+  async move(_sender, threadId, request) {
+    return moveThread(string(threadId, 'threadId', 256), request);
   },
   async settle(_sender, threadId) {
     const id = string(threadId, 'threadId', 256);
@@ -340,6 +346,29 @@ async function runUtility(task: UtilityTask, spaceId: string, prompt: string) {
   return answer?.text ?? null;
 }
 
+/**
+ * Stops the thread's agent (it mustn't edit files while they move), then sets up the new folder. Claude Code (2.1.306) and Codex
+ * (0.163.0) both find a session by its id from any cwd, so the next start resumes the same conversation there.
+ */
+async function moveThread(threadId: string, request: unknown): Promise<MoveResult> {
+  if (!/^[\w-]+$/.test(threadId)) throw new TypeError('threadId must be letters, digits, - or _');
+  const r = record(request, 'request');
+  const from = r.from === null ? null : string(r.from, 'request.from');
+  const root = await agentFolder(threadId, string(r.root, 'request.root'));
+  const workspace = startWorkspace(r.workspace);
+  if (r.changes !== 'bring' && r.changes !== 'stash') throw new TypeError('request.changes must be bring or stash');
+  const wasBusy = isBusy(threadId);
+  await stopSession(threadId);
+  if (wasBusy) broadcast({ threadId, type: 'turn-end', status: 'interrupted' });
+  const moved = await moveCheckout(threadId, from, root, workspace, r.changes, (repo) => worktreeDir(repo, threadId));
+  if (moved.isNew) {
+    const setup = setUpWorktree(threadId, root, moved.cwd, () => Promise.resolve('skip'), new AbortController().signal);
+    if (setup) movedSetups.set(threadId, setup.catch(() => {}).finally(() => movedSetups.delete(threadId)));
+  }
+  const head = await headOf(moved.cwd).catch(() => null);
+  return { cwd: moved.cwd, head, ...(moved.stash && { stash: moved.stash }) };
+}
+
 /** Stopping a session with no agent process is a no-op, so settling twice or settling then deleting never errors. */
 async function stopSession(threadId: string) {
   markIdle(threadId);
@@ -387,7 +416,7 @@ export async function startAgent(threadId: unknown, options: unknown) {
     // The renderer runs agent calls one after another, so a start that waited out the setup, or an app-server slow to answer,
     // would hold back the Stop (and every other thread's calls) behind it. It returns here; setup and launch report through events.
     isLaunching = true;
-    void (setup ?? Promise.resolve())
+    void Promise.all([setup, movedSetups.get(id)])
       .then(() => named?.())
       .then(() => {
         if (!start.signal.aborted) return launch(cwd);
@@ -521,21 +550,26 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
   broadcast({ threadId, type: 'worktree', path: dir });
   const title = isNew && workspace.titlePrompt ? runUtility('title', spaceId, workspace.titlePrompt).then((text) => (text && parseTitle(text)) || null, () => null) : undefined;
   const named = title && (() => nameThread(threadId, dir, workspace.branch, title, start, broadcast));
+  // A background agent's setup has no row to answer from: a failed step is skipped.
+  const setup = isNew ? setUpWorktree(threadId, root, dir, isBackgroundSession(threadId) ? () => Promise.resolve('skip') : start.choose, start.signal) : undefined;
+  return { cwd: dir, setup, named };
+}
+
+/** A new worktree's preparation, when Settings has it on; its progress shows on the thread's setup row. */
+function setUpWorktree(threadId: string, root: string, dir: string, choose: () => Promise<SetupChoice>, signal: AbortSignal) {
   const settings = agentSettings();
-  if (!isNew || !settings.prepareWorktrees) return { cwd: dir, named };
-  const setup = topLevel(root).then((top) =>
+  if (!settings.prepareWorktrees) return;
+  return topLevel(root).then((top) =>
     prepareWorktree({
       root: top,
       dir,
       include: settings.worktreeInclude,
       command: settings.setupCommands[root],
       emit: (setup) => broadcast({ threadId, type: 'setup', setup }),
-      // A background agent's setup has no row to answer from: a failed step is skipped.
-      choose: isBackgroundSession(threadId) ? () => Promise.resolve('skip') : start.choose,
-      signal: start.signal,
+      choose,
+      signal,
     }),
   );
-  return { cwd: dir, setup, named };
 }
 
 function imageOf(value: unknown) {

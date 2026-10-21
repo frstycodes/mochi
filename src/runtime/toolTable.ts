@@ -52,6 +52,22 @@ export const TOOL_TABLE = {
     description: "Settle threads whose work is finished or abandoned: they leave the sidebar's active list and their agents stop. Not your own thread. Undoable by the user.",
     shape: { threadIds },
   },
+  move_thread: {
+    tier: 'change',
+    description:
+      "Move your own thread to another folder, worktree or branch, keeping its conversation, your session, sub-threads and pull requests. Use it when the user asks for it: e.g. work started in a chat with no folder (or a scratch folder) should become a real project, or the work belongs on another branch, in its own worktree, or in another project. Nothing moves while you work: the move runs once you end this turn, so call it last and end your turn right after with one short line. Mochi then resumes you on the same session in the new folder with a note saying where you are; if the move fails you resume where you were, told why. `project`: absolute path of an existing folder (added as a project if it isn't one), or, with `fromFolder`, a new folder (it must not exist yet) made from that folder's files, moved or copied. In a git repository, `workspace` picks your own worktree (a new `branch`, from `base`, or an existing one with `existingBranch`) or the project's own checkout (switched to `branch` when given). Uncommitted changes where you work now come along (`changes: bring`, within one repository only) or stay stashed where they are (`stash`); nothing is discarded.",
+    shape: {
+      project: z.string().min(1).describe('Absolute path of the project folder to move to'),
+      fromFolder: z.string().optional().describe("Make `project` a new folder from this folder's files, e.g. the scratch folder you worked in"),
+      transfer: z.enum(['move', 'copy']).optional().describe('With fromFolder: move the files (default) or copy them'),
+      gitInit: z.boolean().optional().describe("Run `git init` in the folder if it isn't in a git repository"),
+      workspace: z.enum(['worktree', 'folder']).optional().describe("Your own worktree, or the project's own checkout; defaults to the user's setting"),
+      branch: z.string().optional().describe('worktree: the new branch (named for you when left out), or the branch to check out with existingBranch. folder: the branch to switch the checkout to'),
+      existingBranch: z.boolean().optional().describe('worktree: check out `branch` as it is instead of creating it'),
+      base: z.string().optional().describe("A new worktree branch starts from this; defaults to your current branch in the same project, else the default branch"),
+      changes: z.enum(['bring', 'stash']).optional().describe('Uncommitted changes where you work now; defaults to bring within the same project, else stash'),
+    },
+  },
   reactivate_thread: { tier: 'change', description: 'Bring settled threads back to the active list.', shape: { threadIds } },
   pin_thread: { tier: 'change', description: 'Pin threads to the top of the sidebar (at most 5 pinned in a profile), in the order given.', shape: { threadIds } },
   unpin_thread: { tier: 'change', description: 'Unpin threads; they go to the top of the unpinned list.', shape: { threadIds } },

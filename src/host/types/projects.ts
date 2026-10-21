@@ -38,6 +38,11 @@ export interface ProjectsHost {
   migrate(spaceId: string, paths: string[]): Promise<Project[]>;
   /** An existing folder; one already listed comes back as it is. */
   addFolder(spaceId: string, path: string): Promise<Project>;
+  /**
+   * A project at `path`: the folder as it is, or made from `from`'s files moved or copied there (refused if `path` exists).
+   * `gitInit` runs `git init` unless it's already inside a repository.
+   */
+  adopt(spaceId: string, path: string, options: { from?: string; transfer?: 'move' | 'copy'; gitInit?: boolean }): Promise<Project>;
   /** Into `parentDir/<repo>`, refused if that exists. Progress lines arrive through `onProgress` under `opId`. */
   clone(spaceId: string, source: CloneSource, options: { parentDir: string; opId: string; githubUser?: string }): Promise<Project>;
   /** `git init` in `parentDir/<name>`; `publish` also creates the GitHub repository through gh and sets it as origin. */
@@ -58,6 +63,7 @@ export const projectsMethods = {
   list: 'invoke',
   migrate: 'invoke',
   addFolder: 'invoke',
+  adopt: 'invoke',
   clone: 'invoke',
   create: 'invoke',
   rename: 'invoke',

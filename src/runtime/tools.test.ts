@@ -121,8 +121,10 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     },
     remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
+    isFolder: async () => true,
     git: {
       branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
+      branchNameError: async () => null,
       push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9'),
       runCheck: async (_cwd, command) => (failing.includes(command) ? { exitCode: 1, output: 'ℹ tests 714\nℹ fail 5', ms: 9 } : { exitCode: 0, output: 'ok', ms: 9 }),
     },

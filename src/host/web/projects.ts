@@ -49,6 +49,9 @@ export const projects: ProjectsHost = {
   async addFolder(spaceId, path) {
     return add(spaceId, path);
   },
+  async adopt(spaceId, path) {
+    return add(spaceId, path);
+  },
   async clone(spaceId, source, { parentDir, opId }) {
     const origin = 'url' in source ? normalizeOrigin(source.url) : `github.com/${source.github}`;
     if (!origin) throw new Error(`${'url' in source ? source.url : source.github} isn’t a git URL Mochi can clone: use https://…, ssh://… or git@host:owner/repo`);

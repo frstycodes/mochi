@@ -1,6 +1,7 @@
 import type { DriftVerdict } from '../../drift.ts';
 import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
+import type { Head } from './git.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
 export interface AgentStartOptions {
@@ -187,6 +188,28 @@ export interface StartWorkspace {
   titlePrompt?: string;
 }
 
+/** A move's uncommitted changes where the thread works now: carried into its new checkout, or stashed where they are. */
+export type MoveChanges = 'bring' | 'stash';
+
+/** `agent.move`: where a thread works from now on. Its agent stops; the next message resumes the same session there. */
+export interface MoveRequest {
+  /** Where it works now; null for a chat whose agent never ran. */
+  from: string | null;
+  /** The project folder it moves to. */
+  root: string;
+  /** Its own worktree or the project's checkout, and on which branch; unset for a folder that isn't a git repository. */
+  workspace?: StartWorkspace;
+  changes: MoveChanges;
+}
+
+export interface MoveResult {
+  cwd: string;
+  /** null outside a git repository. */
+  head: Head | null;
+  /** The stash in the old checkout's repository that holds the changes left behind. */
+  stash?: string;
+}
+
 /**
  * A new worktree's preparation (`electron/git/setup.ts`): copy the project's ignored local files, install dependencies, run the
  * project's setup command. `failed` waits for `setupChoice`; `cancelled` was stopped by an interrupt and the agent never started.
@@ -342,6 +365,8 @@ export interface AgentHost {
   keepTitle(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
+  /** Stops the thread's agent and sets up `request`'s folder; a new worktree's setup runs before its next start. */
+  move(threadId: string, request: MoveRequest): Promise<MoveResult>;
   /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
   settle(threadId: string): Promise<void>;
   /**
@@ -393,6 +418,7 @@ export const agentMethods = {
   keepTitle: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
+  move: 'invoke',
   settle: 'invoke',
   attached: 'invoke',
   onEvent: 'event',

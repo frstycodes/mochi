@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { CloneSource, ProjectsHost } from '../../src/host/types/projects.ts';
 import { openWindows } from '../agents/events.ts';
 import { githubAccount } from '../git/gh.ts';
-import { cloneProject, githubRepos, initProject, publishProject } from '../projects/add.ts';
+import { adoptFolder, cloneProject, githubRepos, initProject, publishProject } from '../projects/add.ts';
 import { projectRegistry } from '../projects/registry.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
@@ -39,6 +39,14 @@ export const projects = {
   async addFolder(_sender, spaceId, path) {
     const id = space(spaceId);
     return changing(id, store().add(id, string(path, 'path')));
+  },
+  async adopt(_sender, spaceId, path, options) {
+    const id = space(spaceId);
+    const o = record(options, 'options');
+    if (o.transfer !== undefined && o.transfer !== 'move' && o.transfer !== 'copy') throw new TypeError('options.transfer must be move or copy');
+    const from = o.from === undefined ? undefined : string(o.from, 'options.from');
+    const folder = await adoptFolder(string(path, 'path'), from, (o.transfer as 'move' | 'copy' | undefined) ?? 'copy', o.gitInit === true);
+    return changing(id, store().add(id, folder));
   },
   async clone(sender, spaceId, source, options) {
     const id = space(spaceId);

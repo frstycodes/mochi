@@ -9,6 +9,7 @@ import { isListed, type QueueItem, type Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
+import { useThreadMoves } from '../runtime/moves.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
 import { dueReports } from '../runtime/subagents.ts';
@@ -166,6 +167,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useQueueRunner(state, dispatch);
   useDelegatedReports(state.threads, dispatch);
   useSubThreadWakes(state, dispatch);
+  useThreadMoves(state.threads, dispatch);
   useCompactInstructions(state.threads);
   useRemoteBridge(state, dispatch);
   useLimitResumes(state.threads, dispatch);

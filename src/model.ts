@@ -1,5 +1,6 @@
 import type { AgentImage, AgentQuestion, BackgroundTaskKind, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
 import type { AutofixEvent } from './git/autofix.ts';
+import type { PendingMove } from './git/moveThread.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -444,6 +445,8 @@ export interface Thread {
   live?: LiveRun;
   /** Its new worktree's preparation before the agent's first turn; unset when there was nothing to prepare. */
   setup?: WorktreeSetup;
+  /** A move its agent asked for (`move_thread`), waiting for the turn to end. */
+  move?: PendingMove;
   /** Second opinions from the other provider, oldest first. */
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
