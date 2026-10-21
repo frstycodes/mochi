@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { stepElapsedMs } from '../goals/plan.ts';
 import type { AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
 import { NOW0 } from '../model.ts';
 import type { State } from '../store/index.tsx';
@@ -27,6 +28,20 @@ test('a plan matches steps by title, starts and completes them', () => {
   assert.equal(rl.steps.find((x) => x.id === 'rl5')!.status, 'done', 'fuzzy title still matches');
   assert.equal(rl.steps.find((x) => x.id === 'rl6')!.status, 'running');
   assert.equal(rl.steps.length, 9, 'no scope added');
+});
+
+test("a turn's end stops a running step's clock without finishing it; the agent picking it up again restarts it", () => {
+  let s = threadsReducer(base(), { type: 'create', title: 'fix the cookie', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  const agentAt = (event: AgentEvent, ms: number) => (s = threadsReducer(s, { type: 'agent', event, ms }));
+  const items: AgentPlanItem[] = [{ title: 'Open PR and merge', status: 'running' }];
+  const step = () => thread(s, id).steps.find((x) => x.status !== 'dropped')!;
+  agentAt({ threadId: id, type: 'plan', items, isFresh: true }, 1_000);
+  agentAt({ threadId: id, type: 'turn-end', status: 'done' }, 5_000);
+  assert.equal(step().status, 'running', 'only the agent says it is done');
+  assert.equal(stepElapsedMs(step(), s.now, 60_000), 4_000, 'the clock stopped at the turn end');
+  agentAt({ threadId: id, type: 'plan', items }, 9_000);
+  assert.equal(stepElapsedMs(step(), s.now, 10_000), 9_000, 'running again, the clock moves');
 });
 
 test('an unknown plan item lands as a plan step, no revision, after the item it follows', () => {

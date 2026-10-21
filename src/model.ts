@@ -29,6 +29,9 @@ export interface Step {
   /** Wall-clock epoch ms of `startedAt`/`doneAt`, stamped from the agent action; demo steps have only Mochi's minute clock. */
   startedMs?: number;
   doneMs?: number;
+  /** The turn ended with it still running: its clock stops here until the agent picks it up or finishes it. */
+  stoppedAt?: number;
+  stoppedMs?: number;
   droppedAt?: number;
   /** Why it's blocked or was dropped. */
   note?: string;
