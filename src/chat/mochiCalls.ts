@@ -20,7 +20,6 @@ export const MOCHI_CALLS = {
   send_to_thread: ['Messaging a thread', 'Messaged a thread'],
   delete_thread: ['Asking to delete a thread', 'Asked to delete a thread'],
   get_goal: ['Reading the goal', 'Read the goal'],
-  open_pr: ['Opening a pull request', 'Opened a pull request'],
   propose_goal: ['Proposing the goal', 'Proposed the goal'],
   claim_criterion: ['Checking off a criterion', 'Checked off a criterion'],
   report_turn: ['Reporting progress', 'Reported progress'],

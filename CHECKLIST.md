@@ -163,7 +163,7 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
 - [x] Thread line color (chart-1…5) as identity for the goal across every view
 
 ### Sub-threads
-- [x] A thread can have sub-threads (2026-10-18; a tree at any depth since 2026-10-20, never under its own subtree, settling cascades down it; the sidebar shows a top-level thread's whole subtree one level under it, like Claude), each covering one of the parent's criteria when started by the agent (`create_thread` with `criterionId`), or nested by hand (drag, the row menu, the goal card's Similar row) with no criterion. A sub-thread branches from the parent's branch and opens its PR into it (`open_pr` pushes the parent's branch, then `gh pr create --base`)
+- [x] A thread can have sub-threads (2026-10-18; a tree at any depth since 2026-10-20, never under its own subtree, settling cascades down it; the sidebar shows a top-level thread's whole subtree one level under it, like Claude), each covering one of the parent's criteria when started by the agent (`create_thread` with `criterionId`), or nested by hand (drag, the row menu, the goal card's Similar row) with no criterion. A sub-thread branches from the parent's branch and opens its own PR with `gh pr create`, choosing `--base` itself (since 2026-10-21; Mochi used to default it to the parent's branch)
 - [x] The parent waits quietly while sub-threads work (verdict `waiting`, no notice); one that needs you, or is finished and waits to be handed back, makes the parent need you, and the move acts on the sub-thread (Close N gaps goes to its agent, Hand back claims the parent's criterion and posts a result row in the parent's chat); once all are back, Merge N PRs asks the parent's agent to merge them (`src/goals/verdict.ts`, `src/goals/moves.ts`, `src/store/threads.ts`)
 - [x] Sidebar tree: sub-threads under their parent on an L-shaped guide, one line each unless one asks for you; one drag reorders on a row's edges and nests after a 400ms hold over its middle; a sub-thread dragged out of its group stands alone again; Undo toasts (`dropAt` in `src/reorder.ts`, `useRowDrag` in `src/Sidebar.tsx`)
 - [ ] GAP: nesting by hand links no criterion; the hand-back result row is the only trace in the parent until a matcher picks the criterion
@@ -310,8 +310,8 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 Defaults; a repo's own `.github/pull_request_template.md`, commitlint config or branch pattern wins.
 
 - [ ] Branch names from the goal: `type/short-slug` (`feat/per-key-overrides`), validated by `branchNameError`
-- [ ] PR descriptions written by Mochi from the report card: the agent calls `open_pr` with a title and one line of why; body is What / Why / Checks / Screenshots with hard length limits
-- [ ] Before/after screenshots required when the diff touches UI files (`.tsx`, `.css`): captured through the browser pane on the base and the thread's branch; `open_pr` refuses without them
+- [ ] PR descriptions written from the report card: the Open pull request prompt has the agent run `gh pr create` with an explicit base; body is What / Why / Checks / Screenshots with hard length limits
+- [ ] Before/after screenshots required when the diff touches UI files (`.tsx`, `.css`): captured through the browser pane on the base and the thread's branch
 
 ## 12. Simplify (decided 2026-10-13)
 

@@ -13,7 +13,7 @@ import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/gi
 import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 import { runCheck } from '../git/check.ts';
-import { autoMergeArgs, prsOnBranches, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
+import { autoMergeArgs, prsByWorktree, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
@@ -108,8 +108,7 @@ export const git = {
       const branches = await Promise.all(tops.map((top) => (top ? currentBranch(top) : Promise.resolve('HEAD'))));
       const first = tops.find((top) => top !== null);
       if (!first) return [];
-      const found = prsOnBranches(JSON.parse(await runGh(first, args, githubAccount(user))) as GhPr[], new Set(branches.filter((b) => b !== 'HEAD')));
-      return worktrees.flatMap((worktree, i) => found.filter((f) => f.branch === branches[i]).map(({ pr }) => ({ worktree, pr })));
+      return prsByWorktree(worktrees, branches, JSON.parse(await runGh(first, args, githubAccount(user))) as GhPr[]);
     } catch {
       return [];
     }

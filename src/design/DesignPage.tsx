@@ -795,7 +795,7 @@ function Recipes() {
         </Block>
         <Block
           title="Report, criteria met"
-          use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to run open_pr; with a PR open the chip is the next step; merged, Archive thread."
+          use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to open one with gh pr create; with a PR open the chip is the next step; merged, Archive thread."
           wide
         >
           <VizThreadProvider value={rl.id}>

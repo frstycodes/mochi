@@ -11,6 +11,7 @@ import { RefChip } from '../chat/ChatLink';
 import type { RefTone } from '../chat/refs';
 import { openTurn } from '../chat/turnChanges';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
+import { OPEN_PR_PROMPT } from '../git/prs';
 import type { ThreadPr } from '../git/useThreadPrs';
 import { isMod } from '../keys';
 import { useHarness } from '../store';
@@ -112,7 +113,7 @@ function useMoveAnswers(thread: Thread) {
       'merge-subs': () => send(`Merge these sub-thread pull requests into this branch with gh pr merge, then pull them in: ${subPrs.map((n) => `#${n}`).join(', ')}.`, 'Merge sub-thread PRs from the next move'),
       continue: () => send(continuePrompt(report, hasPlan), `Continue with ${agent} from the next move`),
       commit: () => send('Commit these changes on this branch with a Conventional Commits message.', 'Commit from the next move'),
-      'open-pr': () => send('Open the pull request for this work with open_pr.', 'Open pull request from the next move'),
+      'open-pr': () => send(OPEN_PR_PROMPT, 'Open pull request from the next move'),
       settle: () => dispatch({ type: 'settle', threadId: thread.id }),
     })[m.kind]();
   };
@@ -124,8 +125,7 @@ function useMoveAnswers(thread: Thread) {
   const other = (answer: OtherAnswer, question: string, report: TurnReport | undefined) => {
     record(question, report, answer.label);
     if (!answer.isOpenAnyway) return;
-    dispatch({ type: 'idle-update', threadId: thread.id, patch: { canOpenPr: true } });
-    send('Open the pull request with open_pr. I chose Open anyway: the gaps go in its description.', 'Open anyway from the next move');
+    send(`${OPEN_PR_PROMPT} I chose Open anyway: list the open gaps in its description.`, 'Open anyway from the next move');
   };
   return { option, move, other };
 }

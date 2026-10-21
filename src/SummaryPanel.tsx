@@ -49,6 +49,7 @@ import { refDescription, type ChecksState } from './chat/refs';
 import { usePrSwitches } from './git/prSwitches';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
+import { OPEN_PR_PROMPT } from './git/prs';
 import type { McpServer, Source, Thread } from './model';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
@@ -558,9 +559,6 @@ function DiffCount({ added, removed }: { added: number; removed: number }) {
     </span>
   );
 }
-
-const OPEN_PR_PROMPT =
-  'Open a pull request for this branch: commit what is left, then use the open_pr tool with a title and a short why. If a check or gap blocks it, tell me what is missing instead.';
 
 /**
  * Hands the PR to the agent, always through the queue so it never steers a running turn: it goes out once the agent is idle.
