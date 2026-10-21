@@ -19,6 +19,7 @@ import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_CONTROL } from '../settings/settingOptions.ts';
 import { AGENT_CONTROLS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
+import { providerName } from '../secondOpinion/verdict.ts';
 import { BROWSER_TOOLS } from './browserTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS } from './controls.ts';
@@ -63,6 +64,8 @@ export interface ToolEnv {
   library: Pick<LibraryHost, 'list' | 'oauthApps' | 'ownAppRedirect' | 'addConnector' | 'onAuthorize' | 'onDeviceCode' | 'runSetup' | 'updateSetupStep'>;
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
+  /** Starts a second opinion on `thread` from the other provider, resolving with the reviewer; throws why it can't. */
+  askSecondOpinion: (thread: Thread) => Promise<Provider>;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
   git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
   now?: () => number;
@@ -613,6 +616,12 @@ const AGENT_SPECS = {
       const started = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === id);
       if (!started) throw new Error('The delegated task did not start');
       return { changed: `delegated "${agent.name}" to ${agent.provider}`, result: { id, name: agent.name, provider: agent.provider, status: started.status }, isFinal: true };
+    },
+  },
+  ask_second_opinion: {
+    run: async ({ caller, env }) => {
+      const name = providerName(await env.askSecondOpinion(caller));
+      return { changed: `asked ${name} for a second opinion`, result: { note: `${name} is reviewing your diff; the verdict comes to you as a message.` }, isFinal: true };
     },
   },
 } satisfies Partial<Specs>;

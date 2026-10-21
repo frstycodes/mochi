@@ -95,6 +95,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     },
     cwdOf: () => '/repo/rl',
     models: async () => CLAUDE_DEMO_MODELS,
+    askSecondOpinion: async () => 'codex',
     profiles: {
       list: () => profiles,
       update: (id, patch) => void (profiles = profiles.map((p) => (p.id === id ? { ...p, ...patch } : p))),

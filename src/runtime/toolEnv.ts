@@ -8,6 +8,7 @@ import { getProfiles, removeProfile, updateProfile } from '../profiles.ts';
 import { saveDraft, settingsChatDraftKey } from '../chat/drafts.ts';
 import { openSettings } from '../settings/open.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
+import { agentAskSecondOpinion } from '../secondOpinion/run.ts';
 import type { Action, State } from '../store/index.tsx';
 import type { ToolEnv } from './tools.ts';
 
@@ -44,6 +45,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     remote: host.remote,
     isDesktop: host.isDesktop,
     git: host.git,
+    askSecondOpinion: (thread) => agentAskSecondOpinion(thread, dispatch),
   };
 }
 

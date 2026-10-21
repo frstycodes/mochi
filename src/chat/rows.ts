@@ -28,7 +28,10 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
   const rows: ChatRow[] = [];
   let turn: Extract<ChatRow, { kind: 'work' }> | undefined;
   let isMidWork = false;
-  const pushReviews = (at: number) => reviews.filter((r) => (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach((review) => rows.push({ kind: 'review', key: review.id, review }));
+  // A second opinion the agent asked for renders where its verdict went to the agent, in place of that message.
+  const delivered = new Set(activity.flatMap((e) => (e.secondOpinion ? [e.secondOpinion.reviewId] : [])));
+  const pushReview = (review: Review) => rows.push({ kind: 'review', key: review.id, review });
+  const pushReviews = (at: number) => reviews.filter((r) => !delivered.has(r.id) && (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach(pushReview);
 
   const pushChanges = (at: number) => changes.filter((t) => t.end === at - 1).forEach((turn) => rows.push({ kind: 'changes', key: `changes-${turn.start}`, turn }));
 
@@ -65,6 +68,10 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
     }
     turn = undefined;
     isMidWork = false;
+    if (entry.secondOpinion) {
+      const review = reviews.find((r) => r.id === entry.secondOpinion!.reviewId);
+      return review && pushReview(review);
+    }
     if (entry.from || entry.autofix) return rows.push({ kind: 'thread-message', key, entry, index: i });
     const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;

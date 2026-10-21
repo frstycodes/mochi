@@ -34,6 +34,7 @@ export const TOOL_GUIDE = {
 
   update_plan: { group: 'Progress', label: 'Keep a plan', description: 'Show its plan under its latest message and tick steps off as it works.' },
   delegate_task: { group: 'Delegated tasks', label: 'Delegate tasks', description: 'Hand a task to the other provider (or a model its own subagents lack), in the same worktree or a fresh one, on this profile’s account. Its report comes back to the agent when it finishes.' },
+  ask_second_opinion: { group: 'Delegated tasks', label: 'Ask for second opinions', description: 'Have the other provider review its diff, read-only. The verdict shows in the chat and goes back to the agent.' },
 
   browser_tabs: { group: 'Reading the browser', label: 'List browser tabs', description: "See the thread's browser tabs: address, title and which is active." },
   browser_snapshot: { group: 'Reading the browser', label: 'Read pages', description: 'Read the page as text: headings, buttons, fields and links.' },
