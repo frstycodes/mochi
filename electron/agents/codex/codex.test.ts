@@ -88,6 +88,14 @@ test('a failed turn carries the API message, not its raw JSON body', () => {
   assert.match(end.type === 'turn-end' ? end.error! : '', /^The 'gpt-6\.1-sol' model is not supported/);
 });
 
+test('a command hands main what the agent typed to describe on start, not again on end', () => {
+  const s = threadState('h1', '/repo');
+  const item = { type: 'commandExecution', id: 'x1', command: "/bin/zsh -lc 'gh pr checks 260 --watch'", commandActions: [{ type: 'unknown', command: 'gh pr checks 260 --watch' }] };
+  assert.deepEqual(mapNotification('item/started', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'tool', id: 'x1', phase: 'start', text: 'gh pr checks 260 --watch', command: 'gh pr checks 260 --watch' }]);
+  const [end] = mapNotification('item/completed', { threadId: 't', item: { ...item, exitCode: 0 } }, s);
+  assert.equal(end.type === 'tool' && end.command, undefined);
+});
+
 test('file changes report paths relative to the worktree and name them on the approval', () => {
   const s = threadState('h1', '/repo');
   const item = { type: 'fileChange', id: 'f1', status: 'inProgress', changes: [{ path: '/repo/src/a.ts', kind: { type: 'update' }, diff: '' }, { path: 'b.ts', kind: { type: 'add' }, diff: '' }] };

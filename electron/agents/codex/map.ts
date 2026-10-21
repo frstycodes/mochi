@@ -249,7 +249,7 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
       const typed = actions.length === 1 ? obj(actions[0])?.command : undefined;
       const text = typeof typed === 'string' ? typed : item.command;
-      const tool: AgentEvent = { threadId, type: 'tool', id, phase, text, ...(phase === 'end' && exitCode !== undefined && { exitCode }), ...(phase === 'end' && output !== undefined && { output }) };
+      const tool: AgentEvent = { threadId, type: 'tool', id, phase, text, ...(phase === 'start' && { command: text }), ...(phase === 'end' && exitCode !== undefined && { exitCode }), ...(phase === 'end' && output !== undefined && { output }) };
       if (phase === 'start') s.commands.set(id, text);
       else s.commands.delete(id);
       if (phase === 'start' || !s.background.delete(id)) return [tool];

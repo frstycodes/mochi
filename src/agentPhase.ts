@@ -74,10 +74,17 @@ export function currentAction(thread: Thread): CurrentAction | undefined {
   }
   // Waiting on something other than an approval (a failed turn, a review): the turn isn't live.
   if (!isWorking(thread)) return;
-  if (last?.kind === 'tool') return { label: toolLabel(parseTool(last.text)), call: parseTool(last.text), links: last.links };
+  if (last?.kind === 'tool') {
+    const call = parseTool(last.text);
+    return { label: (isCommand(last.text) && last.description) || toolLabel(call), call, links: last.links };
+  }
   if (last?.kind === 'message' && last.who !== 'you') return { label: 'Replying' };
   return { label: PHASE_LABELS.think };
 }
+
+// Only a command's description reads as an action in progress; Grep's and Glob's are past tense. `Run` is also the
+// verb of any tool the work log doesn't know, which logs as `Name: target`.
+const isCommand = (text: string) => toolVerb(text) === 'Run' && !/^\w+: /.test(text);
 
 const isWaitEvent = (e: ActivityEntry) => e.kind === 'event' && e.text.startsWith('Waiting on you:');
 
