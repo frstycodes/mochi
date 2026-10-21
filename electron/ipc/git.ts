@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, SwitchOptions, WorktreeOptions } from '../../src/host/types/git.ts';
+import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, ReviewVerdict, SwitchOptions, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
@@ -13,7 +13,8 @@ import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/gi
 import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 import { runCheck } from '../git/check.ts';
-import { autoMergeArgs, prsByWorktree, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
+import { autoMergeArgs, mergeArgs, prsByWorktree, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
+import { parsePrReview, prReviewQuery, replyThreadArgs, resolveThreadArgs, reviewArgs } from '../../src/git/prReview.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
@@ -32,6 +33,10 @@ const PR_LIST_LIMIT = 100;
 
 // ponytail: one query per batch; GitHub's GraphQL node limit is far above this.
 const MAX_REFS = 50;
+
+// GitHub's own cap on a comment body.
+const MAX_COMMENT = 65536;
+const REVIEW_VERDICTS = ['approve', 'request-changes', 'comment'] satisfies ReviewVerdict[];
 
 export const git = {
   async status(_sender, cwd) {
@@ -119,6 +124,37 @@ export const git = {
     const account = githubAccount(user);
     const allowed = isOn === true ? (JSON.parse(await runGh(top, ['repo', 'view', '--json', 'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed'], account)) as MergeMethods) : null;
     await runGh(top, autoMergeArgs(integer(pr, 'pr', 1, 1e9), allowed), account);
+  },
+
+  async prReview(_sender, cwd, pr, user) {
+    const top = await topLevel(string(cwd, 'cwd'));
+    const n = integer(pr, 'pr', 1, 1e9);
+    const account = githubAccount(user);
+    const [json, patch] = await Promise.all([runGh(top, prReviewQuery(n), account), runGh(top, ['pr', 'diff', String(n), '--color', 'never'], account)]);
+    return parsePrReview(json, parseDiff(patch, false));
+  },
+
+  async commentPr(_sender, cwd, pr, body, user) {
+    await runGh(await topLevel(string(cwd, 'cwd')), ['pr', 'comment', String(integer(pr, 'pr', 1, 1e9)), '--body', string(body, 'body', MAX_COMMENT)], githubAccount(user));
+  },
+
+  async replyThread(_sender, cwd, threadId, body, user) {
+    await runGh(await topLevel(string(cwd, 'cwd')), replyThreadArgs(nodeId(threadId), string(body, 'body', MAX_COMMENT)), githubAccount(user));
+  },
+
+  async resolveThread(_sender, cwd, threadId, isResolved, user) {
+    await runGh(await topLevel(string(cwd, 'cwd')), resolveThreadArgs(nodeId(threadId), isResolved === true), githubAccount(user));
+  },
+
+  async reviewPr(_sender, cwd, pr, verdict, body, user) {
+    await runGh(await topLevel(string(cwd, 'cwd')), reviewArgs(integer(pr, 'pr', 1, 1e9), oneOf(verdict, REVIEW_VERDICTS, 'verdict'), string(body, 'body', MAX_COMMENT)), githubAccount(user));
+  },
+
+  async mergePr(_sender, cwd, pr, user) {
+    const top = await topLevel(string(cwd, 'cwd'));
+    const account = githubAccount(user);
+    const allowed = JSON.parse(await runGh(top, ['repo', 'view', '--json', 'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed'], account)) as MergeMethods;
+    await runGh(top, mergeArgs(integer(pr, 'pr', 1, 1e9), allowed), account);
   },
 
   async ciLog(_sender, cwd, link, user) {
@@ -402,4 +438,11 @@ function insideWorktreeRoot(path: string) {
 
 function isUnderWorktreeRoot(path: string) {
   return worktreeRoots().some((root) => path.startsWith(root + sep));
+}
+
+/** A GraphQL node id (`PRRT_kwDO…`); anything else is refused before it reaches gh's argv. */
+function nodeId(value: unknown) {
+  const id = string(value, 'threadId', 128);
+  if (!/^[A-Za-z0-9_=-]+$/.test(id)) throw new TypeError('threadId must be a GitHub node id');
+  return id;
 }

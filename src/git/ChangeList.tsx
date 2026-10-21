@@ -1,5 +1,6 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useDiffTheme } from '../themes/highlight';
+import type { DiffLineAnnotation } from '@pierre/diffs';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronDown, MessageText, Minus, PlusBold, Undo } from '@/icons';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { ChangeTarget, DiffFile, DiffHunk } from '../host/types/git';
+import type { ChangeTarget, DiffFile, DiffHunk, ReviewThread } from '../host/types/git';
 import { DiffStat } from '../WorkLog';
 import { fileKey, hunkCovers, type ChangeSection } from './files';
 import { isMod } from '../keys';
@@ -37,7 +38,11 @@ export interface ChangeActions {
   comment(file: DiffFile, side: NoteSide, line: number): void;
   sendNote(note: LineNote, text: string): void;
   dropNote(note: LineNote): void;
+  /** A PR's review threads, shown on the lines they sit on. */
+  review?: { threads: ReviewThread[]; renderThread(thread: ReviewThread): ReactNode };
 }
+
+type Annotation = { note: LineNote } | { thread: ReviewThread };
 
 // Files this big start folded, so opening the pane doesn't render thousands of diff lines at once.
 const FOLDED_LINES = 400;
@@ -121,6 +126,9 @@ function FileBody({ file, actions }: { file: DiffFile; actions: ChangeActions })
 function HunkBlock({ file, hunk, actions }: { file: DiffFile; hunk: DiffHunk; actions: ChangeActions }) {
   const target = { path: file.path, staged: file.staged, untracked: file.kind === 'untracked', patch: hunk.patch };
   const key = fileKey(file);
+  const notes = actions.notes.filter((n) => n.fileKey === key && hunkCovers(hunk.header, n.side, n.line));
+  const threads = actions.review?.threads.filter((t) => t.path === file.path && t.line !== null && hunkCovers(hunk.header, t.side, t.line)) ?? [];
+  const annotations = [...notes.map((note) => ({ side: note.side, lineNumber: note.line, metadata: { note } })), ...threads.map((thread) => ({ side: thread.side, lineNumber: thread.line!, metadata: { thread } }))];
   return (
     <div className="group/hunk">
       <div className="flex h-6 items-center gap-2 pr-1.5 pl-3">
@@ -138,17 +146,31 @@ function HunkBlock({ file, hunk, actions }: { file: DiffFile; hunk: DiffHunk; ac
           </span>
         )}
       </div>
-      <HunkDiff patch={hunk.patch} diffStyle={actions.diffStyle} notes={actions.notes.filter((n) => n.fileKey === key && hunkCovers(hunk.header, n.side, n.line))} onComment={(side, line) => actions.comment(file, side, line)} renderNote={(note) => <NoteCard note={note} actions={actions} />} />
+      <HunkDiff
+        patch={hunk.patch}
+        diffStyle={actions.diffStyle}
+        annotations={annotations}
+        onComment={(side, line) => actions.comment(file, side, line)}
+        renderAnnotation={(a) => ('note' in a ? <NoteCard note={a.note} actions={actions} /> : actions.review?.renderThread(a.thread))}
+      />
     </div>
   );
 }
 
 const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as CSSProperties;
 
-function HunkDiff({ patch, diffStyle, notes, onComment, renderNote }: { patch: string; diffStyle: DiffStyle; notes: LineNote[]; onComment: (side: NoteSide, line: number) => void; renderNote: (note: LineNote) => React.ReactNode }) {
+interface HunkDiffProps {
+  patch: string;
+  diffStyle: DiffStyle;
+  annotations: DiffLineAnnotation<Annotation>[];
+  onComment: (side: NoteSide, line: number) => void;
+  renderAnnotation: (annotation: Annotation) => ReactNode;
+}
+
+function HunkDiff({ patch, diffStyle, annotations, onComment, renderAnnotation }: HunkDiffProps) {
   const diffTheme = useDiffTheme();
   return (
-    <PatchDiff<LineNote>
+    <PatchDiff<Annotation>
       patch={patch}
       disableWorkerPool
       options={{
@@ -161,8 +183,8 @@ function HunkDiff({ patch, diffStyle, notes, onComment, renderNote }: { patch: s
         enableGutterUtility: true,
         onGutterUtilityClick: (range) => onComment(range.side ?? 'additions', range.start),
       }}
-      lineAnnotations={notes.map((n) => ({ side: n.side, lineNumber: n.line, metadata: n }))}
-      renderAnnotation={(annotation) => renderNote(annotation.metadata)}
+      lineAnnotations={annotations}
+      renderAnnotation={(annotation) => renderAnnotation(annotation.metadata)}
       style={DIFF_STYLE}
     />
   );

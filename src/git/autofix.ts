@@ -119,7 +119,7 @@ export function autofixQuery(pr: number) {
 }
 
 type GqlComment = { databaseId: number; author: { login: string } | null; body: string; url?: string };
-type GqlContext = { __typename: 'CheckRun'; name: string; status: string; conclusion: string | null; detailsUrl?: string } | { __typename: 'StatusContext'; context: string; state: string; targetUrl?: string | null };
+export type GqlContext = { __typename: 'CheckRun'; name: string; status: string; conclusion: string | null; detailsUrl?: string } | { __typename: 'StatusContext'; context: string; state: string; targetUrl?: string | null };
 type GqlPr = {
   state: AutofixSnapshot['state'];
   url: string;
@@ -150,12 +150,13 @@ export function parseAutofix(json: string): AutofixSnapshot | null {
     url: pr.url,
     head: pr.headRefOid,
     isConflicting: pr.mergeable === 'CONFLICTING',
-    checks: contexts.map(check),
+    checks: contexts.map(rollupCheck),
     comments: [...pr.comments.nodes, ...pr.reviews.nodes].filter(isOthers).map((c) => comment(c)).concat(inline),
   };
 }
 
-function check(c: GqlContext): AutofixCheck {
+/** One context of a commit's `statusCheckRollup` as a check. */
+export function rollupCheck(c: GqlContext): AutofixCheck {
   if (c.__typename === 'StatusContext') return { name: c.context, state: c.state === 'SUCCESS' ? 'pass' : FAILED.has(c.state) ? 'fail' : 'pending', link: c.targetUrl ?? undefined };
   const state = c.status !== 'COMPLETED' ? 'pending' : FAILED.has(c.conclusion ?? '') ? 'fail' : SKIPPED.has(c.conclusion ?? '') ? 'skip' : 'pass';
   return { name: c.name, state, link: c.detailsUrl };
@@ -217,4 +218,4 @@ function fenced(text: string) {
   return `${fence}text\n${untrusted(text)}\n${fence}`;
 }
 
-const untrusted = (text: string) => text.replace(new RegExp(`<(/?)${EVENT_TAG}`, 'gi'), '&lt;$1' + EVENT_TAG);
+export const untrusted = (text: string) => text.replace(new RegExp(`<(/?)${EVENT_TAG}`, 'gi'), '&lt;$1' + EVENT_TAG);

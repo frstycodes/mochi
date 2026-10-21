@@ -30,6 +30,11 @@ export function usePr(cwd: string, githubUser?: string) {
   return usePolled(useCallback(() => host.git.pr(cwd, githubUser), [cwd, githubUser]), PR_POLL_MS);
 }
 
+/** One PR's review page, re-read like `usePr`. */
+export function usePrReview(cwd: string, pr: number, githubUser?: string) {
+  return usePolled(useCallback(() => host.git.prReview(cwd, pr, githubUser), [cwd, pr, githubUser]), PR_POLL_MS);
+}
+
 function usePolled<T>(load: () => Promise<T>, interval: number) {
   const [result, setResult] = useState<{ data?: T; error?: string }>({});
   const latest = useRef(load);

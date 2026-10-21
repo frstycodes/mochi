@@ -304,8 +304,8 @@ export const TOOL_TABLE = {
   open_pane_tab: {
     tier: 'change',
     quiet: true,
-    description: "Open a tab in a thread's side pane: preview (browser), changes, terminal, files or sidechat.",
-    shape: { kind: z.enum(['preview', 'changes', 'terminal', 'files', 'sidechat']), threadId },
+    description: "Open a tab in a thread's side pane: preview (browser), changes, terminal, files, sidechat or pr (the thread's pull request: conversation, checks and review threads).",
+    shape: { kind: z.enum(['preview', 'changes', 'terminal', 'files', 'sidechat', 'pr']), threadId },
   },
   split_with: { tier: 'change', description: 'Open a thread in a new split beside the focused one.', shape: { threadId: otherThread } },
   close_pane: { tier: 'change', quiet: true, description: "Close a thread's side pane (its tabs are kept).", shape: { threadId } },

@@ -60,9 +60,16 @@ export interface MergeMethods {
 /** `gh pr merge` turning auto-merge on with the first method the repo allows (squash, merge, rebase), or off when `allowed` is null. */
 export function autoMergeArgs(pr: number, allowed: MergeMethods | null): string[] {
   if (!allowed) return ['pr', 'merge', String(pr), '--disable-auto'];
+  return ['pr', 'merge', String(pr), '--auto', mergeMethod(allowed)];
+}
+
+/** `gh pr merge` merging now with the first method the repo allows. */
+export const mergeArgs = (pr: number, allowed: MergeMethods) => ['pr', 'merge', String(pr), mergeMethod(allowed)];
+
+function mergeMethod(allowed: MergeMethods) {
   const method = allowed.squashMergeAllowed ? '--squash' : allowed.mergeCommitAllowed ? '--merge' : allowed.rebaseMergeAllowed ? '--rebase' : null;
   if (!method) throw new Error('This repository allows no merge method');
-  return ['pr', 'merge', String(pr), '--auto', method];
+  return method;
 }
 
 // Run as a command (at the start of the activity's `Run …` text or after `&&`, `;`, `|`, a newline), not quoted inside another one's argument.

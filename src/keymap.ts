@@ -23,7 +23,7 @@ const PINS = 5;
 const PROFILES = 9;
 
 /** The side panes mod Alt + a letter toggles: mnemonic, and clear of the browser's and macOS's own mod Alt keys. */
-const PANES = { browser: ['Preview', 'P'], changes: ['Changes', 'D'], terminal: ['Terminal', 'T'], files: ['Files', 'F'], simulator: ['Simulator', 'S'], ports: ['Ports', 'O'], sidechat: ['Side chat', 'C'], agents: ['Agents', 'A'], artifacts: ['Artifacts', 'R'] } as const;
+const PANES = { browser: ['Preview', 'P'], changes: ['Changes', 'D'], terminal: ['Terminal', 'T'], files: ['Files', 'F'], simulator: ['Simulator', 'S'], ports: ['Ports', 'O'], sidechat: ['Side chat', 'C'], agents: ['Agents', 'A'], artifacts: ['Artifacts', 'R'], pr: ['Pull request', 'G'] } as const;
 
 export type PaneCommandKind = keyof typeof PANES;
 
