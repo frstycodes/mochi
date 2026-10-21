@@ -11,12 +11,13 @@ const DEMO_DAYS = [
   { opus: 234.6, codex: 0, commits: 40, added: 9711, removed: 2974, prs: 20 },
   { opus: 1.3, codex: 0, commits: 0, added: 0, removed: 0, prs: 0 },
 ];
-const ROOT = '/demo/mochi';
 const DAY = 86_400_000;
 const PEAK_HOURS = [1, 1, 2, 12, 13, 13, 14, 17, 20, 20, 23];
 
 export const usage: UsageHost = {
-  async report({ since }) {
+  async report({ since, roots, repos }) {
+    // The demo week belongs to the profile's first project, so it shows under All projects and that project alike.
+    const root = repos[0] ?? roots[0] ?? '/demo';
     const start = Date.now() - (DEMO_DAYS.length - 1) * DAY;
     const tokens: TokenBucket[] = [];
     const commits: CommitStat[] = [];
@@ -25,15 +26,19 @@ export const usage: UsageHost = {
       const at = start + i * DAY;
       if (since !== null && at < since - DAY) return;
       const day = localDay(at);
-      // Spend split the way the real week split it: ~59% cache reads, ~28% cache writes, ~14% output at Opus 5.5 rates.
-      tokens.push({ day, harness: 'claude', model: 'claude-opus-5-5', root: ROOT, input: 4_000, output: (d.opus * 0.14 * 1e6) / 20, cacheRead: (d.opus * 0.59 * 1e6) / 0.2, cacheWrite5m: (d.opus * 0.27 * 1e6) / 5, cacheWrite1h: 0 });
-      if (d.codex) tokens.push({ day, harness: 'codex', model: 'gpt-6-astra', root: ROOT, input: (d.codex * 0.6 * 1e6) / 10, output: (d.codex * 0.1 * 1e6) / 50, cacheRead: (d.codex * 0.3 * 1e6) / 1, cacheWrite5m: 0, cacheWrite1h: 0 });
+      // Spend split the way the real week split it: ~59% cache reads, ~27% cache writes (1-hour), ~14% output at Opus 5.5 rates.
+      const opus = { input: 0.016, output: d.opus * 0.14, cacheRead: d.opus * 0.59, cacheWrite: d.opus * 0.27 };
+      tokens.push({ day, harness: 'claude', model: 'claude-opus-5-5', root, input: 4_000, output: (opus.output * 1e6) / 20, cacheRead: (opus.cacheRead * 1e6) / 0.2, cacheWrite5m: 0, cacheWrite1h: (opus.cacheWrite * 1e6) / 8, cost: opus, uncached: d.opus * 12 });
+      if (d.codex) {
+        const astra = { input: d.codex * 0.6, output: d.codex * 0.1, cacheRead: d.codex * 0.3, cacheWrite: 0 };
+        tokens.push({ day, harness: 'codex', model: 'gpt-6-astra', root, input: (astra.input * 1e6) / 10, output: (astra.output * 1e6) / 50, cacheRead: astra.cacheRead * 1e6, cacheWrite5m: 0, cacheWrite1h: 0, cost: astra, uncached: d.codex * 3.7 });
+      }
       for (let c = 0; c < d.commits; c++) {
         const hour = PEAK_HOURS[c % PEAK_HOURS.length];
-        commits.push({ repo: ROOT, at: new Date(new Date(at).setHours(hour, c % 60)).getTime(), added: Math.round(d.added / d.commits), removed: Math.round(d.removed / d.commits), isMerge: false });
+        commits.push({ repo: root, at: new Date(new Date(at).setHours(hour, c % 60)).getTime(), added: Math.round(d.added / d.commits), removed: Math.round(d.removed / d.commits), isMerge: false });
       }
-      for (let n = 0; n < d.prs; n++) prs.push({ repo: ROOT, number: prs.length + 1, state: 'MERGED', createdAt: at, mergedAt: at });
+      for (let n = 0; n < d.prs; n++) prs.push({ repo: root, number: prs.length + 1, state: 'MERGED', createdAt: at, mergedAt: at });
     });
-    return { tokens, sessions: [{ harness: 'claude', root: ROOT, id: 'demo' }, { harness: 'codex', root: ROOT, id: 'demo' }], commits, prs, errors: [] };
+    return { tokens, sessions: [{ harness: 'claude', root, id: 'demo' }, { harness: 'codex', root, id: 'demo' }], commits, prs, errors: [] };
   },
 };

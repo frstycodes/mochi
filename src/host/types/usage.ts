@@ -41,6 +41,18 @@ export interface TokenBucket {
   /** Claude's 5-minute and 1-hour cache writes, priced differently; Codex reports none. */
   cacheWrite5m: number;
   cacheWrite1h: number;
+  /** What these tokens cost at list price, by kind; null when the model has no price. */
+  cost: CostParts | null;
+  /** The same tokens priced with no prompt cache; null when the model has no price. */
+  uncached: number | null;
+}
+
+/** Dollars, by kind of token. */
+export interface CostParts {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
 }
 
 export interface UsageSession {

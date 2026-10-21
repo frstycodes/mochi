@@ -1,7 +1,6 @@
 import type { Provider } from '../model.ts';
 import type { UsageReport } from '../host/types/usage.ts';
 import { daysBetween, localDay } from './days.ts';
-import { costParts, uncachedCost } from './pricing.ts';
 
 export type RangeId = '7d' | '30d' | '90d' | 'all';
 
@@ -30,9 +29,14 @@ export interface UsageScope {
   now: number;
   /** Which project each session root and repo belongs to. */
   projectOf: Map<string, string>;
-  /** null for every project. */
-  projectId: string | null;
+  target: UsageTarget;
 }
+
+/** The profile's projects, one of them, or every folder on this computer (what `ccusage` counts). */
+export type UsageTarget = { kind: 'projects' } | { kind: 'project'; id: string } | { kind: 'everywhere' };
+
+/** The project row for sessions outside every project, when the target is everywhere. */
+export const OTHER_FOLDERS = 'other-folders';
 
 export interface SeriesPoint {
   /** The day, or the Monday that starts the week. */
@@ -48,7 +52,8 @@ export interface SeriesPoint {
 const emptyPoint = (key: string): SeriesPoint => ({ key, cost: { claude: 0, codex: 0 }, tokens: 0, prsMerged: 0, commits: 0, added: 0, removed: 0 });
 
 export function usageView(report: UsageReport, scope: UsageScope) {
-  const inScope = (path: string) => scope.projectId === null || scope.projectOf.get(path) === scope.projectId;
+  const { target } = scope;
+  const inScope = (path: string) => (target.kind === 'everywhere' ? true : target.kind === 'projects' ? scope.projectOf.has(path) : scope.projectOf.get(path) === target.id);
   const tokens = report.tokens.filter((b) => inScope(b.root));
   const commits = report.commits.filter((c) => inScope(c.repo));
   const prs = report.prs.filter((p) => inScope(p.repo));
@@ -68,18 +73,18 @@ export function usageView(report: UsageReport, scope: UsageScope) {
   const models = new Map<string, { model: string; harness: Provider; tokens: number; cost: number | null }>();
   const projects = new Map<string, ProjectRow>();
   const project = (path: string) => {
-    const id = scope.projectOf.get(path) ?? path;
+    const id = scope.projectOf.get(path) ?? OTHER_FOLDERS;
     const row = projects.get(id) ?? { projectId: id, cost: 0, tokens: 0, commits: 0, prsMerged: 0, added: 0 };
     projects.set(id, row);
     return row;
   };
 
   for (const b of tokens) {
-    const parts = costParts(b);
+    const parts = b.cost;
     const cost = parts ? parts.input + parts.output + parts.cacheRead + parts.cacheWrite : 0;
     const total = b.input + b.output + b.cacheRead + b.cacheWrite5m + b.cacheWrite1h;
     spend[b.harness] += cost;
-    spend.uncached += uncachedCost(b) ?? 0;
+    spend.uncached += b.uncached ?? 0;
     byType.input += b.input;
     byType.output += b.output;
     byType.cacheRead += b.cacheRead;
