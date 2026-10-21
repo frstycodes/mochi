@@ -15,7 +15,7 @@ test('maps a turn to session, message deltas, tools, usage and turn end', () => 
   const events = FIXTURE.flatMap((m) => map(m as SDKMessage));
   assert.deepEqual(
     events.map((e) => e.type),
-    ['session', 'info', 'message', 'message', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
+    ['session', 'info', 'message', 'message', 'usage', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
   );
   const [, , first, second] = events;
   assert.deepEqual([first, second], [
@@ -26,7 +26,8 @@ test('maps a turn to session, message deltas, tools, usage and turn end', () => 
   assert.deepEqual(edit && edit.type === 'tool' && edit.files, ['src/a.ts']);
   const bash = events.find((e) => e.type === 'tool' && e.phase === 'end' && e.exitCode !== undefined);
   assert.equal(bash?.type === 'tool' && bash.exitCode, 2);
-  const usage = events.find((e) => e.type === 'usage');
+  const [meter, usage] = events.filter((e) => e.type === 'usage');
+  assert.deepEqual(meter, { threadId: 't1', type: 'usage', inputTokens: 0, outputTokens: 0, contextUsed: 1250, contextMax: undefined }, 'the context meter moves mid-turn, once per API call');
   assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, cachedTokens: 200, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
 });
