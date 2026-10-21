@@ -15,6 +15,9 @@ import { FileMark } from './FileMark';
 import type { Mention } from './mentions';
 import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
 
+/** The composer's editable element: what caret-restoring code focuses. */
+export const COMPOSER_EDITABLE = '[data-composer] .cm-content';
+
 /** Where the caret sits in `text`; `null` while a range is selected. */
 export type Caret = { text: string; at: number | null };
 
