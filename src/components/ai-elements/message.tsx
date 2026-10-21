@@ -28,6 +28,7 @@ import {
 import type { CodeHighlighterPlugin } from "@streamdown/code";
 import type { ThemeRegistrationAny } from "shiki";
 import { shikiTheme } from "@/themes/highlight";
+import { LIGHT_CODE_SURFACES, readableTokenColors } from "@/themes/map";
 import type { ColorTheme } from "@/themes/model";
 import { useColorTheme } from "@/themes/store";
 import { Streamdown, type PluginConfig } from "streamdown";
@@ -404,8 +405,10 @@ function loadStreamdownPlugins() {
     import("shiki/dist/themes/github-dark.mjs"),
   ]).then(([code, math, mermaid, cjk, , light, dark]) => {
     codeModule = code;
-    defaultCodeThemes = [light.default, dark.default];
-    loadedPlugins = { code: withDiffFences(code.createCodePlugin({ themes: [light.default, dark.default] })), math: math.math, mermaid: mermaid.mermaid, cjk: cjk.cjk };
+    // github-light's orange, red, green and grey tokens read under 4.5:1 on Mochi's code background.
+    const readableLight = { ...light.default, tokenColors: readableTokenColors(light.default.tokenColors ?? [], LIGHT_CODE_SURFACES) };
+    defaultCodeThemes = [readableLight, dark.default];
+    loadedPlugins = { code: withDiffFences(code.createCodePlugin({ themes: defaultCodeThemes })), math: math.math, mermaid: mermaid.mermaid, cjk: cjk.cjk };
     return loadedPlugins;
   });
   return pluginsLoading;
