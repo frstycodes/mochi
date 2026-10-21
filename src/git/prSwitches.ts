@@ -1,5 +1,5 @@
 import { host } from '../host/index.ts';
-import { refreshRef } from '../chat/useRefState.ts';
+import { patchRef, refreshRef } from '../chat/useRefState.ts';
 import type { Thread } from '../model.ts';
 import { useHarness } from '../store';
 import { toast } from '../toast/store.ts';
@@ -27,9 +27,13 @@ export function usePrSwitches(thread: Thread, item: ThreadPr): PrSwitch[] {
   if (!canAutofix(thread, pr)) return [];
   const setMerge = (isOn: boolean) => {
     if (!scope.cwd) return;
+    if (githubRef) patchRef(githubRef, { isAutoMerge: isOn });
     host.git.setAutoMerge(scope.cwd, pr.number, isOn, scope.githubUser).then(
       () => githubRef && refreshRef(githubRef, scope, { isAutoMerge: isOn }),
-      (error: Error) => toast.error(isOn ? 'Couldn’t turn on Merge when ready' : 'Couldn’t turn off Merge when ready', { description: error.message }),
+      (error: Error) => {
+        if (githubRef) patchRef(githubRef, { isAutoMerge: !isOn });
+        toast.error(isOn ? 'Couldn’t turn on Merge when ready' : 'Couldn’t turn off Merge when ready', { description: error.message });
+      },
     );
   };
   const autofix: PrSwitch = { id: 'autofix', label: 'Auto-fix', hint: 'Fixes CI and conflicts, weighs reviews', isOn: !!pr.autofixSince, set: (isOn) => setAutofix(dispatch, thread, pr, isOn) };
