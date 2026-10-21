@@ -9,7 +9,7 @@ import { StatusRing, useThreadStatus } from './VerdictChip';
 import type { Verdict } from './verdict';
 
 /** Working (shimmering), handed back, or the verdict's word in its tone. */
-function SubThreadState({ sub, status, className }: { sub: Thread; status: ReturnType<typeof useThreadStatus>; className?: string }) {
+export function SubThreadState({ sub, status, className }: { sub: Thread; status: ReturnType<typeof useThreadStatus>; className?: string }) {
   if (status.isWorking) return <Shimmer as="span" className={cn('shrink-0', className)}>Working</Shimmer>;
   if (sub.parent?.handedBackAt) return <span className={cn('shrink-0 text-muted-foreground', className)}>Handed back</span>;
   return <span className={cn('shrink-0', TONE_TEXT[status.tone ?? 'muted'], className)}>{status.status}</span>;

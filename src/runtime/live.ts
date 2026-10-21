@@ -30,6 +30,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       if (action.schedule) return [];
     // falls through
     case 'drift-new-thread':
+    case 'proposal-start':
     case 'sidechat-promote': {
       const first = action.type === 'create' ? { prompt: action.prompt, skills: action.skills?.length ? action.skills : undefined } : {};
       const sent = action.type === 'create' ? [...(action.referenceImages ?? []), ...(action.images ?? []).map(agentImage)] : [];

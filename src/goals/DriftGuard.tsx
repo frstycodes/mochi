@@ -40,9 +40,8 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const keepHere = () => {
     if (!pending) return;
     resolve('off-goal', `${pending.verdict.reason}. You chose Keep here`);
-    // The agent stopped to ask, so it needs the answer; your own keeps instead teach the guard to go quiet.
-    if (pending.isFromAgent) dispatch({ type: 'send', threadId: thread.id, text: 'Do it here.', reason: 'Do it here from the new-thread suggestion' });
-    else dispatch({ type: 'drift-keep', threadId: thread.id });
+    // Your keeps teach the guard to go quiet.
+    dispatch({ type: 'drift-keep', threadId: thread.id });
   };
 
   // The message already went to the agent; what's left is saying what done now means, in the goal's own editor.
@@ -92,7 +91,7 @@ function useRememberedBranchFrom() {
 
 /**
  * A quiet suggestion above the composer for a message that already went out. It never takes focus or keys from the
- * composer; once you Tab into it, 1 2 3 pick the buttons in order and Esc keeps the message here (not for the agent's own suggestion).
+ * composer; once you Tab into it, 1 2 3 pick the buttons in order and Esc keeps the message here.
  */
 export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread }) {
   const { pending } = guard;
@@ -100,7 +99,7 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (isMod(e) || isNav(e) || e.altKey) return;
-    const run = ({ 1: guard.newThread, 2: guard.keepHere, ...(hasGoal(thread) && { 3: guard.addToGoal }), ...(!pending?.isFromAgent && { Escape: guard.keepHere }) } as Record<string, () => void>)[e.key];
+    const run = ({ 1: guard.newThread, 2: guard.keepHere, ...(hasGoal(thread) && { 3: guard.addToGoal }), Escape: guard.keepHere } as Record<string, () => void>)[e.key];
     if (!run) return;
     e.preventDefault();
     run();
@@ -135,9 +134,8 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
               Move to new thread
               <CardShortcut keys={['1']} />
             </Button>
-            {/* Esc sends nothing: Do it here messages the agent, too much for a dismiss key. */}
-            <Button variant="ghost" size="sm" onClick={guard.keepHere} aria-keyshortcuts={pending.isFromAgent ? '2' : '2 Escape'}>
-              {pending.isFromAgent ? 'Do it here' : 'Keep here'}
+            <Button variant="ghost" size="sm" onClick={guard.keepHere} aria-keyshortcuts="2 Escape">
+              Keep here
               <CardShortcut keys={['2']} />
             </Button>
             {hasGoal(thread) && (

@@ -16,6 +16,7 @@ export const MOCHI_CALLS = {
   reorder_threads: ['Reordering the sidebar', 'Reordered the sidebar'],
   watch_thread: ['Watching a thread', 'Watched a thread'],
   create_thread: ['Starting a new thread', 'Started a new thread'],
+  dismiss_thread_proposal: ['Withdrawing a thread suggestion', 'Withdrew a thread suggestion'],
   send_to_thread: ['Messaging a thread', 'Messaged a thread'],
   delete_thread: ['Asking to delete a thread', 'Asked to delete a thread'],
   get_goal: ['Reading the goal', 'Read the goal'],

@@ -1,7 +1,8 @@
 import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type Handoff, type IdleCheck, type LineSlot, type PendingSteer, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type Handoff, type IdleCheck, type LineSlot, type PendingSteer, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadProposal, type ThreadRef, type TurnReport } from '../model.ts';
+import { addProposal, findProposal, proposalBlocker, updateProposal } from '../chat/proposals.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
@@ -141,7 +142,13 @@ export type ThreadsAction =
   /** A finished delegated task's report goes to the thread's agent: steered into its turn, or starting one (`dueReports`). */
   | { type: 'delegate-report'; threadId: string; subagentId: string }
   /** Its sub-threads are idle and left notes: the notes are the agent's next message (`dueWakes`). */
-  | { type: 'subthread-wake'; threadId: string };
+  | { type: 'subthread-wake'; threadId: string }
+  /** The agent's `create_thread` that didn't start one: a card in its chat (`src/chat/proposals.ts`). */
+  | { type: 'proposal-add'; threadId: string; proposal: ThreadProposal; by: Provider }
+  /** Start, New thread, or the agent starting it when you said so: creates the thread the proposal resolved, as a sub-thread when it is one. */
+  | { type: 'proposal-start'; threadId: string; proposalId: string }
+  /** Dismiss (yours, or the agent withdrawing it with `reason`), or Do it here on an offer. */
+  | { type: 'proposal-answer'; threadId: string; proposalId: string; state: 'dismissed' | 'here'; reason?: string };
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
 export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
@@ -349,14 +356,25 @@ function reduce(state: State, action: Action): State {
         threads: mapThread(state.threads, action.threadId, (t) => ({
           ...t,
           ...(t.live && { status: 'running', live: { ...t.live, isWorking: true, isDetached: undefined, notes: undefined, restart: undefined } }),
+          // Steered into a turn in flight it joins that turn; otherwise the report begins one nobody asked for.
+          ...(t.live && !t.live.isWorking && { turn: { start: t.activity.length, isAgentDriven: true as const } }),
           subagents: t.subagents?.map((s) => (s.id === action.subagentId ? { ...s, isReportDue: undefined } : s)),
         })),
       };
+    case 'proposal-add':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => addProposal(t, action.proposal, { at: state.now, who: action.by, kind: 'event', text: `Suggested "${action.proposal.title}"` })) };
+    case 'proposal-start':
+      return startProposal(state, action);
+    case 'proposal-answer': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      if (!thread || proposalBlocker(thread, action.proposalId, state.now)) return state;
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => updateProposal(t, action.proposalId, { state: action.state, ...(action.reason && { reason: action.reason }) })) };
+    }
     case 'subthread-wake':
       return {
         ...state,
         threads: mapThread(state.threads, action.threadId, (t) =>
-          t.live ? log({ ...t, status: 'running', live: { ...t.live, isWorking: true, isDetached: undefined, notes: undefined, restart: undefined } }, { at: state.now, who: 'harness', kind: 'event', text: 'Sub-threads idle: sent their notes to the agent' }) : t,
+          t.live ? log({ ...t, status: 'running', live: { ...t.live, isWorking: true, isDetached: undefined, notes: undefined, restart: undefined }, turn: { start: t.activity.length, isAgentDriven: true } }, { at: state.now, who: 'harness', kind: 'event', text: 'Sub-threads idle: sent their notes to the agent' }) : t,
         ),
       };
     case 'handoff-draft':
@@ -510,6 +528,8 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     controls: action.controls,
     ...(action.parent && { parent: action.parent }),
     ...(action.isSettingsChat && { isSettingsChat: true }),
+    // An agent wrote its first prompt, so its first turn is no one's request: it can only propose threads.
+    ...(action.isBackground && { turn: { start: action.branchFrom ? 1 : 0, isAgentDriven: true as const } }),
   };
   if (isLive) thread.live = { isWorking: true, cwd: threadCwd(thread) ?? undefined };
   // Detached: a message before the first run starts the agent the way a restored thread does.
@@ -547,7 +567,7 @@ export function send(state: State, action: Extract<Action, { type: 'send' }>): S
       const going = live ? { ...sent, status: 'running' as const, live } : sent;
       // Into a turn in flight, it joins the transcript where the agent reads it (`readSteer`), not where you sent it.
       if (action.typed && t.live?.isWorking) return { ...going, steering: [...(t.steering ?? []), { message: action.typed, entry: { ...entry, isSeen: true }, reason: action.reason }] };
-      const said = log(going, entry);
+      const said = log({ ...going, turn: { start: going.activity.length, ...((from || action.autofix) && { isAgentDriven: true as const }) } }, entry);
       return action.drift ? applyDrift(said, action.drift, action.reason, now) : said;
     }),
   };
@@ -652,6 +672,16 @@ function applyDrift(t: Thread, drift: DriftKind, reason: string, now: number): T
 }
 
 /** Off-goal prompt to a new thread. A finished goal is settled first: its review stays queued while a PR is open, otherwise it resolves. */
+/** A proposal's thread, created as the agent resolved it: you stay where you are, and the card names it. */
+function startProposal(state: State, action: Extract<Action, { type: 'proposal-start' }>): State {
+  const thread = state.threads.find((t) => t.id === action.threadId);
+  if (!thread || proposalBlocker(thread, action.proposalId, state.now)) return state;
+  const { proposal } = findProposal(thread, action.proposalId)!;
+  const next = create(state, { type: 'create', title: proposal.brief, ...proposal.create, isBackground: true });
+  const id = `new-${state.seq}`;
+  return { ...next, threads: mapThread(next.threads, thread.id, (t) => updateProposal(t, proposal.id, { state: 'started', threadId: id })) };
+}
+
 function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new-thread' }>): State {
   const source = state.threads.find((t) => t.id === action.threadId);
   if (!source) return state;

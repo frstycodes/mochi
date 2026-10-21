@@ -10,9 +10,9 @@ import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
-import { setDriftPending } from '../chat/outbox.ts';
+import { nextProposalId, PROPOSALS_PER_TURN, proposalBlocker, turnOf, turnProposalCount } from '../chat/proposals.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, isListed, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread } from '../model.ts';
+import { authorName, isListed, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread, type ThreadProposal } from '../model.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
@@ -383,38 +383,36 @@ const THREAD_SPECS = {
   },
   create_thread: {
     // A sub-thread's new threads, and picks above this thread's run, wait on the user: an agent can't raise what it was started with.
+    // A card asks nothing: nothing runs until the user starts it. Nor does a turn `run` refuses (`AGENT_DRIVEN`).
     ask: async ({ env, caller, args }) => {
+      if (!args.proposalId && args.initiation !== 'user_asked') return undefined;
+      if (turnOf(caller).isAgentDriven) return undefined;
       const raised = await raisedControls(env, caller, providerOf(args.provider, caller), args);
       if (!caller.parent && !raised.length) return undefined;
       const reasons = [caller.parent && 'This thread is a sub-thread, so the threads it starts wait on you.', raised.length && `It would run ${raised.join(' at ')}, above this thread.`];
-      return { title: `${authorName(caller.providers[0])} wants to start a thread`, detail: reasons.filter(Boolean).join(' '), code: args.prompt, denied: "Didn't start the thread" };
+      return { title: `${authorName(caller.providers[0])} wants to start a thread`, detail: reasons.filter(Boolean).join(' '), code: args.prompt ?? args.proposalId, denied: "Didn't start the thread" };
     },
-    run: async ({ state, caller, args, dispatch, env }) => {
-      const prompt = args.prompt.trim();
-      if (!prompt) throw new Error('prompt is required');
-      const parent = subThreadLink(caller, args);
-      const provider = providerOf(args.provider, caller);
-      const project = projectRef(caller.repo);
-      // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
-      const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
-      // Always its own worktree, whatever the composer's Worktree box says: parallel agents sharing one folder trip over each
-      // other's changes and make worktrees Mochi can't see. Its branch gets a temp name until its title names it.
-      const workspace = project ? { mode: 'worktree' as const, ...(base && { base }) } : undefined;
-      const controls = await newThreadControls(env, caller, provider, args);
+    run: async (ctx) => {
+      const { state, caller, args, dispatch } = ctx;
+      if (args.proposalId) return startProposal(ctx, args.proposalId);
+      const prompt = args.prompt?.trim();
+      if (!prompt) throw new Error('prompt is required: the brief the new agent starts on');
+      if (!args.initiation) throw new Error('Pass initiation: "user_asked", "offer" or "own_initiative"');
+      if (args.initiation !== 'own_initiative' && turnOf(caller).isAgentDriven) throw new Error(AGENT_DRIVEN);
+      const create = await proposalCreate(ctx);
+      if (args.initiation !== 'user_asked') return propose(ctx, args.initiation, prompt, create);
       const before = state();
-      dispatch({
-        type: 'create',
-        title: prompt,
-        provider,
-        project,
-        ...(workspace && { workspace }),
-        controls,
-        isLive: !!caller.live,
-        isBackground: true,
-        ...(parent && { parent }),
-      });
+      dispatch({ type: 'create', title: prompt, ...create, isBackground: true });
       const created = state().threads.find((t) => !before.threads.some((s) => s.id === t.id))!;
       return { changed: `started "${created.title}"`, result: summary(created), undo: () => dispatch({ type: 'delete', threadIds: [created.id] }) };
+    },
+  },
+  dismiss_thread_proposal: {
+    run: ({ state, caller, args, dispatch }) => {
+      const blocker = proposalBlocker(target(state(), caller, caller.id), args.taskId, state().now);
+      if (blocker) throw new Error(blocker);
+      dispatch({ type: 'proposal-answer', threadId: caller.id, proposalId: args.taskId, state: 'dismissed', reason: args.reason?.trim() || 'No longer needed' });
+      return { result: { taskId: args.taskId, state: 'dismissed' } };
     },
   },
   send_to_thread: {
@@ -599,8 +597,7 @@ const AGENT_SPECS = {
   update_plan: {
     run: ({ caller, args, dispatch }) => {
       if (!args.items && !args.advance) throw new Error('Pass {"items": [...]} (the whole plan) or {"advance": true}');
-      if (args.items && !args.scope) throw new Error('Pass "scope" with "items": "first_task", "continuation" or "new_task"');
-      if (args.scope === 'new_task') return offerNewThread(caller);
+      if (args.items && !args.scope) throw new Error('Pass "scope" with "items": "first_task" or "continuation"');
       const items = args.items ? args.items.map((i) => ({ title: i.title.trim(), status: PLAN_STATUS[i.status] })) : advanced(caller.steps);
       dispatch({ type: 'agent', event: { threadId: caller.id, type: 'plan', items, ...(args.scope === 'first_task' && { isFresh: true }) }, ms: Date.now() });
       return { result: `Plan shown (${items.length} steps).` };
@@ -679,6 +676,50 @@ function subThreadLink(caller: Thread, args: { criterionId?: string; isTopLevel?
   return { threadId: caller.id, ...(args.criterionId && { criterionId: args.criterionId }) };
 }
 
+const AGENT_DRIVEN = "This turn began with another thread's message or an automated event (Auto-fix, sub-thread notes), not the user, so it can't start threads or ask where work runs: propose it with initiation \"own_initiative\" and the user decides.";
+
+/** What the new thread is: who runs it, where, and under which thread. Resolved now, so a card's Start later creates the same. */
+async function proposalCreate({ env, caller, args }: ToolContext<Args<'create_thread'>>): Promise<ThreadProposal['create']> {
+  const parent = subThreadLink(caller, args);
+  const provider = providerOf(args.provider, caller);
+  const project = projectRef(caller.repo);
+  // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
+  const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
+  // Always its own worktree, whatever the composer's Worktree box says: parallel agents sharing one folder trip over each
+  // other's changes and make worktrees Mochi can't see. Its branch gets a temp name until its title names it.
+  const workspace = project ? { mode: 'worktree' as const, ...(base && { base }) } : undefined;
+  const controls = await newThreadControls(env, caller, provider, args);
+  return { provider, project, ...(workspace && { workspace }), controls, isLive: !!caller.live, ...(parent && { parent }) };
+}
+
+/** An offer or own_initiative card in the caller's chat; nothing starts. */
+function propose({ state, caller, args, dispatch }: ToolContext<Args<'create_thread'>>, initiation: ThreadProposal['initiation'], brief: string, create: ThreadProposal['create']): Outcome {
+  const title = args.title?.trim();
+  if (!title) throw new Error('Pass a short title for the card');
+  const thread = target(state(), caller, caller.id);
+  if (initiation === 'own_initiative' && turnProposalCount(thread) >= PROPOSALS_PER_TURN) throw new Error(`You already proposed ${PROPOSALS_PER_TURN} threads this turn, the most one turn may. Mention the rest in your reply, or withdraw a weaker one with dismiss_thread_proposal first.`);
+  const id = nextProposalId(thread);
+  dispatch({ type: 'proposal-add', threadId: caller.id, proposal: { id, initiation, title, brief, state: 'pending', create }, by: caller.providers[0] });
+  const note =
+    initiation === 'offer'
+      ? 'The user sees New thread / Do it here / Dismiss. Don\'t start the work: end your turn now with one short line. New thread starts it with your brief; "Do it here." or a dismissal comes back as their message.'
+      : 'The user sees a card with Start and Dismiss; nothing runs until they start it. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.';
+  return { result: { taskId: id, state: 'pending', note } };
+}
+
+/** The user told the agent to start a card it proposed. */
+function startProposal({ state, caller, dispatch }: ToolContext<Args<'create_thread'>>, proposalId: string): Outcome {
+  const thread = target(state(), caller, caller.id);
+  if (turnOf(thread).isAgentDriven) throw new Error(AGENT_DRIVEN);
+  const blocker = proposalBlocker(thread, proposalId, state().now);
+  if (blocker) throw new Error(blocker);
+  const before = state();
+  dispatch({ type: 'proposal-start', threadId: caller.id, proposalId });
+  const created = state().threads.find((t) => !before.threads.some((s) => s.id === t.id));
+  if (!created) throw new Error(`Couldn't start ${proposalId}`);
+  return { changed: `started "${created.title}"`, result: summary(created), undo: () => dispatch({ type: 'delete', threadIds: [created.id] }) };
+}
+
 /**
  * A sub-thread's PR goes into its parent's branch, so the parent's PR stays the one you review. The parent's branch is pushed
  * first: GitHub needs it to exist. None for a thread on its own, or nested under a thread in another project.
@@ -754,15 +795,6 @@ const DRAFT_NEXT = "This goal is Mochi's guess from the user's first message, no
 const DRAFT_REFUSAL = `Call propose_goal first. ${DRAFT_NEXT}`;
 
 const PLAN_STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
-
-/** The agent called the request unrelated work: your message goes on the card above the composer, to move to a new thread or keep here. */
-function offerNewThread(thread: Thread) {
-  const asked = thread.activity.findLast((e) => e.who === 'you' && e.kind === 'message');
-  if (!asked) throw new Error('There is no message from the user to move to a new thread; use scope "continuation"');
-  const agent = authorName(thread.providers[0]);
-  setDriftPending(thread.id, { text: asked.text, verdict: { kind: 'off-goal', reason: `${agent} says it's unrelated to the work here` }, isFromAgent: true });
-  return { result: "Mochi asked the user whether to move this request to a new thread. Don't start it: end your turn now with one short line. If they keep it here, they'll tell you." };
-}
 
 /** The thread's plan one step on: the running step done, the next open one running. */
 function advanced(steps: Step[]): AgentPlanItem[] {

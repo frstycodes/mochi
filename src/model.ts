@@ -4,6 +4,7 @@ import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
 import type { ThreadControls } from './runtime/controls.ts';
+import type { WorkspaceDraft } from './git/workspace.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import type { PaneLayout } from './pane/layout.ts';
@@ -189,7 +190,32 @@ export interface ActivityEntry {
   compaction?: Compaction;
   /** Events only: the thread moved to the other agent here. */
   handoff?: Handoff;
+  /** Events only: side work the agent suggested or asked about in this turn (`create_thread`), one card. */
+  proposals?: ThreadProposal[];
 }
+
+/**
+ * A thread the agent suggested (own_initiative: Start / Dismiss) or asked whether to start (offer: New thread / Do it here).
+ * Nothing runs until it's started; a pending one expires after `PROPOSAL_TTL`.
+ */
+export interface ThreadProposal {
+  /** The taskId the agent starts or withdraws it by. */
+  id: string;
+  initiation: 'offer' | 'own_initiative';
+  title: string;
+  /** The new thread's first prompt. */
+  brief: string;
+  state: 'pending' | 'started' | 'dismissed' | 'here';
+  /** Dismissed by the agent: why it withdrew it. */
+  reason?: string;
+  /** Started: the thread it became. */
+  threadId?: string;
+  /** What starting it creates, resolved when the agent asked, so a click starts what the agent meant. */
+  create: { provider: Provider; project: string | null; workspace?: WorkspaceDraft; controls?: ThreadControls; isLive: boolean; parent?: SubThreadLink };
+}
+
+/** App-clock minutes: a week. */
+export const PROPOSAL_TTL = 7 * 24 * 60;
 
 /** A handoff to the other agent: drafting while a model writes `prompt`, started once the new agent has it as its first message. */
 export interface Handoff {
@@ -386,6 +412,8 @@ export interface Thread {
   report?: TurnReport;
   /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
   idle?: IdleCheck;
+  /** Where the latest turn began (an `activity` index) and whether another thread or an automated event began it, not you. */
+  turn?: { start: number; isAgentDriven?: true };
   proposal?: GoalProposal;
   providers: Provider[];
   status: ThreadStatus;

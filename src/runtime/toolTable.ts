@@ -24,8 +24,11 @@ const reason = z.string().min(1).max(240).describe('Why, in a sentence the user 
 /** The MCP server Mochi's tools are on: agents see them as `mcp__mochi__<tool>`. */
 export const MOCHI_SERVER = 'mochi';
 
-/** `update_plan`'s scope: this thread's first task, more of the same work, or unrelated work Mochi offers to move to a new thread. */
-export const PLAN_SCOPES = ['first_task', 'continuation', 'new_task'] as const;
+/** `update_plan`'s scope: this thread's first task, or more of the same work. Unrelated work is a `create_thread` offer. */
+export const PLAN_SCOPES = ['first_task', 'continuation'] as const;
+
+/** `create_thread`'s initiation (Claude Code Desktop's): who wants the thread, which decides whether it starts now. */
+export const THREAD_INITIATIONS = ['user_asked', 'offer', 'own_initiative'] as const;
 
 export const TOOL_TABLE = {
   // {THREADS}
@@ -67,15 +70,24 @@ export const TOOL_TABLE = {
   create_thread: {
     tier: 'change',
     description:
-      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Honor any model or effort the user explicitly named. Otherwise leave that field out: the new thread inherits the originating session's model and effort when it starts. Do not choose a different model or effort on your own. It nests under this thread as a sub-thread: it branches from your branch, opens its PR into it, and each turn it ends comes back to you as a note; you are started with the notes once all your sub-threads are idle. Pass `criterionId` to hand it one piece of your goal. Pass `isTopLevel` for work that stands on its own, like an unrelated task the user wants as a separate thread. From a sub-thread, it nests under that sub-thread and waits on the user's approval, as does any model or effort above this thread's.",
+      "Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. `initiation` says whose idea it is. \"user_asked\": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. \"offer\": a task the user named in their latest message where it isn't clear whether it belongs here; the user sees New thread / Do it here, so don't start the work: end your turn with one short line and wait (\"Do it here.\" comes back as their message). \"own_initiative\": work you noticed or recommend that the user didn't ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with Start and Dismiss and nothing runs until they start it. At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start (\"start the second one\"), pass just its `proposalId`. A turn begun by another thread's message or an automated event (Auto-fix, sub-thread notes) can only use own_initiative. The thread nests under this one as a sub-thread: it branches from your branch, opens its PR into it, and each turn it ends comes back to you as a note; you are started with the notes once all your sub-threads are idle. Pass `criterionId` to hand it one piece of your goal, `isTopLevel` for work that stands on its own. Honor any model or effort the user named; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread waits on the user's approval, as does any model or effort above this thread's.",
     shape: {
-      prompt: z.string(),
+      initiation: z.enum(THREAD_INITIATIONS).optional().describe('Required unless proposalId is given'),
+      title: z.string().min(1).max(80).optional().describe('A short name for the card, about 6 words; required for offer and own_initiative'),
+      prompt: z.string().optional().describe('The brief the new agent starts on; required unless proposalId is given'),
+      proposalId: z.string().optional().describe('Start a card you proposed (its taskId) because the user told you to; nothing else is needed'),
       criterionId: z.string().optional().describe('Hand this criterion of your goal (an id from get_goal) to the new thread as a sub-thread; its result claims it when handed back'),
       isTopLevel: z.boolean().optional().describe('Start it at the top of the sidebar, not nested under this thread'),
       provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
       model: z.string().optional().describe("A model id the account offers, like \"claude-sonnet-5-5\"; defaults to this thread's"),
       effort: z.string().optional().describe("A provider-supported effort id; defaults to the originating session's at start"),
     },
+  },
+  dismiss_thread_proposal: {
+    tier: 'change',
+    quiet: true,
+    description: 'Withdraw a thread card you made with create_thread (own_initiative or offer) that the user has not started, when it went stale: the work got done here after all, it turned out unnecessary, or a better-scoped card replaced it (propose the new one first, then dismiss the old). The card shows your reason.',
+    shape: { taskId: z.string().describe('The taskId create_thread returned'), reason: z.string().max(200).optional().describe('One line the user reads on the card, like "done in this thread"') },
   },
   send_to_thread: {
     tier: 'change',
@@ -157,7 +169,7 @@ export const TOOL_TABLE = {
   update_plan: {
     tier: 'read',
     description:
-      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. Every {"items"} call says in "scope" what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, this one) or "new_task" (unrelated work a fresh thread would do as well from the user\'s words alone). With "new_task", Mochi asks the user whether to move the request to a new thread and shows no plan: don\'t start the work, end your turn with one short line.',
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. Every {"items"} call says in "scope" what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, this one). A request that is unrelated work a fresh thread would do as well from the user\'s words alone gets no plan: offer it with create_thread initiation "offer" instead.',
     shape: {
       items: z
         .array(z.object({ title: z.string().min(1).max(120).describe('A short step, like "Add the parser test"'), status: z.enum(['pending', 'in_progress', 'completed']) }))
