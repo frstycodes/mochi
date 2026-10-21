@@ -1,11 +1,11 @@
-import { mkdir, stat } from 'node:fs/promises';
+import { cp, mkdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { isCloneUrl, normalizeOrigin, repoName } from '../../src/git/origin.ts';
 import type { GithubAccountRef } from '../../src/git/github.ts';
 import type { CloneSource, GithubRepo } from '../../src/host/types/projects.ts';
 import { runGhOn, runGitAs } from '../git/gh.ts';
-import { runGit, runStreaming } from '../git/run.ts';
+import { runGit, runStreaming, topLevel } from '../git/run.ts';
 
 const OWNER_REPO = /^[\w.-]+\/(?!\.\.?(?:\.git)?$)[\w.-]+$/;
 const NAME = /^[\w.-]+$/;
@@ -40,6 +40,34 @@ export async function initProject(parentDir: string, name: string) {
   await mkdir(dest.path);
   await runGit(dest.path, ['init']);
   return dest.path;
+}
+
+/**
+ * The folder for a new project: `path` as it is, or made from `from`'s files, moved or copied there (`path` must not exist yet).
+ * `gitInit` runs `git init` unless the folder is already inside a repository.
+ */
+export async function adoptFolder(path: string, from: string | undefined, transfer: 'move' | 'copy', gitInit: boolean) {
+  const dest = resolve(path.replace(/^~(?=[\\/]|$)/, homedir()));
+  if (from !== undefined) {
+    if (!isAbsolute(from) || !(await stat(from).then((s) => s.isDirectory(), () => false))) throw new Error(`${from} isn't a folder`);
+    if (await stat(dest).then(() => true, () => false)) throw new Error(`${dest} already exists; pick a new folder for the project`);
+    await mkdir(dirname(dest), { recursive: true });
+    if (transfer === 'copy') await cp(from, dest, { recursive: true, errorOnExist: true, force: false });
+    else await moveFolder(from, dest);
+  }
+  if (gitInit && !(await topLevel(dest).then(() => true, () => false))) await runGit(dest, ['init']);
+  return dest;
+}
+
+// A rename can't cross volumes (EXDEV): the files are copied, then the original removed.
+async function moveFolder(from: string, dest: string) {
+  try {
+    await rename(from, dest);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+    await cp(from, dest, { recursive: true, errorOnExist: true, force: false });
+    await rm(from, { recursive: true });
+  }
 }
 
 /** A GitHub repository for the folder through gh, set as its origin; nothing is pushed until there's a commit. */

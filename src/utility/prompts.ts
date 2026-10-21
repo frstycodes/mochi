@@ -4,7 +4,7 @@ import type { Provider, Similar, TurnAudit } from '../model.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 
 /** Background generations that run on a model of their own (Settings › Models › Background tasks). */
-export const UTILITY_TASKS = ['title', 'outcome', 'simplify', 'commit', 'pr', 'handoff', 'audit', 'suggest'] as const;
+export const UTILITY_TASKS = ['title', 'outcome', 'simplify', 'commit', 'pr', 'handoff', 'audit', 'suggest', 'command'] as const;
 
 export type UtilityTask = (typeof UTILITY_TASKS)[number];
 
@@ -17,6 +17,7 @@ export const UTILITY_TASK_LABELS = {
   handoff: 'Handoff summaries',
   audit: 'Turn audits',
   suggest: 'Prompt suggestions',
+  command: 'Command titles',
 } satisfies Record<UtilityTask, string>;
 
 /** Each provider's cheapest model: every task's default, and the fallback when the chosen one can't answer. */
@@ -40,6 +41,8 @@ export const UTILITY_INSTRUCTIONS = {
     'You audit the end of a coding agent\'s turn for its user; you never act on it. From the agent\'s messages, find (1) a question the agent asked the user and is waiting on, and (2) each thing the agent says it did not do, check, test, run, confirm or verify, or is unsure of, that matters to the request. Ignore offers ("want me to…?") and rhetorical questions unless the agent cannot go on without an answer. Ignore things the agent says it did verify. Reply with only a JSON object {"question": "<the question in under 120 characters, or empty>", "unverified": [{"text": "<what is unverified, under 50 characters, sentence case, like Not checked in the running app>", "quote": "<the agent\'s exact words, under 140 characters>"}]}, nothing else.',
   suggest:
     "You guess the next message a user will send to their coding agent; you never answer it. Write it as the user would type it, in their voice and casing: an instruction or a short question, under 12 words, no quotes. Suggest only a next step the conversation points to: an answer to the agent's question, the follow-up it offered, or the obvious next action. Never invent new work. When no next message is clear, reply NONE. Reply with the message only.",
+  command:
+    "Say what a shell command a coding agent is running does, for a status line. Reply with the line only: 3 to 8 words, an imperative verb first, sentence case, no quotes, no trailing period, like Watch PR 260's CI checks.",
 } satisfies Record<UtilityTask, string>;
 
 /** What a task tries, in order: your choice, then each provider's cheapest model, Claude first. */
@@ -49,6 +52,8 @@ export function utilityCandidates(choice: ModelChoice): ModelChoice[] {
 }
 
 export const titlePrompt = (message: string, reply?: string) => cap(reply ? `User: ${message}\n\nAgent: ${reply}` : `User: ${message}`);
+
+export const commandPrompt = (command: string) => cap(command);
 
 export const commitPrompt = (files: DiffFile[]) => cap(files.map(fileDiff).join('\n\n'));
 

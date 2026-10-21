@@ -61,7 +61,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     }
     if (name === IMAGE_CALL) return [{ threadId, type: 'tool', id, phase: 'start', text: 'Generate image', generated: imageCard(input) }];
     const description = callDescription(name, input);
-    return [{ threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) }];
+    return [{ threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description ? { description } : commandOf(name, input)) }];
   }
 
   function toolEnd(block: ToolResultBlock, result: unknown): AgentEvent[] {
@@ -408,6 +408,11 @@ export function describeTool(name: string, input: Record<string, unknown>, serve
   if (typeof target !== 'string') return name;
   const verb = VERBS[name as keyof typeof VERBS];
   return verb ? `${verb} ${target}` : `${name}: ${target.split('\n')[0].slice(0, 200)}`;
+}
+
+/** A Bash call's command, for main to describe when Claude sent no `description` (the field is optional). */
+function commandOf(name: string, input: Record<string, unknown>) {
+  return name === 'Bash' && typeof input.command === 'string' ? { command: input.command } : {};
 }
 
 /** The plain-language line a work-group row shows: Bash's own `description`; Grep and Glob in words. Other tools read fine from their verb and target. */

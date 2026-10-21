@@ -76,6 +76,7 @@
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.56 0.2 25);
   --success: oklch(0.5 0.14 150);
+  --diff-tint-chroma: 0.015;
   --warning: oklch(0.48 0.13 65);
   --info: oklch(0.5 0.15 255);
   --unread: oklch(0.55 0.24 262);
@@ -133,6 +134,7 @@
     --accent: oklch(0.25 0.009 285);
     --destructive: oklch(0.68 0.18 25);
     --success: oklch(0.74 0.16 150);
+    --diff-tint-chroma: 0.04;
     --warning: oklch(0.82 0.14 80);
     --info: oklch(0.76 0.12 250);
     --unread: oklch(0.65 0.19 255);
@@ -180,6 +182,7 @@
   --accent: oklch(0.25 0.009 285);
   --destructive: oklch(0.68 0.18 25);
   --success: oklch(0.74 0.16 150);
+  --diff-tint-chroma: 0.04;
   --warning: oklch(0.82 0.14 80);
   --info: oklch(0.76 0.12 250);
   --unread: oklch(0.65 0.19 255);
@@ -861,4 +864,19 @@
 }
 @keyframes pop-fade-out {
   to { opacity: 0; }
+}
+
+/* ```diff fences in chat; src/chat/diffCodePlugin.ts tags each line's marker token. Tints keep the background's
+   lightness so token contrast barely moves; their hues match --success and --destructive. */
+[data-streamdown='code-block-body'] code > span:has(> [data-diff='add']) {
+  background: oklch(from var(--background) l var(--diff-tint-chroma) 150);
+}
+[data-streamdown='code-block-body'] code > span:has(> [data-diff='del']) {
+  background: oklch(from var(--background) l var(--diff-tint-chroma) 25);
+}
+[data-streamdown='code-block-body'] [data-diff='add'] {
+  color: color-mix(in oklab, var(--success), var(--foreground) 30%);
+}
+[data-streamdown='code-block-body'] [data-diff='del'] {
+  color: color-mix(in oklab, var(--destructive), var(--foreground) 30%);
 }

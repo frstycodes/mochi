@@ -58,7 +58,7 @@ export function threadAt(thread: Thread, t: number): Thread {
     const isLater = (at?: number) => at !== undefined && at > t;
     const isStarted = !isLater(s.startedAt);
     const isDone = !isLater(s.doneAt);
-    return [{ ...s, status, startedAt: isStarted ? s.startedAt : undefined, startedMs: isStarted ? s.startedMs : undefined, doneAt: isDone ? s.doneAt : undefined, doneMs: isDone ? s.doneMs : undefined, droppedAt: isLater(s.droppedAt) ? undefined : s.droppedAt }];
+    return [{ ...s, status, startedAt: isStarted ? s.startedAt : undefined, startedMs: isStarted ? s.startedMs : undefined, doneAt: isDone ? s.doneAt : undefined, doneMs: isDone ? s.doneMs : undefined, ...(isLater(s.stoppedAt) && { stoppedAt: undefined, stoppedMs: undefined }), droppedAt: isLater(s.droppedAt) ? undefined : s.droppedAt }];
   });
   return {
     ...thread,
@@ -166,7 +166,7 @@ function restore(state: State, threadId: string, base: Thread, cpIndex: number, 
   const restored: Thread = {
     ...base,
     // Work resumes now: a step that was running at the checkpoint restarts its clock instead of claiming the hours since.
-    steps: base.steps.map((s) => (s.status === 'running' ? { ...s, startedAt: state.now, startedMs: ms } : s)),
+    steps: base.steps.map((s) => (s.status === 'running' ? { ...s, startedAt: state.now, startedMs: ms, stoppedAt: undefined, stoppedMs: undefined } : s)),
     title: current.title,
     line: current.line,
     orbitSlot: current.orbitSlot,

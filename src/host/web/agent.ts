@@ -26,6 +26,9 @@ export const agent: AgentHost = {
   async compactInstructions() {},
   interrupt: endTurn,
   stop: endTurn,
+  async move(_threadId, { root }) {
+    return { cwd: root, head: null };
+  },
   settle: endTurn,
   async resolve() {},
   async setupChoice() {},

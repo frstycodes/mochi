@@ -183,6 +183,7 @@ export const Stars = solar(Linear.StarsIcon, Bold.StarsIcon);
 export const Stop = solar(Linear.StopIcon, Bold.StopIcon);
 export const StopCircle = solar(Linear.StopCircleIcon, Bold.StopCircleIcon);
 export const Sun = solar(Linear.SunIcon, Bold.SunIcon);
+export const Table = solar(Linear.TableIcon, Bold.TableIcon);
 export const Tablet = solar(Linear.TabletIcon, Bold.TabletIcon);
 export const TaskSquare = solar(Linear.ChecklistMinimalisticIcon, Bold.ChecklistMinimalisticIcon);
 export const Terminal = solar(Linear.ProgrammingIcon, Bold.ProgrammingIcon);

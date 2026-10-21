@@ -30,7 +30,8 @@ import { isSendCall } from './chat/threadMessages';
 import { ThreadMessageBody, ThreadMessageIcon, ThreadMessageLine } from './chat/ThreadMessage';
 import { ICON_SWAP } from './ui';
 import { MessageImages } from './chat/MessageImages';
-import { isFilePath, useImageUrls } from './chat/imageSrc';
+import { isFilePath, revealFile, useImageUrls } from './chat/imageSrc';
+import { openPhotos } from './photo/photos';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
@@ -80,9 +81,7 @@ export function WorkLog({ entries, skills = [], action }: { entries: ActivityEnt
         <AnimatePresence initial={false}>
           {!isOpen && !!files && images.length > 0 && (
             <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="ml-auto flex shrink-0 items-center gap-1 pr-2">
-              {images.map((path) => (
-                <ImageThumb key={path} files={files} path={path} />
-              ))}
+              <ImageThumbs files={files} paths={images} />
             </motion.span>
           )}
         </AnimatePresence>
@@ -268,22 +267,31 @@ const readImage = (call: ToolCall) => (call.verb === 'Read' && isImage(call.targ
 // A Read's target is relative to the thread's folder when inside it; a returned image is already absolute (or a URL).
 const absolutePath = (files: ThreadFiles, path: string) => (!isFilePath(path) || path.startsWith('/') || !files.root ? path : `${files.root}/${path}`);
 
-/** An image the agent read, small, opening in the side pane's Files tab. */
-function ImageThumb({ files, path }: { files: ThreadFiles; path: string }) {
-  const [url] = useImageUrls([absolutePath(files, path)]);
-  const openCallFile = useOpenCallFile(files.threadId);
-  const name = path.split('/').pop() ?? path;
-  return (
+/** The images the agent read or captured, small, opening together in the photo viewer. */
+function ImageThumbs({ files, paths }: { files: ThreadFiles; paths: string[] }) {
+  const srcs = paths.map((path) => absolutePath(files, path));
+  const urls = useImageUrls(srcs);
+  // Images that couldn't be read stay out of the viewer; the index counts only the ones before `i` that it shows.
+  const open = (i: number) => {
+    const photos = srcs.flatMap((src, j) => (urls[j] ? [{ src: urls[j]!, name: imageName(src), ...(isFilePath(src) && { reveal: () => void revealFile(src) }) }] : []));
+    openPhotos({ photos, index: urls.slice(0, i).filter(Boolean).length });
+  };
+  return srcs.map((src, i) => (
     <button
+      key={src}
       type="button"
-      aria-label={`Open ${name}`}
-      onClick={() => openCallFile(files, path)}
-      className="relative h-6 w-9 shrink-0 cursor-default overflow-hidden rounded-md bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
+      aria-label={`View ${imageName(src)}`}
+      disabled={!urls[i]}
+      onClick={() => open(i)}
+      className="relative h-6 w-9 shrink-0 cursor-zoom-in overflow-hidden rounded-md bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
     >
-      {!!url && <img src={url} alt="" className="size-full object-cover" />}
+      {!!urls[i] && <img src={urls[i]!} alt="" className="size-full object-cover" />}
     </button>
-  );
+  ));
 }
+
+// A captured screenshot arrives as a data URL, whose base64 can hold slashes.
+const imageName = (src: string) => (isFilePath(src) ? (src.split('/').pop() ?? src) : 'Screenshot');
 
 /** After the title, so it sits flush with the prose like Claude's: the chevron, or the needs-you dot while paused on you (the chevron on hover, so it still reads as openable). Working needs no icon: Mochi under the chat and the shimmering title say it. */
 export function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {

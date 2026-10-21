@@ -1,3 +1,4 @@
+import { app } from 'electron';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { UsageHost, UsageReport } from '../../src/host/types/usage.ts';
@@ -8,6 +9,7 @@ import { githubAccount } from '../git/gh.ts';
 import { claudeRecords } from '../usage/claude.ts';
 import { codexRecords } from '../usage/codex.ts';
 import { commitStats, prStats } from '../usage/git.ts';
+import { priceBook } from '../usage/prices.ts';
 import { summarize } from '../usage/records.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
@@ -34,7 +36,8 @@ export const usage = {
       Promise.all(repos.map((repo) => settle(commitStats(repo, since), `Commits in ${repo}`))).then((r) => r.flat()),
       Promise.all(repos.map((repo) => settle(prStats(repo, since, account), `Pull requests in ${repo}`))).then((r) => r.flat()),
     ]);
-    return { ...summarize([...claude, ...codex], roots, since), commits, prs, errors } satisfies UsageReport;
+    const price = await priceBook(join(app.getPath('userData'), 'model-prices.json'));
+    return { ...summarize([...claude, ...codex], roots, since, price), commits, prs, errors } satisfies UsageReport;
   },
 } satisfies Handlers<UsageHost>;
 

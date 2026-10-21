@@ -13,7 +13,8 @@ import type { ThemesHost } from '../host/types/themes.ts';
 import { nextProposalId, PROPOSALS_PER_TURN, proposalBlocker, turnOf, turnProposalCount } from '../chat/proposals.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, isListed, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread, type ThreadProposal } from '../model.ts';
-import { projectRef } from '../projects.ts';
+import { projectName, projectRef } from '../projects.ts';
+import { planMove } from './moves.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_CONTROL } from '../settings/settingOptions.ts';
@@ -67,7 +68,9 @@ export interface ToolEnv {
   /** Starts a second opinion on `thread` from the other provider, resolving with the reviewer; throws why it can't. */
   askSecondOpinion: (thread: Thread) => Promise<Provider>;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
+  /** Whether `path` is a folder on disk (`move_thread`'s checks). */
+  isFolder: (path: string) => Promise<boolean>;
+  git: { branches: (root: string) => Promise<BranchList>; branchNameError: (root: string, name: string) => Promise<string | null>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
   now?: () => number;
 }
 
@@ -327,6 +330,15 @@ const THREAD_SPECS = {
       return { changed: `settled ${count(threads)}`, result: { threads: threads.map((t) => summary(target(state(), caller, t.id))) } };
     },
   },
+  move_thread: {
+    run: async ({ env, caller, args, dispatch }) => {
+      if (!env.isDesktop) throw new Error('Threads move only in the desktop app');
+      const move = await planMove(caller, args, { isFolder: env.isFolder, branches: env.git.branches, branchNameError: env.git.branchNameError, prefs: env.prefs.get() });
+      dispatch({ type: 'move-request', threadId: caller.id, move });
+      const result = { willMoveTo: move.root, workspace: move.workspace ?? null, next: 'End your turn now with one short line. Mochi moves the thread once it ends and resumes you there, on this same session, with a note.' };
+      return { changed: `will move this thread to ${projectName(move.root)} when its turn ends`, result, undo: () => dispatch({ type: 'move-cancel', threadId: caller.id }) };
+    },
+  },
   reactivate_thread: {
     run: ({ state, caller, args, dispatch }) => {
       const threads = targets(state(), caller, args.threadIds).filter((t) => t.status === 'settled');
@@ -385,24 +397,30 @@ const THREAD_SPECS = {
     },
   },
   create_thread: {
-    // A sub-thread's new threads, and picks above this thread's run, wait on the user: an agent can't raise what it was started with.
+    // A sub-thread's new threads, a top-level one, and picks above this thread's run, wait on the user: an agent can't raise what it
+    // was started with, nor take work out from under the thread that coordinates it.
     // A card asks nothing: nothing runs until the user starts it. Nor does a turn `run` refuses (`AGENT_DRIVEN`).
     ask: async ({ env, caller, args }) => {
       if (!args.proposalId && args.initiation !== 'user_asked') return undefined;
       if (turnOf(caller).isAgentDriven) return undefined;
+      // Refuses a link that can't be made before the user is asked about it.
+      subThreadLink(caller, args);
       const raised = await raisedControls(env, caller, providerOf(args.provider, caller), args);
-      if (!caller.parent && !raised.length) return undefined;
-      const reasons = [caller.parent && 'This thread is a sub-thread, so the threads it starts wait on you.', raised.length && `It would run ${raised.join(' at ')}, above this thread.`];
-      return { title: `${authorName(caller.providers[0])} wants to start a thread`, detail: reasons.filter(Boolean).join(' '), code: args.prompt ?? args.proposalId, denied: "Didn't start the thread" };
+      if (!caller.parent && !args.isTopLevel && !raised.length) return undefined;
+      const reasons = [caller.parent && 'This thread is a sub-thread, so the threads it starts wait on you.', args.isTopLevel && 'It would start top-level, not nested under this thread.', raised.length && `It would run ${raised.join(' at ')}, above this thread.`];
+      // The agent only suggests top-level; you pick where it goes.
+      const placement = args.isTopLevel ? { options: PLACEMENTS, pick: 'one' as const } : {};
+      return { title: `${authorName(caller.providers[0])} wants to start a thread`, detail: reasons.filter(Boolean).join(' '), code: args.prompt ?? args.proposalId, denied: "Didn't start the thread", ...placement };
     },
-    run: async (ctx) => {
-      const { state, caller, args, dispatch } = ctx;
+    run: async (ctx, [placement]) => {
+      const { state, caller, dispatch } = ctx;
+      const args = { ...ctx.args, isTopLevel: ctx.args.isTopLevel && placement !== 'nested' };
       if (args.proposalId) return startProposal(ctx, args.proposalId);
       const prompt = args.prompt?.trim();
       if (!prompt) throw new Error('prompt is required: the brief the new agent starts on');
       if (!args.initiation) throw new Error('Pass initiation: "user_asked", "offer" or "own_initiative"');
       if (args.initiation !== 'own_initiative' && turnOf(caller).isAgentDriven) throw new Error(AGENT_DRIVEN);
-      const create = await proposalCreate(ctx);
+      const create = await proposalCreate({ ...ctx, args });
       if (args.initiation !== 'user_asked') return propose(ctx, args.initiation, prompt, create);
       const before = state();
       dispatch({ type: 'create', title: prompt, ...create, isBackground: true });
@@ -509,7 +527,9 @@ const GOAL_SPECS = {
       }
       const { summary, next, options } = args;
       dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }), ...(summary?.trim() && { summary: summary.trim() }), ...(next?.trim() && { next: next.trim() }), ...(options && { options: options.map((o) => ({ label: o.label.trim(), reply: o.reply.trim(), ...(o.isDraft && { isDraft: true }) })) }) } });
-      return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
+      const running = caller.steps.find((s) => s.status === 'running');
+      const note = running && `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`;
+      return { changed: 'reported', result: { ...reportOf(target(state(), caller, caller.id)), ...(note && { note }) } };
     },
   },
   get_report: { run: ({ state, caller, args }) => ({ result: reportOf(target(state(), caller, args.threadId)) }) },
@@ -685,6 +705,8 @@ function subThreadLink(caller: Thread, args: { criterionId?: string; isTopLevel?
   return { threadId: caller.id, ...(args.criterionId && { criterionId: args.criterionId }) };
 }
 
+const PLACEMENTS = [{ id: 'top-level', label: 'Top-level thread' }, { id: 'nested', label: 'Nested under this thread' }];
+
 const AGENT_DRIVEN = "This turn began with another thread's message or an automated event (Auto-fix, sub-thread notes), not the user, so it can't start threads or ask where work runs: propose it with initiation \"own_initiative\" and the user decides.";
 
 /** What the new thread is: who runs it, where, and under which thread. Resolved now, so a card's Start later creates the same. */
@@ -693,7 +715,7 @@ async function proposalCreate({ env, caller, args }: ToolContext<Args<'create_th
   const provider = providerOf(args.provider, caller);
   const project = projectRef(caller.repo);
   // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
-  const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
+  const base = parent && !args.isFromDefaultBranch && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
   // Always its own worktree, whatever the composer's Worktree box says: parallel agents sharing one folder trip over each
   // other's changes and make worktrees Mochi can't see. Its branch gets a temp name until its title names it.
   const workspace = project ? { mode: 'worktree' as const, ...(base && { base }) } : undefined;
@@ -731,9 +753,11 @@ function startProposal({ state, caller, dispatch }: ToolContext<Args<'create_thr
 
 /**
  * A sub-thread's PR goes into its parent's branch, so the parent's PR stays the one you review. The parent's branch is pushed
- * first: GitHub needs it to exist. None for a thread on its own, or nested under a thread in another project.
+ * first: GitHub needs it to exist. None for a thread on its own, one started from the default branch, or one nested under a
+ * thread in another project.
  */
 async function parentBase(env: ToolEnv, state: State, caller: Thread, githubUser: string | undefined) {
+  if (!caller.repo?.base) return undefined;
   const parent = caller.parent && parentOf(state.threads, caller);
   if (!parent?.repo || parent.repo.project !== caller.repo?.project || parent.repo.isDetached) return undefined;
   const parentCwd = env.cwdOf(parent);

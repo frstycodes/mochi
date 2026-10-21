@@ -1,10 +1,12 @@
 import { agentImage } from '../chat/images.ts';
+import { interruptsToSend } from '../chat/outbox.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
 import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts';
 import { worktreePath } from '../git/worktrees.ts';
+import { moveFailedNote, moveNote, MOVED_PROMPT } from '../git/moveThread.ts';
 import { sourcePrompt } from '../sources.ts';
 import { startTitleRequest } from '../utility/titles.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -80,6 +82,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     }
     case 'interrupt':
       return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+    case 'steer-requeue': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      return thread && interruptsToSend(thread, action.ids) && hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+    }
     case 'rewind':
     case 'rewind-message':
     case 'rewind-undo': {
@@ -123,6 +129,16 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       // Its session ends with its first turn: the report is in, nobody will send it more.
       const report = agentCalls(state, { type: 'send', threadId: action.threadId, text: reportOf(subagent), reason: '', steers: true }, next);
       return [{ method: 'stop', threadId: subagent.sessionId }, ...report];
+    }
+    // The agent asked for the move and ended its turn: it resumes on the same session, in the new folder or the old one.
+    case 'move': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      const moved = next().threads.find((t) => t.id === action.threadId);
+      return thread?.live && moved ? reattach(moved, withNotes(thread, `${moveNote(action.to.from, action.to.repo, action.to.result)}\n\n${MOVED_PROMPT}`)) : [];
+    }
+    case 'move-failed': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      return thread?.live ? reattach(thread, withNotes(thread, `${moveFailedNote(action.error, threadCwd(thread))}\n\n${MOVED_PROMPT}`)) : [];
     }
     case 'subthread-wake':
       return agentCalls(state, { type: 'send', threadId: action.threadId, text: WAKE_PROMPT, reason: '' }, next);

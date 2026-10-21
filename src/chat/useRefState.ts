@@ -45,14 +45,18 @@ export function useRefStates(refs: GithubRef[], scope: Scope) {
   return keys.map((key) => cache.get(key)?.state);
 }
 
-/** Reads `ref` again now, after Mochi changed it on GitHub; `expected` shows meanwhile, so a switch doesn't flick back. */
-export function refreshRef(ref: GithubRef, scope: Scope, expected?: Partial<RefState>) {
-  const key = refKey(ref);
-  const entry = cache.get(key);
-  if (entry) cache.set(key, { state: entry.state && { ...entry.state, ...expected }, at: 0 });
+/** Shows `patch` on `ref` now, without reading GitHub: an optimistic switch, or its rollback. */
+export function patchRef(ref: GithubRef, patch: Partial<RefState>, at?: number) {
+  const entry = cache.get(refKey(ref));
+  if (entry) cache.set(refKey(ref), { state: entry.state && { ...entry.state, ...patch }, at: at ?? entry.at });
   version++;
   listeners.forEach((l) => l());
-  request(key, ref, scope);
+}
+
+/** Reads `ref` again now, after Mochi changed it on GitHub; `expected` shows meanwhile, so a switch doesn't flick back. */
+export function refreshRef(ref: GithubRef, scope: Scope, expected?: Partial<RefState>) {
+  patchRef(ref, expected ?? {}, 0);
+  request(refKey(ref), ref, scope);
 }
 
 function request(key: string, ref: GithubRef, scope: Scope) {

@@ -176,5 +176,22 @@ export function scopeColor(tokenColors: TokenColor[], scope: string): string | u
   return best?.color;
 }
 
+/** The chat code block's light surfaces (index.css): `--background`, and the ```diff add / remove line tints at its lightness. */
+export const LIGHT_CODE_SURFACES = ['#f6f6f9', '#f0faf2', '#fff3f2'];
+
+/**
+ * `tokenColors` with each foreground nudged to AA on every surface, hue kept; colors that already read come back as written,
+ * and so do rules that paint their own background.
+ */
+export function readableTokenColors(tokenColors: TokenColor[], surfaces: string[]): TokenColor[] {
+  const canvases = surfaces.map((s) => parseHex(s)!);
+  return tokenColors.map((rule) => {
+    const color = !rule.settings?.background && parseHex(rule.settings?.foreground);
+    const readable = color && nudge(color, canvases);
+    if (!readable || readable === color) return rule;
+    return { ...rule, settings: { ...rule.settings, foreground: toHex(readable) } };
+  });
+}
+
 /** Whether `text` reads at AA on `surface`, both as hex; for tests and the preview swatch. */
 export const readsOn = (text: string, surface: string) => contrast(parseHex(text)!, parseHex(surface)!) >= AA;

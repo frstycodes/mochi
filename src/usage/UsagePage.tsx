@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Refresh, Share } from '@/icons';
@@ -13,18 +13,17 @@ import { periodName } from './days';
 import { CommitHeatmap, SpendTrend, TokenCostFlow } from './charts';
 import { compact, Figure, usd } from './Figure';
 import { cacheNote, CachingCompare, Section, SpendSplit, StatStrip } from './parts';
-import { RANGES, type RangeId, type UsageView } from './report';
+import { OTHER_FOLDERS, RANGES, type RangeId, type UsageTarget, type UsageView } from './report';
 import { ShareDialog } from './ShareDialog';
 import { useUsage } from './useUsage';
 
-const ALL = 'all';
-
 export function UsagePage() {
   const [range, setRange] = useState<RangeId>('30d');
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [target, setTarget] = useState<UsageTarget>({ kind: 'projects' });
   const [isSharing, setIsSharing] = useState(false);
-  const usage = useUsage(range, projectId);
-  const project = usage.projects.find((p) => p.id === projectId);
+  const usage = useUsage(range, target);
+  const project = target.kind === 'project' ? usage.projects.find((p) => p.id === target.id) : undefined;
+  const reach = project ? project.name : target.kind === 'everywhere' ? 'everywhere on this computer' : "this profile's projects";
   const { view } = usage;
   const isEmpty = !!view && view.tokens.total === 0 && view.commits.count === 0 && view.prs.opened === 0;
 
@@ -34,7 +33,7 @@ export function UsagePage() {
         <header className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
             <h1 className="type-heading">Usage</h1>
-            <p className="type-body text-muted-foreground">Claude Code and Codex across {project ? project.name : "this profile's projects"}</p>
+            <p className="type-body text-muted-foreground">Claude Code and Codex across {reach}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Tabs value={range} onValueChange={(v) => setRange(v as RangeId)}>
@@ -46,7 +45,7 @@ export function UsagePage() {
                 ))}
               </TabsList>
             </Tabs>
-            <ProjectPicker projects={usage.projects} value={projectId} onChange={setProjectId} />
+            <TargetPicker projects={usage.projects} value={target} onChange={setTarget} />
             <TooltipIconButton label="Refresh" hint="Read the logs, commits and pull requests again" onClick={usage.refresh} disabled={usage.isLoading}>
               <Refresh className={cn(usage.isLoading && 'animate-spin motion-reduce:animate-none')} />
             </TooltipIconButton>
@@ -71,7 +70,7 @@ export function UsagePage() {
               <TokenCostFlow tokens={view.tokens} costByType={view.costByType} />
             </Section>
             <ModelsTable models={view.models} />
-            {projectId === null && view.projects.length > 1 && <ProjectsTable rows={view.projects} projects={usage.projects} />}
+            {target.kind !== 'project' && view.projects.length > 1 && <ProjectsTable rows={view.projects} projects={usage.projects} />}
             <PeriodTable view={view} />
             <Footnote unpriced={view.unpriced} errors={usage.errors} />
           </div>
@@ -82,15 +81,23 @@ export function UsagePage() {
   );
 }
 
-function ProjectPicker({ projects, value, onChange }: { projects: Project[]; value: string | null; onChange: (id: string | null) => void }) {
+const ALL_PROJECTS = 'all-projects';
+const EVERYWHERE = 'everywhere';
+
+function TargetPicker({ projects, value, onChange }: { projects: Project[]; value: UsageTarget; onChange: (target: UsageTarget) => void }) {
+  const selected = value.kind === 'project' ? value.id : value.kind === 'everywhere' ? EVERYWHERE : ALL_PROJECTS;
   return (
-    <Select value={value ?? ALL} onValueChange={(v) => onChange(v === ALL ? null : v)}>
-      <SelectTrigger aria-label="Project" className="max-w-56">
+    <Select value={selected} onValueChange={(v) => onChange(v === ALL_PROJECTS ? { kind: 'projects' } : v === EVERYWHERE ? { kind: 'everywhere' } : { kind: 'project', id: v })}>
+      <SelectTrigger aria-label="Which folders count" className="max-w-60">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          <SelectItem value={ALL}>All projects</SelectItem>
+          <SelectItem value={ALL_PROJECTS}>All projects</SelectItem>
+          <SelectItem value={EVERYWHERE}>Everywhere on this computer</SelectItem>
+        </SelectGroup>
+        <SelectSeparator />
+        <SelectGroup>
           {projects.map((p) => (
             <SelectItem key={p.id} value={p.id}>
               {p.name}
@@ -177,7 +184,7 @@ function ProjectsTable({ rows, projects }: { rows: UsageView['projects']; projec
         <TableBody>
           {rows.map((r) => (
             <TableRow key={r.projectId}>
-              <TableCell className="max-w-64 truncate">{projects.find((p) => p.id === r.projectId)?.name ?? r.projectId}</TableCell>
+              <TableCell className="max-w-64 truncate">{r.projectId === OTHER_FOLDERS ? 'Other folders' : (projects.find((p) => p.id === r.projectId)?.name ?? r.projectId)}</TableCell>
               <TableCell className="tabular text-right">{usd(r.cost, 2)}</TableCell>
               <TableCell className="tabular text-right">{compact(r.tokens)}</TableCell>
               <TableCell className="tabular text-right">{r.prsMerged.toLocaleString('en-US')}</TableCell>
@@ -231,7 +238,7 @@ function Footnote({ unpriced, errors }: { unpriced: string[]; errors: string[] }
   return (
     <div className="type-meta flex max-w-[80ch] flex-col gap-1.5 text-subtle-foreground">
       <p>
-        Read from Claude Code's and Codex's own logs on this computer for sessions in these projects and their worktrees, so it includes work done outside Mochi. Spend is what the tokens would cost at API list prices; a subscription bills differently.
+        Read from Claude Code's and Codex's own logs on this computer, including work done outside Mochi: sessions in these projects and their worktrees, or every session under Everywhere. Spend is what the tokens would cost at API list prices from LiteLLM's public price table (the one ccusage uses); a subscription bills differently.
       </p>
       {unpriced.length > 0 && <p>No price yet for {unpriced.map(modelName).join(', ')}: their tokens count, their spend doesn't.</p>}
       {errors.map((e) => (

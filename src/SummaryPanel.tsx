@@ -44,6 +44,7 @@ import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
 import { openFiles } from './files/viewer';
 import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
+import { ThreadName } from './chat/ThreadMessage';
 import { refDescription, type ChecksState } from './chat/refs';
 import { usePrSwitches } from './git/prSwitches';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
@@ -59,6 +60,7 @@ import { useIdleVerdict } from './goals/VerdictChip';
 import { showsVerdictCard } from './goals/report';
 import { SummaryCriteria, SummaryGoal, SummaryGoalHeader, SummaryGoalStatus, SummaryGoalText, SummaryNextMove } from './goals/SummaryGoal';
 import { clock } from './progress';
+import { subThreadsOf } from './reorder';
 import { useHarness } from './store';
 import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
@@ -530,14 +532,28 @@ function ChangesBody({
           </SummaryRow>
         )}
         {canOpenPr && <CreatePrRow thread={thread} />}
+        <SubThreadPrs parent={thread} onOpen={open.url} />
       </CardBody>
     </>
   );
 }
 
+/** The PRs of the thread's sub-threads, after its own: each sub-thread runs its PR (and its Auto-fix); here they read live, named for it. */
+function SubThreadPrs({ parent, onOpen }: { parent: Thread; onOpen: (url: string) => void }) {
+  const { state } = useHarness();
+  return subThreadsOf(state.threads, parent.id)
+    .filter((sub) => sub.prs.length > 0)
+    .map((sub) => <SubThreadPrRows key={sub.id} sub={sub} onOpen={onOpen} />);
+}
+
+function SubThreadPrRows({ sub, onOpen }: { sub: Thread; onOpen: (url: string) => void }) {
+  const prs = useThreadPrs(sub);
+  return prs.map((item) => <PullRequestRow key={item.pr.number} thread={sub} item={item} onOpen={onOpen} isSubThread />);
+}
+
 function DiffCount({ added, removed }: { added: number; removed: number }) {
   return (
-    <span className="tabular type-caption">
+    <span className="tabular shrink-0 type-caption whitespace-nowrap">
       <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span>
     </span>
   );
@@ -714,7 +730,7 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
 }
 
 /** Like Claude's: state icon, title and ⋮ on top; number, diff and checks under the title. Hover previews it, a click opens it. */
-function PullRequestRow({ thread, item, onOpen }: { thread: Thread; item: ThreadPr; onOpen: (url: string) => void }) {
+function PullRequestRow({ thread, item, onOpen, isSubThread = false }: { thread: Thread; item: ThreadPr; onOpen: (url: string) => void; isSubThread?: boolean }) {
   const { state, label } = item;
   return (
     <ThreadPrHoverCard thread={thread} pr={item.pr} side="left" align="start">
@@ -737,7 +753,8 @@ function PullRequestRow({ thread, item, onOpen }: { thread: Thread; item: Thread
           {!!state.url && <PullRequestMenu thread={thread} item={item} />}
         </div>
         <div className="flex min-w-0 items-center gap-2 pl-6.5 tabular type-caption text-subtle-foreground">
-          <span>{label}</span>
+          <span className="shrink-0">{label}</span>
+          {isSubThread && <ThreadName peer={{ threadId: thread.id, title: thread.title }} className="max-w-none min-w-0 shrink text-muted-foreground hover:text-foreground" />}
           {!!state.diff && <DiffCount added={state.diff.added} removed={state.diff.removed} />}
           {!!state.checkCounts && <CheckCount checks={state.checks} counts={state.checkCounts} />}
         </div>
@@ -750,7 +767,7 @@ const CHECK_DOT = { pending: 'bg-subtle-foreground', pass: 'bg-success', fail: '
 
 function CheckCount({ checks, counts }: { checks: ChecksState | null; counts: { passed: number; total: number } }) {
   return (
-    <span className="ml-auto flex items-center gap-1.5" aria-label={`${counts.passed} of ${counts.total} checks passed`}>
+    <span className="ml-auto flex shrink-0 items-center gap-1.5" aria-label={`${counts.passed} of ${counts.total} checks passed`}>
       <span aria-hidden className={cn('size-1.5 rounded-full', CHECK_DOT[checks ?? 'pending'])} />
       {counts.passed}/{counts.total}
     </span>
@@ -773,7 +790,7 @@ function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
         <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</DropdownMenuItem>
         {switches.length > 0 && <DropdownMenuSeparator />}
         {switches.map((s) => (
-          <DropdownMenuCheckboxItem key={s.id} checked={s.isOn} onCheckedChange={s.set}>
+          <DropdownMenuCheckboxItem key={s.id} checked={s.isOn} onCheckedChange={s.set} onSelect={(e) => e.preventDefault()}>
             {s.label}
           </DropdownMenuCheckboxItem>
         ))}

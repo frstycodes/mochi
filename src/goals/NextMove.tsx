@@ -12,7 +12,7 @@ import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
 import { useHarness } from '../store';
 import { hasGoal } from '../drift';
-import { isPlanComplete, planDuration, planItems, type PlanItem } from './plan';
+import { isPlanComplete, isTicking, planDuration, planItems, type PlanItem } from './plan';
 import { agentAsk, moveContext, moveFor, questionFor } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { turnReport } from './report';
@@ -123,7 +123,7 @@ export function NextMoveActions({ labels, onPick }: { labels: string[]; onPick: 
 /** The thread's plan in the chat; a running step's time ticks every second while the window is visible. */
 export function ThreadPlan({ thread, isWorking }: { thread: Thread; isWorking: boolean }) {
   const { state } = useHarness();
-  const nowMs = useNowMs(thread.steps.some((s) => s.status === 'running'));
+  const nowMs = useNowMs(thread.steps.some(isTicking));
   return <PlanList items={planItems(thread.steps, state.now, nowMs)} slot={thread.line} isWorking={isWorking} />;
 }
 

@@ -14,6 +14,7 @@ export const TOOL_GUIDE = {
   get_thread: { group: 'Threads', label: 'Read a thread', description: "See one thread's goal, its agent's plan, recent activity, pull requests and what it's waiting on you for." },
   rename_thread: { group: 'Threads', label: 'Rename threads', description: 'Give a thread a new title. You get an Undo toast.' },
   settle_thread: { group: 'Threads', label: 'Archive threads', description: 'Move finished or abandoned threads out of the active list and stop their agents. Never its own thread.' },
+  move_thread: { group: 'Threads', label: 'Move its own thread', description: 'Move its thread to another project, worktree or branch, or make its scratch folder a project, keeping the conversation. Runs when its turn ends.' },
   reactivate_thread: { group: 'Threads', label: 'Unarchive threads', description: 'Bring archived threads back to the active list.' },
   pin_thread: { group: 'Threads', label: 'Pin threads', description: 'Pin threads to the top of the sidebar, up to 5 per profile.' },
   unpin_thread: { group: 'Threads', label: 'Unpin threads', description: 'Move pinned threads back into the regular list.' },

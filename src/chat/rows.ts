@@ -7,6 +7,8 @@ export type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
   | { kind: 'event'; key: string; entry: ActivityEntry }
   | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
+  /** Plan changes logged back to back (`planChange`): one line, opening to each. */
+  | { kind: 'plan'; key: string; entries: ActivityEntry[] }
   | { kind: 'review'; key: string; review: Review }
   /** An image a tool call made (`entry.generated`): its own card, never folded into a work group. */
   | { kind: 'image'; key: string; entry: ActivityEntry }
@@ -64,7 +66,10 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
       // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread's result, thread cards) stay in view: the turn continues in a new accordion after one.
       if (isWidget) turn = undefined;
-      return rows.push({ kind: 'event', key, entry });
+      if (!planChange(entry)) return rows.push({ kind: 'event', key, entry });
+      const last = rows.at(-1);
+      if (last?.kind === 'plan') return last.entries.push(entry);
+      return rows.push({ kind: 'plan', key, entries: [entry] });
     }
     turn = undefined;
     isMidWork = false;
@@ -80,6 +85,25 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
   pushChanges(activity.length);
   pushReviews(activity.length);
   return rows;
+}
+
+// Matches the lines `src/runtime/apply.ts` logs when the agent's plan changes; parsed, so history logged before this reads the same.
+const PLAN_EVENT = /^(?:Plan: \w+ (?:added "(?<added>.*)"|found (?<found>\d+) more steps)|\w+ dropped "(?<dropped>.*)")$/s;
+
+/** How many steps a plan-change event added and dropped; undefined for any other entry. */
+function planChange(entry: ActivityEntry) {
+  const groups = entry.kind === 'event' && entry.who === 'harness' ? PLAN_EVENT.exec(entry.text)?.groups : undefined;
+  if (!groups) return;
+  return { added: groups.found ? Number(groups.found) : groups.added === undefined ? 0 : 1, dropped: groups.dropped === undefined ? 0 : 1 };
+}
+
+/** "Plan updated: dropped 5 steps, added 3 steps" for a run of plan changes. */
+export function planSummary(entries: ActivityEntry[]) {
+  const changes = entries.map((e) => planChange(e)!);
+  const dropped = changes.reduce((n, c) => n + c.dropped, 0);
+  const added = changes.reduce((n, c) => n + c.added, 0);
+  const steps = (n: number) => `${n} ${n === 1 ? 'step' : 'steps'}`;
+  return `Plan updated: ${[dropped && `dropped ${steps(dropped)}`, added && `added ${steps(added)}`].filter(Boolean).join(', ')}`;
 }
 
 /** The work row a running thread is still writing: the newest one, unless anyone has spoken since. */

@@ -10,6 +10,7 @@ export const MOCHI_CALLS = {
   get_thread: ['Reading a thread', 'Read a thread'],
   rename_thread: ['Renaming a thread', 'Renamed a thread'],
   settle_thread: ['Archiving threads', 'Archived threads'],
+  move_thread: ['Planning the move', 'Planned the move'],
   reactivate_thread: ['Bringing threads back', 'Brought threads back'],
   pin_thread: ['Pinning threads', 'Pinned threads'],
   unpin_thread: ['Unpinning threads', 'Unpinned threads'],

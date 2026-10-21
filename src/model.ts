@@ -1,5 +1,6 @@
 import type { AgentImage, AgentQuestion, BackgroundTaskKind, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
 import type { AutofixEvent } from './git/autofix.ts';
+import type { PendingMove } from './git/moveThread.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -29,6 +30,9 @@ export interface Step {
   /** Wall-clock epoch ms of `startedAt`/`doneAt`, stamped from the agent action; demo steps have only Mochi's minute clock. */
   startedMs?: number;
   doneMs?: number;
+  /** The turn ended with it still running: its clock stops here until the agent picks it up or finishes it. */
+  stoppedAt?: number;
+  stoppedMs?: number;
   droppedAt?: number;
   /** Why it's blocked or was dropped. */
   note?: string;
@@ -441,6 +445,8 @@ export interface Thread {
   live?: LiveRun;
   /** Its new worktree's preparation before the agent's first turn; unset when there was nothing to prepare. */
   setup?: WorktreeSetup;
+  /** A move its agent asked for (`move_thread`), waiting for the turn to end. */
+  move?: PendingMove;
   /** Second opinions from the other provider, oldest first. */
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
@@ -453,6 +459,8 @@ export interface Thread {
   queuePause?: QueuePause;
   /** Messages you sent into the running turn that the agent hasn't read yet, oldest first; each joins `activity` where it was read. */
   steering?: PendingSteer[];
+  /** You stopped the turn to send a waiting message now (`sendSteerNow`): its interrupted end doesn't pause the queue. */
+  isInterruptedToSend?: true;
   /** The profile's settings chat (Settings › Ask Mochi): one per profile, never listed with the other threads (`isListed`). */
   isSettingsChat?: true;
   /** How many `activity` entries you had seen when you last had it open, on any device; more now is unread. */
@@ -468,6 +476,8 @@ export interface PendingSteer {
   reason: string;
   /** The agent reported its turn while this waited: reading it makes that report one written before your message. */
   hasReportBefore?: true;
+  /** Send now is taking it back: `pending` while the turn it was clicked in runs, `turn-ended` once that turn is over. */
+  sendNow?: 'pending' | 'turn-ended';
 }
 
 export interface QueuedMessage {
@@ -481,6 +491,8 @@ export interface QueuedMessage {
   isCommand: boolean;
   /** Skills typed as `/name` later in the text. */
   typedSkills: string[];
+  /** You clicked Send now on it: it goes out through the queue but isn't marked as queued in the transcript. */
+  isSentNow?: true;
 }
 
 /** An image you sent: what the agent gets, a small copy (`thumb`, a data URL), and where the original was kept (`original`). */

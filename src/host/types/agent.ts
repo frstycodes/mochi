@@ -1,6 +1,7 @@
 import type { DriftVerdict } from '../../drift.ts';
 import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
+import type { Head } from './git.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
 export interface AgentStartOptions {
@@ -63,9 +64,12 @@ export type AgentEvent =
    * `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills
    * the query in late). `skill`: the call loaded this skill (Claude's Skill tool, a skill Codex got with the message). `mcp`: the
    * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
+   * `command`: the shell command a call runs when its agent sent no `description` (Codex always, Claude sometimes), for main to describe.
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage; /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget }
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; command?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage; /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget }
+  /** A plain-language line for a call that started without one, from the background model. */
+  | { threadId: string; type: 'tool-description'; id: string; description: string }
   /** `items` is the whole plan. `isFresh`: a new request's plan, so none of the previous plan's steps carry over. */
   | { threadId: string; type: 'plan'; items: AgentPlanItem[]; isFresh?: boolean }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
@@ -182,6 +186,28 @@ export interface StartWorkspace {
   isNew?: boolean;
   /** With `isNew`, on a temp branch: main asks for a title while the worktree is set up and renames the branch after it before the agent starts. */
   titlePrompt?: string;
+}
+
+/** A move's uncommitted changes where the thread works now: carried into its new checkout, or stashed where they are. */
+export type MoveChanges = 'bring' | 'stash';
+
+/** `agent.move`: where a thread works from now on. Its agent stops; the next message resumes the same session there. */
+export interface MoveRequest {
+  /** Where it works now; null for a chat whose agent never ran. */
+  from: string | null;
+  /** The project folder it moves to. */
+  root: string;
+  /** Its own worktree or the project's checkout, and on which branch; unset for a folder that isn't a git repository. */
+  workspace?: StartWorkspace;
+  changes: MoveChanges;
+}
+
+export interface MoveResult {
+  cwd: string;
+  /** null outside a git repository. */
+  head: Head | null;
+  /** The stash in the old checkout's repository that holds the changes left behind. */
+  stash?: string;
 }
 
 /**
@@ -339,6 +365,8 @@ export interface AgentHost {
   keepTitle(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
+  /** Stops the thread's agent and sets up `request`'s folder; a new worktree's setup runs before its next start. */
+  move(threadId: string, request: MoveRequest): Promise<MoveResult>;
   /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
   settle(threadId: string): Promise<void>;
   /**
@@ -390,6 +418,7 @@ export const agentMethods = {
   keepTitle: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
+  move: 'invoke',
   settle: 'invoke',
   attached: 'invoke',
   onEvent: 'event',

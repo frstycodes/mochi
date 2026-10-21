@@ -110,7 +110,7 @@ function restoreThread(thread: Thread, now: number): Thread {
   // Sending the queue on launch would spend usage unasked.
   // A steer the agent never read went down with its process: it waits in the queue instead.
   const queued = thread.steering ? [...thread.steering.map((s) => s.message), ...(thread.queued ?? [])] : thread.queued;
-  const restored = pauseQueue({ ...thread, live, queued, steering: undefined, ...(criteria && { criteria }), ...(idle && { idle }), ...(reviews && { reviews }), ...(subagents && { subagents }), ...(backgroundTasks && { backgroundTasks }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
+  const restored = pauseQueue({ ...thread, live, queued, steering: undefined, isInterruptedToSend: undefined, ...(criteria && { criteria }), ...(idle && { idle }), ...(reviews && { reviews }), ...(subagents && { subagents }), ...(backgroundTasks && { backgroundTasks }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
   // An image still being made when Mochi quit never lands; its card says so instead of generating forever.
   const activity = failDrafts(
     restored.activity.map((e) => (e.generated?.status === 'running' ? { ...e, generated: { ...e.generated, status: 'failed' as const, error: 'Stopped when Mochi quit' } } : e)),

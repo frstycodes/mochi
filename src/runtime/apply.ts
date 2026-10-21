@@ -58,6 +58,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       state = recordCreatedPr(state, thread, event);
       return event.files?.length && event.patch ? noteCollisions(state, thread.id) : state;
+    case 'tool-description':
+      return update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, description: event.description } : e)) }));
     case 'plan':
       return applyPlan(state, thread, event.items, event.isFresh);
     case 'subagent':
@@ -91,9 +93,10 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => clearLimit(t, now));
     case 'turn-end': {
       // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
-      const ended = thread.live ? update((t) => closeCompaction({ ...t, live: { ...t.live!, isWorking: false, turnEnd: event.status, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
+      const ended = thread.live ? update((t) => closeCompaction({ ...endSendNow(stopRunningSteps(t, now)), live:{ ...t.live!, isWorking: false, turnEnd: event.status, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
       if (isLimitEnd(thread)) return ended;
-      return noteParent(endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event), thread, event.status);
+      const isPaused = event.status === 'failed' || (event.status === 'interrupted' && !thread.isInterruptedToSend);
+      return noteParent(endTurn(isPaused ? { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) } : ended, thread, event), thread, event.status);
     }
   }
 }
@@ -204,11 +207,11 @@ function applyPlan(state: State, thread: Thread, items: AgentPlanItem[], isFresh
     // A blocked step waits on you; the harness, not the plan, unblocks it.
     if (step.status === 'blocked') return;
     if (item.status === 'pending') {
-      threads = mapThread(threads, thread.id, (t) => mapStep(t, step.id, (s) => ({ ...s, status: 'ready', doneAt: undefined, doneMs: undefined })));
+      threads = mapThread(threads, thread.id, (t) => mapStep(t, step.id, (s) => ({ ...s, status: 'ready', doneAt: undefined, doneMs: undefined, stoppedAt: undefined, stoppedMs: undefined })));
       return;
     }
     threads = mapThread(threads, thread.id, (t) => ({
-      ...mapStep(t, step.id, (s) => ({ ...s, status: 'running', startedAt: s.startedAt ?? now, doneAt: undefined, doneMs: undefined })),
+      ...mapStep(t, step.id, (s) => ({ ...s, status: 'running', startedAt: s.startedAt ?? now, doneAt: undefined, doneMs: undefined, stoppedAt: undefined, stoppedMs: undefined })),
       status: t.status === 'needs-you' ? t.status : 'running',
     }));
   });
@@ -302,6 +305,17 @@ function endTurn(state: State, thread: Thread, event: Extract<AgentEvent, { type
   if (event.status === 'failed') return update((t) => log({ ...t, status: 'needs-you' }, { at: now, who: 'harness', kind: 'event', text: `Turn failed${event.error ? `: ${event.error}` : ''}` }));
   // Whether the goal is met is the idle verdict's to say (`src/goals/verdict.ts`), once Mochi has checked the turn.
   return state;
+}
+
+/** A Send now still taking its message back no longer stops anything: the turn it was clicked in is over (`interruptsToSend`). */
+function endSendNow(t: Thread): Thread {
+  const steering = t.steering?.map((s) => (s.sendNow ? { ...s, sendNow: 'turn-ended' as const } : s));
+  return t.isInterruptedToSend || steering ? { ...t, isInterruptedToSend: undefined, steering } : t;
+}
+
+/** A step still running when the turn ends stops its clock; whether it's done is the agent's to say, not the turn end's. */
+function stopRunningSteps(t: Thread, now: number): Thread {
+  return { ...t, steps: t.steps.map((s) => (s.status === 'running' && s.stoppedAt === undefined ? { ...s, stoppedAt: now } : s)) };
 }
 
 /** Who speaks for a thread right now: its live session, else its first provider. */
