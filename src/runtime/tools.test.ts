@@ -54,7 +54,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const pushes: string[] = [];
   const opened: string[] = [];
   const drafted: { spaceId: string; prompt: string }[] = [];
-  const prs: { title: string; body: string }[] = [];
+  const prs: { title: string; body: string; base?: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, goals: true, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
@@ -276,16 +276,16 @@ test('new tasks and subtasks inherit the running session and honor user-named mo
     t.env.dispatch({ type: 'agent', event: { threadId: 'rl', type: 'info', info: { model, effort: 'low' } } });
     // These composer choices apply on the next start, not to the running session.
     t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: other, effort: 'high', speed: '', access: 'Manual' } });
-    for (const isTopLevel of [false, true]) {
+    for (const isFromDefaultBranch of [false, true]) {
       for (const picked of [{}, { model: other }, { effort: 'max' }, { model: other, effort: 'max' }]) {
         // Every pick here runs above the session (another model, or max over low), so it waits on your approval.
-        const pending = picked.model || picked.effort ? await t.asking('create_thread', { initiation: 'user_asked', prompt: 'Fix login', isTopLevel, ...picked }) : null;
+        const pending = picked.model || picked.effort ? await t.asking('create_thread', { initiation: 'user_asked', prompt: 'Fix login', isFromDefaultBranch, ...picked }) : null;
         if (pending) decideTool(pending.card.id, { isApproved: true });
-        const r = pending ? await pending.result : await t.call('create_thread', { initiation: 'user_asked', prompt: 'Fix login', isTopLevel, ...picked });
+        const r = pending ? await pending.result : await t.call('create_thread', { initiation: 'user_asked', prompt: 'Fix login', isFromDefaultBranch, ...picked });
         assert.ok(!r.isError, r.text);
         const created = JSON.parse(r.text);
         assert.deepEqual(t.thread(created.id).controls, { model: picked.model ?? model, effort: picked.effort ?? 'low', speed: '', access: 'Manual' });
-        assert.equal(!!t.thread(created.id).parent, !isTopLevel);
+        assert.deepEqual(t.thread(created.id).parent, { threadId: 'rl' });
       }
     }
     assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x', model: 'unavailable' }), /isn't offered/);
@@ -320,14 +320,31 @@ test('create_thread resolves unset models, isolates provider changes, and passes
   assert.deepEqual(t.thread(unlisted.id).controls, { model: 'custom-model', effort: 'custom-effort', speed: '', access: 'Auto' });
 });
 
-test('create_thread nests under the calling thread by default, and isTopLevel starts it on its own', async () => {
+test('create_thread nests under the calling thread; a top-level one waits on your approval', async () => {
   const t = setup();
   const nested = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add the retry header' });
   assert.deepEqual(t.thread(nested.id).parent, { threadId: 'rl' });
   assert.equal(t.thread(nested.id).repo?.base, 'feat/api-rate-limits', 'it branches from the parent');
-  const own = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Unrelated cleanup', isTopLevel: true });
-  assert.equal(t.thread(own.id).parent, undefined);
+  const placed = async (placement: string) => {
+    const pending = await t.asking('create_thread', { initiation: 'user_asked', prompt: 'Its own project', isTopLevel: true });
+    assert.match(pending.card.detail ?? '', /start top-level/);
+    decideTool(pending.card.id, { isApproved: true, options: [placement] });
+    return t.thread(JSON.parse((await pending.result).text).id).parent;
+  };
+  assert.deepEqual(await placed('nested'), { threadId: 'rl' }, 'you can nest what the agent suggested as top-level');
+  assert.equal(await placed('top-level'), undefined);
   assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x', isTopLevel: true, criterionId: 'c' }), /leave out isTopLevel/);
+});
+
+test('isFromDefaultBranch nests the thread but bases it and its PR on the default branch', async () => {
+  const t = setup({ gitBranches: ['main', 'feat/x'], gitCurrent: 'feat/x' });
+  const stacked = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add the retry header' });
+  const apart = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Unrelated cleanup', isFromDefaultBranch: true });
+  assert.deepEqual(t.thread(apart.id).parent, { threadId: 'rl' });
+  assert.equal(t.thread(apart.id).repo?.base, undefined);
+  await t.ok('open_pr', { title: 'feat: retry header', why: 'y' }, stacked.id);
+  await t.ok('open_pr', { title: 'chore: cleanup', why: 'y' }, apart.id);
+  assert.deepEqual(t.prs.map((pr) => pr.base), ['feat/api-rate-limits', undefined]);
 });
 
 test("a new thread can't run above its parent: higher picks ask first, lower ones and permissions pass straight through", async () => {
