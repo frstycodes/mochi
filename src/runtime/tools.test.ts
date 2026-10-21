@@ -1415,6 +1415,16 @@ test('report_turn works with goals off, on a thread with no goal', async () => {
   assert.equal(t.thread('rl').report?.summary, 'Built the wheel');
 });
 
+test('report_turn reminds the agent of a step left in progress, and says nothing once the plan is done', async () => {
+  const t = setup();
+  t.env.prefs.set({ goals: false });
+  Object.assign(t.thread('rl'), { goal: undefined, proposal: undefined });
+  await t.ok('update_plan', { scope: 'first_task', items: [{ title: 'Open the PR', status: 'in_progress' }] });
+  assert.match((await t.ok('report_turn', { decisions: [], left: [] })).note, /"Open the PR" in progress/);
+  await t.ok('update_plan', { advance: true });
+  assert.equal((await t.ok('report_turn', { decisions: [], left: [] })).note, undefined);
+});
+
 // {THREAD PROPOSALS}
 
 const cardsOf = (thread: Thread) => thread.activity.flatMap((e) => e.proposals ?? []);
