@@ -5,7 +5,7 @@ import { FileLinkButton, useWorktreeLink } from '../chat/ChatLink';
 import { isFilePath } from './kinds';
 
 // em-relative so code sits in whatever text it's in (prose 14px, captions 11px); mono reads larger than Inter at the same size.
-const INLINE_CODE = 'rounded-md bg-muted px-[0.4em] py-[0.1em] font-mono text-[max(0.85em,11px)] shadow-[inset_0_0_0_1px_var(--border)]';
+const INLINE_CODE = 'rounded-md bg-foreground/7 dark:bg-muted px-[0.4em] py-[0.1em] font-mono text-[max(0.85em,11px)]';
 
 /** Streamdown's inline code, except a path to a file in the thread's folder becomes a chip that opens the file viewer. */
 export function FileCode({ node: _node, className, children, ...props }: ComponentProps<'code'> & ExtraProps) {
@@ -18,7 +18,7 @@ export function FileCode({ node: _node, className, children, ...props }: Compone
       </code>
     );
   return (
-    <FileLinkButton link={link} className={cn(INLINE_CODE, 'items-center align-bottom transition-colors hover:bg-accent')}>
+    <FileLinkButton link={link} className={cn(INLINE_CODE, 'items-center align-bottom transition-colors hover:bg-foreground/11 dark:hover:bg-accent')}>
       <code className="truncate">{children}</code>
     </FileLinkButton>
   );
