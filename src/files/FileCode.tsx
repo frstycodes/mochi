@@ -13,12 +13,14 @@ export function FileCode({ node: _node, className, children, ...props }: Compone
   const link = useWorktreeLink(text);
   if (!link)
     return (
-      <code data-streamdown="inline-code" className={cn(INLINE_CODE, 'text-code', className)} {...props}>
+      // The smaller mono font with the prose's line-height sits lower and stretches the line; `leading-none` keeps it inside the line's own height.
+      <code data-streamdown="inline-code" className={cn(INLINE_CODE, 'leading-none text-code', className)} {...props}>
         {children}
       </code>
     );
   return (
-    <FileLinkButton link={link} className={cn(INLINE_CODE, 'items-center align-bottom transition-colors hover:bg-foreground/11 dark:hover:bg-accent')}>
+    // An inline-flex box counts toward the line's height where inline code's doesn't: `leading-[normal]` sizes it to inline code's box (the font's own ascent + descent) and `-my-[0.1em]` cancels the padding, so the chip never stretches the line.
+    <FileLinkButton link={link} className={cn(INLINE_CODE, '-my-[0.1em] leading-[normal] transition-colors hover:bg-foreground/11 dark:hover:bg-accent [&>svg]:size-[1.2em]')}>
       <code className="truncate">{children}</code>
     </FileLinkButton>
   );
