@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
 import { authorName, isMochiCard, type Provider, type QueuedMessage, type QueueItem, type Thread } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
+import { PlanRow } from './chat/PlanRow';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
@@ -196,6 +197,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
   if (row.kind === 'widget') return <McpAppCard threadId={thread.id} widget={row.entry.widget!} />;
   if (row.kind === 'thread-message') return row.entry.autofix ? <AutofixEventRow entry={row.entry} event={row.entry.autofix} index={row.index} /> : <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
+  if (row.kind === 'plan') return <PlanRow entries={row.entries} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.nextMove) return <NextMoveRecord record={row.entry.nextMove} />;
   if (row.kind === 'event' && row.entry.subThread) return <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />;
