@@ -58,6 +58,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       state = recordCreatedPr(state, thread, event);
       return event.files?.length && event.patch ? noteCollisions(state, thread.id) : state;
+    case 'tool-description':
+      return update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, description: event.description } : e)) }));
     case 'plan':
       return applyPlan(state, thread, event.items, event.isFresh);
     case 'subagent':
