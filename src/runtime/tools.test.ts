@@ -352,27 +352,6 @@ test("a new thread can't run above its parent: higher picks ask first, lower one
   assert.equal(t.thread(switched.id).controls?.access, 'Manual', "switching harness keeps the parent's permissions");
 });
 
-test("a sub-thread's new thread waits on you, then nests under it: a two-level tree", async () => {
-  const t = setup();
-  const sub = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Piece of the work' });
-  // Its first turn is the parent's brief, not your request: you ask it here.
-  t.env.dispatch({ type: 'send', threadId: sub.id, text: 'Split this further', reason: '' });
-  const queued = t.state().queue.length;
-  const result = t.call('create_thread', { initiation: 'user_asked', prompt: 'Another piece' }, sub.id);
-  for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
-  const card = t.state().queue.at(-1)!;
-  assert.match(card.detail ?? '', /is a sub-thread/);
-  decideTool(card.id, { isApproved: true });
-  const created = JSON.parse((await result).text);
-  assert.deepEqual(t.thread(created.id).parent, { threadId: sub.id });
-  assert.deepEqual(t.thread(sub.id).parent, { threadId: 'rl' });
-  const before = t.state().queue.length;
-  const own = t.call('create_thread', { initiation: 'user_asked', prompt: 'Unrelated', isTopLevel: true }, sub.id);
-  for (let i = 0; i < 20 && t.state().queue.length === before; i++) await new Promise((r) => setTimeout(r, 0));
-  decideTool(t.state().queue.at(-1)!.id, { isApproved: true });
-  assert.equal(t.thread(JSON.parse((await own).text).id).parent, undefined, 'isTopLevel still starts one on its own');
-});
-
 test('a delete always waits on its widget, and Cancel leaves everything as it was', async () => {
   const t = setup();
   let isSettled = false;
@@ -1453,6 +1432,40 @@ test('a started card is a sub-thread like user_asked, from either Start or the a
   t.env.dispatch({ type: 'proposal-start', threadId: 'rl', proposalId: alone.taskId });
   const started = cardsOf(t.thread('rl')).map((p) => [p.title, subOf(p.threadId!)]);
   assert.deepEqual(started, [['Clicked', asked], ['Told', asked], ['Alone', { parent: undefined, base: undefined }]]);
+});
+
+test("a sub-thread's asked-for threads go on one card with no approval; Start and Start all nest each under it", async () => {
+  const t = setup();
+  const sub = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Piece of the work' });
+  // Its first turn is the parent's brief, not your request: you ask it here.
+  t.env.dispatch({ type: 'send', threadId: sub.id, text: 'Split this further', reason: '' });
+  const [queued, threads] = [t.state().queue.length, t.state().threads.length];
+  const asked = [];
+  for (const title of ['Audit the bundle', 'Audit the renders', 'Audit the queries']) asked.push(await t.ok('create_thread', { initiation: 'user_asked', ...brief(title) }, sub.id));
+  assert.deepEqual([t.state().queue.length, t.state().threads.length], [queued, threads], 'no permission card, nothing started');
+  assert.match(asked[0].note, /Proposed and waiting.*Don't retry or wait/);
+  const cards = t.thread(sub.id).activity.filter((e) => e.proposals);
+  assert.equal(cards.length, 1, "one card for the turn's proposals");
+  assert.deepEqual(cards[0].proposals!.map((p) => [p.id, p.initiation, p.title, p.create.parent, p.create.workspace?.base]), asked.map((a, i) => [a.taskId, 'user_asked', ['Audit the bundle', 'Audit the renders', 'Audit the queries'][i], { threadId: sub.id }, t.thread(sub.id).repo?.branch]));
+  const untitled = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Profile startup\nin electron/main.ts' }, sub.id);
+  assert.equal(cardsOf(t.thread(sub.id)).find((p) => p.id === untitled.taskId)?.title, 'Profile startup', 'the brief names an untitled card');
+
+  // Start on one, then Start all for the rest: each is the thread an approved user_asked call creates.
+  t.env.dispatch({ type: 'proposal-start', threadId: sub.id, proposalId: asked[0].taskId });
+  for (const { taskId } of [...asked.slice(1), untitled]) t.env.dispatch({ type: 'proposal-start', threadId: sub.id, proposalId: taskId });
+  const started = cardsOf(t.thread(sub.id));
+  assert.ok(started.every((p) => p.state === 'started'));
+  for (const p of started) {
+    const created = t.thread(p.threadId!);
+    assert.deepEqual([created.parent, created.repo?.base, firstPrompt(created)], [{ threadId: sub.id }, t.thread(sub.id).repo?.branch, p.brief]);
+  }
+  assert.deepEqual(t.thread(sub.id).parent, { threadId: 'rl' }, 'a two-level tree');
+
+  const before = t.state().queue.length;
+  const own = t.call('create_thread', { initiation: 'user_asked', prompt: 'Unrelated', isTopLevel: true }, sub.id);
+  for (let i = 0; i < 20 && t.state().queue.length === before; i++) await new Promise((r) => setTimeout(r, 0));
+  decideTool(t.state().queue.at(-1)!.id, { isApproved: true });
+  assert.equal(t.thread(JSON.parse((await own).text).id).parent, undefined, 'isTopLevel still asks, then starts one on its own');
 });
 
 test('offer waits for New thread or Do it here, and answering it is final', async () => {

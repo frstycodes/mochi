@@ -379,8 +379,8 @@ const THREAD_SPECS = {
     },
   },
   create_thread: {
-    // A sub-thread's new threads, a top-level one, and picks above this thread's run, wait on the user: an agent can't raise what it
-    // was started with, nor take work out from under the thread that coordinates it.
+    // A top-level thread and picks above this thread's run wait on the user: an agent can't raise what it was started with, nor take
+    // work out from under the thread that coordinates it. A sub-thread's other user_asked threads become cards (`isCardFromSubThread`).
     // A card asks nothing: nothing runs until the user starts it. Nor does a turn `run` refuses (`AGENT_DRIVEN`).
     ask: async ({ env, caller, args }) => {
       if (!args.proposalId && args.initiation !== 'user_asked') return undefined;
@@ -388,8 +388,8 @@ const THREAD_SPECS = {
       // Refuses a link that can't be made before the user is asked about it.
       subThreadLink(caller, args);
       const raised = await raisedControls(env, caller, providerOf(args.provider, caller), args);
-      if (!caller.parent && !args.isTopLevel && !raised.length) return undefined;
-      const reasons = [caller.parent && 'This thread is a sub-thread, so the threads it starts wait on you.', args.isTopLevel && 'It would start top-level, not nested under this thread.', raised.length && `It would run ${raised.join(' at ')}, above this thread.`];
+      if (!args.isTopLevel && !raised.length) return undefined;
+      const reasons = [args.isTopLevel && 'It would start top-level, not nested under this thread.', raised.length && `It would run ${raised.join(' at ')}, above this thread.`];
       // The agent only suggests top-level; you pick where it goes.
       const placement = args.isTopLevel ? { options: PLACEMENTS, pick: 'one' as const } : {};
       return { title: `${authorName(caller.providers[0])} wants to start a thread`, detail: reasons.filter(Boolean).join(' '), code: args.prompt ?? args.proposalId, denied: "Didn't start the thread", ...placement };
@@ -403,7 +403,7 @@ const THREAD_SPECS = {
       if (!args.initiation) throw new Error('Pass initiation: "user_asked", "offer" or "own_initiative"');
       if (args.initiation !== 'own_initiative' && turnOf(caller).isAgentDriven) throw new Error(AGENT_DRIVEN);
       const create = await proposalCreate({ ...ctx, args });
-      if (args.initiation !== 'user_asked') return propose(ctx, args.initiation, prompt, create);
+      if (args.initiation !== 'user_asked' || (await isCardFromSubThread({ ...ctx, args }))) return propose(ctx, args.initiation, prompt, create);
       const before = state();
       dispatch({ type: 'create', title: prompt, ...create, isBackground: true });
       const created = state().threads.find((t) => !before.threads.some((s) => s.id === t.id))!;
@@ -679,19 +679,28 @@ async function proposalCreate({ env, caller, args }: ToolContext<Args<'create_th
   return { provider, project, ...(workspace && { workspace }), controls, isLive: !!caller.live, ...(parent && { parent }) };
 }
 
-/** An offer or own_initiative card in the caller's chat; nothing starts. */
+/** An offer, own_initiative or sub-thread user_asked card in the caller's chat; nothing starts. */
 function propose({ state, caller, args, dispatch }: ToolContext<Args<'create_thread'>>, initiation: ThreadProposal['initiation'], brief: string, create: ThreadProposal['create']): Outcome {
-  const title = args.title?.trim();
+  // A user_asked brief came without a card in mind; its first line names the card, as the prompt names its thread.
+  const title = args.title?.trim() || (initiation === 'user_asked' ? brief.split('\n')[0] : '');
   if (!title) throw new Error('Pass a short title for the card');
   const thread = target(state(), caller, caller.id);
   if (initiation === 'own_initiative' && turnProposalCount(thread) >= PROPOSALS_PER_TURN) throw new Error(`You already proposed ${PROPOSALS_PER_TURN} threads this turn, the most one turn may. Mention the rest in your reply, or withdraw a weaker one with dismiss_thread_proposal first.`);
   const id = nextProposalId(thread);
   dispatch({ type: 'proposal-add', threadId: caller.id, proposal: { id, initiation, title, brief, state: 'pending', create }, by: caller.providers[0] });
-  const note =
-    initiation === 'offer'
-      ? 'The user sees New thread / Do it here / Dismiss. Don\'t start the work: end your turn now with one short line. New thread starts it with your brief; "Do it here." or a dismissal comes back as their message.'
-      : 'The user sees a card with Start and Dismiss; nothing runs until they start it. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.';
-  return { result: { taskId: id, state: 'pending', note } };
+  return { result: { taskId: id, state: 'pending', note: PROPOSAL_NOTES[initiation] } };
+}
+
+const PROPOSAL_NOTES = {
+  offer: 'The user sees New thread / Do it here / Dismiss. Don\'t start the work: end your turn now with one short line. New thread starts it with your brief; "Do it here." or a dismissal comes back as their message.',
+  own_initiative: 'The user sees a card with Start and Dismiss; nothing runs until they start it. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.',
+  user_asked: "Proposed and waiting: this thread is a sub-thread, so the threads it starts go on one card for the user, with Start, Dismiss and Start all. Don't retry or wait on it; carry on, or end your turn. Each one they start nests under this thread and its notes come back to you.",
+} satisfies Record<ThreadProposal['initiation'], string>;
+
+/** A sub-thread's user_asked thread that asks nothing else (placement, a raised pick) goes on its turn's card instead of starting. */
+async function isCardFromSubThread({ env, caller, args }: ToolContext<Args<'create_thread'>>) {
+  if (!caller.parent || args.isTopLevel) return false;
+  return !(await raisedControls(env, caller, providerOf(args.provider, caller), args)).length;
 }
 
 /** The user told the agent to start a card it proposed. */

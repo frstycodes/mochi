@@ -23,7 +23,7 @@ export function ProposalEntry({ thread, entry }: { thread: Thread; entry: Activi
     answer(p, state);
     dispatch({ type: 'send', threadId: thread.id, text: OFFER_REPLY[state], reason: `Answered the offer "${p.title}"` });
   };
-  const proposals = shown.filter((p) => p.initiation === 'own_initiative');
+  const proposals = shown.filter((p) => p.initiation !== 'offer');
   return (
     <div className="flex flex-col gap-3">
       {shown
@@ -36,7 +36,7 @@ export function ProposalEntry({ thread, entry }: { thread: Thread; entry: Activi
   );
 }
 
-/** The agent's own suggestions: Dismiss and Start; several from one turn page through it (‹ 2 of 3 ›). */
+/** The agent's suggestions, or a sub-thread's asked-for threads: Dismiss and Start; several from one turn page through it (‹ 2 of 3 ›) with Start all. */
 export function ProposalCard({ proposals, onStart, onDismiss }: { proposals: ShownProposal[]; onStart: (p: ShownProposal) => void; onDismiss: (p: ShownProposal) => void }) {
   const [at, setAt] = useState(() => Math.max(0, proposals.findIndex(isOpen)));
   const proposal = proposals[Math.min(at, proposals.length - 1)];
@@ -46,9 +46,15 @@ export function ProposalCard({ proposals, onStart, onDismiss }: { proposals: Sho
     const next = proposals.findIndex((p) => p.id !== proposal.id && isOpen(p));
     if (next >= 0) setAt(next);
   };
+  const open = proposals.filter(isOpen);
+  const startAll = open.length > 1 && (
+    <Button size="sm" variant="outline" onClick={() => open.forEach(onStart)}>
+      {`Start all ${open.length}`}
+    </Button>
+  );
   return (
     <section aria-label="Suggested threads" aria-roledescription={proposals.length > 1 ? 'carousel' : undefined} className="flex flex-col rounded-xl border p-1">
-      <ProposalRow key={proposal.id} proposal={proposal} onStart={settle(onStart)} onDismiss={settle(onDismiss)} pager={proposals.length > 1 && <Pager at={at} count={proposals.length} onTurn={setAt} />} />
+      <ProposalRow key={proposal.id} proposal={proposal} onStart={settle(onStart)} onDismiss={settle(onDismiss)} pager={proposals.length > 1 && <Pager at={at} count={proposals.length} onTurn={setAt} />} startAll={startAll} />
     </section>
   );
 }
@@ -76,7 +82,7 @@ function Pager({ at, count, onTurn }: { at: number; count: number; onTurn: (i: n
   );
 }
 
-function ProposalRow({ proposal, onStart, onDismiss, pager }: { proposal: ShownProposal; onStart: () => void; onDismiss: () => void; pager?: ReactNode }) {
+function ProposalRow({ proposal, onStart, onDismiss, pager, startAll }: { proposal: ShownProposal; onStart: () => void; onDismiss: () => void; pager?: ReactNode; startAll?: ReactNode }) {
   const [isBriefOpen, setBriefOpen] = useState(false);
   const isPending = isOpen(proposal);
   const isStarted = proposal.state === 'started' && !!proposal.threadId;
@@ -98,6 +104,7 @@ function ProposalRow({ proposal, onStart, onDismiss, pager }: { proposal: ShownP
           <Button size="sm" variant="ghost" onClick={onDismiss}>
             Dismiss
           </Button>
+          {startAll}
           <Button size="sm" onClick={onStart}>
             Start
           </Button>
