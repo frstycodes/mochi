@@ -105,7 +105,7 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
   );
 }
 
-interface ChangeActionsInput {
+export interface ChangeActionsInput {
   thread: Thread;
   cwd: string;
   canStage: boolean;
@@ -114,7 +114,7 @@ interface ChangeActionsInput {
   confirm: ReturnType<typeof useConfirm>['confirm'];
 }
 
-function useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm }: ChangeActionsInput): ChangeActions {
+export function useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm }: ChangeActionsInput): ChangeActions {
   const { dispatch } = useHarness();
   const [notes, setNotes] = useState<LineNote[]>([]);
   const agentName = thread.providers[0] === 'codex' ? 'Codex' : 'Claude';

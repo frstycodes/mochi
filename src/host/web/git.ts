@@ -1,6 +1,6 @@
 import { parseDiff } from '../../git/parse.ts';
 import { bareState, refKey, type RefState } from '../../chat/refs.ts';
-import type { GitHost } from '../types/git.ts';
+import type { GitHost, PrReview } from '../types/git.ts';
 import { branchFromTitle } from '../../git/workspace.ts';
 
 // Fixture paths match the `adm` thread's demo work, so the Changes pane has something to show.
@@ -147,6 +147,14 @@ export const git: GitHost = {
     return [];
   },
   async setAutoMerge() {},
+  async prReview(_cwd, pr) {
+    return { ...DEMO_REVIEW, number: pr, files: [...parseDiff(STAGED, false), ...parseDiff(UNSTAGED, false)] };
+  },
+  async commentPr() {},
+  async replyThread() {},
+  async resolveThread() {},
+  async reviewPr() {},
+  async mergePr() {},
   async pr() {
     return {
       number: 490,
@@ -232,6 +240,59 @@ const demoRef = (kind: RefState['kind'], status: RefState['status'], number: num
   ...(kind === 'pr' && { branch: { head: `feat/demo-${number}`, base: 'main' }, diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 }, checks: 'pass', checkCounts: { passed: 5, total: 5 }, review: 'approved' }),
   ...extra,
 });
+
+const DEMO_REVIEW = {
+  number: 490,
+  url: 'https://github.com/latitude-dev/latitude/pull/490',
+  title: 'Admin usage dashboard',
+  body: 'Adds `/admin/usage` with a per-key daily breakdown.\n\n- Cursor-paged API route, 500 rows a page\n- Date range picker and CSV export on the page',
+  author: 'frstycodes',
+  state: 'OPEN',
+  isDraft: false,
+  base: 'main',
+  head: 'feat/admin-usage',
+  isConflicting: false,
+  viewer: 'frstycodes',
+  checks: [
+    { name: 'typecheck', state: 'pass' },
+    { name: 'unit', state: 'pass' },
+    { name: 'e2e', state: 'pending' },
+    { name: 'lint', state: 'fail', link: 'https://github.com/latitude-dev/latitude/actions/runs/1' },
+  ],
+  comments: [
+    { id: 'c1', author: 'mira', body: 'Looks close. Two things inline, the page size mostly.', at: '2026-10-20T09:12:00Z', verdict: 'changes-requested' },
+    { id: 'c2', author: 'frstycodes', body: 'Thanks, on it.', at: '2026-10-20T10:02:00Z' },
+  ],
+  threads: [
+    {
+      id: 'PRRT_demo1',
+      path: 'apps/api/routes/admin/usage.ts',
+      side: 'additions',
+      line: 12,
+      isResolved: false,
+      comments: [{ id: 't1', author: 'mira', body: '500 rows is a lot for the admin table. Can we do 100 and let the cursor do the rest?', at: '2026-10-20T09:10:00Z' }],
+    },
+    {
+      id: 'PRRT_demo2',
+      path: 'apps/web/routes/admin/usage.tsx',
+      side: 'deletions',
+      line: 5,
+      isResolved: true,
+      comments: [
+        { id: 't2', author: 'mira', body: 'Was the default range on purpose?', at: '2026-10-20T09:11:00Z' },
+        { id: 't3', author: 'frstycodes', body: 'Yes, matches billing.', at: '2026-10-20T10:01:00Z' },
+      ],
+    },
+    {
+      id: 'PRRT_demo3',
+      path: 'apps/web/routes/admin/old.tsx',
+      side: 'additions',
+      line: null,
+      isResolved: false,
+      comments: [{ id: 't4', author: 'mira', body: 'This file can go once the new page ships.', at: '2026-10-19T16:40:00Z' }],
+    },
+  ],
+} satisfies Omit<PrReview, 'files'>;
 
 const DEMO_REFS: Record<number, RefState> = {
   45: demoRef('pr', 'open', 45, 'fix(header): restore the side pane and sidebar toggles'),

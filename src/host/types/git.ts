@@ -67,6 +67,52 @@ export interface PrInfo {
   checks: PrCheck[];
 }
 
+/** A comment on a PR's conversation, a submitted review, or one comment of an inline review thread. */
+export interface PrComment {
+  id: string;
+  author: string;
+  body: string;
+  url?: string;
+  /** ISO time it was posted. */
+  at: string;
+  /** Reviews only: what the reviewer decided. */
+  verdict?: 'approved' | 'changes-requested';
+}
+
+export interface ReviewThread {
+  /** GraphQL node id: replying and resolving take it. */
+  id: string;
+  path: string;
+  side: 'additions' | 'deletions';
+  /** null for a comment on the whole file, or once the code under it changed (outdated). */
+  line: number | null;
+  isResolved: boolean;
+  comments: PrComment[];
+}
+
+export type ReviewVerdict = 'approve' | 'request-changes' | 'comment';
+
+/** One PR as its review page shows it: conversation, checks, files and inline threads. */
+export interface PrReview {
+  number: number;
+  url: string;
+  title: string;
+  body: string;
+  author: string;
+  state: 'OPEN' | 'MERGED' | 'CLOSED';
+  isDraft: boolean;
+  base: string;
+  head: string;
+  isConflicting: boolean;
+  /** The account gh reads as: its own comments and reviews are yours. */
+  viewer: string;
+  checks: PrCheck[];
+  /** Conversation comments and reviews, oldest first. */
+  comments: PrComment[];
+  threads: ReviewThread[];
+  files: DiffFile[];
+}
+
 export interface Worktree {
   path: string;
   branch: string | null;
@@ -155,6 +201,16 @@ export interface GitHost {
   worktreePrs(worktrees: string[], githubUser?: string): Promise<{ worktree: string; pr: PullRequest }[]>;
   /** GitHub auto-merge for the cwd repo's PR `pr`: on with the first merge method the repo allows (squash, merge, rebase), or off. */
   setAutoMerge(cwd: string, pr: number, isOn: boolean, githubUser?: string): Promise<void>;
+  /** The PR's conversation, checks, files and review threads; null when the repo has no PR `pr`. */
+  prReview(cwd: string, pr: number, githubUser?: string): Promise<PrReview | null>;
+  /** Posts `body` on the PR's conversation. */
+  commentPr(cwd: string, pr: number, body: string, githubUser?: string): Promise<void>;
+  replyThread(cwd: string, threadId: string, body: string, githubUser?: string): Promise<void>;
+  resolveThread(cwd: string, threadId: string, isResolved: boolean, githubUser?: string): Promise<void>;
+  /** Submits a review; `body` is required for request-changes and comment. */
+  reviewPr(cwd: string, pr: number, verdict: ReviewVerdict, body: string, githubUser?: string): Promise<void>;
+  /** Merges now with the first method the repo allows (squash, merge, rebase). */
+  mergePr(cwd: string, pr: number, githubUser?: string): Promise<void>;
   /** The tail of a failed GitHub Actions job's log, from the check's `link`; throws for a check that isn't an Actions job. */
   ciLog(cwd: string, checkLink: string, githubUser?: string): Promise<string>;
   /** origin's `owner/repo` when it's on github.com; null otherwise (no origin, another host, not a repo). */
@@ -227,6 +283,12 @@ export const gitMethods = {
   pr: 'invoke',
   worktreePrs: 'invoke',
   setAutoMerge: 'invoke',
+  prReview: 'invoke',
+  commentPr: 'invoke',
+  replyThread: 'invoke',
+  resolveThread: 'invoke',
+  reviewPr: 'invoke',
+  mergePr: 'invoke',
   ciLog: 'invoke',
   repoSlug: 'invoke',
   refStates: 'invoke',

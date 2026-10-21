@@ -2,12 +2,14 @@ import type { ComponentType } from 'react';
 import { Chart, Folder, Layers, Globe, Hierarchy, MessagePlus, Phone, Plug, type IconComponent } from '@/icons';
 import type { Pane, PaneTab, PaneTabKind, Thread } from '../model';
 import { DiffIcon, TerminalIcon } from '../icons/panes';
+import { GitPullRequestIcon } from '../icons/github';
 import { AgentsTab } from './AgentsTab';
 import { ArtifactsTab } from './ArtifactsTab';
 import { BrowserTab } from './BrowserTab';
 import { ChangesTab } from './ChangesTab';
 import { FilesTab } from './FilesTab';
 import { PortsTab } from './PortsTab';
+import { PrTab } from './PrTab';
 import { SideChatTab } from './SideChatTab';
 import { SimulatorTab } from './SimulatorTab';
 import { TerminalTab } from './TerminalTab';
@@ -30,6 +32,7 @@ export const PANE_TABS = {
   agents: { title: 'Agents', icon: Hierarchy, component: AgentsTab },
   visual: { title: 'Visual', icon: Chart, component: VisualTab },
   artifacts: { title: 'Artifacts', icon: Layers, component: ArtifactsTab },
+  pr: { title: 'Pull request', icon: GitPullRequestIcon, component: PrTab },
 } satisfies Record<PaneTabKind, { title: string; icon: IconComponent; component: ComponentType<PaneTabProps> }>;
 
 export function tabTitle(tab: PaneTab) {
