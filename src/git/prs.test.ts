@@ -33,6 +33,8 @@ test('a gh pr create run gives its PR from the printed URL, title from the comma
   assert.equal(createdPr('Run gh pr view', output), null);
   assert.equal(createdPr('Run gh pr create --fill', 'error: no commits'), null);
   assert.equal(createdPr('Run gh pr create --fill', undefined), null);
+  assert.equal(createdPr('Run grep -n "gh pr create" f', output), null, 'quoted in another command');
+  assert.equal(createdPr('Run git push && gh pr create --base main --title "x"', output)?.title, 'x');
 });
 
 test("auto-merge turns on with the first method the repo allows, squash first, and off with --disable-auto", () => {
