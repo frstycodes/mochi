@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { contrast, nudge, parseHex, toHex } from './color.ts';
-import { scopeColor, themeTokens } from './map.ts';
+import githubLight from 'shiki/dist/themes/github-light.mjs';
+import { LIGHT_CODE_SURFACES, readableTokenColors, scopeColor, themeTokens } from './map.ts';
 
 const ratio = (a: string, b: string) => contrast(parseHex(a)!, parseHex(b)!);
 
@@ -103,4 +104,13 @@ test('themeTokens drops borders a theme draws in its own surface color and keeps
   assert.equal(tokens['--input'], '#abb2bf26', 'invisible input border falls back to translucent foreground');
   assert.equal(tokens['--border'], '#3e4452', 'a visible border is kept');
   assert.ok(ratio(tokens['--ring'], '#282c34') >= 3);
+});
+
+test('readableTokenColors brings every github-light token to AA on the chat code surfaces', () => {
+  const tokenColors = readableTokenColors(githubLight.tokenColors!, LIGHT_CODE_SURFACES);
+  for (const { settings } of tokenColors)
+    for (const surface of LIGHT_CODE_SURFACES)
+      if (!settings.background && parseHex(settings.foreground)) assert.ok(ratio(settings.foreground!, surface) >= 4.5, `${settings.foreground} on ${surface}`);
+  assert.equal(scopeColor(tokenColors, 'string'), scopeColor(githubLight.tokenColors!, 'string'), 'a passing color is kept as written');
+  assert.deepEqual(tokenColors.filter((r) => r.settings.background), githubLight.tokenColors!.filter((r) => r.settings.background), 'rules on their own background are kept');
 });
