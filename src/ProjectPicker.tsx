@@ -1,14 +1,16 @@
-import { useState } from 'react';
-import { Chat, ChevronDown, Folder, FolderPlus } from '@/icons';
+import { useState, type KeyboardEvent } from 'react';
+import { Chat, Check, ChevronDown, Folder, FolderPlus } from '@/icons';
 import type { Project } from './host/types/projects';
 import { ProjectIcon } from './ProjectIcon';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { FollowedMachine } from './host/types/remote';
 import { MetaChip } from './MetaChip';
 import { AddProject, type AddedProject } from './AddProject';
 import { refreshProjects } from './projects';
 import { useHarness } from './store';
+import { isMod } from './keys';
+import { Shortcut } from './Shortcut';
 
 /** A row in the picker: `ref` is what the composer starts the thread with (a folder here, a project id on another computer). */
 export interface PickerProject {
@@ -69,21 +71,36 @@ export function ProjectChooser({ value, projects, machine, placeholder = 'Search
 }
 
 function ProjectList({ projects, value, placeholder, onChoose, onAdd }: { projects: PickerProject[]; value: string | null; placeholder: string; onChoose: (project: string | null) => void; onAdd: () => void }) {
+  // Runs before the window's pinned-thread listener, which skips events already prevented.
+  const chooseByNumber = (e: KeyboardEvent) => {
+    if (!isMod(e) || e.shiftKey || e.altKey || !/^[1-9]$/.test(e.key)) return;
+    const project = projects[Number(e.key) - 1];
+    if (!project || project.isMissing) return;
+    e.preventDefault();
+    onChoose(project.ref);
+  };
+
   return (
-    <Command defaultValue={value ?? 'No project'}>
+    <Command defaultValue={value ?? 'No project'} onKeyDown={chooseByNumber}>
       <CommandInput autoFocus placeholder={placeholder} />
       <CommandList className="max-h-72">
         <CommandEmpty>No project matches.</CommandEmpty>
         {projects.length > 0 && (
           <>
             <CommandGroup heading="Projects">
-              {projects.map((p) => (
+              {projects.map((p, i) => (
                 <CommandItem key={p.ref} value={p.ref} keywords={[p.name]} disabled={p.isMissing} data-checked={p.ref === value} onSelect={() => onChoose(p.ref)}>
                   <ProjectIcon name={p.name} icon={p.icon} />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate">{p.name}</span>
                     {p.isMissing ? <span className="truncate type-caption text-warning">Folder not found; relocate it in Projects</span> : !!p.detail && <span className="truncate type-caption text-subtle-foreground">{p.detail}</span>}
                   </span>
+                  {i < 9 && !p.isMissing && (
+                    <CommandShortcut className="flex items-center gap-2">
+                      {p.ref === value && <Check />}
+                      <Shortcut keys={['mod', String(i + 1)]} />
+                    </CommandShortcut>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>
