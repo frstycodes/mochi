@@ -32,6 +32,7 @@ import type { ColorTheme } from "@/themes/model";
 import { useColorTheme } from "@/themes/store";
 import { Streamdown, type PluginConfig } from "streamdown";
 import { useWordReveal, WORD_REVEAL } from "@/chat/wordReveal";
+import { withDiffFences } from "@/chat/diffCodePlugin";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -385,7 +386,7 @@ function themedCodePlugin(light: ColorTheme | null, dark: ColorTheme | null) {
   const themes: [ThemeRegistrationAny, ThemeRegistrationAny] = [light ? shikiTheme(light) : defaultCodeThemes[0], dark ? shikiTheme(dark) : defaultCodeThemes[1]];
   const key = `${themes[0].name}|${themes[1].name}`;
   let plugin = codePlugins.get(key);
-  if (!plugin) codePlugins.set(key, (plugin = codeModule.createCodePlugin({ themes })));
+  if (!plugin) codePlugins.set(key, (plugin = withDiffFences(codeModule.createCodePlugin({ themes }))));
   return plugin;
 }
 let pluginsLoading: Promise<PluginConfig> | null = null;
@@ -404,7 +405,7 @@ function loadStreamdownPlugins() {
   ]).then(([code, math, mermaid, cjk, , light, dark]) => {
     codeModule = code;
     defaultCodeThemes = [light.default, dark.default];
-    loadedPlugins = { code: code.createCodePlugin({ themes: [light.default, dark.default] }), math: math.math, mermaid: mermaid.mermaid, cjk: cjk.cjk };
+    loadedPlugins = { code: withDiffFences(code.createCodePlugin({ themes: [light.default, dark.default] })), math: math.math, mermaid: mermaid.mermaid, cjk: cjk.cjk };
     return loadedPlugins;
   });
   return pluginsLoading;
