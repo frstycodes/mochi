@@ -65,13 +65,15 @@ export function createView(owner: WebContents, url: string, spaceId: string) {
   const partition = `persist:space-${spaceId}`;
   harden(partition);
   // No preload: the page gets no bridge at all, and is sandboxed like a normal Chrome tab.
-  const view = new WebContentsView({ webPreferences: { partition, ...HARDENED } });
+  const view = new WebContentsView({ webPreferences: { partition, ...PAGE_PREFERENCES } });
   const id = register(view, owner, win);
   void view.webContents.loadURL(url);
   return { id };
 }
 
-const HARDENED = { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true };
+// Electron focuses a view on every navigation, hidden or not: an agent's `browser_open` or a reload on a file change took the keyboard
+// from the composer mid-sentence.
+const PAGE_PREFERENCES = { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, focusOnNavigation: false };
 
 function register(view: WebContentsView, owner: WebContents, win: BrowserWindow) {
   const id = `view-${++nextId}`;
@@ -100,7 +102,7 @@ function register(view: WebContentsView, owner: WebContents, win: BrowserWindow)
  */
 function openPopup(openerId: string, opener: Entry, url: string, options: BrowserWindowConstructorOptions) {
   // `options` inherits the opener's preferences and the page's features string; ours win (getLastWebPreferences, Electron 44).
-  const view = new WebContentsView({ ...options, webPreferences: { ...options.webPreferences, ...HARDENED } });
+  const view = new WebContentsView({ ...options, webPreferences: { ...options.webPreferences, ...PAGE_PREFERENCES } });
   const viewId = register(view, opener.owner, opener.win);
   if (!opener.owner.isDestroyed()) opener.owner.send('browser:onEvent', { id: openerId, type: 'popup', viewId, url } satisfies BrowserEvent);
   return view.webContents;
