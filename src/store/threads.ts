@@ -59,7 +59,7 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[]; /** Started as a sub-thread of another thread. */ parent?: SubThreadLink; /** The profile's settings chat (Settings › Ask Mochi). */ isSettingsChat?: true }
+  | { type: 'create'; title: string; /** The thread's title when given, in place of one cut from `title`: no model renames it. */ name?: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[]; /** Started as a sub-thread of another thread. */ parent?: SubThreadLink; /** The profile's settings chat (Settings › Ask Mochi). */ isSettingsChat?: true }
   /** Make `threadId` a sub-thread of `parentId` (a drag, the Similar row, the row menu); it leaves Pinned, sub-threads aren't pinned. */
   | { type: 'nest'; threadId: string; parentId: string; criterionId?: string }
   | { type: 'unnest'; threadId: string }
@@ -528,7 +528,8 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     id,
     spaceId: state.spaceId,
     repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, threadTempBranch(state.spaceId, id, now)) : null,
-    title: titleFrom(action.title),
+    title: action.name ?? titleFrom(action.title),
+    ...(action.name && { isTitleRenamed: true }),
     goal: '',
     providers: [action.provider],
     status: 'running',
@@ -695,7 +696,7 @@ function startProposal(state: State, action: Extract<Action, { type: 'proposal-s
   const thread = state.threads.find((t) => t.id === action.threadId);
   if (!thread || proposalBlocker(thread, action.proposalId, state.now)) return state;
   const { proposal } = findProposal(thread, action.proposalId)!;
-  const next = create(state, { type: 'create', title: proposal.brief, ...proposal.create, isBackground: true });
+  const next = create(state, { type: 'create', title: proposal.brief, name: proposal.title, ...proposal.create, isBackground: true });
   const id = `new-${state.seq}`;
   return { ...next, threads: mapThread(next.threads, thread.id, (t) => updateProposal(t, proposal.id, { state: 'started', threadId: id })) };
 }

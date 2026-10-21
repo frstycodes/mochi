@@ -489,6 +489,7 @@ export function startWorkspace(value: unknown, legacyWorktree?: unknown): StartW
     isExisting: w.isExisting as boolean | undefined,
     isNew: w.isNew as boolean | undefined,
     titlePrompt: w.titlePrompt === undefined ? undefined : string(w.titlePrompt, 'options.workspace.titlePrompt', 40_000),
+    title: w.title === undefined ? undefined : string(w.title, 'options.workspace.title', 255),
   };
 }
 
@@ -496,7 +497,7 @@ export function startWorkspace(value: unknown, legacyWorktree?: unknown): StartW
  * The folder the agent runs in. A worktree thread gets its own worktree, so the panes and the agent see the same files (a folder
  * that isn't a git repo runs the agent in place, but a refused existing branch fails the start). A project folder thread runs in
  * the project's checkout, switched to its branch first when it chose one; a dirty checkout refuses the switch. A new worktree
- * with a `titlePrompt` asks for its title during the setup; `named` waits for it once the setup is through.
+ * with a `title` is named after it, and one with a `titlePrompt` asks for its title during the setup; `named` waits for it once the setup is through.
  */
 async function workspaceFolder(threadId: string, root: string, workspace: StartWorkspace | undefined, start: ReturnType<Starts['begin']>, spaceId: string): Promise<{ cwd: string; setup?: Promise<unknown>; named?: () => Promise<void> }> {
   if (!workspace) return { cwd: root };
@@ -519,7 +520,7 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
   }
   const { dir, isNew } = await createWorktree(root, threadId, workspace.branch, workspace);
   broadcast({ threadId, type: 'worktree', path: dir });
-  const title = isNew && workspace.titlePrompt ? runUtility('title', spaceId, workspace.titlePrompt).then((text) => (text && parseTitle(text)) || null, () => null) : undefined;
+  const title = !isNew ? undefined : workspace.title ? Promise.resolve(workspace.title) : workspace.titlePrompt ? runUtility('title', spaceId, workspace.titlePrompt).then((text) => (text && parseTitle(text)) || null, () => null) : undefined;
   const named = title && (() => nameThread(threadId, dir, workspace.branch, title, start, broadcast));
   const settings = agentSettings();
   if (!isNew || !settings.prepareWorktrees) return { cwd: dir, named };

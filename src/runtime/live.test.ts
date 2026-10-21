@@ -36,6 +36,13 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
   assert.deepEqual(calls(base(), { type: 'send', threadId: 'adm', text: 'hi', drift: 'on-goal', reason: '' }), []);
 });
 
+test('a new thread with a given title has main name its branch after it, asking no model', () => {
+  const create: Action = { type: 'create', title: 'fix the login redirect', name: 'Fix login redirect', provider: 'claude', project: '/Users/me/dev/harness', isLive: true };
+  const [start] = calls(base(), create);
+  const branch = run(base(), create).threads.find((t) => t.id === start.threadId)!.repo!.branch;
+  assert.deepEqual(start.method === 'start' && start.options.workspace, { mode: 'worktree', branch, isNew: true, title: 'Fix login redirect' });
+});
+
 test('a limit pauses the thread; resume sends on the same account, the API key choice restarts the session on the key, handoff restarts on the other provider', () => {
   const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: 'harness', isLive: true };
   let s = run(base(), create);

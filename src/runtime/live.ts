@@ -7,7 +7,7 @@ import { handoffBlocker } from '../rewind/handoff.ts';
 import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts';
 import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
-import { startTitleRequest } from '../utility/titles.ts';
+import { hasTempBranch, startTitleRequest } from '../utility/titles.ts';
 import type { Action, State } from '../store/index.tsx';
 import { autofixSend } from '../schedule/slice.ts';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
@@ -149,10 +149,11 @@ function start(thread: Thread, provider: Provider, controls: ThreadControls, pro
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider, thread.spaceId), ...(thread.isSettingsChat && { isSettingsChat: true }), ...extra } }];
 }
 
-/** A new thread's first start: its branch is its own, and main names it from the first message before the agent starts. */
+/** A new thread's first start: its branch is its own, and main names it from its given title or first message before the agent starts. */
 function firstWorkspace(thread: Thread): StartWorkspace | undefined {
   const workspace = startWorkspace(thread.repo);
   if (workspace?.mode !== 'worktree' || workspace.isExisting) return workspace;
+  if (thread.isTitleRenamed && hasTempBranch(thread)) return { ...workspace, isNew: true, title: thread.title };
   const titlePrompt = startTitleRequest(thread);
   return { ...workspace, isNew: true, ...(titlePrompt && { titlePrompt }) };
 }

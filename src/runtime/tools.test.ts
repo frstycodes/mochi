@@ -21,6 +21,7 @@ import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
+import { startTitleRequest, titleRequest } from '../utility/titles.ts';
 import { runDevTool } from './devTools.ts';
 
 // Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
@@ -244,6 +245,20 @@ test('create_thread starts each thread on a temp branch of its own, for its titl
   assert.match(first.branch, /^mochi\/[0-9a-f]{8}$/);
   assert.equal(first.autoBranch, first.branch);
   assert.notEqual(second.branch, first.branch, 'the same prompt never clashes');
+});
+
+test('create_thread titles a user_asked thread with the given title, and no generated title replaces it', async () => {
+  const t = setup();
+  const brief = 'Repo: /Users/frsty/dev/harness (Mochi desktop app). Fix the title of new threads';
+  const titled = t.thread((await t.ok('create_thread', { initiation: 'user_asked', title: '  Keep the given thread title ', prompt: brief })).id);
+  assert.equal(titled.title, 'Keep the given thread title');
+  assert.equal(firstPrompt(titled), brief, 'the agent still starts on the brief');
+  const answered: Thread = { ...titled, live: { isWorking: false }, activity: [...titled.activity, { at: 1, who: 'claude', kind: 'message', text: 'Done.' }] };
+  assert.equal(titleRequest(answered), null, 'its first turn leaves the title as given');
+  assert.equal(startTitleRequest(titled), undefined, 'no model is asked before the start either');
+  const untitled = t.thread((await t.ok('create_thread', { initiation: 'user_asked', prompt: brief })).id);
+  assert.equal(untitled.title, `${brief.slice(0, 47)}…`, 'without one, the title is cut from the brief');
+  assert.equal(untitled.isTitleRenamed, undefined);
 });
 
 test('create_thread gives the new thread its own worktree even when your Worktree box is unticked', async () => {
@@ -1426,6 +1441,7 @@ test('own_initiative proposes a card and starts nothing; Start creates it nested
   assert.equal(started.state, 'started');
   assert.deepEqual(t.thread(started.threadId!).parent, { threadId: 'rl' });
   assert.equal(firstPrompt(t.thread(started.threadId!)), started.brief);
+  assert.equal(t.thread(started.threadId!).title, 'Share the token bucket', 'titled as the card');
   assert.deepEqual(t.state().views.latitude, { kind: 'thread', id: 'rl' }, 'you stay where you are');
   assert.match(await t.err('create_thread', { proposalId: r.taskId }), /already started/);
 });

@@ -185,6 +185,8 @@ export interface StartWorkspace {
   isNew?: boolean;
   /** With `isNew`, on a temp branch: main asks for a title while the worktree is set up and renames the branch after it before the agent starts. */
   titlePrompt?: string;
+  /** With `isNew`, on a temp branch: the title the thread was given, which main renames the branch after in place of asking. */
+  title?: string;
 }
 
 /**
