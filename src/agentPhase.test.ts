@@ -24,6 +24,8 @@ test('a live row says what the agent is doing while it works, and nothing once i
   assert.equal(workingLabel(thread({ live: live({}) })), 'Thinking');
   assert.equal(workingLabel(thread({ live: live({}), activity: [you, { at: 1, who: 'claude', kind: 'tool', text: 'Edit src/index.ts +3 -1' }] })), 'Editing index.ts');
   assert.equal(workingLabel(thread({ live: live({}), activity: [you, { at: 1, who: 'claude', kind: 'tool', text: 'Run pnpm test' }] })), 'Running pnpm test');
+  assert.equal(workingLabel(thread({ live: live({}), activity: [you, { at: 1, who: 'claude', kind: 'tool', text: 'Run gh pr checks 260 --watch', description: 'Watch PR 260 checks' }] })), 'Watch PR 260 checks');
+  assert.equal(workingLabel(thread({ live: live({}), activity: [you, { at: 1, who: 'claude', kind: 'tool', text: 'Grep: foo', description: 'Searched for “foo”' }] })), 'Running Grep: foo');
   assert.equal(workingLabel(thread({ live: live({}), activity: [you, { at: 1, who: 'claude', kind: 'message', text: 'Sure' }] })), 'Replying');
   assert.equal(workingLabel(thread({ live: live({ isWorking: false }) })), undefined);
 });

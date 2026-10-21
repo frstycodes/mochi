@@ -61,7 +61,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     }
     if (name === IMAGE_CALL) return [{ threadId, type: 'tool', id, phase: 'start', text: 'Generate image', generated: imageCard(input) }];
     const description = callDescription(name, input);
-    return [{ threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) }];
+    return [{ threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description ? { description } : commandOf(name, input)) }];
   }
 
   function toolEnd(block: ToolResultBlock, result: unknown): AgentEvent[] {
@@ -225,13 +225,16 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
       }
       case 'assistant': {
         const { usage: u } = message.message;
-        if (u) context = { ...context, used: u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) };
+        const used = u ? u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) : context.used;
+        // The meter moves with each API call, not only at the turn's result; tokens and cost still wait for the result's totals.
+        const meter: AgentEvent[] = used && used !== context.used ? [{ threadId, type: 'usage', inputTokens: 0, outputTokens: 0, contextUsed: used, contextMax: context.max || undefined }] : [];
+        context = { ...context, used };
         // Text already arrived as stream_event deltas (includePartialMessages), so only thinking and tool calls are read here.
-        return message.message.content.flatMap((block): AgentEvent[] => {
+        return [...meter, ...message.message.content.flatMap((block): AgentEvent[] => {
           if (block.type === 'thinking' && block.thinking) return [{ threadId, type: 'reasoning', text: block.thinking }];
           if (block.type === 'tool_use') return toolStart(block.id, block.name, block.input as Record<string, unknown>);
           return [];
-        });
+        })];
       }
       case 'user': {
         const { content } = message.message;
@@ -405,6 +408,11 @@ export function describeTool(name: string, input: Record<string, unknown>, serve
   if (typeof target !== 'string') return name;
   const verb = VERBS[name as keyof typeof VERBS];
   return verb ? `${verb} ${target}` : `${name}: ${target.split('\n')[0].slice(0, 200)}`;
+}
+
+/** A Bash call's command, for main to describe when Claude sent no `description` (the field is optional). */
+function commandOf(name: string, input: Record<string, unknown>) {
+  return name === 'Bash' && typeof input.command === 'string' ? { command: input.command } : {};
 }
 
 /** The plain-language line a work-group row shows: Bash's own `description`; Grep and Glob in words. Other tools read fine from their verb and target. */

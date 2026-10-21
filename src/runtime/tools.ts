@@ -509,7 +509,9 @@ const GOAL_SPECS = {
       }
       const { summary, next, options } = args;
       dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }), ...(summary?.trim() && { summary: summary.trim() }), ...(next?.trim() && { next: next.trim() }), ...(options && { options: options.map((o) => ({ label: o.label.trim(), reply: o.reply.trim(), ...(o.isDraft && { isDraft: true }) })) }) } });
-      return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
+      const running = caller.steps.find((s) => s.status === 'running');
+      const note = running && `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`;
+      return { changed: 'reported', result: { ...reportOf(target(state(), caller, caller.id)), ...(note && { note }) } };
     },
   },
   get_report: { run: ({ state, caller, args }) => ({ result: reportOf(target(state(), caller, args.threadId)) }) },

@@ -18,6 +18,7 @@ const claude: ProviderConfig = {
   ],
   commands: [],
   plugins: ['ponytail@ponytail'],
+  claudeAiConnectors: ['claude.ai Gmail', 'claude.ai Figma'],
   projectInstructions: null,
 };
 
@@ -26,6 +27,7 @@ const off = [
   'claude:claude-default:plugin:user:ponytail@ponytail',
   'claude:claude-default:server:user:github',
   'claude:claude-default:server:user:linear',
+  'claude:claude-default:connector:claude.ai:claude.ai Gmail',
   'claude:claude-default:server:user:figma',
   'claude:claude-work:skill:user:run',
   'claude:claude-default:skill:user:gone',
@@ -34,15 +36,15 @@ const off = [
 test('only this account’s items that still exist and the tool itself loads are left out', () => {
   assert.deepEqual(
     offItems(claude, off).map((i) => i.id),
-    off.slice(0, 4),
+    off.slice(0, 5),
   );
 });
 
-test('Claude gets each kind through its own flag-layer setting, servers matched by command or URL', () => {
+test('Claude gets each kind through its own flag-layer setting, servers matched by command or URL, connectors by name', () => {
   assert.deepEqual(claudeNativeSettings(offItems(claude, off)), {
     skillOverrides: { ui: 'off' },
     enabledPlugins: { 'ponytail@ponytail': false },
-    deniedMcpServers: [{ serverCommand: ['npx', '-y', 'gh-mcp'] }, { serverUrl: 'https://mcp.linear.app/mcp' }],
+    deniedMcpServers: [{ serverCommand: ['npx', '-y', 'gh-mcp'] }, { serverUrl: 'https://mcp.linear.app/mcp' }, { serverName: 'claude.ai Gmail' }],
   });
   assert.deepEqual(claudeNativeSettings([]), {});
 });

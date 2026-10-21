@@ -13,11 +13,15 @@ export function offItems(config: ProviderConfig, off: readonly string[]): Native
   return nativeItemsOf(config).filter((item) => off.includes(item.id) && !item.isOffNatively);
 }
 
-/** Claude's flag-layer settings: `skillOverrides` drops a skill from context, `enabledPlugins` a whole plugin, `deniedMcpServers` a server. */
+/**
+ * Claude's flag-layer settings: `skillOverrides` drops a skill from context, `enabledPlugins` a whole plugin,
+ * `deniedMcpServers` a server or claude.ai connector. A connector is matched by name: they all share Anthropic's proxy
+ * URL, and the `claude.ai ` prefix keeps the name from matching anything else.
+ */
 export function claudeNativeSettings(items: readonly NativeItem[]) {
   const skills = items.filter((i) => i.kind === 'skill');
   const plugins = items.filter((i) => i.kind === 'plugin');
-  const servers = items.flatMap((i) => (i.kind === 'server' && i.def ? [serverMatcher(i.def)] : []));
+  const servers = items.flatMap((i): ServerMatcher[] => (i.kind === 'server' && i.def ? [serverMatcher(i.def)] : i.kind === 'connector' ? [{ serverName: i.name }] : []));
   return {
     ...(skills.length && { skillOverrides: Object.fromEntries(skills.map((s) => [s.name, 'off' as const])) }),
     ...(plugins.length && { enabledPlugins: Object.fromEntries(plugins.map((p) => [p.name, false])) }),
@@ -25,12 +29,14 @@ export function claudeNativeSettings(items: readonly NativeItem[]) {
   };
 }
 
+type ServerMatcher = { serverUrl: string } | { serverCommand: [string, ...string[]] } | { serverName: string };
+
 /**
  * By command or URL, never by name: a name match would also block Mochi's own connector of that name (a native `linear`
  * turned off for Mochi's Linear). `serverCommand` was run; `serverUrl` is read from sdk.d.ts. A URL is a pattern there, so
  * its `*` would widen the match; no MCP URL seen carries one.
  */
-function serverMatcher(def: McpServerDef): { serverUrl: string } | { serverCommand: [string, ...string[]] } {
+function serverMatcher(def: McpServerDef): ServerMatcher {
   if (def.url) return { serverUrl: def.url };
   return { serverCommand: [def.command ?? '', ...(def.args ?? [])] };
 }

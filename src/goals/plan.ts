@@ -22,11 +22,17 @@ export function isPlanComplete(items: PlanItem[]) {
   return items.every((i) => i.status === 'done');
 }
 
-/** Wall-clock ms for a step the agent stamped; a demo step, or one finished by an action without `ms`, has only Mochi's minute clock. */
+/** Wall-clock ms for a step the agent stamped; a demo step, or one finished or stopped by an action without `ms`, has only Mochi's minute clock. */
 export function stepElapsedMs(step: Step, now: number, nowMs: number) {
-  const { startedMs, doneAt, doneMs } = step;
-  if (startedMs !== undefined && (doneAt === undefined || doneMs !== undefined)) return Math.max(0, (doneMs ?? nowMs) - startedMs);
-  if (step.startedAt !== undefined) return ((step.doneAt ?? now) - step.startedAt) * 60_000;
+  const { startedMs, doneAt, stoppedAt } = step;
+  const endMs = doneAt !== undefined ? step.doneMs : stoppedAt !== undefined ? step.stoppedMs : nowMs;
+  if (startedMs !== undefined && endMs !== undefined) return Math.max(0, endMs - startedMs);
+  if (step.startedAt !== undefined) return ((doneAt ?? stoppedAt ?? now) - step.startedAt) * 60_000;
+}
+
+/** A running step whose clock still moves: the turn it runs in hasn't ended. */
+export function isTicking(step: Step) {
+  return step.status === 'running' && step.stoppedAt === undefined;
 }
 
 /** "42s", then "1m 05s" while it runs (seconds tick) and "12m" once done, then "1h 3m". */

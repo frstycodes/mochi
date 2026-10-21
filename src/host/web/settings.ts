@@ -69,6 +69,7 @@ const DEMO_CONFIG: ProfileConfig = {
       { name: 'ponytail:ponytail-review', description: 'Review the diff for over-engineering', isSkill: true },
     ],
     plugins: ['figma@claude-plugins-official', 'ponytail@ponytail'],
+    claudeAiConnectors: ['claude.ai Gmail', 'claude.ai Google Calendar', 'claude.ai Slack'],
     projectInstructions: null,
   },
   codex: {

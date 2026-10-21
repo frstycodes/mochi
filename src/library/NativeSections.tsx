@@ -26,10 +26,10 @@ import { setAllOff } from './nativeOff';
 import { useNativeItems, type NativeAccount } from './useNativeItems';
 
 /**
- * Claude Code's and Codex's own items of one kind, a section per account after the page's "In Mochi" list. They're on by
+ * Claude Code's and Codex's own items of the page's kinds, a section per account after the page's "In Mochi" list. They're on by
  * default; a profile can leave one out of its Mochi threads, and the tools keep loading it (PROFILES-UX.md).
  */
-export function NativeSections({ kind, query }: { kind: NativeKind; query: string }) {
+export function NativeSections({ kinds, query }: { kinds: NativeKind[]; query: string }) {
   const accounts = useNativeItems();
   const scope = useLibraryScope();
   const current = useHarness().state.spaceId;
@@ -39,7 +39,7 @@ export function NativeSections({ kind, query }: { kind: NativeKind; query: strin
   // The accounts the profile you're in runs on come first; the others' items can't load there.
   const sorted = accounts.toSorted((a, b) => Number(b.profileIds.includes(spaceId)) - Number(a.profileIds.includes(spaceId)));
   return sorted.map((native) => {
-    const all = native.items.filter((i) => i.kind === kind);
+    const all = native.items.filter((i) => kinds.includes(i.kind));
     if (!all.length || !native.profileIds.length) return null;
     const shown = filterBy(all, query, (i) => [i.name, i.description, i.where]);
     if (query && !shown.length) return null;

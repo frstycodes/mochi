@@ -468,8 +468,9 @@ function stampNew(before: State, after: State, threadId: string, ms?: number): S
 export function stampStep(prior: Step | undefined, step: Step, ms: number): Step {
   const isStarted = step.startedAt !== undefined && prior?.startedAt === undefined;
   const isDone = step.doneAt !== undefined && prior?.doneAt === undefined;
-  if (!isStarted && !isDone) return step;
-  return { ...step, ...(isStarted && { startedMs: ms }), ...(isDone && { doneMs: ms }) };
+  const isStopped = step.stoppedAt !== undefined && prior?.stoppedAt === undefined;
+  if (!isStarted && !isDone && !isStopped) return step;
+  return { ...step, ...(isStarted && { startedMs: ms }), ...(isDone && { doneMs: ms }), ...(isStopped && { stoppedMs: ms }) };
 }
 
 export function log(thread: Thread, entry: ActivityEntry): Thread {

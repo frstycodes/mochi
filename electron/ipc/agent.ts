@@ -18,8 +18,8 @@ import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall, setImageGenerator, undeliveredToolCalls } from '../mcp/server.ts';
-import { parseTitle, UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
-import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
+import { commandPrompt, parseTitle, UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
+import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle, onAgentEvent } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
@@ -104,6 +104,29 @@ const codex = new CodexAdapter(
   },
   (spaceId) => profileInstructions(spaceId, 'codex'),
 );
+// One model call per distinct command per launch: agents rerun the same `pnpm test` all day.
+const commandTitles = new Map<string, Promise<string>>();
+const MAX_COMMAND_TITLES = 500;
+
+// Every thread's events pass here, Claude's and Codex's; a review thread's never do, and its calls stay undescribed.
+onAgentEvent((event) => {
+  if (event.type === 'tool' && event.command) void describeCommand(event.threadId, event.id, event.command);
+});
+
+/** A command its agent sent without a description (always on Codex, sometimes on Claude) gets one from the background model, for its row and the sidebar. */
+async function describeCommand(threadId: string, id: string, command: string) {
+  const spaceId = (claudeRunOptions(threadId) ?? codex.runOptions(threadId))?.spaceId;
+  if (!spaceId) return;
+  if (commandTitles.size >= MAX_COMMAND_TITLES) commandTitles.clear();
+  let title = commandTitles.get(command);
+  if (!title) {
+    title = runUtility('command', spaceId, commandPrompt(command)).then((text) => (text && parseTitle(text)) || '', () => '');
+    commandTitles.set(command, title);
+  }
+  const description = await title;
+  if (description) broadcast({ threadId, type: 'tool-description', id, description });
+}
+
 /** The profile's turned-off Codex items as thread config, read from the account's config (the thread's project included). */
 async function codexNativeOff(spaceId: string, cwd: string, ids: string[] | undefined) {
   if (!ids?.length) return {};
