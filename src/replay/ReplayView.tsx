@@ -1,4 +1,4 @@
-import { listenKeydown, isCommand, commandOf, type CommandId } from '../keymap';
+import { listenKeydown, commandOf, type CommandId } from '../keymap';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronDownSmall, Rewind10, FileText, Share, Forward10, Pause, Play, SkipForwardAlt, SkipBack, VideoPlay, X } from '@/icons';
@@ -26,7 +26,7 @@ import { TooltipIconButton } from '../ui';
 import { DiffStat, DiffView, Expand } from '../WorkLog';
 import type { ReplayExport } from './export';
 import { exportedCheckpoints, liveCheckpoints, loadRecording, shareReplay, type CheckpointSource } from './load';
-import { closeReplay, useReplayRoute } from './open';
+import { goBack, useEscapeBack, useReplayRoute } from '../routes/nav';
 import type { Recording } from './record';
 import { createReplayer, markers, replayedThread, stepsBy, timeline, type Marker, type MarkerKind } from './rebuild';
 
@@ -36,9 +36,9 @@ export function ReplayView() {
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
   const recording = useRecording(thread);
-  useCloseOnEscape();
+  useEscapeBack();
   const onExport = thread ? () => void shareReplay(state, thread) : undefined;
-  const header = <ReplayHeader title={thread?.title ?? 'Thread'} onExport={recording ? onExport : undefined} onClose={closeReplay} />;
+  const header = <ReplayHeader title={thread?.title ?? 'Thread'} onExport={recording ? onExport : undefined} onClose={goBack} />;
   if (recording === undefined) return <ReplayLoading header={header} />;
   if (!recording || !thread) return <NothingRecorded header={header} />;
   return <ReplayPlayer key={thread.id} recording={recording} checkpoints={liveCheckpoints(state, thread)} header={header} />;
@@ -73,16 +73,6 @@ function useRecording(thread: Thread | undefined) {
     return () => void (isCurrent = false);
   }, [id]);
   return recording;
-}
-
-function useCloseOnEscape() {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!isCommand(e, 'dismiss') || e.defaultPrevented || isTyping(e.target)) return;
-      closeReplay();
-    };
-    return listenKeydown(onKey);
-  }, []);
 }
 
 function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: () => void; onClose?: () => void }) {

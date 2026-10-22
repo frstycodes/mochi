@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { Switch } from '@/components/ui/switch';
 import { DEFAULT_PREFS, setPrefs, usePrefs } from './settings/prefs';
-import { openSettings } from './settings/open';
+import { openSettings } from './routes/nav';
 import type { View } from './store';
 import { OverflowIcon } from './ui';
 

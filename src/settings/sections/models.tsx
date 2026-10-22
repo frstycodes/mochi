@@ -12,7 +12,7 @@ import type { Provider } from '../../model';
 import { ProviderMark } from '../../ui';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
 import { useAgentSettings } from '../AgentSettings';
-import { useLinkedTab } from '../open';
+import { useLinkedTab } from '../../routes/nav';
 import { CatalogRow } from '../CatalogRow';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';

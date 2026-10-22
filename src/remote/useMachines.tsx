@@ -7,7 +7,7 @@ import { HarnessScope, type Action, type State } from '../store';
 import { toSaved } from '../store/persist';
 import { commandFor } from './actions';
 import { applyFrame, type Mirror } from './mirror';
-import { openRemoteThread } from './open';
+import { openRemoteThread } from '../routes/nav';
 
 /** A computer this one follows, with its store as far as the stream has brought it; no state before its first snapshot. */
 export interface FollowedView {

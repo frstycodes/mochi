@@ -54,7 +54,7 @@ import { OPEN_PR_PROMPT } from './git/prs';
 import type { McpServer, Source, Thread } from './model';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
-import { openProfileConfig } from './settings/open';
+import { openProfileConfig } from './routes/nav';
 import { GoalDetails } from './goals/GoalDetails';
 import { openGoalEditor } from './goals/GoalEditor';
 import { useNextMove } from './goals/NextMove';

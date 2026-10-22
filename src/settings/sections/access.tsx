@@ -6,7 +6,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { levelPolicy, POLICIES_BY_TIER, toolPolicy, type ToolPolicy } from '../../runtime/toolPolicy';
 import { isGoalTool, tierOf, TOOL_NAMES, type Tier, type ToolName } from '../../runtime/toolTable';
-import { useSettingsRoute } from '../open';
+import { useSettingsRoute } from '../../routes/nav';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect } from '../parts';
 import { AGENT_CONTROLS, getPrefs, setPrefs, usePrefs, type AgentControl } from '../prefs';
 import { TOOL_GROUPS, TOOL_GUIDE, type ToolGroup } from '../toolGuide';

@@ -10,7 +10,7 @@ import { defaultAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
 import { CatalogRow } from '../CatalogRow';
 import { AccountsGroup, ProfilesGroup } from '../HarnessAccounts';
-import { useLinkedTab } from '../open';
+import { useLinkedTab } from '../../routes/nav';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { CommandLine, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 

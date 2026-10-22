@@ -11,7 +11,7 @@ import { runOutcome } from '../../schedule/slice';
 import { triggerNextRun, useSchedules } from '../../schedule/useSchedules';
 import { useHarness, useDispatch } from '../../store';
 import { IconSwap, TooltipIconButton } from '../../ui';
-import { closeSettings } from '../open';
+import { goHome } from '../../routes/nav';
 import { SettingsGroup, SettingsRow } from '../parts';
 
 export function SchedulesSection() {
@@ -32,7 +32,7 @@ export function SchedulesSection() {
 function NoSchedules() {
   const dispatch = useDispatch();
   const startOne = () => {
-    closeSettings();
+    goHome();
     dispatch({ type: 'go', view: { kind: 'new' } });
   };
   return (
