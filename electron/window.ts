@@ -89,6 +89,11 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     return { action: 'deny' };
   });
   win.webContents.on('context-menu', (_event, params) => showTextMenu(win, params));
+  win.webContents.on('render-process-gone', (_event, { reason, exitCode }) => {
+    if (reason === 'clean-exit' || win.isDestroyed()) return;
+    console.error(`Window renderer gone (${reason}, exit ${exitCode}), reloading`);
+    win.reload();
+  });
   win.webContents.on('will-navigate', (event, url) => {
     if (!isTrustedUrl(url)) event.preventDefault();
   });

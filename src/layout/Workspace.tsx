@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { ErrorBoundary } from 'react-error-boundary';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
 import { Edit, Folder, Ban, Inbox, Route, Chart } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
@@ -130,7 +132,9 @@ export function LeafView({ leaf, isMulti, isZoomed, isFirst, isPreview = false }
           onFocusCapture={() => isTabbing() && focus()}
           className={cn('relative h-full min-h-0 min-w-0 bg-background outline-none', isMulti && 'overflow-hidden rounded-xl border border-transparent', isMulti && isFocused && 'border-foreground/20')}
         >
-          <LeafContent leafId={leaf.id} view={leaf.view} />
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[JSON.stringify(leaf.view)]}>
+            <LeafContent leafId={leaf.id} view={leaf.view} />
+          </ErrorBoundary>
           <DropZone leafId={leaf.id} />
         </section>
       </PreviewContext.Provider>

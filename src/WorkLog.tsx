@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { useDiffTheme } from './themes/highlight';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Check, ChevronRight, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
@@ -95,7 +97,11 @@ export function WorkLog({ entries, skills = [], action }: { entries: ActivityEnt
             if (e.kind !== 'tool') return <EventRow key={i} entry={e} />;
             const call = parseTool(e.text);
             if (call.verb === 'Skill') return <SkillRow key={i} name={call.target} description={skills.find((s) => s.name === call.target)?.description} />;
-            return <CallRow key={i} entry={e} isRunning={isLive && i === lastTool} files={files} />;
+            return (
+              <ErrorBoundary key={i} fallbackRender={(props) => <li className="p-2"><ErrorFallback {...props} /></li>}>
+                <CallRow entry={e} isRunning={isLive && i === lastTool} files={files} />
+              </ErrorBoundary>
+            );
           })}
         </CallList>
       </Expand>
@@ -128,6 +134,7 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
   const run = runOf(entry);
   const detail = callDetail(entry, call, files);
   const description = describeCall(entry);
+  if (import.meta.env.DEV && entry.text.includes(DEV_THROW)) throw new Error(`Dev-only test card: a tool call containing ${DEV_THROW} throws`);
 
   return (
     <li className="flex flex-col">
@@ -159,6 +166,9 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
     </li>
   );
 }
+
+// Dev builds only: a call whose text contains this (`echo mochi-dev-throw`) crashes its own card, to check the card's error boundary.
+const DEV_THROW = 'mochi-dev-throw';
 
 /** The row's sentence; for a file call ("Edited redis.ts") the name is a link that opens the file in the side pane's Files tab. */
 function CallText({ call, description, hasOwnDescription, files }: { call: ToolCall; description: string; hasOwnDescription: boolean; files: ThreadFiles | null }) {
