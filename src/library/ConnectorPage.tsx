@@ -14,7 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { timeAgo } from '../progress';
-import { openSettings } from '../settings/open';
+import { openSettings } from '../routes/nav';
 import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
 import { useHarnessSelector } from '../store';
 import { OverflowIcon } from '../ui';

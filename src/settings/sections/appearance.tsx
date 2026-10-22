@@ -19,7 +19,7 @@ import { refreshThemes, setThemePreview, useColorTheme, useThemesState } from '.
 import { installExtension, removeCustomTheme, uninstallPackage, useApplyTheme, useInspectedThemes, useMarketplaceSearch, useSeen } from '../../themes/useMarketplace';
 import { OverflowIcon, TooltipIconButton } from '../../ui';
 import { CatalogRow } from '../CatalogRow';
-import { useLinkedTab } from '../open';
+import { useLinkedTab } from '../../routes/nav';
 import { ListIcon, SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId, SkeletonRows } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
 import { ANIMATIONS, type AnimationArea } from '../settingOptions';

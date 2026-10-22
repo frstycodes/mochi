@@ -22,7 +22,7 @@ import { useLibrary } from '../../library/useLibrary';
 import { linkedAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS } from '../harnesses';
-import { openSubpage, useSettingsRoute } from '../open';
+import { openSubpage, useSettingsRoute } from '../../routes/nav';
 import { SettingsCard, SettingsSection, SettingsSelect } from '../parts';
 
 /** Settings › Profiles: every profile as a row opening its own page (Settings › Profiles › <profile>), and a way to add one. */
@@ -58,7 +58,7 @@ function useOpenLinkedProfile(profiles: Space[]) {
   useEffect(() => {
     const settingId = route?.settingId;
     const linked = settingId && profiles.find((p) => settingId.startsWith(`${p.id}-`));
-    if (linked) openSubpage('profiles', linked.id, settingId);
+    if (linked) openSubpage('profiles', linked.id, settingId, true);
   }, [route?.nonce, route?.settingId]);
 }
 

@@ -51,7 +51,7 @@ import { AgentsBadge, ThreadStatusDot, useThreadRow, type ThreadRow } from './th
 import { BoundShortcut } from './Shortcut';
 import { spaceCommand } from './keymap';
 import { remoteDecisions, remoteThreads } from './remote/mirror';
-import { openRemoteThread, useRemoteThreadRoute } from './remote/open';
+import { openRemoteThread, useRemoteThreadRoute } from './routes/nav';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';

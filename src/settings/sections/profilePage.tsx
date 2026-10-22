@@ -21,7 +21,7 @@ import type { NativeItem } from '../../library/nativeItems';
 import { useNativeItems } from '../../library/useNativeItems';
 import { CatalogRow } from '../CatalogRow';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { openSettings } from '../open';
+import { openSettings } from '../../routes/nav';
 import { ProfileInstructions } from '../ProfileInstructions';
 import { DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
 import { GitHubAccountSelect, NewProfileDialog, useGhAccounts, type GhAccountsState } from './profiles';

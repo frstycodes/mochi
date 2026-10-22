@@ -11,7 +11,7 @@ import { UnreadDot } from '../ui';
 import { host } from '../host';
 import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
-import { openSettings } from '../settings/open';
+import { openSettings } from '../routes/nav';
 import { shallowEqual, useDispatch, useHarnessSelector, useThread } from '../store';
 import { GitPullRequestIcon } from '@/icons/github';
 import { ThreadPrHoverCard } from '../chat/RefHoverCard';

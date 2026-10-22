@@ -19,6 +19,7 @@ import { TitleBar } from '../TitleBar';
 import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
+import { goBack } from '../routes/nav';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
 import { isCommand, listenKeydown } from '../keymap';
@@ -33,19 +34,19 @@ export function ReviewView() {
   const index = Math.min(selected, Math.max(0, threads.length - 1));
   const thread = threads[index];
   const step = (by: 1 | -1) => setSelected(stepIndex(index, threads.length, by));
-  useReviewKeys(step, close);
+  useReviewKeys(step, goBack);
   useCloseOnNavigate(close);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ReviewHeader position={thread ? `${index + 1} of ${threads.length}` : undefined} onClose={close} />
+      <ReviewHeader position={thread ? `${index + 1} of ${threads.length}` : undefined} onClose={goBack} />
       {thread ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 md:grid md:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
           <ReviewSummary key={thread.id} thread={thread} onSkip={() => step(1)} />
           <ReviewSurface key={`surface-${thread.id}`} thread={thread} />
         </div>
       ) : (
-        <NothingToReview onClose={close} />
+        <NothingToReview onClose={goBack} />
       )}
     </div>
   );

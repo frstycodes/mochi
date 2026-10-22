@@ -16,7 +16,7 @@ import { appInfo, appProviderFor, connectorFor, connectorIcon, freeAlias, isSame
 import { LibraryIcon } from './LibraryParts';
 import { serviceName } from './names';
 import type { Library } from './useLibrary';
-import { closeSettings } from '../settings/open';
+import { goHome } from '../routes/nav';
 import { getPrefs } from '../settings/prefs';
 import { useDispatch } from '../store';
 
@@ -70,7 +70,7 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
     dispatch({ type: 'create', title: prompt, provider: getPrefs().agent, project: null, isLive: host.isDesktop });
     onConnected();
     // The new thread opens behind Settings; leave it so the setup shows.
-    closeSettings();
+    goHome();
   };
   const deviceCode = useDeviceCode(isBusy ? url : null);
   const submit = () => {
