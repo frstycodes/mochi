@@ -4,7 +4,7 @@ import type { AgentEvent } from '../host/types/agent.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
-import { runningTasks, shortElapsed, taskResult, threadTasks } from './tasks.ts';
+import { activeTasks, shortElapsed, taskResult, threadTasks } from './tasks.ts';
 
 /** A live Claude thread plus every host.agent call the store would make. */
 function setup() {
@@ -26,7 +26,7 @@ test('a background command runs, picks up its log, and stops only when its harne
   const { id, dispatch, event, calls, thread } = setup();
   event({ id: 'b1', phase: 'start', kind: 'shell', title: 'Wait a minute', command: 'sleep 60' });
   event({ id: 'b1', phase: 'progress', outputFile: '/tmp/tasks/b1.output' });
-  assert.equal(runningTasks(thread()), 1);
+  assert.deepEqual(activeTasks(thread()).map((t) => t.id), ['b1']);
   assert.deepEqual(threadTasks(thread()).map((t) => [t.kind, t.title, t.status, t.outputFile]), [['shell', 'Wait a minute', 'running', '/tmp/tasks/b1.output']]);
 
   dispatch({ type: 'task-stop', threadId: id, taskId: 'b1' });
@@ -36,30 +36,44 @@ test('a background command runs, picks up its log, and stops only when its harne
   event({ id: 'b1', phase: 'end', status: 'stopped' });
   event({ id: 'b1', phase: 'end', status: 'done' });
   assert.equal(thread().backgroundTasks![0].status, 'stopped', 'the first end wins');
-  assert.equal(runningTasks(thread()), 0);
+  assert.deepEqual(activeTasks(thread()), [], 'an ended task leaves the active list');
+  assert.deepEqual(threadTasks(thread()).map((t) => [t.id, t.status]), [['b1', 'stopped']], 'but stays in the full list');
 
   calls.length = 0;
   dispatch({ type: 'task-stop', threadId: id, taskId: 'b1' });
   assert.deepEqual(calls, [], 'nothing to stop once it ended');
 });
 
-test('failed commands keep their exit code; background agents join the list in start order, foreground ones never do', (t) => {
+test('one list holds commands and every agent in start order; only running ones are active', (t) => {
   t.mock.timers.enable({ apis: ['Date'] });
   const { id, dispatch, event, thread } = setup();
-  dispatch({ type: 'agent', event: { threadId: id, type: 'subagent', id: 'a1', phase: 'start', name: 'Review the diff', isBackground: true } });
-  dispatch({ type: 'agent', event: { threadId: id, type: 'subagent', id: 'a2', phase: 'start', name: 'Find usages', isBackground: false } });
+  const agent = (agentId: string, phase: 'start' | 'end', isBackground = false) =>
+    dispatch({ type: 'agent', event: { threadId: id, type: 'subagent', id: agentId, phase, name: agentId, isBackground, ...(phase === 'end' && { status: 'done' as const }) } });
+  agent('a1', 'start', true);
+  t.mock.timers.tick(1000);
+  agent('a2', 'start');
   t.mock.timers.tick(1000);
   event({ id: 'b2', phase: 'start', kind: 'shell', title: 'exit 3' });
   event({ id: 'b2', phase: 'end', status: 'failed', exitCode: 3 });
+  t.mock.timers.tick(1000);
+  event({ id: 'w1', phase: 'start', kind: 'workflow', title: 'Release' });
+  agent('a2', 'end');
+
   const rows = threadTasks(thread());
   assert.deepEqual(
-    rows.map((t) => [t.id, t.kind, t.status]),
+    rows.map((r) => [r.id, r.kind, r.status]),
     [
       ['a1', 'agent', 'running'],
+      ['a2', 'agent', 'done'],
       ['b2', 'shell', 'failed'],
+      ['w1', 'workflow', 'running'],
     ],
   );
-  assert.equal(taskResult(rows[1]), 'Exit 3');
+  assert.deepEqual(
+    activeTasks(thread()).map((r) => r.id),
+    ['a1', 'w1'],
+  );
+  assert.equal(taskResult(rows[2]), 'Exit 3');
   assert.equal(taskResult({ status: 'failed' }), 'Failed');
   assert.equal(taskResult({ status: 'done', exitCode: 0 }), 'Done');
 });

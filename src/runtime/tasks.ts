@@ -1,6 +1,6 @@
 import type { AgentTaskEvent, BackgroundTaskKind, SubagentStatus } from '../host/types/agent.ts';
 import type { BackgroundTask, Provider, Subagent, Thread } from '../model.ts';
-import type { State } from '../store/index.tsx';
+import type { Action, State } from '../store/index.tsx';
 import { mapThread } from '../store/threads.ts';
 
 /** Folds a `task` event into its thread's `backgroundTasks`. The first end wins, like subagents'. */
@@ -42,19 +42,26 @@ export interface TaskRow {
   startedAt: number;
   endedAt?: number;
   exitCode?: number;
+  command?: string;
   outputFile?: string;
   subagent?: Subagent;
 }
 
-/** Everything running behind the thread, oldest first: its agent's background commands and the agents it left running (Claude's, Codex's, Mochi's own). Foreground subagents end with their turn, so they're not here. */
+/** Everything the thread's agent started beside its turn, oldest first: background commands, workflows and monitors, and every agent it started (Claude's, Codex's, Mochi's own). The Background tasks tab lists them all; the summary card shows the active ones. */
 export function threadTasks(thread: Thread): TaskRow[] {
-  const agents = (thread.subagents ?? [])
-    .filter((s) => s.isBackground)
-    .map((s): TaskRow => ({ id: s.id, kind: 'agent', title: s.name, status: s.status, startedAt: s.startedAt, ...(s.endedAt !== undefined && { endedAt: s.endedAt }), subagent: s }));
+  const agents = (thread.subagents ?? []).map(
+    (s): TaskRow => ({ id: s.id, kind: 'agent', title: s.name, status: s.status, startedAt: s.startedAt, ...(s.endedAt !== undefined && { endedAt: s.endedAt }), subagent: s }),
+  );
   return [...(thread.backgroundTasks ?? []), ...agents].sort((a, b) => a.startedAt - b.startedAt);
 }
 
-export const runningTasks = (thread: Thread) => threadTasks(thread).filter((t) => t.status === 'running').length;
+export const isActive = (task: Pick<TaskRow, 'status'>) => task.status === 'running';
+
+export const activeTasks = (thread: Thread) => threadTasks(thread).filter(isActive);
+
+export function stopTask(threadId: string, task: TaskRow): Action {
+  return task.subagent ? { type: 'bg-stop', threadId, subagentId: task.id } : { type: 'task-stop', threadId, taskId: task.id };
+}
 
 /** A finished task's outcome in a word or two: the exit code when it failed with one. */
 export function taskResult(task: Pick<TaskRow, 'status' | 'exitCode'>) {

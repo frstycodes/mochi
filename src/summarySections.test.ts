@@ -67,3 +67,9 @@ test('dragged order wins; cards never placed keep their default slot', () => {
 test('a drag keeps hidden cards in the saved order', () => {
   assert.deepEqual(savedOrder(['sources', 'environment'], ['servers', 'environment', 'sources']), ['sources', 'environment', 'servers']);
 });
+
+test('the background tasks card shows only while a task runs', () => {
+  const task = (status: 'running' | 'done') => ({ id: 'b1', kind: 'shell', provider: 'claude', title: 'sleep 5', status, startedAt: 0 }) as const;
+  assert.deepEqual(cards(thread({ backgroundTasks: [task('running')] })), ['environment', 'sources', 'tasks']);
+  assert.deepEqual(cards(thread({ backgroundTasks: [task('done')] })), ['environment', 'sources'], 'finished tasks stay in the tab, not the card');
+});

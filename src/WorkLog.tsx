@@ -595,16 +595,16 @@ export function DiffView({ patch }: { patch: string }) {
 
 const TONE = { plain: 'text-foreground', dim: 'text-subtle-foreground', pass: 'text-success', fail: 'text-destructive' } satisfies Record<RunResult['lines'][number]['tone'], string>;
 
-/** The command, its exit badge, then its output in colour. */
-export function RunOutput({ command, run }: { command: string; run?: RunResult }) {
+/** The command, its exit badge (once it has an exit code), then its output in colour; `isFull` lets the output run its whole length instead of scrolling inside. */
+export function RunOutput({ command, run, isFull = false }: { command: string; run?: RunResult | Pick<RunResult, 'lines'>; isFull?: boolean }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card font-mono text-xs leading-5">
       <div className="flex items-start gap-3 px-3 py-2">
         <span className="min-w-0 flex-1 break-all whitespace-pre-wrap text-muted-foreground">$ {command}</span>
-        {!!run && <ExitBadge run={run} />}
+        {!!run && 'exitCode' in run && <ExitBadge run={run} />}
       </div>
       {!!run?.lines.length && (
-        <pre className="max-h-64 overflow-auto border-t px-3 py-2">
+        <pre className={cn('overflow-auto border-t px-3 py-2', !isFull && 'max-h-64')}>
           {run.lines.map((l, i) => (
             <div key={i} className={cn('min-h-5 break-all whitespace-pre-wrap', TONE[l.tone])}>
               {l.text}
