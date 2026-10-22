@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
+import { BackgroundTask } from '@/icons';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type MochiFlavor } from '../AgentLoader';
 import { toolLabel, toolPhase } from '../agentPhase';
 import type { Provider, Subagent, Thread } from '../model';
 import { formatElapsed } from '../progress';
 import { oneLine } from '../runtime/subagents';
+import type { TaskRow } from '../runtime/tasks';
+import { TerminalIcon } from '../icons/panes';
 import { useModels } from '../ModelControls';
 import { optionFor } from '../runtime/models';
 import { useSpace } from '../store';
@@ -90,3 +93,10 @@ export function useElapsed(startedAt: number, endedAt?: number) {
   return Math.max(0, (endedAt ?? now) - startedAt);
 }
 
+
+/** A task's kind at a glance: the agent's own Mochi, the terminal glyph for a command, else the background-task glyph. */
+export function TaskIcon({ thread, task }: { thread: Thread; task: TaskRow }) {
+  if (task.subagent) return <SubagentAvatar flavor={subagentPersona(thread, task.subagent).flavor} subagent={task.subagent} className="-mx-0.5 size-5" />;
+  const Icon = task.kind === 'shell' ? TerminalIcon : BackgroundTask;
+  return <Icon aria-label={task.kind === 'shell' ? 'Command' : 'Task'} className="size-4 text-muted-foreground" />;
+}

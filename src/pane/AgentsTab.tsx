@@ -1,42 +1,53 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ArrowLeft, ChevronRight, Hierarchy, Send, Stop } from '@/icons';
+import { ArrowLeft, BackgroundTask, ChevronRight, Send, Stop } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { formatElapsed } from '../progress';
-import { SubagentAvatar, SubagentLine, SubagentMeta, SubagentModel, subagentPersona, TOKENS, useElapsed } from '../agents/parts';
+import { SubagentAvatar, SubagentLine, SubagentMeta, SubagentModel, subagentPersona, TaskIcon, TOKENS, useElapsed } from '../agents/parts';
+import { splitPath } from '../chat/imageSrc';
+import { outputLines } from '../chat/output';
+import type { RunResult } from '../fixtures';
 import { useThreadFiles } from '../files/viewer';
 import { reportOf } from '../runtime/subagents';
+import { isActive, stopTask, taskResult, threadTasks, type TaskRow } from '../runtime/tasks';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from '../viz/FenceVisual';
 import { useGitDiff } from '../git/useGit';
 import { useWorktreePath } from '../git/worktrees';
+import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { DiffFile } from '../host/types/git';
 import type { Subagent, Thread } from '../model';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
 import { VizThreadProvider } from '../viz/WidgetVisual';
-import { CallList, CallRow, DiffStat, DiffView, Expand } from '../WorkLog';
+import { CallList, CallRow, DiffStat, DiffView, Expand, RunOutput } from '../WorkLog';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
-/** Every agent this thread's agent started as a card, running first; a card opens that agent's transcript in place of the list. */
+/** Everything this thread's agent started beside its turn as cards, running first; a card opens that task's page (an agent's transcript, a command's output) in place of the list. */
 export function AgentsTab({ thread, tab }: PaneTabProps) {
-  const agents = ordered(thread.subagents ?? []);
-  const shown = agents.find((s) => s.id === tab.agentId);
-  if (!agents.length) return <NoAgents />;
+  const tasks = threadTasks(thread);
+  const shown = tasks.find((t) => t.id === tab.agentId);
+  if (!tasks.length) return <NoTasks />;
   return (
     // The log's file rows open in the thread's file viewer.
-    <VizThreadProvider value={thread.id}>{shown ? <AgentTranscript key={shown.id} thread={thread} subagent={shown} /> : <AgentList thread={thread} agents={agents} />}</VizThreadProvider>
+    <VizThreadProvider value={thread.id}>{shown ? <TaskPage key={shown.id} thread={thread} task={shown} /> : <TaskList thread={thread} tasks={tasks} />}</VizThreadProvider>
   );
 }
 
-function AgentList({ thread, agents }: { thread: Thread; agents: Subagent[] }) {
-  const running = agents.filter((s) => s.status === 'running');
-  const finished = agents.filter((s) => s.status !== 'running');
+function TaskPage({ thread, task }: { thread: Thread; task: TaskRow }) {
+  if (task.subagent) return <AgentTranscript thread={thread} task={task} subagent={task.subagent} />;
+  return <CommandOutput thread={thread} task={task} />;
+}
+
+/** Newest first within Running and Finished. */
+function TaskList({ thread, tasks }: { thread: Thread; tasks: TaskRow[] }) {
+  const running = tasks.filter(isActive).toReversed();
+  const finished = tasks.filter((t) => !isActive(t)).toReversed();
   const [isFinishedOpen, setFinishedOpen] = useState(!running.length);
   return (
     <ScrollArea type="scroll" className="h-full min-h-0">
@@ -44,7 +55,7 @@ function AgentList({ thread, agents }: { thread: Thread; agents: Subagent[] }) {
         {running.length > 0 && (
           <section aria-label="Running" className="flex flex-col gap-1.5">
             <h3 className="flex h-6 items-center px-1 type-meta text-subtle-foreground">Running</h3>
-            <AgentCards thread={thread} agents={running} />
+            <TaskCards thread={thread} tasks={running} />
           </section>
         )}
         {finished.length > 0 && (
@@ -54,7 +65,7 @@ function AgentList({ thread, agents }: { thread: Thread; agents: Subagent[] }) {
               <ChevronRight aria-hidden className={cn('size-3 transition-transform duration-150', isFinishedOpen && 'rotate-90')} />
             </button>
             <Expand isOpen={isFinishedOpen}>
-              <AgentCards thread={thread} agents={finished} />
+              <TaskCards thread={thread} tasks={finished} />
             </Expand>
           </section>
         )}
@@ -63,33 +74,39 @@ function AgentList({ thread, agents }: { thread: Thread; agents: Subagent[] }) {
   );
 }
 
-function AgentCards({ thread, agents }: { thread: Thread; agents: Subagent[] }) {
+function TaskCards({ thread, tasks }: { thread: Thread; tasks: TaskRow[] }) {
   return (
     <ol className="flex flex-col gap-1.5">
-      {agents.map((s) => (
-        <AgentCard key={s.id} thread={thread} subagent={s} />
-      ))}
+      {tasks.map((task) => (task.subagent ? <AgentCard key={task.id} thread={thread} task={task} subagent={task.subagent} /> : <CommandCard key={task.id} thread={thread} task={task} />))}
     </ol>
   );
 }
 
-/** The whole card opens the transcript (a stretched button); Stop sits above it. */
-function AgentCard({ thread, subagent }: { thread: Thread; subagent: Subagent }) {
+/** The whole card opens the task's page (a stretched button); Stop sits above it. */
+function TaskCard({ thread, task, label, stopName, children }: { thread: Thread; task: TaskRow; label: string; stopName: string; children: ReactNode }) {
   const { dispatch } = useHarness();
-  const { flavor, name } = subagentPersona(thread, subagent);
-  const elapsed = useElapsed(subagent.startedAt, subagent.endedAt);
   return (
     <li className="relative isolate flex flex-col gap-1 rounded-lg border bg-card px-3 py-2.5 transition-colors has-[>button:first-child:hover]:bg-accent/40">
       <button
         type="button"
-        onClick={() => dispatch({ type: 'pane-show-agent', threadId: thread.id, subagentId: subagent.id })}
-        aria-label={`${name}, ${subagent.name}: open transcript`}
+        onClick={() => dispatch({ type: 'pane-show-agent', threadId: thread.id, subagentId: task.id })}
+        aria-label={label}
         className="absolute inset-0 cursor-default rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <div className="flex min-w-0 items-start gap-2">
-        <span className="min-w-0 flex-1 truncate type-body text-foreground">{subagent.name}</span>
-        {subagent.status === 'running' && <StopAgent thread={thread} subagent={subagent} name={name} className="relative z-10 -my-1 -mr-1.5" />}
+        <span className="min-w-0 flex-1 truncate type-body text-foreground">{task.title}</span>
+        {isActive(task) && <StopButton thread={thread} task={task} name={stopName} className="relative z-10 -my-1 -mr-1.5" />}
       </div>
+      {children}
+    </li>
+  );
+}
+
+function AgentCard({ thread, task, subagent }: { thread: Thread; task: TaskRow; subagent: Subagent }) {
+  const { flavor, name } = subagentPersona(thread, subagent);
+  const elapsed = useElapsed(subagent.startedAt, subagent.endedAt);
+  return (
+    <TaskCard thread={thread} task={task} label={`${name}, ${subagent.name}: open transcript`} stopName={name}>
       <div className="flex min-w-0 items-center gap-2 type-meta">
         <SubagentAvatar flavor={flavor} subagent={subagent} className="size-5" />
         <span className="text-muted-foreground">{name}</span>
@@ -102,9 +119,29 @@ function AgentCard({ thread, subagent }: { thread: Thread; subagent: Subagent })
         {subagent.steps.length > 0 && <Count value={String(subagent.steps.length)} unit={subagent.steps.length === 1 ? 'tool use' : 'tool uses'} />}
         <SubagentLine subagent={subagent} />
       </div>
-    </li>
+    </TaskCard>
   );
 }
+
+/** A background command, workflow or monitor: its kind, age and outcome, and the command when the title doesn't already say it. */
+function CommandCard({ thread, task }: { thread: Thread; task: TaskRow }) {
+  const elapsed = useElapsed(task.startedAt, task.endedAt);
+  return (
+    <TaskCard thread={thread} task={task} label={`${task.title}: open output`} stopName={`“${task.title}”`}>
+      <div className="flex min-w-0 items-center gap-2 type-meta">
+        <span className="flex size-5 shrink-0 items-center justify-center">
+          <TaskIcon thread={thread} task={task} />
+        </span>
+        <span className="text-muted-foreground">{TASK_KINDS[task.kind]}</span>
+        <span className="tabular text-subtle-foreground">{formatElapsed(elapsed)}</span>
+        {!isActive(task) && <span className={task.status === 'failed' ? 'text-destructive' : 'text-subtle-foreground'}>{taskResult(task)}</span>}
+      </div>
+      {!!task.command && task.command !== task.title && <p className="truncate font-mono text-xs leading-5 text-subtle-foreground">{task.command}</p>}
+    </TaskCard>
+  );
+}
+
+const TASK_KINDS = { agent: 'Agent', shell: 'Command', workflow: 'Workflow', monitor: 'Monitor' } satisfies Record<TaskRow['kind'], string>;
 
 function Count({ value, unit }: { value: string; unit: string }) {
   return (
@@ -114,10 +151,18 @@ function Count({ value, unit }: { value: string; unit: string }) {
   );
 }
 
-function StopAgent({ thread, subagent, name, className }: { thread: Thread; subagent: Subagent; name: string; className?: string }) {
+function StopButton({ thread, task, name, className }: { thread: Thread; task: TaskRow; name: string; className?: string }) {
   const { dispatch } = useHarness();
+  const isAgent = !!task.subagent;
   return (
-    <TooltipIconButton label="Stop agent" hint={`Stops ${name}; its work so far stays`} size="icon-sm" variant="ghost" className={className} onClick={() => dispatch({ type: 'bg-stop', threadId: thread.id, subagentId: subagent.id })}>
+    <TooltipIconButton
+      label={isAgent ? 'Stop agent' : 'Stop task'}
+      hint={`Stops ${name}; its ${isAgent ? 'work' : 'output'} so far stays`}
+      size="icon-sm"
+      variant="ghost"
+      className={className}
+      onClick={() => dispatch(stopTask(thread.id, task))}
+    >
       <Stop filled className="size-3.5" />
     </TooltipIconButton>
   );
@@ -128,8 +173,17 @@ function kindOf(s: Subagent) {
   return s.isBackground ? 'Background' : 'Agent';
 }
 
+function BackToTasks({ thread }: { thread: Thread }) {
+  const { dispatch } = useHarness();
+  return (
+    <TooltipIconButton label="All tasks" hint="Back to this thread's background tasks" size="icon-sm" variant="ghost" className="-ml-1.5 shrink-0" onClick={() => dispatch({ type: 'pane-show-agent', threadId: thread.id })}>
+      <ArrowLeft />
+    </TooltipIconButton>
+  );
+}
+
 /** One agent's page: its prompt, log, report and changes, flat in the pane; back returns to the list. */
-function AgentTranscript({ thread, subagent }: { thread: Thread; subagent: Subagent }) {
+function AgentTranscript({ thread, task, subagent }: { thread: Thread; task: TaskRow; subagent: Subagent }) {
   const { dispatch } = useHarness();
   const { flavor, name } = subagentPersona(thread, subagent);
   const isRunning = subagent.status === 'running';
@@ -137,16 +191,14 @@ function AgentTranscript({ thread, subagent }: { thread: Thread; subagent: Subag
   return (
     <div data-file-scope className="flex h-full min-h-0 flex-col">
       <PaneTitle>
-        <TooltipIconButton label="All agents" hint="Back to this thread's agents" size="icon-sm" variant="ghost" className="-ml-1.5 shrink-0" onClick={() => dispatch({ type: 'pane-show-agent', threadId: thread.id })}>
-          <ArrowLeft />
-        </TooltipIconButton>
+        <BackToTasks thread={thread} />
         <SubagentAvatar flavor={flavor} subagent={subagent} className="size-5" />
         <span className="shrink-0 type-meta text-foreground">{name}</span>
         <span className="min-w-0 truncate type-meta text-subtle-foreground">{subagent.name}</span>
       </PaneTitle>
       {isRunning && (
         <PaneActions>
-          <StopAgent thread={thread} subagent={subagent} name={name} />
+          <StopButton thread={thread} task={task} name={name} />
         </PaneActions>
       )}
       <ScrollArea type="scroll" className="min-h-0 flex-1">
@@ -171,6 +223,34 @@ function AgentTranscript({ thread, subagent }: { thread: Thread; subagent: Subag
             </div>
           )}
           <AgentChanges thread={thread} subagent={subagent} />
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+/** A command's page: its output as the chat's run block, live while it runs, then with its exit code. */
+function CommandOutput({ thread, task }: { thread: Thread; task: TaskRow }) {
+  const run = useTaskRun(task);
+  const elapsed = useElapsed(task.startedAt, task.endedAt);
+  const isRunning = isActive(task);
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <PaneTitle>
+        <BackToTasks thread={thread} />
+        <TaskIcon thread={thread} task={task} />
+        <span className="min-w-0 truncate type-meta text-foreground">{task.title}</span>
+        <span className="shrink-0 tabular type-meta text-subtle-foreground">{isRunning ? formatElapsed(elapsed) : taskResult(task)}</span>
+      </PaneTitle>
+      {isRunning && (
+        <PaneActions>
+          <StopButton thread={thread} task={task} name={`“${task.title}”`} />
+        </PaneActions>
+      )}
+      <ScrollArea type="scroll" className="min-h-0 flex-1">
+        <div className="flex flex-col gap-2 px-3 pt-1 pb-4">
+          <RunOutput command={task.command ?? task.title} run={run} isFull />
+          {!task.outputFile && <p className="px-1 type-meta text-subtle-foreground">{isRunning ? 'Waiting for output…' : 'No output was captured'}</p>}
         </div>
       </ScrollArea>
     </div>
@@ -266,21 +346,45 @@ function ChangedFile({ file }: { file: DiffFile }) {
   );
 }
 
-function NoAgents() {
+function NoTasks() {
   return (
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Hierarchy />
+          <BackgroundTask />
         </EmptyMedia>
-        <EmptyTitle>No agents yet</EmptyTitle>
-        <EmptyDescription>Subagents and delegated tasks this thread's agent starts show here, with their logs and changes.</EmptyDescription>
+        <EmptyTitle>No background tasks yet</EmptyTitle>
+        <EmptyDescription>Subagents, delegated tasks and background commands this thread's agent starts show here, with their logs, output and changes.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
 }
 
-/** Running first, newest first within each. */
-function ordered(agents: Subagent[]) {
-  return [...agents].sort((a, b) => Number(b.status === 'running') - Number(a.status === 'running') || b.startedAt - a.startedAt);
+/** The command's output, read from the file its harness writes it to: re-read every second while it runs, once more when it ends. */
+function useTaskRun(task: TaskRow): RunResult | Pick<RunResult, 'lines'> | undefined {
+  const [text, setText] = useState('');
+  const { outputFile, status } = task;
+  const isRunning = status === 'running';
+  useEffect(() => {
+    if (!outputFile) return;
+    let isCurrent = true;
+    const { dir, name } = splitPath(outputFile);
+    const read = () =>
+      host.fs.read(dir, name).then(
+        (content) => isCurrent && content.kind === 'text' && setText(content.text),
+        () => {}, // Not written yet; the next read picks it up.
+      );
+    void read();
+    if (!isRunning) return () => void (isCurrent = false);
+    const id = setInterval(read, OUTPUT_POLL_MS);
+    return () => {
+      isCurrent = false;
+      clearInterval(id);
+    };
+  }, [outputFile, isRunning]);
+  const lines = outputLines(text);
+  if (task.exitCode !== undefined) return { exitCode: task.exitCode, lines };
+  return status === 'done' ? { exitCode: 0, lines } : { lines };
 }
+
+const OUTPUT_POLL_MS = 1000;

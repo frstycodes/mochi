@@ -38,7 +38,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
 import { useGitDiff } from './git/useGit';
-import { DiffIcon, TerminalIcon } from './icons/panes';
+import { DiffIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
@@ -67,8 +67,8 @@ import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
 import { OverflowIcon, ProviderMark, TooltipIconButton } from './ui';
-import { shortElapsed, taskResult, threadTasks, type TaskRow } from './runtime/tasks';
-import { SubagentAvatar, subagentPersona, useElapsed } from './agents/parts';
+import { isActive, shortElapsed, stopTask, taskResult, threadTasks, type TaskRow } from './runtime/tasks';
+import { TaskIcon, useElapsed } from './agents/parts';
 import { connectorStatus, fileCount, orderCards, savedOrder, summaryCards, type SummaryCardId } from './summarySections';
 import { SkillIcon } from './icons/ObjectIcons';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
@@ -582,8 +582,8 @@ function CreatePrRow({ thread }: { thread: Thread }) {
 /** Like Claude's: what runs now, each with its age and a stop button, then one "N finished" row whose list opens beside the card. */
 function TasksCard({ thread, open }: CardProps) {
   const tasks = threadTasks(thread);
-  const running = tasks.filter((t) => t.status === 'running');
-  const finished = tasks.filter((t) => t.status !== 'running');
+  const running = tasks.filter(isActive);
+  const finished = tasks.filter((t) => !isActive(t));
   const openTask = (task: TaskRow) => {
     if (task.subagent) return () => open.agent(task.id);
     const file = task.outputFile;
@@ -635,12 +635,6 @@ function FinishedTasks({ thread, tasks, openTask }: { thread: Thread; tasks: Tas
   );
 }
 
-function TaskIcon({ thread, task }: { thread: Thread; task: TaskRow }) {
-  if (task.subagent) return <SubagentAvatar flavor={subagentPersona(thread, task.subagent).flavor} subagent={task.subagent} className="-mx-0.5 size-5" />;
-  const Icon = task.kind === 'shell' ? TerminalIcon : BackgroundTask;
-  return <Icon aria-label={task.kind === 'shell' ? 'Command' : 'Task'} className="size-4 text-muted-foreground" />;
-}
-
 /** How long it has run, ticking while it runs; how long it took once it ended. */
 function TaskAge({ task }: { task: TaskRow }) {
   return <span className="tabular type-caption text-subtle-foreground">{shortElapsed(useElapsed(task.startedAt, task.endedAt))}</span>;
@@ -648,9 +642,8 @@ function TaskAge({ task }: { task: TaskRow }) {
 
 function StopTask({ thread, task }: { thread: Thread; task: TaskRow }) {
   const { dispatch } = useHarness();
-  const stop = () => dispatch(task.subagent ? { type: 'bg-stop', threadId: thread.id, subagentId: task.id } : { type: 'task-stop', threadId: thread.id, taskId: task.id });
   return (
-    <TooltipIconButton label="Stop task" hint={`Stops “${task.title}”; its output so far stays`} size="icon-xs" className="text-subtle-foreground hover:text-foreground" onClick={stop}>
+    <TooltipIconButton label="Stop task" hint={`Stops “${task.title}”; its output so far stays`} size="icon-xs" className="text-subtle-foreground hover:text-foreground" onClick={() => dispatch(stopTask(thread.id, task))}>
       <Stop filled className="size-3" />
     </TooltipIconButton>
   );

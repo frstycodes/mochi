@@ -30,7 +30,7 @@ export type PanesAction =
   | { type: 'pane-drive'; threadId: string; tabId: string | undefined }
   | { type: 'pane-reorder'; threadId: string; order: string[] }
   | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> }
-  /** The thread's Agents pane, open on this agent's transcript, or on the list when `subagentId` is unset. */
+  /** The thread's Background tasks pane, open on this task's page (an agent's transcript, a command's output), or on the list when `subagentId` (any task's id) is unset. */
   | { type: 'pane-show-agent'; threadId: string; subagentId?: string };
 
 const STORAGE_KEY = 'harness.panes.v1';
@@ -204,7 +204,7 @@ function migrate(pane: Pane): Pane {
 }
 
 /**
- * The first background agent of a thread adds its Agents tab: the pane opens if it was closed, but whatever tab you were
+ * The first background agent of a thread adds its Background tasks tab: the pane opens if it was closed, but whatever tab you were
  * on stays in front. Runs after the threads slice, so the agent is already counted.
  */
 function withAgentsTab(state: State, threadId: string): State {

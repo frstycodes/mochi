@@ -1,7 +1,7 @@
 import type { McpServer, Thread } from './model.ts';
 import type { ThreadSummary } from './summary.ts';
 import { hasGoal } from './drift.ts';
-import { threadTasks } from './runtime/tasks.ts';
+import { activeTasks } from './runtime/tasks.ts';
 
 export type SummaryCardId = 'goal' | 'environment' | 'sources' | 'connectors' | 'servers' | 'outputs' | 'changes' | 'tasks';
 
@@ -27,7 +27,7 @@ export function summaryCards({
     portCount > 0 && 'servers',
     outputCount > 0 && 'outputs',
     (!!thread.repo || summary.files.length > 0 || thread.prs.length > 0) && 'changes',
-    threadTasks(thread).length > 0 && 'tasks',
+    activeTasks(thread).length > 0 && 'tasks',
   ];
   return cards.filter((c) => c !== false);
 }
