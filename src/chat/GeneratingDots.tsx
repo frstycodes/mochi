@@ -1,3 +1,4 @@
+import { useReducedMotionConfig } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,7 @@ const RIPPLE_WIDTH = 8;
  * `onCentre` reports where the light is brightest (0–1 of the frame), so the image can land from there.
  */
 export function GeneratingDots({ className, onCentre }: { className?: string; onCentre?: (x: number, y: number) => void }) {
+  const reduced = useReducedMotionConfig();
   const ref = useRef<HTMLCanvasElement>(null);
   const report = useRef(onCentre);
   report.current = onCentre;
@@ -27,7 +29,6 @@ export function GeneratingDots({ className, onCentre }: { className?: string; on
   useEffect(() => {
     const canvas = ref.current!;
     const ctx = canvas.getContext('2d')!;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let width = 0;
     let height = 0;
     let frame = 0;
@@ -88,7 +89,7 @@ export function GeneratingDots({ className, onCentre }: { className?: string; on
       ctx.globalAlpha = 1;
       pooled = { x: best.x, y: best.y };
       report.current?.(best.x / width, best.y / height);
-      if (isVisible && !reduced.matches) frame = requestAnimationFrame(draw);
+      if (isVisible && !reduced) frame = requestAnimationFrame(draw);
     };
 
     const start = () => {
@@ -107,14 +108,12 @@ export function GeneratingDots({ className, onCentre }: { className?: string; on
     });
     resizes.observe(canvas);
     visibility.observe(canvas);
-    reduced.addEventListener('change', start);
     return () => {
       cancelAnimationFrame(frame);
       resizes.disconnect();
       visibility.disconnect();
-      reduced.removeEventListener('change', start);
     };
-  }, []);
+  }, [reduced]);
 
   return <canvas ref={ref} aria-hidden className={cn('pointer-events-none absolute inset-0 size-full text-foreground', className)} />;
 }

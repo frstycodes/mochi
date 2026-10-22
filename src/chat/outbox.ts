@@ -1,3 +1,4 @@
+import { v7 as uuidv7 } from 'uuid';
 import { useSyncExternalStore, type Dispatch } from 'react';
 import { isWorking } from '../agentPhase.ts';
 import { judgeDrift, type DriftVerdict } from '../drift.ts';
@@ -77,10 +78,8 @@ export async function sendSteerNow(dispatch: Dispatch<Action>, thread: Thread, i
   return ids.length > 0;
 }
 
-let nextId = 0;
-
 export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 'draft'>): QueuedMessage {
-  return { id: `m-${Date.now().toString(36)}-${nextId++}`, draft, ...fields };
+  return { id: `m-${uuidv7()}`, draft, ...fields };
 }
 
 /**

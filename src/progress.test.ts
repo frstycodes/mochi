@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Step, Thread } from './model.ts';
-import { boardColumns, similarity, statusAt, timeAgo, goalProgress, progressLabel } from './progress.ts';
+import { boardColumns, similarity, statusAt, timeAgo, goalProgress, progressLabel, duration, formatElapsed } from './progress.ts';
 import { setPrefs } from './settings/prefs.ts';
 
 // Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
 setPrefs({ goals: true });
+
+test('the shared duration formatter preserves minute, ticking and precise command styles', () => {
+  assert.deepEqual([0, 5, 60, 63].map(duration), ['0m', '5m', '1h', '1h 3m']);
+  assert.equal(formatElapsed(65_000), '1m 05s');
+  assert.equal(formatElapsed(1250, 'precise'), '1.3s');
+  assert.equal(formatElapsed(65_000, 'precise'), '1m 5s');
+});
 
 function step(id: string, rest: Partial<Step> = {}): Step {
   return { id, title: id, status: 'ready', addedAt: 0, addedBy: 'you', ...rest };

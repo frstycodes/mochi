@@ -1,3 +1,5 @@
+import { structuralEqual } from '../lib/structuralEqual.ts';
+
 export type View = { kind: 'queue' } | { kind: 'board' } | { kind: 'projects' } | { kind: 'usage' } | { kind: 'new' } | { kind: 'thread'; id: string } | { kind: 'tab'; threadId: string; tabId: string };
 
 export type Orientation = 'row' | 'column';
@@ -39,7 +41,7 @@ const SNAP_POINTS = [100 / 3, 50, 200 / 3];
 const SNAP_DISTANCE = 3;
 
 export function newId() {
-  return Math.random().toString(36).slice(2, 10);
+  return crypto.randomUUID();
 }
 
 export function leaf(view: View): Leaf {
@@ -232,5 +234,5 @@ export function splitTabIds(layouts: SpaceLayout[], threadId: string) {
 }
 
 export function sameView(a: View, b: View) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return structuralEqual(a, b);
 }

@@ -53,18 +53,26 @@ export function clock(minutes: number) {
 }
 
 export function duration(minutes: number) {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
+  return formatElapsed(minutes * 60_000, 'minutes');
 }
 
-export function formatElapsed(ms: number) {
+export function shortElapsed(ms: number) {
+  return formatElapsed(ms, 'short');
+}
+
+export function planDuration(ms: number, isRunning: boolean) {
+  return isRunning || ms < 60_000 ? formatElapsed(ms) : duration(Math.floor(ms / 60_000));
+}
+
+export function formatElapsed(ms: number, style: 'clock' | 'minutes' | 'short' | 'precise' = 'clock') {
   const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+  const m = style === 'minutes' ? ms / 60_000 : Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (style === 'precise') return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${m}m ${Math.round((ms % 60_000) / 1000)}s`;
+  if (style !== 'minutes' && s < 60) return `${s}s`;
+  if (style === 'short') return m < 60 ? `${m}m` : `${h}h`;
+  if (style === 'minutes') return m < 60 ? `${m}m` : m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+  return m < 60 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${h}h ${m % 60}m`;
 }
 
 const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });

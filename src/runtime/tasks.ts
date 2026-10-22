@@ -69,11 +69,3 @@ export function taskResult(task: Pick<TaskRow, 'status' | 'exitCode'>) {
   if (task.status === 'stopped') return 'Stopped';
   return 'Done';
 }
-
-/** Elapsed time as a short age, like Claude's task rows: "45s", "8m", "2h". */
-export function shortElapsed(ms: number) {
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
-}

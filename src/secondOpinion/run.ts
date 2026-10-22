@@ -1,3 +1,4 @@
+import { v7 as uuidv7 } from 'uuid';
 import type { Dispatch } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host/index.ts';
@@ -9,8 +10,6 @@ import type { Action } from '../store/index.tsx';
 import { demoReviewer } from './demo.ts';
 import { checkReviewer, reviewerFor } from './reviewer.ts';
 import { findingsMessage, parseVerdict, providerName, reviewPrompt, type Review, type Verdict } from './verdict.ts';
-
-let nextId = 0;
 
 /** Starts a second opinion on `thread` from the other provider. It runs beside the thread's agent and never waits on or interrupts it. */
 export function askSecondOpinion(thread: Thread, dispatch: Dispatch<Action>) {
@@ -29,7 +28,7 @@ export async function agentAskSecondOpinion(thread: Thread, dispatch: Dispatch<A
 }
 
 function start(thread: Thread, provider: Provider, dispatch: Dispatch<Action>, isAgentAsked?: boolean) {
-  const id = `so-${Date.now().toString(36)}-${++nextId}`;
+  const id = `so-${uuidv7()}`;
   const review: Review = { id, provider, afterIndex: thread.activity.length, startedAt: Date.now(), status: 'running', steps: [], ...(isAgentAsked && { isAgentAsked }) };
   dispatch({ type: 'review-start', threadId: thread.id, review });
   const fail = (error: unknown) => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNow } from '../useNow';
 import { ChevronDown, Copy, Hourglass } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,13 +116,16 @@ function ResumeButton({ isReset, isArmed, at, onResume, onArm }: { isReset: bool
 /** Milliseconds left until `at`, re-rendering each minute (and at the moment it passes); 0 once past or with no time. */
 export function useUntil(at?: string) {
   const target = at ? Date.parse(at) : NaN;
-  const [now, setNow] = useState(Date.now);
+  const [expiredTarget, setExpiredTarget] = useState<number>();
+  const now = useNow(target > Date.now() && expiredTarget !== target ? 60_000 : null);
   useEffect(() => {
     if (!(target > Date.now())) return;
-    const id = window.setInterval(() => setNow(Date.now()), Math.min(60_000, Math.max(1000, target - Date.now())));
-    return () => window.clearInterval(id);
+    const id = window.setTimeout(() => {
+      if (Date.now() >= target) setExpiredTarget(target);
+    }, Math.min(target - Date.now(), 2_147_483_647));
+    return () => window.clearTimeout(id);
   }, [target, now]);
-  return target > now ? target - now : 0;
+  return expiredTarget !== target && target > now ? target - now : 0;
 }
 
 function useHasApiKey(provider: Provider) {

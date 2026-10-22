@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useNow } from '../useNow';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { FollowedMachine } from '../host/types/remote';
@@ -9,7 +9,7 @@ import { machineStatus, presenceAge } from './status';
  * dim while connecting), how long since it was last seen while it's offline. The words are in the tooltip.
  */
 export function MachinePresence({ machine, className }: { machine: FollowedMachine; className?: string }) {
-  const now = useMinuteClock();
+  const now = useNow(15_000);
   const label = machine.status === 'online' ? `Online ${machine.route === 'lan' ? 'on your network' : 'through the relay'}` : machineStatus(machine, new Date(now))!;
   const age = machine.status === 'offline' && machine.lastSeenAt !== undefined ? presenceAge(machine.lastSeenAt, now) : undefined;
   return (
@@ -30,13 +30,3 @@ const DOT = {
   offline: 'border border-subtle-foreground',
   refused: 'bg-warning',
 } satisfies Record<FollowedMachine['status'], string>;
-
-/** Now, updated often enough that a minute badge is never more than a few seconds behind. */
-function useMinuteClock() {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}

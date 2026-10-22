@@ -4,7 +4,8 @@ import type { AgentEvent } from '../host/types/agent.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
-import { activeTasks, shortElapsed, taskResult, threadTasks } from './tasks.ts';
+import { shortElapsed } from '../progress.ts';
+import { activeTasks, taskResult, threadTasks } from './tasks.ts';
 
 /** A live Claude thread plus every host.agent call the store would make. */
 function setup() {
