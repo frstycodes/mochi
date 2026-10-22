@@ -1,4 +1,4 @@
 import type { AccountHost } from '../types/account.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const account = (): AccountHost => bridge().account;
+export const account = (): AccountHost => desktopNamespace('account');

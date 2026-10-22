@@ -7,7 +7,7 @@ import { checkCustomFile, customFileName, customTheme } from '../../src/themes/c
 import type { ColorTheme } from '../../src/themes/model.ts';
 import { checkRef, createMarketplace } from '../../src/themes/openVsx.ts';
 import { LIMITS, loadTheme } from '../../src/themes/vsix.ts';
-import { integer, string, type Handlers } from './handlers.ts';
+import type { Handlers } from './handlers.ts';
 
 // userData/themes/<namespace>.<name>.json holds an installed extension's themes, already read out of its .vsix;
 // userData/themes/custom/ holds the user's own theme files as written.
@@ -26,17 +26,16 @@ export const themes = {
     return [...extensions.flatMap((e) => (Array.isArray(e) ? e : [])), ...customThemes.filter((t) => !!t)];
   },
   async search(_sender, query, offset) {
-    return marketplace.search(string(query, 'query', 128), integer(offset, 'offset', 0, 100_000));
+    return marketplace.search(query, offset);
   },
   async inspect(_sender, namespace, name, version, displayName) {
     const ref = checkRef(namespace, name, version);
-    return marketplace.inspect(ref.namespace, ref.name, ref.version, string(displayName, 'displayName', 256));
+    return marketplace.inspect(ref.namespace, ref.name, ref.version, displayName);
   },
   async install(_sender, namespace, name, version, displayName) {
     const ref = checkRef(namespace, name, version);
-    const label = string(displayName, 'displayName', 256);
-    const found = await marketplace.inspect(ref.namespace, ref.name, ref.version, label);
-    if (!found.length) throw new Error(`${label} has no color themes`);
+    const found = await marketplace.inspect(ref.namespace, ref.name, ref.version, displayName);
+    if (!found.length) throw new Error(`${displayName} has no color themes`);
     await mkdir(root(), { recursive: true });
     await writeFile(installedFile(ref.namespace, ref.name), JSON.stringify(found));
     return found;
@@ -61,7 +60,7 @@ export const themes = {
     return saveCustomText(text);
   },
   async saveCustom(_sender, text, file) {
-    return saveCustomText(string(text, 'text', LIMITS.fileBytes), file === undefined ? undefined : checkCustomFile(file));
+    return saveCustomText(text, file === undefined ? undefined : checkCustomFile(file));
   },
   async readCustom(_sender, file) {
     return readFile(join(customDir(), checkCustomFile(file)), 'utf8');

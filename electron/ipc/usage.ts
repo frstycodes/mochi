@@ -11,17 +11,13 @@ import { codexRecords } from '../usage/codex.ts';
 import { commitStats, prStats } from '../usage/git.ts';
 import { priceBook } from '../usage/prices.ts';
 import { summarize } from '../usage/records.ts';
-import { record, string, type Handlers } from './handlers.ts';
-
-const MAX_PATHS = 512;
+import type { Handlers } from './handlers.ts';
 
 export const usage = {
-  async report(_sender, value) {
-    const query = record(value, 'query');
-    const roots = paths(query.roots, 'roots');
-    const repos = paths(query.repos, 'repos');
-    const since = query.since === null ? null : Number(query.since);
-    if (since !== null && !Number.isFinite(since)) throw new TypeError('since must be epoch ms or null');
+  async report(_sender, query) {
+    const roots = withoutTrailingSlash(query.roots);
+    const repos = withoutTrailingSlash(query.repos);
+    const { since } = query;
     const account = githubAccount(query.githubUser);
     const errors: string[] = [];
     const settle = <T,>(work: Promise<T[]>, failure: string) =>
@@ -48,7 +44,6 @@ function homes(provider: Provider) {
   return [...new Set([fallback, ...own])];
 }
 
-function paths(value: unknown, name: string) {
-  if (!Array.isArray(value) || value.length > MAX_PATHS) throw new TypeError(`${name} must be a list of up to ${MAX_PATHS} paths`);
-  return value.map((p, i) => string(p, `${name}[${i}]`).replace(/\/+$/, ''));
+function withoutTrailingSlash(paths: string[]) {
+  return paths.map((p) => p.replace(/\/+$/, ''));
 }

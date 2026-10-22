@@ -1,4 +1,4 @@
 import type { DataHost } from '../types/data.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const data = (): DataHost => bridge().data;
+export const data = (): DataHost => desktopNamespace('data');

@@ -1,4 +1,4 @@
 import type { BrowserHost } from '../types/browser.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const browser = (): BrowserHost => bridge().browser;
+export const browser = (): BrowserHost => desktopNamespace('browser');
