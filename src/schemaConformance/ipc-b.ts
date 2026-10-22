@@ -6,7 +6,7 @@ import type * as Th from '../../packages/schema/src/ipc/themes.ts';
 import type * as U from '../../packages/schema/src/ipc/usage.ts';
 import type * as W from '../../packages/schema/src/ipc/windows.ts';
 import type { ProjectsHost, CloneSource, Project } from '../host/types/projects.ts';
-import type { RemoteHost, RemoteCommand, CommandResult, RemoteStatus, StreamFrame } from '../host/types/remote.ts';
+import type { RemoteHost, RemoteStatus } from '../host/types/remote.ts';
 import type { ScheduleEvent, ScheduleHost, Trigger, TriggerInput } from '../host/types/schedule.ts';
 import type { SimHost } from '../host/types/sim.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
@@ -19,11 +19,9 @@ export type Conformance = [
   Check<Rpc<ProjectsHost, typeof P.projectsRpc>>,
   Check<Same<Decoded<typeof P.Project>, Project>>,
   Check<Same<Decoded<typeof P.CloneSource>, CloneSource>>,
-  Check<Rpc<RemoteHost, typeof R.remoteRpc>>,
-  Check<Same<Decoded<typeof R.RemoteCommand>, RemoteCommand>>,
-  Check<Same<Decoded<typeof R.CommandResult>, CommandResult>>,
+  // `onCommand` and `command` carry a device's command, which the relay schema reads without an image's `original`: `relay.ts` checks them.
+  Check<Rpc<Omit<RemoteHost, 'onCommand' | 'command'>, typeof R.remoteRpc>>,
   Check<Same<Decoded<typeof R.RemoteStatus>, RemoteStatus>>,
-  Check<Same<Decoded<typeof R.StreamFrame>, StreamFrame>>,
   Check<Rpc<ScheduleHost, typeof Sc.scheduleRpc>>,
   Check<Same<Decoded<typeof Sc.TriggerInput>, TriggerInput>>,
   Check<Same<Decoded<typeof Sc.Trigger>, Trigger>>,

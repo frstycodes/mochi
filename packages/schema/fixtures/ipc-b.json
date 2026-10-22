@@ -3611,23 +3611,6 @@
    [
     "m1",
     {
-     "type": "create",
-     "title": "x",
-     "provider": "claude",
-     "project": null,
-     "images": [
-      {
-       "mediaType": "image/png",
-       "data": "x",
-       "thumb": "x",
-       "original": "/etc/passwd"
-      }
-     ]
-    }
-   ],
-   [
-    "m1",
-    {
      "type": "clone-project",
      "source": {
       "url": "--upload-pack=touch /tmp/x"

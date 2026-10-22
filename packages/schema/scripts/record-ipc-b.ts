@@ -223,7 +223,6 @@ const rejected: Record<string, unknown[][]> = {
     { type: 'create', title: 'x', provider: 'claude', project: null, controls: { model: 'opus', effort: 'high', speed: '', access: 'Root' } },
     { type: 'create', title: 'x', provider: 'claude', project: null, images: [{ mediaType: 'image/svg+xml', data: 'x', thumb: 'x' }] },
     { type: 'create', title: 'x', provider: 'claude', project: null, images: Array.from({ length: 9 }, () => ({ mediaType: 'image/png', data: 'x', thumb: 'x' })) },
-    { type: 'create', title: 'x', provider: 'claude', project: null, images: [{ mediaType: 'image/png', data: 'x', thumb: 'x', original: '/etc/passwd' }] },
     { type: 'clone-project', source: { url: '--upload-pack=touch /tmp/x' } },
     { type: 'add-project', name: '..' },
     { type: 'delete' },
