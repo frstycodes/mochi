@@ -26,6 +26,8 @@ jobs:
 
       # Lint plus type checks for src and electron (TypeScript Go via tsgolint).
       - run: vp check
+      # Adds electron and infra/relay beyond the `tsc -b` inside `vp run build`; the matrix job's electron:build covers electron on each OS.
+      - run: pnpm typecheck
       # `vp test` is Vitest; the suite is node:test, so run the package script.
       - run: vp run test
       - run: vp run build
