@@ -3,7 +3,7 @@ import { startDevMcp } from './mcp/server.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
 import { setImageDir } from './agents/images.ts';
-import { registerIpc } from './ipc/index.ts';
+import { mainCapabilities } from './ipc/index.ts';
 import { startLibraryUpdates } from './library/updates.ts';
 import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
@@ -29,13 +29,12 @@ serveFrames();
 
 app.whenReady().then(() => {
   startAppIcon();
-  registerIpc(isTrustedUrl);
   startWatch();
   void startScheduler();
   startLibraryUpdates();
   // Before the first window: it watches every window's close.
   startRemote();
-  startCore(isTrustedUrl);
+  startCore({ isTrusted: isTrustedUrl, origins: [process.env.VITE_DEV_SERVER_URL ? new URL(process.env.VITE_DEV_SERVER_URL).origin : 'file://'], capabilities: mainCapabilities });
   createWindow();
   void startDevMcp().catch((error: unknown) => console.error('Dev MCP failed', error));
   if (hasTray) startTray(appIconImage());

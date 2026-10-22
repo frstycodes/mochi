@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { manifest } from '../src/host/types/index.ts';
 
 // Only the `event` methods cross here, as whitelisted `<namespace>:<method>` channels, never ipcRenderer itself.
-// Request/response methods go over the `host:port` RPC port (`src/host/desktop/rpc.ts`).
+// Request/response methods go over Core's WebSocket (`src/host/desktop/rpc.ts`).
 const bridge = Object.fromEntries(
   Object.entries(manifest).map(([ns, methods]) => [
     ns,
@@ -25,5 +25,5 @@ const bridge = Object.fromEntries(
 );
 
 contextBridge.exposeInMainWorld('harnessHost', bridge);
-// A port can't cross contextBridge: re-post it to the page.
-for (const channel of ['core:port', 'host:port']) ipcRenderer.on(channel, (event) => window.postMessage(channel, '*', event.ports));
+// Main sends Core's socket URL (token included) only to trusted pages, after each load.
+ipcRenderer.on('core:url', (_event, url: string) => window.postMessage({ channel: 'core:url', url }, '*'));
