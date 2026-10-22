@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { ChevronDown, Login, Logout, Monitor, Moon, Pause, Play, Refresh, RefreshCircle, Settings, Sun, UserCircle, UserEdit } from '@/icons';
+import { ChevronDown, Login, Logout, Monitor, Moon, Pause, Play, Refresh, Settings, Sun, UserCircle, UserEdit } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,15 +19,13 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { useMochiAccount } from './account/useMochiAccount';
 import { showsDemoData } from './demoData';
-import { host } from './host';
 import type { MochiUser } from './host/types/account';
-import type { AppUpdate } from './host/types/updates';
 import { openSettings } from './settings/open';
 import { BoundShortcut } from './Shortcut';
 import { useDispatch, useHarnessSelector } from './store';
 import { IconSwap } from './ui';
 
-/** The sidebar's bottom-left chip: your first name, opening your Mochi account, settings, theme and app updates. */
+/** The sidebar's bottom-left chip: your first name, opening your Mochi account, settings and theme. */
 export function UserMenu() {
   const dispatch = useDispatch();
   const isPaused = useHarnessSelector((s) => s.paused);
@@ -55,8 +52,6 @@ export function UserMenu() {
           <BoundShortcut command="go-settings" className="ml-auto" />
         </DropdownMenuItem>
         <ThemeSubmenu />
-        <DropdownMenuSeparator />
-        <UpdateItems />
         {showsDemoData() && (
           <>
             <DropdownMenuSeparator />
@@ -168,58 +163,4 @@ function ThemeSubmenu() {
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   );
-}
-
-/** The version, what the updater is doing, and the one action it allows right now. */
-function UpdateItems() {
-  const update = useAppUpdate();
-  if (!update) return null;
-  const canCheck = update.status === 'idle' || update.status === 'up-to-date' || update.status === 'error';
-  return (
-    <>
-      <DropdownMenuLabel className="flex flex-col font-normal">
-        <span className="text-foreground">Mochi {update.version}</span>
-        <span className="type-caption text-subtle-foreground">{UPDATE_STATUS[update.status]}</span>
-        {update.status === 'error' && !!update.error && <span className="type-caption text-destructive">{update.error}</span>}
-      </DropdownMenuLabel>
-      {update.status === 'ready' && (
-        <DropdownMenuItem onSelect={() => void host.updates.install()}>
-          <RefreshCircle />
-          Restart to update
-        </DropdownMenuItem>
-      )}
-      {canCheck && (
-        // Stays open so you see the check run and land.
-        <DropdownMenuItem onSelect={(e) => (e.preventDefault(), void host.updates.check())}>
-          <Refresh />
-          Check for updates
-        </DropdownMenuItem>
-      )}
-    </>
-  );
-}
-
-const UPDATE_STATUS = {
-  unconfigured: "Updates aren't set up in this build",
-  unsupported: 'Updates come with each new download',
-  idle: 'Not checked yet',
-  checking: 'Checking for updates…',
-  'up-to-date': 'Up to date',
-  downloading: 'Downloading an update…',
-  ready: 'An update is ready',
-  error: "Couldn't check for updates",
-} satisfies Record<AppUpdate['status'], string>;
-
-function useAppUpdate() {
-  const [update, setUpdate] = useState<AppUpdate | null>(null);
-  useEffect(() => {
-    let isLive = true;
-    void host.updates.get().then((u) => isLive && setUpdate(u));
-    const off = host.updates.onChange(setUpdate);
-    return () => {
-      isLive = false;
-      off();
-    };
-  }, []);
-  return update;
 }

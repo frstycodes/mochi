@@ -42,7 +42,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
 import { SendAlt as CornerDownLeftIcon, Photo as ImageIcon, Monitor, Plus as PlusIcon, Stop as SquareIcon, X as XIcon } from '@/icons';
-import { nanoid } from "nanoid";
 import type {
   ChangeEvent,
   ChangeEventHandler,
@@ -264,7 +263,7 @@ export const PromptInputProvider = ({
       ...prev,
       ...incoming.map((file) => ({
         filename: file.name,
-        id: nanoid(),
+        id: crypto.randomUUID(),
         mediaType: file.type,
         type: "file" as const,
         url: URL.createObjectURL(file),
@@ -609,7 +608,7 @@ export const PromptInput = ({
         for (const file of capped) {
           next.push({
             filename: file.name,
-            id: nanoid(),
+            id: crypto.randomUUID(),
             mediaType: file.type,
             type: "file",
             url: URL.createObjectURL(file),
@@ -826,7 +825,7 @@ export const PromptInput = ({
         const array = Array.isArray(incoming) ? incoming : [incoming];
         setReferencedSources((prev) => [
           ...prev,
-          ...array.map((s) => ({ ...s, id: nanoid() })),
+          ...array.map((s) => ({ ...s, id: crypto.randomUUID() })),
         ]);
       },
       clear: clearReferencedSources,
