@@ -22,7 +22,7 @@ import { useDispatch, useHarnessSelector, useThread } from '../store';
 import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
-import { useSplitTabDrag } from './useSplitTabDrag';
+import { SplitTabHandle } from './SplitTabHandle';
 import { PaneSlotBar, PaneSlots } from '../pane/PaneHeader';
 import { LeafBar } from './SplitControls';
 import { PreviewContext, SplitContext } from './SplitContext';
@@ -199,17 +199,16 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
   const thread = useThread(threadId);
   const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === threadId));
   const tab = pane?.tabs.find((t) => t.id === tabId);
-  const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind, tab ? tabTitle(tab) : '');
   if (!thread || !pane || !tab) return <ClosedTab />;
   const { icon: Icon, component: Content } = PANE_TABS[tab.kind];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <LeafBar>
-        <span onPointerDown={onDragHandle} className="app-no-drag flex min-w-0 cursor-grab items-center gap-2 select-none active:cursor-grabbing">
+        <SplitTabHandle threadId={threadId} tabId={tabId} kind={tab.kind} label={tabTitle(tab)}>
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{tabTitle(tab)}</span>
-        </span>
+        </SplitTabHandle>
         <button type="button" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })} className="min-w-0 cursor-default truncate font-normal text-subtle-foreground hover:text-foreground">
           {thread.title}
         </button>
