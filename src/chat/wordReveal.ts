@@ -1,11 +1,12 @@
+import { useReducedMotionConfig } from 'motion/react';
 import { useLayoutEffect, type RefObject } from 'react';
 
 /** Fades in each word Streamdown wraps (`data-sd-animate`, needs `animated` + `isAnimating`) as it streams into `ref`. */
 export function useWordReveal(ref: RefObject<HTMLElement | null>, isRevealing: boolean) {
+  const reduceMotion = useReducedMotionConfig();
   useLayoutEffect(() => {
     const root = ref.current;
     if (!root || !isRevealing) return;
-    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const keyframes = reduceMotion ? OPACITY_ONLY : FEATHER;
     const started = new WeakSet<Element>();
     // Start times by word index: markdown that reshapes mid-stream (a paragraph turning into a list) remounts its spans, and a remounted word resumes its fade instead of restarting it.
@@ -26,7 +27,7 @@ export function useWordReveal(ref: RefObject<HTMLElement | null>, isRevealing: b
     const observer = new MutationObserver(reveal);
     observer.observe(root, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [ref, isRevealing]);
+  }, [ref, isRevealing, reduceMotion]);
 }
 
 export const WORD_REVEAL = { duration: 600, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)', stagger: 30, minStagger: 6, maxBacklogMs: 900 };

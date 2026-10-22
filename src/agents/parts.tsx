@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useNow } from '../useNow';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { BackgroundTask } from '@/icons';
 import { cn } from '@/lib/utils';
@@ -84,12 +84,7 @@ export function SubagentMeta({ subagent, className }: { subagent: Subagent; clas
 export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
 export function useElapsed(startedAt: number, endedAt?: number) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (endedAt !== undefined) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [endedAt]);
+  const now = useNow(endedAt === undefined ? 1000 : null);
   return Math.max(0, (endedAt ?? now) - startedAt);
 }
 

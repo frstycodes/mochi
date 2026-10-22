@@ -1,4 +1,5 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
+import { useNow } from '../useNow';
 import { CheckCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
@@ -124,30 +125,8 @@ export function NextMoveActions({ labels, onPick }: { labels: string[]; onPick: 
 /** The thread's plan in the chat; a running step's time ticks every second while the window is visible. */
 export function ThreadPlan({ thread, isWorking }: { thread: Thread; isWorking: boolean }) {
   const now = useHarnessSelector((s) => s.now);
-  const nowMs = useNowMs(thread.steps.some(isTicking));
+  const nowMs = useNow(thread.steps.some(isTicking) ? 1000 : null);
   return <PlanList items={planItems(thread.steps, now, nowMs)} slot={thread.line} isWorking={isWorking} />;
-}
-
-/** One clock for the whole list: ticks each second while `isTicking` and the document is visible, idle otherwise. */
-function useNowMs(isTicking: boolean) {
-  const [nowMs, setNowMs] = useState(Date.now);
-  useEffect(() => {
-    if (!isTicking) return;
-    let id: number | undefined;
-    const sync = () => {
-      window.clearInterval(id);
-      if (document.hidden) return;
-      setNowMs(Date.now());
-      id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    };
-    sync();
-    document.addEventListener('visibilitychange', sync);
-    return () => {
-      window.clearInterval(id);
-      document.removeEventListener('visibilitychange', sync);
-    };
-  }, [isTicking]);
-  return nowMs;
 }
 
 /** The agent's own to-do list, each step with how long it took; hidden once every step is done. The running step spins only while `isWorking`. */

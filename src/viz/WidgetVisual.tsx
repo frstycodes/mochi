@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useColorTheme } from '../themes/store';
+import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import { useDispatch } from '../store';
 import { readWidgetMessage } from './fence';
 import { useFrameDocument } from './frameDocument';
@@ -12,13 +13,17 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
   const id = useId();
   const threadId = useVizThreadId();
   const dispatch = useDispatch();
-  const scheme = useColorScheme();
+  const { mode: scheme, theme } = useColorTheme();
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [html] = useState(() => widgetDocument(source, id, scheme));
 
   // The theme goes out on load too, and the widget answers it with its size: sizes posted before this component's listener attached are lost.
   const postTheme = () => frame.current?.contentWindow?.postMessage({ type: 'harness-theme', vars: themeVars(), scheme }, '*');
-  useEffect(postTheme, [scheme]);
+  useEffect(() => {
+    // next-themes applies its DOM theme in an effect; read tokens after that write.
+    const frame = requestAnimationFrame(postTheme);
+    return () => cancelAnimationFrame(frame);
+  }, [scheme, theme]);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -65,18 +70,6 @@ const TOKENS = ['background', 'foreground', 'card', 'card-foreground', 'muted', 
 function themeVars() {
   const css = getComputedStyle(document.documentElement);
   return Object.fromEntries(TOKENS.map((t) => [`--${t}`, css.getPropertyValue(`--${t}`).trim()]));
-}
-
-// next-themes writes the resolved theme to <html data-theme> in its own effect; reading tokens on React's theme state
-// instead could beat that write and send the previous theme's colours.
-function useColorScheme() {
-  return useSyncExternalStore(subscribeTheme, () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'));
-}
-
-function subscribeTheme(onChange: () => void) {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  return () => observer.disconnect();
 }
 
 const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:";
