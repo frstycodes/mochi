@@ -11,7 +11,6 @@ import { demoReviewer } from './demo.ts';
 import { checkReviewer, reviewerFor } from './reviewer.ts';
 import { findingsMessage, parseVerdict, providerName, reviewPrompt, type Review, type Verdict } from './verdict.ts';
 
-
 /** Starts a second opinion on `thread` from the other provider. It runs beside the thread's agent and never waits on or interrupts it. */
 export function askSecondOpinion(thread: Thread, dispatch: Dispatch<Action>) {
   const { provider, reason } = reviewerFor(thread);

@@ -1,5 +1,4 @@
 import type { Step, StepStatus } from '../model.ts';
-export { planDuration } from '../progress.ts';
 
 export interface PlanItem {
   title: string;

@@ -69,5 +69,3 @@ export function taskResult(task: Pick<TaskRow, 'status' | 'exitCode'>) {
   if (task.status === 'stopped') return 'Stopped';
   return 'Done';
 }
-
-export { shortElapsed } from '../progress.ts';

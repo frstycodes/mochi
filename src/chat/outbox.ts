@@ -78,7 +78,6 @@ export async function sendSteerNow(dispatch: Dispatch<Action>, thread: Thread, i
   return ids.length > 0;
 }
 
-
 export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 'draft'>): QueuedMessage {
   return { id: `m-${uuidv7()}`, draft, ...fields };
 }

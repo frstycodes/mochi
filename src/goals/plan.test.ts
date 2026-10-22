@@ -5,7 +5,8 @@ import type { Step } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { isPlanComplete, planDuration, planItems, stepElapsedMs } from './plan.ts';
+import { planDuration } from '../progress.ts';
+import { isPlanComplete, planItems, stepElapsedMs } from './plan.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const step = (rest: Partial<Step>): Step => ({ id: 's', title: 's', status: 'running', addedAt: 0, addedBy: 'claude', ...rest });
