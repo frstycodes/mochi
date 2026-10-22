@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ActivityEntry } from '../model.ts';
-import { editedLater, isTurnUndone, mayHaveEdited, openTurn, turnChanges } from './turnChanges.ts';
+import { editedLater, isTurnUndone, mayHaveEdited, openTurn, patchSections, turnChanges } from './turnChanges.ts';
 
 const e = (kind: ActivityEntry['kind'], who: ActivityEntry['who'], text: string, extra: Partial<ActivityEntry> = {}): ActivityEntry => ({ at: 0, who, kind, text, ...extra });
 const you = (text: string) => e('message', 'you', text);
 const edit = (text: string, patch?: string) => e('tool', 'claude', text, patch ? { patch } : {});
+
+test('patch sections preserve raw text and basename targets, including bare agent hunks', () => {
+  const patch = 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n';
+  const empty = 'diff --git a/empty b/empty\nnew file mode 100644\n';
+  assert.deepEqual(patchSections(patch + empty), [patch]);
+  assert.deepEqual(patchSections('@@ -1 +1 @@\n-a\n+b'), ['@@ -1 +1 @@\n-a\n+b']);
+  assert.equal(turnChanges([you('go'), edit('Edit src/a.ts', patch)])[0].files[0].path, 'src/a.ts');
+});
 
 test('a turn runs from your message to your next one and sums each file over its edits, in first-edited order', () => {
   const turns = turnChanges([

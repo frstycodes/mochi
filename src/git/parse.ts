@@ -1,82 +1,44 @@
-import type { ChangeKind, DiffFile, DiffHunk, GhAccount, GitFileStatus, Worktree } from '../host/types/git.ts';
+import { parsePatchFiles, type FileDiffMetadata } from '@pierre/diffs';
+import type { DiffFile, GhAccount, GitFileStatus, Worktree } from '../host/types/git.ts';
 
 /** Splits `git diff` output into files and self-contained hunk patches. */
 export function parseDiff(text: string, staged: boolean): DiffFile[] {
-  return text
-    .split(/^(?=diff --git )/m)
-    .filter((chunk) => chunk.startsWith('diff --git '))
-    .map((chunk) => parseFile(chunk, staged));
+  return rawFilePatches(text).flatMap((patch) => parsePatchFiles(patch).flatMap(({ files }) => files.map((file) => diffFile(file, patch, staged))));
 }
 
-function parseFile(chunk: string, staged: boolean): DiffFile {
-  const lines = (chunk.endsWith('\n') ? chunk.slice(0, -1) : chunk).split('\n');
-  const firstHunk = lines.findIndex((l) => l.startsWith('@@'));
-  const headerLines = firstHunk < 0 ? lines : lines.slice(0, firstHunk);
-  const header = `${headerLines.join('\n')}\n`;
-  const hunks = firstHunk < 0 ? [] : splitHunks(lines.slice(firstHunk), header);
-  const { path, oldPath } = filePaths(headerLines);
+// The library exposes parsed content, but staging/discard must retain the original patch bytes.
+export function rawFilePatches(text: string) {
+  return text.split(/^(?=diff --git )/m).filter((chunk) => chunk.startsWith('diff --git '));
+}
+
+function diffFile(file: FileDiffMetadata, chunk: string, staged: boolean): DiffFile {
+  const patch = chunk.endsWith('\n') ? chunk : `${chunk}\n`;
+  const offsets: number[] = [];
+  let from = 0;
+  for (const hunk of file.hunks) {
+    const start = patch.indexOf(`\n${hunk.hunkSpecs!}`, from) + 1;
+    offsets.push(start);
+    from = start + 1;
+  }
+  const header = patch.slice(0, offsets[0] ?? patch.length);
+  const hunks = file.hunks.map((hunk, index) => ({
+    header: hunk.hunkSpecs!.replace(/\r?\n$/, ''),
+    patch: header + patch.slice(offsets[index], offsets[index + 1] ?? patch.length),
+    added: hunk.additionLines,
+    removed: hunk.deletionLines,
+  }));
+  const isRenamed = file.type === 'rename-pure' || file.type === 'rename-changed' || /^rename from /m.test(header);
   return {
-    path,
-    oldPath,
-    kind: changeKind(headerLines),
+    path: file.name,
+    oldPath: isRenamed ? file.prevName : undefined,
+    kind: file.type === 'new' ? 'added' : file.type === 'deleted' ? 'deleted' : isRenamed ? 'renamed' : 'modified',
     staged,
-    binary: headerLines.some((l) => l.startsWith('Binary files') || l === 'GIT binary patch'),
-    added: hunks.reduce((n, h) => n + h.added, 0),
-    removed: hunks.reduce((n, h) => n + h.removed, 0),
-    patch: chunk.endsWith('\n') ? chunk : `${chunk}\n`,
+    binary: /^(Binary files |GIT binary patch)/m.test(header),
+    added: hunks.reduce((count, hunk) => count + hunk.added, 0),
+    removed: hunks.reduce((count, hunk) => count + hunk.removed, 0),
+    patch,
     hunks,
   };
-}
-
-// Hunk bodies only hold lines starting with ' ', '+', '-' or '\', so any '@@' line opens the next hunk.
-function splitHunks(lines: string[], header: string): DiffHunk[] {
-  const hunks: DiffHunk[] = [];
-  let start = 0;
-  for (let i = 1; i <= lines.length; i++) {
-    if (i < lines.length && !lines[i].startsWith('@@')) continue;
-    const body = lines.slice(start, i);
-    hunks.push({
-      header: body[0],
-      patch: `${header}${body.join('\n')}\n`,
-      added: body.filter((l) => l[0] === '+').length,
-      removed: body.filter((l) => l[0] === '-').length,
-    });
-    start = i;
-  }
-  return hunks;
-}
-
-function changeKind(header: string[]): ChangeKind {
-  if (header.some((l) => l.startsWith('new file mode'))) return 'added';
-  if (header.some((l) => l.startsWith('deleted file mode'))) return 'deleted';
-  if (header.some((l) => l.startsWith('rename from'))) return 'renamed';
-  return 'modified';
-}
-
-function filePaths(header: string[]) {
-  const field = (prefix: string) => {
-    const line = header.find((l) => l.startsWith(prefix));
-    return line === undefined ? undefined : unquote(line.slice(prefix.length));
-  };
-  const renamedFrom = field('rename from ');
-  const after = field('+++ b/') ?? field('rename to ');
-  const before = field('--- a/') ?? renamedFrom;
-  const path = after ?? before ?? gitLinePath(header[0]);
-  return { path, oldPath: renamedFrom };
-}
-
-// `diff --git a/X b/X` is ambiguous with spaces; binary and mode-only diffs have no ---/+++ lines, and both halves match there.
-function gitLinePath(line: string) {
-  const rest = line.slice('diff --git '.length);
-  if (rest.startsWith('"')) return unquote(rest.slice(0, rest.indexOf('" "') + 1)).slice(2);
-  return rest.slice(2, (rest.length - 1) / 2);
-}
-
-// git appends a tab after ---/+++ paths containing spaces, and C-quotes paths with quotes or control characters.
-function unquote(raw: string) {
-  const value = raw.replace(/\t$/, '');
-  if (!value.startsWith('"')) return value;
-  return JSON.parse(value) as string;
 }
 
 /** `git status --porcelain=v1 -z`. Renames carry their old path as the next NUL field. */
