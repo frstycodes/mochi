@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
+import { useEffect, useRef } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import { DEFAULT_SETTINGS, type ModelChoice } from '../host/types/settings';
@@ -43,20 +46,10 @@ export function useSideChat(thread: Thread, tabId: string) {
 
 /** Settings › Models' side chat model, old catalog ids read as the provider's own (null until read), and a setter that saves it. */
 export function useSideChatDefault() {
-  const [model, setModel] = useState<ModelChoice | null>(null);
-  useEffect(() => {
-    let isCurrent = true;
-    host.settings.get().then(
-      (s) => isCurrent && setModel(sideChatChoice(s.sideChatModel)),
-      () => {},
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
+  const settingsQuery = useQuery({ queryKey: queryKeys.agent.settings(), queryFn: () => host.settings.get() });
+  const model = settingsQuery.data ? sideChatChoice(settingsQuery.data.sideChatModel) : null;
   const save = (choice: ModelChoice) => {
-    setModel(choice);
-    host.settings.set({ sideChatModel: choice }).catch((error: Error) => toast.error('Side chat model not saved', { description: error.message }));
+    host.settings.set({ sideChatModel: choice }).then((next) => queryClient.setQueryData(queryKeys.agent.settings(), next)).catch((error: Error) => toast.error('Side chat model not saved', { description: error.message }));
   };
   return [model, save] as const;
 }

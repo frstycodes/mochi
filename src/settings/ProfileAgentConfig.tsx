@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
+import { useState, type ReactNode } from 'react';
 import { Info } from '@/icons';
 import { toast } from '@/toast/store';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -8,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { host } from '../host';
-import type { ConfigPreview, ProfileConfig } from '../host/types/settings';
+import type { ConfigPreview } from '../host/types/settings';
 import type { Provider, Space } from '../model';
 import { useHarness, useView } from '../store';
 import { parseServerCommand, parseServerJson, toClaude, type ConfigChange, type McpServerDef } from './agentConfig';
@@ -24,25 +27,8 @@ export function useProfileConfig(spaceId: string | undefined) {
   const { state } = useHarness();
   const view = useView(spaceId);
   const projectRoot = (view.kind === 'thread' && state.threads.find((t) => t.id === view.id)?.repo?.path) || undefined;
-  const [config, setConfig] = useState<ProfileConfig>();
-  const [error, setError] = useState<string>();
-  const reload = useCallback(
-    () =>
-      spaceId &&
-      host.settings.agentConfig(spaceId, projectRoot).then(
-        (next) => (setConfig(next), setError(undefined)),
-        (e: Error) => setError(`Couldn't read this profile's agent config: ${ipcMessage(e)}`),
-      ),
-    [spaceId, projectRoot],
-  );
-  useEffect(() => {
-    if (!spaceId) return;
-    void reload();
-    // The tools write these files too (`claude mcp add`, `/skills`), so coming back to the window re-reads them.
-    addEventListener('focus', reload);
-    return () => removeEventListener('focus', reload);
-  }, [reload]);
-  return { config, error, reload };
+  const configQuery = useQuery({ queryKey: queryKeys.profile.config.root(spaceId, projectRoot), queryFn: () => host.settings.agentConfig(spaceId!, projectRoot), enabled: !!spaceId, staleTime: 0 });
+  return { config: configQuery.data, error: configQuery.error ? `Couldn't read this profile's agent config: ${ipcMessage(configQuery.error)}` : undefined, reload: () => { void queryClient.invalidateQueries({ queryKey: queryKeys.profile.config.space(spaceId) }); } };
 }
 
 /** `review` previews the edits, waits for the user in the diff dialog, writes, and resolves true once written. */

@@ -1,7 +1,9 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useSyncExternalStore } from 'react';
 import { host } from '../host/index.ts';
 import type { ListeningPort, PortsListing } from '../host/types/ports.ts';
 import { recordListeningPorts } from './devServer.ts';
+import { queryKeys } from '../queryKeys.ts';
 
 const POLL_MS = 3000;
 
@@ -32,15 +34,8 @@ export function usePorts(threadId: string, cwd: string | null) {
 
 /** Port → configuration name from `cwd`'s .claude/launch.json. */
 export function useLaunchNames(cwd: string | null) {
-  const [names, setNames] = useState(new Map<number, string>());
-  useEffect(() => {
-    if (!cwd) return;
-    void host.ports.targets(cwd).then(
-      (targets) => setNames(new Map(targets.flatMap((t) => (t.source === 'launch.json' && t.port ? [[t.port, t.name] as const] : [])))),
-      () => setNames(new Map()),
-    );
-  }, [cwd]);
-  return names;
+  const targetsQuery = useQuery({ queryKey: queryKeys.ports.launchTargets(cwd), queryFn: () => host.ports.targets(cwd!), enabled: !!cwd });
+  return new Map((targetsQuery.data ?? []).flatMap((t) => t.source === 'launch.json' && t.port ? [[t.port, t.name] as const] : []));
 }
 
 export function refreshPorts() {

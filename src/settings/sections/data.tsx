@@ -1,5 +1,6 @@
 import { clearUiStorage, uiStorageEntries } from '../../lib/uiStorage.ts';
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { SIDECHAT_STORAGE_KEY } from '../../store/sidechat';
 import { clearTerminalHistory, TERMINAL_STORAGE_PREFIX } from '../../terminal/sessions';
 import { SettingsGroup, SettingsRow, settingControlId, UNDO_MS } from '../parts';
 import { CatalogRow } from '../CatalogRow';
+import { queryKeys } from '../../queryKeys';
 
 /** What Mochi keeps on this computer, by what clearing it would remove, then the switches for demo data and replays. */
 export function DataSection() {
@@ -150,12 +152,9 @@ function useStorageUsage() {
 
 /** Recordings live in main's data folder, not local storage; read again after clearing. */
 function useReplayUsage() {
-  const [usage, setUsage] = useState({ threads: 0, bytes: 0 });
-  const remeasure = useCallback(() => {
-    host.data.replayUsage().then(setUsage, (error: unknown) => console.error('Reading replay storage failed', error));
-  }, []);
-  useEffect(remeasure, [remeasure]);
-  return { usage: { items: usage.threads, bytes: usage.bytes, noun: noun('thread', 'threads') } satisfies Area, remeasure };
+  const usageQuery = useQuery({ queryKey: queryKeys.usage.replays(), queryFn: () => host.data.replayUsage() });
+  const usage = usageQuery.data ?? { threads: 0, bytes: 0 };
+  return { usage: { items: usage.threads, bytes: usage.bytes, noun: noun('thread', 'threads') } satisfies Area, remeasure: () => { void usageQuery.refetch(); } };
 }
 
 function terminalCount(raw: string): number {

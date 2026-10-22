@@ -1,10 +1,12 @@
-import { memo, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { memo } from 'react';
 import { GlobeAlt } from '@/icons';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { pageKey, usePage } from '../browser/pages';
 import { LiveDot, ProgressRing, ProviderMark } from '../ui';
 import type { ThreadSnapshot } from './snapshot';
+import { queryKeys } from '../queryKeys';
 
 /** A thread as a card: title, progress, the step in flight, the last message and a preview frame, all from a snapshot. */
 export const SnapshotCard = memo(function SnapshotCard({ snap, className }: { snap: ThreadSnapshot; className?: string }) {
@@ -41,18 +43,8 @@ const CAPTURE_MS = 1000;
  */
 function PreviewFrame({ threadId, tabId, url }: { threadId: string; tabId: string; url: string }) {
   const hostId = usePage(pageKey(threadId, tabId), url).hostId;
-  const [frame, setFrame] = useState<string | null>(null);
-  useEffect(() => {
-    if (!hostId) return;
-    let isLive = true;
-    const capture = () => host.browser.capture(hostId, { fullPage: false }).then((src) => isLive && setFrame(src), () => {});
-    void capture();
-    const id = window.setInterval(capture, CAPTURE_MS);
-    return () => {
-      isLive = false;
-      window.clearInterval(id);
-    };
-  }, [hostId]);
+  const frameQuery = useQuery({ queryKey: queryKeys.stage.previewFrame(hostId), queryFn: () => host.browser.capture(hostId!, { fullPage: false }), enabled: !!hostId, refetchInterval: CAPTURE_MS });
+  const frame = frameQuery.data;
 
   return (
     <div className="flex min-h-0 shrink flex-col overflow-hidden bg-sidebar">

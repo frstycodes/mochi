@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Grid, WarningAlt } from '@/icons';
 import { AppBridge, buildAllowAttribute, PostMessageTransport, type McpUiHostContext, type McpUiResourceCsp, type McpUiResourcePermissions } from '@modelcontextprotocol/ext-apps/app-bridge';
@@ -11,6 +12,7 @@ import type { ThemeSlot } from '../themes/model';
 import { useColorTheme } from '../themes/store';
 import { EmbedFrame } from '../viz/EmbedFrame';
 import { useFrameDocument } from '../viz/frameDocument';
+import { queryKeys } from '../queryKeys';
 
 const HOST = { name: 'Mochi', version: '1' };
 /** Before the view reports its size. */
@@ -32,16 +34,8 @@ export function McpAppCard({ threadId, widget }: { threadId: string; widget: Mcp
 }
 
 function useWidgetResource(threadId: string, { server, uri }: McpWidget) {
-  const [state, setState] = useState<{ resource?: McpWidgetResource; error?: string }>({});
-  useEffect(() => {
-    let isCurrent = true;
-    host.agent.readWidget(threadId, server, uri).then(
-      (resource) => isCurrent && setState({ resource }),
-      (error: unknown) => isCurrent && setState({ error: error instanceof Error ? error.message : String(error) }),
-    );
-    return () => void (isCurrent = false);
-  }, [threadId, server, uri]);
-  return state;
+  const widgetQuery = useQuery({ queryKey: queryKeys.agent.widget(threadId, server, uri), queryFn: () => host.agent.readWidget(threadId, server, uri) });
+  return { resource: widgetQuery.data, error: widgetQuery.error?.message };
 }
 
 export function McpAppFrame({ widget, resource }: { widget: McpWidget; resource: McpWidgetResource }) {

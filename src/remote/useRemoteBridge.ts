@@ -1,6 +1,6 @@
 import { useEffect, useRef, type Dispatch } from 'react';
 import { host } from '../host/index.ts';
-import type { RemoteStatus } from '../host/types/remote.ts';
+import { useRemoteStatus } from './useRemoteStatus';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { toSaved } from '../store/persist.ts';
@@ -27,19 +27,18 @@ export function useRemoteBridge(state: State, dispatch: Dispatch<Action>) {
     answerSnapshots();
   }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const { status } = useRemoteStatus();
   useEffect(() => {
-    const apply = (status: RemoteStatus) => {
-      setStreaming(status.settings.isEnabled, status.settings.machineName || status.hostName);
-      answerSnapshots();
-    };
-    void host.remote.status().then(apply, (error: unknown) => console.error('Reading Settings › Remote access failed', error));
-    const offStatus = host.remote.onStatus(apply);
+    if (!status) return;
+    setStreaming(status.settings.isEnabled, status.settings.machineName || status.hostName);
+    answerSnapshots();
+  }, [status]);
+  useEffect(() => {
     const offSnapshot = host.remote.onSnapshotRequest((id) => {
       waiting.current.push(id);
       answerSnapshots();
     });
     return () => {
-      offStatus();
       offSnapshot();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

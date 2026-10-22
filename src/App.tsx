@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { QueryProvider } from './QueryProvider';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -43,7 +44,8 @@ import { useLibraryNamesLoader } from './library/useLibrary';
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
 
-export function App() {
+export function App() { return <QueryProvider><AppContent /></QueryProvider>; }
+function AppContent() {
   const route = useHashRoute();
   useIdleScrollbars();
   return (

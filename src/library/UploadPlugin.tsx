@@ -1,4 +1,5 @@
-import { useEffect, useState, useSyncExternalStore, type DragEvent, type ReactNode, type RefObject } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState, useSyncExternalStore, type DragEvent, type ReactNode, type RefObject } from 'react';
 import { AlertTriangle, Terminal, Upload } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,6 +16,7 @@ import { ProviderMark, SpaceIcon } from '../ui';
 import type { PluginReview } from './library';
 import { countOf, LibraryIcon, LIST } from './LibraryParts';
 import type { Library } from './useLibrary';
+import { queryKeys } from '../queryKeys';
 
 /**
  * Plugins › Add plugin › Plugin file: a file from the picker (`fileInput`, which the menu clicks) or dropped on the page,
@@ -108,19 +110,12 @@ function usePendingUpload() {
 type Read = { status: 'reading' } | { status: 'error'; message: string } | { status: 'done'; review: PluginReview; bytes: Uint8Array };
 
 function useReview(file: File) {
-  const [read, setRead] = useState<Read>({ status: 'reading' });
-  useEffect(() => {
-    let isLive = true;
-    if (file.size > MAX_UPLOAD_BYTES) return setRead({ status: 'error', message: `The file is over ${MAX_UPLOAD_BYTES / 1_000_000} MB` });
-    void file
-      .arrayBuffer()
-      .then((buffer) => {
-        const bytes = new Uint8Array(buffer);
-        return host.library.reviewUpload({ name: file.name, bytes }).then((review) => isLive && setRead({ status: 'done', review, bytes }));
-      })
-      .catch((error: Error) => isLive && setRead({ status: 'error', message: ipcMessage(error) }));
-    return () => void (isLive = false);
-  }, [file]);
+  const reviewQuery = useQuery({ queryKey: queryKeys.library.uploadReview(file), queryFn: async () => {
+    if (file.size > MAX_UPLOAD_BYTES) throw new Error(`The file is over ${MAX_UPLOAD_BYTES / 1_000_000} MB`);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return { review: await host.library.reviewUpload({ name: file.name, bytes }), bytes };
+  }, gcTime: 0, staleTime: 0 });
+  const read: Read = reviewQuery.data ? { status: 'done', ...reviewQuery.data } : reviewQuery.error ? { status: 'error', message: ipcMessage(reviewQuery.error) } : { status: 'reading' };
   return read;
 }
 

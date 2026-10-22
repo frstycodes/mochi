@@ -1,5 +1,8 @@
 import { persistedSlice } from './lib/uiStorage.ts';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
+import { queryOptions, useQuery } from '@tanstack/react-query';
+import { queryClient } from './query.ts';
+import { queryKeys } from './queryKeys.ts';
 import { host } from './host/index.ts';
 import type { CloneSource, Project } from './host/types/projects.ts';
 import type { Thread } from './model.ts';
@@ -34,17 +37,15 @@ export function isAbsolutePath(path: string) {
 
 /** This profile's projects, most recently used first by `threads` (the profile's); null until main answered. */
 export function useProjects(spaceId: string, threads: readonly Thread[]): Project[] | null {
-  const projects = useSyncExternalStore(subscribe, () => cache.get(spaceId) ?? null);
-  useEffect(() => {
-    loadProjects(spaceId, threads).catch((error: unknown) => console.error('Reading the projects list failed', error));
-    // The threads only seed the first load's migration; the list itself follows main.
-  }, [spaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const projectsQuery = useQuery(projectsQueryOptions(spaceId, threads));
+  const projects = projectsQuery.data ?? null;
   return useMemo(() => projects && byRecentUse(projects, threads), [projects, threads]);
 }
 
 /** The registry's entry for a folder, from what's already loaded; it starts no read of its own. */
 export function useProjectAt(spaceId: string, path: string | undefined): Project | undefined {
-  return useSyncExternalStore(subscribe, () => (path ? cache.get(spaceId)?.find((p) => p.path === path) : undefined));
+  const projectsQuery = useQuery({ queryKey: queryKeys.projects.list(spaceId), queryFn: () => host.projects.list(spaceId), enabled: false });
+  return path ? projectsQuery.data?.find((p) => p.path === path) : undefined;
 }
 
 /** Per folder: its threads still in play, all of them, and when the latest started (store minutes). */
@@ -90,9 +91,25 @@ export function takeRequestedProject() {
  * (the recents this window kept, its threads' folders); main takes them in once (`migrate`) and only lists after.
  */
 export function loadProjects(spaceId: string, threads: readonly Thread[]): Promise<Project[]> {
-  const cached = cache.get(spaceId);
-  if (cached) return Promise.resolve(cached);
-  return pending.get(spaceId) ?? track(spaceId, host.projects.migrate(spaceId, legacyFolders(spaceId, threads)));
+  return queryClient.fetchQuery(projectsQueryOptions(spaceId, threads));
+}
+
+const migrated = new Set<string>();
+
+// Only the first read migrates: main announces every migrate as a change, and the refetch that triggers must only list.
+// Marked before the call because that announcement lands while the migrate is still in flight.
+export function projectsQueryOptions(spaceId: string, threads: readonly Thread[]) {
+  return queryOptions({
+    queryKey: queryKeys.projects.list(spaceId),
+    queryFn: () => {
+      if (migrated.has(spaceId)) return host.projects.list(spaceId);
+      migrated.add(spaceId);
+      return host.projects.migrate(spaceId, legacyFolders(spaceId, threads)).catch((error: unknown) => {
+        migrated.delete(spaceId);
+        throw error;
+      });
+    },
+  });
 }
 
 /** Projects whose threads started last come first, then the newest added. */
@@ -126,29 +143,11 @@ export function createProject(spaceId: string, name: string, publish?: 'private'
 /** The profile's GitHub account (Settings › Profiles); unset runs as gh's active login. */
 export const githubUserOf = (spaceId: string) => getProfiles().find((p) => p.id === spaceId)?.github || undefined;
 
-const cache = new Map<string, Project[]>();
-const pending = new Map<string, Promise<Project[]>>();
-const listeners = new Set<() => void>();
-
-function track(spaceId: string, read: Promise<Project[]>) {
-  pending.set(spaceId, read);
-  void read
-    .then((projects) => {
-      cache.set(spaceId, projects);
-      listeners.forEach((l) => l());
-    }, () => {})
-    .finally(() => pending.get(spaceId) === read && pending.delete(spaceId));
-  return read;
-}
-
-/** Reads the list again: a folder moved or deleted outside Mochi only shows as missing on a fresh read. */
 export function refreshProjects(spaceId: string) {
-  if (cache.has(spaceId) || pending.has(spaceId)) track(spaceId, host.projects.list(spaceId)).catch(() => {});
+  void queryClient.invalidateQueries({ queryKey: queryKeys.projects.list(spaceId) });
 }
 
 host.projects.onChange(refreshProjects);
-// Back from Finder or a terminal, where folders move.
-if (typeof window !== 'undefined') window.addEventListener('focus', () => cache.forEach((_, spaceId) => refreshProjects(spaceId)));
 
 /** Where projects lived before the registry: this window's recents (browser storage), then its threads' folders. */
 function legacyFolders(spaceId: string, threads: readonly Thread[]) {
@@ -168,7 +167,3 @@ function legacyRecents(spaceId: string): string[] {
   }
 }
 
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-}

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { host } from '../host';
 import type { Account } from '../host/types/settings';
 import { useProfiles } from '../profiles';
 import { linkedAccountId } from '../settings/accounts';
 import { nativeItemsOf, type NativeItem } from './nativeItems';
+import { queryKeys } from '../queryKeys';
 
 /** One Claude Code or Codex account the profiles run on, its own items, and the profiles that load them. */
 export interface NativeAccount {
@@ -16,23 +17,9 @@ export interface NativeAccount {
 /** Every account some profile runs on, read from its own config folder; undefined while reading. Read again when the window regains focus, since the tools change these files too. */
 export function useNativeItems(): NativeAccount[] | undefined {
   const profiles = useProfiles();
-  const [accounts, setAccounts] = useState<NativeAccount[]>();
-  const profileKey = profiles.map((p) => p.id).join();
-  useEffect(() => {
-    let isCurrent = true;
-    const read = () =>
-      void readAll(profiles.map((p) => p.id)).then(
-        (next) => isCurrent && setAccounts(next),
-        () => isCurrent && setAccounts([]),
-      );
-    read();
-    addEventListener('focus', read);
-    return () => {
-      isCurrent = false;
-      removeEventListener('focus', read);
-    };
-  }, [profileKey]);
-  return accounts;
+  const profileIds = profiles.map((p) => p.id);
+  const nativeQuery = useQuery({ queryKey: queryKeys.library.nativeItems.profiles(profileIds), queryFn: () => readAll(profileIds), staleTime: 0 });
+  return nativeQuery.data ?? (nativeQuery.isError ? [] : undefined);
 }
 
 /** Each profile's config holds its two accounts; profiles sharing an account read the same folder, so each account is kept once. */

@@ -1,4 +1,6 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { useSyncExternalStore } from 'react';
 import { useTheme } from 'next-themes';
 import { host } from '../host';
@@ -34,9 +36,14 @@ export function useThemesState() {
 }
 
 export async function refreshThemes() {
+  await queryClient.fetchQuery({ queryKey: queryKeys.themes.installed(), queryFn: readThemes, staleTime: 0 });
+}
+
+export async function readThemes() {
   const installed = await host.themes.list();
   update({ installed, isLoaded: true });
   syncActive();
+  return installed;
 }
 
 export function setThemePreview(preview: ColorTheme | null) {

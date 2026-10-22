@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
@@ -41,6 +42,7 @@ import { DiffStat } from '../WorkLog';
 import { TooltipIconButton } from '../ui';
 import { REMOTE_SIDE_CHAT_TAB } from './commands';
 import { useMachines } from './useMachines';
+import { queryKeys } from '../queryKeys';
 
 // Lazy so CodeMirror parses only when a file is first opened.
 const CodeEditor = lazy(() => import('../files/CodeEditor'));
@@ -103,28 +105,10 @@ export function RemotePane({
 const DIFF_POLL_MS = 4000;
 
 /** A read from the machine, again every `pollMs` while it's online; the last data stays on screen across a failed read. */
-function useMachineRead<T>(machine: FollowedMachine, load: () => Promise<T>, pollMs?: number) {
-  const [result, setResult] = useState<{ data?: T; error?: string }>({});
-  const latest = useRef(load);
-  latest.current = load;
-  const refresh = useCallback(async () => {
-    try {
-      const data = await load();
-      if (latest.current === load) setResult({ data });
-    } catch (error) {
-      if (latest.current === load) setResult((r) => ({ ...r, error: gitError(error) }));
-    }
-  }, [load]);
+function useMachineRead<T>(machine: FollowedMachine, key: readonly unknown[], load: () => Promise<T>, pollMs?: number) {
   const isOnline = machine.status === 'online';
-  useEffect(() => {
-    setResult({});
-    if (!isOnline) return;
-    void refresh();
-    if (!pollMs) return;
-    const id = setInterval(refresh, pollMs);
-    return () => clearInterval(id);
-  }, [refresh, pollMs, isOnline]);
-  return { ...result, isLoading: isOnline && !('data' in result) && !result.error, refresh };
+  const machineQuery = useQuery({ queryKey: queryKeys.remote.read(machine.id, key), queryFn: load, enabled: isOnline, refetchInterval: pollMs ?? false });
+  return { data: machineQuery.data, error: machineQuery.error ? gitError(machineQuery.error) : undefined, isLoading: isOnline && machineQuery.isPending, refresh: async () => { await machineQuery.refetch(); } };
 }
 
 /** The Changes tab on the machine's worktree: staging, reverting and line notes run there. */
@@ -137,7 +121,7 @@ function RemoteChanges({ machine, thread }: { machine: FollowedMachine; thread: 
   const saved = (state.checkpoints[thread.id] ?? []).filter((c) => !!c.ref);
   const { diffStyle } = usePrefs();
   const diffQuery = useMachineRead(
-    machine,
+    machine, ['diff', thread.id, scope],
     useCallback(
       () => (checkpoint === undefined ? ask(machine.id, { type: 'diff', threadId: thread.id, scope: scope as DiffScope }) : ask(machine.id, { type: 'checkpoint-diff', threadId: thread.id, n: checkpoint })),
       [ask, machine.id, thread.id, scope, checkpoint],
@@ -257,7 +241,7 @@ function useRemoteChangeActions({ machine, thread, canStage, diffStyle, confirm,
 function RemoteFiles({ machine, thread, file }: { machine: FollowedMachine; thread: Thread; file?: FileTarget }) {
   const { ask } = useMachines();
   const list = useMachineRead(
-    machine,
+    machine, ['files', thread.id],
     useCallback(() => ask(machine.id, { type: 'files', threadId: thread.id }), [ask, machine.id, thread.id]),
   );
   const [expanded, setExpanded] = useState(() => new Set<string>());
@@ -301,7 +285,7 @@ function RemoteFiles({ machine, thread, file }: { machine: FollowedMachine; thre
 function RemoteFile({ machine, thread, path, line }: { machine: FollowedMachine; thread: Thread; path: string; line?: number }) {
   const { ask } = useMachines();
   const file = useMachineRead(
-    machine,
+    machine, ['file', thread.id, path],
     useCallback(() => ask(machine.id, { type: 'read-file', threadId: thread.id, path }), [ask, machine.id, thread.id, path]),
   );
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { FolderOpen } from '@/icons';
 import mochiIcon from '../../build/icon.svg';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,8 @@ import type { Space } from '../model';
 import { ProviderMark } from '../ui';
 import { HARNESSES } from './harnesses';
 import { SettingsGroup, SettingsRow } from './parts';
-import type { InstructionsFile, ProfileFolder } from './instructionFiles';
+import type { InstructionsFile } from './instructionFiles';
+import { queryKeys } from '../queryKeys';
 
 /**
  * The profile's own instructions: files in its folder, opened in your editor. Mochi adds them to each new thread; it
@@ -78,16 +79,6 @@ const readBy = (file: InstructionsFile) => (file.provider ? `${HARNESSES[file.pr
 
 /** The folder and its files, read again when the window regains focus (after an edit in the editor). */
 function useProfileFolder(spaceId: string) {
-  const [folder, setFolder] = useState<ProfileFolder>();
-  useEffect(() => {
-    let isCurrent = true;
-    const read = () => void host.settings.profileFolder(spaceId).then((next) => isCurrent && setFolder(next), () => {});
-    read();
-    addEventListener('focus', read);
-    return () => {
-      isCurrent = false;
-      removeEventListener('focus', read);
-    };
-  }, [spaceId]);
-  return folder;
+  const folderQuery = useQuery({ queryKey: queryKeys.profile.folder(spaceId), queryFn: () => host.settings.profileFolder(spaceId), staleTime: 0 });
+  return folderQuery.data;
 }

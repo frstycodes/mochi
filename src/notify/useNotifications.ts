@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { toast } from '../toast/store.ts';
 import { queueToast } from '../QueueToast';
@@ -12,6 +13,7 @@ import { isAddressed, isAlertKind, isQuiet, type Notice, type NoticeKind } from 
 import { saveNotifySettings } from './slice';
 import { useRemoteAlerts } from './useRemoteAlerts';
 import { useMachines, type FollowedView } from '../remote/useMachines';
+import { queryKeys } from '../queryKeys';
 
 /** For watched threads main shows these itself (`electron/notify/watch.ts`), so the renderer doesn't alert them twice. */
 const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'ci'];
@@ -78,12 +80,9 @@ export function useNotifications() {
     [],
   );
 
-  useEffect(() => {
-    const off = host.notify.onOpenThread((id) => latest.current.openThread(id));
-    // A click that opened this window with every other one closed.
-    void host.notify.pendingOpen().then((id) => id && latest.current.openThread(id));
-    return off;
-  }, []);
+  const pendingOpenQuery = useQuery({ queryKey: queryKeys.notify.pendingOpen(), queryFn: () => host.notify.pendingOpen(), staleTime: Infinity, gcTime: 0 });
+  useEffect(() => { if (pendingOpenQuery.data) latest.current.openThread(pendingOpenQuery.data); }, [pendingOpenQuery.data]);
+  useEffect(() => host.notify.onOpenThread((id) => latest.current.openThread(id)), []);
 
   useEffect(() => saveNotifySettings({ muted, quiet }), [muted, quiet]);
 }
