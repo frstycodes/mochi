@@ -7,10 +7,20 @@ export interface HarnessStore<S, A> {
   dispatch: Dispatch<A>;
 }
 
-/** State held outside React, so a component re-renders only when what it selects changes. */
-export function createExternalState<S>(initial: S) {
+/**
+ * State held outside React, so a component re-renders only when what it selects changes. `defer` changes the state at once but
+ * tells subscribers on the next frame, so a burst (an agent streaming tokens) renders once per frame; `set` tells them now,
+ * along with anything deferred before it.
+ */
+export function createExternalState<S>(initial: S, schedule = nextFrame) {
   let state = initial;
+  let cancel: (() => void) | null = null;
   const listeners = new Set<() => void>();
+  const notify = () => {
+    cancel?.();
+    cancel = null;
+    listeners.forEach((l) => l());
+  };
   return {
     getState: () => state,
     subscribe: (listener: () => void) => {
@@ -18,10 +28,27 @@ export function createExternalState<S>(initial: S) {
       return () => void listeners.delete(listener);
     },
     set: (next: S) => {
+      if (next === state && !cancel) return;
+      state = next;
+      notify();
+    },
+    defer: (next: S) => {
       if (next === state) return;
       state = next;
-      listeners.forEach((l) => l());
+      cancel ??= schedule(notify);
     },
+  };
+}
+
+// A hidden window gets no animation frames; the timeout keeps its store moving, at a slower pace.
+const FRAME_FALLBACK_MS = 100;
+
+function nextFrame(run: () => void) {
+  const frame = requestAnimationFrame(run);
+  const timer = setTimeout(run, FRAME_FALLBACK_MS);
+  return () => {
+    cancelAnimationFrame(frame);
+    clearTimeout(timer);
   };
 }
 

@@ -114,9 +114,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [state.paused, applyNow]);
   useEffect(() => {
+    // Each event folds into the state as it arrives, in order; components hear about a burst once a frame (`defer`).
     const onEvent = (event: SeqAgentEvent) => {
       if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
-      apply({ type: 'agent', event, ms: Date.now() });
+      const action: Action = { type: 'agent', event, ms: Date.now() };
+      recordAction(external.getState(), action);
+      external.defer(reducer(external.getState(), action));
     };
     // After a window reload, agents still running in main replay what they sent meanwhile; live events wait behind that replay.
     let held: SeqAgentEvent[] | null = [];
@@ -136,7 +139,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
         held = null;
       });
     return off;
-  }, [external, apply]);
+  }, [external]);
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
       if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
