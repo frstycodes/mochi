@@ -405,7 +405,8 @@ const THREAD_SPECS = {
       const create = await proposalCreate({ ...ctx, args });
       if (args.initiation !== 'user_asked') return propose(ctx, args.initiation, prompt, create);
       const before = state();
-      dispatch({ type: 'create', title: prompt, ...create, isBackground: true });
+      const name = args.title?.trim();
+      dispatch({ type: 'create', title: prompt, ...(name && { name }), ...create, isBackground: true });
       const created = state().threads.find((t) => !before.threads.some((s) => s.id === t.id))!;
       return { changed: `started "${created.title}"`, result: summary(created), undo: () => dispatch({ type: 'delete', threadIds: [created.id] }) };
     },

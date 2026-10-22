@@ -112,4 +112,4 @@ export function triggerAfter(trigger: Trigger, event: AgentEvent): Trigger {
   return trigger;
 }
 
-const laterRun = ({ isNew: _, titlePrompt: __, ...workspace }: StartWorkspace): StartWorkspace => workspace;
+const laterRun = ({ isNew: _, titlePrompt: __, title: ___, ...workspace }: StartWorkspace): StartWorkspace => workspace;
