@@ -1,14 +1,12 @@
-import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
-import { promisify } from 'node:util';
+import { runCommand } from '@mochi/core/runClient';
 import type { ListeningPort, PortsHost } from '../../src/host/types/ports.ts';
 import { launchConfigs, listeningUnder, packageScripts, parseCwds, parseListening, parsePs, pickPort, portsByRoot, type PortScan } from '../../src/terminal/lsof.ts';
 import { resolveCwd } from '../pty/cwd.ts';
 import { integer, string, type Handlers } from './handlers.ts';
 
-const exec = promisify(execFile);
 const FIRST_THREAD_PORT = 5300;
 const MAX_WATCHED = 256;
 const allocated = new Map<string, Promise<number>>();
@@ -66,9 +64,9 @@ function rootOrError(cwd: unknown) {
 // lsof exits 1 when some PIDs vanished mid-scan or nothing matched; its stdout is still the answer.
 async function run(file: string, args: string[]) {
   try {
-    return (await exec(file, args, { maxBuffer: 8 * 1024 * 1024 })).stdout;
-  } catch (error) {
-    return (error as { stdout?: string }).stdout ?? '';
+    return (await runCommand(file, args, { okCodes: [0, 1], timeout: 10_000 })).stdout;
+  } catch {
+    return '';
   }
 }
 

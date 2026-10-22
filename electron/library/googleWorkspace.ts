@@ -1,10 +1,10 @@
-import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import { GOOGLE_WORKSPACE_PORT, GOOGLE_WORKSPACE_URL, isSameServer } from '../../src/library/connectors.ts';
+import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
 import { userPath } from '@mochi/core/shellPath';
 import { readSecrets, saveSecrets } from './connectors.ts';
 import { mochiOAuthApp } from './oauthApps.ts';
@@ -35,7 +35,7 @@ const PYTHON = '3.12';
 const START_TIMEOUT_MS = 5 * 60_000;
 
 let starting: Promise<void> | undefined;
-let child: ChildProcess | undefined;
+let child: CoreChild | undefined;
 
 app.on('will-quit', () => child?.kill());
 
@@ -46,7 +46,7 @@ async function start() {
   const home = path.join(app.getPath('userData'), 'google-workspace');
   await mkdir(path.join(home, 'logs'), { recursive: true });
   const log = createWriteStream(path.join(home, 'logs', 'workspace-mcp.log'), { flags: 'a' });
-  child = spawn(uvBinary(), ['tool', 'run', '--python', PYTHON, '--from', PACKAGE, 'workspace-mcp', '--transport', 'streamable-http', '--tools', 'gmail', 'drive', 'calendar'], {
+  child = spawnCommand(uvBinary(), ['tool', 'run', '--python', PYTHON, '--from', PACKAGE, 'workspace-mcp', '--transport', 'streamable-http', '--tools', 'gmail', 'drive', 'calendar'], {
     env: {
       PATH: await userPath(),
       HOME: process.env.HOME,
@@ -65,10 +65,9 @@ async function start() {
       FASTMCP_HOME: home,
       FASTMCP_SERVER_AUTH_GOOGLE_JWT_SIGNING_KEY: await signingKey(home),
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  child.stdout?.pipe(log);
-  child.stderr?.pipe(log);
+  child.stdout.pipe(log);
+  child.stderr.pipe(log);
   const exited = new Promise<never>((_, reject) => child!.once('exit', (code) => reject(new Error(`Google Workspace stopped while starting (exit ${code}); see ${path.join(home, 'logs')}`))));
   child.once('exit', () => {
     child = undefined;

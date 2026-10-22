@@ -1,6 +1,5 @@
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
 import { app } from 'electron';
+import { runCommand } from '@mochi/core/runClient';
 import type { SimHost, SimLogLine } from '../../src/host/types/sim.ts';
 import { buildAndRun } from '../sim/build.ts';
 import { screenshot, startRecording, stopAllRecordings, stopRecording } from '../sim/capture.ts';
@@ -8,8 +7,8 @@ import { command, startStream, stopAll, stopStream } from '../sim/helper.ts';
 import * as check from '../sim/parse.ts';
 import { string, type Handlers } from './handlers.ts';
 
-const run = promisify(execFile);
-const simctl = async (...args: string[]) => (await run('xcrun', ['simctl', ...args])).stdout.trim();
+const SIMCTL_TIMEOUT_MS = 60_000;
+const simctl = async (...args: string[]) => (await runCommand('xcrun', ['simctl', ...args], { timeout: SIMCTL_TIMEOUT_MS })).stdout.trim();
 
 app.on('will-quit', () => {
   stopAll();
@@ -80,10 +79,5 @@ function press(udid: string, usage: number, shift: boolean) {
 }
 
 function pbcopy(udid: string, text: string) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn('xcrun', ['simctl', 'pbcopy', udid]);
-    child.on('error', reject);
-    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`simctl pbcopy exited with ${code}`))));
-    child.stdin.end(text);
-  });
+  return runCommand('xcrun', ['simctl', 'pbcopy', udid], { input: text, timeout: SIMCTL_TIMEOUT_MS }).then(() => {});
 }

@@ -1,5 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
+import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
 import { saveImage } from '../images.ts';
 import type { GeneratedImage } from '../../../src/model.ts';
 import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
@@ -590,7 +590,7 @@ class CodexServer {
   asks = new Map<string, Inbox>();
   limits: AccountLimits = {};
   private hooks: ServerHooks;
-  private child?: ChildProcessWithoutNullStreams;
+  private child?: CoreChild;
   private ready?: Promise<RpcClient>;
   private crashes: number[] = [];
   private stderr = '';
@@ -634,7 +634,7 @@ class CodexServer {
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
     const target = spawnable(install.path, ['app-server']);
-    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: accountEnv(this.account, install.env), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
+    const child = spawnCommand(target.file, target.args, { cwd: os.homedir(), env: accountEnv(this.account, install.env), shell: target.shell });
     const gen = ++this.gen;
     this.child = child;
     this.stderr = '';

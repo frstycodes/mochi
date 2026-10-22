@@ -2,6 +2,7 @@ import { app, BrowserWindow, MessageChannelMain, utilityProcess, type UtilityPro
 import { Effect } from 'effect';
 import path from 'node:path';
 import { connectCore } from './client.ts';
+import { useCoreClient } from './runClient.ts';
 
 const RESTART_DELAY_MS = 1000;
 let mainConnection: ReturnType<typeof connectCore> | undefined;
@@ -29,6 +30,7 @@ export function startCore(isTrusted: (url: string) => boolean) {
     core.postMessage(null, [port1]);
     void mainConnection?.then(({ close }) => close());
     mainConnection = connectCore(port2);
+    useCoreClient(mainConnection.then(({ client }) => client));
   };
   const spawn = () => {
     core = utilityProcess.fork(entry, [], { serviceName: 'Mochi Core', env });

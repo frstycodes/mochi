@@ -1,4 +1,3 @@
-import type { SpawnOptions } from 'node:child_process';
 import { access, constants, cp, readdir, readFile } from 'node:fs/promises';
 import { basename, join, matchesGlob } from 'node:path';
 import type { SetupChoice, SetupStep, WorktreeSetup } from '../../src/host/types/agent.ts';
@@ -172,10 +171,10 @@ function listNames(files: string[]) {
   return files.length > 3 ? `${shown} and ${files.length - 3} more` : shown;
 }
 
-/** Spawns in its own process group, so an abort stops what the command started too (pnpm's lifecycle scripts). A string runs through the shell. */
+/** Runs in Core, which stops the whole process tree on an abort (pnpm's lifecycle scripts). A string runs through the shell. */
 function runCommand(command: string[] | string, cwd: string, env: NodeJS.ProcessEnv, signal: AbortSignal, onOutput: (chunk: string) => void) {
   return new Promise<number>((resolve, reject) => {
-    const options = { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] } satisfies SpawnOptions;
+    const options = { cwd, env };
     const child = typeof command === 'string' ? spawnShell(command, options) : spawnFile(command[0], command.slice(1), options);
     const stop = () => killTree(child);
     signal.addEventListener('abort', stop, { once: true });
