@@ -4,7 +4,7 @@ import { decodeArgs, DEV_TOOL_TABLE, jsonSchemaOf, TOOL_TABLE } from './toolTabl
 
 test('every tool lists its input as a JSON Schema object, descriptions kept, no null for an optional field', () => {
   for (const { shape } of [...Object.values(TOOL_TABLE), ...Object.values(DEV_TOOL_TABLE)]) assert.equal(jsonSchemaOf(shape).type, 'object');
-  const { properties } = jsonSchemaOf(TOOL_TABLE.report_turn.shape) as { properties: Record<string, { type?: string; description?: string }> };
+  const properties = jsonSchemaOf(TOOL_TABLE.report_turn.shape).properties as Record<string, { type?: string; description?: string }>;
   assert.equal(properties.question.type, 'string');
   assert.match(properties.left.description ?? '', /still not done/);
 });
