@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { launchConfigs, listeningUnder, packageScripts, parseCwds, parseEtime, parseListening, parsePs, pickPort } from './lsof.ts';
+import { launchConfigs, listeningUnder, packageScripts, parseCwds, parseEtime, parseListening, parsePs, pickPort, portsByRoot } from './lsof.ts';
 
 test('lsof listeners, cwds and ps rows combine into ports under the thread root', () => {
   const listening = parseListening('p100\ncnode\nf21\nn*:5173\nf22\nn[::1]:5173\np200\nf9\nn127.0.0.1:3000\np300\nf4\nn*:8080\n');
@@ -35,4 +35,23 @@ test('run targets come from dev-ish package scripts and launch.json configs', ()
   assert.deepEqual(packageScripts({ scripts: { dev: 'vite', build: 'tsc', 'dev:api': 'node api', test: 'x' } }, 'pnpm').map((t) => t.command), ['pnpm run dev', 'pnpm run dev:api']);
   const [target] = launchConfigs({ configurations: [{ name: 'app', runtimeExecutable: 'pnpm', runtimeArgs: ['dev', '--port', '5191', "it's"], port: 5191 }, { name: 'bad' }] });
   assert.deepEqual(target, { name: 'app', command: `pnpm dev --port 5191 'it'\\''s'`, source: 'launch.json', port: 5191 });
+});
+
+test('one scan fans out to each watched root, a refused cwd keeps its error', () => {
+  const scan = {
+    listening: [
+      { pid: 100, port: 5173 },
+      { pid: 200, port: 3000 },
+    ],
+    cwds: new Map([
+      [100, '/repo/a'],
+      [200, '/repo/b/web'],
+    ]),
+    procs: new Map(),
+  };
+  const found = portsByRoot(['/repo/a', '/repo/b', new Error('cwd is not a directory: /x'), '/repo'], scan, 0);
+  assert.deepEqual(
+    found.map((r) => ('ports' in r ? r.ports.map((p) => p.port) : r.error)),
+    [[5173], [3000], 'cwd is not a directory: /x', [3000, 5173]],
+  );
 });

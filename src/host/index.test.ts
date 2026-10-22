@@ -14,7 +14,7 @@ test('every manifest namespace has a web mock and a desktop impl', () => {
 });
 
 test('web mocks return data shaped like the desktop host', async () => {
-  assert.ok((await registry.ports.web.list('.')).every((p) => Number.isInteger(p.port)));
+  assert.ok((await registry.ports.web.list(['.'])).every((r) => 'ports' in r && r.ports.every((p) => Number.isInteger(p.port))));
   assert.ok((await registry.git.web.status('/repo')).branch);
   const seen: string[] = [];
   const off = registry.pty.web.onData(({ data }) => seen.push(data));

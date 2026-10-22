@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { host } from '../host/index.ts';
-import type { ListeningPort } from '../host/types/ports.ts';
+import type { ListeningPort, PortsListing } from '../host/types/ports.ts';
 import { recordListeningPorts } from './devServer.ts';
 
 const POLL_MS = 3000;
@@ -11,12 +11,14 @@ interface Watcher {
 }
 
 const watchers = new Map<string, Watcher>();
-const polls = new Map<string, { timer: ReturnType<typeof setInterval>; users: number }>();
+const watched = new Map<string, { cwd: string; users: number }>();
 const listeners = new Set<() => void>();
+let timer: ReturnType<typeof setInterval> | undefined;
+let isPollQueued = false;
 
 /**
  * Listening ports under the thread's cwd, polled while something on screen uses them; the last result stays for `listeningPorts`.
- * GAP: one lsof per mounted thread every 3s; move to a single main-process poller pushing events if many threads stay mounted.
+ * One scan every 3s covers every watched thread.
  */
 export function usePorts(threadId: string, cwd: string | null) {
   useEffect(() => {
@@ -41,39 +43,53 @@ export function useLaunchNames(cwd: string | null) {
   return names;
 }
 
-export function refreshPorts(threadId: string, cwd: string) {
-  void poll(threadId, cwd);
+export function refreshPorts() {
+  queuePoll();
 }
 
-/** Polls `threadId` every 3s until the last caller's cleanup runs. */
+/** Includes `threadId` in the shared 3s poll until the last caller's cleanup runs. */
 export function watchPorts(threadId: string, cwd: string) {
-  const watch = polls.get(threadId) ?? startPolling(threadId, cwd);
-  watch.users++;
+  const watch = watched.get(threadId) ?? { cwd, users: 0 };
+  watch.cwd = cwd;
+  watched.set(threadId, watch);
+  if (!watchers.has(threadId)) watchers.set(threadId, {});
+  if (++watch.users === 1) queuePoll();
+  timer ??= setInterval(() => void poll(), POLL_MS);
   return () => {
     if (--watch.users > 0) return;
-    clearInterval(watch.timer);
-    polls.delete(threadId);
+    watched.delete(threadId);
+    if (watched.size > 0) return;
+    clearInterval(timer);
+    timer = undefined;
   };
 }
 
-function startPolling(threadId: string, cwd: string) {
-  if (!watchers.has(threadId)) watchers.set(threadId, {});
-  void poll(threadId, cwd);
-  const watch = { timer: setInterval(() => void poll(threadId, cwd), POLL_MS), users: 0 };
-  polls.set(threadId, watch);
-  return watch;
+// Threads mounting in one commit each want a first result; a microtask folds them into one scan.
+function queuePoll() {
+  if (isPollQueued) return;
+  isPollQueued = true;
+  queueMicrotask(() => {
+    isPollQueued = false;
+    void poll();
+  });
 }
 
-async function poll(threadId: string, cwd: string) {
-  const watcher = watchers.get(threadId)!;
+async function poll() {
+  const threads = [...watched].map(([threadId, { cwd }]) => [threadId, cwd] as const);
+  if (threads.length === 0) return;
   try {
-    const ports = await host.ports.list(cwd);
-    recordListeningPorts(threadId, ports);
-    watchers.set(threadId, { ...watcher, ports, error: undefined });
+    const found = await host.ports.list(threads.map(([, cwd]) => cwd));
+    threads.forEach(([threadId], i) => record(threadId, found[i]));
   } catch (error) {
-    watchers.set(threadId, { ...watcher, error: (error as Error).message });
+    for (const [threadId] of threads) watchers.set(threadId, { ...watchers.get(threadId), error: (error as Error).message });
   }
   listeners.forEach((listener) => listener());
+}
+
+function record(threadId: string, listing: PortsListing) {
+  if ('error' in listing) return void watchers.set(threadId, { ...watchers.get(threadId), error: listing.error });
+  recordListeningPorts(threadId, listing.ports);
+  watchers.set(threadId, { ports: listing.ports });
 }
 
 function subscribe(listener: () => void) {

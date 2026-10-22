@@ -8,6 +8,9 @@ export interface ListeningPort {
   startedAt: number;
 }
 
+/** One watched cwd's share of a scan: its ports, or why its cwd was refused. */
+export type PortsListing = { ports: ListeningPort[] } | { error: string };
+
 export interface RunTarget {
   name: string;
   command: string;
@@ -16,8 +19,8 @@ export interface RunTarget {
 }
 
 export interface PortsHost {
-  /** Listening TCP ports of processes whose working directory is inside `cwd`. */
-  list(cwd: string): Promise<ListeningPort[]>;
+  /** Listening TCP ports of processes whose working directory is inside each of `cwds`, from one system-wide scan. */
+  list(cwds: string[]): Promise<PortsListing[]>;
   /** Only PIDs returned by the latest `list`; the UI confirms first. */
   kill(pid: number): Promise<void>;
   /** A free port reserved for `key` (a thread id) for the app's lifetime. */

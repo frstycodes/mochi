@@ -3,11 +3,13 @@ import type { PortsHost } from '../types/ports.ts';
 const minutesAgo = (m: number) => Date.now() - m * 60_000;
 
 export const ports: PortsHost = {
-  async list() {
-    return [
-      { port: 3000, pid: 48302, command: 'node server.js', startedAt: minutesAgo(42) },
-      { port: 5173, pid: 48211, command: 'node node_modules/.bin/vite', startedAt: minutesAgo(6) },
-    ];
+  async list(cwds) {
+    return cwds.map(() => ({
+      ports: [
+        { port: 3000, pid: 48302, command: 'node server.js', startedAt: minutesAgo(42) },
+        { port: 5173, pid: 48211, command: 'node node_modules/.bin/vite', startedAt: minutesAgo(6) },
+      ],
+    }));
   },
   async kill() {},
   async allocate() {
