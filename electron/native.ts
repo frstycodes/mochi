@@ -4,9 +4,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import { runCommand } from '@mochi/core/runClient';
+import { cached } from './cache.ts';
 
 const COMPILE_TIMEOUT_MS = 5 * 60_000;
-const binaries = new Map<string, Promise<string | null>>();
+const NATIVE_TTL = '365 days';
 
 /**
  * The path of a Swift helper binary, macOS only: in a packaged app the copy scripts/build-native.mjs shipped as a resource,
@@ -14,8 +15,7 @@ const binaries = new Map<string, Promise<string | null>>();
  */
 export function nativeHelper(name: string, source: string) {
   if (process.platform !== 'darwin') return Promise.resolve(null);
-  if (!binaries.has(name)) binaries.set(name, (app.isPackaged ? shipped(name) : compiled(name, source)).catch((error) => (console.warn(`Native helper ${name} unavailable`, error), null)));
-  return binaries.get(name)!;
+  return cached(`native:${name}`, NATIVE_TTL, () => (app.isPackaged ? shipped(name) : compiled(name, source)).catch((error) => (console.warn(`Native helper ${name} unavailable`, error), null)));
 }
 
 async function shipped(name: string) {
