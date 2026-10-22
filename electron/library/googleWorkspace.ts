@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import { GOOGLE_WORKSPACE_PORT, GOOGLE_WORKSPACE_URL, isSameServer } from '../../src/library/connectors.ts';
-import { userPath } from '../shellPath.ts';
+import { userPath } from '@mochi/core/shellPath';
 import { readSecrets, saveSecrets } from './connectors.ts';
 import { mochiOAuthApp } from './oauthApps.ts';
 

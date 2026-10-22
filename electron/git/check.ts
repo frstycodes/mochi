@@ -1,6 +1,6 @@
 import type { CheckRun } from '../../src/host/types/git.ts';
 import { killTree, spawnShell } from '../platform.ts';
-import { userPath } from '../shellPath.ts';
+import { userPath } from '@mochi/core/shellPath';
 
 const TIMEOUT_MS = 10 * 60_000;
 // Enough for a failing assertion and its stack; the head of a long test run is noise.

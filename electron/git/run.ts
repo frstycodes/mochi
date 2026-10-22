@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { dirname, normalize, relative, resolve, sep } from 'node:path';
 import { parseWorktrees } from '../../src/git/parse.ts';
-import { userPath } from '../shellPath.ts';
+import { userPath } from '@mochi/core/shellPath';
 
 const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
 

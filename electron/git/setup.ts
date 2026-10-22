@@ -3,7 +3,7 @@ import { access, constants, cp, readdir, readFile } from 'node:fs/promises';
 import { basename, join, matchesGlob } from 'node:path';
 import type { SetupChoice, SetupStep, WorktreeSetup } from '../../src/host/types/agent.ts';
 import { killTree, spawnFile, spawnShell } from '../platform.ts';
-import { userPath } from '../shellPath.ts';
+import { userPath } from '@mochi/core/shellPath';
 import { runGit } from './run.ts';
 
 export interface SetupRun {

@@ -12,6 +12,7 @@ import { startTray } from './tray.ts';
 import { appIconImage, startAppIcon } from './appIcon.ts';
 import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
 import { serveFrames } from './frameProtocol.ts';
+import { startCore } from '@mochi/core/host';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
@@ -34,6 +35,7 @@ app.whenReady().then(() => {
   startLibraryUpdates();
   // Before the first window: it watches every window's close.
   startRemote();
+  startCore(isTrustedUrl);
   createWindow();
   void startDevMcp().catch((error: unknown) => console.error('Dev MCP failed', error));
   if (hasTray) startTray(appIconImage());
