@@ -10,10 +10,10 @@ import { IS_MAC } from '../keys';
 import { Shortcut } from '../Shortcut';
 import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
-import { useHarness } from '../store';
+import { shallowEqual, useHarnessSelector } from '../store';
 import { hasGoal } from '../drift';
 import { isPlanComplete, isTicking, planDuration, planItems, type PlanItem } from './plan';
-import { agentAsk, moveContext, moveFor, questionFor } from './moves';
+import { agentAsk, moveContext, moveFor, questionFor, type MoveContext } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { turnReport } from './report';
 import { verdictHeading, verdictTiles, type Verdict } from './verdict';
@@ -31,16 +31,17 @@ export function NextMoveCard({ className, ...props }: ComponentProps<typeof Card
 export function useNextMove(thread: Thread) {
   const prs = useThreadPrs(thread);
   const verdict = useIdleVerdict(thread);
-  const { state } = useHarness();
+  const context = useHarnessSelector((s) => moveContext(s.threads, thread), isSameMoveContext);
   if (!verdict) return null;
   const states = prs.map((p) => p.state);
   const report = turnReport(thread);
-  const context = moveContext(state.threads, thread);
   const move = moveFor(thread, verdict, states.map((s) => s.status), context);
   const ask = agentAsk(report);
   const question = ask?.question ?? questionFor(verdict, move, report, authorName(thread.session?.provider ?? thread.providers[0]), context);
   return { verdict, prs, report, tiles: hasGoal(thread) ? verdictTiles(thread, states, verdict) : [], move, ask, question, context };
 }
+
+const isSameMoveContext = (a: MoveContext, b: MoveContext) => a.parent === b.parent && shallowEqual(a.subPrs, b.subPrs);
 
 /** Mochi's verdict as the card's title, in the sidebar chip's icon and tone. */
 export function NextMoveHeader({ thread, verdict }: { thread: Thread; verdict: Verdict }) {
@@ -122,9 +123,9 @@ export function NextMoveActions({ labels, onPick }: { labels: string[]; onPick: 
 
 /** The thread's plan in the chat; a running step's time ticks every second while the window is visible. */
 export function ThreadPlan({ thread, isWorking }: { thread: Thread; isWorking: boolean }) {
-  const { state } = useHarness();
+  const now = useHarnessSelector((s) => s.now);
   const nowMs = useNowMs(thread.steps.some(isTicking));
-  return <PlanList items={planItems(thread.steps, state.now, nowMs)} slot={thread.line} isWorking={isWorking} />;
+  return <PlanList items={planItems(thread.steps, now, nowMs)} slot={thread.line} isWorking={isWorking} />;
 }
 
 /** One clock for the whole list: ticks each second while `isTicking` and the document is visible, idle otherwise. */

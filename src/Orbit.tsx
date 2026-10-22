@@ -4,7 +4,7 @@ import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCirc
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { goalProgress, progressLabel } from './progress';
 import { hasGoal } from './drift';
-import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
+import { useSpaceQueue, useSpaceThreads, type View, useDispatch } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
@@ -34,7 +34,7 @@ const QUEUE_ICONS = {
 } satisfies Record<QueueKind, LucideIcon>;
 
 export function Orbit() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const items = useOrbitItems();
   const [center, setCenter] = useState<{ x: number; y: number; k: number } | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });

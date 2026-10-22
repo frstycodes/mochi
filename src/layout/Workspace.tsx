@@ -15,7 +15,7 @@ import { NewThreadView } from '../NewThreadView';
 import { PANE_TABS, tabTitle } from '../pane/tabs';
 import { ProjectsView } from '../ProjectsView';
 import { QueueView } from '../QueueView';
-import { useHarness } from '../store';
+import { useDispatch, useHarnessSelector, useThread } from '../store';
 import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
@@ -32,9 +32,9 @@ const MIN_SPLIT_PX = 240;
 
 /** The current space's tiling layout: nested resizable splits, each a full session with its own header, composer and side pane. */
 export function Workspace() {
-  const { state } = useHarness();
-  const layout = state.layouts[state.spaceId];
-  const root = displayRoot(layout, state.orientation);
+  const layout = useHarnessSelector((s) => s.layouts[s.spaceId]);
+  const orientation = useHarnessSelector((s) => s.orientation);
+  const root = displayRoot(layout, orientation);
   const all = leaves(root);
   const zoomed = layout.zoomId ? findLeaf(root, layout.zoomId) : undefined;
   const isMulti = all.length > 1;
@@ -62,7 +62,7 @@ function NodeView({ node, isMulti, firstId }: { node: LayoutNode; isMulti: boole
 }
 
 function SplitView({ split, firstId }: { split: Split; firstId: string }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const group = useRef<GroupImperativeHandle | null>(null);
   const ids = split.children.map((c) => c.id);
   const toLayout = (sizes: number[]) => Object.fromEntries(ids.map((id, i) => [id, sizes[i]]));
@@ -108,10 +108,10 @@ function SplitView({ split, firstId }: { split: Split; firstId: string }) {
  * drop or focus target). Same element tree either way, so landing on it only flips these props and never remounts the thread.
  */
 export function LeafView({ leaf, isMulti, isZoomed, isFirst, isPreview = false }: { leaf: Leaf; isMulti: boolean; isZoomed: boolean; isFirst: boolean; isPreview?: boolean }) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
   const ref = useRef<HTMLElement>(null);
   const isWide = useIsWider(ref, WIDE_SPLIT_PX);
-  const isFocused = !isPreview && state.layouts[state.spaceId].focusId === leaf.id;
+  const isFocused = useHarnessSelector((s) => !isPreview && s.layouts[s.spaceId].focusId === leaf.id);
   useFocusFollows(ref, isFocused && isMulti);
   const focus = () => !isPreview && dispatch({ type: 'layout-focus', leafId: leaf.id });
 
@@ -139,9 +139,8 @@ export function LeafView({ leaf, isMulti, isZoomed, isFirst, isPreview = false }
 }
 
 function LeafContent({ leafId, view }: { leafId: string; view: View }) {
-  const { state } = useHarness();
+  const thread = useThread(view.kind === 'thread' ? view.id : '');
   if (view.kind === 'tab') return <TabLeaf threadId={view.threadId} tabId={view.tabId} />;
-  const thread = view.kind === 'thread' ? state.threads.find((t) => t.id === view.id) : undefined;
   // A thread or tab that no longer exists (deleted, or saved by a launch that showed demo data) opens a new thread.
   const kind = view.kind in PAGES ? (view.kind as PageKind) : 'new';
   const { icon: Icon, title, component: Page } = PAGES[kind];
@@ -191,9 +190,9 @@ function PageLeaf({ children }: { children: ReactNode }) {
 
 /** A side pane tab dragged out into its own split: the tab's content, still owned by its thread's pane. */
 function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
-  const { state, dispatch } = useHarness();
-  const thread = state.threads.find((t) => t.id === threadId);
-  const pane = state.panes.find((p) => p.threadId === threadId);
+  const dispatch = useDispatch();
+  const thread = useThread(threadId);
+  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === threadId));
   const tab = pane?.tabs.find((t) => t.id === tabId);
   const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind, tab ? tabTitle(tab) : '');
   if (!thread || !pane || !tab) return <ClosedTab />;
@@ -221,7 +220,7 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
 }
 
 function ClosedTab() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (
     <div className="flex h-full min-h-0 flex-col">
       <LeafBar>Closed tab</LeafBar>
@@ -331,7 +330,7 @@ function useCaretInFocusedSplit(structure: string, focusId: string, isMulti: boo
 }
 
 function useWindowOrientation() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   useEffect(() => {
     const onResize = () => dispatch({ type: 'layout-aspect', orientation: window.innerWidth >= window.innerHeight ? 'row' : 'column' });
     onResize();
@@ -341,8 +340,9 @@ function useWindowOrientation() {
 }
 
 function useLayoutPersistence() {
-  const { state } = useHarness();
+  const layouts = useHarnessSelector((s) => s.layouts);
+  const watched = useHarnessSelector((s) => s.watched);
   useEffect(() => {
-    saveLayouts({ layouts: state.layouts, watched: state.watched });
-  }, [state.layouts, state.watched]);
+    saveLayouts({ layouts, watched });
+  }, [layouts, watched]);
 }

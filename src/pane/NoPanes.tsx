@@ -4,7 +4,7 @@ import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/comp
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { threadCwd } from '@/host/cwd';
 import type { Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { usePorts } from '../terminal/ports';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { PINNABLE_KINDS } from './headerPins';
@@ -14,7 +14,7 @@ import { PANE_TABS } from './tabs';
 
 /** The panes are shown but every one is closed: what can open, running dev servers and recent files. */
 export function NoPanes({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const cwd = threadCwd(thread);
   return (
     <ScrollArea type="scroll" className="h-full">
@@ -69,7 +69,7 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
 
 /** Files the agent read or edited and files opened in Files; opens one there. */
 function RecentFiles({ thread, cwd }: { thread: Thread; cwd: string }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const files = useRecentFiles(thread, cwd);
   if (!files.length) return null;
   return (

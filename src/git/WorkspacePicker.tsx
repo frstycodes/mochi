@@ -11,7 +11,7 @@ import type { Branch, BranchList } from '../host/types/git';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
-import { useHarness } from '../store';
+import { shallowEqual, useDispatch, useHarnessSelector } from '../store';
 import { nextTempBranch } from '../store/threads';
 import { MetaChip } from '../MetaChip';
 import { SwitchBranchDialog } from './SwitchBranchDialog';
@@ -41,17 +41,17 @@ export interface Workspace {
 export function useWorkspace(root: string, draft: WorkspaceDraft, onChange: (draft: WorkspaceDraft) => void, threadId?: string): Workspace {
   const branches = useBranches(root);
   const { list } = branches;
-  const { state } = useHarness();
+  const tempBranch = useHarnessSelector(nextTempBranch);
   const isNew = draft.mode === 'worktree' && !draft.isExisting;
-  const branch = isNew ? (draft.branch ?? nextTempBranch(state)) : draft.isExisting ? draft.branch : (list?.current ?? undefined);
+  const branch = isNew ? (draft.branch ?? tempBranch) : draft.isExisting ? draft.branch : (list?.current ?? undefined);
   const nameError = useBranchNameError(root, isNew && !!list ? branch : undefined);
-  const sharers = state.threads.filter((t) => t.id !== threadId && t.status !== 'settled' && t.repo?.mode === 'folder' && projectRef(t.repo) === root);
+  const sharers = useHarnessSelector((s) => s.threads.filter((t) => t.id !== threadId && t.status !== 'settled' && t.repo?.mode === 'folder' && projectRef(t.repo) === root), shallowEqual);
   return { root, draft, onChange, branches, branch, error: isNew ? nameError : draft.isExisting && !draft.branch ? 'Pick the branch to check out' : null, sharers, isDirty: !!list?.changes.files };
 }
 
 /** A thread whose folder isn't set up yet (`isUnstarted`) can still change where it works, kept in the store; null once it started. */
 export function useThreadWorkspace(thread: Thread): Workspace | null {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const repo = thread.repo;
   const isOpen = !!repo && isUnstarted(thread);
   const draft: WorkspaceDraft = { mode: repo?.mode ?? 'worktree', base: repo?.base, isExisting: repo?.isExisting, branch: repo?.branch };

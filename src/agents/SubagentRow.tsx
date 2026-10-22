@@ -1,10 +1,10 @@
 import type { Subagent, Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { SubagentAvatar, SubagentLine, SubagentMeta, subagentPersona } from './parts';
 
 /** A subagent where it was started in the chat: its Mochi, name and task, and one line (live, or its report's first line). Click opens it in the Background tasks tab. */
 export function SubagentRow({ thread, subagent }: { thread: Thread; subagent: Subagent }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const { flavor, name } = subagentPersona(thread, subagent);
   return (
     <button

@@ -14,7 +14,7 @@ import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { OPEN_PR_PROMPT } from '../git/prs';
 import type { ThreadPr } from '../git/useThreadPrs';
 import { isMod } from '../keys';
-import { useHarness } from '../store';
+import { useHarness, useDispatch } from '../store';
 import { CallList, Expand } from '../WorkLog';
 import { continuePrompt, withUnseenGaps, type Move } from './moves';
 import { SubThreadLineage } from './SubThreads';
@@ -289,7 +289,7 @@ function GapQuote({ quote, onJump }: { quote: string; onJump?: (quote: string) =
 }
 
 function AcceptGap({ thread, gap }: { thread: Thread; gap: Gap }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const accepted = thread.idle?.accepted ?? [];
   const toggle = () => dispatch({ type: 'idle-update', threadId: thread.id, patch: { accepted: gap.isAccepted ? accepted.filter((id) => id !== gap.id) : [...accepted, gap.id] } });
   return (

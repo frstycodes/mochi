@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Thread } from './model.ts';
-import { activeThreads, descendantsOf, dropAt, dropPin, flattenGroups, nestBlocker, rootOf, orderBetween, parentOf, pinAt, pinMany, pinnedThreads, pinOrderOf, reorderThreads, sidebarGroups, stepPin, togglePin } from './reorder.ts';
+import { initialThreads } from './store/threads.ts';
+import { activeThreads, descendantsOf, isSameListing, lastActivityAt, dropAt, dropPin, flattenGroups, nestBlocker, rootOf, orderBetween, parentOf, pinAt, pinMany, pinnedThreads, pinOrderOf, reorderThreads, sidebarGroups, stepPin, togglePin } from './reorder.ts';
 
 const t = (id: string, orbitSlot?: number, lastAt = 0) => ({ id, orbitSlot, spaceId: 's', status: 'running', startedAt: 0, activity: lastAt ? [{ at: lastAt }] : [] }) as unknown as Thread;
 
@@ -159,4 +160,13 @@ test('a pin moved between two of any computers’ pins takes the key between the
   assert.deepEqual(added.map((x) => [x.id, x.orbitSlot]), [['a', 1], ['b', 3], ['c', 2]]);
   const full = [1, 2, 3, 5, 7].map((slot, i) => keyed(`p${i}`, slot, slot * 10));
   assert.equal(pinAt([...full, t('x')], 's', 'x', 1), null);
+});
+
+test('a listing stays the same through streamed text, and changes with its order, a title or a new activity time', () => {
+  const [a, b] = initialThreads().threads;
+  const streamed = { ...a, activity: [...a.activity.slice(0, -1), { ...a.activity.at(-1)!, text: 'more' }] };
+  assert.ok(isSameListing([a, b], [streamed, b]));
+  assert.ok(!isSameListing([a, b], [b, a]));
+  assert.ok(!isSameListing([a, b], [{ ...a, title: 'Renamed' }, b]));
+  assert.ok(!isSameListing([a, b], [{ ...a, activity: [...a.activity, { ...a.activity.at(-1)!, at: lastActivityAt(a) + 1 }] }, b]));
 });

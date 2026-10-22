@@ -6,7 +6,7 @@ import { limitStatus } from './chat/LimitCard';
 import { useThreadStatus } from './goals/VerdictChip';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { runningBackground } from './runtime/subagents';
-import { useHarness } from './store';
+import { useHarnessSelector } from './store';
 import { isUnread } from './store/seen';
 import { LiveDot } from './ui';
 
@@ -14,10 +14,11 @@ export type ThreadRow = ReturnType<typeof useThreadRow>;
 
 /** A row's one status (`useThreadStatus`) and the line under its title: the verdict's reason when idle, else the step in flight or what it waits for. */
 export function useThreadRow(thread: Thread) {
-  const { state } = useHarness();
+  const question = useHarnessSelector((s) => s.queue.find((q) => q.threadId === thread.id)?.title);
+  const isWatched = useHarnessSelector((s) => s.watched.includes(thread.id));
   const status = useThreadStatus(thread);
-  const detail = !status.isWorking && status.verdict ? status.verdict.reason : threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { ...status, detail, isUnread: isUnread(thread), isWatched: state.watched.includes(thread.id) };
+  const detail = !status.isWorking && status.verdict ? status.verdict.reason : threadDetail(thread, question);
+  return { ...status, detail, isUnread: isUnread(thread), isWatched };
 }
 
 export function threadDetail(thread: Thread, question?: string) {

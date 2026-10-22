@@ -473,11 +473,15 @@ function stampNew(before: State, after: State, threadId: string, ms?: number): S
   const priorSteps = new Map(prior?.steps.map((s) => [s.id, s]));
   return {
     ...after,
-    threads: mapThread(after.threads, threadId, (t) => ({
-      ...t,
-      activity: t.activity.length > from ? t.activity.map((e, i) => (i >= from && e.ms === undefined ? { ...e, ms } : e)) : t.activity,
-      steps: t.steps.map((s) => stampStep(priorSteps.get(s.id), s, ms)),
-    })),
+    threads: mapThread(after.threads, threadId, (t) => {
+      const steps = t.steps.map((s) => stampStep(priorSteps.get(s.id), s, ms));
+      return {
+        ...t,
+        activity: t.activity.length > from ? t.activity.map((e, i) => (i >= from && e.ms === undefined ? { ...e, ms } : e)) : t.activity,
+        // Unchanged steps keep their array, so a streamed token changes nothing a reader of the plan compares.
+        steps: steps.every((s, i) => s === t.steps[i]) ? t.steps : steps,
+      };
+    }),
   };
 }
 

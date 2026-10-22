@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { QueuedMessage, Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { TooltipIconButton } from '../ui';
 import { compactFocus } from './compact';
 import { moveQueued, PAUSE_REASONS } from './outbox';
 
 /** Messages waiting for the agent's turn to end, docked in the composer above the text like the question tray. */
 export function QueueTray({ thread, onSendNow, onEdit }: { thread: Thread; onSendNow: (message: QueuedMessage) => void; onEdit: (message: QueuedMessage) => void }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const reduce = useReducedMotionConfig();
   const [isOpen, setOpen] = useState(true);
   const queued = thread.queued ?? [];

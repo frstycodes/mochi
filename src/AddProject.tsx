@@ -15,7 +15,7 @@ import { GithubMarkIcon } from './icons/github';
 import { cloneProject, createProject, githubUserOf, projectName } from './projects';
 import { useMachines } from './remote/useMachines';
 import { getPrefs, usePrefs } from './settings/prefs';
-import { useHarness } from './store';
+import { useHarnessSelector } from './store';
 
 /** What the picker gets back: `ref` is the folder here, the project's id on another computer. */
 export interface AddedProject {
@@ -93,7 +93,7 @@ type Adder = ReturnType<typeof useAdder>;
 
 /** The add calls for this computer or another, and what's running: one at a time, with its latest progress line and git's error as it said it. */
 function useAdder(machine: FollowedMachine | undefined) {
-  const spaceId = useHarness().state.spaceId;
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const { ask } = useMachines();
   const [busy, setBusy] = useState<{ label: string; line: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +145,7 @@ const OWNER_REPO = /^[\w.-]+\/[\w.-]+$/;
 
 /** The profile's own repositories from gh, searchable; a typed `owner/repo` clones any other. Another computer clones as its own login, so there only the typed name works. */
 function GithubPicker({ adder, machine, onBack, onAdded }: { adder: Adder; machine?: FollowedMachine; onBack: () => void; onAdded: (project: AddedProject) => void }) {
-  const spaceId = useHarness().state.spaceId;
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const [query, setQuery] = useState('');
   const repos = useGithubRepos(machine ? null : spaceId);
   const typed = query.trim().replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');

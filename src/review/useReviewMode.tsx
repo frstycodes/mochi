@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { useHarness } from '../store';
+import { useHarnessSelector } from '../store';
 import { reviewThreads } from './order';
 
 const ReviewModeContext = createContext<{ isOpen: boolean; open: () => void; close: () => void } | null>(null);
@@ -18,7 +18,8 @@ export function ReviewModeProvider({ children }: { children: ReactNode }) {
 
 /** Sidebar entry: how many threads in the space wait on review, and whether review mode is showing them. */
 export function useReviewEntry(spaceId: string) {
-  const { state } = useHarness();
+  const count = useHarnessSelector((s) => reviewThreads({ ...s, spaceId }).length);
+  const isCurrent = useHarnessSelector((s) => s.spaceId === spaceId);
   const { isOpen, open } = useReviewMode();
-  return { count: reviewThreads({ ...state, spaceId }).length, isOpen: isOpen && state.spaceId === spaceId, open };
+  return { count, isOpen: isOpen && isCurrent, open };
 }

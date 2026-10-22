@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useHarness } from '../store';
+import { useDispatch, useGetState } from '../store';
 import { markSeen, type SeenAction } from '../store/seen';
 
 type Target = Omit<SeenAction, 'type'>;
@@ -9,14 +9,16 @@ type Target = Omit<SeenAction, 'type'>;
  * the Queue, so their dots last the visit. Under `RemoteScope` this becomes a `seen` command to the thread's computer.
  */
 export function useSeen(target: Target, when: 'open-and-leave' | 'leave') {
-  const { state, dispatch } = useHarness();
-  const latest = useRef({ state, dispatch, target });
-  latest.current = { state, dispatch, target };
+  const dispatch = useDispatch();
+  const getState = useGetState();
+  const latest = useRef({ getState, dispatch, target });
+  latest.current = { getState, dispatch, target };
   const { threadId } = target;
   useEffect(() => {
     // The thread this effect opened, not the one `latest` already holds when the route moves on.
     const mark = () => {
-      const { state, dispatch, target } = latest.current;
+      const { getState, dispatch, target } = latest.current;
+      const state = getState();
       const marked = { type: 'seen' as const, ...(threadId ? { threadId } : target) };
       if (markSeen(state, marked) !== state) dispatch(marked);
     };

@@ -18,7 +18,7 @@ import { PreviewContext, SplitContext, type SplitInfo } from '../layout/SplitCon
 import type { Thread } from '../model';
 import { isTyping } from '../keys';
 import { Shortcut } from '../Shortcut';
-import { HarnessContext, useHarness, type State } from '../store';
+import { HarnessScope, useHarness, type State } from '../store';
 import { TITLE_BAR, TitleBar } from '../TitleBar';
 import { summarize } from '../summary';
 import { TooltipIconButton } from '../ui';
@@ -149,15 +149,14 @@ function ReplayPlayer({ recording, checkpoints, header }: { recording: Recording
 
 /** The real chat view on the scratch store: changing only when a step lands, never on a playhead frame. */
 const ReplayTranscript = memo(function ReplayTranscript({ state, thread }: { state: State; thread: Thread }) {
-  const value = useMemo(() => ({ state, dispatch: NO_DISPATCH }), [state]);
   return (
-    <HarnessContext.Provider value={value}>
+    <HarnessScope state={state} dispatch={NO_DISPATCH}>
       <SplitContext.Provider value={SPLIT}>
         <PreviewContext.Provider value>
           <ChatView thread={thread} isReadOnly />
         </PreviewContext.Provider>
       </SplitContext.Provider>
-    </HarnessContext.Provider>
+    </HarnessScope>
   );
 });
 

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DiffFile, DiffHunk } from '../host/types/git';
-import { useHarness, type Action } from '../store';
+import { type Action, useDispatch } from '../store';
 import type { Quote } from '../store/sidechat';
 import { DiffStat } from '../WorkLog';
 
@@ -89,7 +89,7 @@ export function askInSideChat(dispatch: Dispatch<Action>, threadId: string, ques
 }
 
 function useAskInSideChat(threadId: string) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (quote: Quote) => dispatch({ type: 'sidechat-open', threadId, quote: { ...quote, text: quote.text.slice(0, MAX_QUOTE_CHARS) } });
 }
 

@@ -15,12 +15,12 @@ import { PromptInputProvider, usePromptInputController } from '@/components/ai-e
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, isMochiCard, type Provider, type QueuedMessage, type QueueItem, type Thread } from './model';
+import { authorName, isMochiCard, isStreamedOnly, type Provider, type QueuedMessage, type QueueItem, type Thread } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
 import { PlanRow } from './chat/PlanRow';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
-import { useHarness } from './store';
+import { shallowEqual, useDispatch, useHarnessSelector } from './store';
 import { ProviderMark } from './ui';
 import { WorkspaceControls, WorkspaceNotes, useThreadWorkspace } from './git/WorkspacePicker';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, useComposerHandoff } from './Composer';
@@ -84,7 +84,6 @@ export type MessageBar = ComponentType<{ thread: Thread; index: number; align: '
  * `messageBar` puts actions of its own back under the messages that would have them (another computer's thread).
  */
 export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; isReadOnly?: boolean; messageBar?: MessageBar }) {
-  const { state } = useHarness();
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const rows = chatRows(thread.activity, thread.reviews, shownTurnChanges(thread, isRunning));
@@ -96,7 +95,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
   // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
-  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q) && q.kind !== 'review');
+  const decisions = useHarnessSelector((s) => s.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q) && q.kind !== 'review'), shallowEqual);
   const tray = useTrayState(decisions.length);
   const withActions = finalReplies(rows, isRunning);
 
@@ -111,6 +110,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
   // The composer's own: a message taken back returns there with its mentions and images.
   const restoreDraft = useRef<((message: QueuedMessage) => void) | null>(null);
+  const composerThread = useWithoutStreamedText(thread);
 
   return (
     // The provider holds the message box's text for the whole chat: the next-move card fills it with the agent's draft.
@@ -142,7 +142,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
         {!isReadOnly && (
           <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
             <ImageDropTarget>
-              <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} restoreRef={restoreDraft} />
+              <Composer thread={composerThread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} restoreRef={restoreDraft} />
             </ImageDropTarget>
             <ComposerInbox threadId={thread.id} />
           </div>
@@ -157,6 +157,17 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
  * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
  * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
  */
+/**
+ * `thread`, or the one already shown while only the text of its entries grew (`isStreamedOnly`, no entry added): nothing in the
+ * composer depends on the reply being written, and its subtree is the chat's largest after the transcript.
+ */
+function useWithoutStreamedText(thread: Thread) {
+  const [held, setHeld] = useState(thread);
+  const isSame = held === thread || (isStreamedOnly(held, thread) && held.activity.length === thread.activity.length);
+  if (!isSame) setHeld(thread);
+  return isSame ? held : thread;
+}
+
 function useComposerHeightVar() {
   const ref = useRef<HTMLDivElement>(null);
   const held = useRef(0);
@@ -185,8 +196,19 @@ function useComposerHeightVar() {
   return { ref, hold, release };
 }
 
+interface ChatRowProps {
+  thread: Thread;
+  row: ChatRow;
+  slashItems: SlashItem[];
+  isLive: boolean;
+  isReadOnly?: boolean;
+  messageBar?: MessageBar;
+  hasActions: boolean;
+  action?: CurrentAction;
+}
+
 // isLive: the newest row of a running thread, the one still being written. Memoized: a scroll re-renders the virtualized list, and only rows that just mounted should render.
-const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, messageBar, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; messageBar?: MessageBar; hasActions: boolean; action?: CurrentAction }) {
+const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, messageBar, hasActions, action }: ChatRowProps) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'changes') return <TurnChangesCard thread={thread} turn={row.turn} isReadOnly={isReadOnly} />;
@@ -248,7 +270,17 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
       {message}
     </MessageContextMenu>
   );
-});
+}, isSameRowProps);
+
+/**
+ * Rows re-render for their own entries, not for each token streamed into another: `chatRows` rebuilds every row object, and a
+ * streamed thread differs only in its transcript (`isStreamedOnly`). `action` matters only to the live row.
+ */
+function isSameRowProps(a: ChatRowProps, b: ChatRowProps) {
+  const isSameRow = a.row.kind === b.row.kind && Object.keys(b.row).every((k) => shallowEqual(a.row[k as keyof ChatRow], b.row[k as keyof ChatRow]));
+  const isSameThread = a.thread === b.thread || isStreamedOnly(a.thread, b.thread);
+  return isSameRow && isSameThread && a.isLive === b.isLive && a.hasActions === b.hasActions && a.slashItems === b.slashItems && a.isReadOnly === b.isReadOnly && a.messageBar === b.messageBar && (!b.isLive || a.action === b.action);
+}
 
 /** Your message as markdown with its links, the known `/name` tokens coloured as they were in the composer. */
 function YourMessage({ text, slashItems }: { text: string; slashItems: SlashItem[] }) {
@@ -351,7 +383,8 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
   return null;
 }
 
-function Composer({
+// Memoized: the chat re-renders for every streamed token, and nothing the composer is given changes with it.
+const Composer = memo(function Composer({
   thread,
   slashItems,
   decisions,
@@ -368,7 +401,7 @@ function Composer({
   handoff: ReturnType<typeof useComposerHandoff>;
   restoreRef: RefObject<((message: QueuedMessage) => void) | null>;
 }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const { whileWorking, promptSuggestions } = usePrefs();
   const [isHeld, setIsHeld] = useState(false);
   const isQueueing = shouldQueue(thread, whileWorking, isHeld);
@@ -494,7 +527,7 @@ function Composer({
       </motion.div>
     </div>
   );
-}
+});
 
 function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
   const name = authorName(thread.providers[0]);
@@ -583,7 +616,7 @@ function jumpToQuote(transcript: TranscriptHandle | null, rows: ChatRow[], quote
 
 /** Writing instead of answering keeps the card in the chat too, as its question with no answer. */
 function useRecordUnanswered(thread: Thread) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const next = useNextMove(thread);
   return () => {
     if (!next?.question || !showsVerdictCard(thread)) return;

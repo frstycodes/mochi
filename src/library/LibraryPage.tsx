@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadio
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProfiles } from '../profiles';
-import { useHarness } from '../store';
+import { useHarnessSelector } from '../store';
 import { SpaceIcon } from '../ui';
 import { ALL_PROFILES, setLibraryScope, useLibraryScope } from './libraryScope';
 import { useLibrary, type Library } from './useLibrary';
@@ -21,7 +21,7 @@ export type PagePart = (props: { library: Library; query: string; showDiscover: 
  * and what's added goes to it. The search on the right filters the tab you're on and stays as you switch.
  */
 export function LibraryPage({ id, noun, description, actions, count, library: LibraryPart, discover: DiscoverPart }: { id: string; noun: string; description: string; actions?: (props: { library: Library; showDiscover: () => void }) => ReactNode; count: (library: Library) => number; library: PagePart; discover: PagePart }) {
-  const library = useLibrary(useHarness().state.spaceId);
+  const library = useLibrary(useHarnessSelector((s) => s.spaceId));
   const [tab, setTab] = useState<PageTab>('library');
   const [search, setSearch] = useState('');
   const query = search.trim();
@@ -70,7 +70,7 @@ export function LibraryPage({ id, noun, description, actions, count, library: Li
 function ScopePicker() {
   const profiles = useProfiles();
   const scope = useLibraryScope();
-  const { spaceId } = useHarness().state;
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

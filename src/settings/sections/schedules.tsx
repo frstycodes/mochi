@@ -9,7 +9,7 @@ import { describeTrigger } from '../../schedule/describe';
 import { openSchedule } from '../../schedule/ScheduleDialog';
 import { runOutcome } from '../../schedule/slice';
 import { triggerNextRun, useSchedules } from '../../schedule/useSchedules';
-import { useHarness } from '../../store';
+import { useHarness, useDispatch } from '../../store';
 import { IconSwap, TooltipIconButton } from '../../ui';
 import { closeSettings } from '../open';
 import { SettingsGroup, SettingsRow } from '../parts';
@@ -30,7 +30,7 @@ export function SchedulesSection() {
 
 /** What a schedule is and where one starts: the clock in the new-thread composer, one click away. */
 function NoSchedules() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const startOne = () => {
     closeSettings();
     dispatch({ type: 'go', view: { kind: 'new' } });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
 import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
@@ -40,17 +40,17 @@ import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
 import { TitleBar } from './TitleBar';
-import { useHarness } from './store';
+import { useDispatch, useHarnessSelector } from './store';
 import { hasGoal } from './drift';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
 import { useSeen } from './notify/useSeen';
 
 export function ThreadView({ thread }: { thread: Thread }) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
   const { isWide, isFocused } = useSplit();
   useSeen({ threadId: thread.id }, 'open-and-leave');
-  const pane = state.panes.find((p) => p.threadId === thread.id);
+  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === thread.id));
   const isPaneOpen = !!pane?.isOpen;
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
   const [isPaneTabOpen, setPaneTabOpen] = useState(false);
@@ -63,7 +63,8 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const [isSummarySheetOpen, setSummarySheetOpen] = useState(false);
   const isPaneShown = isWide ? isPaneOpen : isPaneTabOpen;
   const inSplits = useSplitTabIds(thread.id);
-  const openKinds = isPaneShown && pane ? layoutOf(pane).columns.flat() : [];
+  // Memoized by hand: the compiler leaves it inline, and a new array each render would give every pinned tab a new onToggle.
+  const openKinds = useMemo(() => (isPaneShown && pane ? layoutOf(pane).columns.flat() : []), [isPaneShown, pane]);
 
   const toggleKind = (kind: PaneTabKind) => {
     const split = pane?.tabs.find((t) => t.kind === kind && inSplits.has(t.id));
@@ -191,6 +192,7 @@ function useSummaryState(isPaneOpen: boolean, isWide: boolean) {
 
 /** The summary column grows from the right edge while the card itself rises out of the header toggle above it. */
 function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
+  const shown = useHeldWhileClosed(thread, isOpen);
   return (
     // Above the header's blur edge, which is for the scrolling chat only; the header's own controls stay clickable past it.
     <div className="pointer-events-none relative z-30 min-w-0 overflow-hidden pt-(--chat-top)" inert={!isOpen || undefined}>
@@ -201,13 +203,14 @@ function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: b
           animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
         )}
       >
-        <SummaryPanel thread={thread} className="h-full" />
+        <SummaryPanel thread={shown} className="h-full" />
       </div>
     </div>
   );
 }
 
 function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
+  const shown = useHeldWhileClosed(thread, isOpen);
   return (
     <div
       inert={!isOpen || undefined}
@@ -218,9 +221,16 @@ function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen:
       )}
     >
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
-      <SummaryPanel thread={thread} isFloating className={cn('max-h-full', isOpen && 'pointer-events-auto')} />
+      <SummaryPanel thread={shown} isFloating className={cn('max-h-full', isOpen && 'pointer-events-auto')} />
     </div>
   );
+}
+
+/** Both summaries stay mounted so they can fade; the closed one keeps the thread as it was, so a streaming agent doesn't re-render it. */
+function useHeldWhileClosed(thread: Thread, isOpen: boolean) {
+  const [held, setHeld] = useState(thread);
+  if (isOpen && held !== thread) setHeld(thread);
+  return isOpen ? thread : held;
 }
 
 function ThreadHeader({

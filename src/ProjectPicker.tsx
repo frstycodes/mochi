@@ -8,7 +8,7 @@ import type { FollowedMachine } from './host/types/remote';
 import { MetaChip } from './MetaChip';
 import { AddProject, type AddedProject } from './AddProject';
 import { refreshProjects } from './projects';
-import { useHarness } from './store';
+import { useHarnessSelector } from './store';
 import { isMod } from './keys';
 import { Shortcut } from './Shortcut';
 
@@ -26,7 +26,7 @@ export interface PickerProject {
  * `machine` is another computer the list and Add project belong to; unset, this one.
  */
 export function ProjectPicker({ value, projects, machine, onChange, onAdded }: { value: string | null; projects: PickerProject[]; machine?: FollowedMachine; onChange: (project: string | null) => void; onAdded?: () => void }) {
-  const spaceId = useHarness().state.spaceId;
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const [isOpen, setOpen] = useState(false);
   const chosen = projects.find((p) => p.ref === value);
   const name = value && (chosen?.name ?? value);

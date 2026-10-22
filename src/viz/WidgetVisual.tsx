@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { readWidgetMessage } from './fence';
 
 /**
@@ -10,7 +10,7 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
   const frame = useRef<HTMLIFrameElement>(null);
   const id = useId();
   const threadId = useVizThreadId();
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const scheme = useColorScheme();
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [srcDoc] = useState(() => widgetDocument(source, id, scheme));

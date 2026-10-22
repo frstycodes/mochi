@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { answerText, isMochiCard, type QueueItem, type QueueKind, type Thread } from './model';
 import { duration } from './progress';
 import { useReviewEntry } from './review/useReviewMode';
-import { snapshot, useHarness, useSpaceQueue, useSpaceThreads } from './store';
+import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, useDispatch } from './store';
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
 import { useSendCiLog } from './notify/useSendCiLog';
@@ -217,7 +217,7 @@ export function useUndoable() {
 
 /** `canOpenThread`: false inside the thread itself (the composer's tray), where Open thread would go nowhere. */
 function ApprovalRequest({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const withUndo = useUndoable();
   return (
     <Confirmation approval={{ id: item.id }} state="approval-requested">
@@ -256,7 +256,7 @@ function ShowCard({ item }: { item: QueueItem }) {
 }
 
 function ReviewActions({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const withUndo = useUndoable();
   return (
     <>
@@ -297,7 +297,7 @@ function CollisionActions({ item, otherId }: { item: QueueItem; otherId: string 
 }
 
 function RunActions({ item }: { item: QueueItem }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const withUndo = useUndoable();
   return (
     <>
@@ -313,7 +313,7 @@ function RunActions({ item }: { item: QueueItem }) {
 function CiActions({ item }: { item: QueueItem }) {
   const sendLog = useSendCiLog(item);
   const withUndo = useUndoable();
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [isSending, setSending] = useState(false);
   const send = async () => {
     setSending(true);
@@ -348,7 +348,7 @@ function CiActions({ item }: { item: QueueItem }) {
 }
 
 function QuestionChoices({ item }: { item: QueueItem }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const withUndo = useUndoable();
   const questions = item.questions ?? [];
   const isWizard = questions.length > 1;

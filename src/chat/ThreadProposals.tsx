@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, DiagramTree, MessagePlus } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { authorName, type ActivityEntry, type Thread, type ThreadProposal } from '../model';
-import { useHarness } from '../store';
+import { useHarness, useHarnessSelector } from '../store';
 import { SubThreadState } from '../goals/SubThreads';
 import { useThreadStatus } from '../goals/VerdictChip';
 import { isExpired, OFFER_REPLY } from './proposals';
@@ -116,7 +116,7 @@ function ProposalRow({ proposal, onStart, onDismiss, pager, startAll }: { propos
 
 /** What the started thread is doing now, like its sidebar row. */
 function StartedState({ threadId }: { threadId: string }) {
-  const sub = useHarness().state.threads.find((t) => t.id === threadId);
+  const sub = useHarnessSelector((s) => s.threads.find((t) => t.id === threadId));
   if (!sub) return <span className="type-meta text-subtle-foreground">Started</span>;
   return <LiveState sub={sub} />;
 }

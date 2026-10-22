@@ -3,7 +3,7 @@ import { toast } from '@/toast/store';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { host } from '../host';
 import type { CommandData, CommandResult, FollowedMachine, MachineCatalog, RemoteCommand } from '../host/types/remote';
-import { HarnessContext, type Action, type State } from '../store';
+import { HarnessScope, type Action, type State } from '../store';
 import { toSaved } from '../store/persist';
 import { commandFor } from './actions';
 import { applyFrame, type Mirror } from './mirror';
@@ -192,8 +192,7 @@ export function RemoteScope({ machine, state, onOpenTab, children }: { machine: 
     },
     [machine.id, machine.name, run, ask, onOpenTab],
   );
-  const value = useMemo(() => ({ state, dispatch }), [state, dispatch]);
-  return <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>;
+  return <HarnessScope state={state} dispatch={dispatch}>{children}</HarnessScope>;
 }
 
 const COMMAND_VERBS = {

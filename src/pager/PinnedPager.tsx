@@ -6,9 +6,9 @@ import { LeafView, Workspace, WorkspaceEffects } from '../layout/Workspace';
 import type { Leaf } from '../layout/tree';
 import { Overview } from '../stage/Overview';
 import { useWindowSyncHost } from '../stage/windowSync';
-import { useHarness, type State } from '../store';
+import { useDispatch, useHarnessSelector, type State } from '../store';
 import { useSnapPager } from '../useSnapPager';
-import { isHot, OFF_PIN, slotsOf } from './slots';
+import { isHot, OFF_PIN, slotsOf, type PagerSlots } from './slots';
 import { usePagerKeys } from './usePagerKeys';
 import { useOnePagePerSwipe } from './useOnePagePerSwipe';
 
@@ -18,10 +18,10 @@ import { useOnePagePerSwipe } from './useOnePagePerSwipe';
  * is 1:1 and nothing here springs. Pages are keyed by thread, so landing on one flips it from preview to live without a remount.
  */
 export function PinnedPager() {
-  const { state, dispatch } = useHarness();
-  useWindowSyncHost();
-  const slots = slotsOf(state);
-  const live = liveLeaf(state, slots.ids[slots.center]);
+  const dispatch = useDispatch();
+  const slots = useHarnessSelector(slotsOf, isSameSlots);
+  const live = useHarnessSelector((s) => liveLeaf(s, slots.ids[slots.center]));
+  const isOverview = useHarnessSelector((s) => s.isOverview);
   // Every pinned page stays mounted (pins cap at five, and a virtualized thread is cheap), so a quick run of swipes never lands on an empty page.
   // When the set changes (launch, a pin, another space) the current page and its neighbours commit first and the rest mount in a background render.
   const ids = slots.ids.join();
@@ -37,7 +37,6 @@ export function PinnedPager() {
     if (el && el.dataset.wheeling === undefined) open(slots.ids[page]);
   };
   useSnapPager(scroller, { axis: 'x', index: slots.center, onSettle, onCross: haptic });
-  usePagerKeys();
   useOnePagePerSwipe(scroller);
   useCaretFollowsPage(slots.ids[slots.center]);
   const pages = slots.ids.length;
@@ -45,6 +44,7 @@ export function PinnedPager() {
   return (
     <div className="relative h-full min-h-0 overflow-hidden">
       <WorkspaceEffects />
+      <PagerEffects />
       <div
         ref={scroller}
         // Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility.
@@ -72,10 +72,19 @@ export function PinnedPager() {
           })}
         </div>
       </div>
-      {state.isOverview && <Overview />}
+      {isOverview && <Overview />}
     </div>
   );
 }
+
+/** The pager's whole-state side effects, in a leaf of their own so the pages don't re-render with every change. */
+function PagerEffects() {
+  useWindowSyncHost();
+  usePagerKeys();
+  return null;
+}
+
+const isSameSlots = (a: PagerSlots, b: PagerSlots) => a.center === b.center && a.ids.join() === b.ids.join();
 
 /** The layout's only leaf when it shows the pinned thread on the current page: then that page is a lone split rendered by the pager itself. */
 function liveLeaf(state: State, centerId: string): Leaf | undefined {

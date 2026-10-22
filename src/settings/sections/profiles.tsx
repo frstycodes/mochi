@@ -15,7 +15,7 @@ import { host } from '../../host';
 import { keyName } from '../../keys';
 import { SPACE_ICON_NAMES, type Provider, type Space, type SpaceIconName } from '../../model';
 import { addProfile, MAX_PROFILES, useProfiles } from '../../profiles';
-import { useHarness } from '../../store';
+import { useHarness, useDispatch } from '../../store';
 import { ProviderMark, SPACE_ICONS, SpaceIcon } from '../../ui';
 import { countOf } from '../../library/LibraryParts';
 import { useLibrary } from '../../library/useLibrary';
@@ -137,7 +137,7 @@ export function NewProfileDialog({ open, from, onClose }: { open: boolean; from?
 // Inside the dialog's content, which unmounts on close, so each opening starts fresh.
 function NewProfileForm({ from, onDone }: { from?: Space; onDone: () => void }) {
   const profiles = useProfiles();
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const copyProfile = useCopyProfile();
   const [name, setName] = useState(from ? `${from.name} copy` : '');
   const [sourceId, setSourceId] = useState(from?.id ?? EMPTY);

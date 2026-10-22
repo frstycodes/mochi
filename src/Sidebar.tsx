@@ -41,7 +41,7 @@ import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
-import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type State, type View } from './store';
+import { useDispatch, useGetState, useHarnessSelector, useSpace, useSpaceListing, useSpaceQueue, useThread, useView, type State, type View } from './store';
 import { endRename, startRename, titleToSave, useRenameSurface } from './rename';
 import type { FollowedMachine } from './host/types/remote';
 import { SpaceIcon, TooltipIconButton } from './ui';
@@ -61,9 +61,10 @@ import { HAS_CAPTIONS } from './windowCaptions';
 import { host } from './host';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const profiles = useProfiles();
-  const index = profiles.findIndex((s) => s.id === state.spaceId);
+  const index = profiles.findIndex((s) => s.id === spaceId);
   const pager = useRef<HTMLDivElement>(null);
   useSnapPager(pager, { axis: 'x', index, onSettle: (page) => dispatch({ type: 'space', id: profiles[page].id }), onCross: haptic });
 
@@ -186,9 +187,9 @@ function SpacePanel({ isCurrent, children }: { isCurrent: boolean; children: Rea
 }
 
 function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const view = useView(spaceId);
-  const threads = useSpaceThreads(spaceId);
+  const threads = useSpaceListing(spaceId);
   const queue = useSpaceQueue(spaceId);
   const remoteQueueCount = useMachines().machines.reduce((n, m) => n + (m.state ? remoteDecisions(m.state).length : 0), 0);
   const review = useReviewEntry(spaceId);
@@ -335,7 +336,8 @@ function useThreadSelection(order: string[], openId: string | undefined) {
  * group to make it a thread of its own. Alt ↑/↓ reorders from the keyboard, the row menu nests.
  */
 function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: ThreadGroup[]; remotePins: RemotePin[]; active: ThreadGroup[]; row: (t: Thread, isSub?: boolean) => ReactNode; selectedIds: string[] }) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const getState = useGetState();
   const { run } = useMachines();
   const route = useRemoteThreadRoute();
   const listRef = useRef<HTMLUListElement>(null);
@@ -350,7 +352,7 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
     if (!dragged.remote) return dispatch({ type: 'pin-at', threadId: dragged.thread.id, order });
     void run(dragged.remote.machine.id, slot.toPinned ? { type: 'pin', threadId: dragged.thread.id, isPinned: true, order } : { type: 'pin', threadId: dragged.thread.id, isPinned: false });
   };
-  const nest = (dragged: ListRow, parentId: string) => nestWithUndo(dispatch, state.threads, dragged.thread, parentId);
+  const nest = (dragged: ListRow, parentId: string) => nestWithUndo(dispatch, getState().threads, dragged.thread, parentId);
   const drag = useRowDrag(listRef, pinnedIds, drop, nest);
   if (pins.length + active.length === 0) return null;
 
@@ -422,7 +424,8 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
   // Rows only re-measure when the order or the drop slot changes, so ticks, scrolling and space swipes never animate them.
   const glide = { layout: 'position', layoutDependency: rowOrderKey(rows.flatMap((r) => [r.rowId, ...(r.subs ?? []).map((s) => s.id)]), activeIds, drag.state), transition: ROW_LAYOUT } as const;
   const isPinnedEmpty = pins.filter((p) => p.rowId !== drag.state?.id).length === 0 && drag.state?.slot?.toPinned !== true;
-  const target = drag.state?.nestUnder && state.threads.find((t) => t.id === drag.state!.nestUnder);
+  const nestUnder = drag.state?.nestUnder;
+  const target = useHarnessSelector((s) => nestUnder && s.threads.find((t) => t.id === nestUnder));
 
   return (
     <SidebarGroup>
@@ -552,11 +555,12 @@ function useRowDrag(
   onDrop: (row: ListRow, slot: NonNullable<RowDragState['slot']>) => void,
   onNest: (row: ListRow, parentId: string) => void,
 ) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const getState = useGetState();
   const { isMobile } = useSidebar();
   const [drag, setDrag] = useState<RowDragState | null>(null);
-  const latest = useRef({ pinnedIds, onDrop, onNest, state });
-  latest.current = { pinnedIds, onDrop, onNest, state };
+  const latest = useRef({ pinnedIds, onDrop, onNest });
+  latest.current = { pinnedIds, onDrop, onNest };
 
   const onPointerDown = (e: React.PointerEvent<HTMLLIElement>, row: ListRow) => {
     const { thread } = row;
@@ -600,7 +604,7 @@ function useRowDrag(
         frame = requestAnimationFrame(autoScroll);
       }
       if (!row.remote) moveDrag(ev.clientX, ev.clientY);
-      const at = dropOver(listRef.current, row, latest.current.pinnedIds, latest.current.state.threads, ev.clientX, ev.clientY);
+      const at = dropOver(listRef.current, row, latest.current.pinnedIds, getState().threads, ev.clientX, ev.clientY);
       hold(at?.nestUnder ?? null);
       // While a nest target is held the slot stays where it was, so the rows don't move under the pointer.
       const slot = at?.nestUnder ? (current?.slot ?? null) : (at?.slot ?? null);
@@ -628,7 +632,7 @@ function useRowDrag(
       if (landed) return dispatch({ type: 'layout-drop', leafId: landed.leafId, zone: landed.zone, view: landed.view });
       if (nestUnder) return latest.current.onNest(row, nestUnder);
       if (!slot) return;
-      if (thread.parent) unnestWithUndo(dispatch, latest.current.state.threads, thread);
+      if (thread.parent) unnestWithUndo(dispatch, getState().threads, thread);
       latest.current.onDrop(row, slot);
     };
     const onUp = () => finish(false);
@@ -673,7 +677,8 @@ function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string
  * `isSub`: a sub-thread under its parent, one line unless it asks for you. `machine`: the computer it runs on, for another
  * computer's thread among this one's (Pinned).
  */
-export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSelect, onRename }: { thread: Thread; isSub?: boolean; machine?: FollowedMachine; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void; onRename?: () => void }) {
+export function ThreadItem({ thread: listed, isSub, machine, isActive, isSelected, onSelect, onRename }: { thread: Thread; isSub?: boolean; machine?: FollowedMachine; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void; onRename?: () => void }) {
+  const thread = useThread(listed.id) ?? listed;
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
   const isRenaming = useRenameSurface(thread.id) === 'row';
@@ -722,7 +727,7 @@ export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSel
 
 /** The row's title as a field: Enter or leaving it saves, Esc keeps the old title. */
 function RowTitleField({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [startedFrom] = useState(thread.title);
   const ref = useRef<HTMLInputElement>(null);
   // Enter and Esc end it, and the field's unmount then blurs it: once is enough.
@@ -789,7 +794,8 @@ function RowDetail({ thread, row, machine }: { thread: Thread; row: ThreadRow; m
 }
 
 function SpaceFooter() {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const profiles = useProfiles();
   return (
     <SidebarFooter className="flex-row items-center gap-1 px-2 py-2">
@@ -797,7 +803,7 @@ function SpaceFooter() {
       <span className="flex-1" />
       <div role="radiogroup" aria-label="Profile" className="flex items-center gap-0.5">
         {profiles.map((s, i) => {
-          const isCurrent = s.id === state.spaceId;
+          const isCurrent = s.id === spaceId;
           return (
             <Tooltip key={s.id}>
               <TooltipTrigger asChild>

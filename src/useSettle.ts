@@ -1,11 +1,11 @@
 import type { Dispatch } from 'react';
 import { toast } from './toast/store.ts';
 import type { Thread } from './model';
-import { useHarness, type Action } from './store';
+import { type Action, useDispatch } from './store';
 
 /** Settle or reactivate a thread, with an undo toast. */
 export function useSettle(thread: Thread) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return { isSettled: thread.status === 'settled', toggle: () => toggleSettle([thread], dispatch) };
 }
 

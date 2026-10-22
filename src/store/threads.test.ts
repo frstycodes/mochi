@@ -14,3 +14,11 @@ test("a turn's late update is dropped once the next turn has ended", () => {
   const [current] = threadsReducer(at(second), { type: 'idle-update', threadId: 't', patch: { uncommitted: 2 }, turn: 2 }).threads;
   assert.equal(current.idle?.uncommitted, 2);
 });
+
+test('a streamed token changes the transcript and leaves the plan as it was', () => {
+  const t = { id: 't', status: 'running', providers: ['claude'], steps: [{ id: 's1', title: 'Plan', status: 'running' }], activity: [{ at: 1, who: 'claude', kind: 'message', text: 'Hel' }], prs: [] } as unknown as Thread;
+  const state = { now: 1, threads: [t], queue: [], checkpoints: { t: [] }, checkpointSeq: 0 } as unknown as State;
+  const [after] = threadsReducer(state, { type: 'agent', event: { threadId: 't', type: 'message', text: 'lo', isDelta: true }, ms: 5 }).threads;
+  assert.equal(after.activity[0].text, 'Hello');
+  assert.equal(after.steps, t.steps);
+});

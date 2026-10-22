@@ -25,12 +25,13 @@ import type { MochiUser } from './host/types/account';
 import type { AppUpdate } from './host/types/updates';
 import { openSettings } from './settings/open';
 import { BoundShortcut } from './Shortcut';
-import { useHarness } from './store';
+import { useDispatch, useHarnessSelector } from './store';
 import { IconSwap } from './ui';
 
 /** The sidebar's bottom-left chip: your first name, opening your Mochi account, settings, theme and app updates. */
 export function UserMenu() {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const isPaused = useHarnessSelector((s) => s.paused);
   const mochiAccount = useMochiAccount();
   const user = mochiAccount.account?.user;
   const name = firstName(user?.name ?? null);
@@ -62,8 +63,8 @@ export function UserMenu() {
             <DropdownMenuGroup>
               <DropdownMenuLabel>Prototype</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
-                <IconSwap id={state.paused ? 'play' : 'pause'}>{state.paused ? <Play /> : <Pause />}</IconSwap>
-                {state.paused ? 'Resume simulation' : 'Pause simulation'}
+                <IconSwap id={isPaused ? 'play' : 'pause'}>{isPaused ? <Play /> : <Pause />}</IconSwap>
+                {isPaused ? 'Resume simulation' : 'Pause simulation'}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
                 <Refresh />

@@ -5,7 +5,7 @@ import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { authorName, type Thread } from '../model';
 import { timeAgo } from '../progress';
-import { useHarness } from '../store';
+import { useDispatch, useHarnessSelector } from '../store';
 import { rewindBlockedReason, type RewindMode } from '../rewind/checkpoints';
 import { REWIND_MODE_ORDER, REWIND_MODES } from '../rewind/modes';
 import { openRewind } from '../rewind/requests';
@@ -31,7 +31,7 @@ export interface MessageAction {
 export function useMessageActions(thread: Thread, index: number): MessageAction[] {
   const pins = useThreadPins(thread.id);
   const { rewind } = useRewindActions();
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const run = useSimplify(dispatch);
   const isSimplifying = useIsSimplifying(thread.id, index);
   const entry = thread.activity[index];
@@ -73,7 +73,7 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
 /** Shows on hover or keyboard focus under a message; pinned messages are marked on the outline rail instead. */
 export function MessageActions({ thread, index, align }: { thread: Thread; index: number; align: 'start' | 'end' }) {
   const actions = useMessageActions(thread, index);
-  const { now } = useHarness().state;
+  const now = useHarnessSelector((s) => s.now);
   const rewinds = actions.filter((a) => a.id.startsWith('rewind-'));
   return (
     <div role="toolbar" aria-label="Message actions" className={cn('flex items-center gap-0.5', align === 'end' && 'justify-end')}>

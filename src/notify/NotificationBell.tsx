@@ -12,7 +12,7 @@ import { host } from '../host';
 import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
 import { openSettings } from '../settings/open';
-import { useHarness } from '../store';
+import { shallowEqual, useDispatch, useHarnessSelector, useThread } from '../store';
 import { GitPullRequestIcon } from '@/icons/github';
 import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 import { groupBursts, hourLabel, type Burst, type NoticeKind } from './model';
@@ -37,9 +37,11 @@ const VERDICT_ICONS = {
 } satisfies Partial<Record<VerdictKind, { icon: IconComponent; className: string }>>;
 
 export function NotificationBell({ spaceId }: { spaceId: string }) {
-  const { state, dispatch } = useHarness();
-  const spaceThreads = new Set(state.threads.filter((t) => t.spaceId === spaceId).map((t) => t.id));
-  const notices = state.notifications.items.filter((n) => spaceThreads.has(n.threadId));
+  const dispatch = useDispatch();
+  const notices = useHarnessSelector((s) => {
+    const spaceThreads = new Set(s.threads.filter((t) => t.spaceId === spaceId).map((t) => t.id));
+    return s.notifications.items.filter((n) => spaceThreads.has(n.threadId));
+  }, shallowEqual);
   const unread = notices.filter((n) => !n.isRead).length;
   const bursts = groupBursts(notices);
   const [isOpen, setOpen] = useState(false);
@@ -88,13 +90,14 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
 }
 
 function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const now = useHarnessSelector((s) => s.now);
   const jump = useJump();
   const [head, ...rest] = burst.notices;
   const { icon: Icon, className } = (head.verdict && head.verdict in VERDICT_ICONS ? VERDICT_ICONS[head.verdict as keyof typeof VERDICT_ICONS] : undefined) ?? KIND_ICONS[head.kind];
   const isUnread = burst.notices.some((n) => !n.isRead);
-  const isMuted = state.notifications.muted.includes(burst.threadId);
-  const thread = state.threads.find((t) => t.id === burst.threadId);
+  const isMuted = useHarnessSelector((s) => s.notifications.muted.includes(burst.threadId));
+  const thread = useThread(burst.threadId);
   const threadTitle = thread?.title;
   const pr = head.kind === 'pr-review' ? thread?.prs.find((p) => p.number === head.prNumber) : undefined;
   const open = () => {
@@ -118,7 +121,7 @@ function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
         <ItemDescription className="line-clamp-1 type-caption">{rest.length > 0 ? `${threadTitle ?? head.body} · +${rest.length} more` : head.body}</ItemDescription>
       </ItemContent>
       <ItemActions className="relative z-10 gap-1 self-center">
-        <span className="tabular type-caption text-subtle-foreground group-hover/notice:hidden">{state.now - head.at < 1 ? 'now' : duration(state.now - head.at)}</span>
+        <span className="tabular type-caption text-subtle-foreground group-hover/notice:hidden">{now - head.at < 1 ? 'now' : duration(now - head.at)}</span>
         {isUnread && <UnreadDot className="group-hover/notice:hidden" />}
         <Button
           variant="ghost"
@@ -157,8 +160,8 @@ function NoNotices() {
 
 /** Quiet hours, muted threads and which kinds alert live in Settings › Notifications; the popover says what's in effect and links there. */
 function NotifyFooter({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { state } = useHarness();
-  const { quiet, muted } = state.notifications;
+  const quiet = useHarnessSelector((s) => s.notifications.quiet);
+  const muted = useHarnessSelector((s) => s.notifications.muted);
   const status = [quiet.isOn && `Quiet ${hourLabel(quiet.start)}–${hourLabel(quiet.end)}`, muted.length > 0 && `${muted.length} muted`].filter(Boolean).join(' · ');
   return (
     <div className="flex flex-col gap-2 bg-muted/40 px-3 py-2">

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import type { Thread } from './model';
 import { endRename, titleToSave, useDialogRename } from './rename';
-import { useHarness } from './store';
+import { useHarness, useDispatch } from './store';
 
 /** Mounted once at the app root: renames started away from the thread's sidebar row (⌘K, the thread header's menu). */
 export function RenameLayer() {
@@ -16,7 +16,7 @@ export function RenameLayer() {
 }
 
 function RenameDialog({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [startedFrom] = useState(thread.title);
   const [text, setText] = useState(thread.title);
   const save = (e: FormEvent) => {

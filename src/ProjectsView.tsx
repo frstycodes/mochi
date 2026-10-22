@@ -20,7 +20,7 @@ import { ProjectIcon } from './ProjectIcon';
 import { timeAgo } from './progress';
 import { projectUsage, refreshProjects, requestNewThreadIn, useProjects } from './projects';
 import { useMachines } from './remote/useMachines';
-import { useHarness, useSpaceThreads } from './store';
+import { useHarness, useSpaceThreads, useHarnessSelector } from './store';
 import { OverflowIcon } from './ui';
 import { SettingsCard, SettingsSection } from './settings/parts';
 
@@ -44,7 +44,7 @@ export function ProjectsView() {
 }
 
 function ThisComputerProjects() {
-  const spaceId = useHarness().state.spaceId;
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const threads = useSpaceThreads();
   const projects = useProjects(spaceId, threads);
   const [query, setQuery] = useState('');

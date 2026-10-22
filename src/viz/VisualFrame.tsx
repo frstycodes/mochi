@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { PaneVisual } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { IconSwap, TooltipIconButton } from '../ui';
 import { download, serializeSvg, svgToPng } from './exportVisual';
 import type { VizLanguage } from './fence';
@@ -111,7 +111,7 @@ const InPaneContext = createContext(false);
 export const VisualInPane = ({ children }: { children: ReactNode }) => <InPaneContext.Provider value>{children}</InPaneContext.Provider>;
 
 function PaneButtons({ fence, title }: { fence: PaneVisual; title: string }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const threadId = useVizThreadId();
   const open = (isPopped: boolean) => () => dispatch({ type: 'pane-open-tab', threadId, kind: 'visual', title, visual: fence, isPopped });
   return (

@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { Simulator } from '@/host/types/sim';
-import { useHarness } from '@/store';
+import { useDispatch } from '@/store';
 import { message } from './useSimulators';
 
 /** Screenshot and screen recording of a device, posted to the thread like a browser comment. */
 export function useCapture(threadId: string, device: Simulator | null) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [isRecording, setRecording] = useState(false);
 
   // GAP: chat entries are text only, so the capture goes in as its file path until messages carry attachments.

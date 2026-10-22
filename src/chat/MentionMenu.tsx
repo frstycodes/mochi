@@ -12,7 +12,8 @@ import type { AgentImage } from '../host/types/agent';
 import type { AppWindow, ScreenAccess } from '../host/types/windows';
 import type { AgentCommand, McpServer, Thread } from '../model';
 import { openPhotos } from '../photo/photos';
-import { useHarness } from '../store';
+import { useHarnessSelector } from '../store';
+import { isSameListing } from '../reorder';
 import { useLibraryNames } from '../library/names';
 import { FileMark } from './FileMark';
 import { browseEntries, browseQuery, browseTarget, fileMentionFor, mentionTokens, parentDir, rankFiles, tokenText, worktreeMention } from './fileMentions';
@@ -174,7 +175,7 @@ function ChipIcon({ mention }: { mention: Exclude<Mention, { kind: 'window' | 'f
  */
 export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: McpServer[], files: MentionFiles = NO_FILES) {
   const listId = useId();
-  const { state } = useHarness();
+  const threads = useHarnessSelector((s) => s.threads, isSameListing);
   const { textInput } = usePromptInputController();
   const [active, setActive] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<string>();
@@ -189,7 +190,7 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   const fileOptions = useFileOptions(isQuerying ? query : null, files);
 
   const picked = new Set(mentions.map((m) => m.id));
-  const others = browse ? [] : mentionOptions(query ?? '', state.threads, screen.windows, selfId, skills, servers).filter((o) => !picked.has(optionId(o)));
+  const others = browse ? [] : mentionOptions(query ?? '', threads, screen.windows, selfId, skills, servers).filter((o) => !picked.has(optionId(o)));
   const options = [...fileOptions, ...others];
   const items: MenuItem[] = !browse && isBlocked(screen.access) ? [...options, { kind: 'permission' }] : options;
   const isOpen = isQuerying && items.length > 0;

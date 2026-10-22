@@ -6,18 +6,19 @@ import type { LineSlot, Thread } from '../model';
 import { lineColor } from '../ui';
 import { isWorking } from '../agentPhase';
 import { goalProgress } from '../progress';
-import { useHarness } from '../store';
+import { shallowEqual, useHarnessSelector } from '../store';
+import { subThreadsOf } from '../reorder';
 import { idleVerdict, subThreadVerdicts, type Verdict, type VerdictKind } from './verdict';
 
 /** The thread's idle verdict with its PRs as GitHub last reported them and its sub-threads' own; null while the agent works or once settled. */
 export function useIdleVerdict(thread: Thread) {
   const prs = useThreadPrs(thread);
-  const { state } = useHarness();
+  const subs = useHarnessSelector((s) => subThreadsOf(s.threads, thread.id), shallowEqual);
   if (thread.status === 'settled') return null;
   return idleVerdict(
     thread,
     prs.map((p) => p.state),
-    subThreadVerdicts(state.threads, thread.id),
+    subThreadVerdicts(subs, thread.id),
   );
 }
 

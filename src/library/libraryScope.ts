@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Space } from '../model';
 import { useProfiles } from '../profiles';
-import { useHarness } from '../store';
+import { useHarnessSelector } from '../store';
 
 /**
  * The profile Settings › Skills, Plugins and Connectors show and install to, shared by the three pages and a connector's
@@ -21,7 +21,7 @@ export function setLibraryScope(id: string) {
 export function useLibraryScope(): { id: string; profile: Space | null; installTo: string[] } {
   const chosen = useSyncExternalStore(subscribe, () => picked);
   const profiles = useProfiles();
-  const { spaceId } = useHarness().state;
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   if (chosen === ALL_PROFILES) return { id: ALL_PROFILES, profile: null, installTo: profiles.map((p) => p.id) };
   // A picked profile that was since removed falls back to the one you're in.
   const profile = profiles.find((p) => p.id === chosen) ?? profiles.find((p) => p.id === spaceId) ?? profiles[0];

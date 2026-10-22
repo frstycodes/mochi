@@ -8,7 +8,7 @@ import { copyText } from '../clipboard';
 import type { Key } from '../keys';
 import { getPrefs } from '../settings/prefs';
 import { Shortcut } from '../Shortcut';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { reloadPage, updatePage, type Page } from './pages';
 import { openExternally, openInLabel } from './systemBrowser';
 import { SEARCH_ENGINES } from './url';
@@ -20,7 +20,7 @@ const SELECTION_PREVIEW = 24;
  * What it offers follows what was clicked, like Chrome: a link, an image, selected text, a text field, else the page itself.
  */
 export function PageMenu({ thread, pageId, page, menu, at }: { thread: Thread; pageId: string; page: Page; menu: BrowserContextMenu; at: { x: number; y: number } }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const id = page.hostId;
   const run = (command: BrowserMenuCommand, url?: string) => id && void host.browser.menuCommand(id, command, { x: menu.x, y: menu.y }, url);
   const openTab = (url: string) => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind: 'browser', url });

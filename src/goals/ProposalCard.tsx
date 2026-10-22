@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { TerminalIcon } from '@/icons/panes';
 import { authorName, type GoalProposal, type Thread } from '../model';
 import { usePrefs } from '../settings/prefs';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { CallList } from '../WorkLog';
 import { openGoalEditor } from './GoalEditor';
@@ -22,7 +22,7 @@ export function ProposalCard({ thread }: { thread: Thread }) {
 }
 
 function WaitingProposal({ thread, proposal }: { thread: Thread; proposal: GoalProposal }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const decide = (decision: 'accept' | 'keep') => dispatch({ type: 'goal-proposal', threadId: thread.id, decision });
   const acceptAndEdit = () => {
     decide('accept');
@@ -78,7 +78,7 @@ function ProposedCriteria({ criteria }: { criteria: GoalProposal['criteria'] }) 
 }
 
 function AppliedProposal({ thread, proposal }: { thread: Thread; proposal: GoalProposal }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (
     <p className="flex items-center gap-2 type-meta text-muted-foreground">
       <ProviderMark provider={proposal.by} size={14} />

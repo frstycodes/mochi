@@ -8,6 +8,7 @@ import type { WorkspaceDraft } from './git/workspace.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import type { PaneLayout } from './pane/layout.ts';
+import { shallowEqual } from './store/external.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 import { longThreadFromUrl } from './longThread.ts';
 import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
@@ -312,6 +313,13 @@ export interface WebLink {
 /** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
 /** Shown with the other threads (sidebar, palette, queue, list_threads); a settings chat lives only in Settings. */
 export const isListed = (thread: Thread) => !thread.isSettingsChat;
+
+/** The same thread but for what an agent's events stream into it: its transcript and the seq of the last event applied. */
+export function isStreamedOnly(a: Thread, b: Thread) {
+  const keys = Object.keys(a) as (keyof Thread)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((k) => k === 'activity' || Object.is(a[k], b[k]) || (k === 'live' && shallowEqual({ ...a.live, eventSeq: 0 }, { ...b.live, eventSeq: 0 })));
+}
 
 export function firstPrompt(thread: Thread) {
   return thread.activity.find((e) => e.who === 'you' && e.kind === 'message')?.text ?? thread.goal;
