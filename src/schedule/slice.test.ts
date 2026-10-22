@@ -4,7 +4,9 @@ import type { ScheduleRun } from '../host/types/schedule.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { agentCalls } from '../runtime/live.ts';
+import { agentCalls, unsentTurns } from '../runtime/live.ts';
+import { applyAgentEvent } from '../runtime/apply.ts';
+import { agentPhase, pendingWork } from '../agentPhase.ts';
 import { DEFAULT_PREFS, setPrefs } from '../settings/prefs.ts';
 import { scheduleReducer } from './slice.ts';
 
@@ -99,4 +101,33 @@ test('Auto-fix stopping on a merged or closed PR records that state; at its cap 
   const stop = (reason: 'closed' | 'cap'): Action => ({ type: 'autofix', threadId: id, event: { kind: 'stopped', pr: 12, url: 'u', reason } });
   assert.equal(reduce(s, stop('cap')).threads.at(-1)!.prs[0].state, 'open');
   assert.equal(reduce(s, stop('closed')).threads.at(-1)!.prs[0].state, 'closed');
+});
+
+// new-127: a review event became a message (and a turn) the agent never got, so the thread thought on after its PR merged.
+test('an Auto-fix review that reaches no agent ends its turn; the PR merging after leaves no Thinking behind', () => {
+  const create: Action = { type: 'create', title: 'PR pane', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
+  let s = reduce(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'done' });
+  s = reduce(s, { type: 'prs-seen', threadId: id, prs: [{ number: 284, state: 'open', title: 'PR pane', url: 'u' }] });
+  s = reduce(s, { type: 'autofix-set', threadId: id, pr: 284, since: 5 });
+  s = applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'done' });
+  const thread = () => s.threads.find((t) => t.id === id)!;
+  assert.equal(agentPhase(thread()), 'idle');
+
+  const review: Action = { type: 'autofix', threadId: id, event: { kind: 'review', pr: 284, url: 'u', comments: [{ id: 'c1', author: 'coderabbitai', body: 'Nit' }] } };
+  const next = reduce(s, review);
+  const calls = agentCalls(s, review, () => next);
+  assert.deepEqual(calls.map((c) => [c.method, c.threadId]), [['send', id]], 'dispatched, the review reaches the agent');
+  assert.deepEqual(unsentTurns(s, next, calls), []);
+  assert.deepEqual(unsentTurns(s, next, []), [id], 'applied without its call, the turn has nothing to run it');
+
+  const before = s;
+  s = next;
+  assert.equal(pendingWork(thread())?.label, 'Thinking');
+  for (const threadId of unsentTurns(before, next, [])) s = applyAgentEvent(s, { threadId, type: 'turn-end', status: 'failed', error: 'Mochi had no agent to send this to' });
+  s = reduce(s, { type: 'autofix', threadId: id, event: { kind: 'stopped', pr: 284, url: 'u', reason: 'merged' } });
+  assert.equal(thread().activity.at(-1)?.text, 'Auto-fix off: #284 was merged');
+  assert.deepEqual([thread().live?.isWorking, thread().live?.turnEnd, pendingWork(thread())], [false, 'failed', undefined], 'no Thinking once nothing runs');
+  assert.equal(agentPhase(thread()), 'wait', 'the undelivered review asks for you rather than spinning');
 });

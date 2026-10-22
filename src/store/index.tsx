@@ -9,7 +9,7 @@ import { isListed, type QueueItem, type Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
-import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
+import { agentCalls, resumeAfterLostProcess, unsentTurns, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
 import { dueReports } from '../runtime/subagents.ts';
 import { dueWakes } from '../runtime/subThreadNotes.ts';
@@ -93,6 +93,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
       });
     }
     applyNow(action);
+    for (const threadId of unsentTurns(before, next(), calls)) apply({ type: 'agent', event: failed(threadId, new Error('Mochi had no agent to send this to')) });
     // After the action: a new thread only exists once it has applied.
     for (const call of calls) if (call.method === 'start') applyNow({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
     if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
@@ -138,14 +139,15 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
       if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
-      if (event.type === 'autofix') return apply({ type: 'autofix', threadId: event.threadId, event: event.event });
+      // Dispatched, not applied: the message it becomes must reach the agent (`agentCalls`).
+      if (event.type === 'autofix') return dispatch({ type: 'autofix', threadId: event.threadId, event: event.event });
       apply(event.type === 'ci' ? { type: 'ci-result', event } : { type: 'schedule-run', event });
     };
     const off = host.schedule.onEvent(onSchedule);
     // What happened while no window was open: runs and their agent's events, in order.
     void host.schedule.drain().then((events) => events.forEach(onSchedule), (error: unknown) => console.error('Reading scheduled runs failed', error));
     return off;
-  }, [apply]);
+  }, [apply, dispatch]);
   useEffect(() => {
     const onToolCall = (call: AgentToolCall) => {
       const env = toolEnv(

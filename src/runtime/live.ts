@@ -143,6 +143,13 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
+/** Live threads `next` marks working that weren't, with no call to run that turn: nothing would ever end it, so it would think forever. */
+export function unsentTurns(before: State, next: State, calls: AgentCall[]): string[] {
+  const called = new Set(calls.map((c) => c.threadId));
+  const wasWorking = new Set(before.threads.filter((t) => t.live?.isWorking).map((t) => t.id));
+  return next.threads.filter((t) => t.live?.isWorking && !wasWorking.has(t.id) && !called.has(t.id)).map((t) => t.id);
+}
+
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
