@@ -44,6 +44,8 @@ export async function transcriptUuids(configDir: string | undefined, sessionId: 
 }
 
 // Searched rather than derived from the cwd: Claude Code's folder-name scheme (and its hashing of long paths) is its own.
+// Not the SDK's getSessionInfo/getSessionMessages (0.3.296): they take no config dir, so they'd read the default account's folder, and getSessionMessages
+// returns only user/assistant entries while resumeSessionAt also accepts the attachment entries a fork point often is.
 async function transcriptFile(configDir: string, sessionId: string) {
   const projects = join(configDir, 'projects');
   const folders = await readdir(projects).catch(() => []);
