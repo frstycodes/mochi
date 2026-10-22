@@ -21,9 +21,10 @@ test('spawnCommand streams stdout, takes stdin and reports exit', async () => {
   assert.equal(seen.join(''), 'ping\n');
 });
 
-test('spawnCommand kill ends a long process with a null code', async () => {
+test('spawnCommand kill ends a long process with a non-zero code', async () => {
   const child = spawnCommand('sleep', ['30']);
   const exited = new Promise((resolve) => child.once('exit', resolve));
   setTimeout(() => child.kill(), 200);
-  assert.equal(await exited, null);
+  // null where a signal killed it; Windows' taskkill gives an exit code.
+  assert.notEqual(await exited, 0);
 });
