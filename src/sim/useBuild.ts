@@ -4,7 +4,6 @@ import { host } from '@/host';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { nextTabId } from '../store/panes';
-import { showSession, startBuildLog } from '../terminal/sessions';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { message } from './useSimulators';
 
@@ -30,6 +29,8 @@ export function useBuild(udid: string | null, thread: Thread) {
 
   const run = async (cwd: string) => {
     if (!udid || build?.isBuilding) return;
+    const { startBuildLog } = await import('../terminal/sessions');
+    if (builds.get(udid)?.isBuilding) return;
     const pane = state.panes.find((p) => p.threadId === thread.id);
     const terminal = pane?.tabs.find((t) => t.kind === 'terminal');
     const tabId = terminal?.id ?? nextTabId(pane?.tabs ?? []);
@@ -60,7 +61,7 @@ export function useBuild(udid: string | null, thread: Thread) {
     const { threadId, tabId, sessionId } = build.log;
     if (!state.panes.find((p) => p.threadId === threadId)?.isOpen) dispatch({ type: 'pane-toggle', threadId });
     dispatch({ type: 'pane-select-tab', threadId, tabId });
-    showSession(`${threadId}/${tabId}`, sessionId);
+    void import('../terminal/sessions').then(({ showSession }) => showSession(`${threadId}/${tabId}`, sessionId));
   };
 
   const dismiss = () => {

@@ -1,8 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
-import { useDiffTheme } from './themes/highlight';
-import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
-import { File, PatchDiff } from '@pierre/diffs/react';
+import { File, PatchDiff } from './files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Check, ChevronRight, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
@@ -221,9 +219,7 @@ function CallGlyph({ call, links = [] }: { call: ToolCall; links?: WebLink[] }) 
 
 /** The first lines of a file the agent read, highlighted like the viewer; the whole file opens in the viewer. */
 function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
-  const diffTheme = useDiffTheme();
   const [state, setState] = useState<{ text?: string; error?: string }>({});
-  const isReady = useHighlighterReady();
   useEffect(() => {
     let isCurrent = true;
     loadViewerFile({ source: 'workspace', ...fileAt(files, fileLink(path).path) }).then(
@@ -233,14 +229,14 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
     return () => void (isCurrent = false);
   }, [files, path]);
   if (state.error) return <p className="type-caption text-subtle-foreground">{state.error}</p>;
-  if (state.text === undefined || !isReady) return <p className="type-caption text-subtle-foreground">Loading…</p>;
+  if (state.text === undefined) return <p className="type-caption text-subtle-foreground">Loading…</p>;
   const lines = state.text.split('\n');
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       <File
         file={{ name: path.split('/').pop() ?? path, contents: lines.slice(0, PREVIEW_LINES).join('\n') }}
         disableWorkerPool
-        options={{ disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
+        options={{ disableFileHeader: true, overflow: 'scroll' }}
         style={DIFF_STYLE}
         className="max-h-64 overflow-auto"
       />
@@ -551,31 +547,11 @@ function seconds(ms: number) {
   return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-const HIGHLIGHTER = { theme: DEFAULT_THEMES, lang: 'text' } as const;
-
-/**
- * Pierre 1.5.2 drops the first render while its shared highlighter is still loading (`applyHighlightResult` returns
- * early on an empty render cache), so the first diff of a session stayed blank. Mount it once the highlighter is up.
- */
-function useHighlighterReady() {
-  const [isReady, setReady] = useState(() => !!getHighlighterIfLoaded(HIGHLIGHTER));
-  useEffect(() => {
-    if (isReady) return;
-    let isCurrent = true;
-    void getSharedHighlighter(getHighlighterOptions(HIGHLIGHTER.lang, { theme: HIGHLIGHTER.theme })).then(() => isCurrent && setReady(true));
-    return () => void (isCurrent = false);
-  }, [isReady]);
-  return isReady;
-}
-
 const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties;
 
 /** One bordered diff per file in the patch. */
 export function DiffView({ patch }: { patch: string }) {
-  const diffTheme = useDiffTheme();
   const { diffStyle } = usePrefs();
-  const isReady = useHighlighterReady();
-  if (!isReady) return null;
   return (
     <div className="flex flex-col gap-2">
       {patchSections(patch).map((section, i) => (
@@ -583,7 +559,7 @@ export function DiffView({ patch }: { patch: string }) {
           <PatchDiff
             patch={section}
             disableWorkerPool
-            options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
+            options={{ diffStyle, disableFileHeader: true, overflow: 'scroll' }}
             style={DIFF_STYLE}
             className="max-h-80 overflow-auto"
           />

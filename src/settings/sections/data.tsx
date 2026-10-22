@@ -8,7 +8,7 @@ import { host } from '../../host';
 import { forgetAllReplays } from '../../replay/recorder';
 import { useHarness } from '../../store';
 import { SIDECHAT_STORAGE_KEY } from '../../store/sidechat';
-import { clearTerminalHistory, TERMINAL_STORAGE_PREFIX } from '../../terminal/sessions';
+import { TERMINAL_STORAGE_PREFIX } from '../../terminal/storage';
 import { SettingsGroup, SettingsRow, settingControlId, UNDO_MS } from '../parts';
 import { CatalogRow } from '../CatalogRow';
 
@@ -28,7 +28,8 @@ export function DataSection() {
     dispatch({ type: 'sidechat-replace', sidechats: {} });
     toast('Side chats cleared', { duration: UNDO_MS, action: { label: 'Undo', onClick: () => dispatch({ type: 'sidechat-replace', sidechats: previous }) } });
   };
-  const clearTerminals = () => {
+  const clearTerminals = async () => {
+    const { clearTerminalHistory } = await import('../../terminal/sessions');
     clearTerminalHistory();
     remeasure();
     toast('Terminal history cleared', { description: 'Open shells keep running.' });
