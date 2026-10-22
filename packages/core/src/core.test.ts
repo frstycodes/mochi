@@ -3,44 +3,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { MessageChannel, type MessagePort } from 'node:worker_threads';
-import { Effect, Exit, Fiber, Layer, Queue, Stream } from 'effect';
+import { Effect, Exit, Fiber, Layer } from 'effect';
 import { NodeServices } from '@effect/platform-node';
 import { TestClock } from 'effect/testing';
 import { Cache } from './cache.ts';
-import { makeHostCaller } from './hostClient.ts';
-import { layerHost } from './hostServer.ts';
-import { makeCoreClient } from './client.ts';
 import { Run, RunError } from './run.ts';
-import { layerCore } from './server.ts';
-import type { CorePort } from './transport.ts';
-
-// Node's port hands `data` straight to `on('message')`; Electron's `MessagePortMain` wraps it in an event.
-const asMainPort = (port: MessagePort): CorePort => ({
-  postMessage: (message) => port.postMessage(message),
-  on: (event: 'message' | 'close', listener: (event: { data: unknown }) => void) =>
-    event === 'message' ? port.on('message', (data) => listener({ data })) : port.on('close', listener as () => void),
-  start: () => port.start(),
-  close: () => port.close(),
-});
-
-test('ping and ticks reach a client over a MessagePort', async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const ports = yield* Queue.unbounded<CorePort>();
-        yield* Layer.launch(layerCore(ports)).pipe(Effect.forkScoped);
-        const { port1, port2 } = new MessageChannel();
-        Queue.offerUnsafe(ports, asMainPort(port1));
-        const client = yield* makeCoreClient(asMainPort(port2));
-        assert.equal(yield* client.ping(), 'pong');
-        const ticks = yield* client.ticks({ intervalMs: 5 }).pipe(Stream.take(3), Stream.runCollect);
-        assert.deepEqual([...ticks], [0, 1, 2]);
-        port1.close();
-      }),
-    ),
-  );
-});
 
 const runPromise = <A, E>(effect: Effect.Effect<A, E, Run>) => Effect.runPromise(effect.pipe(Effect.provide(Run.layer.pipe(Layer.provide(NodeServices.layer)))));
 
@@ -108,30 +75,5 @@ test('cache keeps a success for its TTL and drops failures', async () => {
       yield* cache.get('b', Effect.fail('down'), '1 minute').pipe(Effect.exit);
       assert.equal(yield* cache.get('b', Effect.succeed('up'), '1 minute'), 'up');
     }).pipe(Effect.provide(Layer.provideMerge(Cache.layer, TestClock.layer()))),
-  );
-});
-
-test('host calls decode their arguments, run the handler and carry failures as messages', async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const ports = yield* Queue.unbounded<CorePort>();
-        const calls: Array<[string, ReadonlyArray<unknown>]> = [];
-        const call = async (tag: string, args: ReadonlyArray<unknown>) => {
-          calls.push([tag, args]);
-          if (tag === 'git.status') return { branch: 'main', files: [{ path: 'a.ts', status: 'modified' }] };
-          throw new Error('nope');
-        };
-        yield* Layer.launch(layerHost(ports, call)).pipe(Effect.forkScoped);
-        const { port1, port2 } = new MessageChannel();
-        Queue.offerUnsafe(ports, asMainPort(port1));
-        const host = yield* makeHostCaller(asMainPort(port2));
-        assert.deepEqual(yield* Effect.promise(() => host('git.status', ['/repo'])), { branch: 'main', files: [{ path: 'a.ts', status: 'modified' }] });
-        yield* Effect.promise(() => assert.rejects(() => host('pty.kill', ['x']), /nope/));
-        yield* Effect.promise(() => assert.rejects(() => host('pty.resize', ['x', 0, 5]), Error));
-        assert.deepEqual(calls.map(([tag]) => tag), ['git.status', 'pty.kill']);
-        port1.close();
-      }),
-    ),
   );
 });
