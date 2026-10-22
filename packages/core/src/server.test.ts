@@ -120,7 +120,7 @@ test("a window's host call reaches the client serving its capability, with the w
   );
 });
 
-test('killing Core reconnects every client, and main registers its capabilities again', { timeout: 30_000 }, async () => {
+test('killing Core reconnects every client, and main registers its capabilities again', { timeout: 90_000 }, async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'mochi-core-'));
   const env = { ...process.env, MOCHI_LOG_FILE: path.join(dir, 'core.log'), MOCHI_CORE_TOKEN: TOKEN, MOCHI_CORE_PORT: String(await freePort()) };
   const startProcess = () => spawn(process.execPath, [path.join(import.meta.dirname, 'core.ts')], { env, stdio: 'inherit' });
@@ -154,8 +154,8 @@ test('killing Core reconnects every client, and main registers its capabilities 
   }
 });
 
-/** A call made while Core is down fails; the same client succeeds once it has redialled (and main re-registered). */
-const retrying = <A, E>(effect: Effect.Effect<A, E>) => effect.pipe(Effect.retry({ times: 100, schedule: Schedule.spaced(50) }));
+/** A call made while Core is down fails; the same client succeeds once it has redialled (and main re-registered). 30s: a cold `node core.ts` takes seconds on a CI runner. */
+const retrying = <A, E>(effect: Effect.Effect<A, E>) => effect.pipe(Effect.retry({ times: 300, schedule: Schedule.spaced(100) }));
 
 function freePort() {
   return new Promise<number>((resolve) => {
