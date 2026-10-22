@@ -1,3 +1,5 @@
+import { v7 as uuidv7 } from 'uuid';
+import { duration } from '../progress.ts';
 import type { ScheduleEvent, ScheduleRun } from '../host/types/schedule.ts';
 import type { PullRequest, QueueItem, Thread } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -51,7 +53,7 @@ function ciResult(state: State, { threadId, result }: Extract<ScheduleEvent, { t
   if (result.status === 'pass') return { ...state, threads };
   const [check] = result.failed;
   const item: QueueItem = {
-    id: `q-ci-${threadId}-${result.pr}-${Date.now().toString(36)}`,
+    id: `q-ci-${threadId}-${result.pr}-${uuidv7()}`,
     kind: 'ci',
     threadId,
     title,
@@ -124,7 +126,7 @@ export function runOutcome(run: ScheduleRun) {
 
 function runDetail(run: ScheduleRun) {
   const ms = run.endedAt ? run.endedAt - run.startedAt : null;
-  const took = ms === null ? null : ms < 60_000 ? 'ran under a minute' : `ran ${Math.round(ms / 60_000)} min`;
+  const took = ms === null ? null : ms < 60_000 ? 'ran under a minute' : `ran ${duration(Math.round(ms / 60_000))}`;
   const parts = [run.reason, took, run.error, run.resetsAt && `resumes after ${new Date(run.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`];
   return parts.filter(Boolean).join(' · ');
 }

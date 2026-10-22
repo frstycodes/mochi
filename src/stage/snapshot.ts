@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { structuralEqual } from '../lib/structuralEqual';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
 import { goalProgress } from '../progress';
 import { isWorking } from '../agentPhase';
@@ -32,7 +33,7 @@ export function useThreadSnapshots(ids: string[]) {
     const thread = state.threads.find((x) => x.id === id);
     if (!thread) return [];
     const next = snapshotOf(thread, state);
-    const snap = hit && isSame(hit.snap, next) ? hit.snap : next;
+    const snap = hit && structuralEqual(hit.snap, next) ? hit.snap : next;
     cache.current.set(id, { at: t, snap });
     return [snap];
   });
@@ -54,8 +55,4 @@ function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
     lastMessage: last ? { who: last.who, text: last.text } : null,
     preview: tab ? { tabId: tab.id, url: tab.url ?? '' } : null,
   };
-}
-
-function isSame(a: ThreadSnapshot, b: ThreadSnapshot) {
-  return JSON.stringify(a) === JSON.stringify(b);
 }

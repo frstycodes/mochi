@@ -14,6 +14,13 @@ const thread = (s: State, id: string) => s.threads.find((t) => t.id === id)!;
 const drafts = (s: State, id: string) => (thread(s, id).queued ?? []).map((m) => m.draft);
 const message = (draft: string) => queuedMessage(draft, { mentions: [], isCommand: false, typedSkills: [] });
 
+test('queued messages use unique, time-ordered UUID v7 identifiers', () => {
+  const ids = Array.from({ length: 100 }, () => message('draft').id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(ids, [...ids].sort());
+  for (const id of ids) assert.match(id, /^m-[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/);
+});
+
 /** A live thread mid-turn with "first", "second", "third" queued. */
 function working() {
   const base = { ...initialThreads(undefined, false), ...initialQueue(), spaceId: 'latitude', views: {} } as unknown as State;

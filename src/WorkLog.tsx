@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
 import type { ActivityEntry, AgentCommand, WebLink } from './model';
-import { clock } from './progress';
+import { clock, formatElapsed } from './progress';
 import { usePrefs } from './settings/prefs';
 import { eventLine, isApprovalChatter, parseTool, toolCall, turnSummary, type ToolCall } from './summary';
 import { hostname, type CurrentAction } from './agentPhase';
@@ -552,13 +552,9 @@ function ExitBadge({ run }: { run: RunResult }) {
   return (
     <span className={cn('flex items-center gap-1 font-mono text-xs tabular', ok ? 'text-subtle-foreground' : 'text-destructive')}>
       {ok ? <Check className="size-3.5 text-success" /> : <X className="size-3.5" />}
-      {ok ? (run.ms === undefined ? 'exit 0' : seconds(run.ms)) : `exit ${run.exitCode}`}
+      {ok ? (run.ms === undefined ? 'exit 0' : formatElapsed(run.ms, 'precise')) : `exit ${run.exitCode}`}
     </span>
   );
-}
-
-function seconds(ms: number) {
-  return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
 const HIGHLIGHTER = { theme: DEFAULT_THEMES, lang: 'text' } as const;

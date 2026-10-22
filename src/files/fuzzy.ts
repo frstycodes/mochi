@@ -18,11 +18,15 @@ export function fuzzyMatches(files: string[], query: string, limit = 50) {
     .slice(0, limit);
 }
 
-function fuzzyMatch(file: string, q: string) {
+export function fuzzyMatch(file: string, query: string) {
+  const q = query.toLowerCase();
+  if (!q) return { score: 0, indices: [] as number[], rank: 0 };
+  const lower = file.toLowerCase();
+  const rank = lower.startsWith(q) ? 0 : lower.includes(q) ? 1 : 2;
   const inBase = subsequence(file, q, file.lastIndexOf('/') + 1);
   const anywhere = subsequence(file, q, 0);
-  if (inBase && (!anywhere || inBase.score + 10 >= anywhere.score)) return { score: inBase.score + 10, indices: inBase.indices };
-  return anywhere;
+  if (inBase && (!anywhere || inBase.score + 10 >= anywhere.score)) return { score: inBase.score + 10, indices: inBase.indices, rank };
+  return anywhere && { ...anywhere, rank };
 }
 
 function subsequence(file: string, q: string, from: number) {

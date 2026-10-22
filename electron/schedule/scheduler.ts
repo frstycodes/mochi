@@ -1,3 +1,4 @@
+import { v7 as uuidv7 } from 'uuid';
 import { app } from 'electron';
 import { writeFileSync } from 'node:fs';
 import { readFile, rename, writeFile } from 'node:fs/promises';
@@ -33,7 +34,6 @@ let triggers: Trigger[] = [];
 let outbox: ScheduleEvent[] = [];
 /** Thread id → its trigger's run in flight, with the agent's latest message for the summary. */
 const active = new Map<string, { run: ScheduleRun; name: string; message: string }>();
-let nextId = 0;
 
 const file = () => join(app.getPath('userData'), 'schedules.json');
 
@@ -197,7 +197,7 @@ function changed() {
 }
 
 const strip = (t: Trigger): Trigger => ({ ...t, seen: undefined });
-const runId = () => `run-${Date.now().toString(36)}-${++nextId}`;
+const runId = () => `run-${uuidv7()}`;
 const describe = (t: Trigger) => (t.when.kind === 'cron' ? describeCron(t.when.cron) : `PR ${t.when.event}`);
 
 // Saves are serialized and go through a temp file, so a quit mid-write leaves the previous file whole.
