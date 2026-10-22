@@ -1,9 +1,10 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { EditorView } from '@codemirror/view';
 import { Chat, Note, ShieldAlert, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
-import { revealIn } from '@/lib/revealIn';
+import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import { useFileList } from '../files/useFiles';
@@ -15,6 +16,7 @@ import { openPhotos } from '../photo/photos';
 import { useHarnessSelector } from '../store';
 import { isSameListing } from '../reorder';
 import { useLibraryNames } from '../library/names';
+import { CaretMenu, forwardKey } from './CaretMenu';
 import { FileMark } from './FileMark';
 import { browseEntries, browseQuery, browseTarget, fileMentionFor, mentionTokens, parentDir, rankFiles, tokenText, worktreeMention } from './fileMentions';
 import { McpServerMark, SkillMark } from './McpIcon';
@@ -23,47 +25,23 @@ import { isInline, mentionFor, mentionGroups, mentionOptions, mentionQuery, opti
 type MenuItem = MentionOption | { kind: 'permission' };
 
 /**
- * Above the thread composer while the text ends in `@` and part of a name: the worktree's files, threads, windows, skills and
+ * Above the caret while the text ends in `@` and part of a name: the worktree's files, threads, windows, skills and
  * MCP servers, grouped. `@../`, `@~/` and `@/` turn it into a browser of that folder.
  */
 export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> }) {
-  const list = useRef<HTMLDivElement>(null);
-  const current = menu.isOpen ? menu.items[menu.active] : undefined;
-  useEffect(() => {
-    const row = current && list.current?.querySelector(`[data-key="${CSS.escape(itemKey(current))}"]`);
-    if (row) revealIn(list.current!, row);
-  }, [current]);
-  if (!menu.isOpen) return null;
   const groups = mentionGroups(menu.items);
   return (
-    <div ref={list} id={menu.listId} role="listbox" aria-label="Reference a file, thread, window, skill or MCP server" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-overlay">
+    <CaretMenu isOpen={menu.isOpen} editor={menu.editor} listRef={menu.listRef} listId={menu.listId} label="Reference a file, thread, window, skill or MCP server" value={menu.activeKey} onValueChange={menu.setActiveKey} onDismiss={menu.dismiss}>
       {groups.map((group) => (
-        <div key={group.kind} role="group" aria-label={group.label} className="flex flex-col gap-0.5">
-          {groups.length > 1 && (
-            <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
-              {group.label}
-            </div>
-          )}
-          {group.items.map((item) => {
-            const i = menu.items.indexOf(item);
-            return (
-              <div
-                key={itemKey(item)}
-                data-key={itemKey(item)}
-                id={`${menu.listId}-${i}`}
-                role="option"
-                aria-selected={i === menu.active}
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => menu.choose(item)}
-                className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent"
-              >
-                <MentionItem item={item} />
-              </div>
-            );
-          })}
-        </div>
+        <CommandGroup key={group.kind} heading={groups.length > 1 ? group.label : undefined}>
+          {group.items.map((item) => (
+            <CommandItem key={itemKey(item)} value={itemKey(item)} onSelect={() => menu.choose(item)} className="h-8 rounded-md type-body">
+              <MentionItem item={item} />
+            </CommandItem>
+          ))}
+        </CommandGroup>
       ))}
-    </div>
+    </CaretMenu>
   );
 }
 
@@ -168,7 +146,7 @@ function ChipIcon({ mention }: { mention: Exclude<Mention, { kind: 'window' | 'f
 }
 
 /**
- * The menu's state, the picked references and the editor props that drive them: arrows move, Enter or Tab picks, Esc
+ * The menu's state, the picked references and the editor props that drive them: arrows move (cmdk does the moving), Enter or Tab picks, Esc
  * closes until the text changes, Backspace in an empty input drops the last chip. While browsing a folder, Tab or `/` on a
  * folder enters it, and Backspace or ← on an empty segment goes up one. A picked file or thread goes into the text as a
  * token where the `@` was. Needs the composer's `PromptInputProvider`.
@@ -177,7 +155,9 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   const listId = useId();
   const threads = useHarnessSelector((s) => s.threads, isSameListing);
   const { textInput } = usePromptInputController();
-  const [active, setActive] = useState(0);
+  const [activeKey, setActiveKey] = useState<string>();
+  const listRef = useRef<HTMLDivElement>(null);
+  const editor = useRef<EditorView>(null);
   const [dismissedAt, setDismissedAt] = useState<string>();
   const [picks, setMentions] = useState<Mention[]>([]);
   const text = textInput.value;
@@ -194,12 +174,12 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   const options = [...fileOptions, ...others];
   const items: MenuItem[] = !browse && isBlocked(screen.access) ? [...options, { kind: 'permission' }] : options;
   const isOpen = isQuerying && items.length > 0;
-  const current = items[Math.min(active, items.length - 1)];
+  const current = items.find((item) => itemKey(item) === activeKey) ?? items[0];
 
   const add = (mention: Mention) => setMentions((all) => [...all.filter((m) => m.id !== mention.id), mention]);
   const choose = async (item: MenuItem) => {
     if (item.kind === 'permission') return host.windows.openScreenRecordingSettings();
-    setActive(0);
+    setActiveKey(undefined);
     if (item.kind === 'window') {
       textInput.setInput(withoutQuery(text));
       const image = await host.windows.captureApp(item.window.id);
@@ -211,38 +191,37 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
     add(mention);
   };
   const browseTo = (dir: string) => {
-    setActive(0);
+    setActiveKey(undefined);
     textInput.setInput(`${withoutQuery(text)}@${dir}`);
   };
   const remove = (id: string) => setMentions((all) => all.filter((m) => m.id !== id));
 
-  const onKeyDown = (e: KeyboardEvent) => {
+  const onKeyDown = (e: KeyboardEvent, view?: EditorView) => {
+    if (view) editor.current = view;
     if (!isOpen) {
       const last = mentions.findLast((m) => !isInline(m));
       if (e.key === 'Backspace' && text === '' && last) remove(last.id);
       return;
     }
-    const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
     const folder = browse && current.kind === 'file' && current.mention.isDir ? current.mention.title : null;
     const up = browse && browse.filter === '' ? parentDir(browse.dir) : null;
-    if (step) setActive((i) => (i + step + items.length) % items.length);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') forwardKey(listRef.current, e);
     else if (folder && (e.key === 'Tab' || e.key === '/')) browseTo(folder);
     else if (up && (e.key === 'Backspace' || e.key === 'ArrowLeft')) browseTo(up);
     else if (e.key === 'Enter' || e.key === 'Tab') void choose(current);
-    else if (e.key === 'Escape') setDismissedAt(text);
-    else return setActive(0);
+    else return setActiveKey(undefined);
     e.preventDefault();
     e.stopPropagation();
   };
 
   const editorProps = {
     onKeyDown,
-    attributes: { 'aria-autocomplete': 'list', 'aria-controls': isOpen ? listId : undefined, 'aria-activedescendant': isOpen ? `${listId}-${items.indexOf(current)}` : undefined },
+    attributes: { 'aria-autocomplete': 'list', 'aria-controls': isOpen ? listId : undefined },
   };
   // Edit on a queued message brings its references back beside any you already picked.
   const restore = (list: Mention[]) => setMentions((all) => [...all, ...list.filter((m) => !all.some((a) => a.id === m.id))]);
   const inlineMentions = useMemo(() => mentions.filter((m) => m.kind === 'file' || m.kind === 'thread'), [mentions]);
-  return { listId, items, active, isOpen, choose, mentions, inlineMentions, remove, restore, clear: () => setMentions([]), editorProps };
+  return { listId, items, activeKey: current && itemKey(current), setActiveKey, dismiss: () => setDismissedAt(text), editor, listRef, isOpen, choose, mentions, inlineMentions, remove, restore, clear: () => setMentions([]), editorProps };
 }
 
 /** Where `@` finds files: the folder the thread works in, and the files it opened or edited lately (relative, newest first). */
