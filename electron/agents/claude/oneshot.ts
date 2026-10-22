@@ -5,12 +5,13 @@ import { app } from 'electron';
 import type { AgentInstall } from '../../../src/host/types/settings.ts';
 import { CLASSIFY_PROMPT, classifyInput } from '../../../src/drift.ts';
 import type { Thread } from '../../../src/model.ts';
+import { cached, uncache } from '../../cache.ts';
 import { detect } from '../../settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
 
 const CLASSIFY_MODEL = 'claude-haiku-5-5';
 const SIDE_CHAT_MODEL = 'claude-sonnet-5-5';
-const DETECT_TTL_MS = 5 * 60_000;
+const DETECT_TTL = '5 minutes';
 const SPARE_IDLE_MS = 10 * 60_000;
 
 // Fixed at prewarm, so it is shared by side chat and classify; each call's own instructions go in `appendSystemPrompt`.
@@ -171,12 +172,9 @@ function discard(accountId: string) {
 app.on('before-quit', () => [...spares.keys()].forEach(discard));
 
 // `detect` spawns `claude` twice; a 4s classify budget can't pay that every time. Only logged-in results are kept.
-const detected = new Map<string, { at: number; install: AgentInstall }>();
-
 async function detectCached(accountId: string, fresh: () => Promise<AgentInstall>) {
-  const hit = detected.get(accountId);
-  if (hit && Date.now() - hit.at < DETECT_TTL_MS) return hit.install;
-  const install = await fresh();
-  if (install.login.state === 'logged-in') detected.set(accountId, { at: Date.now(), install });
+  const key = `claude-detect:${accountId}`;
+  const install = await cached(key, DETECT_TTL, fresh);
+  if (install.login.state !== 'logged-in') await uncache(key);
   return install;
 }

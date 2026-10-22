@@ -1,6 +1,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
+import { cached } from '../cache.ts';
 import type { Locator, Page } from 'playwright-core';
 import { BUILT_IN_RECIPES, parseRecipes, parseTarget, RECIPES_PATH, RECIPES_REPO, withOverrides, type RecipeOverrides, type SetupRecipe, type SetupTarget } from '../../src/library/recipes.ts';
 import type { RecipeOps } from './runRecipe.ts';
@@ -79,8 +80,7 @@ async function baseRecipe(connector: string) {
 
 // `MOCHI_RECIPES_URL` points dev runs and self-hosters at their own copy.
 const RECIPES_URL = process.env.MOCHI_RECIPES_URL ?? `https://raw.githubusercontent.com/${RECIPES_REPO}/main/${RECIPES_PATH}`;
-const RECIPES_TTL_MS = 6 * 60 * 60_000;
-let fetched: { at: number; recipes: Partial<Record<string, SetupRecipe>> } | undefined;
+const RECIPES_TTL = '6 hours';
 
 /**
  * The repo's recipes, read at most every 6 hours, so a fix reaches every install without a release. Each one passes the
@@ -88,12 +88,13 @@ let fetched: { at: number; recipes: Partial<Record<string, SetupRecipe>> } | und
  * out; unreachable, the built-in recipes run.
  */
 async function repoRecipes(): Promise<Partial<Record<string, SetupRecipe>>> {
-  if (fetched && Date.now() - fetched.at < RECIPES_TTL_MS) return fetched.recipes;
-  const recipes = await fetch(RECIPES_URL, { signal: AbortSignal.timeout(5000) })
+  return cached('recipes', RECIPES_TTL, fetchRecipes);
+}
+
+function fetchRecipes() {
+  return fetch(RECIPES_URL, { signal: AbortSignal.timeout(5000) })
     .then((res) => (res.ok ? (res.json() as Promise<unknown>) : {}))
     .then((json): Partial<Record<string, SetupRecipe>> => parseRecipes(json), () => ({}));
-  fetched = { at: Date.now(), recipes };
-  return recipes;
 }
 
 /** Replaces one step's target in the user's overrides; overrides from an older recipe version are dropped. */
