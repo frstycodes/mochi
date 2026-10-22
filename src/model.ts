@@ -101,8 +101,6 @@ export interface IdleCheck {
   isGathering?: boolean;
   /** Unset when no model could read the turn. */
   audit?: TurnAudit;
-  /** Your likely next message, shown in the empty composer for Tab to take; unset when no model could guess one. */
-  suggestion?: string;
   /** Gap ids you accepted this turn. */
   accepted: string[];
   /** You said this turn got you what you wanted: what only you can check counts as met, until your next message. */

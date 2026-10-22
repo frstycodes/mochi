@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { DiffFile } from '../host/types/git.ts';
 import { DEFAULT_SETTINGS, mergeSettings } from '../host/types/settings.ts';
-import { commitPrompt, handoffPrompt, parseAudit, parseCommit, parsePr, parseSuggestion, parseTitle, prPrompt, suggestPrompt, titlePrompt, utilityCandidates, UTILITY_TASKS } from './prompts.ts';
+import { commitPrompt, handoffPrompt, parseAudit, parseCommit, parsePr, parseTitle, prPrompt, titlePrompt, utilityCandidates, UTILITY_TASKS } from './prompts.ts';
 
 const file = (path: string, patch: string): DiffFile => ({ path, kind: 'modified', staged: true, binary: false, added: 2, removed: 1, patch, hunks: [] });
 
@@ -52,12 +52,3 @@ test('an audit keeps only gaps quoted from what the agent wrote, and an empty qu
   assert.equal(parseAudit('not json', replies), null);
 });
 
-test('a suggestion is one short message in your words, or none', () => {
-  assert.equal(suggestPrompt(['fix the login bug'], 'run the tests', ['All 12 pass. Want me to open a PR?']), "User's earlier messages:\nfix the login bug\n\nUser: run the tests\n\nAgent:\nAll 12 pass. Want me to open a PR?");
-  assert.equal(suggestPrompt([], 'hi', ['Hello']), 'User: hi\n\nAgent:\nHello');
-  assert.equal(parseSuggestion('"yes, open the PR"\n'), 'yes, open the PR');
-  assert.equal(parseSuggestion('User: revert those 4 files'), 'revert those 4 files');
-  assert.equal(parseSuggestion('NONE'), '');
-  assert.equal(parseSuggestion('none.'), '');
-  assert.equal(parseSuggestion('x'.repeat(121)), '');
-});

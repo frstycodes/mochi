@@ -5,7 +5,7 @@ import { threadCwd } from '../host/cwd';
 import type { Thread } from '../model';
 import type { Action } from '../store';
 import { getPrefs } from '../settings/prefs';
-import { auditPrompt, parseAudit, parseSuggestion, suggestPrompt } from '../utility/prompts';
+import { auditPrompt, parseAudit } from '../utility/prompts';
 import { runCriterionCheck } from './checks';
 
 // Per launch: a thread seen idle at startup gets no pass, its last turn ended before this launch.
@@ -19,7 +19,6 @@ export function useIdleChecks(threads: Thread[], dispatch: Dispatch<Action>) {
       const was = wasWorking.get(t.id);
       wasWorking.set(t.id, isWorking);
       if (!was || isWorking || !t.live) continue;
-      void suggest(t, dispatch);
       if (getPrefs().goals) void gather(t, dispatch);
       else markIdle(t, dispatch);
     }
@@ -66,21 +65,6 @@ async function audit(t: Thread, dispatch: Dispatch<Action>) {
   const result = text && parseAudit(text, replies);
   if (result) dispatch({ type: 'idle-update', threadId: t.id, patch: { audit: result } });
 }
-
-/** Your likely next message, for the composer's placeholder. `t` predates this turn's `idle-start`, so its record is the next number. */
-async function suggest(t: Thread, dispatch: Dispatch<Action>) {
-  const { start, replies } = lastTurn(t);
-  if (!getPrefs().promptSuggestions || start < 0 || !replies.length || !host.isDesktop) return;
-  const earlier = t.activity.slice(0, start).flatMap((e) => (e.who === 'you' && e.kind === 'message' ? [e.text] : [])).slice(-EARLIER_MESSAGES);
-  const text = await host.agent.utility('suggest', t.spaceId, suggestPrompt(earlier, t.activity[start].text, replies)).catch((error: unknown) => {
-    console.warn('Next message not suggested', error);
-    return null;
-  });
-  const suggestion = text && parseSuggestion(text);
-  if (suggestion) dispatch({ type: 'idle-update', threadId: t.id, patch: { suggestion }, turn: (t.idle?.turn ?? 0) + 1 });
-}
-
-const EARLIER_MESSAGES = 3;
 
 /** Your newest message's index (-1 for none) and the agents' replies after it, oldest first. */
 function lastTurn(t: Thread) {

@@ -41,7 +41,7 @@ import { ReportCard } from './goals/ReportCard';
 import { NextMoveRecord, ThreadPlan, useNextMove } from './goals/NextMove';
 import { SubThreadResultRow } from './goals/SubThreads';
 import { ProposalEntry } from './chat/ThreadProposals';
-import { showsVerdictCard } from './goals/report';
+import { showsVerdictCard, suggestedReply } from './goals/report';
 import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import { AutofixEventRow, ReceivedMessageRow } from './chat/ThreadMessage';
@@ -504,7 +504,7 @@ function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
 }
 
 /** Only for an idle thread with nothing to answer: while it works or asks, the placeholder says what a message would do. */
-const suggestionOf = (thread: Thread, isAsking: boolean) => (isWorking(thread) || isAsking ? undefined : thread.idle?.suggestion);
+const suggestionOf = (thread: Thread, isAsking: boolean) => (isWorking(thread) || isAsking ? undefined : suggestedReply(thread));
 
 /** What holding mod does to this send: the setting's other choice. */
 function WhileWorkingHint({ whileWorking, isHeld }: { whileWorking: Prefs['whileWorking']; isHeld: boolean }) {

@@ -22,7 +22,7 @@ Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.ts
 | New threads | Agent | Claude Code / Codex, each with its mark | Claude Code |
 | New threads | Permissions | Manual / Auto / Full access (Plan too in Claude threads; per-harness meaning in `src/runtime/access.ts`) | Auto |
 | New threads | While the agent is working, new messages | Queue / Steer | Queue |
-| Composer | Suggest your next message (after a turn, a guess in the empty composer, Tab or → takes it; off makes no model call) | switch | on |
+| Composer | Suggest your next message (after a turn, the agent's first next-move answer in the empty composer, Tab or → takes it; nothing without one) | switch | on |
 | Running agents | Agents running at once | stepper 1–16 | 6 |
 | Running agents | When a usage limit hits | Fixed: each harness's own behaviour; resume at reset, API key and handoff are per-thread choices on the limit card | — |
 | Folders | Projects folder (Open folder starts here; clones and new projects land here) | path + Browse | `~/dev` |

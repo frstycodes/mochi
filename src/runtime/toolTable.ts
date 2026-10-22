@@ -144,7 +144,7 @@ export const TOOL_TABLE = {
         .min(1)
         .max(3)
         .optional()
-        .describe('The answers to next, your pick first; written for this turn, not generic'),
+        .describe("The answers to next, your pick first; written for this turn, not generic. The first one's reply is also suggested in the user's empty message box, so write it as their instruction, never as your question"),
     },
   },
   get_report: {
