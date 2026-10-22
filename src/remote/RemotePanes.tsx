@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowUp, Columns, Rows, X } from '@/icons';
 import { ConversationContent, Conversation, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
