@@ -1,17 +1,18 @@
-import { Effect, Scope } from 'effect';
 import { manifest, type HostBridge, type Namespace } from '../types/index.ts';
 import { bridge } from './bridge.ts';
 
 let caller: ReturnType<typeof connect> | undefined;
 
-/** Main posts a fresh port after each page load; the client lives as long as the page. */
+/** Main posts Core's socket URL after each page load; the client lives as long as the page and redials on its own. */
 function connect() {
   return new Promise<(tag: string, args: ReadonlyArray<unknown>) => Promise<unknown>>((resolve) => {
-    const onMessage = (event: MessageEvent) => {
-      const [port] = event.ports;
-      if (event.source !== window || event.data !== 'host:port' || !port) return;
+    const onMessage = (event: MessageEvent<{ channel?: string; url?: string }>) => {
+      if (event.source !== window || event.data?.channel !== 'core:url' || typeof event.data.url !== 'string') return;
       window.removeEventListener('message', onMessage);
-      void import('@mochi/core/hostClient').then(({ makeHostCaller }) => resolve(Effect.runPromise(Scope.provide(makeHostCaller(port), Scope.makeUnsafe()))));
+      const url = event.data.url;
+      void Promise.all([import('@mochi/core/client'), import('@mochi/core/hostClient')]).then(async ([{ connectCore }, { makeHostCaller }]) =>
+        resolve(makeHostCaller((await connectCore(url)).client)),
+      );
     };
     window.addEventListener('message', onMessage);
   });
@@ -19,7 +20,7 @@ function connect() {
 
 const call = async (tag: string, args: ReadonlyArray<unknown>) => (await (caller ??= connect()))(tag, args);
 
-/** `host.<ns>` on desktop: request/response methods are RPCs to main, push methods come from the preload. */
+/** `host.<ns>` on desktop: request/response methods are RPCs to Core, push methods come from the preload. */
 export function desktopNamespace<K extends Namespace>(ns: K): HostBridge[K] {
   caller ??= connect();
   const events = bridge()[ns] as unknown as Record<string, unknown>;

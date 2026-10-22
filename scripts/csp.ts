@@ -31,8 +31,8 @@ const BASE = {
   // Fonts (Inter, katex) are inlined as data: URLs by the build.
   'font-src': ["'self'", 'data:'],
   'media-src': ["'self'", 'data:', 'blob:'],
-  // Image copies and attachments fetch their own data:/blob: URLs; Open VSX is the theme gallery and its CDN.
-  'connect-src': ["'self'", 'data:', 'blob:', 'https://open-vsx.org', 'https://openvsx.eclipsecontent.org'],
+  // Image copies and attachments fetch their own data:/blob: URLs; Open VSX is the theme gallery and its CDN; Core's RPC socket is on loopback.
+  'connect-src': ["'self'", 'data:', 'blob:', 'https://open-vsx.org', 'https://openvsx.eclipsecontent.org', 'ws://127.0.0.1:*'],
   // Widgets and MCP app views get their own policy from electron/frameProtocol.ts; PDF previews are blob: URLs.
   'frame-src': ['mochi-widget:', 'blob:'],
   'base-uri': ["'none'"],

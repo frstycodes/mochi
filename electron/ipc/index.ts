@@ -1,8 +1,9 @@
-import { app, MessageChannelMain, type WebContents } from 'electron';
-import { Effect, Fiber, Layer, Queue } from 'effect';
-import { layerHost } from '@mochi/core/hostServer';
-import type { CorePort } from '@mochi/core/transport';
+import { safeStorage, webContents } from 'electron';
+import { Schema } from 'effect';
+import { Capabilities, definitionOf } from '@mochi/schema';
+import type { CapabilityHandler } from '@mochi/core/hostClient';
 import type { HostBridge, Namespace } from '../../src/host/types/index.ts';
+import { mainWindow } from '../window.ts';
 import type { Handlers } from './handlers.ts';
 import { account } from './account.ts';
 import { agent } from './agent.ts';
@@ -27,28 +28,30 @@ const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, se
   [K in Namespace]: Handlers<HostBridge[K]>;
 };
 
-type Handler = (sender: WebContents, ...args: unknown[]) => Promise<unknown>;
+type Handler = (sender: Electron.WebContents, ...args: unknown[]) => Promise<unknown>;
+
+const secureStorage = {
+  encrypt: async (text: string) => safeStorage.encryptString(text).toString('base64'),
+  decrypt: async (base64: string) => safeStorage.decryptString(Buffer.from(base64, 'base64')),
+};
 
 /**
- * Each trusted window gets its own RPC server, so a handler knows its sender, and a port after every load.
- * Only a page that passed `isTrustedUrl` ever receives one: that, and decoding with `@mochi/schema`, is what vets a call.
+ * What main does for Core. A window's `host.*` call reaches Core over its socket, Core checks the token and scope and
+ * decodes it, then hands it here JSON-encoded, with the window's id so the handler gets its sender.
  */
-export function registerIpc(isTrustedUrl: (url: string) => boolean) {
-  app.on('browser-window-created', (_event, win) => serve(win.webContents, isTrustedUrl));
-}
-
-function serve(contents: WebContents, isTrustedUrl: (url: string) => boolean) {
-  const ports = Effect.runSync(Queue.unbounded<CorePort>());
-  const call = (tag: string, args: ReadonlyArray<unknown>) => {
-    const [namespace, method] = tag.split('.') as [Namespace, string];
-    return (handlers[namespace] as Record<string, Handler>)[method]!(contents, ...args);
-  };
-  const server = Effect.runFork(Layer.launch(layerHost(ports, call)));
-  contents.once('destroyed', () => void Effect.runPromise(Fiber.interrupt(server)));
-  contents.on('did-finish-load', () => {
-    if (!isTrustedUrl(contents.getURL())) return;
-    const { port1, port2 } = new MessageChannelMain();
-    Queue.offerUnsafe(ports, port1);
-    contents.postMessage('host:port', null, [port2]);
-  });
-}
+export const mainCapabilities = {
+  names: ['host', 'notify', 'browserView', 'sim', 'secureStorage'],
+  handle: async ({ capability, method, args, windowId }) => {
+    if (capability === 'secureStorage') {
+      const { input } = Capabilities.secureStorageMethods[method as keyof typeof secureStorage];
+      const [text] = Schema.decodeUnknownSync(input)(args);
+      return secureStorage[method as keyof typeof secureStorage](text);
+    }
+    const { input, output } = definitionOf(method) as { input: Schema.Codec<ReadonlyArray<unknown>, unknown>; output: Schema.Codec<unknown, unknown> };
+    const sender = (windowId === undefined ? undefined : webContents.fromId(windowId)) ?? mainWindow()?.webContents;
+    if (!sender) throw new Error(`No window to run ${method} for`);
+    const [namespace, name] = method.split('.') as [Namespace, string];
+    const result = await (handlers[namespace] as Record<string, Handler>)[name]!(sender, ...Schema.decodeUnknownSync(Schema.toCodecJson(input))(args));
+    return Schema.encodeUnknownSync(Schema.toCodecJson(output))(result);
+  },
+} satisfies { names: ReadonlyArray<Capabilities.CapabilityName>; handle: CapabilityHandler };

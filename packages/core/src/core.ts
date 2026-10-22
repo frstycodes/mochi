@@ -1,18 +1,25 @@
-import type {} from 'electron';
-import { Effect, Layer, Queue } from 'effect';
+import { Effect, Layer } from 'effect';
 import { NodeRuntime } from '@effect/platform-node';
+import { Capabilities } from '@mochi/schema';
 import { layerLog } from './log.ts';
 import { layerCore } from './server.ts';
-import type { CorePort } from './transport.ts';
 
-// The utilityProcess entry. Main posts one port per window (and one for itself) to `parentPort`.
-const program = Effect.gen(function* () {
-  const ports = yield* Queue.unbounded<CorePort>();
-  process.parentPort.on('message', (event) => event.ports.forEach((port) => Queue.offerUnsafe(ports, port)));
-  yield* Effect.logInfo('Core started').pipe(Effect.annotateLogs({ source: 'core', pid: process.pid }));
-  return yield* Layer.launch(layerCore(ports));
-});
+// Core's entry: main forks it as a utilityProcess, and plain `node` runs it too (tests). Main picks the port and the token.
+const env = (name: string) => {
+  const value = process.env[name];
+  if (!value) throw new Error(`Core needs ${name}`);
+  return value;
+};
 
-const logFile = process.env.MOCHI_LOG_FILE;
-if (!logFile) throw new Error('Core needs MOCHI_LOG_FILE');
-NodeRuntime.runMain(program.pipe(Effect.provide(layerLog(logFile))));
+const options = {
+  port: Number(env('MOCHI_CORE_PORT')),
+  tokens: new Map([[env('MOCHI_CORE_TOKEN'), Capabilities.allScopes]]),
+  origins: (process.env.MOCHI_CORE_ORIGINS ?? '').split(',').filter(Boolean),
+};
+
+const program = Effect.logInfo('Core started').pipe(
+  Effect.annotateLogs({ source: 'core', pid: process.pid, port: options.port }),
+  Effect.andThen(Layer.launch(layerCore(options))),
+);
+
+NodeRuntime.runMain(program.pipe(Effect.provide(layerLog(env('MOCHI_LOG_FILE')))));

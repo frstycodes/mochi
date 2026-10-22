@@ -1,16 +1,9 @@
-import { Cause, Context, Duration, Effect, Layer, Queue, Schema, Semaphore, Stream } from 'effect';
+import { Cause, Context, Duration, Effect, Layer, Queue, Semaphore, Stream } from 'effect';
 import { ChildProcess, ChildProcessSpawner } from 'effect/process';
+import { RunError } from './rpc.ts';
 import { userPath } from './shellPath.ts';
 
-export class RunError extends Schema.TaggedError<RunError>()('RunError', {
-  command: Schema.String,
-  /** `-1` when the process never produced an exit code: it failed to start or timed out. */
-  code: Schema.Number,
-  stderr: Schema.String,
-  /** What it printed before failing; some tools report on stdout and exit non-zero. */
-  stdout: Schema.optional(Schema.String),
-  timedOut: Schema.optional(Schema.Boolean),
-}) {}
+export { RunError };
 
 /** Whatever stops a run besides a bad exit code (no such binary, timeout) as a RunError too. */
 export const asRunError = (command: string) => (cause: unknown) =>

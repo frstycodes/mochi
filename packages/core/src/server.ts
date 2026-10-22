@@ -1,28 +1,101 @@
-import { Effect, Layer, Queue, Schedule, Stream } from 'effect';
-import { RpcServer } from 'effect/rpc';
-import { NodeServices } from '@effect/platform-node';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { createServer } from 'node:http';
+import { Context, Effect, Layer, Schedule, Stream } from 'effect';
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
+import { RpcSerialization, RpcServer } from 'effect/rpc';
+import { NodeHttpServer } from '@effect/platform-node';
+import { Capabilities as Contract } from '@mochi/schema';
 import { Cache } from './cache.ts';
-import { CoreRpcs } from './rpc.ts';
+import { Capabilities, hostHandlers } from './hostServer.ts';
+import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { asRunError, Run } from './run.ts';
-import { layerRunner, type CorePort } from './transport.ts';
 
-const HandlersLive = CoreRpcs.toLayer(Effect.gen(function* () {
-  const run = yield* Run;
-  return {
-    ping: () => Effect.succeed('pong'),
-    ticks: ({ intervalMs }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
-    log: ({ level, source, message }) => Effect.logWithLevel(level)(message).pipe(Effect.annotateLogs({ source })),
-    run: ({ command, args, timeoutMs, ...options }) =>
-      run.run(command, args, { ...options, timeout: timeoutMs }).pipe(Effect.mapError(asRunError(command))),
-    spawn: ({ command, args, timeoutMs, ...options }) => run.spawn(command, args, { ...options, timeout: timeoutMs }),
-    stdin: ({ id, data }) => run.write(id, data),
-    signal: ({ id, signal }) => run.signal(id, signal as NodeJS.Signals),
-  };
-}));
+export interface ServerOptions {
+  readonly port: number;
+  readonly host?: string;
+  /** Each accepted token and the scopes a connection made with it gets. */
+  readonly tokens: ReadonlyMap<string, ReadonlyArray<Contract.AuthScope>>;
+  /** Page origins allowed to connect. A client that sends no Origin (main, a Node client) needs only the token. */
+  readonly origins: ReadonlyArray<string>;
+}
 
-/** Everything Core runs, serving RPC to each port offered to `ports`. */
-export const layerCore = (ports: Queue.Dequeue<CorePort>) =>
-  Layer.mergeAll(
-    RpcServer.layer(CoreRpcs).pipe(Layer.provide(HandlersLive), Layer.provide(Run.layer), Layer.provide(RpcServer.layerProtocolWorkerRunner), Layer.provide(layerRunner(ports))),
-    Cache.layer,
-  ).pipe(Layer.provide(NodeServices.layer));
+/** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
+export const layerCore = (options: ServerOptions) =>
+  Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
+    Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer)),
+    Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1' })),
+  );
+
+const layerRoute = (options: ServerOptions) =>
+  HttpRouter.serve(
+    Layer.unwrap(Effect.map(Effect.context<Run | Capabilities>(), (services) => HttpRouter.add('GET', '/ws', connect(options, services)))),
+    { disableLogger: true, disableListenLog: true },
+  );
+
+// Modelled on T3 Code's `apps/server/src/ws.ts`: refuse before the upgrade, then one RPC server per socket, so its
+// handlers know the connection's scopes and window.
+const connect = (options: ServerOptions, services: Context.Context<Run | Capabilities>) =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const url = new URL(request.url, 'http://core');
+    if (url.searchParams.get('v') !== String(Contract.PROTOCOL_VERSION)) return yield* refuse(426, `Core speaks protocol ${Contract.PROTOCOL_VERSION}`);
+    const scopes = scopesOf(options.tokens, url.searchParams.get('token'));
+    if (!scopes) return yield* refuse(401, 'Unknown token');
+    const origin = request.headers.origin;
+    if (origin !== undefined && !options.origins.includes(origin)) return yield* refuse(403, `Origin ${origin} not allowed`);
+    const window = Number(url.searchParams.get('window'));
+    const windowId = Number.isInteger(window) && window > 0 ? window : undefined;
+
+    const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
+    yield* RpcServer.make(CoreWsRpcs, { disableFatalDefects: true }).pipe(
+      Effect.provideService(RpcServer.Protocol, protocol),
+      Effect.provide(Layer.mergeAll(layerHandlers(windowId), layerScopes(scopes))),
+      Effect.provide(services),
+      Effect.forkScoped,
+    );
+    return yield* httpEffect;
+  }).pipe(Effect.provide(RpcSerialization.layerJson));
+
+const refuse = (status: number, reason: string) =>
+  Effect.as(Effect.logWarning(`Refused a socket: ${reason}`).pipe(Effect.annotateLogs({ source: 'core' })), HttpServerResponse.text(reason, { status }));
+
+const digest = (token: string) => createHash('sha256').update(token).digest();
+
+/** Compares digests, so neither the token's length nor its content leaks through timing. */
+function scopesOf(tokens: ServerOptions['tokens'], token: string | null) {
+  if (!token) return undefined;
+  const given = digest(token);
+  let scopes: ReadonlyArray<Contract.AuthScope> | undefined;
+  for (const [known, granted] of tokens) if (timingSafeEqual(digest(known), given)) scopes = granted;
+  return scopes;
+}
+
+// Pattern from T3 Code's `apps/server/src/auth/RpcAuthorization.ts`.
+const layerScopes = (scopes: ReadonlyArray<Contract.AuthScope>) =>
+  Layer.succeed(ScopeAuthorization)((effect, { rpc }) => {
+    const scope = Contract.scopeOf(rpc._tag);
+    return scopes.includes(scope) ? effect : Effect.fail(new Unauthorized({ scope }));
+  });
+
+const layerHandlers = (windowId: number | undefined) =>
+  CoreWsRpcs.toLayer(
+    Effect.gen(function* () {
+      const run = yield* Run;
+      const capabilities = yield* Capabilities;
+      return {
+        ping: () => Effect.succeed('pong'),
+        ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
+        log: ({ level, source, message }: { level: 'Debug' | 'Info' | 'Warn' | 'Error'; source: string; message: string }) =>
+          Effect.logWithLevel(level)(message).pipe(Effect.annotateLogs({ source })),
+        run: ({ command, args, timeoutMs, ...options }: { command: string; args: ReadonlyArray<string>; timeoutMs?: number }) =>
+          run.run(command, args, { ...options, timeout: timeoutMs }).pipe(Effect.mapError(asRunError(command))),
+        spawn: ({ command, args, timeoutMs, ...options }: { command: string; args: ReadonlyArray<string>; timeoutMs?: number }) =>
+          run.spawn(command, args, { ...options, timeout: timeoutMs }),
+        stdin: ({ id, data }: { id: number; data: Uint8Array | null }) => run.write(id, data),
+        signal: ({ id, signal }: { id: number; signal: string }) => run.signal(id, signal as NodeJS.Signals),
+        'capabilities.serve': ({ names }: { names: ReadonlyArray<Contract.CapabilityName> }) => capabilities.serve(names),
+        'capabilities.reply': (reply: Contract.CapabilityReply) => capabilities.reply(reply),
+        ...hostHandlers(capabilities, windowId),
+      } as never;
+    }),
+  );

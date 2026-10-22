@@ -1,6 +1,17 @@
 import { Schema } from 'effect';
-import { Rpc, RpcGroup } from 'effect/rpc';
-import { RunError } from './run.ts';
+import { Rpc, RpcGroup, RpcMiddleware } from 'effect/rpc';
+import { Capabilities, HostRpcs } from '@mochi/schema';
+
+// Here rather than in run.ts so a window's client imports no node built-ins.
+export class RunError extends Schema.TaggedError<RunError>()('RunError', {
+  command: Schema.String,
+  /** `-1` when the process never produced an exit code: it failed to start or timed out. */
+  code: Schema.Number,
+  stderr: Schema.String,
+  /** What it printed before failing; some tools report on stdout and exit non-zero. */
+  stdout: Schema.optional(Schema.String),
+  timedOut: Schema.optional(Schema.Boolean),
+}) {}
 
 const Env = Schema.Record(Schema.String, Schema.String);
 
@@ -38,4 +49,18 @@ export class CoreRpcs extends RpcGroup.make(
   }),
   Rpc.make('stdin', { payload: { id: Schema.Number, data: Schema.NullOr(Schema.Uint8Array) } }),
   Rpc.make('signal', { payload: { id: Schema.Number, signal: Schema.String } }),
+  Rpc.make('capabilities.serve', { payload: { names: Schema.Array(Capabilities.CapabilityName) }, success: Capabilities.CapabilityCall, stream: true }),
+  Rpc.make('capabilities.reply', { payload: Capabilities.CapabilityReply }),
 ) {}
+
+export class Unauthorized extends Schema.TaggedError<Unauthorized>()('Unauthorized', { scope: Capabilities.AuthScope }) {
+  override get message() {
+    return `This connection lacks the ${this.scope} scope`;
+  }
+}
+
+/** Refuses an RPC whose `scopeOf` scope the connection's token doesn't carry. */
+export class ScopeAuthorization extends RpcMiddleware.Service<ScopeAuthorization>()('mochi/core/ScopeAuthorization', { error: Unauthorized }) {}
+
+/** Everything served on Core's WebSocket. */
+export class CoreWsRpcs extends CoreRpcs.merge(HostRpcs).middleware(ScopeAuthorization) {}
