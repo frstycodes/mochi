@@ -32,6 +32,21 @@ jobs:
       - run: vp run test
       - run: vp run build
 
+  # Streams a reply into the built app; fails over the render and script budgets in tests/e2e/stream.perf.spec.ts.
+  perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: voidzero-dev/setup-vp@v1.21.2
+        with:
+          node-version: '24'
+          cache: true
+      - run: vp build --mode electron
+      # Ubuntu 24.04's AppArmor blocks the user namespaces Chromium's sandbox needs.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # No display on the runner: Electron draws into a virtual X server.
+      - run: xvfb-run --auto-servernum pnpm exec playwright test -c tests/e2e
+
   # Mochi ships for macOS, Windows and Linux: the tests and an unpacked build run on each (installers are `electron-builder` without `--dir`).
   package:
     strategy:
