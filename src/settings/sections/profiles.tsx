@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { Fragment, useEffect, useState } from 'react';
 import { ChevronRight, Plus } from '@/icons';
 import { toast } from '@/toast/store';
@@ -24,6 +25,7 @@ import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS } from '../harnesses';
 import { openSubpage, useSettingsRoute } from '../../routes/nav';
 import { SettingsCard, SettingsSection, SettingsSelect } from '../parts';
+import { queryKeys } from '../../queryKeys';
 
 /** Settings › Profiles: every profile as a row opening its own page (Settings › Profiles › <profile>), and a way to add one. */
 export function ProfilesSection() {
@@ -207,15 +209,8 @@ export type GhAccountsState = { accounts?: GhAccount[]; error?: string };
 
 /** gh's logins, read when the page opens and again when the window regains focus (after a `gh auth login` in a terminal). */
 export function useGhAccounts(isNeeded = true): GhAccountsState {
-  const [state, setState] = useState<GhAccountsState>({});
-  useEffect(() => {
-    if (!host.isDesktop || !isNeeded) return;
-    const load = () => host.git.ghAccounts().then((accounts) => setState({ accounts }), (error: Error) => setState({ error: gitError(error) }));
-    load();
-    addEventListener('focus', load);
-    return () => removeEventListener('focus', load);
-  }, [isNeeded]);
-  return state;
+  const accountsQuery = useQuery({ queryKey: queryKeys.profile.githubAccounts(), queryFn: () => host.git.ghAccounts(), enabled: host.isDesktop && isNeeded, staleTime: 0 });
+  return { accounts: accountsQuery.data, error: accountsQuery.error ? gitError(accountsQuery.error) : undefined };
 }
 
 // Radix Select can't hold '' (the profile's "use gh's active account").

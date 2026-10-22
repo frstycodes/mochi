@@ -1,10 +1,10 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useId, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';
-import type { ProfileConfig } from '../host/types/settings';
 import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
 import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
@@ -13,6 +13,7 @@ import { isAbsolutePath } from '../projects';
 import type { Caret } from './ComposerEditor';
 import { CaretMenu, forwardKey } from './CaretMenu';
 import { configuredCommands, insertToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
+import { queryKeys } from '../queryKeys';
 
 /** Above the caret while it ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
 export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
@@ -152,30 +153,7 @@ function useConfiguredCommands(provider: Provider, spaceId: string, projectRoot:
 }
 
 function useProfileConfig(spaceId: string | undefined, projectRoot: string | null) {
-  const key = spaceId && configKey(spaceId, projectRoot);
-  const [config, setConfig] = useState<{ key: string; value?: ProfileConfig }>();
-  useEffect(() => {
-    if (!spaceId || !key) return;
-    let isCurrent = true;
-    configFor(spaceId, projectRoot).then(
-      (value) => isCurrent && setConfig({ key, value }),
-      () => isCurrent && setConfig({ key }),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId, projectRoot, key]);
-  return config && config.key === key ? config.value : undefined;
-}
-
-// GAP: one read per profile and project per launch; a skill added while Mochi runs shows once the agent reports it, or after a restart.
-const configs = new Map<string, ReturnType<typeof host.settings.agentConfig>>();
-function configFor(spaceId: string, projectRoot: string | null) {
-  const key = configKey(spaceId, projectRoot);
-  // The web build's fixture projects are bare names, not folders to read.
   const root = projectRoot && isAbsolutePath(projectRoot) ? projectRoot : undefined;
-  if (!configs.has(key)) configs.set(key, host.settings.agentConfig(spaceId, root).catch((error) => (configs.delete(key), Promise.reject(error))));
-  return configs.get(key)!;
+  const configQuery = useQuery({ queryKey: queryKeys.profile.config.root(spaceId, root), queryFn: () => host.settings.agentConfig(spaceId!, root), enabled: !!spaceId });
+  return configQuery.data;
 }
-
-const configKey = (spaceId: string, projectRoot: string | null) => `${spaceId}\n${projectRoot ?? ''}`;

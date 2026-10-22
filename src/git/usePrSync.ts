@@ -1,3 +1,6 @@
+import { useQueries } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { useEffect, useRef, type Dispatch } from 'react';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
@@ -16,7 +19,6 @@ interface RepoWorktrees {
   worktrees: Map<string, string>;
 }
 
-const readAt = new Map<string, number>();
 
 /**
  * Records gh's PRs for every unsettled worktree thread's branch on `thread.prs`, so every surface reads one list: one `gh pr list`
@@ -25,17 +27,19 @@ const readAt = new Map<string, number>();
 export function usePrSync(threads: Thread[], dispatch: Dispatch<Action>) {
   const latest = useRef(threads);
   latest.current = threads;
-  const keys = repoWorktrees(threads)
-    .map((r) => r.key)
-    .join('\n');
-
+  const repos = repoWorktrees(threads);
+  const keys = repos.map((r) => r.key).join('\n');
+  const prsQueries = useQueries({ queries: repos.map((repo) => ({ queryKey: queryKeys.git.worktreePrs(repo.key), queryFn: () => host.git.worktreePrs([...repo.worktrees.keys()], repo.githubUser), enabled: host.isDesktop, staleTime: TTL_MS })), combine: (results) => results.map((result) => result.data) });
   useEffect(() => {
-    if (!host.isDesktop) return;
-    readStale(latest.current, dispatch);
-    const onFocus = () => readStale(latest.current, dispatch);
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [keys, dispatch]);
+    repos.forEach((repo, i) => {
+      const found = prsQueries[i];
+      if (!found) return;
+      for (const [worktree, threadId] of repo.worktrees) {
+        const prs = found.filter((f) => f.worktree === worktree).map((f) => f.pr);
+        if (prs.length > 0) dispatch({ type: 'prs-seen', threadId, prs });
+      }
+    });
+  }, [prsQueries, keys, dispatch]);
 
   useEffect(() => {
     if (!host.isDesktop) return;
@@ -44,23 +48,9 @@ export function usePrSync(threads: Thread[], dispatch: Dispatch<Action>) {
       if (event.type === 'tool' && event.phase === 'start' && PUSHES_OR_OPENS.test(event.text)) pushed.add(event.threadId);
       if (event.type !== 'turn-end' || !pushed.delete(event.threadId)) return;
       const repo = repoWorktrees(latest.current).find((r) => [...r.worktrees.values()].includes(event.threadId));
-      if (repo) read(repo, dispatch);
+      if (repo) void queryClient.invalidateQueries({ queryKey: queryKeys.git.worktreePrs(repo.key) });
     });
   }, [dispatch]);
-}
-
-function readStale(threads: Thread[], dispatch: Dispatch<Action>) {
-  for (const repo of repoWorktrees(threads)) if (Date.now() - (readAt.get(repo.key) ?? 0) > TTL_MS) read(repo, dispatch);
-}
-
-function read(repo: RepoWorktrees, dispatch: Dispatch<Action>) {
-  readAt.set(repo.key, Date.now());
-  void host.git.worktreePrs([...repo.worktrees.keys()], repo.githubUser).then((found) => {
-    for (const [worktree, threadId] of repo.worktrees) {
-      const prs = found.filter((f) => f.worktree === worktree).map((f) => f.pr);
-      if (prs.length > 0) dispatch({ type: 'prs-seen', threadId, prs });
-    }
-  });
 }
 
 /**

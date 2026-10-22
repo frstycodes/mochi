@@ -1,4 +1,6 @@
 import { browserStorage, persistedFamily, uiStorageEntries } from '../lib/uiStorage.ts';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { useSyncExternalStore } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -72,7 +74,6 @@ const contexts = new Map<string, GroupContext>();
 const byPty = new Map<string, TerminalSession>();
 // Output can beat the spawn reply that tells us which session a pty id belongs to.
 const earlyOutput = new Map<string, string>();
-const threadPorts = new Map<string, Promise<number>>();
 const listeners = new Set<() => void>();
 let nextSessionId = 0;
 let isWired = false;
@@ -227,8 +228,7 @@ function linesSince(term: Terminal, fromLine: number) {
 }
 
 function portFor(threadId: string) {
-  if (!threadPorts.has(threadId)) threadPorts.set(threadId, host.ports.allocate(threadId));
-  return threadPorts.get(threadId)!;
+  return queryClient.fetchQuery({ queryKey: queryKeys.ports.threadPort(threadId), queryFn: () => host.ports.allocate(threadId), staleTime: Infinity });
 }
 
 function shellTitle(group: TerminalGroup) {

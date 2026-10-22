@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
+import { useState } from 'react';
 import { AlertCircle, Bell, Hourglass, Clock, BellOff, CheckCircle, XCircle, Settings, Warning, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -9,7 +12,6 @@ import { SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from '@/componen
 import { cn } from '@/lib/utils';
 import { UnreadDot } from '../ui';
 import { host } from '../host';
-import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
 import { openSettings } from '../routes/nav';
 import { shallowEqual, useDispatch, useHarnessSelector, useThread } from '../store';
@@ -178,14 +180,12 @@ function NotifyFooter({ onOpenSettings }: { onOpenSettings: () => void }) {
 }
 
 function BrowserPermission() {
-  const [permission, setPermission] = useState<NotifyPermission>('default');
-  useEffect(() => {
-    host.notify.permission().then(setPermission);
-  }, []);
+  const permissionQuery = useQuery({ queryKey: queryKeys.notify.permission(), queryFn: () => host.notify.permission() });
+  const permission = permissionQuery.data ?? 'default';
   if (permission === 'granted') return null;
   if (permission === 'denied') return <p className="type-caption text-subtle-foreground">Browser alerts are blocked in this site's settings.</p>;
   return (
-    <Button variant="outline" size="sm" className="self-start" onClick={() => host.notify.requestPermission().then(setPermission)}>
+    <Button variant="outline" size="sm" className="self-start" onClick={() => host.notify.requestPermission().then((next) => queryClient.setQueryData(queryKeys.notify.permission(), next))}>
       Turn on browser alerts
     </Button>
   );

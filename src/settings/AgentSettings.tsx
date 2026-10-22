@@ -1,7 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host';
-import type { AccountId, AccountsState, AgentInstall, AgentSettings, AgentSettingsPatch, ApiKeyState } from '../host/types/settings';
+import type { AccountId, AccountsState, AgentInstall, AgentSettingsPatch, ApiKeyState } from '../host/types/settings';
 import type { Provider } from '../model';
 import { HARNESS_IDS, HARNESSES } from './harnesses';
 import { defaultAccountId } from './accounts';
@@ -28,40 +31,30 @@ export function useAgentSettings() {
 }
 
 function useAgentSettingsState(isDetecting: boolean) {
-  const [installs, setInstalls] = useState<Record<AccountId, InstallState>>({});
-  const [settings, setSettings] = useState<AgentSettings>();
-  const [accounts, setAccounts] = useState<AccountsState>();
-  const [apiKeys, setApiKeys] = useState<Partial<Record<Provider, ApiKeyState>>>({});
-  const [latest, setLatest] = useState<Partial<Record<Provider, string | null>>>({});
+  const settingsQuery = useQuery({ queryKey: queryKeys.agent.settings(), queryFn: () => host.settings.get() });
+  const accountsQuery = useQuery({ queryKey: queryKeys.agent.accounts(), queryFn: () => host.settings.accounts(), enabled: host.isDesktop });
+  const settings = settingsQuery.data;
+  const accounts = accountsQuery.data;
+  const accountList = accounts?.accounts ?? [];
+  const installQueries = useQueries({ queries: accountList.map((account) => ({ queryKey: queryKeys.agent.install(account.id), queryFn: () => host.settings.detect(account.id), enabled: host.isDesktop && isDetecting, staleTime: 60_000 })) });
+  const installs: Record<AccountId, InstallState> = Object.fromEntries(accountList.map((account, i) => {
+    const installQuery = installQueries[i];
+    return [account.id, installQuery.isFetching ? 'checking' : installQuery.data ?? (installQuery.error ? { provider: account.provider, accountId: account.id, path: null, version: null, login: { state: 'unknown', reason: ipcMessage(installQuery.error) } } : 'checking')];
+  }));
+  const latestQueries = useQueries({ queries: HARNESS_IDS.map((provider) => ({ queryKey: queryKeys.agent.version(provider), queryFn: () => host.settings.latestVersion(provider), enabled: host.isDesktop && isDetecting, staleTime: 60_000 })) });
+  const latest = Object.fromEntries(HARNESS_IDS.map((id, i) => [id, latestQueries[i].isFetching ? undefined : latestQueries[i].data ?? null]));
+  const keyQueries = useQueries({ queries: HARNESS_IDS.map((provider) => ({ queryKey: queryKeys.agent.apiKey(provider), queryFn: () => host.settings.apiKey(provider), enabled: host.isDesktop && !!HARNESSES[provider].apiKey })) });
+  const apiKeys: Partial<Record<Provider, ApiKeyState>> = Object.fromEntries(HARNESS_IDS.map((id, i) => [id, keyQueries[i].data]));
   const [updating, setUpdating] = useState<Provider | null>(null);
   const [restartNeeded, setRestartNeeded] = useState<Provider[]>([]);
-
   const check = useCallback((id: AccountId) => {
-    setInstalls((prev) => ({ ...prev, [id]: 'checking' }));
-    host.settings.detect(id).then(
-      (install) => setInstalls((prev) => ({ ...prev, [id]: install })),
-      (error: Error) => setInstalls((prev) => ({ ...prev, [id]: { provider: 'claude', accountId: id, path: null, version: null, login: { state: 'unknown', reason: ipcMessage(error) } } })),
-    );
+    void queryClient.invalidateQueries({ queryKey: queryKeys.agent.install(id) });
+    void queryClient.fetchQuery({ queryKey: queryKeys.agent.install(id), queryFn: () => host.settings.detect(id) }).catch(() => {});
   }, []);
   const checkLatest = useCallback((provider: Provider) => {
-    setLatest((prev) => ({ ...prev, [provider]: undefined }));
-    void host.settings.latestVersion(provider).then(
-      (version) => setLatest((prev) => ({ ...prev, [provider]: version })),
-      () => setLatest((prev) => ({ ...prev, [provider]: null })),
-    );
+    void queryClient.invalidateQueries({ queryKey: queryKeys.agent.version(provider) });
+    void queryClient.fetchQuery({ queryKey: queryKeys.agent.version(provider), queryFn: () => host.settings.latestVersion(provider) }).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    // The web build keeps these in memory (the side chat default works there); accounts and keys need the desktop app.
-    void host.settings.get().then(setSettings);
-    if (!host.isDesktop) return;
-    if (isDetecting) HARNESS_IDS.forEach(checkLatest);
-    for (const id of HARNESS_IDS) if (HARNESSES[id].apiKey) void host.settings.apiKey(id).then((state) => setApiKeys((prev) => ({ ...prev, [id]: state })));
-    void host.settings.accounts().then((state) => {
-      setAccounts(state);
-      if (isDetecting) state.accounts.forEach((a) => check(a.id));
-    });
-  }, [check, checkLatest, isDetecting]);
 
   const checkProvider = (provider: Provider) => {
     accounts?.accounts.filter((a) => a.provider === provider).forEach((a) => check(a.id));
@@ -72,7 +65,7 @@ function useAgentSettingsState(isDetecting: boolean) {
     setUpdating(provider);
     void host.settings.updateHarness(provider).then(
       (install) => {
-        setInstalls((prev) => ({ ...prev, [install.accountId]: install }));
+        queryClient.setQueryData(queryKeys.agent.install(install.accountId), install);
         setRestartNeeded((prev) => [...new Set([...prev, provider])]);
         checkProvider(provider);
         toast.success(`${HARNESSES[provider].name} updated`, { description: 'Restart Mochi to use the new version in running sessions.' });
@@ -87,7 +80,7 @@ function useAgentSettingsState(isDetecting: boolean) {
 
   const update = (patch: AgentSettingsPatch) =>
     host.settings.set(patch).then((next) => {
-      setSettings(next);
+      queryClient.setQueryData(queryKeys.agent.settings(), next);
       for (const id of HARNESS_IDS) if (patch.harnesses?.[id]?.path !== undefined) checkProvider(id);
     }, fail('Setting not saved'));
 
@@ -95,14 +88,18 @@ function useAgentSettingsState(isDetecting: boolean) {
   const mutateAccounts = (run: () => Promise<AccountsState>, error: string) =>
     run().then((next) => {
       next.accounts.filter((a) => !accounts?.accounts.some((b) => b.id === a.id)).forEach((a) => check(a.id));
-      setAccounts(next);
+      queryClient.setQueryData(queryKeys.agent.accounts(), next);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.library.nativeItems.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agent.notes.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.reviewer.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profile.config.all() });
       return true;
     }, fail(error));
 
   /** Resolves true once stored; the caller clears its input so the key leaves renderer state. */
   const saveApiKey = (provider: Provider, key: string | null) =>
     host.settings.setApiKey(provider, key).then((state) => {
-      setApiKeys((prev) => ({ ...prev, [provider]: state }));
+      queryClient.setQueryData(queryKeys.agent.apiKey(provider), state);
       return true;
     }, fail('API key not saved'));
 

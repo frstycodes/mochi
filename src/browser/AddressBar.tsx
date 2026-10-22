@@ -1,3 +1,5 @@
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useDebounced } from '../hooks/useDebounced';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { ArrowUpRight, Globe, Monitor, SearchAlt } from '@/icons';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
@@ -14,6 +16,7 @@ import { historyTitle, pageKey, updatePage, useAddressHistory, type Page } from 
 import { openExternally, openInLabel } from './systemBrowser';
 import { bare, inlineCompletion, rankSuggestions, type Candidate } from './suggest';
 import { displayUrl, normalizeUrl, SEARCH_ENGINES } from './url';
+import { queryKeys } from '../queryKeys';
 
 const SUGGEST_DEBOUNCE_MS = 120;
 const NONE: string[] = [];
@@ -148,13 +151,10 @@ function useCandidates(thread: Thread, pageId: string) {
 /** The engine's suggestions for `query`, kept while the next keystroke's answer is on its way so the list doesn't blink. */
 function useSearchSuggestions(query: string) {
   const { searchEngine } = usePrefs();
-  const [result, setResult] = useState({ query: '', list: [] as string[] });
-  useEffect(() => {
-    if (!query.trim() || /^[a-z]+:\/\//i.test(query)) return;
-    const timer = setTimeout(() => void host.browser.suggest(searchEngine, query).then((list) => setResult({ query, list }), () => {}), SUGGEST_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [query, searchEngine]);
-  return query && query.startsWith(result.query) ? result.list : NONE;
+  const settled = useDebounced(query, SUGGEST_DEBOUNCE_MS);
+  const suggestionsQuery = useQuery({ queryKey: queryKeys.browser.suggestions(searchEngine, settled), queryFn: async () => ({ query: settled, list: await host.browser.suggest(searchEngine, settled) }), enabled: !!settled.trim() && !/^[a-z]+:\/\//i.test(settled), placeholderData: keepPreviousData });
+  const result = suggestionsQuery.data;
+  return result && query && query.startsWith(result.query) ? result.list : NONE;
 }
 
 function useRows(query: string, completion: string, candidates: Candidate[], remote: string[]) {

@@ -1,4 +1,6 @@
+import { useDebounced } from '../hooks/useDebounced';
 import { useEffect, useRef, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import { host } from '../host';
 import { getPrefs } from '../settings/prefs';
@@ -6,6 +8,7 @@ import { slotsUsing, type PackageGroup } from './groups';
 import { slotOf, type ColorTheme } from './model';
 import { PAGE_SIZE, type MarketplaceExtension } from './openVsx';
 import { chooseTheme, refreshThemes } from './store';
+import { queryKeys } from '../queryKeys';
 
 type SearchState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'done'; total: number; extensions: MarketplaceExtension[]; isLoadingMore: boolean };
 
@@ -14,43 +17,18 @@ const DEBOUNCE_MS = 300;
 
 /** Open VSX's Themes category for `query`, one page at a time; `more` appends the next. */
 export function useMarketplaceSearch(query: string) {
-  const [state, setState] = useState<SearchState>({ status: 'loading' });
-  const [attempt, setAttempt] = useState(0);
-  const offset = useRef(0);
-  const current = useRef(0);
-
-  useEffect(() => {
-    const run = ++current.current;
-    setState({ status: 'loading' });
-    const timer = setTimeout(() => {
-      host.themes.search(query, 0).then(
-        (result) => {
-          if (run !== current.current) return;
-          offset.current = PAGE_SIZE;
-          setState({ status: 'done', total: result.total, extensions: result.extensions, isLoadingMore: false });
-        },
-        (error: Error) => run === current.current && setState({ status: 'error', message: error.message }),
-      );
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [query, attempt]);
-
-  const more = () => {
-    if (state.status !== 'done' || state.isLoadingMore) return;
-    const run = current.current;
-    setState({ ...state, isLoadingMore: true });
-    void host.themes.search(query, offset.current).then(
-      (result) => {
-        if (run !== current.current) return;
-        offset.current += PAGE_SIZE;
-        setState((s) => (s.status === 'done' ? { ...s, extensions: dedupe([...s.extensions, ...result.extensions]), isLoadingMore: false } : s));
-      },
-      () => run === current.current && setState((s) => (s.status === 'done' ? { ...s, isLoadingMore: false } : s)),
-    );
-  };
-
-  const hasMore = state.status === 'done' && offset.current < state.total;
-  return { state, more, hasMore, retry: () => setAttempt((n) => n + 1) };
+  const search = useDebounced(query, DEBOUNCE_MS);
+  const searchQuery = useInfiniteQuery({
+    queryKey: queryKeys.themes.search(search),
+    queryFn: ({ pageParam }) => host.themes.search(search, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last, _pages, offset) => offset + PAGE_SIZE < last.total ? offset + PAGE_SIZE : undefined,
+  });
+  const state: SearchState = query !== search ? { status: 'loading' } : searchQuery.data ? {
+    status: 'done', total: searchQuery.data.pages[0].total,
+    extensions: dedupe(searchQuery.data.pages.flatMap((page) => page.extensions)), isLoadingMore: searchQuery.isFetchingNextPage,
+  } : searchQuery.isError ? { status: 'error', message: searchQuery.error.message } : { status: 'loading' };
+  return { state, more: () => { if (!searchQuery.isFetching && searchQuery.hasNextPage) void searchQuery.fetchNextPage(); }, hasMore: searchQuery.hasNextPage, retry: () => { void searchQuery.refetch(); } };
 }
 
 const dedupe = (list: MarketplaceExtension[]) => [...new Map(list.map((e) => [`${e.namespace}.${e.name}`, e])).values()];
@@ -59,18 +37,9 @@ type InspectState = { status: 'idle' | 'loading' } | { status: 'error'; message:
 
 /** An extension's themes, downloaded once `isVisible` turns true (rows scrolled into view), for swatches and preview. */
 export function useInspectedThemes(extension: MarketplaceExtension, isVisible: boolean) {
-  const [state, setState] = useState<InspectState>({ status: 'idle' });
   const { namespace, name, version, displayName } = extension;
-  useEffect(() => {
-    if (!isVisible) return;
-    let isCurrent = true;
-    setState({ status: 'loading' });
-    host.themes.inspect(namespace, name, version, displayName).then(
-      (themes) => isCurrent && setState({ status: 'done', themes }),
-      (error: Error) => isCurrent && setState({ status: 'error', message: error.message }),
-    );
-    return () => void (isCurrent = false);
-  }, [isVisible, namespace, name, version, displayName]);
+  const themesQuery = useQuery({ queryKey: queryKeys.themes.inspect(namespace, name, version, displayName), queryFn: () => host.themes.inspect(namespace, name, version, displayName), enabled: isVisible, staleTime: Infinity });
+  const state: InspectState = themesQuery.data ? { status: 'done', themes: themesQuery.data } : themesQuery.isError ? { status: 'error', message: themesQuery.error.message } : { status: isVisible ? 'loading' : 'idle' };
   return state;
 }
 

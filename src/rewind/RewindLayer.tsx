@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Danger, History, StopCircle } from '@/icons';
@@ -21,7 +22,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FilePath } from '../files/FileView';
 import { host } from '../host';
-import type { RewindPreview } from '../host/types/git';
 import { usePrefs } from '../settings/prefs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useWorktreePath } from '../git/worktrees';
@@ -35,6 +35,7 @@ import type { ForkPoint } from './fork';
 import { PROVIDER_NAME } from './handoff';
 import { openRewind, useRewindRequest } from './requests';
 import { useRewindActions, type RewindTarget } from './useRewindActions';
+import { queryKeys } from '../queryKeys';
 
 /** Hosts the rewind, fork and compare dialogs a thread's menus, step rows and timeline open. */
 export function RewindLayer({ thread }: { thread: Thread }) {
@@ -149,7 +150,7 @@ function ModeOption({ mode, disabledReason }: { mode: RewindMode; disabledReason
   );
 }
 
-function FilesPreview({ preview, canOverwrite, onCanOverwrite }: { preview: RewindPreviewState; canOverwrite: boolean; onCanOverwrite: (on: boolean) => void }) {
+function FilesPreview({ preview, canOverwrite, onCanOverwrite }: { preview: ReturnType<typeof useRewindPreview>; canOverwrite: boolean; onCanOverwrite: (on: boolean) => void }) {
   if (preview.error) return <p className="type-meta text-destructive">Could not read which files change: {preview.error}</p>;
   if (!preview.data) return <Skeleton className="h-16 rounded-lg" />;
   const { files, outside } = preview.data;
@@ -203,25 +204,10 @@ export function DisabledTooltip({ reason, children }: { reason?: string; childre
   );
 }
 
-interface RewindPreviewState {
-  data?: RewindPreview;
-  error?: string;
-}
-
 /** The files a files rewind would change, re-read while the agent works (its edits move the answer). */
 function useRewindPreview(cwd: string | undefined, threadId: string, n: number | undefined, isWorking: boolean) {
-  const [state, setState] = useState<RewindPreviewState>({});
-  useEffect(() => {
-    if (!cwd || n === undefined) return;
-    let isCurrent = true;
-    setState({});
-    host.git.rewindPreview(cwd, threadId, n).then(
-      (data) => isCurrent && setState({ data }),
-      (error: unknown) => isCurrent && setState({ error: error instanceof Error ? error.message : String(error) }),
-    );
-    return () => void (isCurrent = false);
-  }, [cwd, threadId, n, isWorking]);
-  return state;
+  const previewQuery = useQuery({ queryKey: queryKeys.git.rewindPreview(cwd, threadId, n, isWorking), queryFn: () => host.git.rewindPreview(cwd!, threadId, n!), enabled: !!cwd && n !== undefined });
+  return { data: previewQuery.data, error: previewQuery.error?.message };
 }
 
 const PLURAL = new Intl.PluralRules('en');

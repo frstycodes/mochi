@@ -1,10 +1,11 @@
 import { useRef } from 'react';
-import { structuralEqual } from '../lib/structuralEqual';
+import { useQueries } from '@tanstack/react-query';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
 import { goalProgress } from '../progress';
 import { isWorking } from '../agentPhase';
 import { threadDetail } from '../threadRow';
 import { useHarness, type State } from '../store';
+import { queryKeys } from '../queryKeys';
 
 /** What an overview card shows: plain data, so cards never mount a thread's live React tree. */
 export interface ThreadSnapshot {
@@ -25,18 +26,14 @@ const REFRESH_MS = 1000;
 /** Snapshots for `ids`, each refreshed at most once a second and kept identical while nothing on it changed, so memoized cards skip re-rendering. */
 export function useThreadSnapshots(ids: string[]) {
   const { state } = useHarness();
-  const cache = useRef(new Map<string, { at: number; snap: ThreadSnapshot }>());
-  const t = performance.now();
-  return ids.flatMap((id) => {
-    const hit = cache.current.get(id);
-    if (hit && t - hit.at < REFRESH_MS) return [hit.snap];
-    const thread = state.threads.find((x) => x.id === id);
-    if (!thread) return [];
-    const next = snapshotOf(thread, state);
-    const snap = hit && structuralEqual(hit.snap, next) ? hit.snap : next;
-    cache.current.set(id, { at: t, snap });
-    return [snap];
-  });
+  const latest = useRef(state);
+  latest.current = state;
+  const snapshotsQueries = useQueries({ queries: ids.map((id) => ({
+    queryKey: queryKeys.stage.threadSnapshot(id),
+    queryFn: () => { const thread = latest.current.threads.find((t) => t.id === id); return thread ? snapshotOf(thread, latest.current) : null; },
+    staleTime: REFRESH_MS, refetchInterval: REFRESH_MS,
+  })) });
+  return snapshotsQueries.flatMap((result) => result.data ? [result.data] : []);
 }
 
 function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
@@ -56,3 +53,4 @@ function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
     preview: tab ? { tabId: tab.id, url: tab.url ?? '' } : null,
   };
 }
+

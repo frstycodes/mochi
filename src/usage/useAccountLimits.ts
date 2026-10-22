@@ -1,23 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { host } from '../host/index.ts';
-import type { AccountLimits } from '../host/types/agent.ts';
 import type { Provider } from '../model.ts';
 
 /** The profile's `provider` account windows as main keeps them, live; `refresh` asks the provider again (main throttles it). */
 export function useAccountLimits(provider: Provider, spaceId: string) {
-  const [limits, setLimits] = useState<AccountLimits | null>(null);
-  const load = useCallback(
-    (refresh?: boolean) =>
-      void host.agent.limits(provider, spaceId, refresh).then(
-        (l) => setLimits(l),
-        () => {},
-      ),
-    [provider, spaceId],
-  );
-  useEffect(() => {
-    setLimits(null);
-    load();
-    return host.agent.onLimits((l) => setLimits((current) => (current?.accountId === l.accountId ? l : current)));
-  }, [load]);
-  return { limits, refresh: useCallback(() => load(true), [load]) };
+  const limitsQuery = useQuery({ queryKey: queryKeys.agent.limits(provider, spaceId), queryFn: () => host.agent.limits(provider, spaceId) });
+  const limits = limitsQuery.data ?? null;
+  useEffect(() => host.agent.onLimits((next) => { if (limits?.accountId === next.accountId) void queryClient.invalidateQueries({ queryKey: queryKeys.agent.limits(provider, spaceId) }); }), [limits?.accountId, provider, spaceId]);
+  return { limits, refresh: () => queryClient.fetchQuery({ queryKey: queryKeys.agent.limits(provider, spaceId), queryFn: () => host.agent.limits(provider, spaceId, true), staleTime: 0 }) };
 }

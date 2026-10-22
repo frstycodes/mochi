@@ -38,7 +38,6 @@ export function checkRef(namespace: unknown, name: unknown, version?: unknown) {
 
 /** Open VSX search and package reads, shared by the main process and the web build; only inflating differs. */
 export function createMarketplace(inflate: Inflate) {
-  const inspected = new Map<string, Promise<ColorTheme[]>>();
 
   return {
     /** The Themes category, most downloaded first, keeping only extensions whose package.json contributes color themes. */
@@ -51,26 +50,14 @@ export function createMarketplace(inflate: Inflate) {
       return { total: result.totalSize ?? 0, extensions: extensions.filter((e) => !!e?.themes.length) as MarketplaceExtension[] };
     },
 
-    /** Every color theme in one version's .vsix, downloaded and read but not stored. Cached for the session. */
+    /** Every color theme in one version's .vsix, downloaded and read but not stored. The renderer caches it by query key. */
     inspect(namespace: string, name: string, version: string, displayName = name): Promise<ColorTheme[]> {
-      const key = `${namespace}.${name}@${version}`;
-      let pending = inspected.get(key);
-      if (!pending) {
-        pending = download(namespace, name, version).then(async (bytes) =>
-          (await extractThemes(bytes, inflate)).map(({ label, kind, theme }) => ({
-            id: marketplaceThemeId(namespace, name, label),
-            label,
-            kind,
-            source: { kind: 'marketplace' as const, namespace, name, version, displayName, publisher: namespace },
-            theme,
-          })),
-        );
-        pending.catch(() => inspected.delete(key));
-        inspected.set(key, pending);
-        // ponytail: drop the oldest past 32 packages; an LRU if browsing ever revisits pages a lot.
-        if (inspected.size > 32) inspected.delete(inspected.keys().next().value!);
-      }
-      return pending;
+      return download(namespace, name, version).then(async (bytes) =>
+        (await extractThemes(bytes, inflate)).map(({ label, kind, theme }) => ({
+          id: marketplaceThemeId(namespace, name, label), label, kind,
+          source: { kind: 'marketplace' as const, namespace, name, version, displayName, publisher: namespace }, theme,
+        })),
+      );
     },
   };
 }

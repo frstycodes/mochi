@@ -1,4 +1,5 @@
-import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useDeferredValue, useId, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { Chat, Note, ShieldAlert, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
@@ -10,7 +11,7 @@ import { threadCwd } from '../host/cwd';
 import { useFileList } from '../files/useFiles';
 import { useRecentFiles } from '../pane/recentFiles';
 import type { AgentImage } from '../host/types/agent';
-import type { AppWindow, ScreenAccess } from '../host/types/windows';
+import type { ScreenAccess } from '../host/types/windows';
 import type { AgentCommand, McpServer, Thread } from '../model';
 import { openPhotos } from '../photo/photos';
 import { useHarnessSelector } from '../store';
@@ -21,6 +22,7 @@ import { FileMark } from './FileMark';
 import { browseEntries, browseQuery, browseTarget, fileMentionFor, mentionTokens, parentDir, rankFiles, tokenText, worktreeMention } from './fileMentions';
 import { McpServerMark, SkillMark } from './McpIcon';
 import { isInline, mentionFor, mentionGroups, mentionOptions, mentionQuery, optionId, withoutQuery, type FileOption, type Mention, type MentionOption } from './mentions';
+import { queryKeys } from '../queryKeys';
 
 type MenuItem = MentionOption | { kind: 'permission' };
 
@@ -264,36 +266,14 @@ function useFileOptions(query: string | null, { root, recent }: MentionFiles): F
 
 /** A browsed folder's listing, the last one kept while the next loads so the menu doesn't blink between folders. */
 function useFolder(target: string | null, dir: string | null) {
-  const [folder, setFolder] = useState<{ dir: string; path: string; dirs: string[]; files: string[] } | null>(null);
-  useEffect(() => {
-    if (target === null || dir === null) return;
-    let isCurrent = true;
-    host.fs.entries(target).then(
-      (listed) => isCurrent && setFolder(listed && { dir, ...listed }),
-      () => isCurrent && setFolder(null),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [target, dir]);
-  return target === null ? null : folder;
+  const folderQuery = useQuery({ queryKey: queryKeys.chat.folderEntries(target, dir), queryFn: async () => { const listed = await host.fs.entries(target!); return listed && { dir: dir!, ...listed }; }, enabled: target !== null && dir !== null, placeholderData: keepPreviousData });
+  return target === null ? null : folderQuery.data ?? null;
 }
 
 /** Other apps' windows, listed fresh each time the menu opens. */
 function useAppWindows(isOpen: boolean) {
-  const [screen, setScreen] = useState<{ access: ScreenAccess; windows: AppWindow[] }>({ access: 'unknown', windows: [] });
-  useEffect(() => {
-    if (!isOpen) return;
-    let isCurrent = true;
-    host.windows.listApps().then(
-      (next) => isCurrent && setScreen(next),
-      () => isCurrent && setScreen({ access: 'unknown', windows: [] }),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [isOpen]);
-  return screen;
+  const windowsQuery = useQuery({ queryKey: queryKeys.chat.appWindows(), queryFn: () => host.windows.listApps(), enabled: isOpen, staleTime: 0 });
+  return windowsQuery.data ?? { access: 'unknown' as const, windows: [] };
 }
 
 const isBlocked = (access: ScreenAccess) => access === 'denied' || access === 'restricted';

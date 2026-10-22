@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNow } from '../useNow';
 import { ChevronDown, Copy, Hourglass } from '@/icons';
@@ -14,6 +15,7 @@ import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { resetLabel, untilLabel } from '../usage/limits';
 import { EventLine } from './MochiWidget';
+import { queryKeys } from '../queryKeys';
 
 /** Where a thread paused on a usage limit: the live card while the pause lasts (only the latest such entry), then a one-line record. */
 export function LimitEntry({ thread, entry }: { thread: Thread; entry: ActivityEntry }) {
@@ -129,19 +131,8 @@ export function useUntil(at?: string) {
 }
 
 function useHasApiKey(provider: Provider) {
-  const [isSet, setSet] = useState(false);
-  useEffect(() => {
-    if (!HARNESSES[provider].apiKey) return;
-    let isCurrent = true;
-    host.settings.apiKey(provider).then(
-      (key) => isCurrent && setSet(key.isSet),
-      () => {},
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [provider]);
-  return isSet;
+  const keyQuery = useQuery({ queryKey: queryKeys.agent.apiKey(provider), queryFn: () => host.settings.apiKey(provider), enabled: !!HARNESSES[provider].apiKey });
+  return keyQuery.data?.isSet ?? false;
 }
 
 /** The header's status chip while a limit stops the thread: "Waiting · resets 3:40 PM". */

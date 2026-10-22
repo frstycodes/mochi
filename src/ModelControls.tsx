@@ -1,4 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { queryClient } from './query.ts';
+import { queryKeys } from './queryKeys.ts';
+import { createContext, useContext, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { toast } from '@/toast/store';
 import { ArrowLeft, Bolt, ChevronDown, ChevronRight, Search, Star } from '@/icons';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +30,7 @@ import { effortFor, effortName, FAST, isNewThreadModel, listedHarnesses, optionF
 import { setPrefs, toggleStar, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
-import type { AgentInstall, AgentSettings } from './host/types/settings';
+import type { AgentInstall } from './host/types/settings';
 import { linkedAccountId } from './settings/accounts';
 import { HARNESS_IDS, HARNESSES } from './settings/harnesses';
 import { useSpace } from './store';
@@ -358,46 +361,19 @@ type Unavailable = Partial<Record<Provider, string>>;
 
 /** Harnesses the profile can't run: not installed, or its linked account signed out. Empty in the web build, which answers with a mock. */
 function useUnavailableHarnesses(spaceId: string) {
-  const [unavailable, setUnavailable] = useState<Unavailable>({});
-  useEffect(() => {
-    if (!host.isDesktop) return;
-    let isCurrent = true;
-    void host.settings.accounts().then(({ links }) =>
-      HARNESS_IDS.forEach((h) =>
-        host.settings.detect(linkedAccountId(links, spaceId, h)).then(
-          (install) => isCurrent && setUnavailable((prev) => ({ ...prev, [h]: unavailableReason(install) })),
-          () => {},
-        ),
-      ),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
-  return unavailable;
+  const unavailableQuery = useQuery({ queryKey: queryKeys.agent.unavailable(spaceId), queryFn: async () => {
+    const { links } = await host.settings.accounts();
+    return Object.fromEntries(await Promise.all(HARNESS_IDS.map(async (h) => [h, unavailableReason(await host.settings.detect(linkedAccountId(links, spaceId, h)))])));
+  }, enabled: host.isDesktop, staleTime: 60_000 });
+  return (unavailableQuery.data ?? {}) as Unavailable;
 }
 
-// GAP: read once per profile per launch, so signing in another way shows the old note until Mochi restarts.
-const harnessNotes = new Map<string, Promise<Partial<Record<Provider, string>>>>();
-
-/** Per harness, what its model list leaves out on this login; the picker's harness row says it. */
 function useHarnessNotes(spaceId: string) {
-  const [notes, setNotes] = useState<Partial<Record<Provider, string>>>({});
-  useEffect(() => {
-    if (!host.isDesktop) return;
-    let isCurrent = true;
-    let read = harnessNotes.get(spaceId);
-    if (!read) {
-      read = host.settings.accounts().then(({ links }) => host.settings.detect(linkedAccountId(links, spaceId, 'codex'))).then((install) => ({ codex: codexPlanNote(install) }));
-      harnessNotes.set(spaceId, read);
-      read.catch(() => harnessNotes.delete(spaceId));
-    }
-    read.then((n) => isCurrent && setNotes(n), () => {});
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
-  return notes;
+  const notesQuery = useQuery({ queryKey: queryKeys.agent.notes.space(spaceId), queryFn: async () => {
+    const { links } = await host.settings.accounts();
+    return { codex: codexPlanNote(await host.settings.detect(linkedAccountId(links, spaceId, 'codex'))) };
+  }, enabled: host.isDesktop, staleTime: 60_000 });
+  return (notesQuery.data ?? {}) as Partial<Record<Provider, string | undefined>>;
 }
 
 // Seen with codex-cli 0.155.1 on a ChatGPT Plus login (2026-10-13): gpt-6.1-sol is missing from `model/list` even with
@@ -417,37 +393,23 @@ export const MachineModelsContext = createContext<Pick<MachineCatalog, 'models' 
 /** Each harness's models on the profile's account, from main (cached there per account); a harness missing until its list arrives, [] when it can't be read. */
 export function useModels(spaceId: string) {
   const machine = useContext(MachineModelsContext);
-  const [models, setModels] = useState<Partial<Record<Provider, AgentModel[]>>>({});
-  useEffect(() => {
-    let isCurrent = true;
-    setModels({});
-    HARNESS_IDS.forEach((h) =>
-      host.agent.models(h, spaceId).then(
-        (list) => isCurrent && setModels((prev) => ({ ...prev, [h]: list })),
-        () => isCurrent && setModels((prev) => ({ ...prev, [h]: [] })),
-      ),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
+  const modelsQueries = useQueries({ queries: HARNESS_IDS.map((h) => ({ queryKey: queryKeys.agent.models(spaceId, h), queryFn: () => host.agent.models(h, spaceId) })) });
+  const models = Object.fromEntries(HARNESS_IDS.flatMap((h, i) => modelsQueries[i].data ? [[h, modelsQueries[i].data]] : modelsQueries[i].isError ? [[h, []]] : []));
   return machine?.models ?? models;
 }
 
 /** Each harness's default model from Settings ('' = the harness's own); null until read. Re-read on mount, updated in place by `makeDefaultModel`. */
 export function useDefaultModels() {
   const machine = useContext(MachineModelsContext);
-  const models = useSyncExternalStore(subscribeDefaultModels, () => defaultModels);
-  useEffect(() => {
-    host.settings.get().then(publishDefaultModels, () => {});
-  }, []);
-  return machine?.defaults ?? models;
+  const settingsQuery = useQuery({ queryKey: queryKeys.agent.settings(), queryFn: () => host.settings.get() });
+  const settings = settingsQuery.data;
+  return machine?.defaults ?? (settings ? { claude: settings.harnesses.claude.model, codex: settings.harnesses.codex.model } : null);
 }
 
 /** New threads start on `model`: its harness becomes the default agent and the model that harness's Settings default. */
 export function makeDefaultModel(model: ModelOption) {
   setPrefs({ agent: model.harness });
-  host.settings.set({ harnesses: { [model.harness]: { model: model.id } } }).then(publishDefaultModels, (error: Error) => toast.error('Default model not saved', { description: error.message }));
+  host.settings.set({ harnesses: { [model.harness]: { model: model.id } } }).then(() => queryClient.invalidateQueries({ queryKey: queryKeys.agent.settings() }), (error: Error) => toast.error('Default model not saved', { description: error.message }));
 }
 
 /** The composer pickers' "Default" and "Make default": what new threads start on, read from and saved to the same settings New thread uses. */
@@ -459,19 +421,6 @@ export function useNewThreadDefaults(catalog: Partial<Record<Provider, AgentMode
     effort: { isDefault: (e: string) => e === effortFor(model, effort), make: (e: string) => setPrefs({ effort: e }) },
     speed: { isDefault: (s: string) => s === speed, make: (s: string) => setPrefs({ speed: s ? FAST : '' }) },
   };
-}
-
-let defaultModels: Record<Provider, string> | null = null;
-const defaultModelListeners = new Set<() => void>();
-
-function subscribeDefaultModels(listener: () => void) {
-  defaultModelListeners.add(listener);
-  return () => void defaultModelListeners.delete(listener);
-}
-
-function publishDefaultModels(settings: AgentSettings) {
-  defaultModels = { claude: settings.harnesses.claude.model, codex: settings.harnesses.codex.model };
-  defaultModelListeners.forEach((l) => l());
 }
 
 function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string; onToggle: () => void }) {

@@ -1,3 +1,5 @@
+import type { FileContent } from '@/host/types/fs';
+import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useState, type KeyboardEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { FileIcon } from '@react-symbols/icons/utils';
@@ -5,7 +7,6 @@ import { ChevronLeft, ChevronRight, Code, Copy, File, Download, Eye, SidebarRigh
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import type { FileContent } from '@/host/types/fs';
 import { cn } from '@/lib/utils';
 import { copyText } from '../clipboard';
 import { Shortcut } from '../Shortcut';
@@ -16,6 +17,7 @@ import { FilePath, OpenInMenu } from './FileView';
 import { fileKind, hasTextSource, viewerBody, type ViewerBody } from './kinds';
 import { FilePreview } from './previews';
 import { loadViewerFile, openFiles, useFileRequest, viewerName, viewerPath, type ViewerFile } from './viewer';
+import { queryKeys } from '../queryKeys';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
@@ -189,16 +191,8 @@ function CantPreviewState({ file, content, reason }: { file: ViewerFile; content
 }
 
 function useViewerContent(file: ViewerFile) {
-  const [state, setState] = useState<{ content: FileContent | null; error: string | null }>({ content: null, error: null });
-  useEffect(() => {
-    let isCurrent = true;
-    loadViewerFile(file).then(
-      (content) => isCurrent && setState({ content, error: null }),
-      (e: Error) => isCurrent && setState({ content: null, error: e.message }),
-    );
-    return () => void (isCurrent = false);
-  }, [file]);
-  return state;
+  const contentQuery = useQuery({ queryKey: file.source === 'workspace' ? queryKeys.files.content(file.root, file.path) : queryKeys.files.viewerContent(file.url), queryFn: () => loadViewerFile(file) });
+  return { content: contentQuery.data ?? null, error: contentQuery.error?.message ?? null };
 }
 
 function FileStrip({ files, index, onSelect }: { files: ViewerFile[]; index: number; onSelect: (i: number) => void }) {

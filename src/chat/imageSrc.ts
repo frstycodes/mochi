@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
 import { imageMime } from '../files/previews';
+import { queryKeys } from '../queryKeys';
 
 // A URL has a scheme (`data:`, `https:`, `blob:`); a Windows drive (`C:\`) looks like one, so it's checked first.
 const isUrl = (src: string) => !/^[a-z]:[\\/]/i.test(src) && /^[a-z][a-z\d+.-]*:/i.test(src);
@@ -13,28 +15,10 @@ export const isFilePath = (src: string) => !isUrl(src);
  * URLs (revoked when the sources change or the caller goes). Per source: the URL, `undefined` while it loads, `null` when it can't be read.
  */
 export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
-  const key = srcs.join('\n');
-  const [read, setRead] = useState<Record<string, string | null>>({});
-  useEffect(() => {
-    let isCurrent = true;
-    const made: string[] = [];
-    for (const src of new Set(key.split('\n'))) {
-      if (!src || !isFilePath(src)) continue;
-      readImage(src).then(
-        (url) => {
-          made.push(url);
-          if (isCurrent) setRead((r) => ({ ...r, [src]: url }));
-          else URL.revokeObjectURL(url);
-        },
-        () => isCurrent && setRead((r) => ({ ...r, [src]: null })),
-      );
-    }
-    return () => {
-      isCurrent = false;
-      made.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [key]);
-  return srcs.map((src) => (isFilePath(src) ? read[src] : src));
+  const images = useQueries({ queries: srcs.map((src) => ({ queryKey: queryKeys.chat.imageBlob(src), queryFn: () => readImage(src), enabled: !!src && isFilePath(src), structuralSharing: false })), combine: (results) => results.map((result) => ({ blob: result.data, isError: result.isError })) });
+  const urls = useMemo(() => images.map(({ blob }) => blob ? URL.createObjectURL(blob) : undefined), [images]);
+  useEffect(() => () => urls.forEach((url) => { if (url) URL.revokeObjectURL(url); }), [urls]);
+  return srcs.map((src, i) => isFilePath(src) ? urls[i] ?? (images[i].isError ? null : undefined) : src);
 }
 
 /** Selects the file in Finder (Explorer, the file manager). */
@@ -47,7 +31,7 @@ async function readImage(path: string) {
   const { dir, name } = splitPath(path);
   const content = await host.fs.read(dir, name);
   const type = /\.svg$/i.test(path) ? 'image/svg+xml' : imageMime(path);
-  return URL.createObjectURL(new Blob([(content.kind === 'text' ? content.text : content.bytes) as BlobPart], { type }));
+  return new Blob([(content.kind === 'text' ? content.text : content.bytes) as BlobPart], { type });
 }
 
 // The file host reads paths relative to a root, so a file is read from its own folder.

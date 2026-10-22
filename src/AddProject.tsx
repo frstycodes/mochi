@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, ChevronRight, Folder, FolderPlus, Link, Lock } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
@@ -9,13 +10,14 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { isCloneUrl } from './git/origin';
 import { gitError } from './git/useGit';
 import { host } from './host';
-import type { CloneSource, GithubRepo, Project } from './host/types/projects';
+import type { CloneSource, Project } from './host/types/projects';
 import type { FollowedMachine } from './host/types/remote';
 import { GithubMarkIcon } from './icons/github';
 import { cloneProject, createProject, githubUserOf, projectName } from './projects';
 import { useMachines } from './remote/useMachines';
 import { getPrefs, usePrefs } from './settings/prefs';
 import { useHarnessSelector } from './store';
+import { queryKeys } from './queryKeys';
 
 /** What the picker gets back: `ref` is the folder here, the project's id on another computer. */
 export interface AddedProject {
@@ -190,19 +192,9 @@ function GithubPicker({ adder, machine, onBack, onAdded }: { adder: Adder; machi
 
 /** `gh repo list` as the profile's login, once per open. `spaceId` null skips it (another computer's login isn't readable from here). */
 function useGithubRepos(spaceId: string | null) {
-  const [state, setState] = useState<{ list: GithubRepo[] | null; error: string | null }>({ list: null, error: null });
-  useEffect(() => {
-    if (!spaceId) return;
-    let isCurrent = true;
-    host.projects.githubRepos(githubUserOf(spaceId)).then(
-      (list) => isCurrent && setState({ list, error: null }),
-      (e: unknown) => isCurrent && setState({ list: [], error: gitError(e) }),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
-  return { ...state, login: spaceId ? githubUserOf(spaceId) : undefined };
+  const login = spaceId ? githubUserOf(spaceId) : undefined;
+  const reposQuery = useQuery({ queryKey: queryKeys.projects.githubRepos(spaceId, login), queryFn: () => host.projects.githubRepos(login), enabled: !!spaceId });
+  return { list: reposQuery.data ?? (reposQuery.isError ? [] : null), error: reposQuery.error ? gitError(reposQuery.error) : null, login };
 }
 
 function UrlForm({ adder, onBack, onAdded }: { adder: Adder; onBack: () => void; onAdded: (project: AddedProject) => void }) {
@@ -352,20 +344,12 @@ function useFolderMatches(path: string) {
   const dir = cut < 0 ? '~' : path.slice(0, cut) || '/';
   const partial = (cut < 0 ? path : path.slice(cut + 1)).toLowerCase();
   const full = path.replace(/\/+$/, '') || '/';
-  const [found, setFound] = useState<{ key: string; names: string[]; folder: { path: string } | null }>({ key: '', names: [], folder: null });
-  useEffect(() => {
-    let isCurrent = true;
-    void Promise.all([host.fs.folders(dir), host.fs.folders(full)]).then(
-      ([inDir, self]) => isCurrent && setFound({ key: `${dir}\n${full}`, names: inDir?.names ?? [], folder: self && { path: self.path } }),
-      () => isCurrent && setFound({ key: `${dir}\n${full}`, names: [], folder: null }),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [dir, full]);
-  const isFresh = found.key === `${dir}\n${full}`;
-  const matches = isFresh ? found.names.filter((name) => name.toLowerCase().startsWith(partial)) : [];
-  return { dir, matches, folder: isFresh ? found.folder : null };
+  const foldersQuery = useQuery({ queryKey: queryKeys.projects.folderMatches(dir, full), queryFn: async () => {
+    const [inDir, self] = await Promise.all([host.fs.folders(dir), host.fs.folders(full)]);
+    return { names: inDir?.names ?? [], folder: self && { path: self.path } };
+  } });
+  const matches = (foldersQuery.data?.names ?? []).filter((name) => name.toLowerCase().startsWith(partial));
+  return { dir, matches, folder: foldersQuery.data?.folder ?? null };
 }
 
 function browseNative(onChoose: (path: string) => void) {
