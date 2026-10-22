@@ -1,6 +1,7 @@
 import { listenKeydown, isCommand, commandOf } from './keymap';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Dialog as DialogPrimitive } from 'radix-ui';
 import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { goalProgress, progressLabel } from './progress';
@@ -94,35 +95,39 @@ export function Orbit() {
   }, [selectedKey]);
 
   return (
-    <AnimatePresence>
-      {center && (
-        <motion.div
-          key="orbit"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.1 }}
-          className="fixed inset-0 z-[400] touch-none select-none"
-          style={{ background: 'var(--scrim)' }}
-          aria-hidden={false}
-          role="dialog"
-          aria-label="Orbit: move toward a destination and release"
-        >
-          <svg className="pointer-events-none absolute inset-0 h-full w-full">
-            <circle cx={center.x} cy={center.y} r={R_IN * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
-            <circle cx={center.x} cy={center.y} r={R_OUT * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
-            <line x1={center.x} y1={center.y} x2={pointer.x} y2={pointer.y} stroke="var(--foreground)" strokeOpacity={selected ? 0.5 : 0.2} strokeWidth={1.5} />
-          </svg>
-          <div className="absolute flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-center text-xs leading-tight text-subtle-foreground shadow-[var(--elev-popover)]" style={{ left: center.x, top: center.y }}>
-            {selected ? 'Go' : 'Cancel'}
-          </div>
-          {items.map((it, i) => (
-            <OrbitNode key={it.key} item={it} center={center} isSelected={selected?.key === it.key} index={i} />
-          ))}
-          {selected && peekKey === selected.key && <Peek item={selected} center={center} />}
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <DialogPrimitive.Root open={center !== null} onOpenChange={(open) => !open && setCenter(null)}>
+      <AnimatePresence>
+        {center && (
+          <DialogPrimitive.Portal forceMount>
+            <DialogPrimitive.Content asChild forceMount aria-describedby={undefined}>
+              <motion.div
+                key="orbit"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.1 }}
+                className="fixed inset-0 z-[400] touch-none outline-none select-none"
+                style={{ background: 'var(--scrim)' }}
+              >
+                <DialogPrimitive.Title className="sr-only">Orbit: move toward a destination and release</DialogPrimitive.Title>
+                <svg className="pointer-events-none absolute inset-0 h-full w-full">
+                  <circle cx={center.x} cy={center.y} r={R_IN * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
+                  <circle cx={center.x} cy={center.y} r={R_OUT * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
+                  <line x1={center.x} y1={center.y} x2={pointer.x} y2={pointer.y} stroke="var(--foreground)" strokeOpacity={selected ? 0.5 : 0.2} strokeWidth={1.5} />
+                </svg>
+                <div className="absolute flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-center text-xs leading-tight text-subtle-foreground shadow-[var(--elev-popover)]" style={{ left: center.x, top: center.y }}>
+                  {selected ? 'Go' : 'Cancel'}
+                </div>
+                {items.map((it, i) => (
+                  <OrbitNode key={it.key} item={it} center={center} isSelected={selected?.key === it.key} index={i} />
+                ))}
+                {selected && peekKey === selected.key && <Peek item={selected} center={center} />}
+              </motion.div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        )}
+      </AnimatePresence>
+    </DialogPrimitive.Root>
   );
 }
 

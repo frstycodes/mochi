@@ -505,7 +505,7 @@ const Composer = memo(function Composer({
               autoFocus={handoff.isHandoff}
               {...menuProps}
               onKeyDown={(e, view) => {
-                mention.editorProps.onKeyDown(e);
+                mention.editorProps.onKeyDown(e, view);
                 if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
                 if (e.key === MOD_KEY) setIsHeld(true);
                 const newest = queued.at(-1);
