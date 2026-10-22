@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, crashReporter } from 'electron';
 import { startDevMcp } from './mcp/server.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
@@ -15,6 +15,10 @@ import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
 setImageDir(path.join(app.getPath('userData'), 'images'));
+// Minidumps stay local, under `app.getPath('crashDumps')`.
+crashReporter.start({ uploadToServer: false });
+process.on('uncaughtException', (error) => console.error('Uncaught exception in main', error));
+process.on('unhandledRejection', (reason) => console.error('Unhandled rejection in main', reason));
 
 const hasTray = process.platform !== 'darwin';
 // One Mochi per profile on Windows and Linux: a second launch opens a window in the running one (`startTray`).
