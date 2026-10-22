@@ -1,3 +1,4 @@
+import { listenKeydown, isCommand } from '../keymap';
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject, type WheelEvent as ReactWheelEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { ChevronLeft, ChevronRight, Copy, Download, FolderOpen, Maximize, ZoomIn, ZoomOut, X } from '@/icons';
@@ -5,7 +6,7 @@ import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { REVEAL_LABEL } from '../chat/ImageGenCard';
-import { Shortcut } from '../Shortcut';
+import { BoundShortcut } from '../Shortcut';
 import { TooltipIconButton } from '../ui';
 import { copyImage, openPhotos, saveImage, usePhotoRequest, type Photo } from './photos';
 import { FIT, clampPan, isBackdropClick, zoomAt, type View } from './zoom';
@@ -100,14 +101,14 @@ function Stage({ img, photo, position, onStep }: { img: RefObject<HTMLImageEleme
         <DialogPrimitive.Title className="min-w-0 truncate px-1 type-title">{photo.name}</DialogPrimitive.Title>
         {!!position && <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular">{position}</span>}
         <span className="flex-1" />
-        <TooltipIconButton label="Zoom out" hint={<Shortcut keys={['-']} />} disabled={!isZoomed} onClick={() => zoom(1 / STEP)}>
+        <TooltipIconButton label="Zoom out" hint={<BoundShortcut command="photo-zoom-out" />} disabled={!isZoomed} onClick={() => zoom(1 / STEP)}>
           <ZoomOut />
         </TooltipIconButton>
         <span className="w-11 text-center type-meta text-muted-foreground tabular">{Math.round(view.scale * 100)}%</span>
-        <TooltipIconButton label="Zoom in" hint={<Shortcut keys={['+']} />} onClick={() => zoom(STEP)}>
+        <TooltipIconButton label="Zoom in" hint={<BoundShortcut command="photo-zoom-in" />} onClick={() => zoom(STEP)}>
           <ZoomIn />
         </TooltipIconButton>
-        <TooltipIconButton label="Fit to window" hint={<Shortcut keys={['0']} />} disabled={!isZoomed} onClick={() => setView(FIT)}>
+        <TooltipIconButton label="Fit to window" hint={<BoundShortcut command="photo-fit" />} disabled={!isZoomed} onClick={() => setView(FIT)}>
           <Maximize />
         </TooltipIconButton>
         <TooltipIconButton label="Copy image" onClick={() => copyImage(photo).then(() => toast('Image copied'), () => toast.error('Could not copy this image'))}>
@@ -158,13 +159,12 @@ function Stage({ img, photo, position, onStep }: { img: RefObject<HTMLImageEleme
 function useZoomKeys(zoom: (factor: number) => void, fit: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === '+' || e.key === '=') zoom(STEP);
-      if (e.key === '-') zoom(1 / STEP);
-      if (e.key === '0') fit();
+      if (e.defaultPrevented) return;
+      if (isCommand(e, 'photo-zoom-in') || isCommand(e, 'photo-zoom-in-shift')) zoom(STEP);
+      if (isCommand(e, 'photo-zoom-out')) zoom(1 / STEP);
+      if (isCommand(e, 'photo-fit')) fit();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [zoom, fit]);
 }
 

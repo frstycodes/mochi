@@ -47,7 +47,7 @@ import type { FollowedMachine } from './host/types/remote';
 import { SpaceIcon, TooltipIconButton } from './ui';
 import { AgentsBadge, ThreadStatusDot, useThreadRow, type ThreadRow } from './threadRow';
 import { BoundShortcut } from './Shortcut';
-import { spaceCommand } from './keymap';
+import { spaceCommand, isCommand, listenKeydown } from './keymap';
 import { remoteDecisions, remoteThreads } from './remote/mirror';
 import { openRemoteThread, useRemoteThreadRoute } from './remote/open';
 import { DeviceIcon } from './remote/DeviceIcon';
@@ -639,7 +639,7 @@ function useRowDrag(
     // Released outside the window (or the OS took the pointer): no pointerup ever comes, so the drag would stay stuck.
     const onLost = () => finish(true);
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.key !== 'Escape' || !current) return;
+      if (!isCommand(ev, 'dismiss') || !current) return;
       ev.preventDefault();
       ev.stopPropagation();
       finish(true);
@@ -648,7 +648,7 @@ function useRowDrag(
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onLost);
     window.addEventListener('blur', onLost);
-    window.addEventListener('keydown', onKey, true);
+    listenKeydown(onKey, true);
   };
 
   return { state: drag, onPointerDown };

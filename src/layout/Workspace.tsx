@@ -1,3 +1,4 @@
+import { listenKeydown } from '../keymap';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -314,7 +315,7 @@ function useFocusFollows(ref: RefObject<HTMLElement | null>, isFocused: boolean)
 }
 
 let lastTabAt = 0;
-if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => e.key === 'Tab' && (lastTabAt = performance.now()), true);
+if (typeof window !== 'undefined') listenKeydown((e) => e.key === 'Tab' && (lastTabAt = performance.now()), true);
 
 /** Tabbing into a split focuses it; programmatic focus (a composer autofocusing on mount) must not. */
 function isTabbing() {

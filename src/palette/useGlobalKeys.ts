@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { commandOf, spaceCommand } from '../keymap';
+import { commandOf, spaceCommand, listenKeydown } from '../keymap';
 import { getProfiles } from '../profiles';
 import { useDispatch } from '../store';
 
@@ -19,7 +19,6 @@ export function useGlobalKeys(onPalette: () => void) {
       e.preventDefault();
       dispatch({ type: 'space', id: profile.id });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [dispatch, onPalette]);
 }

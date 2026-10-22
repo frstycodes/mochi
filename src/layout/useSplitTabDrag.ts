@@ -1,3 +1,4 @@
+import { listenKeydown, isCommand } from '../keymap';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { PaneTabKind } from '../model';
 import { isOverPinDrop, setPinned } from '../pane/headerPins';
@@ -37,14 +38,14 @@ export function useSplitTabDrag(threadId: string, tabId: string, kind: PaneTabKi
     };
     const onUp = (ev: PointerEvent) => finish(ev);
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.key !== 'Escape' || !isDragging) return;
+      if (!isCommand(ev, 'dismiss') || !isDragging) return;
       ev.preventDefault();
       ev.stopPropagation();
       finish(null);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-    window.addEventListener('keydown', onKey, true);
+    listenKeydown(onKey, true);
   };
 }
 

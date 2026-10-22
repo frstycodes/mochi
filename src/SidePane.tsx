@@ -18,7 +18,7 @@ import { useSize } from './browser/PageSurface';
 import { useDispatch, useHarnessSelector } from './store';
 import { layoutOf, shownTab } from './store/panes';
 import { isMod } from './keys';
-import { commandOf } from './keymap';
+import { commandOf, isCommand, listenKeydown } from './keymap';
 import { TAB_MENU } from './menus/menus';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 
@@ -441,14 +441,14 @@ function usePaneMove(threadId: string, pane: Pane, resolved: ResolvedLayout, are
     };
     const onUp = (ev: PointerEvent) => finish(false, ev);
     const onKey = (ev: globalThis.KeyboardEvent) => {
-      if (ev.key !== 'Escape' || !isDragging) return;
+      if (!isCommand(ev, 'dismiss') || !isDragging) return;
       ev.preventDefault();
       ev.stopPropagation();
       finish(true);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-    window.addEventListener('keydown', onKey, true);
+    listenKeydown(onKey, true);
   };
 
   return { kind, start, indicator: target?.line };
@@ -487,12 +487,11 @@ function useEscapeExpand(threadId: string, isExpanded: boolean) {
   useEffect(() => {
     if (!isExpanded || isPreview) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!isCommand(e, 'dismiss') || e.defaultPrevented) return;
       if (e.target instanceof Element && e.target.closest('.xterm, input, textarea, [contenteditable], [role=dialog], [role=menu], [role=listbox]')) return;
       e.preventDefault();
       dispatch({ type: 'pane-expand', threadId, kind: undefined });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [dispatch, threadId, isExpanded, isPreview]);
 }

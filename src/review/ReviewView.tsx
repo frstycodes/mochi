@@ -21,7 +21,7 @@ import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
-import { isCommand } from '../keymap';
+import { isCommand, listenKeydown } from '../keymap';
 import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
@@ -267,12 +267,10 @@ function useReviewKeys(step: (by: 1 | -1) => void, close: () => void) {
       if (e.defaultPrevented) return;
       if (isCommand(e, 'list-next')) return step(1);
       if (isCommand(e, 'list-previous')) return step(-1);
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable], [role=dialog], [role=alertdialog]')) return;
-      if (e.key === 'Escape') close();
+      if (isCommand(e, 'dismiss')) close();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [step, close]);
 }
 

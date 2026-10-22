@@ -1,3 +1,4 @@
+import { isCommand, listenKeydown } from '../keymap';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -77,7 +78,7 @@ function SettingsChatPage() {
 function useEscapeBack(route: SettingsRoute | null) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!isCommand(e, 'dismiss') || e.defaultPrevented) return;
       if (document.querySelector('[data-radix-popper-content-wrapper], [role=dialog], [role=alertdialog]')) return;
       const target = e.target as HTMLElement;
       if (target.matches?.('input, textarea, select')) return void target.blur();
@@ -85,8 +86,7 @@ function useEscapeBack(route: SettingsRoute | null) {
       if (route?.subpage) return openSettings(route.section);
       closeSettings();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [route]);
 }
 

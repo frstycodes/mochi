@@ -1,3 +1,4 @@
+import { listenKeydown, isCommand, commandOf } from './keymap';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
@@ -307,6 +308,7 @@ function useOrbitTriggers(handlers: {
     let pressTimer: ReturnType<typeof setTimeout> | undefined;
     let press: { x: number; y: number } | null = null;
     let via: 'alt' | 'pointer' | null = null;
+    let triggerCode: string | null = null;
 
     const onPointerMove = (e: PointerEvent) => {
       last.x = e.clientX;
@@ -318,13 +320,17 @@ function useOrbitTriggers(handlers: {
       if (h.current.isOpen) h.current.move(e.clientX, e.clientY);
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && h.current.isOpen) {
+      if (e.defaultPrevented) return;
+      if (isCommand(e, 'dismiss') && h.current.isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         via = null;
         h.current.cancel();
         return;
       }
-      if (e.key === 'Alt') {
+      if (isCommand(e, 'orbit-hold')) {
         if (e.repeat || h.current.isOpen) return;
+        triggerCode = e.code;
         altTimer = setTimeout(() => {
           via = 'alt';
           h.current.open(last.x, last.y);
@@ -332,11 +338,15 @@ function useOrbitTriggers(handlers: {
         return;
       }
       clearTimeout(altTimer);
-      const digit = /^Digit([1-4])$/.exec(e.code);
-      if (h.current.isOpen && digit && h.current.digit(Number(digit[1]))) e.preventDefault();
+      const command = commandOf(e, ['orbit-1', 'orbit-2', 'orbit-3', 'orbit-4']);
+      if (h.current.isOpen && command && h.current.digit(Number(command.slice('orbit-'.length)))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Alt') return;
+      if (e.code !== triggerCode) return;
+      triggerCode = null;
       clearTimeout(altTimer);
       if (via === 'alt' && h.current.isOpen) h.current.commit();
       via = null;
@@ -377,7 +387,11 @@ function useOrbitTriggers(handlers: {
     };
 
     window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('keydown', onKeyDown);
+    const onCapture = (e: KeyboardEvent) => {
+      if (h.current.isOpen) onKeyDown(e);
+    };
+    listenKeydown(onCapture, true);
+    listenKeydown(onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointerup', onPointerUp);
@@ -389,6 +403,7 @@ function useOrbitTriggers(handlers: {
       clearTimeout(altTimer);
       clearTimeout(pressTimer);
       window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('keydown', onCapture, true);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('pointerdown', onPointerDown);
