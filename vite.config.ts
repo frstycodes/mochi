@@ -8,6 +8,7 @@ import electron from 'vite-plugin-electron/simple';
 import { csp } from './scripts/csp.ts';
 
 export default defineConfig(({ mode }) => ({
+  base: './',
   fmt: { singleQuote: true, printWidth: 160 },
   // GAP: format check is off until in-flight branches land; turning it on reformats ~210 files in one commit.
   check: { fmt: false },
@@ -22,7 +23,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
-    viteSingleFile(),
+    mode === 'artifact' && viteSingleFile(),
     mode === 'electron' && csp(),
     mode === 'electron' &&
       electron({

@@ -10,6 +10,7 @@ import { host } from '../host';
 import { getPrefs, subscribePrefs } from '../settings/prefs';
 import { filePathsIn } from './links';
 import { onThemeChange, terminalTheme } from './theme';
+import { TERMINAL_STORAGE_PREFIX } from './storage';
 
 export type SessionKind = 'shell' | 'agent' | 'build';
 
@@ -60,7 +61,6 @@ interface SavedGroup {
   scrollback: Record<string, string>;
 }
 
-export const TERMINAL_STORAGE_PREFIX = 'harness.terminal.v1:';
 const terminalSlice = persistedFamily<SavedGroup | null>(TERMINAL_STORAGE_PREFIX, null);
 const SAVED_SCROLLBACK_ROWS = 1000;
 const FAILURE_OUTPUT_LINES = 80;

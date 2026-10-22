@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Plugin } from 'vite-plus';
 
 // The app window's Content Security Policy, as a <meta> first in <head>.
-// Production is one file (viteSingleFile), so the bundle is an inline <script>: script-src allows it by hash, nothing else.
+// The Electron build loads its chunks as files, so script-src is 'self'; any inline script (a single-file build) is allowed by hash.
 export function csp(): Plugin {
   return {
     name: 'mochi-csp',
@@ -11,7 +11,6 @@ export function csp(): Plugin {
       order: 'post',
       handler: (html, { server }) => (server ? withPolicy(html, DEV) : html),
     },
-    // viteSingleFile inlines the bundle in its own generateBundle, so the hash is taken after it.
     generateBundle(_, bundle) {
       for (const file of Object.values(bundle)) {
         if (file.type !== 'asset' || !file.fileName.endsWith('.html')) continue;
