@@ -1,0 +1,1048 @@
+{
+ "claude/turn": [
+  {
+   "threadId": "t1",
+   "type": "session",
+   "provider": "claude",
+   "sessionId": "sess-1"
+  },
+  {
+   "threadId": "t1",
+   "type": "info",
+   "info": {
+    "model": "claude-opus-5-5",
+    "cwd": "/repo",
+    "permissionMode": "default",
+    "tools": [],
+    "mcpServers": [],
+    "skills": [],
+    "plugins": [],
+    "slashCommands": []
+   }
+  },
+  {
+   "threadId": "t1",
+   "type": "message",
+   "text": "Adding",
+   "isDelta": false
+  },
+  {
+   "threadId": "t1",
+   "type": "message",
+   "text": " a test.",
+   "isDelta": true
+  },
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "contextUsed": 1250
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "edit",
+   "phase": "start",
+   "text": "Edit src/a.ts"
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "edit",
+   "phase": "end",
+   "text": "Edit src/a.ts",
+   "files": [
+    "src/a.ts"
+   ]
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "bash",
+   "phase": "start",
+   "text": "Run pnpm test",
+   "description": "Run tests"
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "bash",
+   "phase": "end",
+   "text": "Run pnpm test",
+   "exitCode": 2,
+   "output": "Exit code 2\n1 failing"
+  },
+  {
+   "threadId": "t1",
+   "type": "message",
+   "text": "Done.",
+   "isDelta": false
+  },
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 1300,
+   "outputTokens": 40,
+   "cachedTokens": 200,
+   "costUsd": 0.02,
+   "contextUsed": 1250,
+   "contextMax": 200000
+  },
+  {
+   "threadId": "t1",
+   "type": "turn-end",
+   "status": "done"
+  }
+ ],
+ "claude/subagent": [
+  {
+   "threadId": "t1",
+   "type": "session",
+   "provider": "claude",
+   "sessionId": "ea137734-1d97-4e7f-8362-eef50cd44374"
+  },
+  {
+   "threadId": "t1",
+   "type": "info",
+   "info": {
+    "model": "claude-haiku-5-5",
+    "cwd": "/tmp/scratch",
+    "permissionMode": "bypassPermissions",
+    "tools": [],
+    "mcpServers": [],
+    "skills": [],
+    "plugins": [],
+    "slashCommands": []
+   }
+  },
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "contextUsed": 27294
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "start",
+   "toolId": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "name": "Echo hi",
+   "prompt": "Run `echo hi` with Bash and reply with its output only.",
+   "isBackground": true
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "progress",
+   "isBackground": true
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "progress",
+   "isBackground": true,
+   "model": "claude-haiku-5-5"
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "progress",
+   "step": {
+    "id": "toolu_014wJvhywPDtw6RVTFc5cqwa",
+    "phase": "start",
+    "text": "Run echo hi",
+    "description": "Print hi via echo"
+   }
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "progress",
+   "activity": "Running Print hi via echo",
+   "tokens": 22021
+  },
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "contextUsed": 28837
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "progress",
+   "step": {
+    "id": "toolu_014wJvhywPDtw6RVTFc5cqwa",
+    "phase": "end",
+    "text": "Run echo hi",
+    "exitCode": 0,
+    "output": "hi"
+   }
+  },
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 78130,
+   "outputTokens": 388,
+   "cachedTokens": 27292,
+   "costUsd": 0.008984145,
+   "contextUsed": 28837,
+   "contextMax": 1000000
+  },
+  {
+   "threadId": "t1",
+   "type": "turn-end",
+   "status": "done"
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "progress",
+   "message": "hi"
+  },
+  {
+   "threadId": "t1",
+   "type": "subagent",
+   "id": "toolu_016eg9L6pu9B97dXqe5vUWok",
+   "phase": "end",
+   "status": "done",
+   "result": "hi",
+   "tokens": 24873
+  },
+  {
+   "threadId": "t1",
+   "type": "session",
+   "provider": "claude",
+   "sessionId": "ea137734-1d97-4e7f-8362-eef50cd44374"
+  },
+  {
+   "threadId": "t1",
+   "type": "info",
+   "info": {
+    "model": "claude-haiku-5-5",
+    "cwd": "/tmp/scratch",
+    "permissionMode": "bypassPermissions",
+    "tools": [],
+    "mcpServers": [],
+    "skills": [],
+    "plugins": [],
+    "slashCommands": []
+   }
+  },
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "contextUsed": 36093,
+   "contextMax": 1000000
+  },
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 60948,
+   "outputTokens": 68,
+   "cachedTokens": 50832,
+   "costUsd": 0.002350920000000001,
+   "contextUsed": 36093,
+   "contextMax": 1000000
+  },
+  {
+   "threadId": "t1",
+   "type": "turn-end",
+   "status": "done"
+  }
+ ],
+ "claude/background": [
+  {
+   "threadId": "t1",
+   "type": "usage",
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "contextUsed": 27540
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "toolu_01YTKAqiJ2ixcQUwDJwiBGCS",
+   "phase": "start",
+   "text": "Run sleep 3 && echo hi",
+   "description": "Say hi later"
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "toolu_01SSW2qKwDWPwQdaTg7tPfxb",
+   "phase": "start",
+   "text": "Run sleep 60",
+   "description": "Wait a minute"
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "brpnuwjdw",
+   "phase": "start",
+   "kind": "shell",
+   "title": "Wait a minute",
+   "command": "sleep 60"
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "toolu_01SSW2qKwDWPwQdaTg7tPfxb",
+   "phase": "end",
+   "text": "Run sleep 60",
+   "exitCode": 0,
+   "output": "Command running in background with ID: brpnuwjdw. Output is being written to: /tmp/tasks/brpnuwjdw.output. You will be notified when it completes. To check interim output, use Read on that file path."
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "brpnuwjdw",
+   "phase": "progress",
+   "outputFile": "/tmp/tasks/brpnuwjdw.output"
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "bh9bd7gcs",
+   "phase": "start",
+   "kind": "shell",
+   "title": "Say hi later",
+   "command": "sleep 3 && echo hi"
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "toolu_01YTKAqiJ2ixcQUwDJwiBGCS",
+   "phase": "end",
+   "text": "Run sleep 3 && echo hi",
+   "exitCode": 0,
+   "output": "Command running in background with ID: bh9bd7gcs. Output is being written to: /tmp/tasks/bh9bd7gcs.output. You will be notified when it completes. To check interim output, use Read on that file path."
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "bh9bd7gcs",
+   "phase": "progress",
+   "outputFile": "/tmp/tasks/bh9bd7gcs.output"
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "toolu_01KiwWoLSNSmHGPdmL44Apom",
+   "phase": "start",
+   "text": "Run exit 3",
+   "description": "Fail fast"
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "bg27tw88d",
+   "phase": "start",
+   "kind": "shell",
+   "title": "Fail fast",
+   "command": "exit 3"
+  },
+  {
+   "threadId": "t1",
+   "type": "tool",
+   "id": "toolu_01KiwWoLSNSmHGPdmL44Apom",
+   "phase": "end",
+   "text": "Run exit 3",
+   "exitCode": 0,
+   "output": "Command running in background with ID: bg27tw88d. Output is being written to: /tmp/tasks/bg27tw88d.output. You will be notified when it completes. To check interim output, use Read on that file path."
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "bg27tw88d",
+   "phase": "progress",
+   "outputFile": "/tmp/tasks/bg27tw88d.output"
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "bg27tw88d",
+   "phase": "end",
+   "status": "failed",
+   "outputFile": "/tmp/tasks/bg27tw88d.output",
+   "exitCode": 3
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "brpnuwjdw",
+   "phase": "end",
+   "status": "stopped",
+   "outputFile": "/tmp/tasks/brpnuwjdw.output"
+  },
+  {
+   "threadId": "t1",
+   "type": "task",
+   "id": "bh9bd7gcs",
+   "phase": "end",
+   "status": "done",
+   "outputFile": "/tmp/tasks/bh9bd7gcs.output",
+   "exitCode": 0
+  }
+ ],
+ "codex/plan": [
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "I",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "’ll",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " record",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " the",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " two",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "-step",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " plan",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": ",",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " run",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " the",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " requested",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " `",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "touch",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "`",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " command",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": ",",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " then",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " mark",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " both",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " steps",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " complete",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": ".",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "plan",
+   "items": [
+    {
+     "title": "Create b.txt",
+     "status": "running"
+    },
+    {
+     "title": "Confirm",
+     "status": "pending"
+    }
+   ]
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-e5466d32-2ce5-48bf-88ca-597dcccad8f9",
+   "phase": "start",
+   "text": "touch c.txt",
+   "command": "touch c.txt"
+  },
+  {
+   "threadId": "h1",
+   "type": "approval",
+   "requestId": "codex:default:number:0",
+   "kind": "command",
+   "title": "Run a command",
+   "detail": "In /tmp/scratch",
+   "code": "/bin/zsh -lc 'touch c.txt'"
+  },
+  {
+   "threadId": "h1",
+   "type": "resolved",
+   "requestId": "codex:default:number:0"
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-e5466d32-2ce5-48bf-88ca-597dcccad8f9",
+   "phase": "end",
+   "text": "touch c.txt",
+   "exitCode": 0
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 21292,
+   "outputTokens": 164,
+   "cachedTokens": 1792,
+   "contextUsed": 21456,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "plan",
+   "items": [
+    {
+     "title": "Create b.txt",
+     "status": "done"
+    },
+    {
+     "title": "Confirm",
+     "status": "done"
+    }
+   ]
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 21484,
+   "outputTokens": 45,
+   "cachedTokens": 20224,
+   "contextUsed": 21529,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "done",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 21553,
+   "outputTokens": 5,
+   "cachedTokens": 21248,
+   "contextUsed": 21558,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "turn-end",
+   "status": "done"
+  }
+ ],
+ "codex/command": [
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 21161,
+   "outputTokens": 34,
+   "cachedTokens": 1792,
+   "contextUsed": 21195,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 30912,
+   "outputTokens": 50,
+   "cachedTokens": 20224,
+   "contextUsed": 30962,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-4fc40d14-d9fb-4670-8b10-88463efb7d13",
+   "phase": "start",
+   "text": "touch a.txt",
+   "command": "touch a.txt"
+  },
+  {
+   "threadId": "h1",
+   "type": "approval",
+   "requestId": "codex:default:number:0",
+   "kind": "command",
+   "title": "Run a command",
+   "detail": "In /tmp/scratch",
+   "code": "/bin/zsh -lc 'touch a.txt'"
+  },
+  {
+   "threadId": "h1",
+   "type": "resolved",
+   "requestId": "codex:default:number:0"
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-4fc40d14-d9fb-4670-8b10-88463efb7d13",
+   "phase": "end",
+   "text": "touch a.txt",
+   "exitCode": 0
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 31541,
+   "outputTokens": 35,
+   "cachedTokens": 30464,
+   "contextUsed": 31576,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "done",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 31599,
+   "outputTokens": 5,
+   "cachedTokens": 30464,
+   "contextUsed": 31604,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "turn-end",
+   "status": "done"
+  }
+ ],
+ "codex/failed": [
+  {
+   "threadId": "h1",
+   "type": "turn-end",
+   "status": "failed",
+   "error": "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."
+  }
+ ],
+ "codex/subagent": [
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "I’ll spawn one sub-agent and wait for its output.\n",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "subagent",
+   "id": "01a1317e-8947-7c73-866e-ec3ce63a621b",
+   "phase": "start",
+   "toolId": "call_03dd2329246e48cbaa23dd501478dcfa",
+   "name": "echo hi",
+   "isBackground": true
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 21154,
+   "outputTokens": 60,
+   "cachedTokens": 0,
+   "contextUsed": 21214,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-d2b7f1e2-3ae2-4a98-8282-04727f3300ee",
+   "phase": "start",
+   "text": "echo hi",
+   "command": "echo hi"
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-d2b7f1e2-3ae2-4a98-8282-04727f3300ee",
+   "phase": "end",
+   "text": "echo hi",
+   "exitCode": 0,
+   "output": "hi\n"
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 151,
+   "outputTokens": 0,
+   "cachedTokens": 0,
+   "contextUsed": 21332,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "hi",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 21390,
+   "outputTokens": 5,
+   "cachedTokens": 21120,
+   "contextUsed": 21395,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "turn-end",
+   "status": "done"
+  },
+  {
+   "threadId": "h1",
+   "type": "subagent",
+   "id": "01a1317e-8947-7c73-866e-ec3ce63a621b",
+   "phase": "end",
+   "status": "done"
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 0,
+   "outputTokens": 49,
+   "cachedTokens": 0,
+   "contextUsed": 21257,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "done",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "usage",
+   "inputTokens": 21319,
+   "outputTokens": 5,
+   "cachedTokens": 21120,
+   "contextUsed": 21324,
+   "contextMax": 258400
+  },
+  {
+   "threadId": "h1",
+   "type": "turn-end",
+   "status": "done"
+  }
+ ],
+ "codex/background": [
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "I",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "’ll",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " start",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " the",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " command",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " with",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " a",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " one",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "-second",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " yield",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": ".\n",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-5d520426-9a8e-4ff3-911c-41db88751dee",
+   "phase": "start",
+   "text": "sh -c 'sleep 25; echo finished; exit 3'",
+   "command": "sh -c 'sleep 25; echo finished; exit 3'"
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "started",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "task",
+   "id": "exec-5d520426-9a8e-4ff3-911c-41db88751dee",
+   "phase": "start",
+   "kind": "shell",
+   "command": "sh -c 'sleep 25; echo finished; exit 3'"
+  },
+  {
+   "threadId": "h1",
+   "type": "turn-end",
+   "status": "done"
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-5d520426-9a8e-4ff3-911c-41db88751dee",
+   "phase": "end",
+   "text": "sh -c 'sleep 25; echo finished; exit 3'",
+   "exitCode": 3,
+   "output": "finished\n"
+  },
+  {
+   "threadId": "h1",
+   "type": "task",
+   "id": "exec-5d520426-9a8e-4ff3-911c-41db88751dee",
+   "phase": "end",
+   "status": "failed",
+   "exitCode": 3
+  }
+ ],
+ "codex/background-stop": [
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "I",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "’ll",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " start",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " the",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " command",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " with",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " a",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " one",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "-second",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": " yield",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": ".\n",
+   "isDelta": true
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-aaec80e8-e146-42a6-babd-b605b1490725",
+   "phase": "start",
+   "text": "sh -c 'sleep 600; echo finished; exit 3'",
+   "command": "sh -c 'sleep 600; echo finished; exit 3'"
+  },
+  {
+   "threadId": "h1",
+   "type": "message",
+   "text": "started",
+   "isDelta": false
+  },
+  {
+   "threadId": "h1",
+   "type": "task",
+   "id": "exec-aaec80e8-e146-42a6-babd-b605b1490725",
+   "phase": "start",
+   "kind": "shell",
+   "command": "sh -c 'sleep 600; echo finished; exit 3'"
+  },
+  {
+   "threadId": "h1",
+   "type": "turn-end",
+   "status": "done"
+  },
+  {
+   "threadId": "h1",
+   "type": "tool",
+   "id": "exec-aaec80e8-e146-42a6-babd-b605b1490725",
+   "phase": "end",
+   "text": "sh -c 'sleep 600; echo finished; exit 3'",
+   "exitCode": 137
+  },
+  {
+   "threadId": "h1",
+   "type": "task",
+   "id": "exec-aaec80e8-e146-42a6-babd-b605b1490725",
+   "phase": "end",
+   "status": "failed",
+   "exitCode": 137
+  }
+ ]
+}
