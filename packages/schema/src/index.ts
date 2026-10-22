@@ -22,4 +22,5 @@ export * as Themes from './ipc/themes.ts';
 export * as Usage from './ipc/usage.ts';
 export * as Windows from './ipc/windows.ts';
 export { upgrade, versioned, versionedUnion } from './version.ts';
-export { hostMethods, hostTags, HostRpcs } from './rpc.ts';
+export { definitionOf, hostMethods, hostTags, HostRpcs } from './rpc.ts';
+export * as Capabilities from './capabilities.ts';

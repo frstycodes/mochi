@@ -50,12 +50,13 @@ export const hostTags = Object.entries(hostMethods).flatMap(([namespace, methods
     .map(([method]) => `${namespace}.${method}`),
 );
 
-const definitionOf = (tag: string) => {
+/** The input and output schemas of `host.<namespace>.<method>`. */
+export const definitionOf = (tag: string) => {
   const [namespace, method] = tag.split('.') as [keyof typeof hostMethods, string];
   return (hostMethods[namespace] as Record<string, object>)[method] as Invoke;
 };
 
-/** A failure crosses the port as its message: the renderer rethrows it as an `Error` (`src/host/desktop/rpc.ts`). */
+/** A failure crosses the socket as its message: the renderer rethrows it as an `Error` (`src/host/desktop/rpc.ts`). */
 export class HostRpcs extends RpcGroup.make(
   ...hostTags.map((tag) => Rpc.make(tag, { payload: definitionOf(tag).input, success: definitionOf(tag).output, error: Schema.String })),
 ) {}
