@@ -1,3 +1,4 @@
+import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
 import { isValidElement, useRef, useState, type KeyboardEvent, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Reorder, useDragControls } from 'motion/react';
@@ -157,25 +158,16 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
   );
 }
 
-const ORDER_KEY = 'mochi.summary-order.v1';
+const orderSlice = persistedSlice<string[]>('mochi.summary-order.v1', []);
+const closedSlice = persistedFamily<string[]>('', []);
 
 /** The shown cards in the order you last dragged them to, remembered on this device for every thread. */
 function useCardOrder(cards: SummaryCardId[]) {
-  const [saved, setSaved] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]') as string[];
-    } catch {
-      return [];
-    }
-  });
+  const [saved, setSaved] = useState(() => orderSlice.getState().value);
   const reorder = (shown: SummaryCardId[]) => {
     const next = savedOrder(shown, saved);
     setSaved(next);
-    try {
-      localStorage.setItem(ORDER_KEY, JSON.stringify(next));
-    } catch {
-      // Storage can be blocked (private window); the order still holds for this session.
-    }
+    orderSlice.setState({ value: next });
   };
   return [orderCards(cards, saved), reorder] as const;
 }
@@ -185,23 +177,13 @@ const TASKS_CLOSED_KEY = 'mochi.summary-tasks-closed.v1';
 
 /** A card that is open unless you folded it in this thread (Changes, Background tasks); remembered on this device under `key`. */
 function useOpenInThread(key: string, threadId: string) {
-  const [closed, setClosed] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(key) ?? '[]') as string[];
-    } catch {
-      return [];
-    }
-  });
+  const [closed, setClosed] = useState(() => closedSlice(key).getState().value);
   const isOpen = !closed.includes(threadId);
   const setOpen = (open: boolean) => {
     if (open === isOpen) return;
     const next = open ? closed.filter((id) => id !== threadId) : [...closed, threadId];
     setClosed(next);
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-    } catch {
-      // Storage can be blocked (private window); the fold still holds for this session.
-    }
+    closedSlice(key).setState({ value: next });
   };
   return [isOpen, setOpen] as const;
 }

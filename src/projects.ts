@@ -1,3 +1,4 @@
+import { persistedSlice } from './lib/uiStorage.ts';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { host } from './host/index.ts';
 import type { CloneSource, Project } from './host/types/projects.ts';
@@ -149,15 +150,17 @@ host.projects.onChange(refreshProjects);
 // Back from Finder or a terminal, where folders move.
 if (typeof window !== 'undefined') window.addEventListener('focus', () => cache.forEach((_, spaceId) => refreshProjects(spaceId)));
 
-/** Where projects lived before the registry: this window's recents (localStorage), then its threads' folders. */
+/** Where projects lived before the registry: this window's recents (browser storage), then its threads' folders. */
 function legacyFolders(spaceId: string, threads: readonly Thread[]) {
   const fromThreads = [...threads].filter((t) => t.spaceId === spaceId).sort((a, b) => b.startedAt - a.startedAt).flatMap((t) => projectRef(t.repo) ?? []);
   return [...new Set([...legacyRecents(spaceId), ...fromThreads])];
 }
 
+const recentsSlice = persistedSlice<Record<string, unknown>>('mochi.projects.v1', {});
+
 function legacyRecents(spaceId: string): string[] {
   try {
-    const saved: unknown = JSON.parse(localStorage.getItem('mochi.projects.v1') ?? '{}');
+    const saved: unknown = recentsSlice.getState().value;
     const refs = (saved as Record<string, unknown> | null)?.[spaceId];
     return Array.isArray(refs) ? refs.filter((r): r is string => typeof r === 'string') : [];
   } catch {

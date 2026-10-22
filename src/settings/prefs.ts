@@ -1,3 +1,4 @@
+import { browserStorage, persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
 import type { SearchEngine } from '../host/types/browser.ts';
 import type { PaneTabKind } from '../model.ts';
@@ -6,7 +7,7 @@ import { effortId, modelId } from '../runtime/models.ts';
 import type { ToolPolicies } from '../runtime/toolPolicy.ts';
 
 /**
- * Renderer-only preferences (SETTINGS.md): one localStorage entry, read synchronously so reducers and module code can use
+ * Renderer-only preferences (SETTINGS.md): one persisted entry, read synchronously so reducers and module code can use
  * them too. Settings the main process reads (worktree root, shell, PR drafts) live in the `settings` host instead.
  */
 export interface Prefs {
@@ -147,7 +148,8 @@ export const PREFS_KEY = 'mochi.prefs.v1';
 // Before this store, the drift card kept its choice under its own key.
 const LEGACY_BRANCH_FROM_KEY = 'harness.drift.branchFrom';
 
-let prefs = load();
+const prefsSlice = persistedSlice(PREFS_KEY, DEFAULT_PREFS, (raw) => parsePrefs(raw, browserStorage.getItem(LEGACY_BRANCH_FROM_KEY)));
+let prefs = prefsSlice.getState().value;
 const listeners = new Set<() => void>();
 
 export function getPrefs(): Prefs {
@@ -160,11 +162,7 @@ export function usePrefs(): Prefs {
 
 export function setPrefs(patch: Partial<Prefs>) {
   prefs = { ...prefs, ...patch };
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): prefs last for this session.
-  }
+  prefsSlice.setState({ value: prefs });
   listeners.forEach((l) => l());
 }
 
@@ -176,7 +174,8 @@ export function prefersReducedMotion() {
 
 /** Re-reads storage: another window (a torn-off thread) changed a pref. */
 export function reloadPrefs() {
-  prefs = load();
+  void prefsSlice.persist.rehydrate();
+  prefs = prefsSlice.getState().value;
   listeners.forEach((l) => l());
 }
 
@@ -212,15 +211,6 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   return { ...prefs, starredModels: prefs.starredModels.map(modelId), effort: effortId(prefs.effort), permissions: access === 'Plan' ? 'Auto' : access };
 }
 
-function load(): Prefs {
-  try {
-    return parsePrefs(localStorage.getItem(PREFS_KEY), localStorage.getItem(LEGACY_BRANCH_FROM_KEY));
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
-// A declaration, not a const: `load()` runs at the top of this module, before a const below it would exist.
 function isStringRecord(value: unknown) {
   return !!value && typeof value === 'object' && !Array.isArray(value) && Object.values(value).every((v) => typeof v === 'string');
 }

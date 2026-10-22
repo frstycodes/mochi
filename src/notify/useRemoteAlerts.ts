@@ -1,3 +1,4 @@
+import { persistedFamily } from '../lib/uiStorage.ts';
 import { useEffect, useRef } from 'react';
 import { toast } from '../toast/store';
 import { host } from '../host';
@@ -8,7 +9,7 @@ import { usePrefs } from '../settings/prefs';
 import { useHarness } from '../store';
 import { alertsToShow, baselineOf, remoteAlerts, type RemoteBaseline } from './remote';
 
-const STORAGE_KEY = 'harness:remote-alerts:';
+const baselineSlice = persistedFamily<RemoteBaseline | null>('harness:remote-alerts:', null);
 
 /**
  * Your other computers' threads alert here as this computer's own do: an OS notification while Mochi is in the background,
@@ -64,14 +65,9 @@ export function useRemoteAlerts() {
 
 /** The baseline that machine's alerts diff against, now moved to `state`; undefined the first time this computer sees it. */
 function advanceBaseline(machineId: string, state: State): RemoteBaseline | undefined {
-  const key = STORAGE_KEY + machineId;
-  const next = JSON.stringify(baselineOf(state));
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved !== next) localStorage.setItem(key, next);
-    return saved ? (JSON.parse(saved) as RemoteBaseline) : undefined;
-  } catch {
-    // Storage blocked: no baseline to trust, so nothing alerts rather than everything alerting again.
-    return undefined;
-  }
+  const slice = baselineSlice(machineId);
+  const saved = slice.getState().value;
+  const next = baselineOf(state);
+  if (JSON.stringify(saved) !== JSON.stringify(next)) slice.setState({ value: next });
+  return saved ?? undefined;
 }

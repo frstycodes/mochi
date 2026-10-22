@@ -1,3 +1,4 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { useEffect, useRef } from 'react';
 import { toast } from '../toast/store.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
@@ -59,7 +60,7 @@ function forkWorktree(threads: Thread[], thread: Thread, fork: Fork) {
   return host.git.forkWorktree(cwd, thread.id, thread.repo!.branch, from);
 }
 
-const SEEN_KEY = 'mochi.worktrees.settled';
+const seenSlice = persistedSlice<Record<string, number>>('mochi.worktrees.settled', {});
 const CLEANUP_MS = 60 * 60 * 1000;
 
 /** Removes worktrees of threads settled longer than Settings › Git and worktrees says, on launch and hourly. Git refuses a dirty one, which stays. */
@@ -80,7 +81,7 @@ export function useWorktreeCleanup() {
 }
 
 async function cleanUp(threads: Thread[], days: number) {
-  const { due, seen } = dueForCleanup(threads, Object.fromEntries(threads.flatMap((t) => (worktreePath(t.id) ? [[t.id, worktreePath(t.id)!]] : []))), loadSeen(), Date.now(), days);
+  const { due, seen } = dueForCleanup(threads, Object.fromEntries(threads.flatMap((t) => (worktreePath(t.id) ? [[t.id, worktreePath(t.id)!]] : []))), seenSlice.getState().value, Date.now(), days);
   for (const { threadId, path } of due) {
     try {
       await host.git.removeWorktree(path);
@@ -91,15 +92,5 @@ async function cleanUp(threads: Thread[], days: number) {
       console.info(`Kept the worktree ${path}`, error);
     }
   }
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
-  } catch {}
-}
-
-function loadSeen(): Record<string, number> {
-  try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}');
-  } catch {
-    return {};
-  }
+  seenSlice.setState({ value: seen });
 }

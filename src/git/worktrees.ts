@@ -1,8 +1,10 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
 
 const KEY = 'harness.worktrees';
 
-let paths = load();
+const pathsSlice = persistedSlice<Record<string, string>>(KEY, {});
+let paths = pathsSlice.getState().value;
 const listeners = new Set<() => void>();
 
 export function worktreePath(threadId: string): string | undefined {
@@ -20,21 +22,11 @@ export function useWorktreePaths() {
 export function setWorktreePath(threadId: string, path: string | null) {
   const { [threadId]: _, ...rest } = paths;
   paths = path ? { ...rest, [threadId]: path } : rest;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(paths));
-  } catch {}
+  pathsSlice.setState({ value: paths });
   listeners.forEach((l) => l());
 }
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => void listeners.delete(listener);
-}
-
-function load(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '{}');
-  } catch {
-    return {};
-  }
 }

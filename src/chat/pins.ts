@@ -1,3 +1,4 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
 
 /** A pinned message, or a passage inside one, kept per thread so it can be found again from the chat's outline rail. */
@@ -12,7 +13,8 @@ export interface Pin {
 export const PINS_STORAGE_KEY = 'harness.pins.v1';
 export type Pins = Record<string, Pin[]>;
 
-let pins: Pins = load();
+const pinsSlice = persistedSlice<Pins>(PINS_STORAGE_KEY, {});
+let pins: Pins = pinsSlice.getState().value;
 const listeners = new Set<() => void>();
 const EMPTY: Pin[] = [];
 
@@ -77,20 +79,8 @@ function set(threadId: string, list: Pin[]) {
 
 function write(next: Pins) {
   pins = next;
-  try {
-    localStorage.setItem(PINS_STORAGE_KEY, JSON.stringify(pins));
-  } catch {
-    // Private windows and blocked storage: pins still work for this session.
-  }
+  pinsSlice.setState({ value: pins });
   listeners.forEach((l) => l());
-}
-
-function load(): Pins {
-  try {
-    return JSON.parse(localStorage.getItem(PINS_STORAGE_KEY) ?? '{}') as Pins;
-  } catch {
-    return {};
-  }
 }
 
 function subscribe(listener: () => void) {
