@@ -1,8 +1,8 @@
 import { BrowserWindow, Notification } from 'electron';
 import { playHaptic } from '../haptics/haptics.ts';
 import { closeAddressed, watch } from '../notify/watch.ts';
-import type { NotifyHost, WatchConfig } from '../../src/host/types/notify.ts';
-import { integer, record, string, type Handlers } from './handlers.ts';
+import type { NotifyHost } from '../../src/host/types/notify.ts';
+import type { Handlers } from './handlers.ts';
 
 // macOS drops click handlers for notifications that get garbage-collected, so live ones are held until clicked or closed.
 const live = new Set<Notification>();
@@ -11,9 +11,8 @@ const byId = new Map<string, Notification>();
 
 export const notify = {
   async show(sender, notice) {
-    const { title, body, id } = record(notice, 'notice');
-    const n = new Notification({ title: string(title, 'title', 200), body: body === undefined ? undefined : string(body, 'body', 2000) });
-    const clickId = id === undefined ? undefined : string(id, 'id', 200);
+    const { title, body, id: clickId } = notice;
+    const n = new Notification({ title, body });
     live.add(n);
     if (clickId) byId.set(clickId, n);
     const forget = () => {
@@ -32,21 +31,20 @@ export const notify = {
     });
     n.show();
   },
-  async close(_sender, value) {
-    for (const id of list(value, 'ids')) {
-      const n = byId.get(string(id, 'id', 200));
+  async close(_sender, ids) {
+    for (const id of ids) {
+      const n = byId.get(id);
       if (!n) continue;
       n.close();
       live.delete(n);
-      byId.delete(id as string);
+      byId.delete(id);
     }
   },
-  async addressed(_sender, value) {
-    const s = record(value, 'signal');
-    closeAddressed({ threadId: string(s.threadId, 'threadId', 256), isViewed: s.isViewed === true, isActedOn: s.isActedOn === true });
+  async addressed(_sender, addressed) {
+    closeAddressed({ threadId: addressed.threadId, isViewed: addressed.isViewed === true, isActedOn: addressed.isActedOn === true });
   },
-  async watch(_sender, value) {
-    watch.set(watchConfig(value));
+  async watch(_sender, config) {
+    watch.set(config);
   },
   async pendingOpen() {
     return watch.takePendingOpen();
@@ -61,40 +59,3 @@ export const notify = {
     return Notification.isSupported() ? 'granted' : 'denied';
   },
 } satisfies Handlers<NotifyHost>;
-
-function watchConfig(value: unknown): WatchConfig {
-  const c = record(value, 'config');
-  const quiet = record(c.quiet, 'config.quiet');
-  return {
-    threads: list(c.threads, 'config.threads').map((v) => {
-      const t = record(v, 'thread');
-      return {
-        id: string(t.id, 'thread.id', 256),
-        title: string(t.title, 'thread.title', 500),
-        cwd: t.cwd === undefined ? undefined : string(t.cwd, 'thread.cwd'),
-        githubUser: t.githubUser === undefined ? undefined : string(t.githubUser, 'thread.githubUser', 128),
-      };
-    }),
-    autofix: list(c.autofix, 'config.autofix').map((v) => {
-      const t = record(v, 'autofix');
-      return {
-        threadId: string(t.threadId, 'autofix.threadId', 256),
-        title: string(t.title, 'autofix.title', 500),
-        pr: integer(t.pr, 'autofix.pr', 1, 1e9),
-        cwd: string(t.cwd, 'autofix.cwd'),
-        githubUser: t.githubUser === undefined ? undefined : string(t.githubUser, 'autofix.githubUser', 128),
-        since: integer(t.since, 'autofix.since', 0, Number.MAX_SAFE_INTEGER),
-      };
-    }),
-    kinds: list(c.kinds, 'config.kinds').map((k) => string(k, 'kind', 64)),
-    quiet: { isOn: quiet.isOn === true, start: integer(quiet.start, 'quiet.start', 0, 23), end: integer(quiet.end, 'quiet.end', 0, 23) },
-    muted: list(c.muted, 'config.muted').map((id) => string(id, 'muted', 256)),
-    needsYou: list(c.needsYou, 'config.needsYou').map((id) => string(id, 'needsYou', 256)),
-    dockBadge: c.dockBadge === true,
-  };
-}
-
-function list(value: unknown, name: string) {
-  if (!Array.isArray(value) || value.length > 10_000) throw new TypeError(`${name} must be an array`);
-  return value as unknown[];
-}

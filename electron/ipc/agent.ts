@@ -3,9 +3,9 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { app } from 'electron';
-import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
+import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskEvent, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type AgentStartOptions, type AgentToolResult, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
-import type { McpWidgetResource, Provider, Thread } from '../../src/model.ts';
+import type { McpWidgetResource, Provider } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
 import { claudeRewindPoint, claudeRunOptions, readClaudeWidget, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, unsteerClaude, stopClaude, stopClaudeTask } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
@@ -18,7 +18,7 @@ import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall, setImageGenerator, undeliveredToolCalls } from '../mcp/server.ts';
-import { commandPrompt, parseTitle, UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
+import { commandPrompt, parseTitle, type UtilityTask } from '../../src/utility/prompts.ts';
 import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle, onAgentEvent } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
@@ -35,36 +35,12 @@ import { sessionConnectors, sessionToolRules } from '../library/connectors.ts';
 import { sessionLibrary } from '../library/store.ts';
 import { codexNativeConfig, offItems } from '../../src/library/nativeOverrides.ts';
 import { readProfileConfig } from '../agents/profileConfig.ts';
-import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
+import type { Handlers } from './handlers.ts';
 import { profileInstructions } from '../agents/profileFolder.ts';
 
 let nextId = 0;
-const PROVIDERS = ['claude', 'codex'];
-// The renderer caps quotes at 8000 chars and activity at 12 × 600; these bound what a renderer can make main send.
-const MAX_MESSAGE_CHARS = 20_000;
-const MAX_CONTEXT_CHARS = 50_000;
-const MAX_IMAGES = 8;
 // Claude rejects images over 5 MB; base64 runs 4/3 of that.
 const MAX_IMAGE_CHARS = 6_900_000;
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-function images(value: unknown) {
-  if (value === undefined) return;
-  if (!Array.isArray(value) || value.length > MAX_IMAGES) throw new TypeError(`images must be an array of up to ${MAX_IMAGES}`);
-  for (const v of value) {
-    const image = record(v, 'image');
-    if (!IMAGE_TYPES.includes(image.mediaType as string)) throw new TypeError(`image.mediaType must be one of ${IMAGE_TYPES.join(', ')}`);
-    string(image.data, 'image.data', MAX_IMAGE_CHARS);
-  }
-}
-
-const MAX_SKILLS = 16;
-
-function skillNames(value: unknown) {
-  if (value === undefined) return;
-  if (!Array.isArray(value) || value.length > MAX_SKILLS) throw new TypeError(`skills must be an array of up to ${MAX_SKILLS}`);
-  for (const v of value) string(v, 'skill', 256);
-}
 
 const broadcast = emitAgentEvent;
 
@@ -145,133 +121,92 @@ export const agent = {
     return startAgent(threadId, options);
   },
   async send(_sender, threadId, text, pictures, skills, speed, steer, steerId) {
-    string(threadId, 'threadId', 256);
-    string(text, 'text', 100_000);
-    images(pictures);
-    skillNames(skills);
-    if (speed !== undefined) string(speed, 'speed', 256);
-    if (steer !== undefined && typeof steer !== 'boolean') throw new TypeError('steer must be a boolean');
-    if (steerId !== undefined) string(steerId, 'steerId', 256);
     // Sent while the worktree is being set up: it goes to the agent once that start is through.
-    await starts.wait(threadId as string);
-    const run = claudeRunOptions(threadId as string) ?? codex.runOptions(threadId as string);
+    await starts.wait(threadId);
+    const run = claudeRunOptions(threadId) ?? codex.runOptions(threadId);
     if (!run) throw new Error(NO_AGENT_PROCESS);
     // '' is standard; a tier the running model doesn't list runs standard too.
-    const tier = speed === undefined ? undefined : ((await offered(run.provider, run.spaceId, run.model, undefined, speed as string)).speed ?? '');
-    markBusy(threadId as string);
-    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier, steer === true, steerId as string | undefined);
-    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier, steer === true, steerId as string | undefined);
+    const tier = speed === undefined ? undefined : ((await offered(run.provider, run.spaceId, run.model, undefined, speed)).speed ?? '');
+    markBusy(threadId);
+    if (hasClaudeSession(threadId)) return sendClaude(threadId, text, pictures, tier, steer === true, steerId);
+    return codex.send(threadId, text, pictures, skills, tier, steer === true, steerId);
   },
   async unsteer(_sender, threadId, steerId) {
-    string(threadId, 'threadId', 256);
-    string(steerId, 'steerId', 256);
-    if (hasClaudeSession(threadId as string)) return unsteerClaude(threadId as string, steerId as string);
-    return codex.unsteer(threadId as string, steerId as string);
+    if (hasClaudeSession(threadId)) return unsteerClaude(threadId, steerId);
+    return codex.unsteer(threadId, steerId);
   },
   async compact(_sender, threadId, focus) {
-    string(threadId, 'threadId', 256);
-    string(focus, 'focus', 10_000);
-    await starts.wait(threadId as string);
-    if (!hasClaudeSession(threadId as string) && !codex.owns(threadId as string)) throw new Error(NO_AGENT_PROCESS);
-    markBusy(threadId as string);
-    if (hasClaudeSession(threadId as string)) return compactClaude(threadId as string, focus as string);
-    return codex.compact(threadId as string);
+    await starts.wait(threadId);
+    if (!hasClaudeSession(threadId) && !codex.owns(threadId)) throw new Error(NO_AGENT_PROCESS);
+    markBusy(threadId);
+    if (hasClaudeSession(threadId)) return compactClaude(threadId, focus);
+    return codex.compact(threadId);
   },
   async compactInstructions(_sender, threadId, instructions) {
-    setClaudeCompactInstructions(string(threadId, 'threadId', 256), string(instructions, 'instructions', 20_000));
+    setClaudeCompactInstructions(threadId, instructions);
   },
   async interrupt(_sender, threadId) {
-    string(threadId, 'threadId', 256);
-    if (starts.abort(threadId as string)) return;
-    if (hasClaudeSession(threadId as string)) return interruptClaude(threadId as string);
-    if (codex.owns(threadId as string)) return codex.interrupt(threadId as string);
+    if (starts.abort(threadId)) return;
+    if (hasClaudeSession(threadId)) return interruptClaude(threadId);
+    if (codex.owns(threadId)) return codex.interrupt(threadId);
     // Nothing running for this thread (already stopped, or never started this launch): nothing to interrupt.
   },
   async setupChoice(_sender, threadId, choice) {
-    string(threadId, 'threadId', 256);
-    if (choice !== 'retry' && choice !== 'skip') throw new TypeError('choice must be retry or skip');
-    if (!starts.choose(threadId as string, choice as SetupChoice)) throw new Error("This thread's worktree setup isn't waiting on you");
+    if (!starts.choose(threadId, choice)) throw new Error("This thread's worktree setup isn't waiting on you");
   },
   async keepTitle(_sender, threadId) {
-    starts.keepTitle(string(threadId, 'threadId', 256));
+    starts.keepTitle(threadId);
   },
   async resolve(_sender, requestId, decision) {
     return resolveRequest(requestId, decision);
   },
   async stop(_sender, threadId) {
-    return stopSession(string(threadId, 'threadId', 256));
+    return stopSession(threadId);
   },
   async settle(_sender, threadId) {
-    const id = string(threadId, 'threadId', 256);
+    const id = threadId;
     killThreadSessions(id);
     await Promise.all([...threadSessions(id, [...claudeSessionIds(), ...codex.threadIds(), ...starts.ids()]).map(stopSession), stopCompare(id)]);
   },
   async attached(_sender, threads) {
-    if (!Array.isArray(threads)) throw new TypeError('threads must be an array');
     return threads
-      .map((t, i) => ({ threadId: string(t?.threadId, `threads[${i}].threadId`, 256), after: typeof t?.after === 'number' ? t.after : undefined }))
       .filter((t) => hasClaudeSession(t.threadId) || codex.owns(t.threadId))
       .map(({ threadId, after }) => ({ threadId, isWorking: isBusy(threadId), events: after === undefined ? [] : eventsSince(threadId, after) }));
   },
   async stopTask(_sender, threadId, taskId) {
-    string(threadId, 'threadId', 256);
-    string(taskId, 'taskId', 256);
-    if (hasClaudeSession(threadId as string)) return stopClaudeTask(threadId as string, taskId as string);
-    if (codex.owns(threadId as string)) return codex.stopTask(threadId as string, taskId as string);
+    if (hasClaudeSession(threadId)) return stopClaudeTask(threadId, taskId);
+    if (codex.owns(threadId)) return codex.stopTask(threadId, taskId);
     // Its parent's process is gone, so the task already stopped with it.
   },
   async warm(_sender, spaceId) {
-    return warmClaude(string(spaceId, 'spaceId', 256));
+    return warmClaude(spaceId);
   },
   async models(_sender, provider, spaceId) {
-    if (!PROVIDERS.includes(provider as string)) throw new TypeError('provider must be claude or codex');
-    return models(codex, provider as Provider, string(spaceId, 'spaceId', 256));
+    return models(codex, provider, spaceId);
   },
   async limits(_sender, provider, spaceId, refresh) {
-    if (!PROVIDERS.includes(provider as string)) throw new TypeError('provider must be claude or codex');
-    string(spaceId, 'spaceId', 256);
-    if (refresh) await refreshLimits(provider as Provider, spaceId as string).catch((error) => console.warn(`Could not read ${provider as Provider} limits`, error));
-    return limitsOf((await accountFor(spaceId as string, provider as Provider)).account.id, provider as Provider);
+    if (refresh) await refreshLimits(provider, spaceId).catch((error) => console.warn(`Could not read ${provider} limits`, error));
+    return limitsOf((await accountFor(spaceId, provider)).account.id, provider);
   },
   async rewindFiles(_sender, threadId, text) {
-    string(threadId, 'threadId', 256);
-    string(text, 'text', 100_000);
-    if (hasClaudeSession(threadId as string)) return rewindClaude(threadId as string, text as string);
+    if (hasClaudeSession(threadId)) return rewindClaude(threadId, text);
   },
   async rewindPoint(_sender, threadId, text) {
-    string(threadId, 'threadId', 256);
-    string(text, 'text', 100_000);
-    if (hasClaudeSession(threadId as string)) return claudeRewindPoint(threadId as string, text as string);
-    return codex.rewindPoint(threadId as string, text as string);
+    if (hasClaudeSession(threadId)) return claudeRewindPoint(threadId, text);
+    return codex.rewindPoint(threadId, text);
   },
   async readWidget(_sender, threadId, server, uri) {
-    string(threadId, 'threadId', 256);
-    string(server, 'server', 256);
-    string(uri, 'uri', 2048);
-    if (!(uri as string).startsWith('ui://')) throw new TypeError('uri must be a ui:// resource');
-    return readWidget(threadId as string, server as string, uri as string);
+    return readWidget(threadId, server, uri);
   },
-  async ask(sender, context, messages, model) {
-    const m = record(model, 'model');
-    if (!PROVIDERS.includes(m.provider as string)) throw new TypeError('model.provider must be claude or codex');
-    if (m.model !== undefined) string(m.model, 'model.model', MAX_MODEL_CHARS);
-    const c = record(context, 'context');
-    string(c.spaceId, 'context.spaceId', 256);
-    if (JSON.stringify(c).length > MAX_CONTEXT_CHARS) throw new TypeError(`context must be under ${MAX_CONTEXT_CHARS} chars`);
-    if (!Array.isArray(messages) || messages.length > 200) throw new TypeError('messages must be an array of up to 200');
-    for (const m of messages) {
-      const message = record(m, 'message');
-      if (message.role !== 'user' && message.role !== 'assistant') throw new TypeError('message.role must be user or assistant');
-      string(message.text, 'message.text', MAX_MESSAGE_CHARS);
-    }
+  async ask(sender, context, messages, asker) {
     const id = `ask-${++nextId}`;
     const send = (event: AgentAskEvent) => !sender.isDestroyed() && sender.send('agent:onAskEvent', event);
     const abort = new AbortController();
     sender.once('destroyed', () => abort.abort());
     void (async () => {
       try {
-        const { model } = await offered(m.provider as Provider, c.spaceId as string, m.model as string | undefined, undefined);
-        for await (const text of askAgent(ASKERS, c as unknown as AgentAskContext, messages as AgentAskMessage[], { provider: m.provider, model } as AgentAskModel, abort)) send({ id, type: 'text', text });
+        const { model } = await offered(asker.provider, context.spaceId, asker.model, undefined);
+        for await (const text of askAgent(ASKERS, context, messages, { provider: asker.provider, model }, abort)) send({ id, type: 'text', text });
         send({ id, type: 'done', text: '' });
       } catch (error) {
         send({ id, type: 'error', text: error instanceof Error ? error.message : String(error) });
@@ -280,11 +215,7 @@ export const agent = {
     return { id };
   },
   async review(sender, request) {
-    const r = record(request, 'request');
-    if (!PROVIDERS.includes(r.provider as string)) throw new TypeError('request.provider must be claude or codex');
-    string(r.spaceId, 'request.spaceId', 256);
-    string(r.prompt, 'request.prompt', 100_000);
-    const run = { ...r, cwd: await agentFolder('review', string(r.cwd, 'request.cwd')) } as AgentReviewRequest;
+    const run = { ...request, cwd: await agentFolder('review', request.cwd) };
     const id = `review-${++nextId}`;
     const send = (event: AgentReviewEvent) => !sender.isDestroyed() && sender.send('agent:onReviewEvent', event);
     const abort = new AbortController();
@@ -303,32 +234,13 @@ export const agent = {
     return undeliveredToolCalls(sender);
   },
   async toolResult(_sender, id, result) {
-    string(id, 'id', 256);
-    const r = record(result, 'result');
-    string(r.text, 'result.text', MAX_CONTEXT_CHARS);
-    if (r.isError !== undefined && typeof r.isError !== 'boolean') throw new TypeError('result.isError must be a boolean');
-    resolveToolCall(id as string, { text: r.text as string, isError: r.isError as boolean | undefined, ...(r.image !== undefined && { image: imageOf(r.image) }) });
+    resolveToolCall(id, { text: result.text, isError: result.isError, ...(result.image !== undefined && { image: imageOf(result.image) }) });
   },
   async utility(_sender, task, spaceId, prompt) {
-    if (!(UTILITY_TASKS as readonly unknown[]).includes(task)) throw new TypeError('task must be a background task');
-    string(spaceId, 'spaceId', 256);
-    string(prompt, 'prompt', 40_000);
-    return runUtility(task as UtilityTask, spaceId as string, prompt as string);
+    return runUtility(task, spaceId, prompt);
   },
   async classify(_sender, prompt, thread) {
-    string(prompt, 'prompt', 20_000);
-    const t = record(thread, 'thread');
-    string(t.title, 'thread.title');
-    string(t.goal, 'thread.goal', 20_000);
-    if (!Array.isArray(t.steps)) throw new TypeError('thread.steps must be an array');
-    for (const s of t.steps) {
-      const step = record(s, 'step');
-      string(step.title, 'step.title');
-      string(step.status, 'step.status', 32);
-    }
-    if (!Array.isArray(t.activity)) throw new TypeError('thread.activity must be an array');
-    string(t.spaceId, 'thread.spaceId', 256);
-    return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
+    return classifyWithModel(prompt, thread, (signal) => classifyClaude(prompt, thread, signal));
   },
 } satisfies Handlers<AgentHost>;
 
@@ -350,40 +262,29 @@ async function stopSession(threadId: string) {
 }
 
 /** Answers a pending approval or question, from the renderer or a notification's buttons. */
-export async function resolveRequest(requestId: unknown, decision: unknown) {
-  string(requestId, 'requestId', 256);
-  const d = agentDecision(decision);
-  if (resolveClaude(requestId as string, d)) return;
-  if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d);
+export async function resolveRequest(requestId: string, decision: AgentDecision) {
+  if (resolveClaude(requestId, decision)) return;
+  if (codex.ownsRequest(requestId)) return codex.resolve(requestId, decision);
   throw new Error(NO_PENDING_REQUEST);
 }
 
-/** Starts a thread's agent from options the renderer (or the scheduler) built; both go through the same checks. */
-export async function startAgent(threadId: unknown, options: unknown) {
-  string(threadId, 'threadId', 256);
-  const o = record(options, 'options');
-  if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
-  string(o.spaceId, 'options.spaceId', 256);
-  string(o.prompt, 'options.prompt', 100_000);
-  for (const key of ['model', 'effort', 'speed', 'permissionMode', 'resume', 'forkAt']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
-  if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
-  if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
-  images(o.images);
-  skillNames(o.skills);
+/** Starts a thread's agent from options the renderer (or the scheduler) built. */
+export async function startAgent(id: string, options: AgentStartOptions & { worktree?: string }) {
   // `speed` goes only through `offered`, which drops one the model doesn't list.
-  const { workspace, worktree, speed, ...rest } = o;
-  const id = threadId as string;
+  const { workspace, worktree, speed, ...rest } = options;
+  // A trigger saved before workspaces carries `worktree: <branch>` instead of `workspace`.
+  const startsIn = workspace ?? (worktree === undefined ? undefined : ({ mode: 'worktree', branch: worktree } satisfies StartWorkspace));
   const start = starts.begin(id);
   markBusy(id);
   const launch = async (cwd: string) => {
-    const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined, speed as string | undefined)) } as unknown as AgentRunOptions;
-    if (o.provider === 'claude') return startClaude(id, run);
+    const run: AgentRunOptions = { ...rest, cwd, ...(await offered(options.provider, options.spaceId, options.model, options.effort, speed)) };
+    if (options.provider === 'claude') return startClaude(id, run);
     return codex.start(id, run, start.signal);
   };
   let isLaunching = false;
   try {
-    const folder = await agentFolder(id, o.cwd);
-    const { cwd, setup, named } = await workspaceFolder(id, folder, startWorkspace(workspace, worktree), start, o.spaceId as string);
+    const folder = await agentFolder(id, options.cwd);
+    const { cwd, setup, named } = await workspaceFolder(id, folder, startsIn, start, options.spaceId);
     // The renderer runs agent calls one after another, so a start that waited out the setup, or an app-server slow to answer,
     // would hold back the Stop (and every other thread's calls) behind it. It returns here; setup and launch report through events.
     isLaunching = true;
@@ -462,35 +363,18 @@ async function* reviewCodex(id: string, request: AgentReviewRequest, signal: Abo
 }
 
 /** The project folder, checked to exist; a folderless chat (null) gets its own folder, so the agent never runs in Mochi's cwd (`/` when packaged). */
-async function agentFolder(threadId: string, cwd: unknown) {
+async function agentFolder(threadId: string, cwd: string | null) {
   if (cwd === null) {
     if (!/^[\w-]+$/.test(threadId)) throw new TypeError('threadId must be letters, digits, - or _');
     const dir = join(homedir(), '.harness', 'chats', threadId);
     await mkdir(dir, { recursive: true });
     return dir;
   }
-  const dir = string(cwd, 'options.cwd');
+  const dir = cwd;
   if (!isAbsolute(dir)) throw new TypeError(`The project folder must be an absolute path, not "${dir}"`);
   const info = await stat(dir).catch(() => null);
   if (!info?.isDirectory()) throw new Error(`The project folder ${dir} doesn't exist anymore`);
   return dir;
-}
-
-/** Checks `options.workspace`; a trigger saved before workspaces carries `worktree: <branch>` instead. */
-export function startWorkspace(value: unknown, legacyWorktree?: unknown): StartWorkspace | undefined {
-  if (value === undefined) return legacyWorktree === undefined ? undefined : { mode: 'worktree', branch: string(legacyWorktree, 'options.worktree', 255) };
-  const w = record(value, 'options.workspace');
-  if (w.mode !== 'worktree' && w.mode !== 'folder') throw new TypeError('options.workspace.mode must be worktree or folder');
-  for (const key of ['isExisting', 'isNew']) if (w[key] !== undefined && typeof w[key] !== 'boolean') throw new TypeError(`options.workspace.${key} must be a boolean`);
-  return {
-    mode: w.mode,
-    branch: string(w.branch, 'options.workspace.branch', 255),
-    base: w.base === undefined ? undefined : string(w.base, 'options.workspace.base', 255),
-    isExisting: w.isExisting as boolean | undefined,
-    isNew: w.isNew as boolean | undefined,
-    titlePrompt: w.titlePrompt === undefined ? undefined : string(w.titlePrompt, 'options.workspace.titlePrompt', 40_000),
-    title: w.title === undefined ? undefined : string(w.title, 'options.workspace.title', 255),
-  };
 }
 
 /**
@@ -539,10 +423,8 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
   return { cwd: dir, setup, named };
 }
 
-function imageOf(value: unknown) {
-  const image = record(value, 'result.image');
-  if (image.mimeType !== 'image/png') throw new TypeError('result.image.mimeType must be image/png');
-  const data = string(image.data, 'result.image.data', MAX_IMAGE_CHARS);
-  if (!/^[A-Za-z0-9+/]+=*$/.test(data)) throw new TypeError('result.image.data must be base64');
-  return { data, mimeType: 'image/png' as const };
+function imageOf(image: NonNullable<AgentToolResult['image']>) {
+  if (image.data.length > MAX_IMAGE_CHARS) throw new TypeError(`result.image.data must be under ${MAX_IMAGE_CHARS} chars`);
+  if (!/^[A-Za-z0-9+/]+=*$/.test(image.data)) throw new TypeError('result.image.data must be base64');
+  return image;
 }
