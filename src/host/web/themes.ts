@@ -1,3 +1,4 @@
+import { persistedSlice } from '../../lib/uiStorage.ts';
 import type { ThemesHost } from '../types/themes.ts';
 import { checkCustomFile, customFileName, customTheme } from '../../themes/custom.ts';
 import type { ColorTheme } from '../../themes/model.ts';
@@ -5,8 +6,8 @@ import { checkRef, createMarketplace, readCapped } from '../../themes/openVsx.ts
 import { LIMITS } from '../../themes/vsix.ts';
 
 // The web build talks to Open VSX straight from the page (its API and CDN send `Access-Control-Allow-Origin: *`) and keeps
-// installed and custom themes in localStorage.
-const KEY = 'mochi.themes.v1';
+// installed and custom themes in browser storage.
+const themesSlice = persistedSlice<Stored>('mochi.themes.v1', { installed: [], custom: {} }, undefined, true);
 
 interface Stored {
   installed: ColorTheme[];
@@ -73,7 +74,7 @@ function parsed(file: string, text: string) {
 
 function load(): Stored {
   try {
-    const parsed = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Stored>;
+    const parsed = themesSlice.getState().value;
     return { installed: Array.isArray(parsed.installed) ? parsed.installed : [], custom: parsed.custom && typeof parsed.custom === 'object' ? parsed.custom : {} };
   } catch {
     return { installed: [], custom: {} };
@@ -82,7 +83,7 @@ function load(): Stored {
 
 function save(stored: Stored) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(stored));
+    themesSlice.setState({ value: stored });
   } catch {
     throw new Error('The browser refused to store the theme (storage full or blocked)');
   }

@@ -1,3 +1,4 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { diffNotices, isAddressed, type Addressing, type Notice, type QuietHours } from './model.ts';
@@ -21,6 +22,8 @@ export type NotificationsAction =
   | { type: 'notify-viewed'; threadId: string };
 
 const STORAGE_KEY = 'harness:notify-settings';
+const notifyDefaults = { muted: [], quiet: { isOn: false, start: 22, end: 8 } };
+const storageSlice = persistedSlice<{ muted: string[]; quiet: QuietHours }>(STORAGE_KEY, notifyDefaults, (raw) => ({ ...notifyDefaults, ...JSON.parse(raw ?? '{}') }));
 const MAX_ITEMS = 200;
 
 export function initialNotifications(): NotificationsState {
@@ -87,19 +90,9 @@ function withNotifications(state: State, patch: Partial<NotificationsState['noti
 }
 
 export function saveNotifySettings({ muted, quiet }: { muted: string[]; quiet: QuietHours }) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ muted, quiet }));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): settings just don't persist.
-  }
+  storageSlice.setState({ value: { muted, quiet } });
 }
 
 function loadSettings(): { muted: string[]; quiet: QuietHours } {
-  const fallback = { muted: [], quiet: { isOn: false, start: 22, end: 8 } };
-  try {
-    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
-  } catch {
-    return fallback;
-  }
+  return storageSlice.getState().value;
 }

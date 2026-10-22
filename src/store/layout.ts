@@ -1,3 +1,4 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import {
   buildPreset,
   closeLeaf,
@@ -61,6 +62,7 @@ export type LayoutAction =
   | { type: 'overview-toggle'; isOpen?: boolean };
 
 const STORAGE_KEY = 'harness.layouts.v1';
+const storageSlice = persistedSlice<Saved>(STORAGE_KEY, { layouts: {}, watched: [] });
 
 // The demo's profiles open on their demo work; every other profile opens on a new thread.
 const DEMO_VIEWS: Record<string, View> = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } };
@@ -247,16 +249,12 @@ function presetViews(state: State, count: number): View[] {
 type Saved = Pick<LayoutState, 'layouts' | 'watched'>;
 
 export function saveLayouts(state: Saved) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ layouts: state.layouts, watched: state.watched }));
-  } catch {
-    // Storage blocked (private window, artifact preview): layouts just don't persist.
-  }
+  storageSlice.setState({ value: { layouts: state.layouts, watched: state.watched } });
 }
 
 function loadLayouts(): Saved {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
+    const raw = storageSlice.getState().value;
     const saved = getPrefs().restoreLayout ? (raw?.layouts ?? {}) : {};
     const layouts = Object.fromEntries(Object.entries(saved).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
     return { layouts, watched: Array.isArray(raw?.watched) ? raw.watched : [] };

@@ -1,3 +1,4 @@
+import { browserStorage } from '../lib/uiStorage.ts';
 import { toast } from '../toast/store.ts';
 import { getPage, openPage, updatePage } from '../browser/pages.ts';
 import { normalizeUrl } from '../browser/url.ts';
@@ -51,7 +52,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
 /** next-themes keeps the choice under `theme`; nothing stored (or storage blocked) means its default, System. */
 function storedTheme() {
   try {
-    return localStorage.getItem('theme') ?? 'system';
+    return browserStorage.getItem('theme') ?? 'system';
   } catch {
     return 'system';
   }

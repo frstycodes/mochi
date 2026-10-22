@@ -1,7 +1,7 @@
 /**
  * What a composer holds before it's sent: per thread (`threadDraftKey`) and per profile's new-thread page (`newThreadDraftKey`).
  * Read from memory, so switching threads restores at once; written to IndexedDB in userData (debounced) for relaunches.
- * IndexedDB stores the attachment Blobs as files on disk, not as base64 in localStorage.
+ * IndexedDB stores the attachment Blobs as files on disk, not as base64 in browser storage.
  */
 export interface DraftFile {
   filename?: string;

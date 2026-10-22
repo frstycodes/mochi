@@ -1,3 +1,4 @@
+import { clearUiStorage, uiStorageEntries } from '../../lib/uiStorage.ts';
 import { useCallback, useEffect, useState } from 'react';
 import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
@@ -55,11 +56,7 @@ export function DataSection() {
       isDestructive: true,
     });
     if (!isConfirmed) return;
-    const clear = () => {
-      try {
-        localStorage.clear();
-      } catch {}
-    };
+    const clear = clearUiStorage;
     clear();
     // Open terminals save their scrollback on pagehide; this listener runs after theirs and wipes it again.
     addEventListener('pagehide', clear);
@@ -119,7 +116,7 @@ interface Area {
 
 const PLURAL = new Intl.PluralRules('en');
 const noun = (one: string, other: string) => (n: number) => (PLURAL.select(n) === 'one' ? one : other);
-// localStorage keeps UTF-16: two bytes a character, keys included.
+// Browser storage keeps UTF-16: two bytes a character, keys included.
 const storedBytes = (key: string, raw: string) => (key.length + raw.length) * 2;
 
 /**
@@ -139,9 +136,8 @@ function useStorageUsage() {
     total: 0,
   };
   try {
-    for (const key of Object.keys(localStorage)) {
+    for (const [key, raw] of uiStorageEntries()) {
       if (key === PINS_STORAGE_KEY || key === SIDECHAT_STORAGE_KEY) continue;
-      const raw = localStorage.getItem(key) ?? '';
       usage.total += storedBytes(key, raw);
       if (!key.startsWith(TERMINAL_STORAGE_PREFIX)) continue;
       usage.terminals.bytes += storedBytes(key, raw);
@@ -164,7 +160,8 @@ function useReplayUsage() {
 
 function terminalCount(raw: string): number {
   try {
-    return JSON.parse(raw)?.sessions?.length ?? 0;
+    const saved = JSON.parse(raw);
+    return (saved?.state?.value ?? saved)?.sessions?.length ?? 0;
   } catch {
     return 0;
   }
