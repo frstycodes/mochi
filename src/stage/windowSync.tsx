@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { host } from '@/host';
-import { HarnessContext, useHarness, type Action, type State } from '../store';
+import { HarnessScope, useHarness, type Action, type State } from '../store';
 
 /**
  * Multi-window sync. The main window's store is the only store: it runs the tick and owns persistence. A torn-off window
@@ -45,7 +45,7 @@ export function MirrorProvider({ fallback, children }: { fallback: ReactNode; ch
   }, []);
   const dispatch = useCallback((action: Action) => send({ kind: 'action', action }), []);
   if (!state) return fallback;
-  return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
+  return <HarnessScope state={state} dispatch={dispatch}>{children}</HarnessScope>;
 }
 
 function send(message: WindowMessage) {

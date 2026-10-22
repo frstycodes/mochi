@@ -17,7 +17,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToggleSlot } from '../SidebarToggle';
 import { DragStrip, TitleBar } from '../TitleBar';
-import { useHarness } from '../store';
+import { useHarness, useDispatch } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
 import { BoundShortcut } from '../Shortcut';
@@ -97,7 +97,7 @@ export function SplitControls() {
 }
 
 function PresetSubmenu() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>

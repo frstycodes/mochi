@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
 // Not PANE_TABS: the chat's sub-thread rows use this peek, and pane/tabs imports the chat, so going through it is a cycle.
 import { BrowserTab } from '../pane/BrowserTab';
-import { useHarness } from '../store';
+import { useDispatch, useHarnessSelector, useThread } from '../store';
 import { PreviewContext } from './SplitContext';
 import { ProviderMark, ThreadStatusIcon } from '../ui';
 import { BoundShortcut } from '../Shortcut';
@@ -23,9 +23,10 @@ const NESTED_PREVIEW = '[data-nested-preview]';
 const NESTED_PREVIEW_ACTIVE = `${NESTED_PREVIEW}:hover, ${NESTED_PREVIEW}:focus-within`;
 
 /** Hover a thread in the sidebar: its transcript tail and preview without switching to it, plus the watch toggle; pinned ones show their ⌘ digit. */
-export function ThreadPeek({ thread, pinNumber, isDisabled, side = 'right', children }: { thread: Thread; pinNumber?: number; isDisabled: boolean; side?: 'right' | 'top'; children: ReactNode }) {
-  const { state, dispatch } = useHarness();
-  const isWatched = state.watched.includes(thread.id);
+export function ThreadPeek({ thread: listed, pinNumber, isDisabled, side = 'right', children }: { thread: Thread; pinNumber?: number; isDisabled: boolean; side?: 'right' | 'top'; children: ReactNode }) {
+  const dispatch = useDispatch();
+  const thread = useThread(listed.id) ?? listed;
+  const isWatched = useHarnessSelector((s) => s.watched.includes(thread.id));
   const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
   const [isOpen, setOpen] = useState(false);
   // The trigger opens on focus too, and renaming focuses the row's field.
@@ -79,8 +80,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, side = 'right', chil
 
 /** The thread's preview tab rendered at a third of its size, live and inert. */
 function PreviewThumb({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
-  const pane = state.panes.find((p) => p.threadId === thread.id);
+  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === thread.id));
   const tab = pane?.tabs.find((t) => t.kind === 'browser');
   if (!pane || !tab) return null;
   return (

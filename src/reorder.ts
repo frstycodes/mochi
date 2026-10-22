@@ -1,4 +1,4 @@
-import { isListed, PIN_SLOTS, type Thread } from './model.ts';
+import { isListed, isStreamedOnly, PIN_SLOTS, type Thread } from './model.ts';
 
 /**
  * Sidebar drag and drop: pinned threads take Orbit slots in list order, both lists keep the dropped order, threads not listed
@@ -139,6 +139,14 @@ export function flattenGroups(groups: ThreadGroup[]): Thread[] {
 
 export function lastActivityAt(thread: Thread) {
   return thread.activity[thread.activity.length - 1]?.at ?? thread.startedAt;
+}
+
+/**
+ * The same sidebar listing: the same threads in order, differing at most in what an agent turn streams (`isStreamedOnly`) short of
+ * a new activity time. A list kept by this is stale in its transcripts; a row reads its own thread for them.
+ */
+export function isSameListing(a: Thread[], b: Thread[]) {
+  return a.length === b.length && a.every((t, i) => t === b[i] || (isStreamedOnly(t, b[i]) && lastActivityAt(t) === lastActivityAt(b[i])));
 }
 
 /** mod Shift P: the `reorder` lists that pin a thread at the end of Pinned, or unpin it to the top of Threads. Null when Pinned is full. */

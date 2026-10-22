@@ -18,7 +18,7 @@ import { serviceName } from './names';
 import type { Library } from './useLibrary';
 import { closeSettings } from '../settings/open';
 import { getPrefs } from '../settings/prefs';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 
 /**
  * Adds an account on a remote MCP server: what to call it, then how it signs in. Without a `url` it's a custom server and
@@ -64,7 +64,7 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
   const [setup, setSetup] = useState<Setup>('agent');
   const byAgent = method === 'app' && hasAgentSetup && setup === 'agent';
   const isReady = isUrlValid && !!alias && !isTaken && !isBusy && (method !== 'key' || !!secret.apiKey) && (method !== 'app' || byAgent || (!!secret.clientId && (!needsSecret || !!secret.clientSecret)));
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const startAgentSetup = () => {
     const prompt = `Connect my ${name} account named "${alias}" to Mochi, setting up my own ${name} app for it.`;
     dispatch({ type: 'create', title: prompt, provider: getPrefs().agent, project: null, isLive: host.isDesktop });

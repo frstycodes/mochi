@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { AgentLoader } from '../AgentLoader';
 import { openFromScope, useThreadFiles, type ThreadFiles } from '../files/viewer';
 import type { Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { Expand } from '../WorkLog';
 import { askSecondOpinion, sendFindings } from './run';
@@ -77,7 +77,7 @@ function VerdictBadge({ verdict }: { verdict: VerdictKind }) {
 }
 
 function VerdictCard({ thread, review }: { thread: Thread; review: Review }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const files = useThreadFiles();
   const result = review.result!;
   const dismiss = () => dispatch({ type: 'review-update', threadId: thread.id, id: review.id, patch: { isDismissed: true } });
@@ -156,7 +156,7 @@ function FilePath({ path, line }: { path: string; line?: number }) {
 }
 
 function ReviewFailed({ thread, review }: { thread: Thread; review: Review }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const name = providerName(review.provider);
   const dismiss = () => dispatch({ type: 'review-update', threadId: thread.id, id: review.id, patch: { isDismissed: true } });
   const retry = () => {
@@ -184,7 +184,7 @@ function ReviewFailed({ thread, review }: { thread: Thread; review: Review }) {
 }
 
 function DismissedReview({ thread, review }: { thread: Thread; review: Review }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (
     <button
       type="button"

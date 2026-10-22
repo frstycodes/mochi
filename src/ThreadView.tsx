@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
 import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
@@ -40,17 +40,17 @@ import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
 import { TitleBar } from './TitleBar';
-import { useHarness } from './store';
+import { useDispatch, useHarnessSelector } from './store';
 import { hasGoal } from './drift';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
 import { useSeen } from './notify/useSeen';
 
 export function ThreadView({ thread }: { thread: Thread }) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
   const { isWide, isFocused } = useSplit();
   useSeen({ threadId: thread.id }, 'open-and-leave');
-  const pane = state.panes.find((p) => p.threadId === thread.id);
+  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === thread.id));
   const isPaneOpen = !!pane?.isOpen;
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
   const [isPaneTabOpen, setPaneTabOpen] = useState(false);
@@ -63,7 +63,8 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const [isSummarySheetOpen, setSummarySheetOpen] = useState(false);
   const isPaneShown = isWide ? isPaneOpen : isPaneTabOpen;
   const inSplits = useSplitTabIds(thread.id);
-  const openKinds = isPaneShown && pane ? layoutOf(pane).columns.flat() : [];
+  // Memoized by hand: the compiler leaves it inline, and a new array each render would give every pinned tab a new onToggle.
+  const openKinds = useMemo(() => (isPaneShown && pane ? layoutOf(pane).columns.flat() : []), [isPaneShown, pane]);
 
   const toggleKind = (kind: PaneTabKind) => {
     const split = pane?.tabs.find((t) => t.kind === kind && inSplits.has(t.id));

@@ -26,7 +26,7 @@ import { SettingsPage } from './settings/SettingsPage';
 import { AgentSettingsProvider } from './settings/AgentSettings';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
-import { HarnessProvider, useHarness } from './store';
+import { HarnessProvider, useHarnessSelector } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { RenameLayer } from './RenameDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
@@ -122,12 +122,6 @@ function Shell() {
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
-  useLibraryNamesLoader(useHarness().state.spaceId);
-  useResolvedQueueToasts();
-  useWorktreeManager();
-  useCheckoutRecovery();
-  useWorktreeCleanup();
-  useAutoArchive();
   const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
   const isReplayOpen = !!useReplayRoute();
@@ -152,7 +146,19 @@ function Shell() {
         </>
       )}
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
+      <ShellEffects />
     </SidebarProvider>
   );
   return isSettingsOpen ? <AgentSettingsProvider>{content}</AgentSettingsProvider> : content;
+}
+
+/** The app's store-driven side effects, in a leaf of their own: they read the whole state, so they re-render on every change. */
+function ShellEffects() {
+  useLibraryNamesLoader(useHarnessSelector((s) => s.spaceId));
+  useResolvedQueueToasts();
+  useWorktreeManager();
+  useCheckoutRecovery();
+  useWorktreeCleanup();
+  useAutoArchive();
+  return null;
 }

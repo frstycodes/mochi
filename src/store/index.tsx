@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState, type Dispatch, type ReactNode } from 'react';
+import { useSyncExternalStoreWithSelector } from 'use-sync-external-store/with-selector';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch, type ReactNode } from 'react';
 import { dueQueued, sendMessage } from '../chat/outbox.ts';
 import { compactFocus, useCompactInstructions } from '../chat/compact.ts';
 import { setDriftClassifier } from '../drift.ts';
@@ -6,6 +7,7 @@ import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
 import { NO_AGENT_PROCESS, type AgentEvent, type AgentToolCall, type AttachedAgent, type SeqAgentEvent } from '../host/types/agent.ts';
 import { isListed, type QueueItem, type Thread } from '../model.ts';
+import { isSameListing } from '../reorder.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
@@ -22,6 +24,7 @@ import { savePanes, type PanesAction, type PanesState } from './panes.ts';
 import { rankQueue, type QueueAction, type QueueState } from './queue.ts';
 import { saveSideChats, type SideChatAction, type SideChatState } from './sidechat.ts';
 import { saveThreads } from './persist.ts';
+import { createExternalState, fixedStore, shallowEqual, type HarnessStore } from './external.ts';
 import { initialState, reducer } from './root.ts';
 import { pruneDrafts } from '../chat/drafts.ts';
 import type { ThreadsAction, ThreadsState } from './threads.ts';
@@ -42,6 +45,7 @@ import { usePrSync } from '../git/usePrSync.ts';
 export type { View } from './layout.ts';
 export { rankQueue };
 export { mirrorState, reducer } from './root.ts';
+export { shallowEqual } from './external.ts';
 
 export interface Snapshot {
   threads: Thread[];
@@ -56,21 +60,18 @@ setDriftClassifier((prompt, thread) => host.agent.classify(prompt, thread));
 
 const TICK_MS = showsDemoData() ? 1000 : 60_000;
 
-export const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
+const HarnessContext = createContext<HarnessStore<State, Action> | null>(null);
 
 export function HarnessProvider({ children }: { children: ReactNode }) {
-  const [state, applyNow] = useReducer(reducer, undefined, initialState);
-  const latest = useRef(state);
-  // Actions from outside a dispatch (agent events, scheduled runs) are recorded against the newest store this provider has seen.
+  const [external] = useState(() => createExternalState(initialState()));
+  const state = useSyncExternalStore(external.subscribe, external.getState);
+  const applyNow = useCallback((action: Action) => external.set(reducer(external.getState(), action)), [external]);
   const apply = useCallback((action: Action) => {
-    recordAction(latest.current, action);
+    recordAction(external.getState(), action);
     applyNow(action);
-  }, []);
-  useEffect(() => {
-    latest.current = state;
-  }, [state]);
+  }, [applyNow]);
   const dispatch = useCallback<Dispatch<Action>>((action) => {
-    const before = latest.current;
+    const before = external.getState();
     recordAction(before, action);
     const answer = resolution(before, action);
     if (answer) host.agent.resolve(answer.requestId, answer.decision).catch((error: unknown) => apply({ type: 'say', threadId: answer.threadId, entry: undelivered(answer, error) }));
@@ -83,7 +84,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     for (const call of calls) {
       // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
       callAgent(call).catch((error: unknown) => {
-        const thread = call.method === 'send' && isLostProcess(error) ? latest.current.threads.find((t) => t.id === call.threadId) : undefined;
+        const thread = call.method === 'send' && isLostProcess(error) ? external.getState().threads.find((t) => t.id === call.threadId) : undefined;
         const retry = thread && call.method === 'send' ? resumeAfterLostProcess(thread, call) : [];
         if (retry.length === 0) return apply({ type: 'agent', event: failed(call.threadId, error) });
         for (const again of retry) {
@@ -99,7 +100,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
     const acted = actedOn(action, before.queue);
     if (acted) host.notify.addressed({ threadId: acted, isActedOn: true }).catch(() => undefined);
-  }, [apply]);
+  }, [external, apply, applyNow]);
   // The tick is the app's clock, one per minute of `now`: the demo runs it 60× fast, real threads at wall-clock speed.
   // Real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {
@@ -111,7 +112,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
       applyNow(tick);
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [state.paused]);
+  }, [state.paused, applyNow]);
   useEffect(() => {
     const onEvent = (event: SeqAgentEvent) => {
       if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
@@ -120,7 +121,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     // After a window reload, agents still running in main replay what they sent meanwhile; live events wait behind that replay.
     let held: SeqAgentEvent[] | null = [];
     const off = host.agent.onEvent((event) => (held ? held.push(event) : onEvent(event)));
-    const attached = latest.current.threads.filter((t) => t.live && !t.live.isDetached).map((t) => ({ threadId: t.id, after: t.live!.eventSeq ?? 0 }));
+    const attached = external.getState().threads.filter((t) => t.live && !t.live.isDetached).map((t) => ({ threadId: t.id, after: t.live!.eventSeq ?? 0 }));
     void (attached.length ? host.agent.attached(attached) : Promise.resolve([]))
       .catch((error: unknown): AttachedAgent[] => (console.error('Replaying agent events after reload failed', error), []))
       .then((agents) => {
@@ -135,7 +136,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
         held = null;
       });
     return off;
-  }, [apply]);
+  }, [external, apply]);
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
       if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
@@ -150,21 +151,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [apply, dispatch]);
   useEffect(() => {
     const onToolCall = (call: AgentToolCall) => {
-      const env = toolEnv(
-        () => latest.current,
-        (action) => {
-          dispatch(action);
-          // The next step of this call (or the next call) can run before React renders this one; it must see this change.
-          latest.current = reducer(latest.current, action);
-        },
-      );
+      const env = toolEnv(external.getState, dispatch);
       void (import.meta.env.DEV && call.threadId === '__dev__' ? runDevTool(call, env) : runTool(call, env)).then((result) => host.agent.toolResult(call.id, result));
     };
     const off = host.agent.onToolCall(onToolCall);
     // Asked only once listening, so a call main sends meanwhile arrives once, by one route or the other.
     void host.agent.pendingToolCalls().then((calls) => calls.forEach(onToolCall), (error: unknown) => console.error('Taking back tool calls after reload failed', error));
     return off;
-  }, [dispatch]);
+  }, [external, dispatch]);
   useQueueRunner(state, dispatch);
   useDelegatedReports(state.threads, dispatch);
   useSubThreadWakes(state, dispatch);
@@ -181,7 +175,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   usePrSync(state.threads, dispatch);
   useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
   useEffect(() => pruneDrafts(new Set(state.threads.map((t) => t.id))), [state.threads]);
-  return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
+  const store = useMemo(() => ({ getState: external.getState, subscribe: external.subscribe, dispatch }), [external, dispatch]);
+  return <HarnessContext.Provider value={store}>{children}</HarnessContext.Provider>;
+}
+
+/** Hands its children a store React already holds: a mirrored window, another computer's threads, a replay. */
+export function HarnessScope({ state, dispatch, children }: { state: State; dispatch: Dispatch<Action>; children: ReactNode }) {
+  const store = useMemo(() => fixedStore(state, dispatch), [state, dispatch]);
+  return <HarnessContext.Provider value={store}>{children}</HarnessContext.Provider>;
 }
 
 /** Sends each live thread's next queued message once its agent's turn is over; `dueQueued` says when. */
@@ -272,42 +273,65 @@ function failed(threadId: string, error: unknown): AgentEvent {
   return { threadId, type: 'turn-end', status: 'failed', error: error instanceof Error ? error.message : String(error) };
 }
 
+function useHarnessStore() {
+  const store = useContext(HarnessContext);
+  if (!store) throw new Error('useHarness must be used inside HarnessProvider');
+  return store;
+}
+
+/** The whole state: re-renders on every change, agent tokens included. Prefer `useHarnessSelector` for what a component shows. */
 export function useHarness() {
-  const ctx = useContext(HarnessContext);
-  if (!ctx) throw new Error('useHarness must be used inside HarnessProvider');
-  return ctx;
+  const store = useHarnessStore();
+  return { state: useSyncExternalStore(store.subscribe, store.getState), dispatch: store.dispatch };
+}
+
+export function useDispatch() {
+  return useHarnessStore().dispatch;
+}
+
+/** The newest state, read when called (an event handler, a drag), without re-rendering on changes. */
+export function useGetState() {
+  return useHarnessStore().getState;
+}
+
+/** What `select` picks from the state; re-renders only when that changes by `isEqual` (`shallowEqual` for a picked object or list). */
+export function useHarnessSelector<T>(select: (state: State) => T, isEqual: (a: T, b: T) => boolean = Object.is) {
+  const store = useHarnessStore();
+  return useSyncExternalStoreWithSelector(store.subscribe, store.getState, null, select, isEqual);
 }
 
 const NEW_VIEW = { kind: 'new' } as const;
 
 export function useSpace() {
-  const { state } = useHarness();
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const profiles = useProfiles();
-  return profiles.find((p) => p.id === state.spaceId) ?? profiles[0];
+  return profiles.find((p) => p.id === spaceId) ?? profiles[0];
 }
 
 export function useView(spaceId?: string) {
-  const { state } = useHarness();
   // A profile added in Settings gets its layout on first visit; until then it shows a new thread.
-  return state.views[spaceId ?? state.spaceId] ?? NEW_VIEW;
+  return useHarnessSelector((s) => s.views[spaceId ?? s.spaceId] ?? NEW_VIEW);
 }
 
 export function useThread(id: string) {
-  const { state } = useHarness();
-  return state.threads.find((t) => t.id === id);
+  return useHarnessSelector((s) => s.threads.find((t) => t.id === id));
 }
 
 export function useSpaceThreads(spaceId?: string) {
-  const { state } = useHarness();
-  const id = spaceId ?? state.spaceId;
-  return state.threads.filter((t) => t.spaceId === id && isListed(t));
+  return useHarnessSelector((s) => s.threads.filter((t) => t.spaceId === (spaceId ?? s.spaceId) && isListed(t)), shallowEqual);
+}
+
+/** The space's threads to list them (`isSameListing`): stale in what a turn streams, so each row reads its own thread for that. */
+export function useSpaceListing(spaceId: string) {
+  return useHarnessSelector((s) => s.threads.filter((t) => t.spaceId === spaceId && isListed(t)), isSameListing);
 }
 
 export function useSpaceQueue(spaceId?: string) {
-  const { state } = useHarness();
-  const id = spaceId ?? state.spaceId;
-  const ids = new Set(state.threads.filter((t) => t.spaceId === id && isListed(t)).map((t) => t.id));
-  return rankQueue(state.queue.filter((q) => ids.has(q.threadId)));
+  return useHarnessSelector((s) => {
+    const id = spaceId ?? s.spaceId;
+    const ids = new Set(s.threads.filter((t) => t.spaceId === id && isListed(t)).map((t) => t.id));
+    return rankQueue(s.queue.filter((q) => ids.has(q.threadId)));
+  }, shallowEqual);
 }
 
 export function snapshot(state: State): Snapshot {

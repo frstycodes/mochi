@@ -1,7 +1,7 @@
 import { host } from '../host/index.ts';
 import { patchRef, refreshRef } from '../chat/useRefState.ts';
 import type { Thread } from '../model.ts';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { toast } from '../toast/store.ts';
 import { canAutofix, setAutofix } from './autofixToggle.ts';
 import { useGithubScope, type ThreadPr } from './useThreadPrs.ts';
@@ -21,7 +21,7 @@ export interface PrSwitch {
  * GitHub's auto-merge (read from GitHub, and only on an open PR: GitHub refuses it on a draft).
  */
 export function usePrSwitches(thread: Thread, item: ThreadPr): PrSwitch[] {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const scope = useGithubScope(thread);
   const { pr, state, githubRef } = item;
   if (!canAutofix(thread, pr)) return [];

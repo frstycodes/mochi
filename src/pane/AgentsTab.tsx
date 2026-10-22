@@ -21,7 +21,7 @@ import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { DiffFile } from '../host/types/git';
 import type { Subagent, Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { TooltipIconButton } from '../ui';
 import { VizThreadProvider } from '../viz/WidgetVisual';
 import { CallList, CallRow, DiffStat, DiffView, Expand, RunOutput } from '../WorkLog';
@@ -84,7 +84,7 @@ function TaskCards({ thread, tasks }: { thread: Thread; tasks: TaskRow[] }) {
 
 /** The whole card opens the task's page (a stretched button); Stop sits above it. */
 function TaskCard({ thread, task, label, stopName, children }: { thread: Thread; task: TaskRow; label: string; stopName: string; children: ReactNode }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (
     <li className="relative isolate flex flex-col gap-1 rounded-lg border bg-card px-3 py-2.5 transition-colors has-[>button:first-child:hover]:bg-accent/40">
       <button
@@ -152,7 +152,7 @@ function Count({ value, unit }: { value: string; unit: string }) {
 }
 
 function StopButton({ thread, task, name, className }: { thread: Thread; task: TaskRow; name: string; className?: string }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const isAgent = !!task.subagent;
   return (
     <TooltipIconButton
@@ -174,7 +174,7 @@ function kindOf(s: Subagent) {
 }
 
 function BackToTasks({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (
     <TooltipIconButton label="All tasks" hint="Back to this thread's background tasks" size="icon-sm" variant="ghost" className="-ml-1.5 shrink-0" onClick={() => dispatch({ type: 'pane-show-agent', threadId: thread.id })}>
       <ArrowLeft />
@@ -184,7 +184,7 @@ function BackToTasks({ thread }: { thread: Thread }) {
 
 /** One agent's page: its prompt, log, report and changes, flat in the pane; back returns to the list. */
 function AgentTranscript({ thread, task, subagent }: { thread: Thread; task: TaskRow; subagent: Subagent }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const { flavor, name } = subagentPersona(thread, subagent);
   const isRunning = subagent.status === 'running';
   const report = subagent.result ?? subagent.error;

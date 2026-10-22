@@ -62,7 +62,7 @@ import { showsVerdictCard } from './goals/report';
 import { SummaryCriteria, SummaryGoal, SummaryGoalHeader, SummaryGoalStatus, SummaryGoalText, SummaryNextMove } from './goals/SummaryGoal';
 import { clock } from './progress';
 import { subThreadsOf } from './reorder';
-import { useHarness } from './store';
+import { useHarness, useDispatch } from './store';
 import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
@@ -565,7 +565,7 @@ function DiffCount({ added, removed }: { added: number; removed: number }) {
  * The PR the agent opens lands in the thread's PRs, so this row turns into it.
  */
 function CreatePrRow({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const isQueued = !!thread.queued?.some((m) => m.draft === OPEN_PR_PROMPT);
   const queue = () => {
     dispatch({ type: 'queued-add', threadId: thread.id, message: queuedMessage(OPEN_PR_PROMPT, { mentions: [], isCommand: false, typedSkills: [] }) });
@@ -641,7 +641,7 @@ function TaskAge({ task }: { task: TaskRow }) {
 }
 
 function StopTask({ thread, task }: { thread: Thread; task: TaskRow }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (
     <TooltipIconButton label="Stop task" hint={`Stops “${task.title}”; its output so far stays`} size="icon-xs" className="text-subtle-foreground hover:text-foreground" onClick={() => dispatch(stopTask(thread.id, task))}>
       <Stop filled className="size-3" />
@@ -687,7 +687,7 @@ function FolderMenu({ thread }: { thread: Thread }) {
 
 /** Where each summary row leads: the side pane for changes, links, servers, folders and visuals, the file viewer for files, Settings for MCP. */
 function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const openers = usePaneOpeners(thread.id);
   const toPane = (action: Action) => {
     dispatch(action);
@@ -792,7 +792,7 @@ function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
 
 /** A URL or a path in the thread's folder; a live agent is told in a message of yours. */
 function AddSourceRow({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [isOpen, setOpen] = useState(false);
   const [text, setText] = useState('');
   const source = sourceFrom(text);

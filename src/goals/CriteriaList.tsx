@@ -2,7 +2,7 @@ import { Play, XCircle, CheckBadge } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { type Criterion, type Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { TooltipIconButton } from '../ui';
 import { useWorktreePath } from '../git/worktrees';
 import { checkBlockedReason, runCriterionCheck } from './checks';
@@ -46,7 +46,7 @@ function CriterionEvidence({ criterion: c, isConfirmed }: { criterion: Criterion
 }
 
 export function RunCheck({ thread, criterion, className }: { thread: Thread; criterion: Criterion; className?: string }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   useWorktreePath(thread.id); // re-renders once the worktree is made
   const reason = checkBlockedReason(thread, criterion);
   return (

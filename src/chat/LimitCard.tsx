@@ -9,7 +9,7 @@ import type { ActivityEntry, Provider, Thread } from '../model';
 import { PROVIDER_NAME } from '../rewind/handoff';
 import { copyHandoffPrompt, handOffHere, isHandingOff, otherProvider } from '../rewind/runHandoff';
 import { HARNESSES } from '../settings/harnesses';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { resetLabel, untilLabel } from '../usage/limits';
 import { EventLine } from './MochiWidget';
@@ -27,7 +27,7 @@ export function LimitEntry({ thread, entry }: { thread: Thread; entry: ActivityE
  * forward is a click: nothing resumes, bills or switches harness unless you chose it for this thread.
  */
 function LimitCard({ thread, title, limit }: { thread: Thread; title: string; limit: NonNullable<NonNullable<Thread['live']>['limit']> }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const provider = thread.providers[0];
   const until = useUntil(limit.resetsAt);
   const isReset = until <= 0;
@@ -67,7 +67,7 @@ function LimitCard({ thread, title, limit }: { thread: Thread; title: string; li
 
 /** Both ways to hand off at once: here, or the prompt on the clipboard to take anywhere. */
 function HandoffMenu({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const other = otherProvider(thread);
   return (
     <DropdownMenu>

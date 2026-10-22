@@ -15,7 +15,7 @@ import { splitTabIds } from './layout/tree';
 import { PreviewContext } from './layout/SplitContext';
 import { pageKey, usePage } from './browser/pages';
 import { useSize } from './browser/PageSurface';
-import { useHarness } from './store';
+import { useDispatch, useHarnessSelector } from './store';
 import { layoutOf, shownTab } from './store/panes';
 import { isMod } from './keys';
 import { commandOf } from './keymap';
@@ -33,7 +33,7 @@ const DRAG_THRESHOLD = 4;
 export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; chat?: ReactNode }) {
   const areaRef = useRef<HTMLDivElement>(null);
   const size = useSize(areaRef);
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   // A divider drag stays local until release: through the store, every move re-rendered the app and rewrote the saved panes.
   const [draft, setDraft] = useState<ResizePatch>();
   const visible = useVisibleLayout(thread.id, pane);
@@ -103,8 +103,8 @@ function belowTopGap(resolved: ResolvedLayout): ResolvedLayout {
 
 /** Tabs dragged out into their own split live there, not in a pane, until they're dropped back or their split closes. */
 export function useSplitTabIds(threadId: string) {
-  const { state } = useHarness();
-  return useMemo(() => splitTabIds(Object.values(state.layouts), threadId), [state.layouts, threadId]);
+  const layouts = useHarnessSelector((s) => s.layouts);
+  return useMemo(() => splitTabIds(Object.values(layouts), threadId), [layouts, threadId]);
 }
 
 /** The stored layout minus panes with nothing to show here (popped out, moved to a split), and nothing while the pane is hidden. */
@@ -208,7 +208,7 @@ function PaneCard({
   entering: 'slide' | 'fade' | undefined;
   onHeaderPointerDown: (e: ReactPointerEvent) => void;
 }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const tab = shownTab(pane, kind);
   const Content = PANE_TABS[kind].component;
   const focus = () => !isFocused && dispatch({ type: 'pane-focus-kind', threadId: thread.id, kind });
@@ -252,7 +252,7 @@ function PaneCard({
 
 /** A multi-tab pane's own tabs in its header, plus New tab where a blank one makes sense. */
 function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; kind: PaneTabKind; shown?: PaneTab }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const listRef = useRef<HTMLDivElement>(null);
   const tabs = pane.tabs.filter((t) => t.kind === kind && !t.isPopped);
   const order = tabs.map((t) => t.id);
@@ -343,7 +343,7 @@ type ResizePatch = Pick<PaneLayout, 'weights' | 'share' | 'columnWeights'>;
  * layout's share or weights, committed by `onResizing(false)`; double-click resets them.
  */
 function Dividers({ threadId, layout, resolved, width, hasChat, onPreview, onResizing }: { threadId: string; layout: PaneLayout; resolved: ResolvedLayout; width: number; hasChat: boolean; onPreview: (patch: ResizePatch) => void; onResizing: (isResizing: boolean) => void }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const reset = (patch: ResizePatch) => dispatch({ type: 'pane-resize', threadId, patch });
   const { columns, rects } = resolved;
   if (!columns.length) return null;
@@ -402,7 +402,7 @@ function Divider({ axis, style, label, onMove, onReset, onResizing }: { axis: 'x
  * dragged tab did, over the thread header it pins its kind. Esc cancels.
  */
 function usePaneMove(threadId: string, pane: Pane, resolved: ResolvedLayout, areaRef: RefObject<HTMLDivElement | null>) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [kind, setKind] = useState<PaneTabKind>();
   const [target, setTarget] = useState<{ col: number; row: number; line: React.CSSProperties }>();
   const latest = useRef({ resolved, pane });
@@ -456,7 +456,7 @@ function usePaneMove(threadId: string, pane: Pane, resolved: ResolvedLayout, are
 
 /** Next / previous pane and Close tab are commands (`src/keymap.ts`); mod 1–9 picks a tab of a multi-tab pane and stays fixed. */
 function usePaneKeys(threadId: string, pane: Pane, layout: PaneLayout) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (e: KeyboardEvent) => {
     const kinds = layout.columns.flat();
     const focused = layout.focused && kinds.includes(layout.focused) ? layout.focused : kinds[0];
@@ -482,7 +482,7 @@ function usePaneKeys(threadId: string, pane: Pane, layout: PaneLayout) {
 
 /** Esc anywhere leaves full size, unless something with its own Esc has focus (a terminal, a field, a menu). Previews never listen. */
 function useEscapeExpand(threadId: string, isExpanded: boolean) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const isPreview = useContext(PreviewContext);
   useEffect(() => {
     if (!isExpanded || isPreview) return;

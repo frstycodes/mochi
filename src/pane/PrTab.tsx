@@ -25,7 +25,7 @@ import { isMod } from '../keys';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { usePrefs } from '../settings/prefs';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { ChangesSkeleton, DiffError, useChangeActions } from './ChangesTab';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
@@ -151,7 +151,7 @@ interface PrActionsInput {
 type PrActions = ReturnType<typeof usePrActions>;
 
 function usePrActions({ thread, cwd, number, githubUser, run, confirm }: PrActionsInput) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const agentName = thread.providers[0] === 'codex' ? 'Codex' : 'Claude';
   return {
     agentName,

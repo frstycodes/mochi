@@ -7,7 +7,7 @@ import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import type { Thread } from '@/model';
 import { usePrefs } from '../settings/prefs';
-import { useHarness } from '../store';
+import { useHarness, useDispatch } from '../store';
 import { usePorts } from '../terminal/ports';
 import { TooltipIconButton } from '../ui';
 import { historyTitle, pageKey, updatePage, useAddressHistory, type Page } from './pages';
@@ -25,7 +25,7 @@ type Row = { value: string; url: string; label: string; detail: string; icon: 's
  * the search engine's suggestions; arrows move, Enter opens, the top URL match completes inline (→ or End accepts it).
  */
 export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const inputRef = useRef<HTMLInputElement>(null);
   const anchorRef = useRef<HTMLFormElement>(null);
   const [typed, setTyped] = useState<string | null>(null);

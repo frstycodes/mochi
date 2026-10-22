@@ -22,7 +22,7 @@ import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
 import { cn } from '@/lib/utils';
 import { TooltipIconButton } from '../ui';
 import type { Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { DiffStat } from '../WorkLog';
 import { PaneActions, PaneMenuItems, PaneTitle, usePaneMenu } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
@@ -115,7 +115,7 @@ export interface ChangeActionsInput {
 }
 
 export function useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm }: ChangeActionsInput): ChangeActions {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [notes, setNotes] = useState<LineNote[]>([]);
   const agentName = thread.providers[0] === 'codex' ? 'Codex' : 'Claude';
 

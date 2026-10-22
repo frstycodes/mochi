@@ -11,7 +11,7 @@ import type { Branch, BranchList } from '../host/types/git';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
-import { useHarness } from '../store';
+import { useHarness, useDispatch } from '../store';
 import { nextTempBranch } from '../store/threads';
 import { MetaChip } from '../MetaChip';
 import { SwitchBranchDialog } from './SwitchBranchDialog';
@@ -51,7 +51,7 @@ export function useWorkspace(root: string, draft: WorkspaceDraft, onChange: (dra
 
 /** A thread whose folder isn't set up yet (`isUnstarted`) can still change where it works, kept in the store; null once it started. */
 export function useThreadWorkspace(thread: Thread): Workspace | null {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const repo = thread.repo;
   const isOpen = !!repo && isUnstarted(thread);
   const draft: WorkspaceDraft = { mode: repo?.mode ?? 'worktree', base: repo?.base, isExisting: repo?.isExisting, branch: repo?.branch };

@@ -7,7 +7,7 @@ import { threadCwd } from '../host/cwd';
 import type { WatchConfig } from '../host/types/notify';
 import { getProfiles } from '../profiles';
 import { usePrefs } from '../settings/prefs';
-import { useHarness, type State } from '../store';
+import { useDispatch, useGetState, useHarness, useHarnessSelector, type State } from '../store';
 import { isAddressed, isAlertKind, isQuiet, type Notice, type NoticeKind } from './model';
 import { saveNotifySettings } from './slice';
 import { useRemoteAlerts } from './useRemoteAlerts';
@@ -90,10 +90,10 @@ export function useNotifications() {
 
 /** Looking at a thread in a focused window settles the notices that only asked you to look, here and in main. */
 function useAddressedOnView(threadId: string | undefined) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
   const isFocused = useSyncExternalStore(subscribeFocus, () => document.hasFocus());
   const isViewed = isFocused && !!threadId;
-  const hasAddressed = isViewed && state.notifications.items.some((n) => n.threadId === threadId && isAddressed(n, { isViewed: true }));
+  const hasAddressed = useHarnessSelector((s) => isViewed && s.notifications.items.some((n) => n.threadId === threadId && isAddressed(n, { isViewed: true })));
   useEffect(() => {
     if (!isViewed || !threadId) return;
     host.notify.addressed({ threadId, isViewed: true }).catch(() => undefined);
@@ -131,7 +131,7 @@ function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: stri
 
 /** Opens what a notice is about: its queue item while that's still open, else its thread. */
 export function useJump() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const openThread = useOpenThread();
   return (n: Notice) => {
     dispatch({ type: 'notify-read', ids: [n.id] });
@@ -141,8 +141,10 @@ export function useJump() {
 
 /** Shows a thread, switching space first; with `queueId` still open, the Queue instead. */
 function useOpenThread() {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const getState = useGetState();
   return (threadId: string, queueId?: string) => {
+    const state = getState();
     const thread = state.threads.find((t) => t.id === threadId);
     if (!thread) return;
     if (thread.spaceId !== state.spaceId) dispatch({ type: 'space', id: thread.spaceId });

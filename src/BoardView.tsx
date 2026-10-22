@@ -4,7 +4,7 @@ import type { Step, Thread } from './model';
 import { isWorking } from './agentPhase';
 import { boardColumns, goalProgress, progressLabel } from './progress';
 import { hasGoal } from './drift';
-import { useHarness, useSpaceThreads } from './store';
+import { useSpaceThreads, useDispatch } from './store';
 import { ProgressRing, ProviderMarks, ThreadStatusIcon, lineColor, stepLabel } from './ui';
 
 const ROW = 112;
@@ -23,7 +23,7 @@ interface Hovered {
 }
 
 export function BoardView() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const threads = useSpaceThreads().filter((t) => t.status !== 'settled');
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const layout = useBoardLayout(threads);

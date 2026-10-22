@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { commandOf, spaceCommand } from '../keymap';
 import { getProfiles } from '../profiles';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 
 const SPACES = Array.from({ length: 9 }, (_, i) => spaceCommand(i + 1));
 
 /** The palette, a profile by position, and New thread (`src/keymap.ts`). */
 export function useGlobalKeys(onPalette: () => void) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const command = commandOf(e, ['palette', 'go-new', ...SPACES]);

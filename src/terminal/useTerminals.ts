@@ -1,12 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import type { Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { usePorts } from './ports';
 import { clearFailure, ensureGroup, feedAgent, useTerminalGroup, type TerminalSession } from './sessions';
 import { usePaneOpeners } from './usePaneOpeners';
 
 export function useTerminals(thread: Thread, tabId: string, cwd: string) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const key = `${thread.id}/${tabId}`;
   const openers = usePaneOpeners(thread.id);
   const context = useMemo(() => ({ cwd, threadId: thread.id, links: openers }), [cwd, thread.id, openers]);

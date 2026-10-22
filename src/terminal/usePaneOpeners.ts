@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { fileLink } from './links';
 import { portUrl } from './devServer';
 import type { TerminalLinks } from './sessions';
 
 export function usePaneOpeners(threadId: string) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return useMemo(
     () =>
       ({

@@ -18,7 +18,7 @@ import type { Provider } from '../model';
 import { useProjects } from '../projects';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
 import { SettingsSelect } from '../settings/parts';
-import { useHarness, useSpaceThreads } from '../store';
+import { useSpaceThreads, useHarnessSelector } from '../store';
 import { ProviderMark, SpaceIcon } from '../ui';
 import { useLibraryScope } from './libraryScope';
 import { TRUSTED_SKILL_OWNERS, type CatalogSkill, type SkillDestination } from './library';
@@ -327,7 +327,7 @@ function DestinationFields({ destination, onChange }: { destination: Destination
 
 /** Where an install goes, and whether the choice is complete (a project picked, an agent ticked). */
 function useDestination() {
-  const { spaceId } = useHarness().state;
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const projects = useProjects(spaceId, useSpaceThreads()) ?? [];
   const [scope, setScope] = useState<Scope>('library');
   const [providers, setProviders] = useState<Provider[]>([...HARNESS_IDS]);

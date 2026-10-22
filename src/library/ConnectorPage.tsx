@@ -16,7 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { timeAgo } from '../progress';
 import { openSettings } from '../settings/open';
 import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
-import { useHarness } from '../store';
+import { useHarnessSelector } from '../store';
 import { OverflowIcon } from '../ui';
 import { ConnectAccountDialog } from './ConnectDialog';
 import { connectorKey } from './connectors';
@@ -29,7 +29,7 @@ import { useLibrary, type Library } from './useLibrary';
 
 /** Settings › Connectors › <connector>: its identity, its accounts and the profiles each reaches, whether threads load it, and when agents may use each of its tools. */
 export function ConnectorPage({ id }: { id: string }) {
-  const library = useLibrary(useHarness().state.spaceId);
+  const library = useLibrary(useHarnessSelector((s) => s.spaceId));
   const tools = useConnectorTools(library.entries);
   const connector = tools.connectors?.find((c) => c.key === id);
   if (!tools.connectors || !tools.settings) return <LoadingPage />;

@@ -17,7 +17,7 @@ import type { Space } from '../model';
 import { updateProfile, useProfiles } from '../profiles';
 import { HARNESSES } from '../settings/harnesses';
 import { SettingsCard, SettingsSection } from '../settings/parts';
-import { useHarness } from '../store';
+import { useHarnessSelector } from '../store';
 import { OverflowIcon, ProviderMark, SpaceIcon } from '../ui';
 import { EmptyRow, filterBy, LibraryRow, LIST } from './LibraryParts';
 import { accountDir, NATIVE_KIND_LABELS, withOff, type NativeItem, type NativeKind } from './nativeItems';
@@ -32,7 +32,7 @@ import { useNativeItems, type NativeAccount } from './useNativeItems';
 export function NativeSections({ kinds, query }: { kinds: NativeKind[]; query: string }) {
   const accounts = useNativeItems();
   const scope = useLibraryScope();
-  const current = useHarness().state.spaceId;
+  const current = useHarnessSelector((s) => s.spaceId);
   // All profiles still sorts by the one you're in; a picked profile's accounts come first and its switches show.
   const spaceId = scope.profile?.id ?? current;
   if (!accounts) return null;

@@ -9,7 +9,7 @@ import type { FileContent } from '@/host/types/fs';
 import { cn } from '@/lib/utils';
 import { copyText } from '../clipboard';
 import { Shortcut } from '../Shortcut';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { TooltipIconButton } from '../ui';
 import { download } from '../viz/exportVisual';
 import { FilePath, OpenInMenu } from './FileView';
@@ -149,7 +149,7 @@ function FileActions({ file, content }: { file: ViewerFile; content: FileContent
 type WorkspaceFile = Extract<ViewerFile, { source: 'workspace' }>;
 
 function useOpenInFilesTab() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (file: WorkspaceFile) => {
     dispatch({ type: 'pane-open-tab', threadId: file.threadId, kind: 'files', file: { path: file.path, line: file.line } });
     openFiles(null);

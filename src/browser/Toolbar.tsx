@@ -25,7 +25,7 @@ import { threadCwd } from '@/host/cwd';
 import type { BrowserCommand, BrowserDevtools } from '@/host/types/browser';
 import { cn } from '@/lib/utils';
 import type { Thread } from '@/model';
-import { useHarness } from '@/store';
+import { useDispatch } from '@/store';
 import { ProviderMark } from '@/ui';
 import { consoleReport, openCompare, screenshot, toggleAutoReload, togglePick } from './actions';
 import { DEVICES, RESPONSIVE } from './devices';
@@ -76,7 +76,7 @@ export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageI
 }
 
 function ConsoleButton({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const [isOpen, setOpen] = useState(false);
   const errorCount = page.console.filter((c) => c.level === 'error').length;
   const agent = agentName(thread);

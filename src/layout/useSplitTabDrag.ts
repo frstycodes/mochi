@@ -1,14 +1,14 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { PaneTabKind } from '../model';
 import { isOverPinDrop, setPinned } from '../pane/headerPins';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { cancelDrag, endDrag, moveDrag, startDrag } from './drag';
 
 const DRAG_THRESHOLD = 4;
 
 /** Pointer-down handler for a split tab's title: drag it onto another split's edge to move it, onto one of its thread's panes to put it back, onto a thread header to pin its kind. Esc cancels. */
 export function useSplitTabDrag(threadId: string, tabId: string, kind: PaneTabKind | undefined, label: string) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     const start = { x: e.clientX, y: e.clientY };

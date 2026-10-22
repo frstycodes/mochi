@@ -8,7 +8,7 @@ import { RemoteFilesContext, useWorktreeFiles } from '../files/useWorktreeFiles'
 import { openFiles, useThreadFiles } from '../files/viewer';
 import { fileLink } from '../terminal/links';
 import { useGithubScope } from '../git/useThreadPrs';
-import { useHarness, useThread } from '../store';
+import { useThread, useDispatch } from '../store';
 import { useVizThreadId } from '../viz/WidgetVisual';
 import { FileMark } from './FileMark';
 import { mentionTarget } from './fileMentions';
@@ -49,7 +49,7 @@ export function RefChip({ githubRef, children }: { githubRef: GithubRef; childre
   const { threadId, cwd, githubUser } = useThreadGithub();
   const home = useRepoSlug(cwd);
   const state = useRefState(githubRef, { cwd, githubUser });
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const url = state?.url ?? refUrl(githubRef);
   const description = refDescription(githubRef.kind, state);
   const label = refLabel(githubRef, home);
@@ -135,7 +135,7 @@ export function useWorktreeLink(text: string) {
 /** Opens `link` (`src/a.ts:12`) in the side pane's Files tab at its line; the file-type icon leads. */
 export function FileLinkButton({ link, className, children }: { link: string; className?: string; children: ReactNode }) {
   const threadId = useVizThreadId();
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const file = fileLink(link);
   return (
     <FileButton name={file.path.split('/').pop()!} data-file-link={link} onClick={() => dispatch({ type: 'pane-open-tab', threadId, kind: 'files', file })} className={className}>

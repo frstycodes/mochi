@@ -5,13 +5,13 @@ import { toast } from '@/toast/store';
 import { TooltipIconButton } from '../ui';
 import { host } from '../host';
 import { authorName, type QueuedMessage, type Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { sendSteerNow } from './outbox';
 import { MessageImages } from './MessageImages';
 
 /** Your messages the agent hasn't read yet, under the live turn. Taking one back returns it to the composer, unless the agent already has it. */
 export function PendingSteers({ thread, onTakeBack }: { thread: Thread; onTakeBack: (message: QueuedMessage) => void }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const agent = authorName(thread.providers[0]);
   const takeBack = async (message: QueuedMessage) => {
     if (!(await host.agent.unsteer(thread.id, message.id))) return toast(`${agent} is already reading it`);

@@ -11,7 +11,7 @@ import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { ListeningPort, RunTarget } from '../host/types/ports';
 import type { Pane, Thread } from '../model';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 import { nextTabId } from '../store/panes';
 import { portUrl } from '../terminal/devServer';
 import { refreshPorts, usePorts } from '../terminal/ports';
@@ -171,7 +171,7 @@ function NoPorts() {
 }
 
 function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const openers = usePaneOpeners(thread.id);
   const listening = usePorts(thread.id, cwd);
   const [targets, setTargets] = useState<RunTarget[]>();

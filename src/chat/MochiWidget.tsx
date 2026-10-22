@@ -18,7 +18,7 @@ import { CatalogRow, isConfigKey, useSettingSources } from '../settings/CatalogR
 import { FileDiffs } from '../settings/FileDiffs';
 import { SettingsRow } from '../settings/parts';
 import { SuggestedServerRow } from '../settings/ProfileAgentConfig';
-import { useHarness } from '../store';
+import { useHarness, useDispatch } from '../store';
 import { revealCard } from './Transcript';
 
 /** A Mochi widget where the agent asked: the live card while it waits, then its one-line record. */
@@ -157,7 +157,7 @@ function WidgetCard({ item, onEscape, children }: { item: QueueItem; onEscape: (
  * carries the suggestion with Use. Nothing waits on it; Done (or Esc) closes it into a record of what changed meanwhile.
  */
 function SettingsWidget({ item, settings }: { item: QueueItem; settings: SettingsSuggestion }) {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const profiles = useProfiles();
   const readers = useRef(new Map<string, Reader>());
   const groups = [...new Set(settings.changes.map((c) => c.profileId ?? ''))].map((profileId) => [profileId, settings.changes.filter((c) => (c.profileId ?? '') === profileId)] as const);
@@ -237,7 +237,7 @@ function SuggestedServer({ server, by, readers }: { server: NonNullable<Settings
 
 /** Opens the widget's thread, then scrolls the widget into view and focuses it, so Esc and Tab act on it straight away. */
 export function useShowCard() {
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   return (item: QueueItem) => {
     dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } });
     let tries = 0;

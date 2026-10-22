@@ -20,7 +20,7 @@ import { PrDialog } from './PrDialog';
 import { RefHoverCard } from '../chat/RefHoverCard';
 import { useThreadPr } from './useThreadPrs';
 import { openedPr } from './prs';
-import { useHarness } from '../store';
+import { useDispatch } from '../store';
 
 interface ShipBarProps {
   thread: Thread;
@@ -37,7 +37,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   const [isChecksOpen, setChecksOpen] = useState(false);
   const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
   const prQuery = usePr(cwd, githubUser);
-  const { dispatch } = useHarness();
+  const dispatch = useDispatch();
   const pr = prQuery.data;
   const stagedCount = diff.files.filter((f) => f.staged).length;
 
