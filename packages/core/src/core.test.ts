@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { MessageChannel, type MessagePort } from 'node:worker_threads';
 import { Effect, Exit, Fiber, Layer, Queue, Stream } from 'effect';
@@ -40,26 +42,38 @@ test('ping and ticks reach a client over a MessagePort', async () => {
 
 const runPromise = <A, E>(effect: Effect.Effect<A, E, Run>) => Effect.runPromise(effect.pipe(Effect.provide(Run.layer.pipe(Layer.provide(NodeServices.layer)))));
 
-test('interrupting run kills `sleep 100` within 100ms', async () => {
+// Windows has to start taskkill.exe before the tree dies (CI measured 115ms); elsewhere it's one kill(-pid).
+const INTERRUPT_BUDGET_MS = process.platform === 'win32' ? 500 : 100;
+
+test('interrupting run kills a 100s child and its grandchild within budget', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'mochi-run-'));
+  const pidFile = path.join(dir, 'pids');
+  const script = `const { spawn } = require('node:child_process');
+const grandchild = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 100000)'], { stdio: 'ignore' });
+require('node:fs').writeFileSync(process.argv[1], process.pid + ' ' + grandchild.pid);
+setTimeout(() => {}, 100000);`;
   await runPromise(
     Effect.gen(function* () {
       const { run } = yield* Run;
-      const fiber = yield* run('sleep', ['100']).pipe(Effect.forkChild);
-      yield* Effect.sleep(200);
+      const fiber = yield* run(process.execPath, ['-e', script, pidFile]).pipe(Effect.forkChild);
+      yield* Effect.sleep(20).pipe(Effect.repeat({ until: () => existsSync(pidFile), times: 250 }));
+      const pids = readFileSync(pidFile, 'utf8').split(' ').map(Number);
       const started = performance.now();
       yield* Fiber.interrupt(fiber);
       const elapsed = performance.now() - started;
-      assert.ok(elapsed < 100, `interrupt took ${elapsed}ms`);
-      assert.equal(childSleeps(), 0);
+      assert.ok(elapsed < INTERRUPT_BUDGET_MS, `interrupt took ${elapsed}ms`);
+      yield* Effect.sleep(20).pipe(Effect.repeat({ until: () => !pids.some(isAlive), times: 50 }));
+      assert.deepEqual(pids.filter(isAlive), []);
     }),
-  );
+  ).finally(() => rmSync(dir, { recursive: true, force: true }));
 });
 
-function childSleeps() {
+function isAlive(pid: number) {
   try {
-    return execFileSync('pgrep', ['-P', String(process.pid), 'sleep']).toString().trim().split('\n').length;
+    process.kill(pid, 0);
+    return true;
   } catch {
-    return 0; // pgrep exits 1 when nothing matches.
+    return false; // ESRCH: no such process.
   }
 }
 
