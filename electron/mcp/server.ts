@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { z } from 'zod';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { copyFile, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -106,6 +106,12 @@ export async function loopbackUrl(name: string, ...rest: string[]) {
 const routes = new Map<string, { handle: (req: IncomingMessage, res: ServerResponse, rest: string[]) => Promise<void>; isPublic: boolean }>();
 
 const SECRET = randomBytes(24).toString('hex');
+
+function isSecret(value: string | undefined) {
+  const given = Buffer.from(value ?? '');
+  return given.length === SECRET.length && timingSafeEqual(given, Buffer.from(SECRET));
+}
+
 const calls = toolCalls(MOCHI_TIMEOUT_MS);
 let http: Promise<Server> | undefined;
 
@@ -129,7 +135,7 @@ function listening() {
     const server = createServer(async (req, res) => {
       if (await routed(req, res)) return;
       const match = req.url?.match(/^\/mcp\/(\w+)\/([\w-]+)(?:\?([\w=&]*))?$/);
-      if (!match || match[1] !== SECRET) return void res.writeHead(404).end();
+      if (!match || !isSecret(match[1])) return void res.writeHead(404).end();
       // Codex sends no Origin; a browser page always does, so this keeps web pages off the port even if they learn the URL.
       if (req.headers.origin !== undefined) return void res.writeHead(403).end();
       const query = new URLSearchParams(match[3]);
@@ -152,7 +158,7 @@ function listening() {
 async function routed(req: IncomingMessage, res: ServerResponse) {
   const [path] = (req.url ?? '').split('?');
   const parts = path.split('/').filter(Boolean);
-  const isPrivate = parts[0] === 'mcp' && parts[1] === SECRET && parts.length > 3;
+  const isPrivate = parts[0] === 'mcp' && isSecret(parts[1]) && parts.length > 3;
   const [name, ...rest] = isPrivate ? parts.slice(2) : parts;
   const route = routes.get(name);
   if (!route || route.isPublic === isPrivate) return false;

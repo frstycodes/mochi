@@ -13,6 +13,7 @@ import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/gi
 import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 import { runCheck } from '../git/check.ts';
+import { conflictedPaths } from '../git/conflicts.ts';
 import { autoMergeArgs, mergeArgs, prsByWorktree, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
 import { parsePrReview, prReviewQuery, replyThreadArgs, resolveThreadArgs, reviewArgs } from '../../src/git/prReview.ts';
 
@@ -203,7 +204,7 @@ export const git = {
       await runGit(top, ['merge', '--no-edit', base]);
       return { base, conflicts: [] };
     } catch (error) {
-      const conflicts = (await runGit(top, ['diff', '--name-only', '--diff-filter=U'])).split('\n').filter(Boolean);
+      const conflicts = await conflictedPaths(top);
       if (conflicts.length === 0) throw error;
       return { base, conflicts };
     }
