@@ -23,6 +23,11 @@ test('the recordings cover most event types', () => {
   for (const type of ['session', 'info', 'message', 'tool', 'plan', 'subagent', 'task', 'approval', 'usage', 'turn-end']) assert.ok(types.has(type), type);
 });
 
+test('a key set to undefined, as IPC and the mappers send it, reads as absent', () => {
+  const usage = { threadId: 't1', type: 'usage', inputTokens: 0, outputTokens: 0, contextUsed: 1250, contextMax: undefined };
+  assert.deepEqual(decode(usage), { ...usage, v: 1 });
+});
+
 test('an event of an unknown type or a later version is refused', () => {
   assert.throws(() => decode({ threadId: 't', type: 'nope' }));
   assert.throws(() => decode({ v: 2, threadId: 't', type: 'notice', text: 'x' }));

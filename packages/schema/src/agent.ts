@@ -1,9 +1,9 @@
 import { Schema, Tuple } from 'effect';
 import { ArrayOf, event, Id, invoke, JsonObject, Str } from './checks.ts';
-import { AgentImage, AgentInfo, AgentQuestion, BackgroundTaskKind, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, ThreadRef, WebLink, WorktreeSetup } from './model.ts';
+import { AgentImage, AgentInfo, AgentQuestion, BackgroundTaskKind, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Thread, ThreadRef, WebLink, WorktreeSetup } from './model.ts';
 import { versionedUnion } from './version.ts';
 
-const opt = Schema.optionalKey;
+const opt = Schema.optional;
 const S = Schema.String;
 const N = Schema.Number;
 const B = Schema.Boolean;
@@ -115,12 +115,12 @@ export type AccountLimits = typeof AccountLimits.Type;
 
 export const StartWorkspace = Schema.Struct({
   mode: Schema.Literals(['worktree', 'folder']),
-  branch: S,
-  base: opt(S),
+  branch: Str(255),
+  base: opt(Str(255)),
   isExisting: opt(B),
   isNew: opt(B),
-  titlePrompt: opt(S),
-  title: opt(S),
+  titlePrompt: opt(Str(40_000)),
+  title: opt(Str(255)),
 });
 export type StartWorkspace = typeof StartWorkspace.Type;
 
@@ -229,6 +229,7 @@ export const agentRpc = {
   onAskEvent: event(AgentAskEvent),
   review: invoke(T([AgentReviewRequest]), IdOut),
   onReviewEvent: event(AgentReviewEvent),
+  classify: invoke(T([Str(20_000), Thread]), DriftVerdict),
   utility: invoke(T([UtilityTask, Short, Str(40_000)]), Schema.NullOr(S)),
   rewindFiles: invoke(T([Id, Str(100_000)]), Void),
   rewindPoint: invoke(T([Id, Str(100_000)]), Schema.NullOr(S)),
