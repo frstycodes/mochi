@@ -1,4 +1,4 @@
-import type { ListeningPort, RunTarget } from '../host/types/ports.ts';
+import type { ListeningPort, PortsListing, RunTarget } from '../host/types/ports.ts';
 
 // Shared by electron/ipc/ports.ts (main) and its test; pure so `node --test` can run it without Electron.
 
@@ -55,6 +55,17 @@ export function listeningUnder(root: string, listening: { pid: number; port: num
       return { port, pid, command: proc?.command ?? '', startedAt: now - (proc?.seconds ?? 0) * 1000 };
     })
     .sort((a, b) => a.port - b.port);
+}
+
+export interface PortScan {
+  listening: { pid: number; port: number }[];
+  cwds: Map<number, string>;
+  procs: Map<number, { seconds: number; command: string }>;
+}
+
+/** Fans one system-wide scan out to each root; an Error stands for a cwd that was refused. */
+export function portsByRoot(roots: (string | Error)[], { listening, cwds, procs }: PortScan, now = Date.now()): PortsListing[] {
+  return roots.map((root) => (root instanceof Error ? { error: root.message } : { ports: listeningUnder(root, listening, cwds, procs, now) }));
 }
 
 /** First port from `start` that nobody reserved and `isFree` accepts. */

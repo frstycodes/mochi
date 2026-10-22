@@ -205,7 +205,7 @@ function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
       } catch (error) {
         toast.error(`Could not stop pid ${target.pid}`, { description: (error as Error).message });
       }
-      refreshPorts(thread.id, cwd);
+      refreshPorts();
     },
   };
 }
