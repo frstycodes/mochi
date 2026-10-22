@@ -45,3 +45,8 @@ jobs:
           cache: true
       - run: vp run test
       - run: vp run electron:build
+
+      - run: pnpm typecheck
+
+      # Runs src, electron, infra and every packages/* test.
+      - run: pnpm test
