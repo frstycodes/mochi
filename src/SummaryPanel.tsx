@@ -62,7 +62,7 @@ import { showsVerdictCard } from './goals/report';
 import { SummaryCriteria, SummaryGoal, SummaryGoalHeader, SummaryGoalStatus, SummaryGoalText, SummaryNextMove } from './goals/SummaryGoal';
 import { clock } from './progress';
 import { subThreadsOf } from './reorder';
-import { useHarness, useDispatch } from './store';
+import { useDispatch, shallowEqual, useHarnessSelector } from './store';
 import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
@@ -541,8 +541,7 @@ function ChangesBody({
 
 /** The PRs of the thread's sub-threads, after its own: each sub-thread runs its PR (and its Auto-fix); here they read live, named for it. */
 function SubThreadPrs({ parent, onOpen }: { parent: Thread; onOpen: (url: string) => void }) {
-  const { state } = useHarness();
-  return subThreadsOf(state.threads, parent.id)
+  return useHarnessSelector((s) => subThreadsOf(s.threads, parent.id), shallowEqual)
     .filter((sub) => sub.prs.length > 0)
     .map((sub) => <SubThreadPrRows key={sub.id} sub={sub} onOpen={onOpen} />);
 }

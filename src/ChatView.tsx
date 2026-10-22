@@ -110,6 +110,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
   // The composer's own: a message taken back returns there with its mentions and images.
   const restoreDraft = useRef<((message: QueuedMessage) => void) | null>(null);
+  const composerThread = useWithoutStreamedText(thread);
 
   return (
     // The provider holds the message box's text for the whole chat: the next-move card fills it with the agent's draft.
@@ -141,7 +142,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
         {!isReadOnly && (
           <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
             <ImageDropTarget>
-              <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} restoreRef={restoreDraft} />
+              <Composer thread={composerThread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} restoreRef={restoreDraft} />
             </ImageDropTarget>
             <ComposerInbox threadId={thread.id} />
           </div>
@@ -156,6 +157,17 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
  * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
  * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
  */
+/**
+ * `thread`, or the one already shown while only the text of its entries grew (`isStreamedOnly`, no entry added): nothing in the
+ * composer depends on the reply being written, and its subtree is the chat's largest after the transcript.
+ */
+function useWithoutStreamedText(thread: Thread) {
+  const [held, setHeld] = useState(thread);
+  const isSame = held === thread || (isStreamedOnly(held, thread) && held.activity.length === thread.activity.length);
+  if (!isSame) setHeld(thread);
+  return isSame ? held : thread;
+}
+
 function useComposerHeightVar() {
   const ref = useRef<HTMLDivElement>(null);
   const held = useRef(0);
@@ -371,7 +383,8 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
   return null;
 }
 
-function Composer({
+// Memoized: the chat re-renders for every streamed token, and nothing the composer is given changes with it.
+const Composer = memo(function Composer({
   thread,
   slashItems,
   decisions,
@@ -514,7 +527,7 @@ function Composer({
       </motion.div>
     </div>
   );
-}
+});
 
 function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
   const name = authorName(thread.providers[0]);

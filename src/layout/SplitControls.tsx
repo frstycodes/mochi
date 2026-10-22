@@ -17,7 +17,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToggleSlot } from '../SidebarToggle';
 import { DragStrip, TitleBar } from '../TitleBar';
-import { useHarness, useDispatch } from '../store';
+import { useDispatch, useHarnessSelector } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
 import { BoundShortcut } from '../Shortcut';
@@ -26,14 +26,14 @@ import { TargetContextMenu } from '../menus/TargetContextMenu';
 
 /** Per-split actions in a split's header: the layout menu and close. */
 export function SplitControls() {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
   const { leafId, isMulti, isZoomed } = useSplit();
   if (!isMulti) return null;
   const run = (action: Parameters<typeof dispatch>[0]) => {
     dispatch({ type: 'layout-focus', leafId });
     dispatch(action);
   };
-  const view = findLeaf(state.layouts[state.spaceId].root, leafId)?.view;
+  const view = useHarnessSelector((s) => findLeaf(s.layouts[s.spaceId].root, leafId)?.view);
   const tearOff = view?.kind === 'thread' ? () => {
     void host.windows.open(`window/${view.id}`);
     dispatch({ type: 'layout-close', leafId });

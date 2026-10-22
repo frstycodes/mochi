@@ -1,11 +1,10 @@
-import { useRef } from 'react';
 import { toast } from '../toast/store.ts';
 import { gitError } from '../git/useGit.ts';
 import { worktreePath } from '../git/worktrees.ts';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
 import { setPrefs } from '../settings/prefs.ts';
-import { useHarness } from '../store/index.tsx';
+import { useDispatch, useGetState } from '../store/index.tsx';
 import { sendToComposer } from '../browser/composer.tsx';
 import { prunePins, restorePrunedPins } from '../chat/pins.ts';
 import { checkpointPhrase, rewindBlockedReason, type RewindMode } from './checkpoints.ts';
@@ -15,18 +14,17 @@ export type { RewindTarget };
 
 /** Rewind and undo touch the worktree first and the transcript only once the files are back, so the two never disagree. */
 export function useRewindActions() {
-  const { state, dispatch } = useHarness();
-  const latest = useRef(state);
-  latest.current = state;
+  const dispatch = useDispatch();
+  const getState = useGetState();
   const blocked = (threadId: string) => {
-    const thread = latest.current.threads.find((t) => t.id === threadId);
+    const thread = getState().threads.find((t) => t.id === threadId);
     const reason = thread && rewindBlockedReason(thread);
     if (reason) toast.error(reason);
     return !!reason;
   };
 
   const undo = async () => {
-    const saved = latest.current.rewindUndo;
+    const saved = getState().rewindUndo;
     if (!saved || blocked(saved.threadId)) return;
     const cwd = worktreePath(saved.threadId);
     try {
@@ -42,7 +40,7 @@ export function useRewindActions() {
 
   /** Rewinding to one of your messages puts it back in the composer. */
   const rewind = async (thread: Thread, target: RewindTarget, mode: RewindMode) => {
-    const done = await rewindThread(latest.current, dispatch, thread.id, target, mode);
+    const done = await rewindThread(getState(), dispatch, thread.id, target, mode);
     if (!done) return;
     if ('error' in done) return void toast.error(done.error, done.description ? { description: done.description } : undefined);
     setPrefs({ rewindMode: mode });

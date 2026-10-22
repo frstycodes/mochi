@@ -16,7 +16,7 @@ import type { Pane, PaneTab, Thread } from './model';
 import { isTabOnScreen } from './store/panes';
 import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
 import { PANE_TABS, tabTitle } from './pane/tabs';
-import { useHarness, useDispatch } from './store';
+import { useHarness, useDispatch, useHarnessSelector } from './store';
 import { isWorking } from './agentPhase';
 import { isCommand } from './keymap';
 import { PreviewContext } from './layout/SplitContext';
@@ -103,13 +103,12 @@ function useBrowserHousekeeping() {
 }
 
 export function PipLayer({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
   useBrowserHousekeeping();
   const anchorRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
   const previewSize = useSize(layerRef);
   const isPreview = useContext(PreviewContext);
-  const pane = state.panes.find((p) => p.threadId === thread.id);
+  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === thread.id));
   const floating = pane ? floatingTabs(thread, pane) : [];
   const rect = useTrackedRect(anchorRef, floating.length > 0 && !isPreview);
   const bounds = isPreview ? previewSize : { w: Math.max(0, (rect?.width ?? 0) - 2 * LAYER_INSET), h: Math.max(0, (rect?.height ?? 0) - 2 * LAYER_INSET) };

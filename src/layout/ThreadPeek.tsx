@@ -23,11 +23,7 @@ const NESTED_PREVIEW = '[data-nested-preview]';
 const NESTED_PREVIEW_ACTIVE = `${NESTED_PREVIEW}:hover, ${NESTED_PREVIEW}:focus-within`;
 
 /** Hover a thread in the sidebar: its transcript tail and preview without switching to it, plus the watch toggle; pinned ones show their ⌘ digit. */
-export function ThreadPeek({ thread: listed, pinNumber, isDisabled, side = 'right', children }: { thread: Thread; pinNumber?: number; isDisabled: boolean; side?: 'right' | 'top'; children: ReactNode }) {
-  const dispatch = useDispatch();
-  const thread = useThread(listed.id) ?? listed;
-  const isWatched = useHarnessSelector((s) => s.watched.includes(thread.id));
-  const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
+export function ThreadPeek({ thread, pinNumber, isDisabled, side = 'right', children }: { thread: Thread; pinNumber?: number; isDisabled: boolean; side?: 'right' | 'top'; children: ReactNode }) {
   const [isOpen, setOpen] = useState(false);
   // The trigger opens on focus too, and renaming focuses the row's field.
   const isRenaming = useRenameSurface(thread.id) === 'row';
@@ -50,31 +46,44 @@ export function ThreadPeek({ thread: listed, pinNumber, isDisabled, side = 'righ
         {children}
       </HoverCardTrigger>
       <HoverCardContent side={side} align="start" sideOffset={side === 'right' ? 12 : 4} className="flex w-80 flex-col gap-2.5 p-3">
-        <div className="flex items-center gap-2">
-          <ThreadStatusIcon status={thread.status} />
-          <span className="min-w-0 flex-1 truncate type-title">{thread.title}</span>
-          {!!pinNumber && isCommandId(pinnedCommand(pinNumber)) && <BoundShortcut command={pinnedCommand(pinNumber)} />}
-        </div>
-        {/* A preview never drives the live browser view, or the real pane loses it. */}
-        <PreviewContext.Provider value={true}>
-          <PreviewThumb thread={thread} />
-        </PreviewContext.Provider>
-        {tail.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {tail.map((a) => (
-              <li key={a.at + a.text} className="flex gap-2">
-                <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.secondOpinion ? <ProviderMark provider={a.secondOpinion.provider} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.autofix ? <MagicStar aria-hidden className="size-4 text-muted-foreground" /> : a.who === 'you' && 'You'}</span>
-                <p className={cn('line-clamp-2 type-meta', a.who === 'you' ? 'text-foreground' : 'text-muted-foreground')}>{a.text}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-        <Button variant="secondary" size="sm" aria-pressed={isWatched} onClick={() => dispatch({ type: 'watch-toggle', threadId: thread.id })} className="self-start">
-          {isWatched ? <EyeOff /> : <Eye />}
-          {isWatched ? 'Stop watching' : 'Watch for needs you and done'}
-        </Button>
+        <PeekCard listed={thread} pinNumber={pinNumber} />
       </HoverCardContent>
     </HoverCard>
+  );
+}
+
+/** The open peek: reads the thread itself, since a listed thread is stale in its transcript (`isSameListing`). */
+function PeekCard({ listed, pinNumber }: { listed: Thread; pinNumber?: number }) {
+  const dispatch = useDispatch();
+  const thread = useThread(listed.id) ?? listed;
+  const isWatched = useHarnessSelector((s) => s.watched.includes(thread.id));
+  const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <ThreadStatusIcon status={thread.status} />
+        <span className="min-w-0 flex-1 truncate type-title">{thread.title}</span>
+        {!!pinNumber && isCommandId(pinnedCommand(pinNumber)) && <BoundShortcut command={pinnedCommand(pinNumber)} />}
+      </div>
+      {/* A preview never drives the live browser view, or the real pane loses it. */}
+      <PreviewContext.Provider value={true}>
+        <PreviewThumb thread={thread} />
+      </PreviewContext.Provider>
+      {tail.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {tail.map((a) => (
+            <li key={a.at + a.text} className="flex gap-2">
+              <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.secondOpinion ? <ProviderMark provider={a.secondOpinion.provider} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.autofix ? <MagicStar aria-hidden className="size-4 text-muted-foreground" /> : a.who === 'you' && 'You'}</span>
+              <p className={cn('line-clamp-2 type-meta', a.who === 'you' ? 'text-foreground' : 'text-muted-foreground')}>{a.text}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Button variant="secondary" size="sm" aria-pressed={isWatched} onClick={() => dispatch({ type: 'watch-toggle', threadId: thread.id })} className="self-start">
+        {isWatched ? <EyeOff /> : <Eye />}
+        {isWatched ? 'Stop watching' : 'Watch for needs you and done'}
+      </Button>
+    </>
   );
 }
 

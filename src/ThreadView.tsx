@@ -192,6 +192,7 @@ function useSummaryState(isPaneOpen: boolean, isWide: boolean) {
 
 /** The summary column grows from the right edge while the card itself rises out of the header toggle above it. */
 function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
+  const shown = useHeldWhileClosed(thread, isOpen);
   return (
     // Above the header's blur edge, which is for the scrolling chat only; the header's own controls stay clickable past it.
     <div className="pointer-events-none relative z-30 min-w-0 overflow-hidden pt-(--chat-top)" inert={!isOpen || undefined}>
@@ -202,13 +203,14 @@ function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: b
           animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
         )}
       >
-        <SummaryPanel thread={thread} className="h-full" />
+        <SummaryPanel thread={shown} className="h-full" />
       </div>
     </div>
   );
 }
 
 function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
+  const shown = useHeldWhileClosed(thread, isOpen);
   return (
     <div
       inert={!isOpen || undefined}
@@ -219,9 +221,16 @@ function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen:
       )}
     >
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
-      <SummaryPanel thread={thread} isFloating className={cn('max-h-full', isOpen && 'pointer-events-auto')} />
+      <SummaryPanel thread={shown} isFloating className={cn('max-h-full', isOpen && 'pointer-events-auto')} />
     </div>
   );
+}
+
+/** Both summaries stay mounted so they can fade; the closed one keeps the thread as it was, so a streaming agent doesn't re-render it. */
+function useHeldWhileClosed(thread: Thread, isOpen: boolean) {
+  const [held, setHeld] = useState(thread);
+  if (isOpen && held !== thread) setHeld(thread);
+  return isOpen ? thread : held;
 }
 
 function ThreadHeader({

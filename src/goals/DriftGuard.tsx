@@ -11,14 +11,15 @@ import { isMod, isNav } from '../keys';
 import { goalProgress } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { Shortcut } from '../Shortcut';
-import { snapshot, useHarness } from '../store';
+import { snapshot, useDispatch, useGetState } from '../store';
 import { openGoalEditor } from './GoalEditor';
 
 type BranchFrom = 'current' | 'base';
 
 /** Every message goes out at once; a confident off-goal verdict, usually arriving late from the model, then suggests moving it to a new thread. `onSent` runs once a message goes. */
 export function useDriftGuard(thread: Thread, onSent?: () => void) {
-  const { state, dispatch } = useHarness();
+  const dispatch = useDispatch();
+  const getState = useGetState();
   const pending = useDriftPending(thread.id);
   const setPending = (next: null) => setDriftPending(thread.id, next);
   const [branchFrom, setBranchFrom] = useRememberedBranchFrom();
@@ -27,7 +28,9 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
 
   /** Always sends: the suggestion never holds a message back. */
   const submit = (message: QueuedMessage, extra?: Parameters<typeof sendMessage>[4]) => {
-    sendMessage(dispatch, state, thread, message, extra);
+    // The newest thread: the composer may hold one a few streamed tokens old (`useWithoutStreamedText`).
+    const state = getState();
+    sendMessage(dispatch, state, state.threads.find((t) => t.id === thread.id) ?? thread, message, extra);
     onSent?.();
   };
 
@@ -52,7 +55,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
 
   const newThread = () => {
     if (!pending) return;
-    const before = snapshot(state);
+    const before = snapshot(getState());
     const isGoalDone = isDone(thread);
     // GAP: undo restores the store, but the interrupted turn stays interrupted.
     if (thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
