@@ -1,0 +1,267 @@
+{
+ "_source": "DEFAULT_PREFS (src/settings/prefs.ts), DEFAULT_SPACES and FIRST_PROFILE (src/model.ts, src/profiles.ts), theme and pin shapes from src/themes/groups.test.ts and src/chat/pins.ts; no user data",
+ "prefs": {
+  "v": 1,
+  "reduceMotion": "system",
+  "animations": [],
+  "lightTheme": "mochi",
+  "darkTheme": "mochi",
+  "projectsFolder": "~/dev",
+  "restoreLayout": true,
+  "goals": false,
+  "idleChecks": "edited",
+  "proposedGoals": "ask",
+  "idleAlerts": [
+   "gaps",
+   "needs-you",
+   "stalled"
+  ],
+  "alertKinds": [
+   "needs-you",
+   "done",
+   "failed",
+   "limit",
+   "ci",
+   "pr-review",
+   "run"
+  ],
+  "watchedToasts": true,
+  "dockBadge": true,
+  "starredModels": [
+   "claude-opus-5-5",
+   "claude-sonnet-5-5"
+  ],
+  "starredThemes": [],
+  "effort": "high",
+  "speed": "",
+  "agent": "claude",
+  "permissions": "Auto",
+  "headerPins": [
+   "browser",
+   "terminal"
+  ],
+  "sidebarItems": [
+   "queue",
+   "board",
+   "projects",
+   "usage"
+  ],
+  "driftGuard": true,
+  "whileWorking": "steer",
+  "promptSuggestions": true,
+  "simplifyLength": "short",
+  "simplifyNeedsFirst": true,
+  "simplifyRules": "",
+  "simplifyAuto": false,
+  "simplifyAutoWords": 150,
+  "branchFrom": "current",
+  "branchPrefix": "mochi/",
+  "autofixPrs": true,
+  "autoArchivePrs": false,
+  "workspaceMode": "worktree",
+  "diffStyle": "unified",
+  "worktreeCleanup": "7",
+  "terminalFontSize": 12,
+  "terminalScrollback": 5000,
+  "restoreTerminals": true,
+  "searchEngine": "duckduckgo",
+  "simulator": "",
+  "demoData": false,
+  "agentControl": "everything",
+  "toolPolicies": {
+   "delete_thread": "ask"
+  },
+  "recordReplays": true,
+  "rewindMode": "files",
+  "keybindings": {
+   "palette.open": "Mod+K"
+  }
+ },
+ "legacyPrefs": {
+  "in": {
+   "agent": "codex",
+   "branchPrefix": "",
+   "goals": true,
+   "permissions": "Ask first",
+   "terminalFontSize": "13",
+   "keybindings": {
+    "a": 1
+   },
+   "speed": "turbo",
+   "starredThemes": [
+    "ext:catppuccin.catppuccin-vsc:Mocha"
+   ],
+   "headerPins": [
+    "browser",
+    "nope"
+   ]
+  },
+  "out": {
+   "v": 1,
+   "agent": "codex",
+   "permissions": "Manual",
+   "starredThemes": [
+    "ext:catppuccin.catppuccin-vsc:Mocha"
+   ]
+  }
+ },
+ "profiles": [
+  {
+   "v": 1,
+   "id": "latitude",
+   "name": "Latitude",
+   "icon": "work",
+   "plans": {
+    "claude": "Team",
+    "codex": "Business"
+   },
+   "github": ""
+  },
+  {
+   "v": 1,
+   "id": "personal",
+   "name": "Personal",
+   "icon": "home",
+   "plans": {
+    "claude": "Max",
+    "codex": "Plus"
+   },
+   "github": ""
+  },
+  {
+   "v": 1,
+   "id": "liane",
+   "name": "Liane",
+   "icon": "layers",
+   "plans": {
+    "claude": "Max",
+    "codex": "Plus"
+   },
+   "github": ""
+  },
+  {
+   "v": 1,
+   "id": "personal-2",
+   "name": "Personal",
+   "icon": "home",
+   "plans": {
+    "claude": "",
+    "codex": ""
+   },
+   "github": "",
+   "nativeOff": [
+    "claude:mcp:github"
+   ],
+   "nativeNew": {
+    "codex": "off"
+   }
+  }
+ ],
+ "legacyProfiles": [
+  {
+   "id": "personal",
+   "name": "Personal",
+   "icon": "home",
+   "plans": {
+    "claude": "",
+    "codex": ""
+   },
+   "github": ""
+  }
+ ],
+ "pins": {
+  "t1": [
+   {
+    "v": 1,
+    "id": "0:1729600000000",
+    "index": 0,
+    "text": ""
+   },
+   {
+    "v": 1,
+    "id": "3:1729600001000",
+    "index": 3,
+    "text": "the cache must expire"
+   }
+  ]
+ },
+ "legacyPins": {
+  "t1": [
+   {
+    "id": "2:1729600000000",
+    "index": 2,
+    "text": ""
+   }
+  ]
+ },
+ "themes": {
+  "v": 1,
+  "installed": [
+   {
+    "id": "ext:catppuccin.catppuccin-vsc:Mocha",
+    "label": "Mocha",
+    "kind": "dark",
+    "source": {
+     "kind": "marketplace",
+     "namespace": "catppuccin",
+     "name": "catppuccin-vsc",
+     "version": "1.0.0",
+     "displayName": "Catppuccin",
+     "publisher": "catppuccin"
+    },
+    "theme": {
+     "colors": {
+      "editor.background": "#1e1e2e"
+     },
+     "tokenColors": [
+      {
+       "scope": [
+        "comment"
+       ],
+       "settings": {
+        "foreground": "#6c7086",
+        "fontStyle": "italic"
+       }
+      }
+     ]
+    }
+   }
+  ],
+  "custom": {
+   "mine.json": "{\"name\":\"Mine\",\"colors\":{}}"
+  }
+ },
+ "projectRegistry": {
+  "version": 1,
+  "spaces": {
+   "personal": {
+    "isMigrated": true,
+    "projects": [
+     {
+      "v": 1,
+      "id": "7f6c2a9e-1d2b-4c3a-9e8f-0a1b2c3d4e5f",
+      "name": "mochi",
+      "path": "/Users/me/dev/mochi",
+      "origin": "github.com/frstycodes/mochi",
+      "addedAt": 1729600000000,
+      "iconMode": "auto"
+     },
+     {
+      "v": 1,
+      "id": "0b1c2d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e",
+      "name": "notes",
+      "path": "/Users/me/notes",
+      "origin": null,
+      "addedAt": 1729500000000
+     }
+    ]
+   }
+  }
+ },
+ "legacyProjectRecents": {
+  "personal": [
+   "/Users/me/dev/mochi",
+   "/Users/me/notes"
+  ]
+ }
+}
