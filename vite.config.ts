@@ -5,6 +5,7 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import electron from 'vite-plugin-electron/simple';
+import { csp } from './scripts/csp.ts';
 
 export default defineConfig(({ mode }) => ({
   fmt: { singleQuote: true, printWidth: 160 },
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => ({
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
     viteSingleFile(),
+    mode === 'electron' && csp(),
     mode === 'electron' &&
       electron({
         // node-pty is a native addon: bundling it breaks its `.node` and spawn-helper lookups.

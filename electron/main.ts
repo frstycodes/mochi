@@ -11,6 +11,7 @@ import { startScheduler } from './schedule/scheduler.ts';
 import { startTray } from './tray.ts';
 import { appIconImage, startAppIcon } from './appIcon.ts';
 import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
+import { serveFrames } from './frameProtocol.ts';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
@@ -19,6 +20,7 @@ setImageDir(path.join(app.getPath('userData'), 'images'));
 const hasTray = process.platform !== 'darwin';
 // One Mochi per profile on Windows and Linux: a second launch opens a window in the running one (`startTray`).
 if (hasTray && !app.requestSingleInstanceLock()) app.exit();
+serveFrames();
 
 app.whenReady().then(() => {
   startAppIcon();

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useDispatch } from '../store';
 import { readWidgetMessage } from './fence';
+import { useFrameDocument } from './frameDocument';
 
 /**
  * Agent-written SVG or HTML in an opaque-origin iframe: scripts run, but with no access to the app, its storage,
@@ -13,7 +14,7 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
   const dispatch = useDispatch();
   const scheme = useColorScheme();
   const [height, setHeight] = useState(INITIAL_HEIGHT);
-  const [srcDoc] = useState(() => widgetDocument(source, id, scheme));
+  const [html] = useState(() => widgetDocument(source, id, scheme));
 
   // The theme goes out on load too, and the widget answers it with its size: sizes posted before this component's listener attached are lost.
   const postTheme = () => frame.current?.contentWindow?.postMessage({ type: 'harness-theme', vars: themeVars(), scheme }, '*');
@@ -38,8 +39,7 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
       ref={frame}
       title={title}
       sandbox="allow-scripts"
-      srcDoc={srcDoc}
-      onLoad={postTheme}
+      {...useFrameDocument(frame, 'widget', html, postTheme)}
       className="block w-full border-0 bg-transparent"
       style={{ height, colorScheme: scheme }}
     />
