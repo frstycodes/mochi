@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { z } from 'zod';
+import { Option, Schema, SchemaTransformation } from 'effect';
 import type { CatalogPlugin, MarketplaceCatalog } from '../../src/library/library.ts';
 import { parsePluginBundle } from '../../src/library/pluginBundle.ts';
 import { isInternalSkill, parseSkillMd } from '../../src/library/skillMd.ts';
@@ -59,9 +59,9 @@ async function loadMarketplaceFile(source: string) {
   for (const { url, format } of marketplaceUrls(source, target)) {
     const response = await fetch(url, { headers: GITHUB_HEADERS });
     if (!response.ok) continue;
-    const parsed = marketplaceSchema.safeParse(await response.json().catch(() => null));
-    if (!parsed.success) throw new CatalogError(`${source} has a marketplace.json Mochi can't read`);
-    return { file: parsed.data, format, target };
+    const file = Schema.decodeUnknownOption(marketplaceSchema)(await response.json().catch(() => null));
+    if (Option.isNone(file)) throw new CatalogError(`${source} has a marketplace.json Mochi can't read`);
+    return { file: file.value, format, target };
   }
   throw new CatalogError(`No marketplace.json found in ${source}`);
 }
@@ -114,58 +114,60 @@ function marketplaceUrls(source: string, target: GitHubTarget | null) {
   return MARKETPLACE_FILES.map(({ path, format }) => ({ url: rawUrl(target, path), format }));
 }
 
-const personSchema = z.union([z.string(), z.object({ name: z.string() }).transform((person) => person.name)]);
+// A person is a name, or an object with one; either reads as the name.
+const personSchema = Schema.Union([
+  Schema.String,
+  Schema.Struct({ name: Schema.String }).pipe(Schema.decodeTo(Schema.String, SchemaTransformation.transform({ decode: (person) => person.name, encode: (name) => ({ name }) }))),
+]);
 
 // `source` is a path inside the marketplace repo, or an object naming another repo (github / url / git-subdir / local).
-const pluginSourceSchema = z.union([
-  z.string(),
-  z.object({
-    source: z.string(),
-    repo: z.string().optional(),
-    url: z.string().optional(),
-    path: z.string().optional(),
-    ref: z.string().optional(),
-    sha: z.string().optional(),
+const pluginSourceSchema = Schema.Union([
+  Schema.String,
+  Schema.Struct({
+    source: Schema.String,
+    repo: Schema.optionalKey(Schema.String),
+    url: Schema.optionalKey(Schema.String),
+    path: Schema.optionalKey(Schema.String),
+    ref: Schema.optionalKey(Schema.String),
+    sha: Schema.optionalKey(Schema.String),
   }),
 ]);
 
-const marketplaceSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  owner: personSchema.optional(),
-  metadata: z.object({ description: z.string().optional(), pluginRoot: z.string().optional() }).optional(),
-  interface: z.object({ displayName: z.string().optional() }).optional(),
-  plugins: z.array(
-    z.object({
-      name: z.string(),
-      source: pluginSourceSchema.optional(),
-      displayName: z.string().optional(),
-      description: z.string().optional(),
-      category: z.string().optional(),
-      author: personSchema.optional(),
-      version: z.string().optional(),
-      homepage: z.string().optional(),
+const marketplaceSchema = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  owner: Schema.optionalKey(personSchema),
+  metadata: Schema.optionalKey(Schema.Struct({ description: Schema.optionalKey(Schema.String), pluginRoot: Schema.optionalKey(Schema.String) })),
+  interface: Schema.optionalKey(Schema.Struct({ displayName: Schema.optionalKey(Schema.String) })),
+  plugins: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      source: Schema.optionalKey(pluginSourceSchema),
+      displayName: Schema.optionalKey(Schema.String),
+      description: Schema.optionalKey(Schema.String),
+      category: Schema.optionalKey(Schema.String),
+      author: Schema.optionalKey(personSchema),
+      version: Schema.optionalKey(Schema.String),
+      homepage: Schema.optionalKey(Schema.String),
     }),
   ),
 });
 
-type MarketplaceFile = z.infer<typeof marketplaceSchema>;
+type MarketplaceFile = typeof marketplaceSchema.Type;
 type MarketplacePlugin = MarketplaceFile['plugins'][number];
 
 // Codex keeps a plugin's display name, blurb and logo in its own .codex-plugin/plugin.json.
-const codexManifestSchema = z.object({
-  interface: z
-    .object({
-      displayName: z.string().optional(),
-      shortDescription: z.string().optional(),
-      developerName: z.string().optional(),
-      logo: z.string().optional(),
-      composerIcon: z.string().optional(),
-    })
-    .optional(),
+const codexManifestSchema = Schema.Struct({
+  interface: Schema.optionalKey(Schema.Struct({
+      displayName: Schema.optionalKey(Schema.String),
+      shortDescription: Schema.optionalKey(Schema.String),
+      developerName: Schema.optionalKey(Schema.String),
+      logo: Schema.optionalKey(Schema.String),
+      composerIcon: Schema.optionalKey(Schema.String),
+    })),
 });
 
-type CodexManifest = { dir: string; manifest: z.infer<typeof codexManifestSchema> };
+type CodexManifest = { dir: string; manifest: typeof codexManifestSchema.Type };
 
 function toCatalog(marketplace: MarketplaceFile, format: MarketplaceCatalog['format'], target: GitHubTarget | null, manifests: Map<string, CodexManifest>) {
   return {
@@ -206,7 +208,7 @@ function claudePluginIcon(plugin: MarketplacePlugin, marketplace: MarketplaceFil
   return null;
 }
 
-async function fetchCodexManifests(target: GitHubTarget, plugins: MarketplacePlugin[]) {
+async function fetchCodexManifests(target: GitHubTarget, plugins: readonly MarketplacePlugin[]) {
   const dirs = new Map<string, string>();
   for (const plugin of plugins) {
     const path = typeof plugin.source === 'string' ? plugin.source : plugin.source?.source === 'local' ? plugin.source.path : undefined;
@@ -216,8 +218,8 @@ async function fetchCodexManifests(target: GitHubTarget, plugins: MarketplacePlu
   const { files } = await fetchRepoTextFiles(target, (path) => wanted.has(path));
   const manifests = new Map<string, CodexManifest>();
   for (const [dir, name] of dirs) {
-    const parsed = codexManifestSchema.safeParse(parseJson(files.get(joinPath(dir, '.codex-plugin/plugin.json'))));
-    if (parsed.success) manifests.set(name, { dir, manifest: parsed.data });
+    const manifest = Schema.decodeUnknownOption(codexManifestSchema)(parseJson(files.get(joinPath(dir, '.codex-plugin/plugin.json'))));
+    if (Option.isSome(manifest)) manifests.set(name, { dir, manifest: manifest.value });
   }
   return manifests;
 }
