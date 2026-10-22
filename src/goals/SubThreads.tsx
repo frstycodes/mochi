@@ -79,8 +79,8 @@ export function SubThreadGuide({ isLast, className }: { isLast: boolean; classNa
     <span aria-hidden className={cn('pointer-events-none absolute inset-y-0 left-0', className)}>
       {/* Stops where the curve starts on the last row; elsewhere runs 2px on to meet the next row's trunk across the list's gap. */}
       <span className={cn('absolute top-0 left-0 border-l', GUIDE, isLast ? 'h-2.5' : '-bottom-0.5')} />
-      {/* Lands at 16px, mid first line (6px padding + half of 20px). */}
-      <span className={cn('absolute top-2.5 left-0 h-1.5 w-2.5 rounded-bl-[6px] border-b border-l', GUIDE)} />
+      {/* Only the last row joins the line; lands at 16px, mid first line (6px padding + half of 20px). */}
+      {isLast && <span className={cn('absolute top-2.5 left-0 h-1.5 w-2.5 rounded-bl-[6px] border-b border-l', GUIDE)} />}
     </span>
   );
 }
