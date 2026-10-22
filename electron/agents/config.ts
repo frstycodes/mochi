@@ -8,7 +8,7 @@ import type { Provider } from '../../src/model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/settings/accounts.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
 import { fallbackShell } from '../platform.ts';
-import { userPath } from '../shellPath.ts';
+import { userPath } from '@mochi/core/shellPath';
 
 export { userPath };
 

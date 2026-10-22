@@ -23,3 +23,4 @@ const bridge = Object.fromEntries(
 );
 
 contextBridge.exposeInMainWorld('harnessHost', bridge);
+ipcRenderer.on('core:port', (event) => window.postMessage('core:port', '*', event.ports));

@@ -9,7 +9,7 @@ import { baseRef, localName } from '../git/branches.ts';
 import { mainRepo, runGit, topLevel } from '../git/run.ts';
 import { isFree, listeningPorts, runTargets } from '../ipc/ports.ts';
 import { killTree, spawnShell } from '../platform.ts';
-import { userPath } from '../shellPath.ts';
+import { userPath } from '@mochi/core/shellPath';
 
 interface Session {
   dir: string;

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 
-// No `electron` import: git/run.ts uses this too, and its tests run under plain node.
+// No `electron` import: Core and electron/git/run.ts use this, and their tests run under plain node.
 
 let pathLookup: Promise<string> | undefined;
 
