@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { MultiFileDiff } from '@pierre/diffs/react';
-import { useDiffTheme } from '../themes/highlight';
+import { MultiFileDiff } from './Diffs';
 import { AlertTriangle, Code, File, Share, Eye } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -120,13 +119,12 @@ function ConflictBar({ file, isComparing, onCompare }: { file: OpenFile; isCompa
 }
 
 function ConflictDiff({ path, disk, mine }: { path: string; disk: string; mine: string }) {
-  const diffTheme = useDiffTheme();
   return (
     <MultiFileDiff
       oldFile={{ name: path, contents: disk }}
       newFile={{ name: path, contents: mine }}
       disableWorkerPool
-      options={{ diffStyle: 'unified', disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
+      options={{ diffStyle: 'unified', disableFileHeader: true, overflow: 'scroll' }}
       style={{ '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties}
       className="h-full overflow-auto"
     />

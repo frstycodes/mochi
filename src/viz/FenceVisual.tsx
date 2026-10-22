@@ -1,8 +1,8 @@
+import { lazy, Suspense } from 'react';
 import { defaultRehypePlugins, type Components, type CustomRendererProps, type PluginConfig, type StreamdownProps } from 'streamdown';
 import { WarningAlt } from '@/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHarness } from '../store';
-import { ChartVisual } from './ChartVisual';
 import { CodeFrame } from './CodeFrame';
 import { withThemeVars } from './exportVisual';
 import { metaTitle, parseFence, VIZ_LANGUAGES, type VizLanguage, type VizSpecs } from './fence';
@@ -15,6 +15,8 @@ import { WidgetVisual } from './WidgetVisual';
 import { FileCode } from '../files/FileCode';
 import { ChatLink } from '../chat/ChatLink';
 import { rehypeRefs, rehypeRelativeLinks } from '../chat/rehypeRefs';
+
+const ChartVisual = lazy(() => import('./ChartVisual').then((m) => ({ default: m.ChartVisual })));
 
 /** Streamdown hooks for chat messages: fenced visuals plus code block, table, image, file-path and PR/issue link overrides. Widgets need a VizThreadProvider above. */
 export const VIZ_PLUGINS = { renderers: [{ language: [...VIZ_LANGUAGES], component: FenceVisual }] } satisfies PluginConfig;
@@ -40,14 +42,36 @@ function FenceVisual({ code, isIncomplete, language, meta }: CustomRendererProps
 }
 
 /** One fenced visual from its source: a placeholder while it streams, the source on error. The side pane's visual tabs render it again. */
-export function VisualContent({ language, code, isIncomplete = false, title }: { language: VizLanguage; code: string; isIncomplete?: boolean; title?: string }) {
+export function VisualContent({
+  language,
+  code,
+  isIncomplete = false,
+  title,
+}: {
+  language: VizLanguage;
+  code: string;
+  isIncomplete?: boolean;
+  title?: string;
+}) {
   const fence = parseFence(language, code, isIncomplete);
   if (fence.status === 'pending') return <PendingVisual language={language} />;
   if (fence.status === 'error') return <BrokenVisual language={language} code={code} message={fence.message} />;
   return <ReadyVisual language={language} spec={fence.spec} source={SOURCES[language](code)} code={code} title={title} />;
 }
 
-function ReadyVisual({ language, spec, source, code, title }: { language: VizLanguage; spec: VizSpecs[VizLanguage]; source: VisualSource; code: string; title?: string }) {
+function ReadyVisual({
+  language,
+  spec,
+  source,
+  code,
+  title,
+}: {
+  language: VizLanguage;
+  spec: VizSpecs[VizLanguage];
+  source: VisualSource;
+  code: string;
+  title?: string;
+}) {
   const { state } = useHarness();
   const threadOf = (id: string) => state.threads.find((t) => t.id === id);
 
@@ -56,7 +80,9 @@ function ReadyVisual({ language, spec, source, code, title }: { language: VizLan
       const chart = spec as VizSpecs['chart'];
       return (
         <VisualFrame fence={{ language, code }} title={title ?? chart.title ?? `${capitalize(chart.type)} chart`} source={source}>
-          <ChartVisual spec={chart} />
+          <Suspense fallback={<Skeleton className="h-40" />}>
+            <ChartVisual spec={chart} />
+          </Suspense>
         </VisualFrame>
       );
     }

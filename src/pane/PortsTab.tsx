@@ -15,7 +15,6 @@ import { useDispatch } from '../store';
 import { nextTabId } from '../store/panes';
 import { portUrl } from '../terminal/devServer';
 import { refreshPorts, usePorts } from '../terminal/ports';
-import { addShell } from '../terminal/sessions';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { TooltipIconButton } from '../ui';
 import { PlannedTab } from './PlannedTab';
@@ -186,7 +185,8 @@ function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
     targets,
     threadPort,
     /** Runs in the thread's terminal tab, opening one if there is none. */
-    run(target: RunTarget) {
+    async run(target: RunTarget) {
+      const { addShell } = await import('../terminal/sessions');
       const terminal = pane.tabs.find((t) => t.kind === 'terminal' && !t.isPopped);
       const tabId = terminal?.id ?? nextTabId(pane.tabs);
       addShell(`${thread.id}/${tabId}`, { cwd, threadId: thread.id, links: openers }, { title: target.name, command: target.command });
