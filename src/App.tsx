@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
+import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/toast/Toaster';
 import { useResolvedQueueToasts } from './QueueToast';
@@ -54,30 +56,35 @@ export function App() {
       <ColorThemeController />
       <ReducedMotion>
         <TooltipProvider delayDuration={400}>
-          {embeddedReplay ? (
-            <ReplayPage payload={embeddedReplay} />
-          ) : route === 'design' ? (
-            <DesignPage />
-          ) : route.startsWith('/window/') ? (
-            <TornWindow threadId={route.slice('/window/'.length)} />
-          ) : (
-            <HarnessProvider>
-              <MachinesProvider>
-                <ReviewModeProvider>
-                  <Shell />
-                </ReviewModeProvider>
-              </MachinesProvider>
-              <Orbit />
-              <PhotoViewer />
-              <FileViewer />
-              <ScheduleLayer />
-              <RenameLayer />
-              <GoalEditorLayer />
-              <DeviceApprovalLayer />
-              <Toaster />
-              <AppZoomChip />
-            </HarnessProvider>
-          )}
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[route]}>
+            {embeddedReplay ? (
+              <ReplayPage payload={embeddedReplay} />
+            ) : route === 'design' ? (
+              <DesignPage />
+            ) : route.startsWith('/window/') ? (
+              <TornWindow threadId={route.slice('/window/'.length)} />
+            ) : (
+              <HarnessProvider>
+                <MachinesProvider>
+                  <ReviewModeProvider>
+                    {/* Inside the store's provider: a crash in the shell (the sidebar) keeps the store and its running agents. */}
+                    <ErrorBoundary FallbackComponent={ErrorFallback}>
+                      <Shell />
+                    </ErrorBoundary>
+                  </ReviewModeProvider>
+                </MachinesProvider>
+                <Orbit />
+                <PhotoViewer />
+                <FileViewer />
+                <ScheduleLayer />
+                <RenameLayer />
+                <GoalEditorLayer />
+                <DeviceApprovalLayer />
+                <Toaster />
+                <AppZoomChip />
+              </HarnessProvider>
+            )}
+          </ErrorBoundary>
         </TooltipProvider>
       </ReducedMotion>
     </ThemeProvider>
@@ -133,7 +140,19 @@ function Shell() {
       {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
       <SidebarInset className="isolate order-last min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[isSettingsOpen, isReplayOpen, isRemoteOpen, review.isOpen]}>
+            {isSettingsOpen ? (
+              <SettingsPage />
+            ) : isReplayOpen ? (
+              <ReplayView />
+            ) : isRemoteOpen ? (
+              <RemoteThreadView />
+            ) : review.isOpen ? (
+              <ReviewView />
+            ) : (
+              <PinnedPager />
+            )}
+          </ErrorBoundary>
         </div>
       </SidebarInset>
       {/* After the page in the DOM, back on the left through `order-last` above: Electron applies app-region in document order, so the page's drag headers would otherwise swallow the sidebar's toggle. */}
