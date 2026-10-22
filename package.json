@@ -92,6 +92,7 @@
   "devDependencies": {
     "@babel/core": "^8.0.7",
     "@lobehub/icons-static-svg": "^1.95.1",
+    "@playwright/test": "1.60.0",
     "@rolldown/plugin-babel": "^0.2.4",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.5",
