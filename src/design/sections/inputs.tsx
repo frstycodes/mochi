@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ArrowUp, Search } from '@/icons';
+import { ArrowUp, ChevronDown, Search } from '@/icons';
+import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DirectionProvider } from '@/components/ui/direction';
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet, FieldTitle } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -11,11 +12,13 @@ import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/comp
 import { Kbd } from '@/components/ui/kbd';
 import { Label } from '@/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import { ProviderMark } from '../../ui';
 import { Block, Grid, Section } from '../layout';
 import { StateMatrix, previewState } from '../state-matrix';
@@ -82,21 +85,7 @@ export function InputsSection() {
             <NativeSelectOption value="codex">Codex</NativeSelectOption>
           </NativeSelect>
         </Block>
-        <Block title="Combobox" use="Pick from a long, searchable list: projects, branches, skills.">
-          <Combobox items={PROJECTS}>
-            <ComboboxInput placeholder="Pick a project" aria-label="Project" />
-            <ComboboxContent>
-              <ComboboxEmpty>No project matches.</ComboboxEmpty>
-              <ComboboxList>
-                {(item: string) => (
-                  <ComboboxItem key={item} value={item}>
-                    {item}
-                  </ComboboxItem>
-                )}
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
-        </Block>
+        <ComboboxBlock />
         <ChecksBlock />
         <RadioBlock />
         <SwitchBlock />
@@ -164,6 +153,40 @@ function SelectBlock() {
           </Select>
         )}
       />
+    </Block>
+  );
+}
+
+function ComboboxBlock() {
+  const [isOpen, setOpen] = useState(false);
+  const [project, setProject] = useState<string | null>(null);
+  const choose = (value: string) => {
+    setProject(value);
+    setOpen(false);
+  };
+  return (
+    <Block title="Combobox" use="Pick from a long, searchable list: projects, branches, skills. A Popover around a Command.">
+      <Popover open={isOpen} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" aria-label="Project" className="w-56 justify-start">
+            <span className={cn('min-w-0 flex-1 truncate text-left', !project && 'text-muted-foreground')}>{project ?? 'Pick a project'}</span>
+            <ChevronDown data-icon="inline-end" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-56 p-0">
+          <Command defaultValue={project ?? undefined}>
+            <CommandInput placeholder="Search projects" />
+            <CommandList>
+              <CommandEmpty>No project matches.</CommandEmpty>
+              {PROJECTS.map((p) => (
+                <CommandItem key={p} value={p} data-checked={p === project} onSelect={choose}>
+                  {p}
+                </CommandItem>
+              ))}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </Block>
   );
 }
