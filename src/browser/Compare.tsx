@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 import { toast } from '@/toast/store';
 import { Danger, X } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -111,7 +112,6 @@ function SliderCompare({ thread, pageId, page, base, branch }: { thread: Thread;
   const [shots, setShots] = useState<{ base: string; head: string } | null>(null);
   const [split, setSplit] = useState(50);
   const [width, setWidth] = useState<number>();
-  const boxRef = useRef<HTMLDivElement>(null);
   const isReady = !!page.hostId && !!basePage.hostId && !basePage.isLoading && !page.isLoading;
 
   useEffect(() => {
@@ -122,47 +122,26 @@ function SliderCompare({ thread, pageId, page, base, branch }: { thread: Thread;
     );
   }, [isReady, shots, basePage.hostId, page.hostId]);
 
-  const dragTo = (e: PointerEvent) => {
-    const r = boxRef.current!.getBoundingClientRect();
-    setSplit(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)));
-  };
-  const onKeyDown = (e: KeyboardEvent) => {
-    const step = e.shiftKey ? 10 : 2;
-    if (e.key === 'ArrowLeft') setSplit((s) => Math.max(0, s - step));
-    if (e.key === 'ArrowRight') setSplit((s) => Math.min(100, s + step));
-  };
-
   if (!shots) return <CompareStarting label="Capturing both pages…" />;
   // Shown at the CSS width the pages were laid out at, so the captures stay sharp and line up with the layout you saw.
   return (
     <div className="relative mx-auto h-full" style={{ maxWidth: width }}>
       <div className="h-full overflow-auto" style={{ scrollbarWidth: 'none' }}>
-        <div ref={boxRef} className="relative">
+        <div className="relative">
           <img src={shots.head} alt={`${branch} page`} draggable={false} onLoad={(e) => setWidth(e.currentTarget.naturalWidth / devicePixelRatio)} className="block w-full select-none" />
           <img src={shots.base} alt={`${base.branch} page`} draggable={false} className="absolute inset-x-0 top-0 block w-full select-none" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }} />
         </div>
       </div>
       {/* Outside the scroller so the handle stays in view while the captures scroll under it. */}
-      <div
-        role="slider"
-        tabIndex={0}
-        aria-label="Base / thread split"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(split)}
-        onKeyDown={onKeyDown}
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          dragTo(e);
-        }}
-        onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && dragTo(e)}
-        className="group absolute inset-y-0 w-6 -translate-x-1/2 cursor-ew-resize touch-none outline-none"
-        style={{ left: `${split}%` }}
-      >
-        {/* Fixed colours, not theme tokens: the line sits on the page's own pixels, light or dark. */}
-        <span aria-hidden className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.45)]" />
-        <span aria-hidden className="absolute top-1/2 left-1/2 size-5 -translate-1/2 rounded-full bg-popover shadow-float group-focus-visible:ring-2 group-focus-visible:ring-ring" />
-      </div>
+      <Group orientation="horizontal" className="pointer-events-none absolute inset-0" onLayoutChange={(layout) => setSplit(layout.base)}>
+        <Panel id="base" defaultSize="50%" />
+        <Separator className="group pointer-events-auto relative w-0 cursor-ew-resize touch-none outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-6 after:-translate-x-1/2">
+          {/* Fixed colours, not theme tokens: the line sits on the page's own pixels, light or dark. */}
+          <span aria-hidden className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.45)]" />
+          <span aria-hidden className="absolute top-1/2 left-1/2 size-5 -translate-1/2 rounded-full bg-popover shadow-float group-focus-visible:ring-2 group-focus-visible:ring-ring" />
+        </Separator>
+        <Panel id="head" />
+      </Group>
       <SliderLabel side="left">{base.branch}</SliderLabel>
       <SliderLabel side="right">{branch}</SliderLabel>
       <Button size="xs" variant="outline" className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border-transparent bg-popover text-foreground shadow-popover dark:bg-popover" onClick={() => setShots(null)}>
