@@ -12,7 +12,7 @@ import { notify } from '../../../src/host/web/notify.ts';
 import { ports } from '../../../src/host/web/ports.ts';
 import { pty } from '../../../src/host/web/pty.ts';
 
-const hosts = { account, browser, data, fs, git, library, notify, ports, pty } as Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>;
+const hosts = { account, browser, data, fs, git, library, notify, ports, pty } as unknown as Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>;
 const cwd = '/repo';
 const target = { path: 'apps/web/routes/admin/usage.tsx', staged: false };
 const calls: Record<string, [string, unknown[]][]> = {
