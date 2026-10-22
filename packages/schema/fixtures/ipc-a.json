@@ -1,0 +1,2377 @@
+{
+ "account": [
+  {
+   "method": "get",
+   "input": [],
+   "output": {
+    "status": "unconfigured",
+    "isPersistent": false
+   }
+  },
+  {
+   "method": "signOut",
+   "input": [],
+   "output": {
+    "status": "unconfigured",
+    "isPersistent": false
+   }
+  }
+ ],
+ "browser": [
+  {
+   "method": "create",
+   "input": [
+    {
+     "url": "https://example.com",
+     "spaceId": "personal"
+    }
+   ],
+   "output": {
+    "id": "view-1"
+   }
+  },
+  {
+   "method": "navigate",
+   "input": [
+    "view-1",
+    "http://localhost:3000/"
+   ]
+  },
+  {
+   "method": "command",
+   "input": [
+    "view-1",
+    "reload"
+   ]
+  },
+  {
+   "method": "setBounds",
+   "input": [
+    "view-1",
+    {
+     "x": 0,
+     "y": 40,
+     "width": 800,
+     "height": 600,
+     "radius": 8
+    }
+   ]
+  },
+  {
+   "method": "setBounds",
+   "input": [
+    "view-1",
+    null
+   ]
+  },
+  {
+   "method": "emulate",
+   "input": [
+    "view-1",
+    {
+     "width": 390,
+     "height": 844,
+     "scale": 0.8,
+     "dpr": 3,
+     "mobile": true,
+     "touch": true,
+     "colorScheme": "dark",
+     "reducedMotion": false
+    }
+   ]
+  },
+  {
+   "method": "act",
+   "input": [
+    "view-1",
+    {
+     "kind": "click",
+     "ref": "g1-e3"
+    }
+   ]
+  },
+  {
+   "method": "act",
+   "input": [
+    "view-1",
+    {
+     "kind": "scroll",
+     "dx": 0,
+     "dy": 400
+    }
+   ]
+  },
+  {
+   "method": "waitFor",
+   "input": [
+    "view-1",
+    {
+     "text": "Done",
+     "timeoutMs": 1000
+    }
+   ]
+  },
+  {
+   "method": "scroll",
+   "input": [
+    "view-1",
+    {
+     "x": 0,
+     "y": 120
+    }
+   ],
+   "output": {
+    "x": 0,
+    "y": 0
+   }
+  },
+  {
+   "method": "find",
+   "input": [
+    "view-1",
+    "usage",
+    {
+     "forward": true,
+     "isNewSearch": true,
+     "matchCase": false
+    }
+   ]
+  },
+  {
+   "method": "menuCommand",
+   "input": [
+    "view-1",
+    "copy",
+    {
+     "x": 10,
+     "y": 20
+    }
+   ]
+  },
+  {
+   "method": "logs",
+   "input": [
+    "view-1"
+   ],
+   "output": []
+  },
+  {
+   "method": "snapshot",
+   "input": [
+    "view-1"
+   ]
+  },
+  {
+   "method": "suggest",
+   "input": [
+    "duckduckgo",
+    "effect schema"
+   ],
+   "output": []
+  },
+  {
+   "method": "defaultBrowser",
+   "input": [],
+   "output": ""
+  }
+ ],
+ "data": [
+  {
+   "method": "load",
+   "input": [],
+   "output": null
+  },
+  {
+   "method": "save",
+   "input": [
+    "{\"v\":1}",
+    {
+     "t1": "{\"thread\":{}}"
+    }
+   ]
+  },
+  {
+   "method": "loadReplay",
+   "input": [
+    "t1"
+   ],
+   "output": null
+  },
+  {
+   "method": "appendReplay",
+   "input": [
+    "t1",
+    "{\"at\":1}\n"
+   ],
+   "output": true
+  },
+  {
+   "method": "replayUsage",
+   "input": [],
+   "output": {
+    "threads": 1,
+    "bytes": 9
+   }
+  },
+  {
+   "method": "clearReplays",
+   "input": [
+    [
+     "t1"
+    ]
+   ]
+  },
+  {
+   "method": "clearReplays",
+   "input": []
+  }
+ ],
+ "fs": [
+  {
+   "method": "list",
+   "input": [
+    "/repo"
+   ],
+   "output": [
+    "README.md",
+    "package.json",
+    "scripts/build.py",
+    "src/App.tsx",
+    "src/SidePane.tsx",
+    "src/index.css",
+    "src/logo.svg"
+   ]
+  },
+  {
+   "method": "read",
+   "input": [
+    "/repo",
+    "package.json"
+   ],
+   "output": {
+    "kind": "text",
+    "text": "{\n  \"name\": \"harness-proto\",\n  \"private\": true,\n  \"scripts\": { \"dev\": \"vite\", \"test\": \"node --test\" },\n  \"dependencies\": { \"react\": \"^19.3.0\" }\n}\n",
+    "mtimeMs": 1
+   }
+  },
+  {
+   "method": "write",
+   "input": [
+    "/repo",
+    "a.ts",
+    "export {};\n",
+    {
+     "baseMtimeMs": 0
+    }
+   ]
+  },
+  {
+   "method": "search",
+   "input": [
+    "/repo",
+    "s1",
+    "usage",
+    {
+     "isCaseSensitive": false,
+     "isRegex": false,
+     "isWholeWord": false
+    }
+   ],
+   "output": {
+    "isTruncated": false
+   }
+  },
+  {
+   "method": "editors",
+   "input": [],
+   "output": []
+  },
+  {
+   "method": "pickFolder",
+   "input": [
+    "~/code"
+   ]
+  },
+  {
+   "method": "folders",
+   "input": [
+    "~"
+   ],
+   "output": {
+    "path": "~",
+    "names": [
+     "dev",
+     "work",
+     "Documents"
+    ]
+   }
+  },
+  {
+   "method": "entries",
+   "input": [
+    "~"
+   ],
+   "output": {
+    "path": "~",
+    "dirs": [
+     "dev",
+     "work",
+     "Documents"
+    ],
+    "files": [
+     "notes.md"
+    ]
+   }
+  }
+ ],
+ "git": [
+  {
+   "method": "status",
+   "input": [
+    "/repo"
+   ],
+   "output": {
+    "branch": "feat/admin-usage",
+    "files": [
+     {
+      "path": "apps/api/routes/admin/usage.ts",
+      "status": "added"
+     },
+     {
+      "path": "apps/web/routes/admin/usage.tsx",
+      "status": "modified"
+     },
+     {
+      "path": "apps/web/components/Chart.tsx",
+      "status": "deleted"
+     }
+    ]
+   }
+  },
+  {
+   "method": "diff",
+   "input": [
+    "/repo",
+    "uncommitted"
+   ],
+   "output": {
+    "branch": "feat/admin-usage",
+    "base": "origin/main",
+    "files": [
+     {
+      "path": "apps/api/routes/admin/usage.ts",
+      "kind": "added",
+      "staged": true,
+      "binary": false,
+      "added": 14,
+      "removed": 0,
+      "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+      "hunks": [
+       {
+        "header": "@@ -0,0 +1,14 @@",
+        "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+        "added": 14,
+        "removed": 0
+       }
+      ]
+     },
+     {
+      "path": "apps/web/routes/admin/usage.tsx",
+      "kind": "modified",
+      "staged": false,
+      "binary": false,
+      "added": 8,
+      "removed": 4,
+      "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+      "hunks": [
+       {
+        "header": "@@ -1,8 +1,10 @@",
+        "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n",
+        "added": 4,
+        "removed": 2
+       },
+       {
+        "header": "@@ -20,8 +22,10 @@ export function UsagePage() {",
+        "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+        "added": 4,
+        "removed": 2
+       }
+      ]
+     },
+     {
+      "path": "apps/web/components/Chart.tsx",
+      "kind": "deleted",
+      "staged": false,
+      "binary": false,
+      "added": 0,
+      "removed": 4,
+      "patch": "diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx\ndeleted file mode 100644\nindex 9a1b2c3..0000000\n--- a/apps/web/components/Chart.tsx\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-import { LineChart } from 'recharts';\n-export function Chart({ data }: { data: unknown[] }) {\n-  return <LineChart data={data} />;\n-}\n",
+      "hunks": [
+       {
+        "header": "@@ -1,4 +0,0 @@",
+        "patch": "diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx\ndeleted file mode 100644\nindex 9a1b2c3..0000000\n--- a/apps/web/components/Chart.tsx\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-import { LineChart } from 'recharts';\n-export function Chart({ data }: { data: unknown[] }) {\n-  return <LineChart data={data} />;\n-}\n",
+        "added": 0,
+        "removed": 4
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "method": "diff",
+   "input": [
+    "/repo",
+    "branch",
+    "main"
+   ],
+   "output": {
+    "branch": "feat/admin-usage",
+    "base": "origin/main",
+    "files": [
+     {
+      "path": "apps/api/routes/admin/usage.ts",
+      "kind": "added",
+      "staged": false,
+      "binary": false,
+      "added": 14,
+      "removed": 0,
+      "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+      "hunks": [
+       {
+        "header": "@@ -0,0 +1,14 @@",
+        "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+        "added": 14,
+        "removed": 0
+       }
+      ]
+     },
+     {
+      "path": "apps/web/routes/admin/usage.tsx",
+      "kind": "modified",
+      "staged": false,
+      "binary": false,
+      "added": 8,
+      "removed": 4,
+      "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+      "hunks": [
+       {
+        "header": "@@ -1,8 +1,10 @@",
+        "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n",
+        "added": 4,
+        "removed": 2
+       },
+       {
+        "header": "@@ -20,8 +22,10 @@ export function UsagePage() {",
+        "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+        "added": 4,
+        "removed": 2
+       }
+      ]
+     },
+     {
+      "path": "apps/web/components/Chart.tsx",
+      "kind": "deleted",
+      "staged": false,
+      "binary": false,
+      "added": 0,
+      "removed": 4,
+      "patch": "diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx\ndeleted file mode 100644\nindex 9a1b2c3..0000000\n--- a/apps/web/components/Chart.tsx\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-import { LineChart } from 'recharts';\n-export function Chart({ data }: { data: unknown[] }) {\n-  return <LineChart data={data} />;\n-}\n",
+      "hunks": [
+       {
+        "header": "@@ -1,4 +0,0 @@",
+        "patch": "diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx\ndeleted file mode 100644\nindex 9a1b2c3..0000000\n--- a/apps/web/components/Chart.tsx\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-import { LineChart } from 'recharts';\n-export function Chart({ data }: { data: unknown[] }) {\n-  return <LineChart data={data} />;\n-}\n",
+        "added": 0,
+        "removed": 4
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "method": "stage",
+   "input": [
+    "/repo",
+    {
+     "path": "apps/web/routes/admin/usage.tsx",
+     "staged": false
+    }
+   ]
+  },
+  {
+   "method": "commit",
+   "input": [
+    "/repo",
+    "feat(admin): usage page"
+   ],
+   "output": "0000000"
+  },
+  {
+   "method": "push",
+   "input": [
+    "/repo",
+    "octocat"
+   ]
+  },
+  {
+   "method": "createPr",
+   "input": [
+    "/repo",
+    {
+     "title": "Usage page",
+     "body": "Adds it.",
+     "base": "main"
+    },
+    "ghe.example.com/octocat"
+   ],
+   "output": "https://github.com/latitude-dev/latitude/pull/490"
+  },
+  {
+   "method": "pr",
+   "input": [
+    "/repo"
+   ],
+   "output": {
+    "number": 490,
+    "url": "https://github.com/latitude-dev/latitude/pull/490",
+    "title": "Rate limits for the public API",
+    "state": "OPEN",
+    "checks": [
+     {
+      "name": "typecheck",
+      "state": "pass"
+     },
+     {
+      "name": "unit",
+      "state": "pass"
+     },
+     {
+      "name": "e2e",
+      "state": "pending"
+     },
+     {
+      "name": "lint",
+      "state": "fail"
+     }
+    ]
+   }
+  },
+  {
+   "method": "worktreePrs",
+   "input": [
+    [
+     "/repo"
+    ]
+   ],
+   "output": []
+  },
+  {
+   "method": "prReview",
+   "input": [
+    "/repo",
+    42
+   ],
+   "output": {
+    "number": 42,
+    "url": "https://github.com/latitude-dev/latitude/pull/490",
+    "title": "Admin usage dashboard",
+    "body": "Adds `/admin/usage` with a per-key daily breakdown.\n\n- Cursor-paged API route, 500 rows a page\n- Date range picker and CSV export on the page",
+    "author": "frstycodes",
+    "state": "OPEN",
+    "isDraft": false,
+    "base": "main",
+    "head": "feat/admin-usage",
+    "isConflicting": false,
+    "viewer": "frstycodes",
+    "checks": [
+     {
+      "name": "typecheck",
+      "state": "pass"
+     },
+     {
+      "name": "unit",
+      "state": "pass"
+     },
+     {
+      "name": "e2e",
+      "state": "pending"
+     },
+     {
+      "name": "lint",
+      "state": "fail",
+      "link": "https://github.com/latitude-dev/latitude/actions/runs/1"
+     }
+    ],
+    "comments": [
+     {
+      "id": "c1",
+      "author": "mira",
+      "body": "Looks close. Two things inline, the page size mostly.",
+      "at": "2026-10-20T09:12:00Z",
+      "verdict": "changes-requested"
+     },
+     {
+      "id": "c2",
+      "author": "frstycodes",
+      "body": "Thanks, on it.",
+      "at": "2026-10-20T10:02:00Z"
+     }
+    ],
+    "threads": [
+     {
+      "id": "PRRT_demo1",
+      "path": "apps/api/routes/admin/usage.ts",
+      "side": "additions",
+      "line": 12,
+      "isResolved": false,
+      "comments": [
+       {
+        "id": "t1",
+        "author": "mira",
+        "body": "500 rows is a lot for the admin table. Can we do 100 and let the cursor do the rest?",
+        "at": "2026-10-20T09:10:00Z"
+       }
+      ]
+     },
+     {
+      "id": "PRRT_demo2",
+      "path": "apps/web/routes/admin/usage.tsx",
+      "side": "deletions",
+      "line": 5,
+      "isResolved": true,
+      "comments": [
+       {
+        "id": "t2",
+        "author": "mira",
+        "body": "Was the default range on purpose?",
+        "at": "2026-10-20T09:11:00Z"
+       },
+       {
+        "id": "t3",
+        "author": "frstycodes",
+        "body": "Yes, matches billing.",
+        "at": "2026-10-20T10:01:00Z"
+       }
+      ]
+     },
+     {
+      "id": "PRRT_demo3",
+      "path": "apps/web/routes/admin/old.tsx",
+      "side": "additions",
+      "line": null,
+      "isResolved": false,
+      "comments": [
+       {
+        "id": "t4",
+        "author": "mira",
+        "body": "This file can go once the new page ships.",
+        "at": "2026-10-19T16:40:00Z"
+       }
+      ]
+     }
+    ],
+    "files": [
+     {
+      "path": "apps/api/routes/admin/usage.ts",
+      "kind": "added",
+      "staged": false,
+      "binary": false,
+      "added": 14,
+      "removed": 0,
+      "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+      "hunks": [
+       {
+        "header": "@@ -0,0 +1,14 @@",
+        "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+        "added": 14,
+        "removed": 0
+       }
+      ]
+     },
+     {
+      "path": "apps/web/routes/admin/usage.tsx",
+      "kind": "modified",
+      "staged": false,
+      "binary": false,
+      "added": 8,
+      "removed": 4,
+      "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+      "hunks": [
+       {
+        "header": "@@ -1,8 +1,10 @@",
+        "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n",
+        "added": 4,
+        "removed": 2
+       },
+       {
+        "header": "@@ -20,8 +22,10 @@ export function UsagePage() {",
+        "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+        "added": 4,
+        "removed": 2
+       }
+      ]
+     },
+     {
+      "path": "apps/web/components/Chart.tsx",
+      "kind": "deleted",
+      "staged": false,
+      "binary": false,
+      "added": 0,
+      "removed": 4,
+      "patch": "diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx\ndeleted file mode 100644\nindex 9a1b2c3..0000000\n--- a/apps/web/components/Chart.tsx\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-import { LineChart } from 'recharts';\n-export function Chart({ data }: { data: unknown[] }) {\n-  return <LineChart data={data} />;\n-}\n",
+      "hunks": [
+       {
+        "header": "@@ -1,4 +0,0 @@",
+        "patch": "diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx\ndeleted file mode 100644\nindex 9a1b2c3..0000000\n--- a/apps/web/components/Chart.tsx\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-import { LineChart } from 'recharts';\n-export function Chart({ data }: { data: unknown[] }) {\n-  return <LineChart data={data} />;\n-}\n",
+        "added": 0,
+        "removed": 4
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "method": "refStates",
+   "input": [
+    "/repo",
+    [
+     {
+      "owner": "latitude",
+      "repo": "app",
+      "number": 42,
+      "kind": "pr"
+     }
+    ]
+   ],
+   "output": {}
+  },
+  {
+   "method": "ghAccounts",
+   "input": [],
+   "output": []
+  },
+  {
+   "method": "sync",
+   "input": [
+    "/repo"
+   ],
+   "output": {
+    "base": "origin/main",
+    "conflicts": []
+   }
+  },
+  {
+   "method": "addWorktree",
+   "input": [
+    "/repo",
+    "t-1",
+    "feat/usage",
+    {
+     "base": "main"
+    }
+   ],
+   "output": "~/.mochi/worktrees/demo/t-1"
+  },
+  {
+   "method": "branches",
+   "input": [
+    "/repo"
+   ],
+   "output": {
+    "current": "main",
+    "defaultBranch": "main",
+    "changes": {
+     "files": 0,
+     "added": 0,
+     "removed": 0
+    },
+    "branches": [
+     {
+      "name": "main",
+      "isRemote": false,
+      "committedAt": 1792651326970,
+      "worktree": "/repo"
+     },
+     {
+      "name": "feat/admin-usage",
+      "isRemote": false,
+      "committedAt": 1792634046970,
+      "worktree": "~/.mochi/worktrees/latitude/adm"
+     },
+     {
+      "name": "feat/api-rate-limits",
+      "isRemote": false,
+      "committedAt": 1792608126970
+     },
+     {
+      "name": "fix/checkout-e2e",
+      "isRemote": false,
+      "committedAt": 1792521726970
+     },
+     {
+      "name": "feat/better-auth-session-rotation-and-device-trust-for-enterprise-sso",
+      "isRemote": false,
+      "committedAt": 1792392126970
+     },
+     {
+      "name": "origin/release/2026-10",
+      "isRemote": true,
+      "committedAt": 1792305726970
+     },
+     {
+      "name": "origin/feat/onboarding-emails",
+      "isRemote": true,
+      "committedAt": 1791873726970
+     }
+    ]
+   }
+  },
+  {
+   "method": "branchNameError",
+   "input": [
+    "/repo",
+    "feat/usage"
+   ],
+   "output": null
+  },
+  {
+   "method": "switchBranch",
+   "input": [
+    "/repo",
+    "main",
+    {
+     "changes": "stash"
+    }
+   ]
+  },
+  {
+   "method": "worktrees",
+   "input": [
+    "/repo"
+   ],
+   "output": []
+  },
+  {
+   "method": "head",
+   "input": [
+    "/repo"
+   ],
+   "output": {
+    "branch": "main",
+    "isDetached": false
+   }
+  },
+  {
+   "method": "checkpoint",
+   "input": [
+    "/repo",
+    "t-1",
+    "turn"
+   ],
+   "output": "t-1turn000000000000000000000000000000000"
+  },
+  {
+   "method": "checkpoint",
+   "input": [
+    "/repo",
+    "t-1",
+    3
+   ],
+   "output": "t-13000000000000000000000000000000000000"
+  },
+  {
+   "method": "restoreFiles",
+   "input": [
+    "/repo",
+    "t-1",
+    "undo",
+    [
+     "a.ts"
+    ]
+   ]
+  },
+  {
+   "method": "rewindPreview",
+   "input": [
+    "/repo",
+    "t-1",
+    2
+   ],
+   "output": {
+    "files": [
+     "src/limits/schema.ts",
+     "src/gateway/config.ts"
+    ],
+    "outside": []
+   }
+  },
+  {
+   "method": "turnDiff",
+   "input": [
+    "/repo",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   ],
+   "output": [
+    {
+     "path": "apps/api/routes/admin/usage.ts",
+     "kind": "added",
+     "staged": false,
+     "binary": false,
+     "added": 14,
+     "removed": 0,
+     "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+     "hunks": [
+      {
+       "header": "@@ -0,0 +1,14 @@",
+       "patch": "diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts\nnew file mode 100644\nindex 0000000..8f3c2a1\n--- /dev/null\n+++ b/apps/api/routes/admin/usage.ts\n@@ -0,0 +1,14 @@\n+import { db } from '@latitude/db';\n+import { cursorPage } from '../../lib/pagination';\n+\n+export async function usage(req: AdminRequest) {\n+  const { cursor, days = 14 } = req.query;\n+  return cursorPage(\n+    db.apiUsageDaily\n+      .where('day', '>=', daysAgo(days))\n+      .groupBy(['key_id', 'day'])\n+      .orderBy(['key_id', 'day']),\n+    cursor,\n+    500,\n+  );\n+}\n",
+       "added": 14,
+       "removed": 0
+      }
+     ]
+    },
+    {
+     "path": "apps/web/routes/admin/usage.tsx",
+     "kind": "modified",
+     "staged": false,
+     "binary": false,
+     "added": 8,
+     "removed": 4,
+     "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+     "hunks": [
+      {
+       "header": "@@ -1,8 +1,10 @@",
+       "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -1,8 +1,10 @@\n-import { Chart } from '../../components/Chart';\n+import { BarChart } from '../../components/charts/BarChart';\n+import { DateRangePicker } from '../../components/DateRangePicker';\n import { useUsage } from '../../api/usage';\n \n export function UsagePage() {\n-  const { data } = useUsage();\n+  const [range, setRange] = useState(last14Days);\n+  const { data } = useUsage({ range });\n   if (!data) return <UsageSkeleton />;\n \n   return (\n",
+       "added": 4,
+       "removed": 2
+      },
+      {
+       "header": "@@ -20,8 +22,10 @@ export function UsagePage() {",
+       "patch": "diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx\nindex 2b7e9d0..c41a7f3 100644\n--- a/apps/web/routes/admin/usage.tsx\n+++ b/apps/web/routes/admin/usage.tsx\n@@ -20,8 +22,10 @@ export function UsagePage() {\n       <header className=\"flex items-center gap-2\">\n         <h1>API usage</h1>\n-        <span>Last 14 days</span>\n+        <DateRangePicker value={range} onChange={setRange} />\n       </header>\n-      <Chart data={data.byDay} />\n+      <BarChart data={data.byDay} x=\"day\" y=\"requests\" />\n+      <KeyTable rows={data.byKey} />\n+      <ExportButton range={range} />\n     </section>\n   );\n }\n",
+       "added": 4,
+       "removed": 2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "method": "runCheck",
+   "input": [
+    "/repo",
+    "pnpm test"
+   ]
+  },
+  {
+   "method": "repoSlug",
+   "input": [
+    "/repo"
+   ],
+   "output": {
+    "owner": "frstycodes",
+    "repo": "mochi"
+   }
+  }
+ ],
+ "library": [
+  {
+   "method": "list",
+   "input": [
+    "personal"
+   ],
+   "output": [
+    {
+     "id": "skill-pdf",
+     "kind": "skill",
+     "name": "pdf",
+     "title": "pdf",
+     "description": "Extract text and tables, fill forms, merge and split PDF files.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/pdf",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "skill-frontend-design",
+     "kind": "skill",
+     "name": "frontend-design",
+     "title": "frontend-design",
+     "description": "Distinctive, production-grade interfaces that avoid generic AI looks.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/frontend-design",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-code-review",
+     "kind": "plugin",
+     "name": "code-review",
+     "title": "Code review",
+     "description": "Review a pull request with agents for bugs, security and style.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": "2 skills · 3 agents",
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": 1792478526963,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-linear",
+     "kind": "plugin",
+     "name": "linear",
+     "title": "Linear",
+     "description": "Issues, projects and cycles from Linear.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/linear.png?size=96",
+     "contents": "1 skill",
+     "remotes": [
+      {
+       "name": "linear",
+       "url": "https://mcp.linear.app/mcp"
+      }
+     ],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-work",
+     "kind": "connector",
+     "name": "linear:work",
+     "title": "Linear · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-personal",
+     "kind": "connector",
+     "name": "linear:personal",
+     "title": "Linear · personal",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "personal",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-notion-work",
+     "kind": "connector",
+     "name": "notion:work",
+     "title": "Notion · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.notion.com/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=notion.so&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": false,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    }
+   ]
+  },
+  {
+   "method": "setEnabled",
+   "input": [
+    "personal",
+    "skill-1",
+    true
+   ]
+  },
+  {
+   "method": "importFromAccount",
+   "input": [
+    "personal",
+    "claude",
+    [
+     "skills",
+     "mcp"
+    ]
+   ]
+  },
+  {
+   "method": "discoverSkills",
+   "input": [
+    "anthropics/skills"
+   ],
+   "output": [
+    {
+     "name": "pdf",
+     "description": "Extract text and tables, fill forms, merge and split PDF files.",
+     "source": "anthropics/skills/skills/pdf",
+     "fileCount": 6,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "docx",
+     "description": "Create and edit Word documents with tracked changes and comments.",
+     "source": "anthropics/skills/skills/docx",
+     "fileCount": 5,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "xlsx",
+     "description": "Build spreadsheets with formulas, formatting and charts.",
+     "source": "anthropics/skills/skills/xlsx",
+     "fileCount": 4,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "pptx",
+     "description": "Create and edit slide decks with layouts and speaker notes.",
+     "source": "anthropics/skills/skills/pptx",
+     "fileCount": 5,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "frontend-design",
+     "description": "Distinctive, production-grade interfaces that avoid generic AI looks.",
+     "source": "anthropics/skills/skills/frontend-design",
+     "fileCount": 1,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "canvas-design",
+     "description": "Posters and visual art as PNG and PDF, from a design philosophy.",
+     "source": "anthropics/skills/skills/canvas-design",
+     "fileCount": 3,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "algorithmic-art",
+     "description": "Generative art with p5.js: seeded randomness, flow fields, particles.",
+     "source": "anthropics/skills/skills/algorithmic-art",
+     "fileCount": 4,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "brand-guidelines",
+     "description": "Apply Anthropic’s colors and type to anything that should look on-brand.",
+     "source": "anthropics/skills/skills/brand-guidelines",
+     "fileCount": 2,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "mcp-builder",
+     "description": "Design and build MCP servers that let models use an API well.",
+     "source": "anthropics/skills/skills/mcp-builder",
+     "fileCount": 7,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "skill-creator",
+     "description": "Write, test and improve skills of your own.",
+     "source": "anthropics/skills/skills/skill-creator",
+     "fileCount": 6,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "webapp-testing",
+     "description": "Drive a local web app with Playwright to check it works.",
+     "source": "anthropics/skills/skills/webapp-testing",
+     "fileCount": 3,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    },
+    {
+     "name": "internal-comms",
+     "description": "Status reports, updates and newsletters in your company’s voice.",
+     "source": "anthropics/skills/skills/internal-comms",
+     "fileCount": 4,
+     "icon": "https://github.com/anthropics.png?size=96",
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04"
+    }
+   ]
+  },
+  {
+   "method": "installSkill",
+   "input": [
+    "personal",
+    "anthropics/skills",
+    "pdf",
+    {
+     "scope": "user",
+     "providers": [
+      "claude"
+     ]
+    }
+   ],
+   "output": [
+    {
+     "id": "skill-frontend-design",
+     "kind": "skill",
+     "name": "frontend-design",
+     "title": "frontend-design",
+     "description": "Distinctive, production-grade interfaces that avoid generic AI looks.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/frontend-design",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-code-review",
+     "kind": "plugin",
+     "name": "code-review",
+     "title": "Code review",
+     "description": "Review a pull request with agents for bugs, security and style.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": "2 skills · 3 agents",
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": 1792478526963,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-linear",
+     "kind": "plugin",
+     "name": "linear",
+     "title": "Linear",
+     "description": "Issues, projects and cycles from Linear.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/linear.png?size=96",
+     "contents": "1 skill",
+     "remotes": [
+      {
+       "name": "linear",
+       "url": "https://mcp.linear.app/mcp"
+      }
+     ],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-work",
+     "kind": "connector",
+     "name": "linear:work",
+     "title": "Linear · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-personal",
+     "kind": "connector",
+     "name": "linear:personal",
+     "title": "Linear · personal",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "personal",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-notion-work",
+     "kind": "connector",
+     "name": "notion:work",
+     "title": "Notion · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.notion.com/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=notion.so&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": false,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "skill-pdf",
+     "kind": "skill",
+     "name": "pdf",
+     "title": "pdf",
+     "description": "Extract text and tables, fill forms, merge and split PDF files.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/pdf",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04",
+     "placements": [
+      {
+       "provider": "claude",
+       "scope": "user",
+       "dir": "~/.claude/skills/pdf"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "method": "searchSkillsSh",
+   "input": [
+    "react"
+   ],
+   "output": []
+  },
+  {
+   "method": "popularSkillsSh",
+   "input": [],
+   "output": [
+    {
+     "id": "vercel-labs/skills/find-skills",
+     "name": "find-skills",
+     "source": "vercel-labs/skills",
+     "installs": 3927274,
+     "installSource": "vercel-labs/skills@find-skills",
+     "url": "https://skills.sh/vercel-labs/skills/find-skills",
+     "icon": "https://github.com/vercel-labs.png?size=96"
+    },
+    {
+     "id": "mattpocock/skills/grill-me",
+     "name": "grill-me",
+     "source": "mattpocock/skills",
+     "installs": 1387557,
+     "installSource": "mattpocock/skills@grill-me",
+     "url": "https://skills.sh/mattpocock/skills/grill-me",
+     "icon": "https://github.com/mattpocock.png?size=96"
+    },
+    {
+     "id": "mattpocock/skills/grill-with-docs",
+     "name": "grill-with-docs",
+     "source": "mattpocock/skills",
+     "installs": 1188473,
+     "installSource": "mattpocock/skills@grill-with-docs",
+     "url": "https://skills.sh/mattpocock/skills/grill-with-docs",
+     "icon": "https://github.com/mattpocock.png?size=96"
+    },
+    {
+     "id": "vercel-labs/agent-browser/agent-browser",
+     "name": "agent-browser",
+     "source": "vercel-labs/agent-browser",
+     "installs": 1170738,
+     "installSource": "vercel-labs/agent-browser@agent-browser",
+     "url": "https://skills.sh/vercel-labs/agent-browser/agent-browser",
+     "icon": "https://github.com/vercel-labs.png?size=96"
+    },
+    {
+     "id": "mattpocock/skills/improve-codebase-architecture",
+     "name": "improve-codebase-architecture",
+     "source": "mattpocock/skills",
+     "installs": 1133991,
+     "installSource": "mattpocock/skills@improve-codebase-architecture",
+     "url": "https://skills.sh/mattpocock/skills/improve-codebase-architecture",
+     "icon": "https://github.com/mattpocock.png?size=96"
+    },
+    {
+     "id": "mattpocock/skills/tdd",
+     "name": "tdd",
+     "source": "mattpocock/skills",
+     "installs": 1110148,
+     "installSource": "mattpocock/skills@tdd",
+     "url": "https://skills.sh/mattpocock/skills/tdd",
+     "icon": "https://github.com/mattpocock.png?size=96"
+    },
+    {
+     "id": "heygen-com/hyperframes/hyperframes-cli",
+     "name": "hyperframes-cli",
+     "source": "heygen-com/hyperframes",
+     "installs": 1109284,
+     "installSource": "heygen-com/hyperframes@hyperframes-cli",
+     "url": "https://skills.sh/heygen-com/hyperframes/hyperframes-cli",
+     "icon": "https://github.com/heygen-com.png?size=96"
+    },
+    {
+     "id": "heygen-com/hyperframes/hyperframes",
+     "name": "hyperframes",
+     "source": "heygen-com/hyperframes",
+     "installs": 1063942,
+     "installSource": "heygen-com/hyperframes@hyperframes",
+     "url": "https://skills.sh/heygen-com/hyperframes/hyperframes",
+     "icon": "https://github.com/heygen-com.png?size=96"
+    },
+    {
+     "id": "mattpocock/skills/handoff",
+     "name": "handoff",
+     "source": "mattpocock/skills",
+     "installs": 1008869,
+     "installSource": "mattpocock/skills@handoff",
+     "url": "https://skills.sh/mattpocock/skills/handoff",
+     "icon": "https://github.com/mattpocock.png?size=96"
+    },
+    {
+     "id": "anthropics/skills/frontend-design",
+     "name": "frontend-design",
+     "source": "anthropics/skills",
+     "installs": 1004533,
+     "installSource": "anthropics/skills@frontend-design",
+     "url": "https://skills.sh/anthropics/skills/frontend-design",
+     "icon": "https://github.com/anthropics.png?size=96"
+    },
+    {
+     "id": "mattpocock/skills/triage",
+     "name": "triage",
+     "source": "mattpocock/skills",
+     "installs": 963979,
+     "installSource": "mattpocock/skills@triage",
+     "url": "https://skills.sh/mattpocock/skills/triage",
+     "icon": "https://github.com/mattpocock.png?size=96"
+    },
+    {
+     "id": "anthropics/skills/pdf",
+     "name": "pdf",
+     "source": "anthropics/skills",
+     "installs": 702114,
+     "installSource": "anthropics/skills@pdf",
+     "url": "https://skills.sh/anthropics/skills/pdf",
+     "icon": "https://github.com/anthropics.png?size=96"
+    }
+   ]
+  },
+  {
+   "method": "marketplaces",
+   "input": [],
+   "output": [
+    {
+     "name": "claude-plugins-official",
+     "source": "anthropics/claude-plugins-official"
+    }
+   ]
+  },
+  {
+   "method": "marketplaceCatalog",
+   "input": [
+    "claude-plugins-official"
+   ],
+   "output": {
+    "name": "claude-plugins-official",
+    "displayName": "Claude plugins",
+    "description": "Anthropic's directory of Claude Code plugins",
+    "owner": "Anthropic",
+    "format": "claude",
+    "plugins": [
+     {
+      "name": "code-review",
+      "title": "Code review",
+      "description": "Review a pull request with agents for bugs, security and style.",
+      "category": "development",
+      "author": "anthropics",
+      "version": "1.0.0",
+      "homepage": null,
+      "icon": "https://github.com/anthropics.png?size=96"
+     },
+     {
+      "name": "feature-dev",
+      "title": "Feature development",
+      "description": "Explore, plan, build and review a feature in guided phases.",
+      "category": "development",
+      "author": "anthropics",
+      "version": "1.0.0",
+      "homepage": null,
+      "icon": "https://github.com/anthropics.png?size=96"
+     },
+     {
+      "name": "commit-commands",
+      "title": "Commit commands",
+      "description": "Commit, push and open a pull request in one step.",
+      "category": "development",
+      "author": "anthropics",
+      "version": "1.0.0",
+      "homepage": null,
+      "icon": "https://github.com/anthropics.png?size=96"
+     },
+     {
+      "name": "pr-review-toolkit",
+      "title": "PR review toolkit",
+      "description": "Specialised reviewers for tests, types, comments and silent failures.",
+      "category": "development",
+      "author": "anthropics",
+      "version": "1.0.0",
+      "homepage": null,
+      "icon": "https://github.com/anthropics.png?size=96"
+     },
+     {
+      "name": "security-guidance",
+      "title": "Security guidance",
+      "description": "Warns about risky patterns while the agent edits code.",
+      "category": "security",
+      "author": "anthropics",
+      "version": "1.0.0",
+      "homepage": null,
+      "icon": "https://github.com/anthropics.png?size=96"
+     },
+     {
+      "name": "frontend-design",
+      "title": "Frontend design",
+      "description": "Interfaces with a point of view instead of the generic look.",
+      "category": "design",
+      "author": "anthropics",
+      "version": "1.0.0",
+      "homepage": null,
+      "icon": "https://github.com/anthropics.png?size=96"
+     },
+     {
+      "name": "agent-sdk-dev",
+      "title": "Agent SDK dev",
+      "description": "Scaffold and check apps built on the Claude Agent SDK.",
+      "category": "development",
+      "author": "anthropics",
+      "version": "1.0.0",
+      "homepage": null,
+      "icon": "https://github.com/anthropics.png?size=96"
+     },
+     {
+      "name": "linear",
+      "title": "Linear",
+      "description": "Issues, projects and cycles from Linear.",
+      "category": "productivity",
+      "author": "linear",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/linear.png?size=96"
+     },
+     {
+      "name": "stripe",
+      "title": "Stripe",
+      "description": "Payments, customers and subscriptions, plus Stripe’s best practices.",
+      "category": "development",
+      "author": "stripe",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/stripe.png?size=96"
+     },
+     {
+      "name": "vercel",
+      "title": "Vercel",
+      "description": "Deploy, read logs and manage projects on Vercel.",
+      "category": "deployment",
+      "author": "vercel",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/vercel.png?size=96"
+     },
+     {
+      "name": "supabase",
+      "title": "Supabase",
+      "description": "Databases, auth and edge functions in your Supabase projects.",
+      "category": "database",
+      "author": "supabase",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/supabase.png?size=96"
+     },
+     {
+      "name": "sentry",
+      "title": "Sentry",
+      "description": "Errors, issues and releases, with fixes suggested in place.",
+      "category": "monitoring",
+      "author": "getsentry",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/getsentry.png?size=96"
+     },
+     {
+      "name": "figma",
+      "title": "Figma",
+      "description": "Read designs and variables, and map components to code.",
+      "category": "design",
+      "author": "figma",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/figma.png?size=96"
+     },
+     {
+      "name": "notion",
+      "title": "Notion",
+      "description": "Search, read and write Notion pages and databases.",
+      "category": "productivity",
+      "author": "makenotion",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/makenotion.png?size=96"
+     },
+     {
+      "name": "github",
+      "title": "GitHub",
+      "description": "Repositories, issues, pull requests and Actions.",
+      "category": "development",
+      "author": "github",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/github.png?size=96"
+     },
+     {
+      "name": "playwright",
+      "title": "Playwright",
+      "description": "Drive a real browser to test and inspect web apps.",
+      "category": "testing",
+      "author": "microsoft",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/microsoft.png?size=96"
+     },
+     {
+      "name": "context7",
+      "title": "Context7",
+      "description": "Current documentation for the libraries in your project.",
+      "category": "development",
+      "author": "upstash",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/upstash.png?size=96"
+     },
+     {
+      "name": "firebase",
+      "title": "Firebase",
+      "description": "Firestore, auth and hosting in your Firebase projects.",
+      "category": "database",
+      "author": "firebase",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/firebase.png?size=96"
+     },
+     {
+      "name": "prisma",
+      "title": "Prisma",
+      "description": "Schema, migrations and queries with Prisma ORM.",
+      "category": "database",
+      "author": "prisma",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/prisma.png?size=96"
+     },
+     {
+      "name": "atlassian",
+      "title": "Atlassian",
+      "description": "Jira issues and Confluence pages.",
+      "category": "productivity",
+      "author": "atlassian",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/atlassian.png?size=96"
+     },
+     {
+      "name": "hubspot",
+      "title": "HubSpot",
+      "description": "Contacts, companies and deals in your CRM.",
+      "category": "productivity",
+      "author": "HubSpot",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/HubSpot.png?size=96"
+     },
+     {
+      "name": "aikido",
+      "title": "Aikido",
+      "description": "Scan code and dependencies for vulnerabilities.",
+      "category": "security",
+      "author": "AikidoSec",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/AikidoSec.png?size=96"
+     },
+     {
+      "name": "airtable",
+      "title": "Airtable",
+      "description": "Bases, tables and records in Airtable.",
+      "category": "productivity",
+      "author": "Airtable",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/Airtable.png?size=96"
+     },
+     {
+      "name": "cloudflare",
+      "title": "Cloudflare",
+      "description": "Workers, KV, R2 and D1 in your account.",
+      "category": "deployment",
+      "author": "cloudflare",
+      "version": null,
+      "homepage": null,
+      "icon": "https://github.com/cloudflare.png?size=96"
+     }
+    ]
+   }
+  },
+  {
+   "method": "addConnector",
+   "input": [
+    "personal",
+    {
+     "url": "https://mcp.example.com/mcp",
+     "alias": "work"
+    },
+    {
+     "inPane": true
+    }
+   ],
+   "output": [
+    {
+     "id": "skill-frontend-design",
+     "kind": "skill",
+     "name": "frontend-design",
+     "title": "frontend-design",
+     "description": "Distinctive, production-grade interfaces that avoid generic AI looks.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/frontend-design",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-code-review",
+     "kind": "plugin",
+     "name": "code-review",
+     "title": "Code review",
+     "description": "Review a pull request with agents for bugs, security and style.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": "2 skills · 3 agents",
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": 1792478526963,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-linear",
+     "kind": "plugin",
+     "name": "linear",
+     "title": "Linear",
+     "description": "Issues, projects and cycles from Linear.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/linear.png?size=96",
+     "contents": "1 skill",
+     "remotes": [
+      {
+       "name": "linear",
+       "url": "https://mcp.linear.app/mcp"
+      }
+     ],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-work",
+     "kind": "connector",
+     "name": "linear:work",
+     "title": "Linear · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-personal",
+     "kind": "connector",
+     "name": "linear:personal",
+     "title": "Linear · personal",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "personal",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-notion-work",
+     "kind": "connector",
+     "name": "notion:work",
+     "title": "Notion · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.notion.com/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=notion.so&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": false,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "skill-pdf",
+     "kind": "skill",
+     "name": "pdf",
+     "title": "pdf",
+     "description": "Extract text and tables, fill forms, merge and split PDF files.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/pdf",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": "13e4063a1cf913f5606d57d42ab83a86f5001e04",
+     "placements": [
+      {
+       "provider": "claude",
+       "scope": "user",
+       "dir": "~/.claude/skills/pdf"
+      }
+     ]
+    },
+    {
+     "id": "connector-mcp-example-com-work",
+     "kind": "connector",
+     "name": "mcp-example-com:work",
+     "title": "mcp.example.com · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": true,
+     "profileIds": [
+      "personal"
+     ],
+     "source": "https://mcp.example.com/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=mcp.example.com&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    }
+   ]
+  },
+  {
+   "method": "oauthApps",
+   "input": [],
+   "output": [
+    "github",
+    "slack",
+    "google"
+   ]
+  },
+  {
+   "method": "connectorSettings",
+   "input": [],
+   "output": {}
+  },
+  {
+   "method": "listConnectorTools",
+   "input": [
+    "example"
+   ],
+   "output": {
+    "tools": [],
+    "listedAt": 1792651330288,
+    "error": "No account on it is signed in."
+   }
+  },
+  {
+   "method": "setConnectorSettings",
+   "input": [
+    "example",
+    {
+     "isOff": false,
+     "tools": {
+      "search": "allow"
+     }
+    }
+   ],
+   "output": {
+    "example": {
+     "isOff": false,
+     "tools": {
+      "search": "allow"
+     },
+     "toolList": {
+      "tools": [],
+      "listedAt": 1792651330288,
+      "error": "No account on it is signed in."
+     }
+    }
+   }
+  },
+  {
+   "method": "runSetup",
+   "input": [
+    "slack",
+    "view-1",
+    {
+     "params": {
+      "workspace": "acme"
+     }
+    }
+   ]
+  },
+  {
+   "method": "updateSetupStep",
+   "input": [
+    "slack",
+    "create-app",
+    {
+     "role": "button",
+     "name": "Create App",
+     "within": {
+      "role": "dialog"
+     }
+    }
+   ]
+  }
+ ],
+ "notify": [
+  {
+   "method": "show",
+   "input": [
+    {
+     "title": "Done",
+     "body": "The tests pass",
+     "id": "n1"
+    }
+   ]
+  },
+  {
+   "method": "close",
+   "input": [
+    [
+     "n1"
+    ]
+   ]
+  },
+  {
+   "method": "addressed",
+   "input": [
+    {
+     "threadId": "t1",
+     "isViewed": true
+    }
+   ]
+  },
+  {
+   "method": "watch",
+   "input": [
+    {
+     "threads": [
+      {
+       "id": "t1",
+       "title": "Usage page",
+       "cwd": "/repo",
+       "githubUser": "octocat"
+      }
+     ],
+     "autofix": [
+      {
+       "threadId": "t1",
+       "title": "Usage page",
+       "pr": 42,
+       "cwd": "/repo",
+       "since": 1760000000000
+      }
+     ],
+     "kinds": [
+      "done"
+     ],
+     "quiet": {
+      "isOn": true,
+      "start": 22,
+      "end": 7
+     },
+     "muted": [],
+     "needsYou": [
+      "t1"
+     ],
+     "dockBadge": true
+    }
+   ]
+  },
+  {
+   "method": "pendingOpen",
+   "input": [],
+   "output": null
+  },
+  {
+   "method": "permission",
+   "input": [],
+   "output": "denied"
+  }
+ ],
+ "ports": [
+  {
+   "method": "list",
+   "input": [
+    [
+     "/repo"
+    ]
+   ],
+   "output": [
+    {
+     "ports": [
+      {
+       "port": 3000,
+       "pid": 48302,
+       "command": "node server.js",
+       "startedAt": 1792648810289
+      },
+      {
+       "port": 5173,
+       "pid": 48211,
+       "command": "node node_modules/.bin/vite",
+       "startedAt": 1792650970289
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "method": "kill",
+   "input": [
+    4321
+   ]
+  },
+  {
+   "method": "allocate",
+   "input": [
+    "t1"
+   ],
+   "output": 5300
+  },
+  {
+   "method": "targets",
+   "input": [
+    "/repo"
+   ],
+   "output": [
+    {
+     "name": "dev",
+     "command": "pnpm run dev",
+     "source": "package.json"
+    },
+    {
+     "name": "harness-app",
+     "command": "pnpm dev --port 5191 --strictPort",
+     "source": "launch.json",
+     "port": 5191
+    }
+   ]
+  }
+ ],
+ "pty": [
+  {
+   "method": "spawn",
+   "input": [
+    {
+     "cwd": "/repo",
+     "cols": 80,
+     "rows": 24,
+     "command": "pnpm dev",
+     "port": 5300,
+     "threadId": "t1"
+    }
+   ],
+   "output": {
+    "id": "pty-1"
+   }
+  },
+  {
+   "method": "write",
+   "input": [
+    "pty-1",
+    "ls\r"
+   ]
+  },
+  {
+   "method": "resize",
+   "input": [
+    "pty-1",
+    120,
+    40
+   ]
+  },
+  {
+   "method": "kill",
+   "input": [
+    "pty-1"
+   ]
+  }
+ ]
+}

@@ -1,18 +1,18 @@
 import { app } from 'electron';
-import { z } from 'zod';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { copyFile, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
-import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
+import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { Schema } from 'effect';
 import type { ImageGenHarness } from '../../src/host/types/settings.ts';
 import type { GeneratedImage } from '../../src/model.ts';
 import { IMAGE_SIZES, IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, imageResultText, type ImageSize } from '../../src/runtime/imageTool.ts';
-import { isTurnTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, servedTools, TOOL_NAMES, TOOL_TABLE, type MochiScope } from '../../src/runtime/toolTable.ts';
+import { decodeArgs, DEV_TOOL_TABLE, isTurnTool, jsonSchemaOf, MOCHI_SERVER, MOCHI_TIMEOUT_MS, servedTools, TOOL_NAMES, TOOL_TABLE, type MochiScope } from '../../src/runtime/toolTable.ts';
 import { agentSettings } from '../agents/config.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
@@ -44,11 +44,38 @@ export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SE
  * is Claude's only (Codex generates natively) and runs here in main, not in the renderer; a session started while it was
  * off in Settings doesn't get it.
  */
-export function claudeServer(thread: string, spaceId: string, cwd: string, scope: MochiScope = {}) {
-  const tools = toolsFor(scope).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args), { alwaysLoad: !!scope.isSettingsChat || isTurnTool(t.name) }));
-  const image = tool(IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, (args, extra) => generateImage(spaceId, cwd, args, (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal));
+export function claudeServer(thread: string, spaceId: string, cwd: string, scope: MochiScope = {}): McpSdkServerConfigWithInstance {
+  const tools = toolsFor(scope).map((t): ServedTool => ({ ...t, alwaysLoad: !!scope.isSettingsChat || isTurnTool(t.name), call: (args) => callMochi(thread, t.name, args) }));
+  const image: ServedTool = { name: IMAGE_TOOL, description: IMAGE_TOOL_DESCRIPTION, shape: IMAGE_TOOL_SHAPE, call: (args, signal) => generateImage(spaceId, cwd, args as ImageArgs, signal) };
   const isImageOff = scope.isSettingsChat || agentSettings().imageGen === 'off';
-  return createSdkMcpServer({ name: SERVER, instructions: instructionsFor(scope), tools: isImageOff ? tools : [...tools, image] });
+  return { type: 'sdk', name: SERVER, instance: mochiServer(instructionsFor(scope), isImageOff ? tools : [...tools, image]) };
+}
+
+interface ServedTool {
+  name: string;
+  description: string;
+  shape: Schema.Struct.Fields;
+  /** Claude: listed up front, never deferred behind tool search. */
+  alwaysLoad?: boolean;
+  call: (args: Record<string, unknown>, signal: AbortSignal) => Promise<CallToolResult>;
+}
+
+type ImageArgs = { prompt: string; size?: ImageSize; saveTo?: string };
+
+/** An MCP server for `tools`, their inputs listed as JSON Schema and checked against their shapes before `call` runs. */
+function mochiServer(instructions: string, tools: ServedTool[]) {
+  const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions, capabilities: { tools: {} } });
+  mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: jsonSchemaOf(t.shape), ...(t.alwaysLoad && { _meta: { 'anthropic/alwaysLoad': true } }) })),
+  }));
+  mcp.server.setRequestHandler(CallToolRequestSchema, async ({ params }, extra): Promise<CallToolResult> => {
+    const tool = tools.find((t) => t.name === params.name);
+    if (!tool) return { content: [{ type: 'text', text: `No Mochi tool ${params.name}` }], isError: true };
+    const decoded = decodeArgs(tool.shape, params.arguments ?? {});
+    if ('error' in decoded) return { content: [{ type: 'text', text: `Invalid arguments for ${params.name}: ${decoded.error}` }], isError: true };
+    return tool.call(decoded.args as Record<string, unknown>, extra.signal);
+  });
+  return mcp;
 }
 
 type GenerateImage = (spaceId: string, prompt: string, signal: AbortSignal) => Promise<GeneratedImage>;
@@ -141,9 +168,7 @@ function listening() {
       const query = new URLSearchParams(match[3]);
       const scope: MochiScope = { isGoalsOff: query.get('goals') === 'off', isSettingsChat: query.get('kind') === 'settings' };
       const isDev = !app.isPackaged && process.env.MOCHI_DEV_MCP === '1' && match[2] === '__dev__';
-      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: isDev ? 'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.' : instructionsFor(scope) });
-      if (isDev) registerDevTools(mcp);
-      else for (const t of toolsFor(scope)) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
+      const mcp = isDev ? mochiServer(DEV_INSTRUCTIONS, devTools()) : mochiServer(instructionsFor(scope), toolsFor(scope).map((t) => ({ ...t, call: (args) => callMochi(match[2], t.name, args) })));
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => void transport.close().then(() => mcp.close()));
       await mcp.connect(transport);
@@ -183,21 +208,6 @@ export async function startDevMcp() {
   console.info(`Dev MCP connection written to ${file}`);
 }
 
-function registerDevTools(mcp: McpServer) {
-  mcp.registerTool('inspect', {
-    description: 'Inspect this dev build. Omit threadId to list threads; supply it for paginated transcript, goal, criteria, plan, report, verdict and next action. PR state is the last recorded state, not a fresh GitHub fetch.',
-    inputSchema: { threadId: z.string().optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(200).optional() },
-  }, (args: Record<string, unknown>) => callMochi('__dev__', 'inspect', args));
-  mcp.registerTool('start_task', {
-    description: 'Start a real task in the dev build’s selected profile, with its normal account and permission defaults. project is an optional absolute project folder; omit for a folderless task. Returns the thread id to inspect.',
-    inputSchema: { prompt: z.string().trim().min(1).max(20000), provider: z.enum(['claude', 'codex']), project: z.string().min(1).optional() },
-  }, (args: Record<string, unknown>) => callMochi('__dev__', 'start_task', args));
-  mcp.registerTool('accept_goal', {
-    description: 'Accept a test task’s researched goal in this opted-in dev build, as through its proposal card. This does not verify any criteria; it only makes them available for progress reporting.',
-    inputSchema: { threadId: z.string().min(1) },
-  }, (args: Record<string, unknown>) => callMochi('__dev__', 'accept_goal', args));
-  mcp.registerTool('continue_task', {
-    description: 'Send the next prompt to an idle dev task, as through its composer. Inspect its transcript, criteria and next action first. Refuses running or settled tasks.',
-    inputSchema: { threadId: z.string().min(1), text: z.string().trim().min(1).max(20000) },
-  }, (args: Record<string, unknown>) => callMochi('__dev__', 'continue_task', args));
-}
+const DEV_INSTRUCTIONS = 'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.';
+
+const devTools = () => Object.entries(DEV_TOOL_TABLE).map(([name, t]): ServedTool => ({ name, ...t, call: (args) => callMochi('__dev__', name, args) }));
