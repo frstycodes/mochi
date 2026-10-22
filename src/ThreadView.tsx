@@ -24,7 +24,7 @@ import type { Pane, PaneTabKind, Thread } from './model';
 import { PANE_TABS } from './pane/tabs';
 import { layoutOf } from './store/panes';
 import { BoundShortcut } from './Shortcut';
-import { commandOf, paneCommand } from './keymap';
+import { commandOf, paneCommand, listenKeydown } from './keymap';
 import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop, type PinnableKind } from './pane/headerPins';
 import { isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
@@ -158,8 +158,7 @@ function usePaneShortcuts(isFocused: boolean, onToggle: (kind: PaneTabKind) => v
       e.preventDefault();
       toggle.current(kind);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [isFocused]);
 }
 

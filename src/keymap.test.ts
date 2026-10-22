@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bindingOf, checkBinding, chordOf, chordText, COMMAND_IDS, COMMANDS, conflictOf, defaultKeys, filterCommands, isCommand, parseChord, rebind, reservedReason, resetBinding } from './keymap.ts';
+import { bindingOf, checkBinding, chordOf, chordText, COMMAND_IDS, COMMANDS, conflictOf, defaultKeys, filterCommands, isCommand, parseChord, rebind, reservedReason, resetBinding, type CommandId } from './keymap.ts';
 
 const key = (code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ code, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods });
 
@@ -8,7 +8,7 @@ for (const isMac of [true, false])
   test(`defaults on ${isMac ? 'macOS' : 'Windows and Linux'} are unique where they listen and never reserved`, () => {
     for (const id of COMMAND_IDS) {
       const keys = defaultKeys(id, isMac);
-      assert.equal(reservedReason(keys, isMac), undefined, `${id}: ${chordText(keys)}`);
+      assert.equal(reservedReason(keys, isMac, COMMANDS[id].scope), undefined, `${id}: ${chordText(keys)}`);
       assert.equal(conflictOf(id, keys, {}, isMac), undefined, `${id}: ${chordText(keys)}`);
     }
   });
@@ -17,7 +17,7 @@ test('chords read and write as text, modifiers in a fixed order, letters in any 
   assert.deepEqual(parseChord('shift+MOD+k'), ['mod', 'shift', 'K']);
   assert.deepEqual(parseChord('nav+left'), ['nav', 'left']);
   assert.equal(chordText(['shift', 'mod', '[']), 'mod+shift+[');
-  for (const bad of ['cmd+K', 'mod+mod+K', 'mod+', 'mod+K+J', 'mod+Escape', '']) assert.equal(parseChord(bad), null, bad);
+  for (const bad of ['cmd+K', 'mod+mod+K', 'mod+', 'mod+K+J', 'mod+Unknown', '']) assert.equal(parseChord(bad), null, bad);
 });
 
 test('an override wins, an empty one clears, an unreadable one falls back to the default', () => {
@@ -90,4 +90,52 @@ test('the shortcut filter matches words in the title or group, the chord a comma
   assert.deepEqual(filterCommands(COMMAND_IDS, { ...none, chord: ['mod', 'P'] }, moved, true), ['palette'], 'a rebind moves the match');
   assert.deepEqual(filterCommands(COMMAND_IDS, { ...none, isChangedOnly: true }, moved, true), ['palette', 'files-go-to'].filter((id) => COMMAND_IDS.includes(id as never)), 'changed keeps rebinds only');
   assert.deepEqual(filterCommands(COMMAND_IDS, { ...none, isChangedOnly: true }, {}, true), []);
+});
+
+
+test('H4 commands match their physical defaults, accept a rebind, and stop on the old chord', () => {
+  const cases: [CommandId, string, Partial<ReturnType<typeof key>>][] = [
+    ['dismiss', 'Escape', {}],
+    ['sidebar-toggle', 'KeyB', { metaKey: true }],
+    ['toast-focus', 'KeyT', { altKey: true }],
+    ['report-take-move', 'Enter', { metaKey: true }],
+    ['replay-toggle', 'Space', {}],
+    ['replay-toggle-k', 'KeyK', {}],
+    ['replay-back', 'KeyJ', {}],
+    ['replay-forward', 'KeyL', {}],
+    ['replay-previous', 'ArrowLeft', {}],
+    ['replay-next', 'ArrowRight', {}],
+    ['replay-marker-previous', 'ArrowLeft', { shiftKey: true }],
+    ['replay-marker-next', 'ArrowRight', { shiftKey: true }],
+    ['replay-start', 'Home', {}],
+    ['replay-end', 'End', {}],
+    ['photo-zoom-in', 'Equal', {}],
+    ['photo-zoom-in-shift', 'Equal', { shiftKey: true }],
+    ['photo-zoom-out', 'Minus', {}],
+    ['photo-fit', 'Digit0', {}],
+    ['annotation-undo', 'KeyZ', { metaKey: true }],
+    ['annotation-redo', 'KeyZ', { metaKey: true, shiftKey: true }],
+    ['orbit-hold', 'AltLeft', { altKey: true }],
+    ...([1, 2, 3, 4] as const).map((n): [CommandId, string, Partial<ReturnType<typeof key>>] => [`orbit-${n}`, `Digit${n}`, {}]),
+  ];
+  for (const isMac of [true, false]) {
+    for (const [id, code, macMods] of cases) {
+      const mods = isMac || !macMods.metaKey ? macMods : { ...macMods, metaKey: false, ctrlKey: true };
+      const event = key(code, mods);
+      assert.ok(isCommand(event, id, {}, isMac), `${id} default`);
+      const moved = rebind({}, id, ['mod', 'shift', 'F12'], undefined, isMac);
+      assert.ok(isCommand(key('F12', isMac ? { metaKey: true, shiftKey: true } : { ctrlKey: true, shiftKey: true }), id, moved, isMac), `${id} rebound`);
+      assert.equal(isCommand(event, id, moved, isMac), false, `${id} old chord`);
+      assert.equal(isCommand(event, id, { [id]: '' }, isMac), false, `${id} disabled`);
+      assert.ok(filterCommands(COMMAND_IDS, { query: COMMANDS[id].title, chord: null, isChangedOnly: false }, {}, isMac).includes(id), `${id} settings row`);
+    }
+  }
+  assert.ok(isCommand(key('Digit1', { altKey: true }), 'orbit-1', {}, true), 'Orbit selection works while holding Alt');
+  assert.ok(isCommand(key('Digit1', { metaKey: true }), 'orbit-1', { 'orbit-hold': 'mod+F12' }, true), 'Orbit selection follows a rebound hold modifier');
+  assert.ok(isCommand(key('NumpadEnter', { metaKey: true }), 'report-take-move', {}, true), 'numpad Enter');
+  assert.equal(isCommand({ ...key('KeyZ', { metaKey: true }), key: 'k' }, 'palette', {}, true), false, 'a logical key cannot spoof a physical key');
+  assert.equal(isCommand({ ...key('KeyK', { metaKey: true }), defaultPrevented: true }, 'palette', {}, true), false, 'a consumed press stays consumed');
+  assert.equal(isCommand({ ...key('KeyK', { metaKey: true }), isComposing: true }, 'palette', {}, true), false, 'composition stays with the input');
+  assert.equal(checkBinding('annotation-undo', ['mod', 'Q'], {}, true).ok, false, 'annotation cannot take an OS shortcut');
+  assert.deepEqual(parseChord('alt'), ['alt'], 'the Orbit hold default survives persistence and reset');
 });

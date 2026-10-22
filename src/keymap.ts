@@ -1,3 +1,4 @@
+import { matchKeybindingPress } from 'tinykeys';
 import { IS_MAC, shortcutText, type Key, type Modifier } from './keys.ts';
 import { getPrefs } from './settings/prefs.ts';
 
@@ -7,16 +8,18 @@ import { getPrefs } from './settings/prefs.ts';
  * `prefs.keybindings`, which holds only the changed ones (`''` = no shortcut). Chords match on `e.code`, so they work on
  * any keyboard layout. Field-local keys (the composer's Enter, text editing, a terminal's own keys) stay out: `FIXED_KEYS`.
  */
-export const COMMAND_GROUPS = ['General', 'Threads', 'Splits', 'Side pane', 'Profiles', 'Lists'] as const;
+export const COMMAND_GROUPS = ['General', 'Threads', 'Splits', 'Side pane', 'Profiles', 'Lists', 'Replay', 'Photos', 'Annotations', 'Orbit'] as const;
 
-/** Where a command listens: anywhere, inside a side pane with focus, or in Queue and Review's lists. Two commands clash when they share a scope or one is global. */
-export type CommandScope = 'global' | 'pane' | 'list';
+/** Commands clash within a scope or with a global command. Viewer shortcuts listen only while that viewer is active. */
+export type CommandScope = 'global' | 'pane' | 'list' | 'replay' | 'photo' | 'annotation' | 'orbit';
 
 interface Command {
   title: string;
   group: (typeof COMMAND_GROUPS)[number];
   scope: CommandScope;
   keys: Key[] | ((isMac: boolean) => Key[]);
+  inDialog?: boolean;
+  whileTyping?: boolean;
 }
 
 const PINS = 5;
@@ -31,6 +34,10 @@ const ARROWS = { left: 'left', right: 'right', up: 'up', down: 'down' } as const
 
 export const COMMANDS = {
   palette: { title: 'Command palette', group: 'General', scope: 'global', keys: ['mod', 'K'] },
+  dismiss: { title: 'Dismiss the current view or gesture', group: 'General', scope: 'global', keys: ['Esc'], whileTyping: true },
+  'sidebar-toggle': { title: 'Toggle sidebar', group: 'General', scope: 'global', keys: ['mod', 'B'] },
+  'toast-focus': { title: 'Focus the newest notification', group: 'General', scope: 'global', keys: (isMac) => [isMac ? 'alt' : 'nav', 'T'] },
+  'report-take-move': { title: 'Take the next move', group: 'Threads', scope: 'global', keys: ['mod', 'Enter'], whileTyping: true },
   'go-settings': { title: 'Settings', group: 'General', scope: 'global', keys: ['mod', ','] },
   'go-new': { title: 'New thread', group: 'General', scope: 'global', keys: ['mod', 'N'] },
   'layout-overview': { title: 'Show all sessions', group: 'General', scope: 'global', keys: ['mod', 'up'] },
@@ -64,6 +71,24 @@ export const COMMANDS = {
 
   'list-next': { title: 'Next item', group: 'Lists', scope: 'list', keys: ['J'] },
   'list-previous': { title: 'Previous item', group: 'Lists', scope: 'list', keys: ['K'] },
+  'replay-toggle': { title: 'Play or pause replay', group: 'Replay', scope: 'replay', keys: ['Space'] },
+  'replay-toggle-k': { title: 'Play or pause replay with K', group: 'Replay', scope: 'replay', keys: ['K'] },
+  'replay-back': { title: 'Replay back 10 seconds', group: 'Replay', scope: 'replay', keys: ['J'] },
+  'replay-forward': { title: 'Replay forward 10 seconds', group: 'Replay', scope: 'replay', keys: ['L'] },
+  'replay-previous': { title: 'Previous replay event', group: 'Replay', scope: 'replay', keys: ['left'] },
+  'replay-next': { title: 'Next replay event', group: 'Replay', scope: 'replay', keys: ['right'] },
+  'replay-marker-previous': { title: 'Previous replay marker', group: 'Replay', scope: 'replay', keys: ['shift', 'left'] },
+  'replay-marker-next': { title: 'Next replay marker', group: 'Replay', scope: 'replay', keys: ['shift', 'right'] },
+  'replay-start': { title: 'Start of replay', group: 'Replay', scope: 'replay', keys: ['Home'] },
+  'replay-end': { title: 'End of replay', group: 'Replay', scope: 'replay', keys: ['End'] },
+  'photo-zoom-in': { title: 'Zoom photo in', group: 'Photos', scope: 'photo', keys: ['='], inDialog: true },
+  'photo-zoom-in-shift': { title: 'Zoom photo in with +', group: 'Photos', scope: 'photo', keys: ['shift', '='], inDialog: true },
+  'photo-zoom-out': { title: 'Zoom photo out', group: 'Photos', scope: 'photo', keys: ['-'], inDialog: true },
+  'photo-fit': { title: 'Fit photo', group: 'Photos', scope: 'photo', keys: ['0'], inDialog: true },
+  'annotation-undo': { title: 'Undo annotation', group: 'Annotations', scope: 'annotation', keys: ['mod', 'Z'] },
+  'annotation-redo': { title: 'Redo annotation', group: 'Annotations', scope: 'annotation', keys: ['mod', 'shift', 'Z'] },
+  'orbit-hold': { title: 'Hold to open Orbit', group: 'Orbit', scope: 'global', keys: ['alt'] },
+  ...numbered(4, (n) => [`orbit-${n}`, { title: `Choose Orbit item ${n}`, group: 'Orbit', scope: 'orbit', keys: [String(n)], whileTyping: true }]) as Record<`orbit-${1 | 2 | 3 | 4}`, Command>,
 } satisfies Record<string, Command>;
 
 export type CommandId = keyof typeof COMMANDS;
@@ -85,14 +110,12 @@ export const FIXED_KEYS: { keys: Key[]; what: string }[] = [
   { keys: ['Enter'], what: 'Send from the composer (Shift Enter for a new line)' },
   { keys: ['mod'], what: 'Hold while sending to queue or steer the other way' },
   { keys: ['up'], what: 'Edit your last message from an empty composer' },
-  { keys: ['alt'], what: 'Hold for Orbit' },
-  { keys: ['Esc'], what: 'Close a menu, dialog, expanded pane, the overview or Settings' },
+  { keys: ['Esc'], what: 'Close a menu or dialog, or cancel shortcut recording' },
   { keys: ['mod', '1'], what: 'Pick a tab in a pane with tabs (1 to 9), while it has focus' },
   { keys: ['alt', 'up'], what: 'Move a focused pinned thread up or down' },
-  { keys: ['mod', 'Z'], what: 'Undo while annotating a page (Shift for redo)' },
-  { keys: ['left', 'right'], what: 'Step through files, photos and replays' },
+  { keys: ['left', 'right'], what: 'Step through files and photos' },
   { keys: ['1'], what: 'Answer a drift card (1 to 3)' },
-  { keys: ['mod', 'Enter'], what: 'Take the next move from an empty composer; send a review comment or a note on a change' },
+  { keys: ['mod', 'Enter'], what: 'Send a review comment or a note on a change' },
   { keys: ['mod', 'C'], what: 'Text editing, and every key inside a terminal or the simulator' },
 ];
 
@@ -113,6 +136,7 @@ const CODES: Record<string, string> = {
   '-': 'Minus',
   '=': 'Equal',
   '`': 'Backquote',
+  Esc: 'Escape',
   Enter: 'Enter',
   Tab: 'Tab',
   Space: 'Space',
@@ -130,7 +154,7 @@ const CODES: Record<string, string> = {
 const NAMES = Object.fromEntries(Object.entries(CODES).map(([name, code]) => [code, name]));
 
 /** The keys a plain chord (no ⌘, ⌃ or ⌥) may end in: anything else moves focus or edits text. */
-const PLAIN_OK = /^([A-Z0-9]|F\d+)$/;
+const PLAIN_OK = /^([A-Z0-9]|F\d+|Esc|Space|left|right|up|down|Home|End|PageUp|PageDown|=|-)$/;
 
 const reserved = (keys: Key[], reason: string) => ({ keys, reason });
 
@@ -222,6 +246,7 @@ export function parseChord(text: string): Key[] | null {
   const parts = text.split('+').map((p) => p.trim());
   // A trailing '+' leaves an empty part, and '+' is no key here (it's Shift = on most layouts).
   if (parts.some((p) => !p)) return null;
+  if (parts.length === 1 && parts[0].toLowerCase() === 'alt') return ['alt'];
   const key = parts.pop()!;
   const name = keyNamed(key);
   const mods = parts.map((p) => p.toLowerCase());
@@ -236,6 +261,9 @@ function keyNamed(key: string) {
 }
 
 interface KeyEventLike {
+  key?: string;
+  defaultPrevented?: boolean;
+  isComposing?: boolean;
   code: string;
   metaKey: boolean;
   ctrlKey: boolean;
@@ -248,11 +276,6 @@ function physical(keys: Key[], isMac = IS_MAC) {
   const mods = new Set(keys.flatMap((k) => (k === 'mod' ? [isMac ? 'meta' : 'ctrl'] : k === 'nav' ? [isMac ? 'ctrl' : 'alt'] : k === 'alt' || k === 'shift' ? [k] : [])));
   const key = keys.find((k) => !(MODIFIERS as readonly Key[]).includes(k));
   return `${['meta', 'ctrl', 'alt', 'shift'].filter((m) => mods.has(m)).join('+')}|${key ? CODES[key] : ''}`;
-}
-
-function eventPhysical(e: KeyEventLike) {
-  const mods = [e.metaKey && 'meta', e.ctrlKey && 'ctrl', e.altKey && 'alt', e.shiftKey && 'shift'].filter(Boolean).join('+');
-  return `${mods}|${e.code === 'NumpadEnter' ? 'Enter' : e.code}`;
 }
 
 /**
@@ -268,11 +291,25 @@ export function chordOf(e: KeyEventLike, isMac = IS_MAC): Key[] | null {
   return parseChord(chordText([...mods, name]));
 }
 
-/** True when `e` is `id`'s chord. A chord without ⌘, ⌃ or ⌥ never fires while typing in a field or a dialog. */
+/** Match the current binding through tinykeys, keeping physical codes and the command's typing policy. */
 export function isCommand(e: KeyEventLike & { target?: EventTarget | null }, id: CommandId, overrides?: Overrides, isMac = IS_MAC) {
   const keys = bindingOf(id, overrides, isMac);
-  if (!keys || physical(keys, isMac) !== eventPhysical(e)) return false;
-  return !(isPlain(keys) && isTyping(e.target));
+  if (!keys || e.defaultPrevented || e.isComposing) return false;
+  const [mods, code] = physical(keys, isMac).split('|');
+  const modifiers: Record<string, string> = { meta: 'Meta', ctrl: 'Control', alt: 'Alt', shift: 'Shift' };
+  const required = mods ? mods.split('+').map((m) => modifiers[m]) : [];
+  const key = code || 'Alt';
+  // tinykeys also accepts e.key; supplying only the code keeps layout-independent matching.
+  const event = {
+    key: '',
+    code: e.code === 'NumpadEnter' ? 'Enter' : /^(AltLeft|AltRight)$/.test(e.code) ? 'Alt' : e.code,
+    getModifierState: (mod: string) => ({ Meta: e.metaKey, Control: e.ctrlKey, Alt: e.altKey, Shift: e.shiftKey })[mod] ?? false,
+  } as KeyboardEvent;
+  const command: Command = COMMANDS[id];
+  const heldMods = command.scope === 'orbit' ? physical(bindingOf('orbit-hold', overrides, isMac) ?? [], isMac).split('|')[0] : '';
+  const optional = heldMods ? heldMods.split('+').map((m) => modifiers[m]) : [];
+  if (!matchKeybindingPress(event, [required.filter((m) => m !== key), optional, key])) return false;
+  return command.whileTyping || !(isPlain(keys) && isTyping(e.target, command.inDialog));
 }
 
 /** The first of `ids` whose chord `e` is. */
@@ -282,15 +319,21 @@ export function commandOf<T extends CommandId>(e: KeyEventLike & { target?: Even
 
 const isPlain = (keys: Key[]) => !keys.some((k) => k === 'mod' || k === 'nav' || k === 'alt');
 
-function isTyping(target: EventTarget | null | undefined) {
-  return typeof Element !== 'undefined' && target instanceof Element && !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=dialog]');
+function isTyping(target: EventTarget | null | undefined, inDialog = false) {
+  return typeof Element !== 'undefined' && target instanceof Element && !!target.closest(`input, textarea, select, [contenteditable]:not([contenteditable=false])${inDialog ? '' : ', [role=dialog], [role=alertdialog], [role=menu]'}`);
+}
+
+export function listenKeydown(listener: (event: KeyboardEvent) => void, capture = false) {
+  window.addEventListener('keydown', listener, capture);
+  return () => window.removeEventListener('keydown', listener, capture);
 }
 
 /** Why `keys` can't be bound at all ("macOS quits Mochi with it"), or undefined when it can. */
-export function reservedReason(keys: Key[], isMac = IS_MAC): string | undefined {
+export function reservedReason(keys: Key[], isMac = IS_MAC, scope: CommandScope = 'global'): string | undefined {
   const name = keys.at(-1)!;
   if (isPlain(keys) && !PLAIN_OK.test(name)) return `It needs ${isMac ? '⌘, ⌃ or ⌥' : 'Ctrl or Alt'}: on its own it moves focus or edits text`;
-  return (isMac ? MAC_RESERVED : PC_RESERVED).find((r) => physical(r.keys, isMac) === physical(keys, isMac))?.reason;
+  const reserved = (isMac ? MAC_RESERVED : PC_RESERVED).filter((r) => scope !== 'annotation' || !EDITING.includes(r));
+  return reserved.find((r) => physical(r.keys, isMac) === physical(keys, isMac))?.reason;
 }
 
 const overlaps = (a: CommandScope, b: CommandScope) => a === b || a === 'global' || b === 'global';
@@ -311,7 +354,7 @@ export type BindingCheck = { ok: true } | { ok: false; reason: string } | { ok: 
 /** What binding `keys` to `id` would hit; `null` (no shortcut) always passes. */
 export function checkBinding(id: CommandId, keys: Key[] | null, overrides: Overrides = getPrefs().keybindings, isMac = IS_MAC): BindingCheck {
   if (!keys) return { ok: true };
-  const reason = reservedReason(keys, isMac);
+  const reason = reservedReason(keys, isMac, COMMANDS[id].scope);
   if (reason) return { ok: false, reason };
   const conflict = conflictOf(id, keys, overrides, isMac);
   return conflict ? { ok: false, conflict } : { ok: true };

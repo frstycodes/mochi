@@ -1,3 +1,4 @@
+import { listenKeydown, isCommand } from '../keymap';
 import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
 import { ArrowUp, CopyStack, RotateLeft, Stop, Trash, X } from '@/icons';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -122,11 +123,10 @@ function useCloseOnLeave() {
   }, [view]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target)) return;
+      if (!isCommand(e, 'dismiss') || e.defaultPrevented || isTyping(e.target)) return;
       closeRemoteThread();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, []);
 }
 

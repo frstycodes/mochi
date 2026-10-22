@@ -1,3 +1,4 @@
+import { listenKeydown, isCommand } from '../keymap';
 import {
   useEffect,
   useLayoutEffect,
@@ -389,13 +390,12 @@ function useFocusHotkey(listRef: RefObject<HTMLOListElement | null>, isActive: b
   useEffect(() => {
     if (!isActive) return;
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== 'KeyT') return;
+      if (!isCommand(e, 'toast-focus')) return;
       const target = listRef.current?.querySelector<HTMLElement>('li:not([inert]) button:not([inert] *)');
       if (!target) return;
       e.preventDefault();
       target.focus();
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return listenKeydown(onKeyDown);
   }, [listRef, isActive]);
 }
