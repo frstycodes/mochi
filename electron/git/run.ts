@@ -1,28 +1,27 @@
-import { execFile, spawn } from 'node:child_process';
 import { dirname, normalize, relative, resolve, sep } from 'node:path';
 import { parseWorktrees } from '../../src/git/parse.ts';
-import { userPath } from '@mochi/core/shellPath';
+import { runCommand, RunError, spawnCommand } from '@mochi/core/runClient';
 
-const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
+const ENV = { GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
 
 /**
- * execFile, never a shell: args go to the binary verbatim. `okCodes` lists non-zero exits that still carry a result;
- * `stderr` resolves with what went to stderr instead, for tools that print their report there (`gh auth status`).
+ * Runs in Core, never through a shell: args go to the binary verbatim, with the login shell's PATH (a Finder-launched app gets
+ * launchd's, which lacks Homebrew's `gh`). `okCodes` lists non-zero exits that still carry a result; `stderr` resolves with what
+ * went to stderr instead, for tools that print their report there (`gh auth status`).
  */
-export function run(
+export async function run(
   cmd: 'git' | 'gh' | 'du',
   cwd: string,
   args: string[],
   { input, okCodes = [0], env, stderr: wantsStderr }: { input?: string; okCodes?: number[]; env?: Record<string, string>; stderr?: boolean } = {},
 ) {
-  // A Finder-launched app gets launchd's PATH, which lacks Homebrew's `gh`; the login shell's PATH has it.
-  return userPath().then((PATH) => new Promise<string>((done, fail) => {
-    const child = execFile(cmd, args, { cwd, env: { ...ENV, PATH, ...env }, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (!error || (typeof error.code === 'number' && okCodes.includes(error.code))) return done(wantsStderr ? stderr : stdout);
-      fail(new Error(stderr.trim() || error.message));
-    });
-    if (input !== undefined) child.stdin?.end(input);
-  }));
+  try {
+    const result = await runCommand(cmd, args, { cwd, env: { ...ENV, ...env }, input, okCodes: [0, ...okCodes] });
+    return wantsStderr ? result.stderr : result.stdout;
+  } catch (error) {
+    if (error instanceof RunError) throw new Error(error.stderr.trim() || error.message);
+    throw error;
+  }
 }
 
 /**
@@ -30,8 +29,8 @@ export function run(
  * comes. On failure the error holds what it printed, progress bars left out.
  */
 export function runStreaming(cmd: 'git' | 'gh', cwd: string, args: string[], onLine: (line: string) => void, env?: Record<string, string>) {
-  return userPath().then((PATH) => new Promise<void>((done, fail) => {
-    const child = spawn(cmd, args, { cwd, env: { ...ENV, PATH, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  return new Promise<void>((done, fail) => {
+    const child = spawnCommand(cmd, args, { cwd, env: { ...ENV, ...env } });
     const printed: string[] = [];
     const line = (text: string) => {
       if (!text.trim()) return;
@@ -49,9 +48,9 @@ export function runStreaming(cmd: 'git' | 'gh', cwd: string, args: string[], onL
     };
     child.stdout.on('data', reader());
     child.stderr.on('data', reader());
-    child.on('error', fail);
+    child.on('error', (error: Error) => fail(error instanceof RunError ? new Error(error.stderr || error.message) : error));
     child.on('close', (code) => (code === 0 ? done() : fail(new Error(printed.slice(-20).join('\n') || `${cmd} exited with ${code}`))));
-  }));
+  });
 }
 
 /** git's redrawn counters: "Receiving objects:  42% (420/1000)". */

@@ -1,12 +1,11 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { app } from 'electron';
+import { runCommand } from '@mochi/core/runClient';
 
-const run = promisify(execFile);
+const COMPILE_TIMEOUT_MS = 5 * 60_000;
 const binaries = new Map<string, Promise<string | null>>();
 
 /**
@@ -32,6 +31,6 @@ async function compiled(name: string, source: string) {
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, `${name}-${hash}.swift`);
   await writeFile(file, source);
-  await run('xcrun', ['swiftc', '-O', file, '-o', binary]);
+  await runCommand('xcrun', ['swiftc', '-O', file, '-o', binary], { timeout: COMPILE_TIMEOUT_MS });
   return binary;
 }

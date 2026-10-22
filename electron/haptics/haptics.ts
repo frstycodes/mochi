@@ -1,9 +1,9 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { app } from 'electron';
+import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
 import { nativeHelper } from '../native.ts';
 import helperSource from './haptic.swift?raw';
 
-let helper: Promise<ChildProcessWithoutNullStreams | null> | undefined;
+let helper: Promise<CoreChild | null> | undefined;
 
 /** One trackpad tick. Best effort: no Xcode to compile the helper, or no Force Touch trackpad, means no haptic. */
 export function playHaptic() {
@@ -15,7 +15,7 @@ export function playHaptic() {
 async function start() {
   const binary = await nativeHelper('haptic', helperSource);
   if (!binary) return null;
-  const child = spawn(binary);
+  const child = spawnCommand(binary);
   child.on('exit', () => (helper = undefined));
   app.on('will-quit', () => child.kill());
   return child;
