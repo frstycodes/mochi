@@ -15,6 +15,7 @@ const options = {
   port: Number(env('MOCHI_CORE_PORT')),
   tokens: new Map([[env('MOCHI_CORE_TOKEN'), Capabilities.allScopes]]),
   origins: (process.env.MOCHI_CORE_ORIGINS ?? '').split(',').filter(Boolean),
+  userData: env('MOCHI_CORE_DATA'),
 };
 
 const program = Effect.logInfo('Core started').pipe(

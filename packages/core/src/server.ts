@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
+import path from 'node:path';
 import { Context, Effect, Layer, Schedule, Stream } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
@@ -9,6 +10,9 @@ import { Cache } from './cache.ts';
 import { Capabilities, hostHandlers } from './hostServer.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { asRunError, Run } from './run.ts';
+import { storeHandlers } from './store/handlers.ts';
+import { importJson } from './store/importJson.ts';
+import { Store } from './store/store.ts';
 
 export interface ServerOptions {
   readonly port: number;
@@ -17,24 +21,36 @@ export interface ServerOptions {
   readonly tokens: ReadonlyMap<string, ReadonlyArray<Contract.AuthScope>>;
   /** Page origins allowed to connect. A client that sends no Origin (main, a Node client) needs only the token. */
   readonly origins: ReadonlyArray<string>;
+  /** Mochi's data folder: the store's `mochi.db`, and the JSON files it imports once. Unset: an in-memory store (tests). */
+  readonly userData?: string;
 }
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
 export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
-    Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer)),
-    Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1' })),
+    Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer, layerStore(options.userData))),
+    // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
+    Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1', gracefulShutdownTimeout: '100 millis' })),
   );
+
+/** The store, after the one-time import of main's JSON files, so no handler reads it before they are in. */
+const layerStore = (userData: string | undefined) =>
+  Layer.effectDiscard(userData ? Effect.asVoid(importJson(userData)) : Effect.void).pipe(
+    Layer.provideMerge(Store.layer(userData ? path.join(userData, 'mochi.db') : ':memory:')),
+    Layer.orDie,
+  );
+
+type Services = Run | Capabilities | Store;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
-    Layer.unwrap(Effect.map(Effect.context<Run | Capabilities>(), (services) => HttpRouter.add('GET', '/ws', connect(options, services)))),
+    Layer.unwrap(Effect.map(Effect.context<Services>(), (services) => HttpRouter.add('GET', '/ws', connect(options, services)))),
     { disableLogger: true, disableListenLog: true },
   );
 
 // Modelled on T3 Code's `apps/server/src/ws.ts`: refuse before the upgrade, then one RPC server per socket, so its
 // handlers know the connection's scopes and window.
-const connect = (options: ServerOptions, services: Context.Context<Run | Capabilities>) =>
+const connect = (options: ServerOptions, services: Context.Context<Services>) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = new URL(request.url, 'http://core');
@@ -49,7 +65,7 @@ const connect = (options: ServerOptions, services: Context.Context<Run | Capabil
     const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
     yield* RpcServer.make(CoreWsRpcs, { disableFatalDefects: true }).pipe(
       Effect.provideService(RpcServer.Protocol, protocol),
-      Effect.provide(Layer.mergeAll(layerHandlers(windowId), layerScopes(scopes))),
+      Effect.provide(Layer.mergeAll(layerHandlers(windowId, options.userData), layerScopes(scopes))),
       Effect.provide(services),
       Effect.forkScoped,
     );
@@ -77,11 +93,12 @@ const layerScopes = (scopes: ReadonlyArray<Contract.AuthScope>) =>
     return scopes.includes(scope) ? effect : Effect.fail(new Unauthorized({ scope }));
   });
 
-const layerHandlers = (windowId: number | undefined) =>
+const layerHandlers = (windowId: number | undefined, userData: string | undefined) =>
   CoreWsRpcs.toLayer(
     Effect.gen(function* () {
       const run = yield* Run;
       const capabilities = yield* Capabilities;
+      const store = yield* Store;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -96,6 +113,7 @@ const layerHandlers = (windowId: number | undefined) =>
         'capabilities.serve': ({ names }: { names: ReadonlyArray<Contract.CapabilityName> }) => capabilities.serve(names),
         'capabilities.reply': (reply: Contract.CapabilityReply) => capabilities.reply(reply),
         ...hostHandlers(capabilities, windowId),
+        ...storeHandlers(store, userData),
       } as never;
     }),
   );

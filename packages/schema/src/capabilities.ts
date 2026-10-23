@@ -62,6 +62,12 @@ const coreScopes: Record<string, AuthScope> = {
   signal: 'terminal',
   'capabilities.serve': 'manage',
   'capabilities.reply': 'manage',
+  shell: 'read',
+  thread: 'read',
+  'events.append': 'operate',
+  'docs.list': 'manage',
+  'docs.get': 'manage',
+  'docs.set': 'manage',
 };
 
 // GAP: per-namespace, not per-method; `remote-core` refines it when scoped device tokens exist.

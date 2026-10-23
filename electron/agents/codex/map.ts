@@ -3,7 +3,7 @@ import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, AgentTa
 import type { AgentCommand, AgentInfo, GeneratedImage, McpServer, WebLink } from '../../../src/model.ts';
 import { codexWindows, hottest, mergeWindows } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
-import type { SaveImage } from '../images.ts';
+import type { SaveImage } from '@mochi/core/agents/images';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {

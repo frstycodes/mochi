@@ -122,7 +122,7 @@ test("a window's host call reaches the client serving its capability, with the w
 
 test('killing Core reconnects every client, and main registers its capabilities again', { timeout: 90_000 }, async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'mochi-core-'));
-  const env = { ...process.env, MOCHI_LOG_FILE: path.join(dir, 'core.log'), MOCHI_CORE_TOKEN: TOKEN, MOCHI_CORE_PORT: String(await freePort()) };
+  const env = { ...process.env, MOCHI_LOG_FILE: path.join(dir, 'core.log'), MOCHI_CORE_TOKEN: TOKEN, MOCHI_CORE_PORT: String(await freePort()), MOCHI_CORE_DATA: dir };
   const startProcess = () => spawn(process.execPath, [path.join(import.meta.dirname, 'core.ts')], { env, stdio: 'inherit' });
   let core = startProcess();
   try {
