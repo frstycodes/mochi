@@ -86,6 +86,9 @@ importers:
       '@mochi/core':
         specifier: workspace:*
         version: link:packages/core
+      '@mochi/domain':
+        specifier: workspace:*
+        version: link:packages/domain
       '@mochi/schema':
         specifier: workspace:*
         version: link:packages/schema
