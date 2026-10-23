@@ -1,7 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { test } from 'node:test';
 import { devTarget } from '../../src/terminal/lsof.ts';
 import { debounce, DEBOUNCE_MS, isHmrLog, isIgnored, ScrollMemory, watchTree } from './reload.ts';
@@ -28,30 +25,22 @@ test('debounce runs once after the burst settles', (t) => {
   assert.equal(calls, 1);
 });
 
-test('watchTree reports one change per burst, with its start, and ignores node_modules', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'mochi-watch-'));
-  mkdirSync(join(root, 'node_modules'));
-  mkdirSync(join(root, 'src'));
+test('watchTree reports one change per burst, with its start, and ignores node_modules', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
   const seen: number[] = [];
-  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  // FSEvents delivers writes from just before the watch started; let the setup's own mkdirs pass first.
-  await wait(500);
-  const stop = watchTree(root, (since) => seen.push(since));
-  try {
-    await wait(100);
-    writeFileSync(join(root, 'node_modules', 'dep.js'), '1');
-    await wait(DEBOUNCE_MS + 200);
-    assert.equal(seen.length, 0);
-    const before = Date.now();
-    writeFileSync(join(root, 'src', 'a.ts'), '1');
-    writeFileSync(join(root, 'src', 'b.ts'), '1');
-    await wait(DEBOUNCE_MS + 200);
-    assert.equal(seen.length, 1);
-    assert.ok(seen[0] >= before && seen[0] <= before + 100);
-  } finally {
-    stop();
-    rmSync(root, { recursive: true, force: true });
-  }
+  let emit: (paths: ReadonlyArray<string>) => void = () => {};
+  let isStopped = false;
+  const stop = watchTree('/repo', (since) => seen.push(since), (_root, onPaths) => ((emit = onPaths), () => (isStopped = true)));
+  emit(['node_modules/dep/index.js']);
+  t.mock.timers.tick(DEBOUNCE_MS + 1);
+  assert.equal(seen.length, 0);
+  emit(['src/a.ts']);
+  t.mock.timers.tick(50);
+  emit(['src/b.ts']);
+  t.mock.timers.tick(DEBOUNCE_MS + 1);
+  assert.deepEqual(seen, [1000 + DEBOUNCE_MS + 1]);
+  stop();
+  assert.ok(isStopped);
 });
 
 test('isHmrLog knows the dev servers that reload pages themselves', () => {

@@ -14,6 +14,8 @@ import { storeHandlers } from './store/handlers.ts';
 import { importJson } from './store/importJson.ts';
 import { Store } from './store/store.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
+import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
+import { Watch } from './watch/watch.ts';
 
 export interface ServerOptions {
   readonly port: number;
@@ -29,6 +31,7 @@ export interface ServerOptions {
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
 export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
+    Layer.provide(Watch.layer),
     Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer, UtilityQueue.layer, layerStore(options.userData))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1', gracefulShutdownTimeout: '100 millis' })),
@@ -41,7 +44,7 @@ const layerStore = (userData: string | undefined) =>
     Layer.orDie,
   );
 
-type Services = Run | Capabilities | UtilityQueue | Store;
+type Services = Run | Capabilities | UtilityQueue | Watch | Store;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -105,6 +108,7 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
       // The model call itself still runs in main (`agent.utility`, `agent.classify` on the `host` capability); Core decides when, and which one.
       const model = (tag: string, args: ReadonlyArray<unknown>) =>
         host[tag]!(args).pipe(Effect.catch((error) => Effect.logWarning(`${tag} failed: ${error}`).pipe(Effect.annotateLogs({ source: 'core' }), Effect.as(null))));
+      const watch = yield* Watch;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -118,6 +122,9 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
         signal: ({ id, signal }: { id: number; signal: string }) => run.signal(id, signal as NodeJS.Signals),
         'capabilities.serve': ({ names }: { names: ReadonlyArray<Contract.CapabilityName> }) => capabilities.serve(names),
         'capabilities.reply': (reply: Contract.CapabilityReply) => capabilities.reply(reply),
+        watch: ({ key }: { key: WatchKey }) => watch.watch(key),
+        'watch.gate': (gate: Gate) => watch.setGate(gate),
+        'watch.stale': ({ kinds }: { kinds: ReadonlyArray<StaleKind> }) => watch.markStale(kinds),
         'utility.run': ({ task, spaceId, prompt, thread }: { task: keyof typeof PRIORITY; spaceId: string; prompt: string; thread?: string }) =>
           queue.submit({ thread, kind: task, priority: PRIORITY[task], promptChars: prompt.length, run: model('agent.utility', [task, spaceId, prompt]) as Effect.Effect<string | null> }),
         'utility.classify': ({ prompt, thread }: { prompt: string; thread: { id: string } }) =>

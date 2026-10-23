@@ -13,6 +13,7 @@ import { appIconImage, startAppIcon } from './appIcon.ts';
 import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
 import { serveFrames } from './frameProtocol.ts';
 import { startCore } from '@mochi/core/host';
+import './fs/watch.ts';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
