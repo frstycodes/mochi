@@ -3,6 +3,7 @@ import { host } from '../host';
 import type { Thread } from '../model';
 import type { Action } from '../store';
 import { parseTitle } from './prompts';
+import { runUtility } from './runUtility';
 import { hasTempBranch, titleRequest } from './titles';
 import { worktreePath } from '../git/worktrees';
 
@@ -22,7 +23,7 @@ export function useAutoTitles(threads: Thread[], dispatch: Dispatch<Action>) {
       const prompt = !asked.has(t.id) && titleRequest(t);
       if (!prompt) continue;
       asked.add(t.id);
-      void host.agent.utility('title', t.spaceId, prompt).then(
+      void runUtility('title', t.spaceId, prompt, t.id).then(
         async (text) => {
           const title = text && parseTitle(text);
           // A rename while the call was out wins, title and branch both.

@@ -38,6 +38,7 @@ import { recordAction } from '../replay/recorder.ts';
 import { tapAction } from '../remote/tap.ts';
 import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
+import { classifyInCore } from '../utility/runUtility.ts';
 import { useIdleChecks } from '../goals/useIdleChecks';
 import { useAutoSimplify } from '../simplify/useSimplify.ts';
 import { usePrSync } from '../git/usePrSync.ts';
@@ -56,7 +57,7 @@ export interface Snapshot {
 export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState & { streamed: number };
 export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | ReviewAction | NotificationsAction | ScheduleAction | { type: 'reset' } | { type: 'tool-undo'; undo: ToolUndo };
 
-setDriftClassifier((prompt, thread) => host.agent.classify(prompt, thread));
+setDriftClassifier(classifyInCore);
 
 const TICK_MS = showsDemoData() ? 1000 : 60_000;
 

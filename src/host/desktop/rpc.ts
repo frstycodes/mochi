@@ -5,7 +5,7 @@ let caller: ReturnType<typeof connect> | undefined;
 
 /** Main posts Core's socket URL after each page load; the client lives as long as the page and redials on its own. */
 function connect() {
-  return new Promise<(tag: string, args: ReadonlyArray<unknown>) => Promise<unknown>>((resolve) => {
+  return new Promise<(tag: string, args: unknown) => Promise<unknown>>((resolve) => {
     const onMessage = (event: MessageEvent<{ channel?: string; url?: string }>) => {
       if (event.source !== window || event.data?.channel !== 'core:url' || typeof event.data.url !== 'string') return;
       window.removeEventListener('message', onMessage);
@@ -18,7 +18,10 @@ function connect() {
   });
 }
 
-const call = async (tag: string, args: ReadonlyArray<unknown>) => (await (caller ??= connect()))(tag, args);
+const call = async (tag: string, args: unknown) => (await (caller ??= connect()))(tag, args);
+
+/** One of Core's own procedures (not a `host.*` method), called with its payload. */
+export const callCore = <T>(tag: string, payload: unknown) => call(tag, payload) as Promise<T>;
 
 /** `host.<ns>` on desktop: request/response methods are RPCs to Core, push methods come from the preload. */
 export function desktopNamespace<K extends Namespace>(ns: K): HostBridge[K] {

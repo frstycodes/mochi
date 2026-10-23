@@ -4,6 +4,7 @@ import { host } from '../host';
 import type { Thread } from '../model';
 import { getPrefs } from '../settings/prefs';
 import type { Action } from '../store';
+import { runUtility } from '../utility/runUtility';
 import { localSimplify, rulesKey, simplifyPrompt, wordCount } from './simplify';
 
 // Messages being simplified right now, as `threadId:index`, so the bar and the row can show it.
@@ -29,7 +30,7 @@ async function simplify(thread: Thread, index: number, dispatch: Dispatch<Action
   pending.add(key);
   changed();
   try {
-    const answer = host.isDesktop ? await host.agent.utility('simplify', thread.spaceId, simplifyPrompt(entry.text, prefs)).catch(() => null) : null;
+    const answer = host.isDesktop ? await runUtility('simplify', thread.spaceId, simplifyPrompt(entry.text, prefs), thread.id).catch(() => null) : null;
     if (host.isDesktop && !answer) toast('Simplified without a model', { description: 'No background model answered, so this is a plain cut of the reply.' });
     dispatch({ type: 'simplified', threadId: thread.id, index, text: answer?.trim() || localSimplify(entry.text, prefs.simplifyLength), rulesKey: rules });
   } finally {
