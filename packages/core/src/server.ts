@@ -7,6 +7,8 @@ import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { NodeHttpServer } from '@effect/platform-node';
 import { Capabilities as Contract } from '@mochi/schema';
 import { Cache } from './cache.ts';
+import { GitHub, GithubTransport } from './github/service.ts';
+import { githubHandlers } from './github/handlers.ts';
 import { Capabilities, hostHandlers } from './hostServer.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { asRunError, Run } from './run.ts';
@@ -32,7 +34,7 @@ export interface ServerOptions {
 export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
     Layer.provide(Watch.layer),
-    Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer, UtilityQueue.layer, layerStore(options.userData))),
+    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), Capabilities.layer, UtilityQueue.layer, layerStore(options.userData)).pipe(Layer.provideMerge(Run.layer))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1', gracefulShutdownTimeout: '100 millis' })),
   );
@@ -44,7 +46,7 @@ const layerStore = (userData: string | undefined) =>
     Layer.orDie,
   );
 
-type Services = Run | Capabilities | UtilityQueue | Watch | Store;
+type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -109,6 +111,7 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
       const model = (tag: string, args: ReadonlyArray<unknown>) =>
         host[tag]!(args).pipe(Effect.catch((error) => Effect.logWarning(`${tag} failed: ${error}`).pipe(Effect.annotateLogs({ source: 'core' }), Effect.as(null))));
       const watch = yield* Watch;
+      const github = yield* GitHub;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -137,6 +140,7 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
           }).pipe(Effect.map((answer) => (answer ? JSON.parse(answer) : null))),
         ...host,
         ...storeHandlers(store, userData),
+        ...githubHandlers(github),
       } as never;
     }),
   );

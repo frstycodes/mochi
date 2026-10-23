@@ -11,7 +11,7 @@ import { CheckList, ChecksSummary } from './Checks';
 import type { Thread } from '../model';
 import { useProfiles } from '../profiles';
 import type { ConfirmRequest } from './useConfirm';
-import { usePr } from './useGit';
+import { refreshGithub, useBranchPr } from './githubWatch';
 import { isMod } from '../keys';
 import { TooltipIconButton } from '../ui';
 import { commitPrompt, localCommit, parseCommit } from '../utility/prompts';
@@ -36,9 +36,9 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   const [message, setMessage] = useState('');
   const [isChecksOpen, setChecksOpen] = useState(false);
   const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
-  const prQuery = usePr(cwd, githubUser);
+  const prQuery = useBranchPr(cwd, githubUser);
   const dispatch = useDispatch();
-  const pr = prQuery.data;
+  const { pr } = prQuery;
   const stagedCount = diff.files.filter((f) => f.staged).length;
 
   const commit = async () => {
@@ -57,7 +57,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
     });
     if (!ok) return;
     await run('Push', () => host.git.push(cwd, githubUser));
-    await prQuery.refresh();
+    refreshGithub({ cwd, githubUser, isPush: true });
   };
 
   const [isPrOpen, setPrOpen] = useState(false);
@@ -108,7 +108,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
             Review
           </Button>
         )}
-        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading} className="text-muted-foreground">Create pull request</Button>}
+        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isPending} className="text-muted-foreground">Create pull request</Button>}
         {!!pr && pr.checks.length > 0 && <ChecksSummary checks={pr.checks} isOpen={isChecksOpen} onToggle={() => setChecksOpen((o) => !o)} />}
       </div>
       {!!pr && isChecksOpen && <CheckList checks={pr.checks} />}
@@ -124,7 +124,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
             const opened = url && openedPr(url, pr.title);
             if (opened) dispatch({ type: 'prs-seen', threadId: thread.id, prs: [opened] });
             if (url) toast.success('Pull request opened', { description: url });
-            await prQuery.refresh();
+            refreshGithub({ cwd, githubUser, isPush: true });
           }}
           onClose={() => setPrOpen(false)}
         />
