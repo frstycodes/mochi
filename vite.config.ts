@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => ({
           vite: {
             // Mochi's OAuth app secrets (electron/library/oauthApps.ts), from the gitignored .env.local.
             define: { __MOCHI_OAUTH_ENV__: JSON.stringify(loadEnv(mode, import.meta.dirname, 'MOCHI_OAUTH_')) },
-            build: { rolldownOptions: { external: ['node-pty', /^playwright-core(\/|$)/] } },
+            build: { rolldownOptions: { external: ['node-pty', '@parcel/watcher', /^playwright-core(\/|$)/] } },
           },
         },
         // A sandboxed preload must be CommonJS; `.cjs` keeps it CJS under the package's `"type": "module"`.
