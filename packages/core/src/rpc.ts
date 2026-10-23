@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup, RpcMiddleware } from 'effect/rpc';
 import { Agent, Capabilities, HostRpcs, Model } from '@mochi/schema';
+import { StoreRpcs } from './store/rpc.ts';
 import { Gate, StaleKind, WatchKey, WatchValue } from './watch/keys.ts';
 import { GithubRpcs } from './github/schema.ts';
 
@@ -73,4 +74,4 @@ export class Unauthorized extends Schema.TaggedError<Unauthorized>()('Unauthoriz
 export class ScopeAuthorization extends RpcMiddleware.Service<ScopeAuthorization>()('mochi/core/ScopeAuthorization', { error: Unauthorized }) {}
 
 /** Everything served on Core's WebSocket. */
-export class CoreWsRpcs extends CoreRpcs.merge(HostRpcs, GithubRpcs).middleware(ScopeAuthorization) {}
+export class CoreWsRpcs extends CoreRpcs.merge(HostRpcs, StoreRpcs, GithubRpcs).middleware(ScopeAuthorization) {}

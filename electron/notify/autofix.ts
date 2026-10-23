@@ -3,11 +3,9 @@ import { Effect, Stream } from 'effect';
 import { keyedStreams } from '@mochi/core/github/client';
 import type { AutofixSnapshot } from '@mochi/core/github/schema';
 import { mainCoreClient } from '@mochi/core/host';
-import { writeFileSync } from 'node:fs';
-import { readFile, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { autofixStep, autofixTitle, type AutofixBaseline, type AutofixEvent, type AutofixTarget } from '../../src/git/autofix.ts';
 import { githubAccount } from '../git/gh.ts';
+import { readDoc, writeDoc } from '@mochi/core/store/client';
 import { topLevel } from '../git/run.ts';
 import { failedLog } from '../ipc/git.ts';
 import { deliver } from '../schedule/scheduler.ts';
@@ -32,7 +30,6 @@ let loaded: Promise<Record<string, AutofixBaseline>> | undefined;
 let targets: AutofixTarget[] = [];
 let alert: (notice: OsNotice) => void = () => {};
 
-const file = () => join(app.getPath('userData'), 'autofix.json');
 const keyOf = (t: Pick<AutofixTarget, 'threadId' | 'pr'>) => `${t.threadId}#${t.pr}`;
 
 type Watched = Pick<AutofixTarget, 'threadId' | 'pr' | 'cwd' | 'githubUser'>;
@@ -54,7 +51,7 @@ export function syncAutofix(next: AutofixTarget[], notify: (notice: OsNotice) =>
 async function onSnapshot(watched: Watched, snap: AutofixSnapshot | null) {
   const target = targets.find((t) => keyOf(t) === keyOf(watched));
   if (!snap || !target) return;
-  baselines = await (loaded ??= readFile(file(), 'utf8').then((text) => (JSON.parse(text) as Saved).baselines, () => ({})));
+  baselines = await (loaded ??= readDoc<Saved>('autofix', 'autofix').then((saved) => saved?.baselines ?? {}));
   const key = keyOf(target);
   if (baselines[key]?.stopped && baselines[key].since === target.since) return;
   const { baseline, events } = autofixStep(baselines[key], target, snap);
@@ -81,25 +78,22 @@ async function withLogs(event: AutofixEvent, top: string, account: ReturnType<ty
   return { ...event, logs: logs.filter((l) => !!l) };
 }
 
-// Saves are serialized and go through a temp file, so a quit mid-write leaves the previous file whole.
-let writing: Promise<void> = Promise.resolve();
 let timer: ReturnType<typeof setTimeout> | undefined;
-const snapshot = () => JSON.stringify({ version: 1, baselines: baselines ?? {} } satisfies Saved);
 
 function save() {
   clearTimeout(timer);
-  timer = setTimeout(() => {
-    timer = undefined;
-    const text = snapshot();
-    writing = writing.catch(() => {}).then(async () => {
-      await writeFile(`${file()}.tmp`, text, { mode: 0o600 });
-      await rename(`${file()}.tmp`, file());
-    });
-  }, 200);
+  timer = setTimeout(flush, 200);
 }
 
+function flush() {
+  timer = undefined;
+  // writeDoc logs a failure; the next change writes the whole document again.
+  void writeDoc('autofix', 'autofix', { version: 1, baselines: baselines ?? {} } satisfies Saved).catch(() => {});
+}
+
+// A save still waiting on its timer goes now; quitting waits for Core to have it (`startCore`).
 app.on('before-quit', () => {
   if (!timer) return;
   clearTimeout(timer);
-  writeFileSync(file(), snapshot(), { mode: 0o600 });
+  flush();
 });

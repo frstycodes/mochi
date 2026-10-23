@@ -7,6 +7,7 @@ import type { Capabilities } from '@mochi/schema';
 import { connectCore, coreUrl, type CoreClient } from './client.ts';
 import { serveCapabilities, type CapabilityHandler } from './hostClient.ts';
 import { useCoreClient } from './runClient.ts';
+import { flushDocs, hasPendingDocs, preloadDocs, useDocsClient } from './store/client.ts';
 
 const RESTART_DELAY_MS = 1000;
 let mainConnection: ReturnType<typeof connectCore> | undefined;
@@ -21,7 +22,8 @@ export interface StartCoreOptions {
 /**
  * Main's side: forks Core on a loopback port with a fresh token, restarts it on the same port when it exits, connects
  * main as the client serving `capabilities`, and sends every trusted page its socket URL after each load (`core:url`).
- * Clients redial on their own, so a restart needs nothing from here beyond the respawn.
+ * Clients redial on their own, so a restart needs nothing from here beyond the respawn. Resolves once Core answers and the
+ * documents main reads synchronously (`cachedDoc`) are loaded.
  */
 export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions) {
   const token = randomBytes(32).toString('base64url');
@@ -38,6 +40,12 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
       contents.send('core:url', coreUrl(port, token, contents.id));
     });
   app.on('browser-window-created', (_event, win) => win.webContents.on('did-finish-load', () => sendUrl(win.webContents)));
+  // Core holds the documents main last wrote; quitting waits for them to land before it stops Core.
+  app.on('before-quit', (event) => {
+    if (!hasPendingDocs()) return;
+    event.preventDefault();
+    void flushDocs().finally(() => app.quit());
+  });
   app.on('will-quit', () => {
     isQuitting = true;
     core?.kill();
@@ -50,6 +58,7 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
       MOCHI_CORE_PORT: String(port),
       MOCHI_CORE_TOKEN: token,
       MOCHI_CORE_ORIGINS: origins.join(','),
+      MOCHI_CORE_DATA: app.getPath('userData'),
     };
     const spawn = () => {
       // Bundled into dist-electron/main.js, beside the `core` entry.
@@ -65,9 +74,11 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
     spawn();
     mainConnection = connectCore(coreUrl(port, token));
     useCoreClient(mainConnection.then(({ client }) => client));
+    useDocsClient(mainConnection.then(({ client }) => client));
     void mainConnection.then(({ client }) => resolveMainClient(client));
     void mainConnection.then(({ client }) => Effect.runFork(serveCapabilities(client, capabilities.names, capabilities.handle)));
   });
+  return ready().then(() => preloadDocs(['settings', 'window_bounds']));
 }
 
 let resolveMainClient: (client: CoreClient) => void;

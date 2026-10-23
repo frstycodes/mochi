@@ -1,6 +1,6 @@
 import os from 'node:os';
 import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
-import { saveImage } from '../images.ts';
+import { saveImage } from '@mochi/core/agents/images';
 import type { GeneratedImage } from '../../../src/model.ts';
 import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';

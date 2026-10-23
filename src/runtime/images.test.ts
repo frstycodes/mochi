@@ -10,7 +10,7 @@ import { parseSaved, toSaved } from '../store/persist.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { createMapper } from '../../electron/agents/claude/map.ts';
 import { mapNotification, threadState } from '../../electron/agents/codex/map.ts';
-import type { SaveImage } from '../../electron/agents/images.ts';
+import type { SaveImage } from '@mochi/core/agents/images';
 
 const THREAD = 'adm';
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;

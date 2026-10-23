@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { normalizeOrigin } from '../../src/git/origin.ts';
 import type { Project, ProjectIconMode } from '../../src/host/types/projects.ts';
 import { customIconFile, findFavicon, iconUrl, removeCustomIcon, saveCustomIcon } from './icon.ts';
 import { runGit } from '../git/run.ts';
+import { readDoc, writeDoc } from '@mochi/core/store/client';
 
 /** `iconMode` is unset on rows saved before icons: those read as `auto`. */
 type StoredProject = Omit<Project, 'isMissing' | 'icon' | 'iconMode' | 'favicon'> & { iconMode?: ProjectIconMode };
@@ -18,22 +19,20 @@ interface Saved {
 export type ProjectRegistry = ReturnType<typeof projectRegistry>;
 
 /**
- * Every profile's projects in one JSON file, uploaded icons in `iconDir`. Changes run one at a time, each saved before the
- * next starts.
+ * Every profile's projects in one document of Core's `projects` table (`key`; tests use their own), uploaded icons in
+ * `iconDir`. Changes run one at a time, each saved before the next starts.
  */
-export function projectRegistry(file: string, iconDir = join(dirname(file), 'project-icons')) {
+export function projectRegistry(iconDir: string, key = 'registry') {
   let saved: Promise<Saved> | undefined;
   let queue: Promise<unknown> = Promise.resolve();
-  const load = () => (saved ??= readFile(file, 'utf8').then((text) => parseSaved(JSON.parse(text)), emptySaved));
+  const load = () => (saved ??= readDoc('projects', key).then(parseSaved));
 
   function change<T>(spaceId: string, edit: (space: Saved['spaces'][string]) => Promise<T>) {
     const next = queue.then(async () => {
       const data = await load();
       const space = (data.spaces[spaceId] ??= { projects: [], isMigrated: false });
       const result = await edit(space);
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(`${file}.tmp`, JSON.stringify(data, null, 2), { mode: 0o600 });
-      await rename(`${file}.tmp`, file);
+      await writeDoc('projects', key, data);
       return result;
     });
     queue = next.catch(() => {});

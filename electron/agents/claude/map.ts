@@ -11,7 +11,7 @@ import { IMAGE_TOOL, imageCard } from '../../../src/runtime/imageTool.ts';
 import { MOCHI_SERVER } from '../../../src/runtime/toolTable.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
-import type { SaveImage } from '../images.ts';
+import type { SaveImage } from '@mochi/core/agents/images';
 
 /**
  * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs and usage totals carry across

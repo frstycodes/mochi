@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
-import { saveImage } from '../images.ts';
+import { saveImage } from '@mochi/core/agents/images';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage, type SDKUserMessageReplay } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';

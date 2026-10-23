@@ -2,38 +2,19 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { MAX_REPLAY_BYTES, type DataHost } from '../../src/host/types/data.ts';
-import { imageDir, saveImage, sweepImages } from '../agents/images.ts';
+import { saveImage } from '@mochi/core/agents/images';
 import { embedReplay, isSelfContained, replayFileName } from '../../src/replay/page.ts';
 import { indexHtml } from '../window.ts';
-import type { Handlers } from './handlers.ts';
-import { threadStore } from './threadStore.ts';
+import type { Handlers, ServedByCore } from './handlers.ts';
 
-const store = () => threadStore(join(app.getPath('userData'), 'threads'), join(app.getPath('userData'), 'threads.json'));
 const replays = () => join(app.getPath('userData'), 'replays');
 const replayFile = (threadId: string) => join(replays(), `${threadId}.jsonl`);
 
-// Saves are serialized and written to a temp file first, so a quit mid-write leaves the previous file whole.
-let writing: Promise<void> = Promise.resolve();
-// Appends too, so two flushes can't interleave their lines or both pass the cap check.
+// Appends are serialized, so two flushes can't interleave their lines or both pass the cap check.
 let appending: Promise<unknown> = Promise.resolve();
 const capped = new Set<string>();
-// Every window loads; the first load of a launch sweeps.
-let hasSwept = false;
 
 export const data = {
-  async load() {
-    await writing;
-    const files = await store().load();
-    if (files && !hasSwept) {
-      hasSwept = true;
-      void sweepUnreferenced([files.index, ...files.threads]).catch((error: unknown) => console.error('Image sweep failed', error));
-    }
-    return files;
-  },
-  async save(_sender, index, threads) {
-    writing = writing.catch(() => {}).then(() => store().save(index, threads));
-    return writing;
-  },
   async loadReplay(_sender, threadId) {
     const path = replayFile(threadId);
     await appending.catch(() => {});
@@ -83,17 +64,7 @@ export const data = {
   async saveImage(_sender, mediaType, base64) {
     return saveImage(mediaType, base64);
   },
-} satisfies Handlers<DataHost>;
-
-// Replays can name an image the thread itself no longer shows (after a rewind), so they count as references too.
-async function sweepUnreferenced(threads: string[]) {
-  const dir = imageDir();
-  if (!dir) return;
-  const startedAt = Date.now();
-  const names = (await readdir(replays()).catch(() => [] as string[])).filter((n) => n.endsWith('.jsonl'));
-  const recordings = await Promise.all(names.map((n) => readFile(join(replays(), n), 'utf8').catch(() => '')));
-  await sweepImages(dir, [...threads, ...recordings], startedAt);
-}
+} satisfies Omit<Handlers<DataHost>, ServedByCore['data']>;
 
 function orNull(error: NodeJS.ErrnoException) {
   if (error.code === 'ENOENT') return null;
