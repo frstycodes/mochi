@@ -149,8 +149,9 @@ test('killing Core reconnects every client, and main registers its capabilities 
       ),
     );
   } finally {
-    core.kill('SIGKILL');
-    rmSync(dir, { recursive: true, force: true });
+    // Windows keeps Core's open `mochi.db` locked until the process is gone.
+    if (core.exitCode === null && core.signalCode === null) await new Promise((resolve) => (core.once('exit', resolve), core.kill('SIGKILL')));
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 

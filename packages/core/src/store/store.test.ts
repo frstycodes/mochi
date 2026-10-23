@@ -49,8 +49,8 @@ test('the import takes threads, settings, projects, limits and window bounds; an
   assert.equal(result.threads!.threads.length, 1);
   assert.equal(JSON.parse(result.threads!.threads[0]!).thread.title, 'Fix login');
   assert.deepEqual(
-    result.corrupt.map((c) => c.file.slice(dir.length)),
-    ['/schedules.json', '/threads/t2.json'],
+    result.corrupt.map((c) => c.file),
+    [join(dir, 'schedules.json'), join(dir, 'threads', 't2.json')],
   );
   for (const { kept } of result.corrupt) assert.ok(existsSync(kept));
   assert.equal(readFileSync(result.corrupt[0]!.kept, 'utf8'), schedules);
