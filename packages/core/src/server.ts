@@ -6,6 +6,8 @@ import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { NodeHttpServer } from '@effect/platform-node';
 import { Capabilities as Contract } from '@mochi/schema';
 import { Cache } from './cache.ts';
+import { GitHub, GithubTransport } from './github/service.ts';
+import { githubHandlers } from './github/handlers.ts';
 import { Capabilities, hostHandlers } from './hostServer.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { asRunError, Run } from './run.ts';
@@ -26,19 +28,19 @@ export interface ServerOptions {
 export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
     Layer.provide(Watch.layer),
-    Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer, UtilityQueue.layer)),
+    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), Capabilities.layer, UtilityQueue.layer).pipe(Layer.provideMerge(Run.layer))),
     Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1' })),
   );
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
-    Layer.unwrap(Effect.map(Effect.context<Run | Capabilities | UtilityQueue | Watch>(), (services) => HttpRouter.add('GET', '/ws', connect(options, services)))),
+    Layer.unwrap(Effect.map(Effect.context<Run | Capabilities | UtilityQueue | Watch | GitHub>(), (services) => HttpRouter.add('GET', '/ws', connect(options, services)))),
     { disableLogger: true, disableListenLog: true },
   );
 
 // Modelled on T3 Code's `apps/server/src/ws.ts`: refuse before the upgrade, then one RPC server per socket, so its
 // handlers know the connection's scopes and window.
-const connect = (options: ServerOptions, services: Context.Context<Run | Capabilities | UtilityQueue | Watch>) =>
+const connect = (options: ServerOptions, services: Context.Context<Run | Capabilities | UtilityQueue | Watch | GitHub>) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = new URL(request.url, 'http://core');
@@ -92,6 +94,7 @@ const layerHandlers = (windowId: number | undefined) =>
       const model = (tag: string, args: ReadonlyArray<unknown>) =>
         host[tag]!(args).pipe(Effect.catch((error) => Effect.logWarning(`${tag} failed: ${error}`).pipe(Effect.annotateLogs({ source: 'core' }), Effect.as(null))));
       const watch = yield* Watch;
+      const github = yield* GitHub;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -119,6 +122,7 @@ const layerHandlers = (windowId: number | undefined) =>
             run: Effect.map(model('agent.classify', [prompt, thread]), (verdict) => (verdict ? JSON.stringify(verdict) : null)),
           }).pipe(Effect.map((answer) => (answer ? JSON.parse(answer) : null))),
         ...host,
+        ...githubHandlers(github),
       } as never;
     }),
   );

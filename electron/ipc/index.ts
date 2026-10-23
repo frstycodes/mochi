@@ -10,7 +10,7 @@ import { agent } from './agent.ts';
 import { browser } from './browser.ts';
 import { data } from './data.ts';
 import { fs } from './fs.ts';
-import { git } from './git.ts';
+import { git, type CoreServed } from './git.ts';
 import { library } from './library.ts';
 import { notify } from './notify.ts';
 import { ports } from './ports.ts';
@@ -25,7 +25,7 @@ import { usage } from './usage.ts';
 import { windows } from './windows.ts';
 
 const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, remote, account, projects, library, usage } satisfies {
-  [K in Namespace]: Handlers<HostBridge[K]>;
+  [K in Namespace]: Handlers<K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]>;
 };
 
 type Handler = (sender: Electron.WebContents, ...args: unknown[]) => Promise<unknown>;

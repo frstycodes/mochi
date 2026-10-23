@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import type { ChangeTarget, CheckState, DiffFile, GitHost, PrCheck, PrInfo, WorktreeOptions } from '../../src/host/types/git.ts';
+import type { ChangeTarget, DiffFile, GitHost, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
@@ -10,11 +9,10 @@ import { addBranchWorktree, baseRef, branchNameError, headOf, listBranches, rena
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
-import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import type { Handlers } from './handlers.ts';
 import { runCheck } from '../git/check.ts';
 import { conflictedPaths } from '../git/conflicts.ts';
-import { autoMergeArgs, mergeArgs, prsByWorktree, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
+import { autoMergeArgs, mergeArgs, type MergeMethods } from '../../src/git/prs.ts';
 import { parsePrReview, prReviewQuery, replyThreadArgs, resolveThreadArgs, reviewArgs } from '../../src/git/prReview.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
@@ -22,12 +20,6 @@ const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-pre
 const MAX_UNTRACKED = 200;
 // Enough to hold a stack trace and the failing assertion, small enough to send as one message.
 const CI_LOG_LINES = 150;
-
-// ponytail: the repo's newest PRs of any state; a thread's PR older than this many others goes unseen. Upgrade: `--search head:<branch>` per branch.
-const PR_LIST_LIMIT = 100;
-
-// ponytail: one query per batch; GitHub's GraphQL node limit is far above this.
-const MAX_REFS = 50;
 
 export const git = {
   async status(_sender, cwd) {
@@ -85,24 +77,6 @@ export const git = {
     return (await runGh(top, args, githubAccount(user))).trim();
   },
 
-  async pr(_sender, cwd, user) {
-    return readPr(cwd, githubAccount(user));
-  },
-
-  async worktreePrs(_sender, value, user) {
-    const worktrees = value.slice(0, MAX_REFS);
-    const args = ['pr', 'list', '--state', 'all', '--limit', String(PR_LIST_LIMIT), '--json', 'number,url,title,state,isDraft,headRefName,isCrossRepository'];
-    try {
-      const tops = await Promise.all(worktrees.map((w) => topLevel(w).catch(() => null)));
-      const branches = await Promise.all(tops.map((top) => (top ? currentBranch(top) : Promise.resolve('HEAD'))));
-      const first = tops.find((top) => top !== null);
-      if (!first) return [];
-      return prsByWorktree(worktrees, branches, JSON.parse(await runGh(first, args, githubAccount(user))) as GhPr[]);
-    } catch {
-      return [];
-    }
-  },
-
   async setAutoMerge(_sender, cwd, pr, isOn, user) {
     const top = await topLevel(cwd);
     const account = githubAccount(user);
@@ -154,23 +128,6 @@ export const git = {
     if (!remote || remote.host !== GITHUB_COM) return null;
     const [owner, repo] = remote.path.split('/');
     return { owner, repo };
-  },
-
-  async refStates(_sender, cwd, value, user) {
-    const refs = value.slice(0, MAX_REFS).map(validRef).filter((r) => r !== null);
-    if (refs.length === 0) return {};
-    // A settled thread's worktree is gone; spawning gh there fails with ENOENT, so read as gh's active account from home.
-    const folder = cwd === null ? null : cwd;
-    const hasFolder = folder !== null && existsSync(folder);
-    const dir = hasFolder ? folder : homedir();
-    const account = hasFolder ? githubAccount(user) : undefined;
-    // gh exits 1 when any ref doesn't resolve and still prints the others; no gh, no login or offline leaves every ref unknown.
-    const json = await runGh(dir, refsQuery(refs), account, { okCodes: [0, 1] }).catch(() => '');
-    try {
-      return parseRefs(json, refs);
-    } catch {
-      return {};
-    }
   },
 
   async renameAutoBranch(_sender, cwd, expected, title) {
@@ -305,7 +262,10 @@ export const git = {
     if (commit) await applyFiles(dir, commit);
     return dir;
   },
-} satisfies Handlers<GitHost>;
+} satisfies Handlers<Omit<GitHost, CoreServed>>;
+
+/** Core's GitHub service answers these (`packages/core/src/github/handlers.ts`); main never sees the call. */
+export type CoreServed = 'pr' | 'worktreePrs' | 'refStates';
 
 /**
  * The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. A new branch starts at
@@ -358,30 +318,6 @@ export async function failedLog(top: string, link: string, account: GithubAccoun
   const [, runId, jobId] = job;
   const log = await runGh(top, ['run', 'view', runId, ...(jobId ? ['--job', jobId] : []), '--log-failed'], account);
   return log.split('\n').slice(-lines).join('\n');
-}
-
-/** The branch's PR and its checks, or null when the branch has none. */
-export async function readPr(cwd: string, account: GithubAccountRef | undefined): Promise<PrInfo | null> {
-  const top = await topLevel(cwd);
-  const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state,title'], account).catch((error: Error) => {
-    if (/no (open )?pull requests? found|no git remotes/i.test(error.message)) return null;
-    throw error;
-  });
-  if (!view) return null;
-  // gh exits 8 while checks are pending and 1 when one failed or none are reported; stdout still holds the JSON.
-  const checks = await runGh(top, ['pr', 'checks', '--json', 'name,bucket,link'], account, { okCodes: [0, 1, 8] }).catch(() => '');
-  return { ...(JSON.parse(view) as { number: number; url: string; state: string; title: string }), checks: parseChecks(checks) };
-}
-
-const BUCKETS = ['pass', 'fail', 'pending', 'skipping', 'cancel'] satisfies CheckState[];
-
-function parseChecks(json: string): PrCheck[] {
-  if (!json.trim()) return [];
-  return (JSON.parse(json) as { name: string; bucket: string; link?: string }[]).map((c) => ({
-    name: c.name,
-    state: (BUCKETS as string[]).includes(c.bucket) ? (c.bucket as CheckState) : 'pending',
-    link: c.link || undefined,
-  }));
 }
 
 /** Thread worktrees live under the worktree root (Settings › Git and worktrees), never inside the project, so its own `git status` stays clean. */

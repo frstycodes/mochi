@@ -1,11 +1,10 @@
 import type { CommitStat, PrStat } from '../../src/host/types/usage.ts';
-import type { GithubAccountRef } from '../../src/git/github.ts';
-import { runGh } from '../git/gh.ts';
+import { Effect } from 'effect';
+import { formatGithubAccount, type GithubAccountRef } from '../../src/git/github.ts';
 import { runGit } from '../git/run.ts';
 
 /** Generated files that would swamp the line counts. */
 const LOCKFILE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?|Cargo\.lock|Gemfile\.lock|poetry\.lock|composer\.lock|go\.sum|uv\.lock)$/;
-const PR_LIMIT = 1000;
 const RECORD = '\u001e';
 
 /**
@@ -46,9 +45,10 @@ export function parseLog(repo: string, out: string): CommitStat[] {
 export async function prStats(repo: string, since: number | null, account: GithubAccountRef | undefined): Promise<PrStat[]> {
   // A folder that isn't a repo, or one never pushed anywhere, has no pull requests to ask GitHub about.
   if (!(await runGit(repo, ['remote', 'get-url', 'origin']).catch(() => ''))) return [];
-  const args = ['pr', 'list', '--state', 'all', '--author', '@me', '--limit', String(PR_LIMIT), '--json', 'number,state,createdAt,mergedAt'];
-  if (since !== null) args.push('--search', `created:>=${new Date(since).toISOString().slice(0, 10)}`);
-  const rows = JSON.parse(await runGh(repo, args, account)) as { number: number; state: PrStat['state']; createdAt: string; mergedAt: string | null }[];
+  // Imported here: `@mochi/core/host` loads electron, and this file's parsers are tested under plain node.
+  const { mainCoreClient } = await import('@mochi/core/host');
+  const client = await mainCoreClient();
+  const rows = await Effect.runPromise(Effect.mapError(client['github.authoredPrs']({ cwd: repo, since, githubUser: account && formatGithubAccount(account) }), (error) => new Error(String(error))));
   return rows.map((r) => ({ repo, number: r.number, state: r.state, createdAt: Date.parse(r.createdAt), mergedAt: r.mergedAt ? Date.parse(r.mergedAt) : null }));
 }
 

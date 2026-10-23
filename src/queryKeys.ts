@@ -81,7 +81,7 @@ export const queryKeys = {
     branches: (root: string) => ['git-branches', root] as const,
     pr: (cwd: string, githubUser: string | undefined) => ['git-pr', cwd, githubUser] as const,
     review: (cwd: string, pr: number, githubUser: string | undefined) => ['git-review', cwd, pr, githubUser] as const,
-    worktreePrs: (repoKey: string) => ['worktree-prs', repoKey] as const,
+    branchPrs: (cwd: string, githubUser: string | undefined) => ['github-pr', cwd, githubUser] as const,
     branchNameError: (root: string, name: string | undefined) => ['branch-name-error', root, name] as const,
     rewindPreview: (cwd: string | undefined, threadId: string, n: number | undefined, isWorking: boolean) => ['rewind-preview', cwd, threadId, n, isWorking] as const,
   },

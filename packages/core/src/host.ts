@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import type { Capabilities } from '@mochi/schema';
-import { connectCore, coreUrl } from './client.ts';
+import { connectCore, coreUrl, type CoreClient } from './client.ts';
 import { serveCapabilities, type CapabilityHandler } from './hostClient.ts';
 import { useCoreClient } from './runClient.ts';
 
@@ -65,9 +65,16 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
     spawn();
     mainConnection = connectCore(coreUrl(port, token));
     useCoreClient(mainConnection.then(({ client }) => client));
+    void mainConnection.then(({ client }) => resolveMainClient(client));
     void mainConnection.then(({ client }) => Effect.runFork(serveCapabilities(client, capabilities.names, capabilities.handle)));
   });
 }
+
+let resolveMainClient: (client: CoreClient) => void;
+const mainClient = new Promise<CoreClient>((resolve) => (resolveMainClient = resolve));
+
+/** Main's own Core client; waits for `startCore` to connect. */
+export const mainCoreClient = () => mainClient;
 
 const pingUntilUp = async () => {
   const { client } = await mainConnection!;
