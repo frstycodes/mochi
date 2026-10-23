@@ -14,7 +14,7 @@ export type Turn<E> = (context: TurnContext) => Effect.Effect<void, E, Scope.Sco
  * `acquireRelease` (child processes, pending approvals, timers) is released in reverse order before `stop` returns.
  */
 export class Turns extends Context.Service<Turns>()('mochi/core/Turns', {
-  make: Effect.gen(function* () {
+  make: Effect.sync(() => {
     const running = new Map<string, Fiber.Fiber<void, unknown>>();
     const pending = new Map<string, Deferred.Deferred<unknown>>();
     const keyOf = (threadId: string, requestId: string) => `${threadId}\u0000${requestId}`;
