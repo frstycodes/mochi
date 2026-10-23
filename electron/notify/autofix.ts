@@ -1,7 +1,5 @@
 import { app } from 'electron';
-import { writeFileSync } from 'node:fs';
-import { readFile, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readDoc, writeDoc } from '@mochi/core/store/client';
 import type { ScheduleEvent } from '../../src/host/types/schedule.ts';
 import { autofixQuery, autofixStep, autofixTitle, parseAutofix, type AutofixBaseline, type AutofixEvent, type AutofixTarget } from '../../src/git/autofix.ts';
 import { githubAccount, runGh } from '../git/gh.ts';
@@ -29,12 +27,11 @@ const MAX_LOGS = 3;
 let baselines: Record<string, AutofixBaseline> | null = null;
 const due = new Map<string, { dueAt: number; delay: number; signature: string }>();
 
-const file = () => join(app.getPath('userData'), 'autofix.json');
 const keyOf = (t: AutofixTarget) => `${t.threadId}#${t.pr}`;
 
 /** Runs from the scheduler's poll, after CI for watched threads. `alert` is the watch's OS notification (quiet hours, muting apply). */
 export async function pollAutofix(targets: AutofixTarget[], deliver: (event: ScheduleEvent) => void, alert: (notice: OsNotice) => void) {
-  baselines ??= await readFile(file(), 'utf8').then((text) => (JSON.parse(text) as Saved).baselines, () => ({}));
+  baselines ??= (await readDoc<Saved>('autofix', 'autofix'))?.baselines ?? {};
   for (const target of targets) {
     const key = keyOf(target);
     const now = Date.now();
@@ -72,25 +69,22 @@ async function withLogs(event: AutofixEvent, top: string, account: ReturnType<ty
   return { ...event, logs: logs.filter((l) => !!l) };
 }
 
-// Saves are serialized and go through a temp file, so a quit mid-write leaves the previous file whole.
-let writing: Promise<void> = Promise.resolve();
 let timer: ReturnType<typeof setTimeout> | undefined;
-const snapshot = () => JSON.stringify({ version: 1, baselines: baselines ?? {} } satisfies Saved);
 
 function save() {
   clearTimeout(timer);
-  timer = setTimeout(() => {
-    timer = undefined;
-    const text = snapshot();
-    writing = writing.catch(() => {}).then(async () => {
-      await writeFile(`${file()}.tmp`, text, { mode: 0o600 });
-      await rename(`${file()}.tmp`, file());
-    });
-  }, 200);
+  timer = setTimeout(flush, 200);
 }
 
+function flush() {
+  timer = undefined;
+  // writeDoc logs a failure; the next change writes the whole document again.
+  void writeDoc('autofix', 'autofix', { version: 1, baselines: baselines ?? {} } satisfies Saved).catch(() => {});
+}
+
+// A save still waiting on its timer goes now; quitting waits for Core to have it (`startCore`).
 app.on('before-quit', () => {
   if (!timer) return;
   clearTimeout(timer);
-  writeFileSync(file(), snapshot(), { mode: 0o600 });
+  flush();
 });

@@ -4,7 +4,7 @@ import { Capabilities, definitionOf } from '@mochi/schema';
 import type { CapabilityHandler } from '@mochi/core/hostClient';
 import type { HostBridge, Namespace } from '../../src/host/types/index.ts';
 import { mainWindow } from '../window.ts';
-import type { Handlers } from './handlers.ts';
+import type { Handlers, ServedByCore } from './handlers.ts';
 import { account } from './account.ts';
 import { agent } from './agent.ts';
 import { browser } from './browser.ts';
@@ -25,7 +25,7 @@ import { usage } from './usage.ts';
 import { windows } from './windows.ts';
 
 const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, remote, account, projects, library, usage } satisfies {
-  [K in Namespace]: Handlers<HostBridge[K]>;
+  [K in Namespace]: Omit<Handlers<HostBridge[K]>, K extends keyof ServedByCore ? ServedByCore[K] : never>;
 };
 
 type Handler = (sender: Electron.WebContents, ...args: unknown[]) => Promise<unknown>;

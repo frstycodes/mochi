@@ -2,7 +2,7 @@ import { app, BrowserWindow, crashReporter } from 'electron';
 import { startDevMcp } from './mcp/server.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
-import { setImageDir } from './agents/images.ts';
+import { setImageDir } from '@mochi/core/agents/images';
 import { mainCapabilities } from './ipc/index.ts';
 import { startLibraryUpdates } from './library/updates.ts';
 import { startRemote } from './remote/index.ts';
@@ -27,14 +27,13 @@ const hasTray = process.platform !== 'darwin';
 if (hasTray && !app.requestSingleInstanceLock()) app.exit();
 serveFrames();
 
-app.whenReady().then(() => {
+app.whenReady().then(() => startCore({ isTrusted: isTrustedUrl, origins: [process.env.VITE_DEV_SERVER_URL ? new URL(process.env.VITE_DEV_SERVER_URL).origin : 'file://'], capabilities: mainCapabilities })).then(() => {
   startAppIcon();
   startWatch();
   void startScheduler();
   startLibraryUpdates();
   // Before the first window: it watches every window's close.
   startRemote();
-  startCore({ isTrusted: isTrustedUrl, origins: [process.env.VITE_DEV_SERVER_URL ? new URL(process.env.VITE_DEV_SERVER_URL).origin : 'file://'], capabilities: mainCapabilities });
   createWindow();
   void startDevMcp().catch((error: unknown) => console.error('Dev MCP failed', error));
   if (hasTray) startTray(appIconImage());

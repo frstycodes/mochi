@@ -8,7 +8,7 @@ import { projectRegistry } from '../projects/registry.ts';
 import type { Handlers } from './handlers.ts';
 
 let registry: ReturnType<typeof projectRegistry> | undefined;
-const store = () => (registry ??= projectRegistry(join(app.getPath('userData'), 'projects.json')));
+const store = () => (registry ??= projectRegistry(join(app.getPath('userData'), 'project-icons')));
 
 /** Every window lists the registry, so each hears when a profile's list changes. */
 const changed = (spaceId: string) => {

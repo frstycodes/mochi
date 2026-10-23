@@ -7,7 +7,7 @@ export interface SavedFiles {
   threads: string[];
 }
 
-/** The desktop app's saved threads, in main's `userData/threads`; the renderer shapes and parses them (`src/store/persist.ts`). */
+/** The desktop app's saved threads, in Core's store (`threads` table, served by Core); the renderer shapes and parses them (`src/store/persist.ts`). */
 export interface DataHost {
   /** null when nothing was saved yet. */
   load(): Promise<SavedFiles | null>;

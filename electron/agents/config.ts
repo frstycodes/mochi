@@ -1,6 +1,6 @@
-import { app, safeStorage } from 'electron';
+import { safeStorage } from 'electron';
 import { access, constants } from 'node:fs/promises';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, migrateSettings, type Account, type AccountId, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ApiKeyState } from '../../src/host/types/settings.ts';
@@ -9,6 +9,7 @@ import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/setti
 import { HARNESSES } from '../../src/settings/harnesses.ts';
 import { fallbackShell } from '../platform.ts';
 import { userPath } from '@mochi/core/shellPath';
+import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 
 export { userPath };
 
@@ -185,9 +186,15 @@ export function setApiKey(provider: Provider, key: string | null) {
 function load(): Stored {
   if (stored) return stored;
   let saved: Partial<Stored> = {};
+  const document = cachedDoc<unknown>('settings', 'agent');
   try {
-    saved = migrateSettings(JSON.parse(readFileSync(file(), 'utf8'))) as Partial<Stored>;
-  } catch {}
+    if (document !== undefined && (typeof document !== 'object' || document === null || Array.isArray(document))) throw new TypeError('Agent settings are not an object');
+    saved = (document === undefined ? {} : migrateSettings(document as Record<string, unknown>)) as Partial<Stored>;
+  } catch (error) {
+    // Defaults stand in for this run, but saving stays off so they never replace what's stored (keys and accounts included).
+    unreadable = error;
+    console.error('Agent settings could not be read; changes are not saved until the next launch', error);
+  }
   // Merged per harness, so a harness added to the registry later gets its defaults; default accounts always exist.
   const settings = mergeSettings(DEFAULT_SETTINGS, saved);
   const accounts = [...DEFAULT_ACCOUNTS.filter((d) => !saved.accounts?.some((a) => a.id === d.id)), ...(saved.accounts ?? [])];
@@ -195,15 +202,15 @@ function load(): Stored {
   return stored;
 }
 
+let unreadable: unknown;
+
 function save(next: Stored) {
+  if (unreadable) throw new Error('Agent settings could not be read at launch, so they are not saved over', { cause: unreadable });
   stored = next;
-  writeFileSync(file(), JSON.stringify(next, null, 2), { mode: 0o600 });
+  // writeDoc logs a failure; the next save writes the whole document again.
+  void writeDoc('settings', 'agent', next).catch(() => {});
   const settings = agentSettings();
   for (const listener of listeners) listener(settings);
-}
-
-function file() {
-  return join(app.getPath('userData'), 'agent-settings.json');
 }
 
 async function isExecutable(path: string) {

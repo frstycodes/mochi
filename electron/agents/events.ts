@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import type { AgentEvent } from '../../src/host/types/agent.ts';
 import { mainWindow } from '../window.ts';
+import { logEvent } from '@mochi/core/store/client';
 
 type Tap = (event: AgentEvent) => void;
 type SeqEvent = AgentEvent & { seq: number };
@@ -21,6 +22,7 @@ export function emitAgentEvent(event: AgentEvent) {
   if (event.type === 'turn-end' || event.type === 'limit') markIdle(event.threadId);
   const numbered = { ...event, seq: ++seq };
   remember(numbered);
+  logEvent({ type: `agent.${event.type}`, threadId: event.threadId, payload: event, eventId: `agent-${numbered.seq}` });
   for (const tap of taps) tap(event);
   if (!mainWindow()) whenClosed(event);
   for (const win of openWindows()) win.webContents.send('agent:onEvent', numbered);

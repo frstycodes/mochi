@@ -1,8 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { app } from 'electron';
-import { writeFileSync } from 'node:fs';
-import { readFile, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readDoc, writeDoc } from '@mochi/core/store/client';
 import type { AgentEvent } from '../../src/host/types/agent.ts';
 import type { ScheduleEvent, ScheduleRun, Trigger, TriggerInput } from '../../src/host/types/schedule.ts';
 import { describeCron } from '../../src/schedule/cron.ts';
@@ -35,10 +33,8 @@ let outbox: ScheduleEvent[] = [];
 /** Thread id → its trigger's run in flight, with the agent's latest message for the summary. */
 const active = new Map<string, { run: ScheduleRun; name: string; message: string }>();
 
-const file = () => join(app.getPath('userData'), 'schedules.json');
-
 export async function startScheduler() {
-  const saved = await readFile(file(), 'utf8').then((text) => JSON.parse(text) as Saved, () => null);
+  const saved = await readDoc<Saved>('schedule', 'schedules');
   const now = Date.now();
   // Runs that were going when Mochi quit stopped with it.
   triggers = (saved?.triggers ?? []).map((t) => afterLaunch({ ...t, runs: t.runs.map((r) => (r.status === 'running' ? { ...r, status: 'interrupted' as const, endedAt: now, error: 'Mochi quit during the run' } : r)) }, now));
@@ -200,27 +196,22 @@ const strip = (t: Trigger): Trigger => ({ ...t, seen: undefined });
 const runId = () => `run-${uuidv7()}`;
 const describe = (t: Trigger) => (t.when.kind === 'cron' ? describeCron(t.when.cron) : `PR ${t.when.event}`);
 
-// Saves are serialized and go through a temp file, so a quit mid-write leaves the previous file whole.
-let writing: Promise<void> = Promise.resolve();
 let timer: ReturnType<typeof setTimeout> | undefined;
-
-const snapshot = () => JSON.stringify({ version: 1, triggers, outbox } satisfies Saved);
 
 function save() {
   clearTimeout(timer);
-  timer = setTimeout(() => {
-    timer = undefined;
-    const text = snapshot();
-    writing = writing.catch(() => {}).then(async () => {
-      await writeFile(`${file()}.tmp`, text, { mode: 0o600 });
-      await rename(`${file()}.tmp`, file());
-    });
-  }, 200);
+  timer = setTimeout(flush, 200);
 }
 
-// A save still waiting on its timer is written now; an async one already in flight finishes on its own.
+function flush() {
+  timer = undefined;
+  // writeDoc logs a failure; the next change writes the whole document again.
+  void writeDoc('schedule', 'schedules', { version: 1, triggers, outbox } satisfies Saved).catch(() => {});
+}
+
+// A save still waiting on its timer goes now; quitting waits for Core to have it (`startCore`).
 app.on('before-quit', () => {
   if (!timer) return;
   clearTimeout(timer);
-  writeFileSync(file(), snapshot(), { mode: 0o600 });
+  flush();
 });
