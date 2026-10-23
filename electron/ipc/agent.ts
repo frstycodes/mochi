@@ -3,6 +3,8 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { app } from 'electron';
+import { Effect } from 'effect';
+import { coreClient } from '@mochi/core/host';
 import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskEvent, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type AgentStartOptions, type AgentToolResult, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { McpWidgetResource, Provider } from '../../src/model.ts';
@@ -237,14 +239,21 @@ export const agent = {
     resolveToolCall(id, { text: result.text, isError: result.isError, ...(result.image !== undefined && { image: imageOf(result.image) }) });
   },
   async utility(_sender, task, spaceId, prompt) {
-    return runUtility(task, spaceId, prompt);
+    return executeUtility(task, spaceId, prompt);
   },
   async classify(_sender, prompt, thread) {
     return classifyWithModel(prompt, thread, (signal) => classifyClaude(prompt, thread, signal));
   },
 } satisfies Handlers<AgentHost>;
 
-async function runUtility(task: UtilityTask, spaceId: string, prompt: string) {
+/** Queued in Core (`utility.run`), which calls `agent.utility` below when it is this job's turn. */
+async function runUtility(task: UtilityTask, spaceId: string, prompt: string, thread?: string) {
+  const client = await coreClient();
+  return Effect.runPromise(client['utility.run']({ task, spaceId, prompt, thread }));
+}
+
+/** One model call, no queue: Core's executor for `utility.run`. */
+async function executeUtility(task: UtilityTask, spaceId: string, prompt: string) {
   const offers = (provider: Provider) => models(codex, provider, spaceId).then((list) => list.map((m) => m.id), () => []);
   const startedAt = performance.now();
   const answer = await utility(ASKERS, offers, agentSettings().utilityModels[task], spaceId, task, prompt);
@@ -404,7 +413,7 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
   }
   const { dir, isNew } = await createWorktree(root, threadId, workspace.branch, workspace);
   broadcast({ threadId, type: 'worktree', path: dir });
-  const title = !isNew ? undefined : workspace.title ? Promise.resolve(workspace.title) : workspace.titlePrompt ? runUtility('title', spaceId, workspace.titlePrompt).then((text) => (text && parseTitle(text)) || null, () => null) : undefined;
+  const title = !isNew ? undefined : workspace.title ? Promise.resolve(workspace.title) : workspace.titlePrompt ? runUtility('title', spaceId, workspace.titlePrompt, threadId).then((text) => (text && parseTitle(text)) || null, () => null) : undefined;
   const named = title && (() => nameThread(threadId, dir, workspace.branch, title, start, broadcast));
   const settings = agentSettings();
   if (!isNew || !settings.prepareWorktrees) return { cwd: dir, named };

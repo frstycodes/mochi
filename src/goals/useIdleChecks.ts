@@ -6,6 +6,7 @@ import type { Thread } from '../model';
 import type { Action } from '../store';
 import { getPrefs } from '../settings/prefs';
 import { auditPrompt, parseAudit } from '../utility/prompts';
+import { runUtility } from '../utility/runUtility';
 import { runCriterionCheck } from './checks';
 
 // Per launch: a thread seen idle at startup gets no pass, its last turn ended before this launch.
@@ -58,7 +59,7 @@ async function countUncommitted(t: Thread, dispatch: Dispatch<Action>) {
 async function audit(t: Thread, dispatch: Dispatch<Action>) {
   const { start, replies } = lastTurn(t);
   if (!t.goal || start < 0 || !replies.length || !host.isDesktop) return;
-  const text = await host.agent.utility('audit', t.spaceId, auditPrompt(t.activity[start].text, replies)).catch((error: unknown) => {
+  const text = await runUtility('audit', t.spaceId, auditPrompt(t.activity[start].text, replies), t.id).catch((error: unknown) => {
     console.warn('Turn not audited', error);
     return null;
   });

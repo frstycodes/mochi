@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { host } from '../host';
+import { runUtility } from './runUtility';
 import type { UtilityTask } from './prompts';
 
 /**
@@ -13,7 +13,7 @@ export function useDraft(task: UtilityTask, spaceId: string) {
     async (prompt: string | Promise<string>) => {
       setInFlight((n) => n + 1);
       try {
-        return await host.agent.utility(task, spaceId, await prompt);
+        return await runUtility(task, spaceId, await prompt);
       } catch (error) {
         console.warn(`${task} draft failed`, error);
         return null;

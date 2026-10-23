@@ -13,6 +13,7 @@ import { asRunError, Run } from './run.ts';
 import { storeHandlers } from './store/handlers.ts';
 import { importJson } from './store/importJson.ts';
 import { Store } from './store/store.ts';
+import { PRIORITY, UtilityQueue } from './utility/queue.ts';
 
 export interface ServerOptions {
   readonly port: number;
@@ -28,7 +29,7 @@ export interface ServerOptions {
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
 export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
-    Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer, layerStore(options.userData))),
+    Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer, UtilityQueue.layer, layerStore(options.userData))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1', gracefulShutdownTimeout: '100 millis' })),
   );
@@ -40,7 +41,7 @@ const layerStore = (userData: string | undefined) =>
     Layer.orDie,
   );
 
-type Services = Run | Capabilities | Store;
+type Services = Run | Capabilities | UtilityQueue | Store;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -99,6 +100,11 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
       const run = yield* Run;
       const capabilities = yield* Capabilities;
       const store = yield* Store;
+      const queue = yield* UtilityQueue;
+      const host = hostHandlers(capabilities, windowId) as Record<string, (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>>;
+      // The model call itself still runs in main (`agent.utility`, `agent.classify` on the `host` capability); Core decides when, and which one.
+      const model = (tag: string, args: ReadonlyArray<unknown>) =>
+        host[tag]!(args).pipe(Effect.catch((error) => Effect.logWarning(`${tag} failed: ${error}`).pipe(Effect.annotateLogs({ source: 'core' }), Effect.as(null))));
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -112,7 +118,17 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
         signal: ({ id, signal }: { id: number; signal: string }) => run.signal(id, signal as NodeJS.Signals),
         'capabilities.serve': ({ names }: { names: ReadonlyArray<Contract.CapabilityName> }) => capabilities.serve(names),
         'capabilities.reply': (reply: Contract.CapabilityReply) => capabilities.reply(reply),
-        ...hostHandlers(capabilities, windowId),
+        'utility.run': ({ task, spaceId, prompt, thread }: { task: keyof typeof PRIORITY; spaceId: string; prompt: string; thread?: string }) =>
+          queue.submit({ thread, kind: task, priority: PRIORITY[task], promptChars: prompt.length, run: model('agent.utility', [task, spaceId, prompt]) as Effect.Effect<string | null> }),
+        'utility.classify': ({ prompt, thread }: { prompt: string; thread: { id: string } }) =>
+          queue.submit({
+            thread: thread.id,
+            kind: 'classify',
+            priority: PRIORITY.classify,
+            promptChars: prompt.length,
+            run: Effect.map(model('agent.classify', [prompt, thread]), (verdict) => (verdict ? JSON.stringify(verdict) : null)),
+          }).pipe(Effect.map((answer) => (answer ? JSON.parse(answer) : null))),
+        ...host,
         ...storeHandlers(store, userData),
       } as never;
     }),

@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup, RpcMiddleware } from 'effect/rpc';
-import { Capabilities, HostRpcs } from '@mochi/schema';
+import { Agent, Capabilities, HostRpcs, Model } from '@mochi/schema';
 import { StoreRpcs } from './store/rpc.ts';
 
 // Here rather than in run.ts so a window's client imports no node built-ins.
@@ -50,6 +50,9 @@ export class CoreRpcs extends RpcGroup.make(
   }),
   Rpc.make('stdin', { payload: { id: Schema.Number, data: Schema.NullOr(Schema.Uint8Array) } }),
   Rpc.make('signal', { payload: { id: Schema.Number, signal: Schema.String } }),
+  // The utility model's queue. `thread` + task make the replace-older key; leave `thread` out for a one-off.
+  Rpc.make('utility.run', { payload: { task: Agent.UtilityTask, spaceId: Schema.String, prompt: Schema.String, thread: Schema.optional(Schema.String) }, success: Schema.NullOr(Schema.String) }),
+  Rpc.make('utility.classify', { payload: { prompt: Schema.String, thread: Model.Thread }, success: Schema.NullOr(Agent.DriftVerdict) }),
   Rpc.make('capabilities.serve', { payload: { names: Schema.Array(Capabilities.CapabilityName) }, success: Capabilities.CapabilityCall, stream: true }),
   Rpc.make('capabilities.reply', { payload: Capabilities.CapabilityReply }),
 ) {}

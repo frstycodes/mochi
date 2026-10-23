@@ -11,6 +11,7 @@ import { forkRelatives } from './fork.ts';
 import { failDrafts, handoffSummary } from './handoff.ts';
 import { draftHandoff } from './runHandoff.ts';
 import { host } from '../host/index.ts';
+import { utilityCore } from '../utility/runUtility.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const thread = (s: State, id: string) => s.threads.find((t) => t.id === id)!;
@@ -168,13 +169,13 @@ test('a draft that throws or outlives the window fails its row', () => {
 test('draftHandoff uses the model draft, else the local summary on an error or past the timeout', async (t) => {
   const rl = thread(base(), 'rl');
   t.mock.method(host.git, 'diff', async () => ({ branch: '', base: '', files: [] }));
-  const utility = t.mock.method(host.agent, 'utility', async () => '```\nDrafted\n```');
+  const utility = t.mock.method(utilityCore, 'call', async () => '```\nDrafted\n```' as never);
   assert.deepEqual(await draftHandoff(rl, 'codex'), { prompt: 'Drafted' });
-  utility.mock.mockImplementation(async () => null);
+  utility.mock.mockImplementation(async () => null as never);
   const failed = await draftHandoff(rl, 'codex');
   assert.equal(failed.fallback, 'error');
   assert.match(failed.prompt, /\*\*Handoff to Codex\*\*/);
-  utility.mock.mockImplementation(() => new Promise<string>(() => {}));
+  utility.mock.mockImplementation(() => new Promise<never>(() => {}));
   assert.equal((await draftHandoff(rl, 'codex', 5)).fallback, 'timeout');
 });
 
