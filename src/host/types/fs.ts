@@ -7,9 +7,6 @@ export interface FsHost {
   read(root: string, path: string): Promise<FileContent>;
   /** Refuses with `conflict` when the file changed on disk since `baseMtimeMs`, unless `force`. */
   write(root: string, path: string, text: string, options: { baseMtimeMs: number; force?: boolean }): Promise<WriteResult>;
-  watch(root: string): Promise<void>;
-  unwatch(root: string): Promise<void>;
-  onChange(listener: (change: FsChange) => void): () => void;
   /** Searches file contents under `root` (`.gitignore` honoured), pushing each file's hits through `onSearchHits` under `id`; resolves when done or cancelled. */
   search(root: string, id: string, pattern: string, options: SearchOptions): Promise<SearchSummary>;
   cancelSearch(id: string): Promise<void>;
@@ -64,11 +61,6 @@ export interface SearchSummary {
   isTruncated: boolean;
 }
 
-export interface FsChange {
-  root: string;
-  path: string;
-}
-
 export const EDITORS = ['vscode', 'cursor', 'zed'] as const;
 export type Editor = (typeof EDITORS)[number];
 
@@ -76,9 +68,6 @@ export const fsMethods = {
   list: 'invoke',
   read: 'invoke',
   write: 'invoke',
-  watch: 'invoke',
-  unwatch: 'invoke',
-  onChange: 'event',
   search: 'invoke',
   cancelSearch: 'invoke',
   onSearchHits: 'event',

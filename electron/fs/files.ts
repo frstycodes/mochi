@@ -1,14 +1,11 @@
-import { constants, watch, type FSWatcher } from 'node:fs';
+import { constants } from 'node:fs';
 import { open, readFile, stat } from 'node:fs/promises';
-import path from 'node:path';
-import type { WebContents } from 'electron';
-import type { FileContent, FsChange, WriteResult } from '../../src/host/types/fs.ts';
-import { resolveInside, resolveRoot } from './contain.ts';
+import type { FileContent, WriteResult } from '../../src/host/types/fs.ts';
+import { resolveInside } from './contain.ts';
 
 const MAX_TEXT_BYTES = 5 * 1024 * 1024;
 const MAX_BYTES = 50 * 1024 * 1024;
 const BINARY_EXT = /\.(png|jpe?g|gif|webp|avif|ico|bmp|pdf)$/i;
-const UNWATCHED = /(^|[/\\])(\.git|node_modules)([/\\]|$)/;
 
 export async function readInside(root: string, rel: string): Promise<FileContent> {
   const real = await resolveInside(root, rel);
@@ -34,30 +31,4 @@ export async function writeInside(root: string, rel: string, text: string, { bas
     await handle.close();
   }
   return { status: 'saved', mtimeMs: (await stat(real)).mtimeMs };
-}
-
-const watchers = new Map<string, { watcher: FSWatcher; count: number }>();
-
-export async function watchRoot(sender: WebContents, root: string) {
-  const key = `${sender.id}\0${root}`;
-  const existing = watchers.get(key);
-  if (existing) return void existing.count++;
-  const realRoot = await resolveRoot(root);
-  const watcher = watch(realRoot, { recursive: true }, (_event, file) => {
-    if (!file || UNWATCHED.test(file) || sender.isDestroyed()) return;
-    sender.send('fs:onChange', { root, path: file.split(path.sep).join('/') } satisfies FsChange);
-  });
-  watchers.set(key, { watcher, count: 1 });
-  sender.once('destroyed', () => {
-    watcher.close();
-    watchers.delete(key);
-  });
-}
-
-export function unwatchRoot(sender: WebContents, root: string) {
-  const key = `${sender.id}\0${root}`;
-  const entry = watchers.get(key);
-  if (!entry || --entry.count > 0) return;
-  entry.watcher.close();
-  watchers.delete(key);
 }

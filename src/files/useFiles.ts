@@ -1,32 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
+import { useWatchQuery, watchKey } from '../watch/useWatchQuery.ts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { host } from '@/host';
 import type { FileContent } from '@/host/types/fs';
 
-const RELIST_DELAY_MS = 300;
-
-
-/** The root's file list, re-listed shortly after anything under it changes. */
+/** The root's file list, re-listed by Core when a file under it is created or deleted. */
 export function useFileList(root: string | null) {
-  const filesQuery = useQuery({ queryKey: queryKeys.files.list(root), queryFn: () => host.fs.list(root!), enabled: !!root });
-  useEffect(() => {
-    if (!root) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const relist = () => { void queryClient.invalidateQueries({ queryKey: queryKeys.files.list(root) }); };
-    void host.fs.watch(root);
-    const off = host.fs.onChange((change) => {
-      if (change.root !== root) return;
-      clearTimeout(timer);
-      timer = setTimeout(relist, RELIST_DELAY_MS);
-    });
-    return () => {
-      off();
-      clearTimeout(timer);
-      void host.fs.unwatch(root);
-    };
-  }, [root]);
+  const [filesQuery] = useWatchQuery(queryKeys.files.list(root), root ? { _tag: 'files', root } : null, (value) => value.files as string[], () => host.fs.list(root!));
   return { files: filesQuery.data ?? null, error: filesQuery.error?.message ?? null };
 }
 
@@ -57,7 +39,7 @@ export function useOpenFile(root: string, path: string) {
     setContent(next);
     setDraft(null);
   }, [contentQuery.data]);
-  useEffect(() => host.fs.onChange((change) => { if (change.root === root && change.path === path) void queryClient.invalidateQueries({ queryKey: queryKeys.files.content(root, path) }); }), [root, path]);
+  useEffect(() => watchKey({ _tag: 'changes', root }, (value) => { if (value._tag === 'changes' && value.paths.includes(path)) void queryClient.invalidateQueries({ queryKey: queryKeys.files.content(root, path) }); }), [root, path]);
 
   const saved = content?.kind === 'text' ? content.text : null;
   const isDirty = draft !== null && saved !== null && draft !== saved;

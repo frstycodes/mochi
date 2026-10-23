@@ -1,4 +1,4 @@
-import { watch } from 'node:fs';
+import { watchFromMain } from '../fs/watchClient.ts';
 
 // Build output, caches and VCS data change on every build; a reload for them would loop with the dev server's own writes.
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'dist-electron', 'build', 'out', 'coverage', '.next', '.nuxt', '.svelte-kit', '.turbo', '.cache', '.vite', '.parcel-cache', '.output', 'target']);
@@ -32,26 +32,29 @@ export function debounce(fn: () => void, ms: number) {
   return call;
 }
 
+/** Changed paths under `root`, `/`-separated, until the returned stop function runs. */
+export type FollowChanges = (root: string, onPaths: (paths: ReadonlyArray<string>) => void) => () => void;
+
+const followCore: FollowChanges = (root, onPaths) => watchFromMain({ _tag: 'changes', root }, (value) => value._tag === 'changes' && onPaths(value.paths));
+
 /**
- * Recursive watch (native on macOS and Windows), debounced, ignoring build and VCS dirs. `onChange` gets the time of the burst's
- * first write, so a dev server that reacted inside the debounce still counts as having handled it. Returns the stop function.
+ * Changes under `root` from Core's shared watch on it, debounced, ignoring build and VCS dirs. `onChange` gets the time of the
+ * burst's first write, so a dev server that reacted inside the debounce still counts as having handled it. Returns the stop function.
  */
-export function watchTree(root: string, onChange: (since: number) => void) {
+export function watchTree(root: string, onChange: (since: number) => void, follow = followCore) {
   let since = 0;
   const fire = debounce(() => {
     onChange(since);
     since = 0;
   }, DEBOUNCE_MS);
-  const watcher = watch(root, { recursive: true }, (_event, file) => {
-    if (!file || isIgnored(file.toString())) return;
+  const stop = follow(root, (paths) => {
+    if (paths.every(isIgnored)) return;
     since ||= Date.now();
     fire();
   });
-  // A deleted root or a permission error ends the watch; the toggle simply stops doing anything.
-  watcher.on('error', () => watcher.close());
   return () => {
     fire.cancel();
-    watcher.close();
+    stop();
   };
 }
 

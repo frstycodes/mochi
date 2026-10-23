@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import type { FsHost } from '../../src/host/types/fs.ts';
 import { installedEditors, openInEditor } from '../fs/editors.ts';
-import { readInside, unwatchRoot, watchRoot, writeInside } from '../fs/files.ts';
+import { readInside, writeInside } from '../fs/files.ts';
 import { resolveInside, resolveRoot } from '../fs/contain.ts';
 import { listFiles } from '../fs/list.ts';
 import { cancelSearch, searchFor } from '../fs/search.ts';
@@ -18,8 +18,6 @@ export const fs = {
   write: (_sender, root, path, text, options) => writeInside(root, path, text, options),
   search: (sender, root, id, pattern, options) => searchFor(sender, root, id, pattern, options),
   cancelSearch: async (_sender, id) => cancelSearch(id),
-  watch: (sender, root) => watchRoot(sender, root),
-  unwatch: async (sender, root) => unwatchRoot(sender, root),
   editors: () => installedEditors(),
   openIn: async (_sender, editor, root, path, line) => {
     const file = path ? await resolveInside(root, path) : '';

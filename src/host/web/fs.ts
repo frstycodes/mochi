@@ -1,6 +1,6 @@
 import { joinPath } from '../../chat/fileMentions.ts';
 import { compileQuery, matchLines } from '../../files/search.ts';
-import type { FileContent, FsChange, FsHost, SearchHits } from '../types/fs.ts';
+import type { FileContent, FsHost, SearchHits } from '../types/fs.ts';
 
 // In-memory files so the web build can show the tree, editor and previews; every root sees the same set.
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3987e5"/><path d="M20 20v24M44 20v24M20 32h24" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>\n`;
@@ -23,7 +23,6 @@ const OUTSIDE_FILES: Record<string, string[]> = {
 };
 // Where the fixture project (root `.`) sits in the fixture tree.
 const WEB_PROJECT = '~/dev/harness';
-const listeners = new Set<(change: FsChange) => void>();
 const hitListeners = new Set<(hits: SearchHits) => void>();
 const SEARCH_LIMIT = 2_000;
 
@@ -43,20 +42,13 @@ export const fs: FsHost = {
     if (!file) throw new Error(`${path} does not exist`);
     return { kind: 'text', ...file };
   },
-  async write(root, path, text, { baseMtimeMs, force }) {
+  async write(_root, path, text, { baseMtimeMs, force }) {
     const file = files.get(path);
     if (!file) throw new Error(`${path} does not exist`);
     if (!force && file.mtimeMs !== baseMtimeMs) return { status: 'conflict', ...file };
     const mtimeMs = file.mtimeMs + 1;
     files.set(path, { text, mtimeMs });
-    listeners.forEach((l) => l({ root, path }));
     return { status: 'saved', mtimeMs };
-  },
-  async watch() {},
-  async unwatch() {},
-  onChange(listener) {
-    listeners.add(listener);
-    return () => void listeners.delete(listener);
   },
   async search(_root, id, pattern, options) {
     const regex = compileQuery(pattern, options);

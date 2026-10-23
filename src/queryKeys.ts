@@ -87,6 +87,7 @@ export const queryKeys = {
   },
   ports: {
     launchTargets: (cwd: string | null) => ['launch-targets', cwd] as const,
+    listening: (cwd: string | null) => ['ports-listening', cwd] as const,
     threadPort: (threadId: string) => ['thread-port', threadId] as const,
   },
   remote: {
