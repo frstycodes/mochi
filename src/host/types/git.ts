@@ -196,7 +196,7 @@ export interface GitHost {
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
   /**
    * The PRs in every state from the branch each of `worktrees` (one repo's) has checked out now, which the agent may have
-   * switched: one `gh pr list` for them all. Never throws: no gh, no login or offline is none.
+   * switched: Core reads them all in one GraphQL request per repository. Never throws: no gh, no login or offline is none.
    */
   worktreePrs(worktrees: string[], githubUser?: string): Promise<{ worktree: string; pr: PullRequest }[]>;
   /** GitHub auto-merge for the cwd repo's PR `pr`: on with the first merge method the repo allows (squash, merge, rebase), or off. */
@@ -215,7 +215,7 @@ export interface GitHost {
   ciLog(cwd: string, checkLink: string, githubUser?: string): Promise<string>;
   /** origin's `owner/repo` when it's on github.com; null otherwise (no origin, another host, not a repo). */
   repoSlug(cwd: string): Promise<RepoSlug | null>;
-  /** Live state of PRs and issues in one `gh api graphql` call, keyed by `refKey`. Never throws: refs gh can't read are left out. */
+  /** Live state of PRs and issues, one GraphQL request per repository, keyed by `refKey`. Never throws: refs GitHub can't resolve are left out. */
   refStates(cwd: string | null, refs: GithubRef[], githubUser?: string): Promise<Record<string, RefState>>;
   /** gh's logins on every host it knows, for picking a profile's account. Never carries tokens. */
   ghAccounts(): Promise<GhAccount[]>;

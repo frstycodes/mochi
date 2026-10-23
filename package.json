@@ -42,6 +42,7 @@
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/ext-apps": "2.0.3",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@octokit/graphql": "9.0.5",
     "@parcel/watcher": "2.5.1",
     "@pierre/diffs": "^1.5.2",
     "@radix-ui/react-use-controllable-state": "^1.2.6",

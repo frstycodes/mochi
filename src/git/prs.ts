@@ -20,31 +20,6 @@ function isSame(a: PullRequest, b: PullRequest) {
 export const OPEN_PR_PROMPT =
   'Open a pull request for this branch: commit what is left, push it, then run gh pr create with --base set explicitly (usually main, or the branch this one was cut from), a Conventional Commits title, and a body written from your turn report: What, Why, Checks. If a check or gap blocks it, tell me what is missing instead.';
 
-export interface GhPr {
-  number: number;
-  url: string;
-  title: string;
-  state: string;
-  isDraft: boolean;
-  headRefName: string;
-  isCrossRepository: boolean;
-}
-
-/** `gh pr list --json` rows on one of `branches` → those branches' PRs, leaving out a fork's PR that shares a branch name. */
-export function prsOnBranches(rows: GhPr[], branches: Set<string>): { branch: string; pr: PullRequest }[] {
-  return rows.flatMap((row) => {
-    const state = row.state === 'MERGED' ? 'merged' : row.state === 'CLOSED' ? 'closed' : row.isDraft ? 'draft' : 'open';
-    if (row.isCrossRepository || !branches.has(row.headRefName)) return [];
-    return [{ branch: row.headRefName, pr: { number: row.number, state, title: row.title, url: row.url } }];
-  });
-}
-
-/** Each worktree's PRs, matched by the branch it has checked out (`HEAD` when detached, which has none), so a PR opened any way lands on its thread. */
-export function prsByWorktree(worktrees: string[], branches: string[], rows: GhPr[]): { worktree: string; pr: PullRequest }[] {
-  const found = prsOnBranches(rows, new Set(branches.filter((b) => b !== 'HEAD')));
-  return worktrees.flatMap((worktree, i) => found.filter((f) => f.branch === branches[i]).map(({ pr }) => ({ worktree, pr })));
-}
-
 /** Auto-archive (`useAutoArchive`) is due: a PR has it on, every PR merged or closed, and the agent idle; until then it waits. */
 export function isArchiveDue(thread: Thread) {
   if (thread.status === 'settled' || thread.live?.isWorking) return false;

@@ -1,15 +1,18 @@
 import { app, BrowserWindow, Notification } from 'electron';
+import { Effect, Stream } from 'effect';
+import { keyedStreams } from '@mochi/core/github/client';
+import { currentPr } from '@mochi/core/github/nodes';
+import type { BranchPrs } from '@mochi/core/github/schema';
+import { mainCoreClient } from '@mochi/core/host';
 import type { AgentEvent } from '../../src/host/types/agent.ts';
 import type { ThreadAddressed, WatchConfig } from '../../src/host/types/notify.ts';
-import type { ScheduleEvent } from '../../src/host/types/schedule.ts';
 import { isAddressed, isQuiet } from '../../src/notify/model.ts';
 import { resetLabel } from '../../src/usage/limits.ts';
 import { ciTitle, ciTransition, coalesce, type CiSeen, type OsNotice } from '../../src/notify/watch.ts';
 import { emitAgentEvent, onAgentEvent } from '../agents/events.ts';
-import { githubAccount } from '../git/gh.ts';
 import { resolveRequest } from '../ipc/agent.ts';
-import { readPr } from '../ipc/git.ts';
-import { pollAutofix } from './autofix.ts';
+import { deliver } from '../schedule/scheduler.ts';
+import { syncAutofix } from './autofix.ts';
 import { createWindow, mainWindow } from '../window.ts';
 
 /**
@@ -32,9 +35,8 @@ let burstTimer: ReturnType<typeof setTimeout> | undefined;
 // macOS drops click handlers for notifications that get garbage-collected, so live ones are held until clicked or closed.
 const live = new Map<Notification, OsNotice>();
 
-const CI_BASE_MS = 2 * 60_000;
-const CI_MAX_MS = 30 * 60_000;
-const ci = new Map<string, { seen?: CiSeen; dueAt: number; delay: number }>();
+/** Thread id → its PR's last CI state, the baseline a pass or fail is reported against. */
+const ci = new Map<string, CiSeen | undefined>();
 
 export function startWatch() {
   onAgentEvent(onEvent);
@@ -45,6 +47,8 @@ export const watch = {
     config = next;
     needsYou = new Set(next.needsYou);
     badge();
+    syncCi();
+    syncAutofix(next.autofix, alert);
   },
   takePendingOpen() {
     const id = pendingOpen;
@@ -165,29 +169,29 @@ function open(threadId: string) {
   if (threadId) win.webContents.send('notify:onOpenThread', threadId);
 }
 
-/**
- * Runs from the scheduler's poll: one `gh pr view` + `gh pr checks` per watched thread with a folder that's due. A thread whose
- * checks are running is due every poll; one with no PR, settled checks or a failing gh backs off, doubling up to `CI_MAX_MS`.
- */
-export async function pollCi(deliver: (event: ScheduleEvent) => void) {
-  const watched = new Set(config.threads.map((t) => t.id));
-  for (const id of ci.keys()) if (!watched.has(id)) ci.delete(id);
-  for (const thread of config.threads) {
-    const now = Date.now();
-    const state = ci.get(thread.id) ?? { dueAt: 0, delay: CI_BASE_MS };
-    if (!thread.cwd || state.dueAt > now) continue;
-    const pr = await readPr(thread.cwd, githubAccount(thread.githubUser)).catch((error: Error) => {
-      console.warn(`CI poll for ${thread.id} failed: ${error.message}`);
-      return null;
-    });
-    const { seen, result } = pr?.state === 'OPEN' ? ciTransition(state.seen, pr) : { seen: state.seen, result: undefined };
-    const isChanging = seen?.status === 'pending' || seen?.pr !== state.seen?.pr || seen?.status !== state.seen?.status;
-    const delay = isChanging ? CI_BASE_MS : Math.min(state.delay * 2, CI_MAX_MS);
-    // Due a little early, so the scheduler's next tick on the same interval doesn't miss it by milliseconds.
-    ci.set(thread.id, { seen, delay, dueAt: now + delay - 5_000 });
-    if (!result) continue;
-    deliver({ type: 'ci', threadId: thread.id, result });
-    alert({ threadId: thread.id, kind: 'ci', title: thread.title, body: ciTitle(result) });
-  }
-  await pollAutofix(config.autofix, deliver, alert);
+type CiWatch = { threadId: string; cwd: string; githubUser?: string };
+
+// Core polls each repository once for every surface: fast for a while after a push, backing off to every 10 minutes.
+const ciStreams = keyedStreams(
+  ({ cwd, githubUser }: CiWatch) => Stream.unwrap(Effect.map(Effect.promise(mainCoreClient), (client) => client['github.pr']({ cwd, githubUser }))),
+  ({ threadId }, prs) => onPrs(threadId, prs),
+  ({ threadId }, error) => console.warn(`CI watch for ${threadId} failed: ${error instanceof Error ? error.message : String(error)}`),
+);
+
+function syncCi() {
+  const watched = config.threads.flatMap((t) => (t.cwd ? [{ threadId: t.id, cwd: t.cwd, githubUser: t.githubUser }] : []));
+  for (const id of ci.keys()) if (!watched.some((w) => w.threadId === id)) ci.delete(id);
+  ciStreams(watched);
+}
+
+/** A watched thread's branch PRs changed: its open PR's CI passing or failing after another state alerts once. */
+function onPrs(threadId: string, { prs }: BranchPrs) {
+  const pr = currentPr(prs);
+  const thread = config.threads.find((t) => t.id === threadId);
+  if (pr?.state !== 'OPEN' || !thread) return;
+  const { seen, result } = ciTransition(ci.get(threadId), pr);
+  ci.set(threadId, seen);
+  if (!result) return;
+  deliver({ type: 'ci', threadId, result });
+  alert({ threadId, kind: 'ci', title: thread.title, body: ciTitle(result) });
 }
