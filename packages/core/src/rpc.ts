@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup, RpcMiddleware } from 'effect/rpc';
 import { Agent, Capabilities, HostRpcs, Model } from '@mochi/schema';
+import { Gate, StaleKind, WatchKey, WatchValue } from './watch/keys.ts';
 
 // Here rather than in run.ts so a window's client imports no node built-ins.
 export class RunError extends Schema.TaggedError<RunError>()('RunError', {
@@ -54,6 +55,11 @@ export class CoreRpcs extends RpcGroup.make(
   Rpc.make('utility.classify', { payload: { prompt: Schema.String, thread: Model.Thread }, success: Schema.NullOr(Agent.DriftVerdict) }),
   Rpc.make('capabilities.serve', { payload: { names: Schema.Array(Capabilities.CapabilityName) }, success: Capabilities.CapabilityCall, stream: true }),
   Rpc.make('capabilities.reply', { payload: Capabilities.CapabilityReply }),
+  Rpc.make('watch', { payload: { key: WatchKey }, success: WatchValue, stream: true }),
+  /** Main's report of window visibility, sleep and power source. */
+  Rpc.make('watch.gate', { payload: Gate }),
+  /** Every subscribed key of these kinds reads again, gate permitting. */
+  Rpc.make('watch.stale', { payload: { kinds: Schema.Array(StaleKind) } }),
 ) {}
 
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()('Unauthorized', { scope: Capabilities.AuthScope }) {

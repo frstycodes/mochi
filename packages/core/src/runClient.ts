@@ -29,6 +29,9 @@ export function useCoreClient(client: Promise<Client>) {
   backend = client;
 }
 
+/** Core's client once main has connected; undefined before then and in plain-node tests. */
+export const connectedCore = () => backend;
+
 let local: Promise<Client> | undefined;
 // ponytail: in-process only for tests and the moment before Core connects; same service, no second implementation.
 function localClient(): Promise<Client> {

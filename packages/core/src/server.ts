@@ -10,6 +10,8 @@ import { Capabilities, hostHandlers } from './hostServer.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { asRunError, Run } from './run.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
+import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
+import { Watch } from './watch/watch.ts';
 
 export interface ServerOptions {
   readonly port: number;
@@ -23,19 +25,20 @@ export interface ServerOptions {
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
 export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
+    Layer.provide(Watch.layer),
     Layer.provide(Layer.mergeAll(Run.layer, Capabilities.layer, UtilityQueue.layer)),
     Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1' })),
   );
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
-    Layer.unwrap(Effect.map(Effect.context<Run | Capabilities | UtilityQueue>(), (services) => HttpRouter.add('GET', '/ws', connect(options, services)))),
+    Layer.unwrap(Effect.map(Effect.context<Run | Capabilities | UtilityQueue | Watch>(), (services) => HttpRouter.add('GET', '/ws', connect(options, services)))),
     { disableLogger: true, disableListenLog: true },
   );
 
 // Modelled on T3 Code's `apps/server/src/ws.ts`: refuse before the upgrade, then one RPC server per socket, so its
 // handlers know the connection's scopes and window.
-const connect = (options: ServerOptions, services: Context.Context<Run | Capabilities | UtilityQueue>) =>
+const connect = (options: ServerOptions, services: Context.Context<Run | Capabilities | UtilityQueue | Watch>) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = new URL(request.url, 'http://core');
@@ -88,6 +91,7 @@ const layerHandlers = (windowId: number | undefined) =>
       // The model call itself still runs in main (`agent.utility`, `agent.classify` on the `host` capability); Core decides when, and which one.
       const model = (tag: string, args: ReadonlyArray<unknown>) =>
         host[tag]!(args).pipe(Effect.catch((error) => Effect.logWarning(`${tag} failed: ${error}`).pipe(Effect.annotateLogs({ source: 'core' }), Effect.as(null))));
+      const watch = yield* Watch;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -101,6 +105,9 @@ const layerHandlers = (windowId: number | undefined) =>
         signal: ({ id, signal }: { id: number; signal: string }) => run.signal(id, signal as NodeJS.Signals),
         'capabilities.serve': ({ names }: { names: ReadonlyArray<Contract.CapabilityName> }) => capabilities.serve(names),
         'capabilities.reply': (reply: Contract.CapabilityReply) => capabilities.reply(reply),
+        watch: ({ key }: { key: WatchKey }) => watch.watch(key),
+        'watch.gate': (gate: Gate) => watch.setGate(gate),
+        'watch.stale': ({ kinds }: { kinds: ReadonlyArray<StaleKind> }) => watch.markStale(kinds),
         'utility.run': ({ task, spaceId, prompt, thread }: { task: keyof typeof PRIORITY; spaceId: string; prompt: string; thread?: string }) =>
           queue.submit({ thread, kind: task, priority: PRIORITY[task], promptChars: prompt.length, run: model('agent.utility', [task, spaceId, prompt]) as Effect.Effect<string | null> }),
         'utility.classify': ({ prompt, thread }: { prompt: string; thread: { id: string } }) =>

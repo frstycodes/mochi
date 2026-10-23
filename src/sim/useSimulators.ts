@@ -1,13 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
 import { host } from '@/host';
+import type { Simulator } from '@/host/types/sim';
 import { queryKeys } from '../queryKeys';
+import { useWatchQuery } from '../watch/useWatchQuery';
 
-const POLL_MS = 5000;
-
-/** Simulators on this Mac, refreshed every few seconds so boots from Xcode or the CLI show up. */
+/** Simulators on this Mac, pushed by Core while something shows them, so boots from Xcode or the CLI show up. */
 export function useSimulators() {
-  const simulatorsQuery = useQuery({ queryKey: queryKeys.sim.list(), queryFn: () => host.sim.list(), refetchInterval: POLL_MS });
-  return { simulators: simulatorsQuery.data ?? null, error: simulatorsQuery.error ? message(simulatorsQuery.error) : null, refresh: async () => { await simulatorsQuery.refetch(); } };
+  const [simulatorsQuery, refresh] = useWatchQuery(queryKeys.sim.list(), { _tag: 'sim' }, (value) => value.simulators as Simulator[], () => host.sim.list());
+  return { simulators: simulatorsQuery.data ?? null, error: simulatorsQuery.error ? message(simulatorsQuery.error) : null, refresh };
 }
 
 /** Electron prefixes IPC errors with "Error invoking remote method 'sim:x': Error: "; the rest is the useful part. */

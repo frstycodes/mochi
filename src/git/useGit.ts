@@ -2,15 +2,16 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host/index.ts';
-import type { DiffScope } from '../host/types/git.ts';
+import type { DiffScope, GitDiff } from '../host/types/git.ts';
 import { queryKeys } from '../queryKeys.ts';
+import { useWatchQuery } from '../watch/useWatchQuery.ts';
 
-const DIFF_POLL_MS = 4000;
 const PR_POLL_MS = 30_000;
 
-/** The worktree's diff (against `base`, the thread's chosen base), re-read on an interval and on window focus while the agent keeps editing. */
+/** The worktree's diff (against `base`, the thread's chosen base), pushed by Core when the worktree's git status moves. */
 export function useGitDiff(cwd: string, scope: DiffScope, base?: string) {
-  return gitResult(useQuery({ queryKey: queryKeys.git.diff(cwd, scope, base), queryFn: () => host.git.diff(cwd, scope, base), refetchInterval: host.isDesktop ? DIFF_POLL_MS : false }));
+  const [diffQuery, refresh] = useWatchQuery(queryKeys.git.diff(cwd, scope, base), { _tag: 'gitDiff', cwd, scope, base }, (value) => value.diff as GitDiff, () => host.git.diff(cwd, scope, base));
+  return { ...gitResult(diffQuery), refresh };
 }
 
 /** The project's branches, read once per root; `refresh` re-reads them. */

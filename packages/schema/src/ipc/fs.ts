@@ -27,8 +27,6 @@ export type SearchHits = typeof SearchHits.Type;
 
 export const SearchSummary = Schema.Struct({ isTruncated: B });
 
-export const FsChange = Schema.Struct({ root: S, path: S });
-
 export const DiskFile = Schema.Struct({ root: S, path: S });
 export type DiskFile = typeof DiskFile.Type;
 
@@ -40,9 +38,6 @@ export const fsRpc = {
   list: invoke(T([Str()]), Schema.Array(S)),
   read: invoke(T([Str(), Str()]), FileContent),
   write: invoke(T([Str(), Str(), Str(5 * 1024 * 1024), Schema.Struct({ baseMtimeMs: Schema.Finite, force: Schema.optional(B) })]), WriteResult),
-  watch: invoke(T([Str()]), Schema.Void),
-  unwatch: invoke(T([Str()]), Schema.Void),
-  onChange: event(FsChange),
   search: invoke(T([Str(), SearchId, Str(1024), SearchOptions]), SearchSummary),
   cancelSearch: invoke(T([SearchId]), Schema.Void),
   onSearchHits: event(SearchHits),

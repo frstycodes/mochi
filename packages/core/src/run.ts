@@ -1,4 +1,4 @@
-import { Cause, Context, Duration, Effect, Layer, Queue, Semaphore, Stream } from 'effect';
+import { Cause, Context, Duration, Effect, Layer, PubSub, Queue, Semaphore, Stream } from 'effect';
 import { ChildProcess, ChildProcessSpawner } from 'effect/process';
 import { RunError } from './rpc.ts';
 import { userPath } from './shellPath.ts';
@@ -83,6 +83,7 @@ export class Run extends Context.Service<Run>()('mochi/core/Run', {
 
     // A spawn's stdin and signals are reached by process id from other RPC calls; the stream's scope owns the process.
     const live = new Map<number, { stdin: Queue.Queue<Uint8Array, Cause.Done>; kill: (signal: NodeJS.Signals) => Effect.Effect<void> }>();
+    const childEvents = yield* PubSub.unbounded<void>();
 
     /** A long-lived process: its output as events. Ending or interrupting the stream kills the tree. */
     const spawn = (command: string, args: ReadonlyArray<string> = [], options: SpawnOptions = {}): Stream.Stream<SpawnEvent, RunError> =>
@@ -94,7 +95,8 @@ export class Run extends Context.Service<Run>()('mochi/core/Run', {
           );
           const id = handle.pid;
           live.set(id, { stdin, kill: (killSignal) => handle.kill({ killSignal }).pipe(Effect.ignore) });
-          yield* Effect.addFinalizer(() => Effect.sync(() => live.delete(id)));
+          PubSub.publishUnsafe(childEvents, undefined);
+          yield* Effect.addFinalizer(() => Effect.sync(() => (live.delete(id), PubSub.publishUnsafe(childEvents, undefined))));
           yield* Queue.offer(events, { _tag: 'started', id });
           const pump = (stream: 'stdout' | 'stderr') =>
             handle[stream].pipe(Stream.runForEach((data) => Queue.offer(events, { _tag: 'out', stream, data })), Effect.ignore);
@@ -120,7 +122,9 @@ export class Run extends Context.Service<Run>()('mochi/core/Run', {
       return data ? Queue.offer(process.stdin, data).pipe(Effect.asVoid) : Queue.end(process.stdin).pipe(Effect.asVoid);
     };
     const signal = (id: number, killSignal: NodeJS.Signals) => live.get(id)?.kill(killSignal) ?? Effect.void;
-    return { run, spawn, write, signal };
+    /** Ticks when a spawned process starts or ends. */
+    const children = Stream.fromPubSub(childEvents);
+    return { run, spawn, write, signal, children };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make);

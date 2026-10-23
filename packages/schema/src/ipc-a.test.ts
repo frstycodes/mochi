@@ -38,7 +38,6 @@ test('push payloads decode', () => {
     [browserRpc.onEvent, { id: 'view-1', type: 'dialog', kind: null }],
     [browserRpc.onEvent, { id: 'view-1', type: 'download', name: 'a.zip', path: '/Users/me/Downloads/a.zip', state: 'progress', received: 10, total: 0 }],
     [fsRpc.onSearchHits, { id: 's1', path: 'a.ts', lines: [{ line: 3, text: 'usage()', isCut: false, ranges: [[0, 5]], column: [2, 7] }] }],
-    [fsRpc.onChange, { root: '/repo', path: 'a.ts' }],
     [ptyRpc.onData, { id: 'pty-1', data: '$ ' }],
     [ptyRpc.onExit, { id: 'pty-1', exitCode: 0 }],
     [libraryRpc.onDeviceCode, { url: 'https://api.githubcopilot.com/mcp', userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' }],
