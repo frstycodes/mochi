@@ -87,6 +87,9 @@ function freePort() {
   });
 }
 
+/** Core's RPC client once main is connected, for main's own calls to Core's procedures. */
+export const coreClient = async () => (await mainConnection!).client;
+
 /** Main's log lines go to Core's file, retried for 5s while Core restarts; after that they go to main's stderr. */
 export function logToCore(level: 'Debug' | 'Info' | 'Warn' | 'Error', message: string) {
   void mainConnection

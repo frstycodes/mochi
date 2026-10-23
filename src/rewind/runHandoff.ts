@@ -5,6 +5,7 @@ import { threadCwd } from '../host/cwd.ts';
 import type { Handoff, Provider, Thread } from '../model.ts';
 import type { Action } from '../store/index.tsx';
 import { handoffPrompt, parseHandoff } from '../utility/prompts.ts';
+import { runUtility } from '../utility/runUtility.ts';
 import { draftingIndex, handoffSummary, PROVIDER_NAME, type DiffStat } from './handoff.ts';
 
 /** Past this the local summary goes instead: a handoff you asked for shouldn't wait on a slow background model. */
@@ -44,7 +45,7 @@ export async function draftHandoff(thread: Thread, to: Provider, timeoutMs = DRA
     .filter((a) => a.kind === 'message' && a.who !== 'harness')
     .slice(-TRANSCRIPT_MESSAGES)
     .map((a) => `${a.who === 'you' ? 'User' : 'Agent'}: ${a.text.slice(0, 1500)}`);
-  const draft = host.agent.utility('handoff', thread.spaceId, handoffPrompt(template, transcript)).then(
+  const draft = runUtility('handoff', thread.spaceId, handoffPrompt(template, transcript), thread.id).then(
     (text) => (text ? { prompt: parseHandoff(text) } : { prompt: template, fallback: 'error' as const }),
     (error: unknown) => {
       console.warn('handoff draft failed', error);
