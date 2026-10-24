@@ -10,6 +10,7 @@ import { Cache } from './cache.ts';
 import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
 import { Capabilities, hostHandlers } from './hostServer.ts';
+import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
 import { visibleItem } from './remote/visible.ts';
@@ -35,6 +36,7 @@ export interface ServerOptions {
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
 export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
+    Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
     Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), Capabilities.layer, UtilityQueue.layer, layerStore(options.userData)).pipe(Layer.provideMerge(Run.layer))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
@@ -56,7 +58,7 @@ const layerStore = (userData: string | undefined) =>
     Layer.orDie,
   );
 
-type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store;
+type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store | Metrics;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -138,6 +140,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
       const watch = yield* Watch;
       const github = yield* GitHub;
       const stored = storeHandlers(store, userData);
+      const metrics = yield* Metrics;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -164,6 +167,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
             promptChars: prompt.length,
             run: Effect.map(model('agent.classify', [prompt, thread]), (verdict) => (verdict ? JSON.stringify(verdict) : null)),
           }).pipe(Effect.map((answer) => (answer ? JSON.parse(answer) : null))),
+        metrics: () => metrics.stream,
         ...host,
         ...stored,
         thread: (input: { threadId: string; afterSequence: number }) => stored.thread(input).pipe(Stream.map((item) => visibleItem(item, identity.scopes)), Stream.filter((item) => item !== undefined)),

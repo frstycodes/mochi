@@ -120,6 +120,9 @@ export const queryKeys = {
     threadSnapshot: (threadId: string) => ['thread-snapshot', threadId] as const,
     previewFrame: (hostId: string | null | undefined) => ['preview-frame', hostId] as const,
   },
+  developer: {
+    metrics: () => ['developer-metrics'] as const,
+  },
   browser: {
     suggestions: (searchEngine: string, query: string) => ['search-suggestions', searchEngine, query] as const,
   },

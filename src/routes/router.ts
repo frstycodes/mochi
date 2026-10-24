@@ -17,8 +17,9 @@ const settingsRoute = createRoute({
 const replayRoute = createRoute({ getParentRoute: () => rootRoute, path: '/replay/$threadId', component: lazyRouteComponent(load, 'ReplayView') });
 const remoteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/remote/$machineId/$threadId', component: lazyRouteComponent(load, 'RemoteThreadView') });
 const reviewRoute = createRoute({ getParentRoute: () => rootRoute, path: '/review', component: lazyRouteComponent(load, 'ReviewView') });
+const developerRoute = createRoute({ getParentRoute: () => rootRoute, path: '/developer', component: lazyRouteComponent(load, 'DeveloperPage') });
 
-const routeTree = rootRoute.addChildren([workspaceRoute, settingsRoute, replayRoute, remoteRoute, reviewRoute]);
+const routeTree = rootRoute.addChildren([workspaceRoute, settingsRoute, replayRoute, remoteRoute, reviewRoute, developerRoute]);
 
 declare module '@tanstack/react-router' {
   interface Register {
