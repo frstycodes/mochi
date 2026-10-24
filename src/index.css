@@ -392,6 +392,11 @@
   padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px / var(--app-zoom, 1))) + 0.5rem);
 }
 
+/* The macOS traffic lights (`useCaptionInset`) cover the top-left corner: 9px past them, matching `LIGHTS_RESERVE`, less where the header already starts. */
+:root[data-traffic-lights] [data-under-lights] {
+  padding-left: calc(var(--lights-end) + 9px - var(--header-left, 0px));
+}
+
 /* Unlayered on purpose: the Artifact host wraps the page in its own skeleton, and its unlayered body colour beats `@layer base`, so text without a colour class turned light-theme dark on the dark theme. */
 #root {
   color: var(--foreground);

@@ -119,8 +119,10 @@ export function PaneActionsSlot() {
 
 /** The slots alone, for a pane shown outside its card (in a split, popped out): what the pane put in its header still shows, and nothing at all when it put nothing there. */
 export function PaneSlotBar() {
+  const bar = useRef<HTMLDivElement>(null);
+  useCaptionInset(bar);
   return (
-    <div data-pane-header className="flex h-9 shrink-0 items-center gap-0.5 pr-1.5 pl-3 not-has-[>*>*]:hidden">
+    <div ref={bar} data-pane-header className="flex h-9 shrink-0 items-center gap-0.5 pr-1.5 pl-3 not-has-[>*>*]:hidden">
       <PaneTitleSlot />
       <PaneActionsSlot />
     </div>
