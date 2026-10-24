@@ -28,12 +28,12 @@ import { TargetContextMenu } from '../menus/TargetContextMenu';
 export function SplitControls() {
   const dispatch = useDispatch();
   const { leafId, isMulti, isZoomed } = useSplit();
+  const view = useHarnessSelector((s) => findLeaf(s.layouts[s.spaceId].root, leafId)?.view);
   if (!isMulti) return null;
   const run = (action: Parameters<typeof dispatch>[0]) => {
     dispatch({ type: 'layout-focus', leafId });
     dispatch(action);
   };
-  const view = useHarnessSelector((s) => findLeaf(s.layouts[s.spaceId].root, leafId)?.view);
   const tearOff = view?.kind === 'thread' ? () => {
     void host.windows.open(`window/${view.id}`);
     dispatch({ type: 'layout-close', leafId });

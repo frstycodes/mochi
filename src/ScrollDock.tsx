@@ -212,7 +212,7 @@ function DockStrip<T>({ ref, items, startIndex, onBrowse }: { ref: RefObject<HTM
   // Mount only: after opening, the scroll offset is the source of truth.
   useLayoutEffect(() => {
     if (ref.current) ref.current.scrollLeft = startIndex * SPACING;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- scrolls to the start position once, on mount
 
   useMotionValueEvent(pos, 'change', (p) => onBrowse(Math.min(items.length - 1, Math.max(0, Math.round(p)))));
 

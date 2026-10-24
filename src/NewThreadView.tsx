@@ -82,7 +82,7 @@ function NewThread() {
   const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
   useEffect(() => {
     mention.restore(saved?.mentions ?? []);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- restores the saved draft's mentions once, on mount
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const machines = useMachines();
   const [runsOn, setRunsOn] = useState<string | null>(null);
@@ -122,7 +122,7 @@ function NewThread() {
     changeRunsOn(null);
     changeProject(ref);
     setStep('compose');
-  }, [requestedProject]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [requestedProject]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per sidebar request; the setters read current state
 
   const chooseFirst = (next: string | null) => {
     if (remote) changeRunsOn(null);

@@ -107,7 +107,7 @@ export async function testMcpServer(spaceId: string, provider: Provider, name: s
     return { tools: tools.map((t) => t.name) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(stderr.trim() ? `${message}\n${stderr.trim()}` : message);
+    throw new Error(stderr.trim() ? `${message}\n${stderr.trim()}` : message, { cause: error });
   } finally {
     clearTimeout(timer);
     void client.close().catch(() => {});

@@ -19,7 +19,7 @@ export async function run(
     const result = await runCommand(cmd, args, { cwd, env: { ...ENV, ...env }, input, okCodes: [0, ...okCodes] });
     return wantsStderr ? result.stderr : result.stdout;
   } catch (error) {
-    if (error instanceof RunError) throw new Error(error.stderr.trim() || error.message);
+    if (error instanceof RunError) throw new Error(error.stderr.trim() || error.message, { cause: error });
     throw error;
   }
 }

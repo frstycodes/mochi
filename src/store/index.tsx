@@ -67,7 +67,7 @@ export async function startStore() {
   });
 }
 
-function useReplica() {
+function requireReplica() {
   if (!replica) throw new Error('The store starts before the first render (startStore)');
   return replica;
 }
@@ -143,7 +143,7 @@ export function StoreScope({ state, dispatch, children }: { state: State; dispat
 }
 
 function useStoreValue() {
-  const replica = useReplica();
+  const replica = requireReplica();
   const { dispatch, apply } = useStoreDispatch(replica);
   useProjectionContext(replica, dispatch);
   const value = useMemo(() => ({ store: replica.store, getState: replica.getState, dispatch }), [replica, dispatch]);

@@ -85,7 +85,7 @@ function Reason({ row, verdict }: { row: RowFixture; verdict: Verdict | null }) 
   return <span className="min-w-0 truncate">{verdict && verdict.kind !== 'idle' ? verdict.reason : 'Idle'}</span>;
 }
 
-// A · Status line
+// A · The status reads as a line
 function StatusLineRow({ row, isActive }: RowProps) {
   const { thread, ago } = row;
   const verdict = useIdleVerdict(thread);

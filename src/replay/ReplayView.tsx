@@ -102,6 +102,7 @@ function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: 
 /** The exported page has no sidebar around it. */
 function useOptionalSidebar() {
   try {
+    // oxlint-disable-next-line react/hooks -- useSidebar runs on every render; the catch only covers its throw outside a SidebarProvider.
     return useSidebar();
   } catch {
     return null;

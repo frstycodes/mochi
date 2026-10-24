@@ -99,7 +99,7 @@ function useSharedSettingsDrift(): Drift[] {
     return () => {
       isCurrent = false;
     };
-  }, [onlineKey, nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [onlineKey, nonce]); // eslint-disable-line react-hooks/exhaustive-deps -- online is tracked by onlineKey; nonce forces a reread
   const catalog = settingsCatalog();
   const refresh = () => setNonce((n) => n + 1);
   return online.flatMap((machine) => {

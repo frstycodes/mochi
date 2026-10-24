@@ -7,18 +7,37 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 import electron from 'vite-plugin-electron/simple';
 import { csp } from './scripts/csp.ts';
 
+// Copied from shadcn and AI Elements and kept as published, so an update diffs cleanly.
+const VENDORED = ['src/components/ui/**', 'src/components/ai-elements/**'];
+
 export default defineConfig(({ mode }) => ({
   base: './',
   fmt: { singleQuote: true, printWidth: 160 },
   // GAP: format check is off until in-flight branches land; turning it on reformats ~210 files in one commit.
   check: { fmt: false },
   lint: {
-    jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
-    rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },
-    options: { typeAware: true, typeCheck: true },
+    plugins: ['eslint', 'typescript', 'unicorn', 'oxc', 'react'],
+    jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }, './scripts/oxlint/index.ts'],
+    rules: { 'vite-plus/prefer-vite-plus-imports': 'error', 'eslint/preserve-caught-error': 'error' },
+    overrides: [
+      {
+        files: ['**/*.{ts,tsx}'],
+        excludeFiles: VENDORED,
+        rules: { 'mochi/require-suppression-reason': 'error', 'mochi/no-low-value-comments': 'error' },
+      },
+      {
+        files: ['src/**', 'electron/**', 'packages/*/src/**', 'infra/*/src/**'],
+        excludeFiles: [...VENDORED, '**/*.test.ts'],
+        rules: { 'mochi/no-em-dash-copy': 'error' },
+      },
+      // The React Compiler builds the renderer only; Core's `use*` setters are not hooks.
+      { files: ['src/**/*.{ts,tsx}'], rules: { 'react/hooks': 'error', 'mochi/no-hookless-use-function': 'error' } },
+    ],
+    // `pnpm typecheck` (tsc-rs) is the type check; tsgolint only supplies types to the type-aware rules.
+    options: { typeAware: true, typeCheck: false },
   },
   test: {
-    include: ['src/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'electron/**/*.test.ts', 'infra/**/src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'electron/**/*.test.ts', 'infra/**/src/**/*.test.ts'],
     setupFiles: ['scripts/test-env.ts'],
     // `--changed` follows imports only; a dependency bump or a fixture a test reads from disk reruns everything.
     forceRerunTriggers: ['**/package.json', '**/{vitest,vite}.config.*', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '**/fixtures/**'],

@@ -131,7 +131,7 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
         compartments.attributes.reconfigure(EditorView.contentAttributes.of(contentAttributes)),
       ],
     });
-  }, [items, inlineMentions, placeholder, suggestion, attributesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items, inlineMentions, placeholder, suggestion, attributesKey]); // eslint-disable-line react-hooks/exhaustive-deps -- contentAttributes is tracked by its serialized key
 
   return <div ref={host} onKeyUp={onKeyUp} onBlur={onBlur} className={cn('w-full min-w-0', className)} />;
 }

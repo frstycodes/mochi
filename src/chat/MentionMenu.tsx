@@ -309,7 +309,7 @@ function useFileOptions(query: string | null, { root, recent }: MentionFiles): F
       const cut = path.lastIndexOf('/') + 1;
       return { kind: 'file', mention: worktreeMention(path), name: path.slice(cut), dir: path.slice(0, cut) };
     });
-  }, [deferred, browse?.dir, browse?.filter, folder, files, recentKey, root]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deferred, browse?.dir, browse?.filter, folder, files, recentKey, root]); // eslint-disable-line react-hooks/exhaustive-deps -- browse and recent are tracked by their fields and joined key, not identity
 }
 
 /** A browsed folder's listing, the last one kept while the next loads so the menu doesn't blink between folders. */

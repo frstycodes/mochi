@@ -33,7 +33,7 @@ export async function updateHarness(provider: Provider): Promise<void> {
     await runCommand(target.file, target.args, { env: { ...accountEnv(provider, null), PATH: await userPath() }, timeout: 180_000, shell: target.shell });
   } catch (error) {
     const failure = error as Error & { stderr?: string };
-    throw new Error(failure.stderr?.trim().split('\n').at(-1) || failure.message);
+    throw new Error(failure.stderr?.trim().split('\n').at(-1) || failure.message, { cause: error });
   }
 }
 

@@ -24,7 +24,7 @@ function TornThread({ threadId }: { threadId: string }) {
   useLibraryNamesLoader(thread?.spaceId);
   useEffect(() => {
     if (thread) document.title = thread.title;
-  }, [thread?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [thread?.title]); // eslint-disable-line react-hooks/exhaustive-deps -- only the title is read
   if (!thread) return <Gone />;
   return (
     // Desktop windows hide the title bar: with no sidebar here, the header clears the traffic lights itself.

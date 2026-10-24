@@ -424,7 +424,7 @@ const Composer = memo(function Composer({
   const draftExtra = useMemo(() => (mention.mentions.length > 0 ? { mentions: mention.mentions } : undefined), [mention.mentions]);
   useEffect(() => {
     mention.restore(getDraft<{ mentions: Mention[] }>(draftKey)?.extra?.mentions ?? []);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- restores the saved draft's mentions once, on mount
 
   // `/compact` never goes to the agent as text: it runs now, waits in the queue as typed, or says why it can't.
   const runCompact = (focus: string, hasFiles: boolean) => {
