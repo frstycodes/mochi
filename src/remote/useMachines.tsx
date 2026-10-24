@@ -6,9 +6,9 @@ import { toast } from '@/toast/store';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { host } from '../host';
 import type { CommandData, CommandResult, FollowedMachine, RemoteCommand } from '../host/types/remote';
-import { HarnessScope, type Action, type State } from '../store';
+import { StoreScope, type Action, type State } from '../store';
 import { commandFor } from './actions';
-import { applyFrame, mirrorOf, type Mirror } from './mirror';
+import { applyFrame, cachedMirror, type Mirror } from './mirror';
 import { openRemoteThread } from '../routes/nav';
 
 /** A computer this one follows, with its store as far as the stream has brought it; no state before its first snapshot. */
@@ -53,8 +53,8 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!cachedQuery.data) return;
-    // Main checked each cached thread file against its schema before handing it here.
-    setMirrors((all) => cachedQuery.data.reduce((next, { machineId, saved }) => (next[machineId] ? next : { ...next, [machineId]: cached(mirrorOf(JSON.parse(saved))) }), all));
+    // Each cached thread file is decoded again here (`cachedMirror`), as a streamed one is.
+    setMirrors((all) => cachedQuery.data.reduce((next, { machineId, saved }) => (next[machineId] ? next : { ...next, [machineId]: cached(cachedMirror(JSON.parse(saved))) }), all));
   }, [cachedQuery.data]);
   useMirrorCache(mirrors);
   const machines = useMemo(() => followed.map((machine) => ({ machine, state: mirrors[machine.id]?.state })), [followed, mirrors]);
@@ -176,7 +176,7 @@ export function RemoteScope({ machine, state, onOpenTab, children }: { machine: 
     },
     [machine.id, machine.name, run, ask, onOpenTab],
   );
-  return <HarnessScope state={state} dispatch={dispatch}>{children}</HarnessScope>;
+  return <StoreScope state={state} dispatch={dispatch}>{children}</StoreScope>;
 }
 
 const COMMAND_VERBS = {

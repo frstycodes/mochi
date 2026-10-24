@@ -4,7 +4,7 @@ import { useRemoteStatus } from './useRemoteStatus';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { runRemoteCommand } from './commands.ts';
-import { setMachineName } from './tap.ts';
+import { setMachineName } from './answers.ts';
 import { closeIdleShells, SWEEP_MS } from './terminals.ts';
 
 /** Runs devices' commands, which reach this window from Core through main, while the store lives here. */

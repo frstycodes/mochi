@@ -1,18 +1,13 @@
 import type { MirrorFrame } from '../host/types/remote.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 import { mirrorState } from '../store/root.ts';
 import { rankQueue } from '../store/queue.ts';
-import { isListed, type Thread } from '../model.ts';
-import type { Checkpoint } from '../rewind/checkpoints.ts';
-import type { Fork } from '../rewind/fork.ts';
+import { savedThreadFrom, type SavedThread } from '../store/saved.ts';
+import { isListed } from '../model.ts';
 import { lastActivityAt, pinnedThreads } from '../reorder.ts';
 
-/** One thread's file as the machine saves it, decoded by main (`Persist.SavedThread`). */
-export interface MirroredThread {
-  thread: Thread;
-  checkpoints?: Checkpoint[];
-  fork?: Fork;
-}
+/** One thread's file as the machine saves it. */
+export type MirroredThread = SavedThread;
 
 /** Another computer's store as this one follows it: its thread files as its `thread` streams last sent them. */
 export interface Mirror {
@@ -22,12 +17,22 @@ export interface Mirror {
 
 /**
  * Builds a store from the thread files alone, through the store's own initial state, so nothing runs: no agent, schedule
- * or file on this computer moves.
+ * or file on this computer moves. A file that isn't a `Persist.SavedThread` leaves the mirror as it was.
  */
 export function applyFrame(mirror: Mirror | undefined, frame: MirrorFrame): Mirror {
   if (frame.type === 'reset') return mirrorOf({});
   const { [frame.threadId]: _replaced, ...rest } = mirror?.threads ?? {};
-  return mirrorOf(frame.saved === null ? rest : { ...rest, [frame.threadId]: frame.saved as MirroredThread });
+  if (frame.saved === null) return mirrorOf(rest);
+  const saved = savedThreadFrom(frame.saved);
+  return saved ? mirrorOf({ ...rest, [frame.threadId]: saved }) : (mirror ?? mirrorOf({}));
+}
+
+/** A mirror as `useMachines` cached it: each thread file decoded, one that won't decode left out. */
+export function cachedMirror(threads: Record<string, unknown>): Mirror {
+  return mirrorOf(Object.fromEntries(Object.entries(threads).flatMap(([id, file]) => {
+    const saved = savedThreadFrom(file);
+    return saved ? [[id, saved]] : [];
+  })));
 }
 
 /**

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { MirrorFrame } from '../host/types/remote.ts';
 import type { Action } from '../store/index.tsx';
 import { mirrorState, reducer } from '../store/root.ts';
-import { splitSaved, toSaved } from '../store/persist.ts';
+import { splitSaved, toSaved } from '../store/saved.ts';
 import { applyFrame, type Mirror } from './mirror.ts';
 
 /** A machine's store with one live thread; each thread file as its `thread` stream sends it after a save. */

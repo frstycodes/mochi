@@ -23,7 +23,7 @@ import { handoffBlocker } from '../rewind/handoff.ts';
 import { handOffHere } from '../rewind/runHandoff.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
-import { answeredBy, markAnswered } from './tap.ts';
+import { answeredBy, markAnswered } from './answers.ts';
 
 export interface CommandEnv {
   state: State;
