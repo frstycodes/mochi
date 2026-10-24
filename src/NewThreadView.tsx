@@ -230,7 +230,7 @@ function NewThread() {
                 <>
                   <ProjectPicker value={project} onChange={changeProject} projects={projects} />
                   {!!project && <WorkspaceControls workspace={workspace} />}
-                  {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+                  <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
                 </>
               )}
             </ComposerMeta>
