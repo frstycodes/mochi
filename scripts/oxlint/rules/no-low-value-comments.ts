@@ -1,6 +1,6 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 71df573f, oxlint-plugin-t3code/rules/no-low-value-comments.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ../LICENSE-T3. Local edits: imports from vite-plus/lint/plugins; a TODO may name its
-// owner or condition instead of an issue (`TODO(windows)`); `// {SECTION}` separators are allowed.
+// owner or condition instead of an issue (`TODO(windows)`); `// {SECTION}` separators are allowed, but not a file's only one.
 import { defineRule, type ESTree } from 'vite-plus/lint/plugins';
 
 const TS_FILE_PATTERN = /\.[cm]?tsx?$/u;
@@ -115,6 +115,13 @@ export default defineRule({
           context.report({
             loc: { start: comments[0]!.loc.start, end: comments.at(-1)!.loc.end },
             message,
+          });
+        }
+        const sections = groups.filter(({ comments, lines }) => comments[0]!.type === "Line" && lines.length === 1 && SECTION_PATTERN.test(lines[0]!));
+        if (sections.length === 1) {
+          context.report({
+            loc: sections[0]!.comments[0]!.loc,
+            message: "Drop the separator; `// {SECTION}` is for a file with more than one section.",
           });
         }
       },

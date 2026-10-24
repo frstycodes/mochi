@@ -20,10 +20,14 @@ function lint(source: string): string[] {
   return (JSON.parse(stdout) as { diagnostics: { message: string }[] }).diagnostics.map((d) => d.message);
 }
 
-test('a TODO naming its owner or condition and a {SECTION} separator pass; a bare TODO and a divider do not', () => {
-  assert.deepEqual(lint('// TODO(windows): the fake CLI needs a .cmd shim.\nexport const a = 1;\n// {THREADS}\nexport const listThreads = 2;\n'), []);
+test('a TODO naming its owner or condition and {SECTION} separators pass; a bare TODO and a divider do not', () => {
+  assert.deepEqual(lint('// TODO(windows): the fake CLI needs a .cmd shim.\nexport const a = 1;\n// {THREADS}\nexport const listThreads = 2;\n// {GOALS}\nexport const getGoal = 3;\n'), []);
   assert.deepEqual(lint('// TODO: tidy this up.\nexport const a = 1;\n// ---- Threads ----\nexport const b = 2;\n'), [
     'Link the issue that tracks this, or drop the marker.',
     "Drop the section divider; split the file or let the code's structure show the grouping.",
   ]);
+});
+
+test('a file with a single {SECTION} separator is told to drop it', () => {
+  assert.deepEqual(lint('export const a = 1;\n// {OVERRIDES}\nexport const b = 2;\n'), ["Drop the separator; `// {SECTION}` is for a file with more than one section."]);
 });
