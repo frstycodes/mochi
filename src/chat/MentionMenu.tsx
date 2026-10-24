@@ -15,6 +15,8 @@ import { openPhotos } from '../photo/photos';
 import { useHarnessSelector } from '../store';
 import { isSameListing } from '../reorder';
 import { useLibraryNames } from '../library/names';
+import { MENTION_DROP_EVENT, useDragSelector } from '../layout/drag';
+import { isInside } from '../pane/headerPins';
 import { FileMark } from './FileMark';
 import { browseEntries, browseQuery, browseTarget, fileMentionFor, mentionTokens, parentDir, rankFiles, tokenText, worktreeMention } from './fileMentions';
 import { McpServerMark, PluginMark, SkillMark } from './McpIcon';
@@ -234,6 +236,14 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
     textInput.setInput(`${withoutQuery(text)}@${dir}`);
   };
   const remove = (id: string) => setMentions((all) => all.filter((m) => m.id !== id));
+  /** A thread dropped on the composer: its token at the end of the text, as if picked from the menu. */
+  const mentionThread = (threadId: string) => {
+    const thread = threads.find((t) => t.id === threadId);
+    if (!thread || thread.id === selfId) return;
+    const mention = mentionFor({ kind: 'thread', thread });
+    textInput.setInput(`${text}${text && !/\s$/.test(text) ? ' ' : ''}@${mention.title} `);
+    add(mention);
+  };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (!isOpen) {
@@ -261,7 +271,26 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   // Edit on a queued message brings its references back beside any you already picked.
   const restore = (list: Mention[]) => setMentions((all) => [...all, ...list.filter((m) => !all.some((a) => a.id === m.id))]);
   const inlineMentions = useMemo(() => mentions.filter((m) => m.kind === 'file' || m.kind === 'thread'), [mentions]);
-  return { listId, items, active, isOpen, choose, mentions, inlineMentions, remove, restore, clear: () => setMentions([]), editorProps };
+  return { listId, items, active, isOpen, choose, mentions, inlineMentions, remove, mentionThread, restore, clear: () => setMentions([]), editorProps };
+}
+
+/**
+ * Makes the composer a drop target for a thread dragged from the sidebar: `isOver` while one hovers it, and the drop mentions
+ * that thread (`mentionThread`). Spread `dropProps` on the composer card.
+ */
+export function useThreadMentionDrop(menu: ReturnType<typeof useMentionMenu>) {
+  // A callback ref: the composer can mount after this hook does (a new thread's composer waits for its project step).
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const isOver = useDragSelector((s) => s?.view.kind === 'thread' && !!el && isInside(el, s.x, s.y));
+  const latest = useRef(menu.mentionThread);
+  latest.current = menu.mentionThread;
+  useEffect(() => {
+    if (!el) return;
+    const onDrop = (e: Event) => latest.current((e as CustomEvent<string>).detail);
+    el.addEventListener(MENTION_DROP_EVENT, onDrop);
+    return () => el.removeEventListener(MENTION_DROP_EVENT, onDrop);
+  }, [el]);
+  return { ref: setEl, 'data-mention-drop': '', 'data-mention-over': isOver || undefined };
 }
 
 /** Where `@` finds files: the folder the thread works in, and the files it opened or edited lately (relative, newest first). */

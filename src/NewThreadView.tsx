@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { getPrefs, setPrefs, usePrefs } from './settings/prefs';
 import { useHarness, useSpace, useSpaceThreads } from './store';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadPlugins, useThreadServers, useThreadSkills } from './chat/SlashMenu';
-import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
+import { MentionChips, MentionMenu, useMentionMenu, useThreadMentionDrop } from './chat/MentionMenu';
 import { resolveToken, typedSkills } from './chat/slash';
 import { withReferences, type Mention } from './chat/mentions';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
@@ -76,6 +76,7 @@ function NewThread() {
   // No thread is this page's own, so none is left out.
   const mentionFiles = useMemo(() => ({ root: project && projectRoot(repoFor(project, '')), recent: [] }), [project]);
   const mention = useMentionMenu(layoutId, useThreadSkills(provider, spaceId, project), useThreadServers(provider, spaceId, project), useThreadPlugins(provider, spaceId, project), mentionFiles);
+  const threadDrop = useThreadMentionDrop(mention);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
   const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
   useEffect(() => {
@@ -189,7 +190,7 @@ function NewThread() {
             <div className="relative">
               <SlashMenu menu={slash} />
               <MentionMenu menu={mention} />
-              <ComposerCard>
+              <ComposerCard {...threadDrop} className="data-mention-over:border-ring">
                 <MentionChips menu={mention} />
                 <MachineModelsContext.Provider value={remote ? (catalog ?? NO_CATALOG) : null}>
                   <ComposerInput
