@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { argumentSlots, configuredCommands, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
+import { argumentSlots, bySlashGroup, configuredCommands, slashGroup, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
 
 test('parses /side with its question, keeping line breaks', () => {
   assert.deepEqual(parseSlash('/side why Redis?')?.arg, 'why Redis?');
@@ -116,6 +116,13 @@ test('slots disappear one by one as each argument is started', () => {
   assert.equal(slotPlaceholder(' a.ts --fix extra', hint), '');
   assert.equal(slotPlaceholder(' a.ts\n', hint), '');
   assert.equal(slotPlaceholder(' ', undefined), '');
+});
+
+test('the menu groups rows by Mochi, plugin prefix or harness, best-ranked group first, rows kept together', () => {
+  const row = (name: string, source: 'mochi' | 'claude' = 'claude') => ({ name, description: '', source, isSkill: true });
+  const grouped = bySlashGroup([row('emil:review'), row('run'), row('side', 'mochi'), row('emil:animate'), row('ponytail:audit')]);
+  assert.deepEqual(grouped.map((i) => i.name), ['emil:review', 'emil:animate', 'run', 'side', 'ponytail:audit']);
+  assert.deepEqual(grouped.map(slashGroup), ['emil', 'emil', 'claude', 'mochi', 'ponytail']);
 });
 
 test('before the agent starts, leaves out the skills and plugins the profile turned off', () => {

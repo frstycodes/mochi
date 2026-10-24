@@ -10,10 +10,11 @@ import { offItems } from '../library/nativeOverrides';
 import { useProfiles } from '../profiles';
 import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
-import { ProviderMark } from '../ui';
 import { isAbsolutePath } from '../projects';
 import type { Caret } from './ComposerEditor';
-import { configuredCommands, insertToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
+import { SkillFallback } from './MentionMenu';
+import { SkillMark } from './McpIcon';
+import { bySlashGroup, configuredCommands, insertToken, slashGroup, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
 
 /** Above the composer while the caret ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
 export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
@@ -24,13 +25,19 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
     if (row) revealIn(list.current!, row);
   }, [current]);
   if (!menu.isOpen) return null;
-  const groups = [menu.matches.filter((m) => m.source === 'mochi'), menu.matches.filter((m) => m.source !== 'mochi')].filter((g) => g.length);
+  // `matches` arrive with each section's rows together (`bySlashGroup`), so a section is a run of one group.
+  const groups = menu.matches.reduce<SlashItem[][]>((runs, item) => {
+    const last = runs.at(-1);
+    if (last && slashGroup(last[0]) === slashGroup(item)) last.push(item);
+    else runs.push([item]);
+    return runs;
+  }, []);
   return (
     <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-overlay">
       {groups.map((group) => (
-        <div key={group[0].source} role="group" aria-label={groupName(group[0].source)} className="flex flex-col gap-0.5">
+        <div key={slashGroup(group[0])} role="group" aria-label={groupName(group[0])} className="flex flex-col gap-0.5">
           <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
-            {groupName(group[0].source)}
+            {groupName(group[0])}
           </div>
           {group.map((item) => (
             <div
@@ -63,13 +70,19 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
 
 const MOCHI_ICONS = { side: MessageQuestion, compact: Minimize } satisfies Record<string, typeof MessageQuestion>;
 
+/** A harness item's own icon (its skill's, else its plugin's, from the library), else the skill lightbulb. */
 function SlashIcon({ item }: { item: SlashItem }) {
-  if (item.source !== 'mochi') return <ProviderMark provider={item.source} size={14} className="mx-px" />;
+  if (item.source !== 'mochi') return <SkillMark skill={item.name} fallback={<SkillFallback />} />;
   const Icon = MOCHI_ICONS[item.name as keyof typeof MOCHI_ICONS] ?? MessageQuestion;
   return <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
-const groupName = (source: SlashItem['source']) => (source === 'mochi' ? 'Mochi' : HARNESSES[source].name);
+// A plugin's section reads as the prefix you type (`emilkowalski`), not a prettified title.
+const groupName = (item: SlashItem) => {
+  if (item.source === 'mochi') return 'Mochi';
+  const group = slashGroup(item);
+  return group === item.source ? HARNESSES[item.source].name : group;
+};
 const optionId = (listId: string, item: SlashItem) => `${listId}-${item.source}-${item.name.replace(/\W/g, '_')}`;
 
 /**
@@ -87,7 +100,7 @@ export function useSlashMenu(items: SlashItem[]) {
   const editor = useRef<EditorView>(null);
   const at = caret?.text === text ? caret.at : text.length;
   const range = at === null ? null : slashQueryAt(text, at);
-  const matches = range ? slashMatches(range.query, items) : [];
+  const matches = range ? bySlashGroup(slashMatches(range.query, items)) : [];
   const isOpen = matches.length > 0 && dismissedAt !== text;
   const index = Math.min(active, matches.length - 1);
 
