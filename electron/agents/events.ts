@@ -1,5 +1,5 @@
 import { app, BrowserWindow, safeStorage, webContents } from 'electron';
-import { Effect, Schedule, Stream } from 'effect';
+import { Cause, Effect, Schedule, Stream } from 'effect';
 import type { AgentDecision, AgentEvent, AgentStartOptions, AgentToolCall, AgentToolResult, StartWorkspace } from '../../src/host/types/agent.ts';
 import type { AgentLogin } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
@@ -45,7 +45,13 @@ const coreCall = async (tag: string, args: unknown) => makeHostCaller(await main
 
 // The stream ends with the socket; after Core restarts, the redialled client subscribes again.
 void mainCoreClient().then((client) =>
-  Effect.runFork(client.agentPush().pipe(Stream.runForEach((item) => Effect.sync(() => deliver(item))), Effect.ignore, Effect.repeat(Schedule.spaced(250)))),
+  Effect.runFork(
+    client.agentPush().pipe(
+      Stream.runForEach((item) => Effect.sync(() => deliver(item))),
+      Effect.catchCause((cause) => Effect.sync(() => console.warn('Agent push stream ended; subscribing again', Cause.pretty(cause)))),
+      Effect.repeat(Schedule.spaced(250)),
+    ),
+  ),
 );
 
 function deliver({ channel, payload, windowId }: { channel: string; payload: unknown; windowId?: number }) {

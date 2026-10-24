@@ -27,16 +27,21 @@ export const useEventLog = (append: (event: SeqEvent) => void) => void (log = ap
 /** Every thread agent event goes through here: logged, then Core's own taps, then main relays it to the windows. */
 export function emitAgentEvent(event: AgentEvent) {
   if (event.type === 'turn-end' || event.type === 'limit') markIdle(event.threadId);
-  const numbered = { ...event, seq: ++seq };
+  // As JSON from here on (log, replay, push): adapters leave optional fields undefined, which the socket's encoder refuses.
+  const numbered = JSON.parse(JSON.stringify({ ...event, seq: ++seq })) as SeqEvent;
   remember(numbered);
   log(numbered);
   for (const tap of taps) tap(event);
   push({ channel: 'agent:onEvent', payload: numbered });
 }
 
-/** To main, which hands it to the windows (`electron/agents/events.ts`). */
+/**
+ * To main, which hands it to the windows (`electron/agents/events.ts`). As JSON: adapters leave optional fields undefined, which
+ * the socket's encoder refuses, and one refused item would end the stream.
+ */
 export function push(item: Push) {
-  for (const listener of pushes) listener(item);
+  const json = JSON.parse(JSON.stringify(item)) as Push;
+  for (const listener of pushes) listener(json);
 }
 
 export function onPush(listener: (push: Push) => void) {
