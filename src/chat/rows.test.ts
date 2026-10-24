@@ -73,7 +73,7 @@ test('the live work row is the newest one, until anyone speaks after it', () => 
 
 test('a subagent is its own row where it started, and the turn goes on in a new accordion after it', () => {
   const agent: ActivityEntry = { ...e('subagent', 'claude', 'Load test'), subagentId: 'toolu_1' };
-  assert.deepEqual(shape([e('message', 'you', 'go'), e('tool', 'claude', 'Read a.ts'), agent, e('tool', 'claude', 'Edit a.ts')]), ['go', 'work(Read a.ts)', 'Load test', 'work(Edit a.ts)']);
+  assert.deepEqual(shape([e('message', 'you', 'go'), e('tool', 'claude', 'Read a.ts'), agent, e('tool', 'claude', 'Edit a.ts')]), ['go', 'work(Read a.ts)', 'subagent(Load test)', 'work(Edit a.ts)']);
   assert.deepEqual(chatRows([agent]).map((r) => r.kind), ['subagent']);
 });
 
@@ -148,11 +148,20 @@ test('plan and turn-report calls have their own surfaces, so they get no work-lo
 
 test('a second opinion the agent asked for sits where its verdict reached the agent, in place of that message', () => {
   const review = { id: 'so-1', provider: 'codex' as const, afterIndex: 1, startedAt: 0, status: 'done' as const, steps: [], isAgentAsked: true };
-  const label = (rows: ReturnType<typeof chatRows>) => rows.map((r) => (r.kind === 'review' ? `review(${r.review.id})` : r.kind === 'work' || r.kind === 'plan' ? r.kind : r.kind === 'changes' ? 'changes' : r.entry.text));
+  const label = (rows: ReturnType<typeof chatRows>) => rows.map((r) => (r.kind === 'review' ? `review(${r.review.id})` : r.kind === 'work' || r.kind === 'plan' ? r.kind : r.kind === 'changes' ? 'changes' : r.kind === 'subagent' ? 'subagent' : r.entry.text));
   const asked = [e('message', 'you', 'fix login'), e('tool', 'claude', 'Edit auth.ts'), e('message', 'claude', 'Done, checking with Codex.')];
   assert.deepEqual(label(chatRows(asked, [{ ...review, status: 'running' }])), ['fix login', 'review(so-1)', 'work', 'Done, checking with Codex.'], 'while it runs, where it started');
   const findings: ActivityEntry = { ...e('message', 'you', 'Codex reviewed the diff…'), secondOpinion: { reviewId: 'so-1', provider: 'codex' } };
   assert.deepEqual(label(chatRows([...asked, findings, e('message', 'claude', 'Fixed the empty case.')], [review])), ['fix login', 'work', 'Done, checking with Codex.', 'review(so-1)', 'Fixed the empty case.']);
+});
+
+test('subagents started back to back share one row; anything between them starts a new one', () => {
+  const agent = (id: string): ActivityEntry => ({ ...e('subagent', 'claude', id), subagentId: id });
+  const rows = chatRows([agent('a'), agent('b'), agent('c'), e('message', 'claude', 'Waiting on them.'), agent('d')]);
+  assert.deepEqual(
+    rows.map((r) => (r.kind === 'subagent' ? r.entries.map((x) => x.subagentId).join('+') : r.kind)),
+    ['a+b+c', 'message', 'd'],
+  );
 });
 
 test('plan changes logged back to back fold into one row; anything between them starts a new one', () => {

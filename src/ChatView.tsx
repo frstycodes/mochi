@@ -74,7 +74,7 @@ import type { Mention } from './chat/mentions';
 import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
-import { SubagentRow } from './agents/SubagentRow';
+import { SubagentGroup } from './agents/SubagentRow';
 import { rememberedScroll, Transcript, type TranscriptHandle } from './chat/Transcript';
 
 export type MessageBar = ComponentType<{ thread: Thread; index: number; align: 'start' | 'end' }>;
@@ -212,10 +212,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'changes') return <TurnChangesCard thread={thread} turn={row.turn} isReadOnly={isReadOnly} />;
-  if (row.kind === 'subagent') {
-    const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
-    return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
-  }
+  if (row.kind === 'subagent') return <SubagentGroup thread={thread} entries={row.entries} />;
   if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
   if (row.kind === 'widget') return <McpAppCard threadId={thread.id} widget={row.entry.widget!} />;
   if (row.kind === 'thread-message') return row.entry.autofix ? <AutofixEventRow entry={row.entry} event={row.entry.autofix} index={row.index} /> : <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
