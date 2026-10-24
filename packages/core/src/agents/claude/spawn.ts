@@ -4,10 +4,11 @@ import { spawnCommand } from '../../runClient.ts';
 /** Claude Code as a process of Core's `run`: a kill signals its whole process group, and its exit takes leftover children with it. */
 export function spawnThroughRun({ command, args, cwd, env, signal }: SpawnOptions) {
   const child = spawnCommand(command, args, { cwd, env });
+  const signalTree = child.kill.bind(child);
   let killed = false;
   const kill = (killSignal: NodeJS.Signals = 'SIGTERM') => {
     killed = true;
-    child.kill(killSignal);
+    signalTree(killSignal);
     return true;
   };
   signal?.addEventListener('abort', () => kill(), { once: true });

@@ -39,7 +39,8 @@ export class Turns extends Context.Service<Turns>()('mochi/core/Turns', {
         const scope = yield* Scope.make();
         const fiber = yield* turn(contextFor(threadId)).pipe(
           Effect.catchCause((cause) => Effect.logWarning('Turn failed', cause).pipe(Effect.annotateLogs({ source: 'agents', threadId }))),
-          Effect.onExit((exit) => Effect.andThen(Scope.close(scope, Exit.isFailure(exit) ? exit : Exit.void), Effect.sync(() => running.delete(threadId)))),
+          // A release that fails still ends the turn: the thread can start again.
+          Effect.onExit((exit) => Scope.close(scope, Exit.isFailure(exit) ? exit : Exit.void).pipe(Effect.ensuring(Effect.sync(() => running.delete(threadId))))),
           Effect.provideService(Scope.Scope, scope),
           Effect.forkDetach,
         );
