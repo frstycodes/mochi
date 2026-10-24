@@ -69,6 +69,8 @@ const calls: Record<string, [string, unknown[]][]> = {
     ['list', ['personal']],
     ['setEnabled', ['personal', 'skill-1', true]],
     ['importFromAccount', ['personal', 'claude', ['skills', 'mcp']]],
+    ['importFromAccount', ['personal', 'claude', ['skills'], ['pdf']]],
+    ['addSkill', ['personal', { 'SKILL.md': '---\nname: release-notes\ndescription: Drafts release notes\n---\nList merged PRs by area.\n', 'templates/notes.md': '## Changes\n' }]],
     ['discoverSkills', ['anthropics/skills']],
     ['installSkill', ['personal', 'anthropics/skills', 'pdf', { scope: 'user', providers: ['claude'] }]],
     ['searchSkillsSh', ['react']],

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
 import { Slot } from 'radix-ui';
 import { useDraggable, useDroppable } from '@dnd-kit/react';
-import { Archive, Chat, DiagramTree, Edit, Eye, Menu, Search, TaskSquare, Unarchive } from '@/icons';
+import { Archive, Chat, Edit, Eye, Menu, Search, TaskSquare, Unarchive } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -28,7 +28,7 @@ import { SubThreadGuide } from './goals/SubThreads';
 import { nestWithUndo, unnestWithUndo } from './subThreadActions';
 import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
-import { cancelDrag, DragSurface, endDrag, middleHalf, moveDrag, startDrag, type SurfaceHandlers } from './layout/drag';
+import { cancelDrag, DragSurface, endDrag, MENTION_DROP_EVENT, mentionDropAt, middleHalf, moveDrag, startDrag, type SurfaceHandlers } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
 import { useIsMultiSplit } from './SidebarToggle';
@@ -356,7 +356,7 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
   };
   const nest = (dragged: ListRow, parentId: string) => nestWithUndo(dispatch, getState().threads, dragged.thread, parentId);
   const rows = [...pins, ...active.map(localRow)];
-  const findRow = (rowId: string) => [...rows, ...rows.flatMap((r) => (r.subs ?? []).map((s) => localRow({ thread: s, subs: [], settledSubs: 0 })))].find((r) => r.rowId === rowId);
+  const findRow = (rowId: string) => [...rows, ...rows.flatMap((r) => (r.subs ?? []).map((s) => localRow({ thread: s, subs: [] })))].find((r) => r.rowId === rowId);
   const drag = useRowDrag(listRef, findRow, pinnedIds, drop, nest);
   const { isMobile } = useSidebar();
   const nestUnder = drag.state?.nestUnder;
@@ -418,8 +418,7 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
       return (
         <Fragment key={r.rowId}>
           {item(t, pinNumber, rowProps)}
-          {subs.map((s, j) => item(s, undefined, { 'data-row-id': s.id, 'data-pinned': isPinned || undefined }, { parentId: t.id, isLast: j === subs.length - 1 && !r.settledSubs }))}
-          {!!r.settledSubs && <SettledSubs count={r.settledSubs} glide={glide} />}
+          {subs.map((s, j) => item(s, undefined, { 'data-row-id': s.id, 'data-pinned': isPinned || undefined }, { parentId: t.id, isLast: j === subs.length - 1 }))}
         </Fragment>
       );
     });
@@ -478,7 +477,6 @@ interface ListRow {
   thread: Thread;
   remote?: RemotePin;
   subs?: Thread[];
-  settledSubs?: number;
 }
 
 const localRow = (group: ThreadGroup): ListRow => ({ rowId: group.thread.id, ...group });
@@ -486,19 +484,6 @@ const localRow = (group: ThreadGroup): ListRow => ({ rowId: group.thread.id, ...
 // The nest target's inside hairline: on a pseudo-element, so no row changes size while you drag over it.
 const NEST_TARGET =
   "after:pointer-events-none after:absolute after:inset-0 after:rounded-md after:border after:border-transparent data-nest-target:after:border-foreground/20 data-nest-target:[&_[data-sidebar=menu-button]]:bg-sidebar-accent";
-
-/** "2 sub-threads done": the end of a parent's guide once some have finished; they're listed under Archived. */
-function SettledSubs({ count, glide }: { count: number; glide: MotionProps }) {
-  return (
-    <motion.li {...glide} className="relative pl-[27px]">
-      <SubThreadGuide isLast className="left-[15px]" />
-      <span className="flex h-8 items-center gap-2 px-1 type-caption text-subtle-foreground">
-        <DiagramTree aria-hidden className="size-4 shrink-0" />
-        {`${count} ${count === 1 ? 'sub-thread' : 'sub-threads'} done`}
-      </span>
-    </motion.li>
-  );
-}
 
 /** Every computer's pins as one list, by pin order (`pinOrderOf`); this computer's first among equal keys. */
 function mergePins(pinned: ThreadGroup[], remotePins: RemotePin[]): ListRow[] {
@@ -620,7 +605,9 @@ function useRowDrag(
       session.current = null;
       setDrag(null);
       if (canceled) return cancelDrag();
+      const mentionDrop = s.row.remote ? null : mentionDropAt(s.state.x, s.state.y);
       const landed = s.row.remote ? null : endDrag();
+      if (mentionDrop) return void mentionDrop.dispatchEvent(new CustomEvent(MENTION_DROP_EVENT, { detail: s.row.thread.id }));
       if (landed) return dispatch({ type: 'layout-drop', ...landed });
       const { slot, nestUnder } = s.state;
       if (nestUnder) return onNest(s.row, nestUnder);

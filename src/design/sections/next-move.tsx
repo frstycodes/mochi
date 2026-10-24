@@ -23,6 +23,7 @@ export function NextMoveBlock({ rl }: { rl: Thread }) {
       <VizThreadProvider value={rl.id}>
         <div className="flex flex-col gap-12">
           <PlanMock rl={rl} />
+          <PlanStatesMock rl={rl} />
           {nextMoveFixtures(rl).map((f) => (
             <TurnEndMock key={f.label} fixture={f} />
           ))}
@@ -39,8 +40,16 @@ function PlanMock({ rl }: { rl: Thread }) {
     <MockFrame label="Working · the plan stays last until it's done, then hides" control={isDone ? <Button size="xs" variant="outline" onClick={() => setItems(PLAN)}>Reset</Button> : <Button size="xs" variant="outline" onClick={() => setItems(advance)}>Finish a step</Button>}>
       <p className="type-prose">Adding Retry-After to the 429 path first, then the burst test.</p>
       <WorkLine>Edited rate-limit.ts</WorkLine>
-      <PlanList items={items} slot={rl.line} isWorking={!isDone} />
+      <PlanList items={items} slot={rl.line} />
       <ComposerStub placeholder={isDone ? `Message ${authorName(rl.providers[0])}` : `Steer ${authorName(rl.providers[0])} while it works`} />
+    </MockFrame>
+  );
+}
+
+function PlanStatesMock({ rl }: { rl: Thread }) {
+  return (
+    <MockFrame label="Every status · only the running step moves; paused stops its clock, blocked waits on you">
+      <PlanList items={PLAN_STATES} slot={rl.line} />
     </MockFrame>
   );
 }
@@ -138,6 +147,14 @@ const PLAN: PlanItem[] = [
   { title: 'Add Retry-After to every 429', status: 'running', ms: 12 * 60_000 + 7_000 },
   { title: 'Cover the burst case in rate-limit.test.ts', status: 'pending' },
   { title: 'Typecheck, test, then check the headers with curl', status: 'pending' },
+];
+
+const PLAN_STATES: PlanItem[] = [
+  { title: 'Read the rate limiter and its tests', status: 'done', ms: 4 * 60_000 },
+  { title: 'Add Retry-After to every 429', status: 'running', ms: 2 * 60_000 + 7_000 },
+  { title: 'Migrate the limiter config', status: 'paused', ms: 6 * 60_000 },
+  { title: 'Rotate the staging API key', status: 'blocked', note: 'Needs the new key from you' },
+  { title: 'Cover the burst case in rate-limit.test.ts', status: 'pending' },
 ];
 
 interface NextMoveFixture {

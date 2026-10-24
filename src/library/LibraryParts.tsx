@@ -16,7 +16,7 @@ import { HARNESSES } from '../settings/harnesses';
 import { OverflowIcon, ProviderMark, SpaceIcon } from '../ui';
 import { isSameServer } from './connectors';
 import { useLibraryScope } from './libraryScope';
-import { STANDALONE_PLUGIN, type LibraryEntry } from './library';
+import { skillPluginName, type LibraryEntry } from './library';
 import { similarNativeSkills, type SimilarSkill } from './similarSkills';
 import { useNativeItems } from './useNativeItems';
 import type { Library } from './useLibrary';
@@ -113,7 +113,7 @@ function entryMeta(entry: LibraryEntry) {
   const updated = entry.updatedAt && `updated ${timeAgo((Date.now() - entry.updatedAt) / 60_000)}`;
   const pinned = entry.autoUpdate === false && 'pinned';
   // A skill written to an agent's own folders loads by its bare name there, not through the library's plugin.
-  const name = entry.kind === 'skill' && (entry.placements.length ? entry.placements.map((p) => tildePath(p.dir)).join(', ') : `/${STANDALONE_PLUGIN}:${entry.name}`);
+  const name = entry.kind === 'skill' && (entry.placements.length ? entry.placements.map((p) => tildePath(p.dir)).join(', ') : `/${skillPluginName(entry.source)}:${entry.name}`);
   const source = entry.source && (entry.commit ? `${entry.source} @ ${entry.commit.slice(0, 7)}` : entry.source);
   return [KIND_LABELS[entry.kind], name, entry.contents, source, updated, pinned].filter(Boolean).join(' · ');
 }

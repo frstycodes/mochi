@@ -4,7 +4,7 @@ import { connectorKey, type DeviceCode } from '../../src/library/connectors.ts';
 import { libraryEntries, removeItem, setItemEnabled, type LibraryConnector } from '../../src/library/library.ts';
 import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
-import { addMarketplace, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, removePlacements, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
+import { addMarketplace, addOwnSkill, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, removePlacements, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
 import { popularSkillsSh, searchSkillsSh } from '../library/skillsSh.ts';
 import type { SkillDestination } from '../../src/library/library.ts';
 import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
@@ -33,9 +33,13 @@ export const library = {
     await removePlacements(item);
     return libraryEntries(await updateLibrary((index) => removeItem(index, id)), spaceId);
   },
-  async importFromAccount(_sender, spaceId, provider, parts) {
-    const notes = await importFromAccount(spaceId, provider, parts);
+  async importFromAccount(_sender, spaceId, provider, parts, names) {
+    const notes = await importFromAccount(spaceId, provider, parts, names);
     return { entries: libraryEntries(await readLibrary(), spaceId), notes };
+  },
+  async addSkill(_sender, spaceId, files) {
+    await addOwnSkill(spaceId, files);
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async discoverSkills(_sender, source) {
     const skills = await discoverSkills(source);

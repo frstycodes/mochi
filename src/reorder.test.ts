@@ -91,7 +91,7 @@ test('a two-level tree shows one level deep: the whole open subtree under its to
     t('x'),
   ] as Thread[];
   const { active } = sidebarGroups(threads, 's');
-  assert.deepEqual(active.map((g) => [g.thread.id, g.subs.map((s) => s.id), g.settledSubs]), [['p', ['a', 'a1', 'b'], 1], ['x', [], 0]]);
+  assert.deepEqual(active.map((g) => [g.thread.id, g.subs.map((s) => s.id)]), [['p', ['a', 'a1', 'b']], ['x', []]]);
   assert.deepEqual(flattenGroups(active).map((x) => x.id), ['p', 'a', 'a1', 'b', 'x']);
   assert.equal(rootOf(threads, threads[2]).id, 'p', 'a grandchild shows in its top-level row’s group');
   assert.deepEqual(threads[2].parent, { threadId: 'a' }, 'while its parent stays the thread that started it');
@@ -100,7 +100,7 @@ test('a two-level tree shows one level deep: the whole open subtree under its to
 test('the sidebar nests open sub-threads under their parent, pinned or not, and only counts settled ones', () => {
   const threads = [t('p', 1), { ...t('a', undefined, 9), startedAt: 2, parent: { threadId: 'p' } }, { ...t('b', undefined, 1), startedAt: 1, parent: { threadId: 'p' } }, { ...t('done'), status: 'settled', parent: { threadId: 'p' } }, t('x')] as Thread[];
   const { pinned, active } = sidebarGroups(threads, 's');
-  assert.deepEqual(pinned.map((g) => [g.thread.id, g.subs.map((s) => s.id), g.settledSubs]), [['p', ['b', 'a'], 1]]);
+  assert.deepEqual(pinned.map((g) => [g.thread.id, g.subs.map((s) => s.id)]), [['p', ['b', 'a']]]);
   assert.deepEqual(active.map((g) => g.thread.id), ['x'], 'a sub-thread is never a row of its own while its parent is live');
 });
 
