@@ -39,6 +39,10 @@ export function openReview() {
   void getRouter().navigate({ to: '/review' });
 }
 
+export function openDeveloper() {
+  void getRouter().navigate({ to: '/developer' });
+}
+
 /** The previous page; the workspace when this one was the first. */
 export function goBack() {
   const { history } = getRouter();

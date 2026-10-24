@@ -258,7 +258,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
         }),
       );
 
-    return { append, loadThreads, saveThreads, listDocs, getDoc, setDoc, enqueue, claim, complete, fail, shell, thread };
+    return { events: Stream.fromPubSub(published), append, loadThreads, saveThreads, listDocs, getDoc, setDoc, enqueue, claim, complete, fail, shell, thread };
   }),
 }) {
   /** The store and its `SqlClient`. */

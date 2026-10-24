@@ -33,7 +33,7 @@ export const allScopes = AuthScope.literals;
  * drive simulators. `host` is every `host.*` namespace whose handler still lives in main; it shrinks as they move into Core.
  * `remote` runs a device's command (`device.command`) in the window that owns the store, until Core owns it.
  */
-export const CapabilityName = Schema.Literals(['notify', 'browserView', 'secureStorage', 'sim', 'host', 'remote']);
+export const CapabilityName = Schema.Literals(['notify', 'browserView', 'secureStorage', 'sim', 'host', 'remote', 'metrics']);
 export type CapabilityName = typeof CapabilityName.Type;
 
 /** Core → the client that registered `capability`. `args` and the reply's `value` are JSON-encoded with the method's schema. */
@@ -55,6 +55,23 @@ export type CapabilityReply = typeof CapabilityReply.Type;
 export const secureStorageMethods = {
   encrypt: invoke(Schema.Tuple([Str(1_000_000)]), Schema.String),
   decrypt: invoke(Schema.Tuple([Str(1_400_000)]), Schema.String),
+};
+
+/** One process of `app.getAppMetrics()`. `cpuSeconds` is the process's cumulative CPU time, so two samples give a rate that doesn't depend on Electron's sampling window. */
+export const ProcessMetric = Schema.Struct({
+  pid: Schema.Number,
+  type: Schema.String,
+  name: Schema.optionalKey(Schema.String),
+  cpuPercent: Schema.Number,
+  cpuSeconds: Schema.Number,
+  workingSetKb: Schema.Number,
+  privateKb: Schema.optionalKey(Schema.Number),
+});
+export type ProcessMetric = typeof ProcessMetric.Type;
+
+/** What main reports for the developer page. */
+export const metricsMethods = {
+  processes: invoke(Schema.Tuple([]), Schema.Array(ProcessMetric)),
 };
 
 /** The capability that serves `host.<namespace>.*`. */

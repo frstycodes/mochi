@@ -23,6 +23,8 @@ const PORTS_MS = 5_000;
 const SIM_MS = 5_000;
 const ON_BATTERY_FACTOR = 3;
 const GIT_TIMEOUT_MS = 30_000;
+/** Keys that read on an interval while a window is visible; the rest read when something changed. */
+const POLL_MS: Partial<Record<WatchKey['_tag'], number>> = { ports: PORTS_MS, sim: SIM_MS };
 // ponytail: a fingerprint stats at most this many changed paths; past it, edits to the rest go unseen until the status itself changes.
 const MAX_STATS = 2_000;
 
@@ -171,8 +173,31 @@ export const makeWatch = (deps: WatchDeps) =>
         }),
       );
 
+    const subscribed = new Map<string, { key: WatchKey; subscribers: number }>();
+
     /** The key's values: the current one first (once read), then each change. */
-    const watch = (key: WatchKey): Stream.Stream<WatchValue> => {
+    const watch = (key: WatchKey): Stream.Stream<WatchValue> =>
+      Stream.unwrap(
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            const id = JSON.stringify(key);
+            subscribed.set(id, { key, subscribers: (subscribed.get(id)?.subscribers ?? 0) + 1 });
+            return id;
+          }),
+          (id) => Effect.sync(() => (subscribed.get(id)!.subscribers === 1 ? subscribed.delete(id) : subscribed.get(id)!.subscribers--)),
+        ).pipe(Effect.as(read(key))),
+      );
+
+    /** Every subscribed key, and how often it reads under the current gate. */
+    const subscriptions = Effect.gen(function* () {
+      const { isVisible, isAsleep, isOnBattery } = yield* SubscriptionRef.get(gate);
+      return [...subscribed.values()].map(({ key, subscribers }) => {
+        const base = isAsleep ? undefined : isVisible ? POLL_MS[key._tag] : HIDDEN_MS;
+        return { key, subscribers, intervalMs: base === undefined ? null : base * (isOnBattery ? ON_BATTERY_FACTOR : 1) };
+      });
+    });
+
+    const read = (key: WatchKey): Stream.Stream<WatchValue> => {
       switch (key._tag) {
         case 'files':
           return follow(RcMap.get(files, key.root));
@@ -212,7 +237,7 @@ export const makeWatch = (deps: WatchDeps) =>
         for (const t of topics) if (kinds.includes(t.kind)) t.markStale();
       });
 
-    return { watch, setGate, markStale };
+    return { watch, subscriptions, setGate, markStale };
   });
 
 export class Watch extends Context.Service<Watch>()('mochi/core/Watch', {

@@ -53,11 +53,13 @@ export class Run extends Context.Service<Run>()('mochi/core/Run', {
       semaphores.set(queue, semaphore);
       return semaphore;
     };
+    const started = yield* PubSub.unbounded<string>();
     const describe = (command: string, args: ReadonlyArray<string>) => [command, ...args].join(' ');
 
     const exec = (command: string, args: ReadonlyArray<string>, options: RunOptions) =>
       Effect.scoped(
         Effect.gen(function* () {
+          PubSub.publishUnsafe(started, command);
           const handle = yield* spawner.spawn(
             ChildProcess.make(command, args, {
               cwd: options.cwd,
@@ -90,6 +92,7 @@ export class Run extends Context.Service<Run>()('mochi/core/Run', {
       Stream.callback<SpawnEvent, RunError>((events) =>
         Effect.gen(function* () {
           const stdin = yield* Queue.unbounded<Uint8Array, Cause.Done>();
+          PubSub.publishUnsafe(started, command);
           const handle = yield* spawner.spawn(
             ChildProcess.make(command, args, { cwd: options.cwd, env: { PATH, ...options.env }, extendEnv: true, shell: options.shell, stdin: { stream: Stream.fromQueue(stdin) } }),
           );
@@ -124,7 +127,9 @@ export class Run extends Context.Service<Run>()('mochi/core/Run', {
     const signal = (id: number, killSignal: NodeJS.Signals) => live.get(id)?.kill(killSignal) ?? Effect.void;
     /** Ticks when a spawned process starts or ends. */
     const children = Stream.fromPubSub(childEvents);
-    return { run, spawn, write, signal, children };
+    /** The binary of every process Core starts, `run` or `spawn`. */
+    const spawns = Stream.fromPubSub(started);
+    return { run, spawn, write, signal, children, spawns };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make);
