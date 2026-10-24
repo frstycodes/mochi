@@ -6,6 +6,8 @@ import { revealIn } from '@/lib/revealIn';
 import { host } from '../host';
 import type { ProfileConfig } from '../host/types/settings';
 import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
+import { offItems } from '../library/nativeOverrides';
+import { useProfiles } from '../profiles';
 import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { ProviderMark } from '../ui';
@@ -159,10 +161,12 @@ function useAgentCommands(provider: Provider, spaceId: string, projectRoot: stri
   return agent?.commands ? { commands: agent.commands, skills: agent.skills } : configured;
 }
 
+/** Leaves out what the Skills tab turned off for the profile, as the session will once it starts. */
 function useConfiguredCommands(provider: Provider, spaceId: string, projectRoot: string | null, isNeeded: boolean) {
   const config = useProfileConfig(isNeeded ? spaceId : undefined, projectRoot);
+  const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
   // Stable per config read: the menu reveals its current row when that row changes.
-  return useMemo(() => (config ? configuredCommands(config[provider]) : { commands: [], skills: [] }), [config, provider]);
+  return useMemo(() => (config ? configuredCommands(config[provider], offItems(config[provider], nativeOff ?? [])) : { commands: [], skills: [] }), [config, provider, nativeOff]);
 }
 
 function useProfileConfig(spaceId: string | undefined, projectRoot: string | null) {

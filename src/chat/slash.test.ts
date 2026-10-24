@@ -118,6 +118,29 @@ test('slots disappear one by one as each argument is started', () => {
   assert.equal(slotPlaceholder(' ', undefined), '');
 });
 
+test('before the agent starts, leaves out the skills and plugins the profile turned off', () => {
+  const off = (kind: 'skill' | 'plugin', name: string) => ({ id: name, provider: 'claude' as const, accountId: 'a', kind, name, description: '', where: '', file: null, isOffNatively: false });
+  const listed = configuredCommands(
+    {
+      skills: [
+        { name: 'run', description: 'Launch the app', dir: '~/.claude/skills/run', enabled: true },
+        { name: 'deploy', description: 'Ship it', dir: '~/.claude/skills/deploy', enabled: true },
+      ],
+      commands: [
+        { name: 'deploy', description: 'Project copy of deploy', isSkill: true },
+        { name: 'ponytail:ponytail', description: 'A plugin skill', isSkill: true },
+        { name: 'ponytail:audit', description: 'A plugin command', isSkill: false },
+        { name: 'pony:x', description: 'Another plugin', isSkill: true },
+      ],
+    },
+    [off('skill', 'deploy'), off('plugin', 'ponytail@ponytail')],
+  );
+  assert.deepEqual(
+    listed.commands.map((c) => c.name),
+    ['run', 'pony:x'],
+  );
+});
+
 test('before the agent starts, lists enabled account skills then project, plugin and custom ones, first of a name kept', () => {
   const listed = configuredCommands({
     skills: [

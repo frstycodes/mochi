@@ -1,4 +1,5 @@
 import type { ProviderConfig } from '../host/types/settings.ts';
+import type { NativeItem } from '../library/nativeItems.ts';
 import type { AgentCommand, Provider } from '../model.ts';
 
 /** Commands Mochi runs itself from the thread composer. Anything else starting with `/` goes to the agent as typed. */
@@ -24,11 +25,16 @@ export function slashItems(commands: AgentCommand[], provider: Provider, skills?
 /**
  * What the agent will offer, read from disk before it starts and reports its own list: the account's enabled skills, then
  * the project's, plugins' and custom ones, the first of a name kept. In the agent's shape, `skills` naming the skills among `commands`.
+ * `off` is what the profile turned off (`offItems`), left out by the same rules the session's overrides apply: a skill by name, a
+ * plugin with everything it brings.
  */
-export function configuredCommands({ skills, commands }: Pick<ProviderConfig, 'skills' | 'commands'>) {
-  const own = skills.filter((s) => s.enabled).map(({ name, description, argumentHint }) => ({ name, description, ...(argumentHint && { argumentHint }), isSkill: true }));
+export function configuredCommands({ skills, commands }: Pick<ProviderConfig, 'skills' | 'commands'>, off: readonly NativeItem[] = []) {
+  const offSkills = new Set(off.flatMap((i) => (i.kind === 'skill' ? [i.name] : [])));
+  const offPlugins = off.flatMap((i) => (i.kind === 'plugin' ? [`${i.name.split('@')[0]}:`] : []));
+  const isOn = (name: string) => !offSkills.has(name) && !offPlugins.some((prefix) => name.startsWith(prefix));
+  const own = skills.filter((s) => s.enabled && isOn(s.name)).map(({ name, description, argumentHint }) => ({ name, description, ...(argumentHint && { argumentHint }), isSkill: true }));
   const seen = new Set<string>();
-  const unique = [...own, ...commands].filter((c) => !seen.has(c.name) && !!seen.add(c.name));
+  const unique = [...own, ...commands.filter((c) => isOn(c.name))].filter((c) => !seen.has(c.name) && !!seen.add(c.name));
   return { commands: unique.map(({ isSkill: _, ...c }): AgentCommand => c), skills: unique.flatMap((c) => (c.isSkill ? [c.name] : [])) };
 }
 
