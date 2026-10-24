@@ -127,6 +127,14 @@ test('a skill reference asks the agent to load it, an MCP reference to prefer it
   assert.deepEqual(codex.skills, ['ui'], 'Codex attaches the skill item');
 });
 
+test('a plugin reference asks the agent to prefer what the plugin brings', () => {
+  const plugin = mentionFor({ kind: 'plugin', plugin: 'emilkowalski' });
+  assert.deepEqual(plugin, { kind: 'plugin', id: 'plugin:emilkowalski', title: 'emilkowalski' });
+  const sent = withReferences('polish the menu', [plugin], [], { provider: 'claude' });
+  assert.equal(sent.text, '@emilkowalski\n\npolish the menu');
+  assert.match(sent.prompt, /prefer what the "emilkowalski" plugin brings .*named "emilkowalski:…"/);
+});
+
 test('picked skills reach the agent call, so Codex can attach them', () => {
   const create: Action = { type: 'create', title: 'go', provider: 'codex', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'gpt-5.5', effort: 'Low', speed: '', access: 'Manual' } };
   let s = base();
@@ -136,16 +144,17 @@ test('picked skills reach the agent call, so Codex can attach them', () => {
   assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: 'p', skills: ['ui'], speed: '' }]);
 });
 
-test('the @ menu shows threads, windows, skills and MCP servers as four groups, in that order', () => {
+test('the @ menu shows threads, windows, skills, connectors and plugins as five groups, in that order', () => {
   const windows = [{ id: '4711', title: 'latitude-pact - Slack', app: 'Slack' }];
-  const groups = mentionGroups(mentionOptions('', [other], windows, 'x', skills, servers));
+  const groups = mentionGroups(mentionOptions('', [other], windows, 'x', skills, servers, ['emilkowalski']));
   assert.deepEqual(
     groups.map((g) => [g.label, g.items.length]),
     [
       ['Threads', 1],
       ['Windows', 1],
       ['Skills', 2],
-      ['MCP servers', 1],
+      ['Connectors', 1],
+      ['Plugins', 1],
     ],
   );
   const blocked = mentionGroups([...mentionOptions('', [other], [], 'x'), { kind: 'permission' as const }]);

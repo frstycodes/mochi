@@ -59,7 +59,7 @@ import { HandoffRow } from './chat/HandoffRow';
 import { compactFocus, compactGate } from './chat/compact';
 import { parseSlash, resolveToken, typedSkills, type SlashItem } from './chat/slash';
 import { rehypeSlashTokens } from './chat/rehypeRefs';
-import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
+import { SlashMenu, useSlashItems, useSlashMenu, useThreadPlugins, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
@@ -413,7 +413,7 @@ const Composer = memo(function Composer({
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const root = projectRef(thread.repo);
-  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent), useThreadMentionFiles(thread));
+  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent), useThreadPlugins(provider, thread.spaceId, root, thread.agent), useThreadMentionFiles(thread));
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
