@@ -35,7 +35,7 @@ const calls: Record<string, [string, unknown[]][]> = {
     ['suggest', ['duckduckgo', 'effect schema']],
     ['defaultBrowser', []],
   ],
-  data: [['load', []], ['save', ['{"v":1}', { t1: '{"thread":{}}' }]], ['loadReplay', ['t1']], ['appendReplay', ['t1', '{"at":1}\n']], ['replayUsage', []], ['clearReplays', [['t1']]], ['clearReplays', []]],
+  data: [['loadReplay', ['t1']], ['appendReplay', ['t1', '{"at":1}\n']], ['replayUsage', []], ['clearReplays', [['t1']]], ['clearReplays', []]],
   fs: [['list', [cwd]], ['read', [cwd, 'package.json']], ['write', [cwd, 'a.ts', 'export {};\n', { baseMtimeMs: 0 }]], ['search', [cwd, 's1', 'usage', { isCaseSensitive: false, isRegex: false, isWholeWord: false }]], ['editors', []], ['pickFolder', ['~/code']], ['folders', ['~']], ['entries', ['~']]],
   git: [
     ['status', [cwd]],

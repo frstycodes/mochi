@@ -24,7 +24,7 @@ export const makeCoreClient = (url: string) =>
   Effect.flatMap(Layer.build(layerProtocol(url)), (context) => RpcClient.make(CoreWsRpcs).pipe(Effect.provide(context), Effect.map(retryIdempotent)));
 
 /** Safe to send twice: reads, writes of a whole value, and appends deduplicated by their `commandId`. Streams resubscribe instead. */
-const IDEMPOTENT = new Set(['ping', 'log', 'docs.list', 'docs.get', 'docs.set', 'events.append', 'data.load', 'data.save']);
+const IDEMPOTENT = new Set(['ping', 'log', 'docs.list', 'docs.get', 'docs.set', 'events.append']);
 
 /** A restart drops the socket under calls in flight; Core is back within a few seconds (`RESTART_DELAY_MS` in host.ts). */
 const RECONNECT_TRIES = 120;

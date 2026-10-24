@@ -1,14 +1,15 @@
-import { pauseQueue } from '../chat/outbox.ts';
+import { pauseQueue } from '../chat/queued.ts';
 import { migrateReceived } from '../chat/threadMessages.ts';
 import { LIMIT_DEMO_IDS } from '../usage/limitDemo.ts';
-import { host } from '../host/index.ts';
-import type { AttachedAgent, WorktreeSetup } from '../host/types/agent.ts';
+import { Schema } from 'effect';
+import { Persist } from '@mochi/schema';
+import type { WorktreeSetup } from '../host/types/agent.ts';
 import type { SavedFiles } from '../host/types/data.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
 import { failDrafts } from '../rewind/handoff.ts';
-import type { State } from './index.tsx';
+import type { State } from './types.ts';
 
 /** What the desktop app saves between launches: your own (live) threads and the slices that refer to them. Demo threads start fresh every launch. */
 export interface Saved {
@@ -27,13 +28,13 @@ interface SavedIndex extends Omit<Saved, 'threads' | 'checkpoints' | 'forks'> {
   threadIds: string[];
 }
 
-interface SavedThread {
+export interface SavedThread {
   thread: Thread;
   checkpoints?: Checkpoint[];
   fork?: Fork;
 }
 
-export function toSaved(state: State): Saved {
+export function toSaved(state: Pick<State, 'now' | 'seq' | 'threads' | 'queue' | 'checkpoints' | 'checkpointSeq' | 'forks'>): Saved {
   const threads = state.threads.filter((t) => t.live && !LIMIT_DEMO_IDS.includes(t.id));
   const ids = new Set(threads.map((t) => t.id));
   const pick = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => ids.has(id)));
@@ -57,21 +58,41 @@ export type Attached = Map<string, boolean>;
  * they were waiting on are gone. After a window reload the agents in `attached` are still running in main and stay attached.
  */
 export function parseSaved(json: string | null, attached: Attached = new Map()): Saved | null {
-  const saved = json ? readSaved(() => JSON.parse(json) as Saved) : null;
+  const saved = json ? decodeSaved(json) : null;
   return saved && restoreSavedThreads(saved, attached);
 }
 
-function readSaved(parse: () => Saved): Saved | null {
-  try {
-    const saved = parse();
-    if (saved?.version !== 1 || !Array.isArray(saved.threads) || !Array.isArray(saved.queue)) return null;
-    return { ...saved, threads: saved.threads.filter((t) => typeof t?.id === 'string' && t.live) };
-  } catch {
-    return null;
-  }
+const decodeWhole = Schema.decodeUnknownOption(Schema.fromJsonString(Persist.Saved));
+const decodeValue = Schema.decodeUnknownOption(Persist.Saved);
+const decodeThreadValue = Schema.decodeUnknownOption(Persist.SavedThread);
+
+/** A save this version can read, its legacy shapes upgraded (`Persist.Saved`); null for anything else. */
+function decodeSaved(json: string): Saved | null {
+  const decoded = decodeWhole(json);
+  return decoded._tag === 'Some' ? fromDecoded(decoded.value) : null;
 }
 
-function restoreSavedThreads(saved: Saved, attached: Attached): Saved {
+/** `decodeSaved` for a value already parsed: a `replica` snapshot. */
+export function savedFrom(value: unknown): Saved | null {
+  const decoded = decodeValue(value);
+  return decoded._tag === 'Some' ? fromDecoded(decoded.value) : null;
+}
+
+/** One thread's file as another computer streams it (`Persist.SavedThread`); null for anything else. */
+export function savedThreadFrom(value: unknown): SavedThread | null {
+  const decoded = decodeThreadValue(value);
+  // Decoded values are the model's types, readonly (as `fromDecoded`).
+  return decoded._tag === 'Some' ? (decoded.value as unknown as SavedThread) : null;
+}
+
+/** Only live threads are saved; demo threads start fresh every launch. */
+function fromDecoded(decoded: Persist.Saved): Saved {
+  // Decoded values are the model's types (src/schemaConformance/persist.ts checks it), readonly; the store's slices aren't.
+  const { now, seq, threads, queue, checkpoints, checkpointSeq, forks } = decoded as unknown as Saved;
+  return { version: 1, now, seq, threads: threads.filter((t) => t.live), queue, checkpoints, checkpointSeq, forks };
+}
+
+export function restoreSavedThreads(saved: Saved, attached: Attached = new Map()): Saved {
   // A Mochi tool card waits on the old page's run of the call; after a reload the new page runs it again and asks anew.
   const reasked = new Set(saved.queue.filter((q) => q.tool && attached.has(q.threadId)).map((q) => q.id));
   // A save from before read state reads as all seen, not as every thread unread at once.
@@ -125,88 +146,36 @@ function stoppedSetup(setup: WorktreeSetup): WorktreeSetup {
   return { ...setup, status: 'cancelled', steps: setup.steps.map((s) => (s.status === 'running' || s.status === 'pending' ? { ...s, status: 'skipped' } : s)) };
 }
 
-let restored: Saved | null = null;
-let isSaveBlocked = false;
-
-/** Called once with the saved file before the store is created (`src/main.tsx`). */
-export async function restoreSaved(files: SavedFiles | null) {
-  const saved = files && readSaved(() => joinSaved(files));
-  if (files && !saved) return restoreFailed(new Error('The saved threads are not a save this version can read'));
-  if (!saved) return;
-  // The events they sent meanwhile are replayed once the store mounts (`src/store/index.tsx`).
-  const live = await host.agent.attached(saved.threads.map((t) => ({ threadId: t.id }))).catch((): AttachedAgent[] => []);
-  restored = restoreSavedThreads(saved, new Map(live.map((a) => [a.threadId, a.isWorking])));
-}
-
-/** Saving stays off for this run, so a file that failed to load is never overwritten with an empty list. */
-export function restoreFailed(error: unknown) {
-  isSaveBlocked = true;
-  console.error('Loading saved threads failed; saving is off until the next launch', error);
-}
-
-export function getRestored() {
-  return restored;
-}
-
-const SAVE_DELAY_MS = 500;
-let timer: ReturnType<typeof setTimeout> | undefined;
-let pending: State | null = null;
-let lastIndex = '';
-/** Each thread's file as the last save that landed wrote it. */
-const written = new Map<string, string>();
-
-/** Debounced; a no-op in the web build. Flushed when the window unloads, so quitting right after a message keeps it. */
-export function saveThreads(state: State) {
-  if (!host.isDesktop || isSaveBlocked) return;
-  pending = state;
-  clearTimeout(timer);
-  timer = setTimeout(flush, SAVE_DELAY_MS);
-}
-
-function flush() {
-  clearTimeout(timer);
-  if (!pending) return;
-  const { index, threads } = splitSaved(toSaved(pending));
-  pending = null;
-  const changed = Object.fromEntries(Object.entries(threads).filter(([id, json]) => written.get(id) !== json));
-  if (index === lastIndex && !Object.keys(changed).length) return;
-  lastIndex = index;
-  host.data.save(index, changed).then(
-    () => {
-      for (const [id, json] of Object.entries(changed)) written.set(id, json);
-      for (const id of written.keys()) if (!(id in threads)) written.delete(id);
-    },
-    (error: unknown) => {
-      lastIndex = '';
-      console.error('Saving threads failed', error);
-    },
-  );
-}
-
-if (typeof window !== 'undefined') window.addEventListener('beforeunload', flush);
-
 export function splitSaved({ threads, checkpoints, forks, ...rest }: Saved) {
   const index = JSON.stringify({ ...rest, threadIds: threads.map((t) => t.id) } satisfies SavedIndex);
   return { index, threads: Object.fromEntries(threads.map((t) => [t.id, encodeThread(t, checkpoints[t.id], forks[t.id])])) };
 }
 
-/** A `threads.json` from before the split comes back as the index, its threads still inside it. */
-export function joinSaved({ index, threads }: SavedFiles): Saved {
-  const head = JSON.parse(index) as Partial<Saved>;
-  const parts = threads.flatMap((text): SavedThread[] => {
-    try {
-      return [JSON.parse(text) as SavedThread];
-    } catch {
-      // A thread file is written whole or not at all; one that still won't parse costs that thread, not the others.
-      return [];
-    }
+const decodeIndex = Schema.decodeUnknownOption(Schema.fromJsonString(Persist.SavedIndex));
+const decodeThread = Schema.decodeUnknownOption(Schema.fromJsonString(Persist.SavedThread));
+
+/**
+ * The index and thread files joined, each validated and upgraded (`Persist`); a `threads.json` from before the split is the
+ * whole save in the index. Null when the index is none this version reads. A thread file that won't decode costs that
+ * thread, not the others.
+ */
+export function joinSaved({ index, threads }: SavedFiles): Saved | null {
+  const whole = decodeSaved(index);
+  if (whole) return whole;
+  const head = decodeIndex(index);
+  if (head._tag === 'None') return null;
+  const { v: _, threadIds: _ids, ...rest } = head.value;
+  const parts = threads.flatMap((text) => {
+    const part = decodeThread(text);
+    return part._tag === 'Some' ? [part.value] : [];
   });
-  return {
-    ...(head as Saved),
-    threads: [...(head.threads ?? []), ...parts.map((p) => p.thread)],
-    checkpoints: { ...head.checkpoints, ...Object.fromEntries(parts.flatMap((p) => (p.checkpoints ? [[p.thread.id, p.checkpoints]] : []))) },
-    forks: { ...head.forks, ...Object.fromEntries(parts.flatMap((p) => (p.fork ? [[p.thread.id, p.fork]] : []))) },
-  };
+  return fromDecoded({
+    ...rest,
+    v: 1,
+    threads: parts.map((p) => p.thread),
+    checkpoints: Object.fromEntries(parts.flatMap((p) => (p.checkpoints ? [[p.thread.id, p.checkpoints]] : []))),
+    forks: Object.fromEntries(parts.flatMap((p) => (p.fork ? [[p.thread.id, p.fork]] : []))),
+  });
 }
 
 // Reducers replace a thread only when it changes, so an unchanged thread skips JSON.stringify and compares as the same string.

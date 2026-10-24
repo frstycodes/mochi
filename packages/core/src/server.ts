@@ -18,6 +18,7 @@ import { asRunError, Run } from './run.ts';
 import { storeHandlers } from './store/handlers.ts';
 import type { DocTable } from './store/migrations.ts';
 import { importJson } from './store/importJson.ts';
+import { Projection } from './store/projection.ts';
 import { Store } from './store/store.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
 import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
@@ -56,14 +57,15 @@ export const layerCore = (options: ServerOptions) =>
     ),
   );
 
-/** The store, after the one-time import of main's JSON files, so no handler reads it before they are in. */
+/** The store and its projection, after the one-time import of main's JSON files, so neither reads it before they are in. */
 const layerStore = (userData: string | undefined) =>
-  Layer.effectDiscard(userData ? Effect.asVoid(importJson(userData)) : Effect.void).pipe(
+  Projection.layer(userData).pipe(
+    Layer.provideMerge(Layer.effectDiscard(userData ? Effect.asVoid(importJson(userData)) : Effect.void)),
     Layer.provideMerge(Store.layer(userData ? path.join(userData, 'mochi.db') : ':memory:')),
     Layer.orDie,
   );
 
-type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store | Metrics;
+type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store | Projection | Metrics;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -92,7 +94,7 @@ const connect = (options: ServerOptions, services: Context.Context<Services>) =>
     const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
     yield* RpcServer.make(CoreWsRpcs, { disableFatalDefects: true }).pipe(
       Effect.provideService(RpcServer.Protocol, protocol),
-      Effect.provide(Layer.mergeAll(layerHandlers(windowId, identity, options.userData), layerScopes(identity.scopes))),
+      Effect.provide(Layer.mergeAll(layerHandlers(windowId, identity), layerScopes(identity.scopes))),
       Effect.provide(services),
       Effect.forkScoped,
     );
@@ -153,7 +155,7 @@ const layerScopes = (scopes: ReadonlyArray<Contract.AuthScope>) =>
     return scopes.includes(scope) ? effect : Effect.fail(new Unauthorized({ scope }));
   });
 
-const layerHandlers = (windowId: number | undefined, identity: Identity, userData: string | undefined) =>
+const layerHandlers = (windowId: number | undefined, identity: Identity) =>
   CoreWsRpcs.toLayer(
     Effect.gen(function* () {
       const run = yield* Run;
@@ -163,7 +165,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
       const host = hostHandlers(capabilities, windowId) as Record<string, (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>>;
       const watch = yield* Watch;
       const github = yield* GitHub;
-      const stored = storeHandlers(store, userData);
+      const stored = storeHandlers(store, yield* Projection);
       const metrics = yield* Metrics;
       return {
         ping: () => Effect.succeed('pong'),

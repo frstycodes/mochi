@@ -25,6 +25,10 @@ export interface LoggedEvent {
   readonly type: string;
   readonly threadId: string | null;
   readonly payload: unknown;
+  /** Epoch ms it was logged. */
+  readonly at?: number;
+  /** Set for a command; a window knows its own by this (`src/store/replica.ts`). */
+  readonly commandId?: string | null;
 }
 
 export type ShellItem = { readonly _tag: 'snapshot'; readonly shell: Shell } | { readonly _tag: 'event'; readonly event: LoggedEvent };
@@ -55,7 +59,7 @@ export function projectShell(shell: Shell, item: ShellItem): Shell {
   }
 }
 
-/** The fields a thread list shows, read tolerantly from a saved thread (`SavedThread` in src/store/persist.ts). */
+/** The fields a thread list shows, read tolerantly from a saved thread (`SavedThread` in src/store/saved.ts). */
 export function summarizeThread(id: string, saved: unknown): ThreadSummary {
   const thread = (saved as { thread?: Record<string, unknown> } | null)?.thread ?? {};
   const text = (value: unknown) => (typeof value === 'string' ? value : null);

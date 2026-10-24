@@ -5,7 +5,7 @@
 import { writeFileSync } from 'node:fs';
 import { seedQueue, seedThreads, type Thread } from '../../../src/model.ts';
 import type { Checkpoint } from '../../../src/rewind/checkpoints.ts';
-import { splitSaved, toSaved } from '../../../src/store/persist.ts';
+import { splitSaved, toSaved } from '../../../src/store/saved.ts';
 
 const demo = seedThreads();
 const base = demo[0];

@@ -7,7 +7,7 @@ import type { RemoteCommandRequest } from '../../src/host/types/remote.ts';
 import { runDeviceCommand } from '../remote/index.ts';
 import { processMetrics } from '../metrics.ts';
 import { mainWindow } from '../window.ts';
-import type { Handlers, ServedByCore } from './handlers.ts';
+import type { Handlers } from './handlers.ts';
 import { account } from './account.ts';
 import { mainForAgents } from '../agents/events.ts';
 import { browser } from './browser.ts';
@@ -29,7 +29,7 @@ import { windows } from './windows.ts';
 
 // `agent` is served by Core (packages/core/src/agents/handlers.ts); main never gets those calls.
 const handlers = { pty, git, fs, ports, sim, browser, notify, windows, settings, data, schedule, themes, remote, account, projects, library, usage } satisfies {
-  [K in Exclude<Namespace, 'agent'>]: Omit<Handlers<K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]>, K extends keyof ServedByCore ? ServedByCore[K] : never>;
+  [K in Exclude<Namespace, 'agent'>]: Handlers<K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]>;
 };
 
 type Handler = (sender: Electron.WebContents, ...args: unknown[]) => Promise<unknown>;

@@ -5,10 +5,6 @@ import { embedReplay, isSelfContained, replayFileName } from '../../replay/page.
 const replays = new Map<string, string>();
 
 export const data: DataHost = {
-  async load() {
-    return null;
-  },
-  async save() {},
   async loadReplay(threadId) {
     return replays.get(threadId) ?? null;
   },

@@ -5,7 +5,7 @@ import { AgentImage } from '../model.ts';
 const T = Schema.Tuple;
 const o = Schema.optional;
 
-// One IPC string; no thread comes near it.
+// One IPC string; no replay export comes near it.
 const MAX_CHARS = 64 * 1024 * 1024;
 /** Per thread; main refuses appends past it and writes one `capped` line. */
 export const MAX_REPLAY_BYTES = 8 * 1024 * 1024;
@@ -14,13 +14,8 @@ const MAX_IMAGE_BYTES = 5_000_000;
 /** It names the thread's replay file. */
 const ReplayThreadId = Str(128).check(Schema.isPattern(/^[\w-]+$/));
 
-export const SavedFiles = Schema.Struct({ index: Schema.String, threads: Schema.Array(Schema.String) });
-export type SavedFiles = typeof SavedFiles.Type;
-
-/** `DataHost` (`src/host/types/data.ts`). The saved files' contents are `persist.ts`'s shapes, decoded by the renderer. */
+/** `DataHost` (`src/host/types/data.ts`). */
 export const dataRpc = {
-  load: invoke(T([]), Schema.NullOr(SavedFiles)),
-  save: invoke(T([Str(MAX_CHARS), Schema.Record(Schema.String, Str(MAX_CHARS))]), Schema.Void),
   loadReplay: invoke(T([ReplayThreadId]), Schema.NullOr(Schema.String)),
   appendReplay: invoke(T([ReplayThreadId, Str(MAX_REPLAY_BYTES)]), Schema.Boolean),
   replayUsage: invoke(T([]), Schema.Struct({ threads: Schema.Number, bytes: Schema.Number })),

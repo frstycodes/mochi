@@ -62,10 +62,10 @@ test('the import takes threads, settings, projects, limits and window bounds; an
   assert.deepEqual(snapshot.shell.projects, [{ id: 'p1', name: 'Mochi', path: '/src/mochi', space: 'default' }]);
 });
 
-test('a legacy threads.json imports whole, as the index the renderer joins', async () => {
+test('a legacy threads.json imports whole, as the index the projection joins', async () => {
   const dir = fixture('legacy');
   const threads = await withStore(dir, Effect.andThen(importJson(dir), Effect.flatMap(Effect.service(Store), (store) => store.loadThreads)));
-  assert.deepEqual(threads, { index: readFileSync(join(dir, 'threads.json'), 'utf8'), threads: [] });
+  assert.deepEqual(threads, { index: readFileSync(join(dir, 'threads.json'), 'utf8'), threads: [], sequence: 0 });
   assert.ok(readdirSync(dir).includes('threads.json'), 'the original stays');
 });
 

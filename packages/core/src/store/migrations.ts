@@ -57,10 +57,20 @@ const initial = Effect.gen(function* () {
       updated_at TEXT NOT NULL
     )
   `;
-  // The renderer's `SavedIndex` (src/store/persist.ts): one row.
+  // The renderer's `SavedIndex` (src/store/saved.ts): one row.
   yield* sql`CREATE TABLE thread_index (id INTEGER PRIMARY KEY CHECK (id = 1), payload_json TEXT NOT NULL, updated_at TEXT NOT NULL)`;
   for (const table of docTables) yield* sql.unsafe(`CREATE TABLE ${table} (key TEXT PRIMARY KEY, payload_json TEXT NOT NULL, updated_at TEXT NOT NULL)`);
   yield* sql`CREATE TABLE imports (source TEXT PRIMARY KEY, status TEXT NOT NULL, detail TEXT, at TEXT NOT NULL)`;
 });
 
-export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial }) });
+/**
+ * Core writes the thread snapshots from its projection: the index records the log sequence they hold. A snapshot the renderer
+ * saved held everything logged before it, so it starts at the log's end.
+ */
+const snapshotSequence = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`ALTER TABLE thread_index ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0`;
+  yield* sql`UPDATE thread_index SET sequence = (SELECT COALESCE(MAX(sequence), 0) FROM events)`;
+});
+
+export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial, '2_snapshot_sequence': snapshotSequence }) });

@@ -35,16 +35,24 @@ export interface OutboxEffect {
   readonly attempt: number;
 }
 
-/** The saved threads in the shape `data.load` returns (`SavedFiles`, src/host/types/data.ts). */
+/** The saved threads (`SavedFiles`, src/host/types/data.ts) and the log sequence they hold. */
 export interface SavedFiles {
   readonly index: string;
   readonly threads: ReadonlyArray<string>;
+  readonly sequence: number;
 }
 
 const SHELL_TYPES = new Set(['thread.saved', 'thread.deleted', 'projects.saved']);
 
-type EventRow = { sequence: number; thread_id: string | null; event_type: string; payload_json: string };
-const toEvent = (row: EventRow): LoggedEvent => ({ sequence: row.sequence, type: row.event_type, threadId: row.thread_id, payload: JSON.parse(row.payload_json) });
+type EventRow = { sequence: number; thread_id: string | null; event_type: string; payload_json: string; occurred_at: string; command_id: string | null };
+const toEvent = (row: EventRow): LoggedEvent => ({
+  sequence: row.sequence,
+  type: row.event_type,
+  threadId: row.thread_id,
+  payload: JSON.parse(row.payload_json),
+  at: Date.parse(row.occurred_at),
+  commandId: row.command_id,
+});
 const now = () => new Date().toISOString();
 
 /** `threadIds` of a `SavedIndex`; a legacy `threads.json` has none, its threads are inside it. */
@@ -54,8 +62,8 @@ const threadIdsOf = (index: string): string[] => {
 };
 
 /**
- * Core's SQLite: the append-only `events` log with `command_receipts`, the `outbox`, the thread snapshots the renderer
- * saves, and one table of JSON documents per former JSON file. Committed events are published to the `shell` and `thread`
+ * Core's SQLite: the append-only `events` log with `command_receipts`, the `outbox`, the thread snapshots Core's projection
+ * writes (`projection.ts`), and one table of JSON documents per former JSON file. Committed events are published to the `shell` and `thread`
  * streams.
  */
 export class Store extends Context.Service<Store>()('mochi/core/Store', {
@@ -63,13 +71,15 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
     const sql = yield* SqlClient.SqlClient;
     const published = yield* PubSub.unbounded<LoggedEvent>();
 
-    const insertEvent = (input: AppendInput) =>
-      Effect.map(
+    const insertEvent = (input: AppendInput) => {
+      const at = now();
+      return Effect.map(
         sql<{ sequence: number }>`INSERT INTO events (event_id, command_id, thread_id, event_type, version, occurred_at, payload_json)
-          VALUES (${input.eventId ?? randomUUID()}, ${input.commandId ?? null}, ${input.threadId ?? null}, ${input.type}, ${input.version ?? 1}, ${now()}, ${JSON.stringify(input.payload ?? null)})
+          VALUES (${input.eventId ?? randomUUID()}, ${input.commandId ?? null}, ${input.threadId ?? null}, ${input.type}, ${input.version ?? 1}, ${at}, ${JSON.stringify(input.payload ?? null)})
           RETURNING sequence`,
-        (rows): LoggedEvent => ({ sequence: rows[0]!.sequence, type: input.type, threadId: input.threadId ?? null, payload: input.payload ?? null }),
+        (rows): LoggedEvent => ({ sequence: rows[0]!.sequence, type: input.type, threadId: input.threadId ?? null, payload: input.payload ?? null, at: Date.parse(at), commandId: input.commandId ?? null }),
       );
+    };
 
     /** Runs `work` in a transaction and publishes the events it logged once it committed. */
     const commit = <A, E, R>(work: Effect.Effect<{ result: A; events: ReadonlyArray<LoggedEvent> }, E, R>) =>
@@ -98,15 +108,25 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
       );
 
     const loadThreads = Effect.gen(function* () {
-      const [index] = yield* sql<{ payload_json: string }>`SELECT payload_json FROM thread_index WHERE id = 1`;
+      const [index] = yield* sql<{ payload_json: string; sequence: number }>`SELECT payload_json, sequence FROM thread_index WHERE id = 1`;
       if (!index) return null;
       const rows = yield* sql<{ thread_id: string; payload_json: string }>`SELECT thread_id, payload_json FROM threads`;
       const byId = new Map(rows.map((row) => [row.thread_id, row.payload_json]));
-      return { index: index.payload_json, threads: threadIdsOf(index.payload_json).flatMap((id) => byId.get(id) ?? []) } satisfies SavedFiles;
+      return { index: index.payload_json, threads: threadIdsOf(index.payload_json).flatMap((id) => byId.get(id) ?? []), sequence: index.sequence } satisfies SavedFiles;
     });
 
-    /** `changed` holds only the threads that changed, by id; a thread the index no longer lists is deleted. */
-    const saveThreads = (index: string, changed: Readonly<Record<string, string>>) =>
+    /** Every logged event after `afterSequence`, oldest first; at most `limit`. */
+    const eventsAfter = (afterSequence: number, limit = -1) =>
+      Effect.map(
+        sql<EventRow>`SELECT sequence, thread_id, event_type, payload_json, occurred_at, command_id FROM events WHERE sequence > ${afterSequence} ORDER BY sequence LIMIT ${limit}`,
+        (rows) => rows.map(toEvent),
+      );
+
+    /**
+     * `changed` holds only the threads that changed, by id; a thread the index no longer lists is deleted. `sequence` is the
+     * last logged event the snapshot holds (a `thread` stream sends the events after it); unset, it holds the whole log.
+     */
+    const saveThreads = (index: string, changed: Readonly<Record<string, string>>, sequence?: number) =>
       commit(
         Effect.gen(function* () {
           const ids = new Set(threadIdsOf(index));
@@ -116,7 +136,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
             const event = yield* insertEvent({ type: 'thread.saved', threadId: id, payload: summary });
             events.push(event);
             yield* sql`INSERT INTO threads (thread_id, sequence, title, status, project, payload_json, updated_at)
-              VALUES (${id}, ${event.sequence}, ${summary.title}, ${summary.status}, ${summary.project}, ${json}, ${now()})
+              VALUES (${id}, ${sequence ?? event.sequence}, ${summary.title}, ${summary.status}, ${summary.project}, ${json}, ${now()})
               ON CONFLICT (thread_id) DO UPDATE SET sequence = excluded.sequence, title = excluded.title, status = excluded.status,
                 project = excluded.project, payload_json = excluded.payload_json, updated_at = excluded.updated_at`;
           }
@@ -125,8 +145,9 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
             events.push(yield* insertEvent({ type: 'thread.deleted', threadId: thread_id }));
             yield* sql`DELETE FROM threads WHERE thread_id = ${thread_id}`;
           }
-          yield* sql`INSERT INTO thread_index (id, payload_json, updated_at) VALUES (1, ${index}, ${now()})
-            ON CONFLICT (id) DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`;
+          const [{ last }] = (yield* sql<{ last: number | null }>`SELECT MAX(sequence) AS last FROM events`) as [{ last: number | null }];
+          yield* sql`INSERT INTO thread_index (id, payload_json, sequence, updated_at) VALUES (1, ${index}, ${sequence ?? last ?? 0}, ${now()})
+            ON CONFLICT (id) DO UPDATE SET payload_json = excluded.payload_json, sequence = excluded.sequence, updated_at = excluded.updated_at`;
           return { result: undefined, events };
         }),
       );
@@ -219,7 +240,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
       Effect.gen(function* () {
         const [row] = yield* sql<{ sequence: number; payload_json: string }>`SELECT sequence, payload_json FROM threads WHERE thread_id = ${threadId}`;
         const sequence = row?.sequence ?? 0;
-        const tail = yield* sql<EventRow>`SELECT sequence, thread_id, event_type, payload_json FROM events WHERE thread_id = ${threadId} AND sequence > ${sequence} ORDER BY sequence`;
+        const tail = yield* sql<EventRow>`SELECT sequence, thread_id, event_type, payload_json, occurred_at, command_id FROM events WHERE thread_id = ${threadId} AND sequence > ${sequence} ORDER BY sequence`;
         return [{ _tag: 'snapshot', sequence, saved: row ? (JSON.parse(row.payload_json) as unknown) : null }, ...tail.map((r) => ({ _tag: 'event', event: toEvent(r) }))] as ThreadItem[];
       });
 
@@ -228,7 +249,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
       sql.withTransaction(
         Effect.gen(function* () {
           if (afterSequence <= 0) return yield* snapshotOf(threadId);
-          const rows = yield* sql<EventRow>`SELECT sequence, thread_id, event_type, payload_json FROM events
+          const rows = yield* sql<EventRow>`SELECT sequence, thread_id, event_type, payload_json, occurred_at, command_id FROM events
             WHERE thread_id = ${threadId} AND sequence > ${afterSequence} ORDER BY sequence LIMIT ${MAX_REPLAY_EVENTS + 1}`;
           const bytes = rows.reduce((sum, row) => sum + row.payload_json.length, 0);
           const isReplayable = rows.length <= MAX_REPLAY_EVENTS && bytes <= MAX_REPLAY_BYTES && !rows.some((row) => row.event_type === 'thread.saved');
@@ -258,7 +279,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
         }),
       );
 
-    return { events: Stream.fromPubSub(published), append, loadThreads, saveThreads, listDocs, getDoc, setDoc, enqueue, claim, complete, fail, shell, thread };
+    return { events: Stream.fromPubSub(published), subscribe: PubSub.subscribe(published), append, eventsAfter, loadThreads, saveThreads, listDocs, getDoc, setDoc, enqueue, claim, complete, fail, shell, thread };
   }),
 }) {
   /** The store and its `SqlClient`. */

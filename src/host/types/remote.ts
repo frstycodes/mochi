@@ -73,7 +73,7 @@ export interface FollowedMachine {
   lastSeenAt?: number;
 }
 
-/** A followed machine's threads, one thread file (`SavedThread`, src/store/persist.ts) at a time; `null` deletes it. */
+/** A followed machine's threads, one thread file (`SavedThread`, src/store/saved.ts) at a time; `null` deletes it. */
 export type MirrorFrame = { type: 'reset' } | { type: 'thread'; threadId: string; saved: unknown };
 
 /** "Allow <name>?" on this computer's screen. */

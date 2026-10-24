@@ -8,9 +8,6 @@ export type Handlers<T> = {
     : never;
 };
 
-/** Host methods Core serves itself (`storeHandlers` in packages/core); main never gets these calls. */
-export type ServedByCore = { data: 'load' | 'save' };
-
 export const notImplemented = (name: string) => async (): Promise<never> => {
   throw new Error(`${name} is not implemented yet`);
 };

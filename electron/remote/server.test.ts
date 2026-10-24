@@ -5,11 +5,12 @@ import { HttpServer } from 'effect/http';
 import sodium from 'libsodium-wrappers';
 import { Capabilities, type Relay } from '@mochi/schema';
 import { coreUrl, makeCoreClient } from '@mochi/core/client';
-import { makeHostCaller, serveCapabilities } from '@mochi/core/hostClient';
+import { serveCapabilities } from '@mochi/core/hostClient';
 import { makeDeviceClient } from '@mochi/core/remote/device';
 import { queuedReader, type Link, type RawLink } from '@mochi/core/remote/link';
 import { mintDeviceToken } from '@mochi/core/remote/token';
 import { Unauthorized } from '@mochi/core/rpc';
+import type { ThreadItem } from '@mochi/domain';
 import { layerCore } from '@mochi/core/server';
 import type { Scope } from '../../src/host/types/remote.ts';
 import type { DeviceKeys } from './crypto/keys.ts';
@@ -81,22 +82,32 @@ const setup = (scopes: Scope[]) =>
       onOffline: () => {},
       onRefused: (reason) => assert.fail(reason),
     });
-    return { window, host: makeHostCaller(window), client, welcomes, rejected, dial, secure };
+    return { window, client, welcomes, rejected, dial, secure };
   });
 
-const INDEX = JSON.stringify({ v: 1, now: 0, seq: 0, checkpointSeq: 0, queue: [], threadIds: ['t1'] });
-const threadFile = (title: string) => JSON.stringify({ v: 1, thread: { id: 't1', title, status: 'running', activity: [{ who: 'harness', kind: 'tool', text: 'Edited a.ts', patch: '+secret' }] }, checkpoints: [] });
 const run = <A, E>(effect: Effect.Effect<A, E, import('effect').Scope.Scope>) => Effect.runPromise(Effect.scoped(effect));
+
+type Window = Effect.Success<ReturnType<typeof makeCoreClient>>;
+const command = (window: Window, threadId: string | null, payload: object) => window['events.append']({ type: 'command', threadId, payload });
+/** A thread in Core's projection with an edit whose patch only `code` may read; Core writes its snapshot within a second. */
+const seed = (window: Window, title: string) =>
+  Effect.gen(function* () {
+    yield* command(window, null, { type: 'create', spaceId: 's', title, name: title, provider: 'claude', project: null, isLive: true });
+    yield* window['events.append']({ type: 'agent.tool', threadId: 'new-1', payload: { threadId: 'new-1', type: 'tool', id: 'e1', phase: 'start', text: 'Edited a.ts' } });
+    yield* window['events.append']({ type: 'agent.tool', threadId: 'new-1', payload: { threadId: 'new-1', type: 'tool', id: 'e1', phase: 'end', text: 'Edited a.ts', patch: '+secret' } });
+    yield* Effect.sleep(700);
+  });
+const snapshots = (stream: Stream.Stream<ThreadItem, unknown>, n: number) => stream.pipe(Stream.filter((item) => item._tag === 'snapshot'), Stream.take(n), Stream.runCollect);
 
 test('a paired device reads the same `thread` stream a window does, through a relay channel', async () => {
   await run(
     Effect.gen(function* () {
-      const { window, host, client, welcomes } = yield* setup(['read', 'operate', 'manage', 'code']);
-      yield* Effect.promise(() => host('data.save', [INDEX, { t1: threadFile('Fix login') }]));
-      const read = (from: typeof window) => from.thread({ threadId: 't1', afterSequence: 0 }).pipe(Stream.take(2), Stream.runCollect);
+      const { window, client, welcomes } = yield* setup(['read', 'operate', 'manage', 'code']);
+      yield* seed(window, 'Fix login');
+      const read = (from: typeof window) => snapshots(from.thread({ threadId: 'new-1', afterSequence: 0 }), 2);
       const both = yield* Effect.forkChild(Effect.all([read(window), read(client)], { concurrency: 'unbounded' }));
       yield* Effect.sleep(300);
-      yield* Effect.promise(() => host('data.save', [INDEX, { t1: threadFile('Fix SSO login') }]));
+      yield* command(window, 'new-1', { type: 'rename', threadId: 'new-1', title: 'Fix SSO login' });
       const [fromWindow, fromDevice] = yield* Fiber.join(both);
       assert.deepEqual([...fromDevice], [...fromWindow]);
       assert.deepEqual(
@@ -119,15 +130,15 @@ test('a device command runs where main serves `remote`, named after the device; 
       assert.deepEqual(runs, [{ id: (runs[0] as { id: string }).id, deviceName: 'Laptop', command: { type: 'interrupt', threadId: 't1' } }]);
 
       const reader = yield* setup(['read']);
-      yield* Effect.promise(() => reader.host('data.save', [INDEX, { t1: threadFile('Fix login') }]));
+      yield* seed(reader.window, 'Fix login');
       const refused = yield* reader.client['device.command']({ command: { type: 'interrupt', threadId: 't1' } }).pipe(Effect.exit);
       assert.ok(Exit.isFailure(refused));
       const error = Cause.squash(refused.cause);
       assert.ok(error instanceof Unauthorized && error.scope === 'operate', String(error));
       // It still reads, without the diffs `code` would show it.
-      const [snapshot] = yield* reader.client.thread({ threadId: 't1', afterSequence: 0 }).pipe(Stream.take(1), Stream.runCollect);
-      const saved = snapshot?._tag === 'snapshot' ? (snapshot.saved as { thread: { activity: object[] }; checkpoints?: unknown }) : undefined;
-      assert.deepEqual(saved?.thread.activity, [{ who: 'harness', kind: 'tool', text: 'Edited a.ts' }]);
+      const [snapshot] = yield* snapshots(reader.client.thread({ threadId: 'new-1', afterSequence: 0 }), 1);
+      const saved = snapshot?._tag === 'snapshot' ? (snapshot.saved as { thread: { activity: { kind: string; text: string }[] }; checkpoints?: unknown }) : undefined;
+      assert.deepEqual(saved?.thread.activity.map((e) => [e.kind, e.text, 'patch' in e]), [['message', 'Fix login', false], ['tool', 'Edited a.ts', false]]);
       assert.equal(saved?.checkpoints, undefined);
     }),
   );

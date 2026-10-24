@@ -11,7 +11,7 @@ import type { Fork } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
 import type { McpServerDef } from '../settings/agentConfig.ts';
-import type { Saved } from '../store/persist.ts';
+import type { Saved } from '../store/saved.ts';
 import type { VizLanguage } from '../viz/fence.ts';
 import type { Check, Decoded, Same } from './check.ts';
 
