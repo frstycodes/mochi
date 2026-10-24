@@ -1,9 +1,13 @@
 import sodium from 'libsodium-wrappers';
-import type { DeviceKind, Scope } from '../../src/host/types/remote.ts';
-import { asKind, THIS_KIND } from './protocol.ts';
-import { createHandshake, E2EError, type Session } from './crypto/session.ts';
-import type { DeviceKeys } from './crypto/keys.ts';
-import type { Link, RawLink } from './link.ts';
+import type { Link, RawLink } from '@mochi/core/remote/link';
+import { createHandshake, E2EError, type DeviceKeys, type Session } from '@mochi/core/remote/session';
+import { DEVICE_KINDS, type DeviceKind, type Scope } from '../../src/host/types/remote.ts';
+
+/** This computer's kind, from its OS. */
+export const THIS_KIND: DeviceKind = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'windows' : 'linux';
+
+/** A kind from the other side, or undefined for one this version doesn't know. */
+export const asKind = (value: unknown): DeviceKind | undefined => (DEVICE_KINDS.includes(value as never) ? (value as DeviceKind) : undefined);
 
 /**
  * Every connection opens with one pairing exchange, then carries only ciphertext (DEVICES.md › End-to-end encryption):

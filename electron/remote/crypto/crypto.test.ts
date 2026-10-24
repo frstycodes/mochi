@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import sodium from 'libsodium-wrappers';
 import { loadDeviceKeys, type DeviceKeys } from './keys.ts';
-import { createHandshake, E2EError, type E2EErrorCode, type Session } from './session.ts';
+import { createHandshake, E2EError, type E2EErrorCode, type Session } from '@mochi/core/remote/session';
 
 await sodium.ready;
 

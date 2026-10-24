@@ -1,12 +1,13 @@
+import { Effect, Fiber } from 'effect';
 import WebSocket from 'ws';
-import { HEARTBEAT, splitChannel, withChannel, type RelayToMachine } from '../../infra/relay/src/protocol.ts';
-import type { RelayState } from '../../src/host/types/remote.ts';
+import { RelayWire, type Remote } from '@mochi/schema';
 import { HEARTBEAT_MS, keepAlive, queuedReader, socketLink, toBytes, type RawLink } from './link.ts';
+import { reconnect } from './reconnect.ts';
+
+const { decodeRelayToMachine, HEARTBEAT, splitChannel, withChannel } = RelayWire;
 
 /** Mochi's hosted relay (`infra/relay`); `MOCHI_RELAY_URL` points dev runs and self-hosters at another. */
 export const RELAY_URL = process.env.MOCHI_RELAY_URL ?? 'https://mochi-relay.sandeshpandey.workers.dev';
-
-const MAX_BACKOFF_MS = 60_000;
 
 export interface RelayMachine {
   id: string;
@@ -29,70 +30,70 @@ export function connectMachine(options: {
   publicKey: string;
   token: () => Promise<string>;
   onChannel: (raw: RawLink) => void;
-  onState: (state: RelayState) => void;
+  onState: (state: Remote.RelayState) => void;
   /** Connected, or the account's membership records changed: time to fetch them. */
   onMembers: () => void;
+  /** A control frame from the relay that isn't one: dropped. */
+  onMalformed?: (raw: string) => void;
 }): MachineConnection {
-  let socket: WebSocket | undefined;
-  let isClosed = false;
-  let attempt = 0;
-  let retry: ReturnType<typeof setTimeout> | undefined;
   const channels = new Map<number, ReturnType<typeof channelLink>>();
 
-  async function open() {
-    options.onState({ status: 'connecting' });
-    let token: string;
-    try {
-      token = await options.token();
-    } catch (error) {
-      // Signed out or the session ended: nothing to reconnect with until you sign in again.
-      return options.onState({ status: 'error', error: (error as Error).message });
-    }
-    if (isClosed) return;
-    const ws = new WebSocket(url('/v1/connect', { role: 'machine', machine: options.machineId }), { headers: { authorization: `Bearer ${token}` } });
-    socket = ws;
-    let isAwaitingPong = false;
-    const heartbeat = setInterval(() => {
-      if (isAwaitingPong) return ws.terminate();
-      isAwaitingPong = true;
-      if (ws.readyState === ws.OPEN) ws.send(HEARTBEAT.ping);
-    }, HEARTBEAT_MS);
-    ws.on('open', () => {
-      attempt = 0;
-      ws.send(JSON.stringify({ type: 'register', name: options.name(), publicKey: options.publicKey }));
-      options.onState({ status: 'connected' });
-      options.onMembers();
+  /** One connection: fails when it couldn't open, succeeds when an open one dropped, so the next drop starts the backoff over. */
+  const connectOnce = (token: string) =>
+    Effect.callback<void, Unreachable>((resume) => {
+      const ws = new WebSocket(url('/v1/connect', { role: 'machine', machine: options.machineId }), { headers: { authorization: `Bearer ${token}` } });
+      let isOpen = false;
+      let isAwaitingPong = false;
+      const heartbeat = setInterval(() => {
+        if (isAwaitingPong) return ws.terminate();
+        isAwaitingPong = true;
+        if (ws.readyState === ws.OPEN) ws.send(HEARTBEAT.ping);
+      }, HEARTBEAT_MS);
+      ws.on('open', () => {
+        isOpen = true;
+        ws.send(JSON.stringify({ type: 'register', name: options.name(), publicKey: options.publicKey }));
+        options.onState({ status: 'connected' });
+        options.onMembers();
+      });
+      ws.on('message', (data, isBinary) => {
+        isAwaitingPong = false;
+        const bytes = toBytes(data as Buffer);
+        return isBinary ? onData(bytes) : onControl(ws, new TextDecoder().decode(bytes));
+      });
+      ws.on('unexpected-response', (_request, response) => {
+        options.onState({ status: 'error', error: response.statusCode === 401 ? 'The relay didn’t accept your Mochi session' : `The relay answered ${response.statusCode}` });
+        ws.terminate();
+      });
+      // Every failure also closes the socket; the close is what's acted on.
+      ws.on('error', () => {});
+      ws.on('close', () => {
+        clearInterval(heartbeat);
+        for (const channel of channels.values()) channel.end(1001, 'The relay connection dropped');
+        channels.clear();
+        resume(isOpen ? Effect.void : Effect.fail(new Unreachable()));
+      });
+      return Effect.sync(() => {
+        clearInterval(heartbeat);
+        ws.close(1000, 'Turned off');
+      });
     });
-    ws.on('message', (data, isBinary) => {
-      isAwaitingPong = false;
-      const bytes = toBytes(data as Buffer);
-      return isBinary ? onData(bytes) : onControl(new TextDecoder().decode(bytes));
-    });
-    ws.on('unexpected-response', (_request, response) => {
-      options.onState({ status: 'error', error: response.statusCode === 401 ? 'The relay didn’t accept your Mochi session' : `The relay answered ${response.statusCode}` });
-      ws.terminate();
-    });
-    ws.on('error', () => {});
-    ws.on('close', () => {
-      clearInterval(heartbeat);
-      for (const channel of channels.values()) channel.end(1001, 'The relay connection dropped');
-      channels.clear();
-      if (isClosed || socket !== ws) return;
-      const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** attempt++);
-      options.onState({ status: 'connecting' });
-      retry = setTimeout(() => void open(), delay);
-    });
-  }
 
-  function onControl(text: string) {
+  const run = Effect.gen(function* () {
+    options.onState({ status: 'connecting' });
+    const token = yield* Effect.tryPromise(options.token);
+    yield* connectOnce(token).pipe(Effect.tapError(() => Effect.sync(() => options.onState({ status: 'connecting' }))));
+  }).pipe(
+    Effect.retry({ schedule: reconnect, while: (error) => error instanceof Unreachable }),
+    Effect.forever,
+    // Signed out or the session ended: nothing to reconnect with until you sign in again.
+    Effect.catch((error) => Effect.sync(() => options.onState({ status: 'error', error: messageOf(error) }))),
+  );
+
+  function onControl(socket: WebSocket, text: string) {
     if (text === HEARTBEAT.pong) return;
-    let frame: RelayToMachine;
-    try {
-      frame = JSON.parse(text) as RelayToMachine;
-    } catch {
-      return;
-    }
-    if (frame.type === 'open' && socket) {
+    const frame = decodeRelayToMachine(text);
+    if (!frame) return options.onMalformed?.(text);
+    if (frame.type === 'open') {
       const channel = channelLink(socket, frame.channel, () => channels.delete(frame.channel));
       channels.set(frame.channel, channel);
       options.onChannel(channel.link);
@@ -106,16 +107,21 @@ export function connectMachine(options: {
     if (split) channels.get(split.channel)?.deliver(split.bytes);
   }
 
-  void open();
+  const fiber = Effect.runFork(run);
   return {
     close() {
-      isClosed = true;
-      clearTimeout(retry);
-      socket?.close(1000, 'Turned off');
+      Effect.runFork(Fiber.interrupt(fiber));
       options.onState({ status: 'off' });
     },
   };
 }
+
+/** The relay didn't take the connection. Anything else (`token()` rejected) means there is no session to connect with. */
+class Unreachable extends Error {}
+const messageOf = (error: unknown) => {
+  const cause = (error as { cause?: unknown })?.cause ?? error;
+  return cause instanceof Error ? cause.message : String(cause);
+};
 
 /**
  * A device's own connection to one machine through the relay: its bytes, unprefixed, kept alive by text pings the relay's

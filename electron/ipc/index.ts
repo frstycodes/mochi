@@ -1,8 +1,10 @@
 import { safeStorage, webContents } from 'electron';
 import { Schema } from 'effect';
-import { Capabilities, definitionOf } from '@mochi/schema';
+import { Capabilities, definitionOf, Relay } from '@mochi/schema';
 import type { CapabilityHandler } from '@mochi/core/hostClient';
 import type { HostBridge, Namespace } from '../../src/host/types/index.ts';
+import type { RemoteCommandRequest } from '../../src/host/types/remote.ts';
+import { runDeviceCommand } from '../remote/index.ts';
 import { mainWindow } from '../window.ts';
 import type { Handlers, ServedByCore } from './handlers.ts';
 import { account } from './account.ts';
@@ -40,8 +42,12 @@ const secureStorage = {
  * decodes it, then hands it here JSON-encoded, with the window's id so the handler gets its sender.
  */
 export const mainCapabilities = {
-  names: ['host', 'notify', 'browserView', 'sim', 'secureStorage'],
+  names: ['host', 'notify', 'browserView', 'sim', 'secureStorage', 'remote'],
   handle: async ({ capability, method, args, windowId }) => {
+    if (capability === 'remote') {
+      const result = await runDeviceCommand(Schema.decodeUnknownSync(Schema.toCodecJson(Relay.RemoteCommandRequest))(args[0]) as RemoteCommandRequest);
+      return Schema.encodeUnknownSync(Schema.toCodecJson(Relay.CommandResult))(result);
+    }
     if (capability === 'secureStorage') {
       const { input } = Capabilities.secureStorageMethods[method as keyof typeof secureStorage];
       const [text] = Schema.decodeUnknownSync(input)(args);

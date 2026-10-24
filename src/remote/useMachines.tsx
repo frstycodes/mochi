@@ -7,9 +7,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { host } from '../host';
 import type { CommandData, CommandResult, FollowedMachine, RemoteCommand } from '../host/types/remote';
 import { HarnessScope, type Action, type State } from '../store';
-import { toSaved } from '../store/persist';
 import { commandFor } from './actions';
-import { applyFrame, type Mirror } from './mirror';
+import { applyFrame, mirrorOf, type Mirror } from './mirror';
 import { openRemoteThread } from '../routes/nav';
 
 /** A computer this one follows, with its store as far as the stream has brought it; no state before its first snapshot. */
@@ -43,13 +42,8 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const offMachines = host.remote.onMachines(() => { void queryClient.invalidateQueries({ queryKey: queryKeys.remote.machines() }); });
-    const offFrames = host.remote.onMachineFrame(({ machineId, frame }) =>
-      setMirrors((all) => {
-        const next = applyFrame(all[machineId], frame);
-        return next === all[machineId] ? all : { ...all, [machineId]: next };
-      }),
-    );
-    // Before this, frames went nowhere: every machine starts over with a snapshot.
+    const offFrames = host.remote.onMachineFrame(({ machineId, frame }) => setMirrors((all) => ({ ...all, [machineId]: applyFrame(all[machineId], frame) })));
+    // Before this, frames went nowhere: every machine starts over, each thread from its snapshot.
     void host.remote.follow();
     return () => {
       offMachines();
@@ -59,7 +53,8 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!cachedQuery.data) return;
-    setMirrors((all) => cachedQuery.data.reduce((next, { machineId, saved }) => next[machineId] ? next : { ...next, [machineId]: applyFrame(undefined, { type: 'snapshot', epoch: '', seq: 0, saved: JSON.parse(saved) }) }, all));
+    // Main checked each cached thread file against its schema before handing it here.
+    setMirrors((all) => cachedQuery.data.reduce((next, { machineId, saved }) => (next[machineId] ? next : { ...next, [machineId]: cached(mirrorOf(JSON.parse(saved))) }), all));
   }, [cachedQuery.data]);
   useMirrorCache(mirrors);
   const machines = useMemo(() => followed.map((machine) => ({ machine, state: mirrors[machine.id]?.state })), [followed, mirrors]);
@@ -116,6 +111,10 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
 
 const CACHE_EVERY_MS = 5000;
 
+/** Mirrors read back from the cache: nothing new in them to save. */
+const fromCache = new WeakSet<Mirror>();
+const cached = (mirror: Mirror) => (fromCache.add(mirror), mirror);
+
 /** Saves each mirror that changed, at most every few seconds; a busy stream still gets saved while it runs. */
 function useMirrorCache(mirrors: Record<string, Mirror | undefined>) {
   const latest = useRef(mirrors);
@@ -127,10 +126,9 @@ function useMirrorCache(mirrors: Record<string, Mirror | undefined>) {
     timer.current = setTimeout(() => {
       timer.current = undefined;
       for (const [machineId, mirror] of Object.entries(latest.current)) {
-        // A mirror from the cache itself has no epoch: nothing new to save.
-        if (!mirror?.epoch || saved.current.get(machineId) === mirror) continue;
+        if (!mirror || fromCache.has(mirror) || saved.current.get(machineId) === mirror) continue;
         saved.current.set(machineId, mirror);
-        host.remote.cacheMachine(machineId, JSON.stringify(toSaved(mirror.state))).catch((error: unknown) => console.error('Saving another computer’s threads failed', error));
+        host.remote.cacheMachine(machineId, JSON.stringify(mirror.threads)).catch((error: unknown) => console.error('Saving another computer’s threads failed', error));
       }
     }, CACHE_EVERY_MS);
   }, [mirrors]);

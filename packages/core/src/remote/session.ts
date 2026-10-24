@@ -1,5 +1,7 @@
 import sodium from 'libsodium-wrappers';
-import type { DeviceKeys } from './keys.ts';
+
+/** Ed25519; converted to X25519 for `crypto_kx`. */
+export type DeviceKeys = { publicKey: Uint8Array; privateKey: Uint8Array };
 
 /** The machine owns the threads and is the `crypto_kx` server; the device controlling it is the client. */
 export type Role = 'machine' | 'device';

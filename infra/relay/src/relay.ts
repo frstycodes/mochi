@@ -137,7 +137,10 @@ export class Relay<S> {
 
   private async onControl(socket: S, machineId: string, raw: string) {
     const frame = parseMachineFrame(raw);
-    if (!frame) return this.room.close(socket, CLOSE.badFrame, 'Unknown control frame');
+    if (!frame) {
+      console.warn(`Refused a malformed control frame from machine ${machineId}`);
+      return this.room.close(socket, CLOSE.badFrame, 'Unknown control frame');
+    }
     if (frame.type === 'close') {
       for (const device of this.room.byTag(channelTag(frame.channel))) if (this.isDeviceOf(device, machineId)) this.room.close(device, 1000, 'Closed by the machine');
       return;

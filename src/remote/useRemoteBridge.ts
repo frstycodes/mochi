@@ -3,45 +3,21 @@ import { host } from '../host/index.ts';
 import { useRemoteStatus } from './useRemoteStatus';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
-import { toSaved } from '../store/persist.ts';
 import { runRemoteCommand } from './commands.ts';
-import { setStreaming, streamPosition } from './tap.ts';
+import { setMachineName } from './tap.ts';
 import { closeIdleShells, SWEEP_MS } from './terminals.ts';
 
-/** Streams the store to main while remote is on, answers its snapshot requests and runs devices' commands. */
+/** Runs devices' commands, which reach this window from Core through main, while the store lives here. */
 export function useRemoteBridge(state: State, dispatch: Dispatch<Action>) {
   const latest = useRef(state);
-  const waiting = useRef<string[]>([]);
-
-  // A snapshot goes out only once the committed store holds every numbered action, so it matches the seq it carries.
-  const answerSnapshots = () => {
-    const { epoch, seq } = streamPosition();
-    if (!epoch || waiting.current.length === 0 || latest.current.streamed !== seq) return;
-    // Side chats aren't saved with the store, but a device opening one should see what was asked before it connected.
-    const saved = JSON.stringify({ ...toSaved(latest.current), sidechats: latest.current.sidechats });
-    for (const id of waiting.current.splice(0)) host.remote.snapshot(id, epoch, seq, saved).catch((error: unknown) => console.error('Sending the snapshot failed', error));
-  };
-
   useEffect(() => {
     latest.current = state;
-    answerSnapshots();
-  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const { status } = useRemoteStatus();
   useEffect(() => {
-    if (!status) return;
-    setStreaming(status.settings.isEnabled, status.settings.machineName || status.hostName);
-    answerSnapshots();
+    if (status) setMachineName(status.settings.machineName || status.hostName);
   }, [status]);
-  useEffect(() => {
-    const offSnapshot = host.remote.onSnapshotRequest((id) => {
-      waiting.current.push(id);
-      answerSnapshots();
-    });
-    return () => {
-      offSnapshot();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const timer = setInterval(() => closeIdleShells(Date.now()), SWEEP_MS);
