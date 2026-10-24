@@ -113,21 +113,16 @@ export function nestBlocker(threads: Thread[], id: string, parentId: string) {
 
 /**
  * A top-level sidebar row with its whole open subtree one level under it, depth first (like Claude's sessions under the top
- * session); finished ones only counted. The data keeps the real tree: `parent` is the thread that started it.
+ * session); finished ones leave it for Archived. The data keeps the real tree: `parent` is the thread that started it.
  */
 export interface ThreadGroup {
   thread: Thread;
   subs: Thread[];
-  settledSubs: number;
 }
 
 /** Pinned and Threads as the sidebar shows them: top-level rows only, each carrying its sub-threads wherever they'd sort alone. */
 export function sidebarGroups(threads: Thread[], spaceId: string) {
-  const group = (t: Thread): ThreadGroup => {
-    const subs = openSubtree(threads, t.id);
-    const settledSubs = [t, ...subs].reduce((n, p) => n + subThreadsOf(threads, p.id).filter((s) => s.status === 'settled').length, 0);
-    return { thread: t, subs, settledSubs };
-  };
+  const group = (t: Thread): ThreadGroup => ({ thread: t, subs: openSubtree(threads, t.id) });
   const isTop = (t: Thread) => !parentOf(threads, t);
   return { pinned: pinnedThreads(threads, spaceId).filter(isTop).map(group), active: activeThreads(threads, spaceId).filter(isTop).map(group) };
 }

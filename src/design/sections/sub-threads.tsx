@@ -118,24 +118,15 @@ const PLAIN: RowFixture = { title: 'Fix flaky checkout e2e', met: 1, total: 2, t
 
 function GuideTree({ family, rl }: { family: Family; rl: Thread }) {
   const open = family.children.filter((c) => !c.isSettled);
-  const settled = family.children.length - open.length;
   return (
     <li className="flex flex-col">
       <ParentRow row={family.parent} rl={rl} />
       <ul aria-label={`Sub-threads of ${family.parent.title}`} className="-mt-1 ml-[15px] flex flex-col gap-0.5">
         {open.map((c, i) => (
-          <Branch key={c.title} isLast={i === open.length - 1 && settled === 0}>
+          <Branch key={c.title} isLast={i === open.length - 1}>
             <ChildRow row={c} rl={rl} />
           </Branch>
         ))}
-        {settled > 0 && (
-          <Branch isLast>
-            <RowShell className="flex-row items-center gap-2 px-1 py-1.5 text-subtle-foreground">
-              <DiagramTree aria-hidden className="size-4 shrink-0" />
-              <span className="type-caption">{`${settled} sub-threads done`}</span>
-            </RowShell>
-          </Branch>
-        )}
       </ul>
     </li>
   );
