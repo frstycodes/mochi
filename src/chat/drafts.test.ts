@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAX_DRAFT_BYTES, clearDraft, flushDrafts, getDraft, loadDrafts, newThreadDraftKey, pruneDrafts, saveDraft, threadDraftKey, type Draft, type DraftStore } from './drafts.ts';
+import { MAX_DRAFT_BYTES, clearDraft, flushDrafts, getDraft, loadDrafts, newThreadDraftKey, saveDraft, threadDraftKey, type Draft, type DraftStore } from './drafts.ts';
 
 function memoryStore(initial: [string, Draft][] = []) {
   const disk = new Map(initial);
@@ -49,7 +49,7 @@ test('an emptied composer drops its draft, attachments past the cap are not kept
 
   saveDraft(threadDraftKey('gone'), { text: 'x', files: [] });
   saveDraft(threadDraftKey('kept'), { text: 'y', files: [] });
-  pruneDrafts(new Set(['kept']));
+  clearDraft(threadDraftKey('gone'));
   flushDrafts();
   await Promise.resolve();
   assert.deepEqual([...disk.keys()].sort(), [key, threadDraftKey('kept')].sort());

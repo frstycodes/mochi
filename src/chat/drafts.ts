@@ -63,10 +63,6 @@ export function clearDraft(key: string) {
 }
 
 /** Drops the drafts of threads that no longer exist. */
-export function pruneDrafts(threadIds: Set<string>) {
-  for (const key of drafts.keys()) if (key.startsWith('thread:') && !threadIds.has(key.slice('thread:'.length))) clearDraft(key);
-}
-
 export function flushDrafts() {
   for (const key of timers.keys()) {
     clearTimeout(timers.get(key));

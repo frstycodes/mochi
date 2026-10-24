@@ -407,7 +407,7 @@ export interface Thread {
   title: string;
   /** Renamed by you (or by the agent at your request), or titled by the agent that started it: a generated title never replaces it. */
   isTitleRenamed?: boolean;
-  /** A model named the thread after its first exchange (`useAutoTitles`). */
+  /** A model named the thread after its first exchange (the reactor's `title.generate`). */
   isTitleGenerated?: boolean;
   /** The drafted or edited outcome; '' while the thread has no goal (a question, a chat). */
   goal: string;
