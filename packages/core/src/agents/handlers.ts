@@ -136,7 +136,7 @@ async function runSession(threadId: string) {
   const sessions = required(turns);
   await Effect.runPromise(sessions.stop(threadId));
   const session = Effect.acquireRelease(Effect.void, () => Effect.promise(() => stopSession(threadId))).pipe(Effect.andThen(Effect.never));
-  await Effect.runPromise(sessions.start(threadId, () => session).pipe(Effect.mapError((message) => new Error(message))));
+  await Effect.runPromise(sessions.start(threadId, () => session).pipe(Effect.catch((message) => Effect.die(new Error(message)))));
 }
 
 async function endSession(threadId: string) {

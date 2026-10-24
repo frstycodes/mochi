@@ -44,7 +44,7 @@ export const layerAgents = (userData: string | undefined) =>
       }
       settingsDoc = yield* store.getDoc('settings', 'agent').pipe(Effect.orElseSucceed(() => undefined));
       const call = (capability: 'main' | 'secureStorage', method: string, args: ReadonlyArray<unknown>) =>
-        Effect.runPromise(capabilities.call({ capability, method, args }).pipe(Effect.mapError((message) => new Error(message))));
+        Effect.runPromise(capabilities.call({ capability, method, args }).pipe(Effect.catch((message) => Effect.die(new Error(message)))));
       useAgentConfig({
         read: () => settingsDoc,
         write: async () => {

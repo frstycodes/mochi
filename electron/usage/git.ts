@@ -48,7 +48,7 @@ export async function prStats(repo: string, since: number | null, account: Githu
   // Imported here: `@mochi/core/host` loads electron, and this file's parsers are tested under plain node.
   const { mainCoreClient } = await import('@mochi/core/host');
   const client = await mainCoreClient();
-  const rows = await Effect.runPromise(Effect.mapError(client['github.authoredPrs']({ cwd: repo, since, githubUser: account && formatGithubAccount(account) }), (error) => new Error(String(error))));
+  const rows = await Effect.runPromise(client['github.authoredPrs']({ cwd: repo, since, githubUser: account && formatGithubAccount(account) }).pipe(Effect.catch((error) => Effect.die(new Error(String(error))))));
   return rows.map((r) => ({ repo, number: r.number, state: r.state, createdAt: Date.parse(r.createdAt), mergedAt: r.mergedAt ? Date.parse(r.mergedAt) : null }));
 }
 
