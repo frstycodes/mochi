@@ -1,7 +1,6 @@
 import { useEffect, type Dispatch } from 'react';
 import { host } from '../host/index.ts';
 import { useRemoteStatus } from './useRemoteStatus';
-import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { runRemoteCommand } from './commands.ts';
 import { setMachineName } from './answers.ts';
@@ -22,7 +21,7 @@ export function useRemoteBridge(getState: () => State, dispatch: Dispatch<Action
   useEffect(
     () =>
       host.remote.onCommand(({ id, deviceName, command }) => {
-        void runRemoteCommand(command, { state: getState(), dispatch, deviceName, whileWorking: getPrefs().whileWorking })
+        void runRemoteCommand(command, { state: getState(), dispatch, deviceName })
           // A host call that throws (git refused a push, gh couldn't open the PR) is the device's answer, verbatim.
           .catch((error: unknown) => ({ isOk: false as const, error: error instanceof Error ? error.message : String(error) }))
           .then((result) => host.remote.commandResult(id, result))

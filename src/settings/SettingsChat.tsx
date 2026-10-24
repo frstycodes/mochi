@@ -6,7 +6,8 @@ import { ComposerCard, ComposerInput } from '../Composer';
 import { settingsChatDraftKey } from '../chat/drafts';
 import { host } from '../host';
 import { SplitContext } from '../layout/SplitContext';
-import { initialControls, type ThreadControls } from '../runtime/controls';
+import type { ThreadControls } from '../runtime/controls';
+import { initialControls } from '../runtime/startOptions';
 import { useSideChatDefault } from '../sidechat/useSideChat';
 import { useHarness, type State } from '../store';
 

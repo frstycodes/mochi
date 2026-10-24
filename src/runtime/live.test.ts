@@ -4,7 +4,7 @@ import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { applyAgentEvent } from './apply.ts';
-import { agentOptions, initialControls } from './controls.ts';
+import { agentOptions, initialControls } from './startOptions.ts';
 import { agentCalls, CONTINUE_PROMPT, resumeAfterLostProcess, scheduledStart } from './live.ts';
 import { isUnstarted, type WorkspaceDraft } from '../git/workspace.ts';
 import { setWorktreePath } from '../git/worktrees.ts';

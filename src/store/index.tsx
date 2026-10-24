@@ -2,7 +2,7 @@ import { useStore } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode } from 'react';
-import { useAllPins } from '../chat/pins.ts';
+import { replaceAllPins, useAllPins } from '../chat/pins.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -12,11 +12,13 @@ import { isSameListing } from '../reorder.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
-import { agentCalls, resumeAfterLostProcess, unsentTurns, type AgentCall } from '../runtime/live.ts';
+import { agentCallArgs, agentCalls, resumeAfterLostProcess, unsentTurns, type AgentCall } from '../runtime/live.ts';
+// Registers the profile options an agent's start reads (`startEnv`).
+import '../runtime/startOptions.ts';
 import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
-import { usePrefs } from '../settings/prefs.ts';
+import { setPrefs, usePrefs } from '../settings/prefs.ts';
 import { projectionPrefs, type ProjectionContext } from './context.ts';
 import { savePanes } from './panes.ts';
 import { rankQueue } from './queue.ts';
@@ -206,28 +208,48 @@ function withDispatchContext(state: State, action: Action): Action {
   return action;
 }
 
-/** Sends your prefs and pins as the projection's `context` whenever they differ from the state's. */
+/**
+ * Keeps your prefs and pins (`ProjectionContext`) one value between this window and Core, which holds them in its settings
+ * store: Core's when it changes (another window, a device), yours when you change them here. A window that finds Core with
+ * none sends its own once, migrating them out of this window's storage.
+ */
 function useProjectionContext(replica: Replica, dispatch: Dispatch<Action>) {
   const prefs = usePrefs();
   const pins = useAllPins();
-  const context = useMemo((): ProjectionContext => ({ prefs: projectionPrefs(prefs), pins }), [prefs, pins]);
+  const local = useMemo((): ProjectionContext => ({ prefs: projectionPrefs(prefs), pins }), [prefs, pins]);
   const held = useStore(replica.store, (s) => s.context);
+  /** The value both sides last agreed on, as JSON. */
+  const synced = useRef<string | null>(null);
   useEffect(() => {
-    if (JSON.stringify(held) !== JSON.stringify(context)) dispatch({ type: 'context', context });
-  }, [held, context, dispatch]);
+    const core = JSON.stringify(held);
+    const mine = JSON.stringify(local);
+    const isFirst = synced.current === null;
+    if (isFirst && !replica.isContextSet()) {
+      synced.current = mine;
+      return dispatch({ type: 'context', context: local });
+    }
+    if (isFirst || core !== synced.current) {
+      synced.current = core;
+      // Written here so this window's own readers (Settings, the pin rail) show Core's values.
+      if (mine !== core) adoptContext(held);
+      return;
+    }
+    if (mine === synced.current) return;
+    synced.current = mine;
+    dispatch({ type: 'context', context: local });
+  }, [held, local, replica, dispatch]);
+}
+
+function adoptContext({ prefs, pins }: ProjectionContext) {
+  setPrefs(projectionPrefs(prefs));
+  replaceAllPins(pins);
 }
 
 // Sequential: a handoff's stop must reach the old agent before the new one starts in the same thread.
 let pending: Promise<unknown> = Promise.resolve();
 
 function callAgent(replica: Replica, call: AgentCall) {
-  const run = () => {
-    if (call.method === 'start') return host.agent.start(call.threadId, call.options);
-    if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images, call.skills, call.speed, call.steer, call.steerId);
-    if (call.method === 'compact') return host.agent.compact(call.threadId, call.focus);
-    if (call.method === 'stopTask') return host.agent.stopTask(call.threadId, call.taskId);
-    return host.agent[call.method](call.threadId);
-  };
+  const run = () => (host.agent[call.method] as (threadId: string, ...args: unknown[]) => Promise<unknown>)(call.threadId, ...agentCallArgs(call));
   // After the commands sent so far are logged: the agent's reply folds after the message it answers.
   const next = pending.then(() => replica.sent()).then(run);
   pending = next.catch(() => {});

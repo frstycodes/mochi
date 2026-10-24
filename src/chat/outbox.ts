@@ -1,16 +1,10 @@
-import { v7 as uuidv7 } from 'uuid';
 import { useSyncExternalStore, type Dispatch } from 'react';
-import { isWorking } from '../agentPhase.ts';
-import { judgeDrift, type DriftVerdict } from '../drift.ts';
+import type { DriftVerdict } from '../drift.ts';
 import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
-import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/types.ts';
-import { agentImage, shownImage } from './images.ts';
-import { withReferences } from './mentions.ts';
+import { sendAction } from './queued.ts';
 
-export { interruptsToSend, orderQueue, pauseQueue } from './queued.ts';
-
-type WhileWorking = Prefs['whileWorking'];
+export { interruptsToSend, orderQueue, pauseQueue, queuedMessage, shouldQueue } from './queued.ts';
 
 export const PAUSE_REASONS = {
   failed: 'The last turn failed',
@@ -19,10 +13,6 @@ export const PAUSE_REASONS = {
   restart: 'Mochi restarted',
 } satisfies Record<QueuePause, string>;
 
-/** Whether a message sent now waits for the turn to end: the setting, flipped for this one send while mod is held. */
-export function shouldQueue(thread: Thread, whileWorking: WhileWorking, isHeld: boolean) {
-  return isWorking(thread) && (whileWorking === 'queue') !== isHeld;
-}
 
 /** One step up (-1) or down (1); the ends stay put. */
 export function moveQueued(ids: string[], id: string, step: -1 | 1) {
@@ -53,9 +43,6 @@ export async function sendSteerNow(dispatch: Dispatch<Action>, thread: Thread, i
   return ids.length > 0;
 }
 
-export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 'draft'>): QueuedMessage {
-  return { id: `m-${uuidv7()}`, draft, ...fields };
-}
 
 /**
  * Sends a message now: references resolve and the drift guard judges it against the thread as it is at this moment, so a
@@ -63,16 +50,13 @@ export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 
  * It steers: a turn in flight takes it at its next step; an idle agent starts a turn with it.
  */
 export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'threads'>, thread: Thread, message: QueuedMessage, extra?: { queuedId?: string }) {
-  const { draft, images = [] } = message;
-  const { text, ...references } = withReferences(draft, message.mentions, state.threads, { isCommand: message.isCommand, provider: thread.providers[0], typedSkills: message.typedSkills });
   // A new message answers an open suggestion by ignoring it.
   setDriftPending(thread.id, null);
-  const verdict = judgeDrift(text, thread);
-  const isSettled = !(verdict instanceof Promise);
-  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, images: [...references.images, ...images.map(agentImage)], shownImages: images.map(shownImage), steers: true, typed: message, ...extra });
+  const { action, text, verdict } = sendAction(state, thread, message, extra);
+  dispatch(action);
   void Promise.resolve(verdict).then((v) => {
     if (v.kind === 'off-goal') return setDriftPending(thread.id, { text, verdict: v });
-    if (!isSettled) dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift: v.kind, reason: v.reason });
+    if (verdict instanceof Promise) dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift: v.kind, reason: v.reason });
   });
 }
 

@@ -1,6 +1,7 @@
 import { authorName, type ActivityEntry, type Compaction, type Thread } from '../model.ts';
 import { pinsOf } from '../store/context.ts';
 import type { Pin } from './pins.ts';
+import { parseSlash } from './slash.ts';
 
 /** One pin's share of the instructions, and all of them together: the summary has to stay much smaller than what it replaces. */
 export const PIN_CHARS = 2000;
@@ -50,4 +51,10 @@ export function compactionEntry(thread: Thread, at: number, trigger: Compaction[
   const pins = pinsOf(thread.id).filter((p) => thread.activity[p.index]).length;
   const compaction: Compaction = { trigger, status: 'running', pins, hasGoal: !!thread.goal, ...(focus && { focus }), ...(thread.context.used > 0 && { preTokens: thread.context.used }) };
   return { at, who: 'harness', kind: 'event', text: 'Compacting the conversation', compaction };
+}
+
+/** `/compact focus` → `'focus'`; anything else → null. Queued messages carry it as typed. */
+export function compactFocus(text: string) {
+  const command = parseSlash(text);
+  return command?.command.name === 'compact' ? command.arg : null;
 }

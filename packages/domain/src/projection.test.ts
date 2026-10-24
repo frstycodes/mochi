@@ -22,11 +22,22 @@ function runtimeGraph(entry: string) {
   return { modules: [...modules].map((m) => relative(root, m)), packages: [...packages].sort() };
 }
 
+const RENDERER_ONLY = /host\/(index|desktop|web|cwd)|uiStorage|settings\/prefs\.ts|chat\/pins\.ts|chat\/outbox\.ts|git\/worktrees|projects\.ts|profiles\.ts|demoData|\.tsx$/;
+
 test('the projection loads without the renderer: no React, no host, no browser storage in what it imports', () => {
   const { modules, packages } = runtimeGraph(join(import.meta.dirname, 'projection.ts'));
-  assert.deepEqual(modules.filter((m) => /host\/(index|desktop|web)|uiStorage|settings\/prefs\.ts|chat\/pins\.ts|git\/worktrees|projects\.ts|demoData|\.tsx$/.test(m)), []);
+  assert.deepEqual(modules.filter((m) => RENDERER_ONLY.test(m)), []);
   assert.ok(modules.some((m) => m.endsWith('src/runtime/apply.ts')), 'the walk reached the agent event fold');
-  assert.deepEqual(packages, ['effect', 'zustand/vanilla/shallow']);
+  assert.deepEqual(packages, ['effect', 'uuid', 'zustand/vanilla/shallow']);
+});
+
+test('what Core runs from src/ for its reactor and device commands loads without the renderer too', () => {
+  const src = join(import.meta.dirname, '../../../src');
+  for (const entry of ['runtime/live.ts', 'remote/storeCommands.ts', 'chat/queued.ts', 'chat/compaction.ts', 'runtime/due.ts', 'runtime/limits.ts', 'utility/titles.ts', 'simplify/simplify.ts']) {
+    const { modules, packages } = runtimeGraph(join(src, entry));
+    assert.deepEqual(modules.filter((m) => RENDERER_ONLY.test(m)), [], entry);
+    assert.deepEqual(packages.filter((p) => !['effect', 'uuid', 'zustand/vanilla/shallow'].includes(p)), [], entry);
+  }
 });
 
 test('a fold reads prefs from the state, never from the window folding it, so Core and every window agree', () => {

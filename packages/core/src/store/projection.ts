@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, PubSub, Schedule, Stream } from 'effect';
 import { actionOf, COMMAND_TYPE, domainFrom, isDomainChange, MAX_REPLAY_BYTES, MAX_REPLAY_EVENTS, project, type Domain, type LoggedEvent, type ReplicaItem } from '@mochi/domain';
+import type { ProjectionContext } from '../../../../src/store/context.ts';
 import type { Action } from '../../../../src/store/types.ts';
 import { joinSaved, restoreSavedThreads, splitSaved, toSaved } from '../../../../src/store/saved.ts';
 import { sweepUnreferenced } from './handlers.ts';
@@ -7,6 +8,9 @@ import { Store } from './store.ts';
 
 /** A snapshot write waits this long for more events, so a streamed reply writes about twice a second. */
 const SAVE_EVERY = '500 millis';
+
+/** Where Core keeps your prefs and pins the folds and reactor rules read (`ProjectionContext`): one settings document. */
+export const SHARED_CONTEXT = { table: 'settings', key: 'shared' } as const;
 
 /** Core's clock for the store: `tick` moves `now`, the minute clock activity is stamped with. */
 const TICK_EVERY = '1 minute';
@@ -39,7 +43,10 @@ export class Projection extends Context.Service<Projection>()('mochi/core/Projec
       if (files && userData) yield* Effect.forkDetach(sweepUnreferenced(userData, files));
 
       let sequence = files?.sequence ?? 0;
-      let domain = domainFrom(saved);
+      // Null until a window sent its prefs and pins: the first to connect migrates its own (src/store/index.tsx).
+      const shared = (yield* store.getDoc(SHARED_CONTEXT.table, SHARED_CONTEXT.key)) as ProjectionContext | undefined;
+      let isContextSet = !!shared;
+      let domain: Domain = { ...domainFrom(saved), ...(shared && { context: shared }) };
       for (const event of yield* store.eventsAfter(sequence)) {
         const action = actionOf(event);
         if (action) domain = project(domain, action, event.at);
@@ -59,7 +66,8 @@ export class Projection extends Context.Service<Projection>()('mochi/core/Projec
           const before = domain;
           domain = project(domain, action, event.at);
           isDirty ||= isDomainChange(before, domain);
-          return PubSub.publish(folded, { event, action, before, after: domain });
+          const kept = action.type === 'context' ? store.setDoc(SHARED_CONTEXT.table, SHARED_CONTEXT.key, domain.context).pipe(Effect.tap(() => Effect.sync(() => (isContextSet = true))), Effect.ignore) : Effect.void;
+          return Effect.andThen(kept, PubSub.publish(folded, { event, action, before, after: domain }));
         });
       yield* Stream.fromSubscription(logged).pipe(Stream.runForEach(fold), Effect.forkScoped);
 
@@ -98,7 +106,7 @@ export class Projection extends Context.Service<Projection>()('mochi/core/Projec
             const live = yield* PubSub.subscribe(folded);
             const at = sequence;
             // As JSON: the store leaves optional fields undefined, which the socket's encoder refuses.
-            const snapshot: ReplicaItem = JSON.parse(JSON.stringify({ _tag: 'snapshot', sequence: at, saved: toSaved(domain), context: domain.context }));
+            const snapshot: ReplicaItem = JSON.parse(JSON.stringify({ _tag: 'snapshot', sequence: at, saved: toSaved(domain), context: isContextSet ? domain.context : null }));
             const gap = afterSequence > 0 && afterSequence >= startSequence && afterSequence <= at ? yield* replay(afterSequence, at) : undefined;
             const items = gap ?? [snapshot];
             const tail = Stream.fromSubscription(live).pipe(

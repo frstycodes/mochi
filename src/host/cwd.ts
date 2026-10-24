@@ -1,6 +1,7 @@
 import { worktreePath } from '../git/worktrees.ts';
 import type { Thread } from '../model.ts';
 import { host } from './index.ts';
+import { setStartEnv } from '../runtime/startEnv.ts';
 
 // The web build's host mocks ignore the folder, so its fixture projects (no path) get a placeholder root.
 const WEB_FIXTURE_ROOT = '.';
@@ -18,3 +19,5 @@ export function threadCwd(thread: Pick<Thread, 'id' | 'repo' | 'live'>, isDeskto
 export function projectRoot(repo: NonNullable<Thread['repo']>, isDesktop = host.isDesktop) {
   return repo.path ?? (isDesktop ? null : WEB_FIXTURE_ROOT);
 }
+
+setStartEnv({ threadCwd: (thread) => threadCwd(thread), projectRoot: (repo) => projectRoot(repo), worktreePath });

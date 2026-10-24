@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { LoggedEvent } from '@mochi/domain';
 import type { QueueItem, Thread } from '../../../../src/model.ts';
+import { DEFAULT_CONTEXT } from '../../../../src/store/context.ts';
 import { autoSimplify, autoTitles, compactInstructions, delegatedReports, draftsPrune, idleChecks, limitResumes, prSync, queueRunner, react, subThreadWakes, type ReactorState } from './rules.ts';
 
 const idle = { isWorking: false };
 const thread = (id: string, fields: Record<string, unknown> = {}) =>
   ({ id, title: id, spaceId: 'space', status: 'running', goal: '', activity: [], providers: ['claude'], live: idle, ...fields }) as unknown as Thread;
-const state = (threads: Thread[], queue: QueueItem[] = [], boot = 'b1'): ReactorState => ({ threads, queue, boot });
+const state = (threads: Thread[], queue: QueueItem[] = [], boot = 'b1', context = DEFAULT_CONTEXT): ReactorState => ({ threads, queue, context, boot });
 const event = (type: string, threadId: string | null, payload: unknown = null, sequence = 7): LoggedEvent => ({ sequence, type, threadId, payload });
-const saved = (id = 't1') => event('thread.saved', id);
+const saved = (id = 't1') => event('command', id);
 const NONE = state([]);
 
 test('queue runner: sends the head of an idle thread queue, not one mid-turn or waiting on an approval', () => {
@@ -62,10 +63,23 @@ test('compact instructions: live Claude threads only, a new key when the goal ch
   assert.deepEqual(compactInstructions(saved(), NONE, state([thread('t1', { session: { provider: 'codex' } })])), []);
 });
 
-test('idle checks and auto simplify: one command per turn end', () => {
+test('a setting changed in Core is what its rule reads: goals pick gathering over marking, Simplify › auto gates simplifying', () => {
   const end = event('agent.turn-end', 't1', { type: 'turn-end', status: 'done' }, 42);
-  assert.deepEqual(idleChecks(end, NONE, NONE), [{ type: 'idle.gather', key: 'idle:42', threadId: 't1' }]);
-  assert.deepEqual(autoSimplify(end, NONE, NONE), [{ type: 'simplify.auto', key: 'simplify:42', threadId: 't1' }]);
+  const reply = thread('t1', { activity: [{ who: 'claude', kind: 'message', text: 'one two three four five' }] });
+  const withPrefs = (prefs: Partial<ReactorState['context']['prefs']>) => state([reply], [], 'b1', { ...DEFAULT_CONTEXT, prefs: { ...DEFAULT_CONTEXT.prefs, ...prefs } });
+  assert.deepEqual(idleChecks(end, NONE, withPrefs({ goals: false })), [{ type: 'idle.mark', key: 'idle:42', threadId: 't1' }]);
+  assert.deepEqual(idleChecks(end, NONE, withPrefs({ goals: true })), [{ type: 'idle.gather', key: 'idle:42', threadId: 't1' }]);
+  assert.deepEqual(autoSimplify(end, NONE, withPrefs({ simplifyAuto: false, simplifyAutoWords: 3 })), []);
+  assert.deepEqual(autoSimplify(end, NONE, withPrefs({ simplifyAuto: true, simplifyAutoWords: 3 })), [{ type: 'simplify.auto', key: 'simplify:42', threadId: 't1' }]);
+  assert.deepEqual(autoSimplify(end, NONE, withPrefs({ simplifyAuto: true, simplifyAutoWords: 50 })), [], 'shorter than the setting asks');
+});
+
+test('compact instructions follow your pins in Core: a pin change is a new key', () => {
+  const claude = thread('t1', { goal: 'ship it', session: { provider: 'claude' } });
+  const pinned = (pins: ReactorState['context']['pins']) => state([claude], [], 'b1', { ...DEFAULT_CONTEXT, pins });
+  const [none] = compactInstructions(saved(), NONE, pinned({}));
+  const [one] = compactInstructions(saved(), NONE, pinned({ t1: [{ id: 'p', index: 0, text: '' }] }));
+  assert.notEqual(one?.key, none?.key);
 });
 
 test('PR sync: a tool that pushes or opens a PR refreshes, other tools and tool ends do not', () => {
@@ -76,8 +90,13 @@ test('PR sync: a tool that pushes or opens a PR refreshes, other tools and tool 
   assert.deepEqual(prSync(tool('git push', 'end'), NONE, NONE), []);
 });
 
-test('drafts prune: only on thread delete', () => {
-  assert.deepEqual(draftsPrune(event('thread.deleted', 't1'), NONE, NONE), [{ type: 'drafts.prune', key: 'drafts:t1', threadId: 't1' }]);
-  assert.deepEqual(react(saved(), NONE, NONE), [], 'a save with no threads asks for nothing');
-  assert.deepEqual(react(event('agent.text', 't1'), NONE, NONE), [], 'unregistered event types run no rule');
+test('drafts prune: a thread gone from the state takes its drafts', () => {
+  assert.deepEqual(draftsPrune(saved(), state([thread('t1'), thread('t2')]), state([thread('t2')])), [{ type: 'drafts.prune', key: 'drafts:t1', threadId: 't1' }]);
+});
+
+test('state rules run on a fold that changed the state, not on a streamed token or an unchanged one', () => {
+  const due = state([thread('t1', { queued: [{ id: 'm1', draft: 'next' }] })]);
+  assert.deepEqual(react(event('agent.turn-end', 't1'), NONE, due).map((c) => c.type), ['queue.send', 'idle.mark']);
+  assert.deepEqual(react(event('agent.message', 't1'), NONE, due), [], 'a token makes nothing due');
+  assert.deepEqual(react(event('command', 't1'), due, due), [], 'nothing changed');
 });
