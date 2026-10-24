@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
-import { Archive, Chat, DiagramTree, Edit, Eye, Menu, Search, TaskSquare, Unarchive } from '@/icons';
+import { Archive, Chat, Edit, Eye, Menu, Search, TaskSquare, Unarchive } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -357,7 +357,7 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
   if (pins.length + active.length === 0) return null;
 
   const rows = [...pins, ...active.map(localRow)];
-  const dragged = drag.state && [...rows, ...rows.flatMap((r) => (r.subs ?? []).map((s) => localRow({ thread: s, subs: [], settledSubs: 0 })))].find((r) => r.rowId === drag.state!.id);
+  const dragged = drag.state && [...rows, ...rows.flatMap((r) => (r.subs ?? []).map((s) => localRow({ thread: s, subs: [] })))].find((r) => r.rowId === drag.state!.id);
   const step = (id: string, by: 1 | -1) => {
     reorder(stepPin(pinnedIds, activeIds, id, by));
     // Moving a focused node in the DOM can drop its focus; put it back on the row.
@@ -409,8 +409,7 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
       return (
         <Fragment key={r.rowId}>
           {item(t, pinNumber, rowProps)}
-          {subs.map((s, j) => item(s, undefined, { 'data-row-id': s.id, 'data-pinned': isPinned || undefined, onPointerDown: (e: React.PointerEvent<HTMLLIElement>) => drag.onPointerDown(e, localRow({ thread: s, subs: [], settledSubs: 0 })) }, { parentId: t.id, isLast: j === subs.length - 1 && !r.settledSubs }))}
-          {!!r.settledSubs && <SettledSubs count={r.settledSubs} glide={glide} />}
+          {subs.map((s, j) => item(s, undefined, { 'data-row-id': s.id, 'data-pinned': isPinned || undefined, onPointerDown: (e: React.PointerEvent<HTMLLIElement>) => drag.onPointerDown(e, localRow({ thread: s, subs: [] })) }, { parentId: t.id, isLast: j === subs.length - 1 }))}
         </Fragment>
       );
     });
@@ -467,7 +466,6 @@ interface ListRow {
   thread: Thread;
   remote?: RemotePin;
   subs?: Thread[];
-  settledSubs?: number;
 }
 
 const localRow = (group: ThreadGroup): ListRow => ({ rowId: group.thread.id, ...group });
@@ -475,19 +473,6 @@ const localRow = (group: ThreadGroup): ListRow => ({ rowId: group.thread.id, ...
 // The nest target's inside hairline: on a pseudo-element, so no row changes size while you drag over it.
 const NEST_TARGET =
   "after:pointer-events-none after:absolute after:inset-0 after:rounded-md after:border after:border-transparent data-nest-target:after:border-foreground/20 data-nest-target:[&_[data-sidebar=menu-button]]:bg-sidebar-accent";
-
-/** "2 sub-threads done": the end of a parent's guide once some have finished; they're listed under Archived. */
-function SettledSubs({ count, glide }: { count: number; glide: MotionProps }) {
-  return (
-    <motion.li {...glide} className="relative pl-[27px]">
-      <SubThreadGuide isLast className="left-[15px]" />
-      <span className="flex h-8 items-center gap-2 px-1 type-caption text-subtle-foreground">
-        <DiagramTree aria-hidden className="size-4 shrink-0" />
-        {`${count} ${count === 1 ? 'sub-thread' : 'sub-threads'} done`}
-      </span>
-    </motion.li>
-  );
-}
 
 /** Every computer's pins as one list, by pin order (`pinOrderOf`); this computer's first among equal keys. */
 function mergePins(pinned: ThreadGroup[], remotePins: RemotePin[]): ListRow[] {
