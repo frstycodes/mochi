@@ -129,6 +129,7 @@ export const Note = solar(Linear.NotesIcon, Bold.NotesIcon);
 export const Notification = solar(Linear.NotificationUnreadIcon, Bold.NotificationUnreadIcon);
 export const Paperclip = solar(Linear.PaperclipIcon, Bold.PaperclipIcon);
 export const Pause = solar(Linear.PauseIcon, Bold.PauseIcon);
+export const PauseCircle = solar(Linear.PauseCircleIcon, Bold.PauseCircleIcon);
 export const Pen = solar(Linear.PenIcon, Bold.PenIcon);
 export const Pencil = solar(Linear.PenIcon, Bold.PenIcon);
 export const Phone = solar(Linear.SmartphoneIcon, Bold.SmartphoneIcon);

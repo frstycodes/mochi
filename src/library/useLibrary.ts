@@ -20,7 +20,7 @@ export function useLibrary(spaceId: string) {
   const entries = entriesQuery.data ?? null;
   useEffect(() => { if (entriesQuery.error) toast.error("Couldn't read the library", { description: entriesQuery.error.message }); }, [entriesQuery.error]);
   useEffect(() => { if (entries) setLibraryNames(entries); }, [entries]);
-  const importMutation = useMutation({ mutationFn: (provider: Provider) => host.library.importFromAccount(spaceId, provider, ['skills', 'mcp']), onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.library.all() }) });
+  const importMutation = useMutation({ mutationFn: ({ provider, names }: { provider: Provider; names?: string[] }) => host.library.importFromAccount(spaceId, provider, names ? ['skills'] : ['skills', 'mcp'], names), onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.library.all() }) });
   const libraryMutation = useMutation(libraryMutationOptions);
   const apply = (failure: string) => (run: () => Promise<unknown>) =>
     libraryMutation.mutateAsync(run).then(() => true, (error: Error) => {
@@ -62,8 +62,11 @@ export function useLibrary(spaceId: string) {
         }),
       ),
     setAutoUpdate: (entry: LibraryEntry, autoUpdate: boolean) => apply(`${entry.title} not changed`)(() => host.library.update(spaceId, entry.id, autoUpdate)),
-    importFromAccount: (provider: Provider) =>
-      importMutation.mutateAsync(provider).then(
+    /** Writes or uploads a skill into the library, on for this profile; resolves whether it was added. */
+    addSkill: (files: Record<string, string>) => apply('Skill not added')(() => installed((profileId) => host.library.addSkill(profileId, files))),
+    /** Everything the account has, or just the skills in `names` (Copy to Mochi on one of its rows). */
+    importFromAccount: (provider: Provider, names?: string[]) =>
+      importMutation.mutateAsync({ provider, names }).then(
         ({ notes }) => notes,
         (error: Error) => {
           toast.error('Nothing imported', { description: error.message });

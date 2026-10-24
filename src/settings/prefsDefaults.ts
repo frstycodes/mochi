@@ -48,7 +48,7 @@ export interface Prefs {
   simplifyAuto: boolean;
   simplifyAutoWords: number;
   branchFrom: 'current' | 'base';
-  /** When the agent goes idle, whether Mochi runs the goal's criterion checks (`useIdleChecks`). */
+  /** When the agent goes idle, whether Mochi runs the goal's criterion checks (`gatherIdle`). */
   idleChecks: 'edited' | 'always' | 'off';
   /** A goal the agent proposes (`propose_goal`) waits for your Accept, or applies at once with an undo. */
   proposedGoals: 'ask' | 'apply';

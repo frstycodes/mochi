@@ -119,15 +119,20 @@ test('a paired device reads the same `thread` stream a window does, through a re
   );
 });
 
-test('a device command runs where main serves `remote`, named after the device; a read-scoped device is refused it', async () => {
+test('a device command that needs a window runs where main serves `remote`, named after the device; Core applies a store command itself; a read-scoped device is refused it', async () => {
   await run(
     Effect.gen(function* () {
       const full = yield* setup(['read', 'operate']);
       const runs: unknown[] = [];
       yield* serveCapabilities(full.window, ['remote'], async (call) => (runs.push(call.args[0]), { isOk: true })).pipe(Effect.forkScoped);
       yield* Effect.sleep(50);
-      assert.deepEqual(yield* full.client['device.command']({ command: { type: 'interrupt', threadId: 't1' } }), { isOk: true });
-      assert.deepEqual(runs, [{ id: (runs[0] as { id: string }).id, deviceName: 'Laptop', command: { type: 'interrupt', threadId: 't1' } }]);
+      assert.deepEqual(yield* full.client['device.command']({ command: { type: 'catalog' } }), { isOk: true });
+      assert.deepEqual(runs, [{ id: (runs[0] as { id: string }).id, deviceName: 'Laptop', command: { type: 'catalog' } }]);
+      // An interrupt is a store action: Core applies it, no window hears of it.
+      yield* seed(full.window, 'Fix login');
+      assert.deepEqual(yield* full.client['device.command']({ command: { type: 'interrupt', threadId: 'new-1' } }), { isOk: true });
+      assert.equal(runs.length, 1);
+      assert.deepEqual(yield* full.client['device.command']({ command: { type: 'interrupt', threadId: 'nope' } }), { isOk: false, error: 'No such thread on this machine' });
 
       const reader = yield* setup(['read']);
       yield* seed(reader.window, 'Fix login');

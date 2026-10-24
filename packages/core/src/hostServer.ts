@@ -3,10 +3,17 @@ import { Capabilities as Contract, definitionOf, hostTags } from '@mochi/schema'
 
 type Call = Omit<Contract.CapabilityCall, 'id'>;
 
-/** Clients that registered capabilities, and Core's calls into them. The latest client to register a name serves it. */
+/** A served call's failure when its client went away before answering: the next client serving the name takes it. */
+export const DISCONNECTED = 'The client serving this call disconnected';
+
+/**
+ * Clients that registered capabilities, and Core's calls into them. The latest client to register a name serves it; when it
+ * goes, the one before it does, so closing a window never leaves a call waiting while another still serves the name.
+ */
 export class Capabilities extends Context.Service<Capabilities>()('mochi/core/Capabilities', {
   make: Effect.sync(() => {
-    const providers = new Map<Contract.CapabilityName, Queue.Queue<Contract.CapabilityCall>>();
+    /** Per name, the serving clients' queues, latest last. */
+    const providers = new Map<Contract.CapabilityName, Queue.Queue<Contract.CapabilityCall>[]>();
     const pending = new Map<number, { deferred: Deferred.Deferred<unknown, string>; queue: Queue.Queue<Contract.CapabilityCall> }>();
     let nextId = 0;
 
@@ -14,7 +21,7 @@ export class Capabilities extends Context.Service<Capabilities>()('mochi/core/Ca
       for (const [id, entry] of pending) {
         if (entry.queue !== queue) continue;
         pending.delete(id);
-        Deferred.doneUnsafe(entry.deferred, Effect.fail('The client serving this call disconnected'));
+        Deferred.doneUnsafe(entry.deferred, Effect.fail(DISCONNECTED));
       }
     };
 
@@ -22,9 +29,13 @@ export class Capabilities extends Context.Service<Capabilities>()('mochi/core/Ca
     const serve = (names: ReadonlyArray<Contract.CapabilityName>) =>
       Stream.unwrap(
         Effect.map(Queue.unbounded<Contract.CapabilityCall>(), (queue) => {
-          for (const name of names) providers.set(name, queue);
+          for (const name of names) providers.set(name, [...(providers.get(name) ?? []), queue]);
           const unregister = Effect.sync(() => {
-            for (const name of names) if (providers.get(name) === queue) providers.delete(name);
+            for (const name of names) {
+              const rest = (providers.get(name) ?? []).filter((q) => q !== queue);
+              if (rest.length) providers.set(name, rest);
+              else providers.delete(name);
+            }
             failPending(queue);
           });
           return Stream.fromQueue(queue).pipe(Stream.ensuring(unregister));
@@ -39,17 +50,17 @@ export class Capabilities extends Context.Service<Capabilities>()('mochi/core/Ca
         Deferred.doneUnsafe(entry.deferred, error === undefined ? Effect.succeed(value) : Effect.fail(error));
       });
 
-    /** Fails with a message when no connected client offers `capability`. */
-    const call = (request: Call) =>
+    /** Fails with a message when no connected client offers `capability`; a client that leaves mid-call hands it to the next. */
+    const call = (request: Call): Effect.Effect<unknown, string> =>
       Effect.gen(function* () {
-        const queue = providers.get(request.capability);
+        const queue = providers.get(request.capability)?.at(-1);
         if (!queue) return yield* Effect.fail(`No connected client offers ${request.capability}`);
         const id = nextId++;
         const deferred = yield* Deferred.make<unknown, string>();
         pending.set(id, { deferred, queue });
         Queue.offerUnsafe(queue, { ...request, id });
         return yield* Deferred.await(deferred).pipe(Effect.ensuring(Effect.sync(() => pending.delete(id))));
-      });
+      }).pipe(Effect.catch((error) => (error === DISCONNECTED && providers.has(request.capability) ? call(request) : Effect.fail(error))));
 
     return { serve, reply, call };
   }),

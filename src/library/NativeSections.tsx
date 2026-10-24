@@ -1,4 +1,4 @@
-import { Copy } from '@/icons';
+import { Copy, Import } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -29,7 +29,8 @@ import { useNativeItems, type NativeAccount } from './useNativeItems';
  * Claude Code's and Codex's own items of the page's kinds, a section per account after the page's "In Mochi" list. They're on by
  * default; a profile can leave one out of its Mochi threads, and the tools keep loading it (PROFILES-UX.md).
  */
-export function NativeSections({ kinds, query }: { kinds: NativeKind[]; query: string }) {
+/** `onCopy`: offered on a skill of the profile's own account, to copy it into Mochi's library. */
+export function NativeSections({ kinds, query, onCopy }: { kinds: NativeKind[]; query: string; onCopy?: (item: NativeItem) => void }) {
   const accounts = useNativeItems();
   const scope = useLibraryScope();
   const current = useHarnessSelector((s) => s.spaceId);
@@ -52,6 +53,7 @@ export function NativeSections({ kinds, query }: { kinds: NativeKind[]; query: s
         spaceId={spaceId}
         isAllProfiles={!scope.profile}
         hasSeveral={accounts.filter((a) => a.account.provider === native.account.provider && a.profileIds.length).length > 1}
+        onCopy={onCopy}
       />
     );
   });
@@ -64,6 +66,7 @@ function AccountSection({
   spaceId,
   isAllProfiles,
   hasSeveral,
+  onCopy,
 }: {
   native: NativeAccount;
   all: NativeItem[];
@@ -71,6 +74,7 @@ function AccountSection({
   spaceId: string;
   isAllProfiles: boolean;
   hasSeveral: boolean;
+  onCopy?: (item: NativeItem) => void;
 }) {
   const { account, profileIds } = native;
   const harness = HARNESSES[account.provider].name;
@@ -113,7 +117,7 @@ function AccountSection({
       <SettingsCard>
         {native.error && <EmptyRow text={`Couldn’t read all of ${accountDir(account)}: ${native.error}`} />}
         {shown.map((item) => (
-          <NativeRow key={item.id} item={item} harness={harness} eligible={users} profile={profile} isMine={isMine} isAllProfiles={isAllProfiles} />
+          <NativeRow key={item.id} item={item} harness={harness} eligible={users} profile={profile} isMine={isMine} isAllProfiles={isAllProfiles} onCopy={isMine && item.kind === 'skill' ? onCopy : undefined} />
         ))}
       </SettingsCard>
     </SettingsSection>
@@ -121,7 +125,7 @@ function AccountSection({
 }
 
 /** A library row for a native item: where it lives, the one line explaining a non-default state, where it's off, and where it lives on disk. */
-function NativeRow({ item, harness, eligible, profile, isMine, isAllProfiles }: { item: NativeItem; harness: string; eligible: Space[]; profile: Space; isMine: boolean; isAllProfiles: boolean }) {
+function NativeRow({ item, harness, eligible, profile, isMine, isAllProfiles, onCopy }: { item: NativeItem; harness: string; eligible: Space[]; profile: Space; isMine: boolean; isAllProfiles: boolean; onCopy?: (item: NativeItem) => void }) {
   const isOffHere = !isAllProfiles && isMine && !!profile.nativeOff?.includes(item.id);
   return (
     <LibraryRow
@@ -140,7 +144,7 @@ function NativeRow({ item, harness, eligible, profile, isMine, isAllProfiles }: 
             ) : (
               isMine && <Switch checked={!isOffHere} onCheckedChange={(isOn) => updateProfile(profile.id, { nativeOff: withOff(profile.nativeOff, [item.id], !isOn) })} aria-label={`${item.name} in ${profile.name}`} />
             ))}
-          <NativeItemMenu item={item} />
+          <NativeItemMenu item={item} onCopy={onCopy} />
         </>
       }
     />
@@ -203,7 +207,7 @@ function NativeProfilesMenu({ item, harness, eligible }: { item: NativeItem; har
 }
 
 /** Mochi never removes or updates a native item, so its menu only leads to where it lives. */
-function NativeItemMenu({ item }: { item: NativeItem }) {
+function NativeItemMenu({ item, onCopy }: { item: NativeItem; onCopy?: (item: NativeItem) => void }) {
   const { file } = item;
   if (!file) return null;
   return (
@@ -219,6 +223,15 @@ function NativeItemMenu({ item }: { item: NativeItem }) {
           <Copy />
           Copy path
         </DropdownMenuItem>
+        {!!onCopy && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onCopy(item)}>
+              <Import />
+              Copy to Mochi library
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

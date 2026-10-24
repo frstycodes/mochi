@@ -1,19 +1,31 @@
 import type { Pin, Pins } from '../chat/pins.ts';
 import { DEFAULT_PREFS, type Prefs } from '../settings/prefsDefaults.ts';
 
-/** The prefs the thread projection reads; the rest of `Prefs` is this window's own. */
-export type ProjectionPrefs = Pick<Prefs, 'goals' | 'driftGuard' | 'autofixPrs' | 'autoArchivePrs' | 'workspaceMode' | 'branchPrefix'>;
+/** The prefs the thread projection and Core's reactor rules read; the rest of `Prefs` is this window's own. */
+export type ProjectionPrefs = Pick<Prefs, 'goals' | 'driftGuard' | 'autofixPrs' | 'autoArchivePrs' | 'workspaceMode' | 'branchPrefix' | 'idleChecks' | 'simplifyAuto' | 'simplifyAutoWords' | 'whileWorking'>;
 
 /**
- * What the projection reads besides the state and the event: your prefs and pins. Core and every window fold the same events,
- * so a fold reads these from the state (`context` commands set them), never from this window's storage.
+ * What the projection reads besides the state and the event: your prefs and pins. Core keeps them in its settings store
+ * (`settings`/`shared`) and every window folds with them, so a fold reads these from the state (`context` commands set them),
+ * never from this window's storage.
  */
 export interface ProjectionContext {
   prefs: ProjectionPrefs;
   pins: Pins;
 }
 
-export const projectionPrefs = ({ goals, driftGuard, autofixPrs, autoArchivePrs, workspaceMode, branchPrefix }: ProjectionPrefs): ProjectionPrefs => ({ goals, driftGuard, autofixPrs, autoArchivePrs, workspaceMode, branchPrefix });
+export const projectionPrefs = ({ goals, driftGuard, autofixPrs, autoArchivePrs, workspaceMode, branchPrefix, idleChecks, simplifyAuto, simplifyAutoWords, whileWorking }: ProjectionPrefs): ProjectionPrefs => ({
+  goals,
+  driftGuard,
+  autofixPrs,
+  autoArchivePrs,
+  workspaceMode,
+  branchPrefix,
+  idleChecks,
+  simplifyAuto,
+  simplifyAutoWords,
+  whileWorking,
+});
 
 export const DEFAULT_CONTEXT: ProjectionContext = { prefs: projectionPrefs(DEFAULT_PREFS), pins: {} };
 

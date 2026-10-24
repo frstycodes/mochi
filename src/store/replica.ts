@@ -24,6 +24,8 @@ export interface Replica {
   sent: () => Promise<unknown>;
   /** The last logged event folded in. */
   sequence: () => number;
+  /** Whether Core holds your prefs and pins (`context`) yet; until then this window migrates its own. */
+  isContextSet: () => boolean;
   /** Each agent event and other window's command as it folds, with the state before it. Returns a stop. */
   listen: (listener: (action: Action, before: State) => void) => () => void;
   stop: () => void;
@@ -51,6 +53,7 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
   let cancelFrame: (() => void) | null = null;
   let stopFollow = () => {};
   let isStopped = false;
+  let isContextSet = false;
   const listeners = new Set<(action: Action, before: State) => void>();
 
   const flush = () => {
@@ -65,6 +68,7 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
   const onEvent = (event: LoggedEvent) => {
     const action = actionOf(event);
     if (!action) return;
+    if (action.type === 'context') isContextSet = true;
     const fold = { ms: event.at, isForeign: event.type === COMMAND_TYPE };
     if (pending[0] && event.commandId === pending[0].id) {
       // Ours: its window slices applied when it was sent.
@@ -91,7 +95,9 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
       const saved = item.saved === null ? null : savedFrom(item.saved);
       if (item.saved !== null && !saved) console.error('Core sent a snapshot this version can’t read; keeping what this window holds');
       state = state ? merged(state, saved) : initial(saved);
-      if (saved) state = { ...state, context: (decodeContext(item.context) ?? state.context) as ProjectionContext };
+      const context = decodeContext(item.context);
+      isContextSet = !!context;
+      if (context) state = { ...state, context: context as ProjectionContext };
       sequence = item.sequence;
       store ??= createStore<State>()(() => state!);
       flush();
@@ -132,6 +138,7 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
       },
       sent: () => sending,
       sequence: () => sequence,
+      isContextSet: () => isContextSet,
       listen: (listener) => {
         listeners.add(listener);
         return () => void listeners.delete(listener);
@@ -186,6 +193,10 @@ const ContextSchema = Schema.Struct({
     autoArchivePrs: Schema.Boolean,
     workspaceMode: Schema.Literals(['worktree', 'folder']),
     branchPrefix: Schema.String,
+    idleChecks: Schema.Literals(['edited', 'always', 'off']),
+    simplifyAuto: Schema.Boolean,
+    simplifyAutoWords: Schema.Number,
+    whileWorking: Schema.Literals(['queue', 'steer']),
   }),
   pins: Schema.Record(Schema.String, Schema.Array(Pin)),
 });

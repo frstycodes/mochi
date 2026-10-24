@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useSyncExternalStore, type Dispatch } from 'react';
+import { useCallback, useSyncExternalStore, type Dispatch } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { Thread } from '../model';
@@ -42,19 +42,14 @@ async function simplify(thread: Thread, index: number, dispatch: Dispatch<Action
 // Once per message per launch, so turning auto off and on doesn't re-run old replies.
 const autoDone = new Set<string>();
 
-/** With Settings › Simplify › auto on: a long reply is simplified once its thread goes idle. */
-export function useAutoSimplify(threads: Thread[], dispatch: Dispatch<Action>) {
-  useEffect(() => {
-    const prefs = getPrefs();
-    if (!prefs.simplifyAuto) return;
-    for (const t of threads) {
-      if (t.live?.isWorking || t.status === 'running') continue;
-      const index = t.activity.findLastIndex((e) => e.kind === 'message' && (e.who === 'claude' || e.who === 'codex'));
-      const entry = t.activity[index];
-      const key = `${t.id}:${index}:${entry?.at}`;
-      if (!entry || entry.simplified || autoDone.has(key) || wordCount(entry.text) < prefs.simplifyAutoWords) continue;
-      autoDone.add(key);
-      void simplify(t, index, dispatch);
-    }
-  }, [threads, dispatch]);
+/** With Settings › Simplify › auto on: a long reply is simplified once its thread goes idle (the reactor's `simplify.auto`). */
+export function autoSimplify(t: Thread, dispatch: Dispatch<Action>) {
+  const prefs = getPrefs();
+  if (!prefs.simplifyAuto || t.live?.isWorking || t.status === 'running') return;
+  const index = t.activity.findLastIndex((e) => e.kind === 'message' && (e.who === 'claude' || e.who === 'codex'));
+  const entry = t.activity[index];
+  const key = `${t.id}:${index}:${entry?.at}`;
+  if (!entry || entry.simplified || autoDone.has(key) || wordCount(entry.text) < prefs.simplifyAutoWords) return;
+  autoDone.add(key);
+  void simplify(t, index, dispatch);
 }

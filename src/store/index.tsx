@@ -2,9 +2,7 @@ import { useStore } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode } from 'react';
-import { dueQueued, sendMessage } from '../chat/outbox.ts';
-import { compactFocus, useCompactInstructions } from '../chat/compact.ts';
-import { useAllPins } from '../chat/pins.ts';
+import { replaceAllPins, useAllPins } from '../chat/pins.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -14,14 +12,13 @@ import { isSameListing } from '../reorder.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
-import { agentCalls, resumeAfterLostProcess, unsentTurns, type AgentCall } from '../runtime/live.ts';
-import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
-import { dueReports } from '../runtime/subagents.ts';
-import { dueWakes } from '../runtime/subThreadNotes.ts';
+import { agentCallArgs, agentCalls, resumeAfterLostProcess, unsentTurns, type AgentCall } from '../runtime/live.ts';
+// Registers the profile options an agent's start reads (`startEnv`).
+import '../runtime/startOptions.ts';
 import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
-import { usePrefs } from '../settings/prefs.ts';
+import { setPrefs, usePrefs } from '../settings/prefs.ts';
 import { projectionPrefs, type ProjectionContext } from './context.ts';
 import { savePanes } from './panes.ts';
 import { rankQueue } from './queue.ts';
@@ -31,18 +28,13 @@ import { saveSideChats } from './sidechat.ts';
 import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 import { initialState, reducer } from './root.ts';
 import type { Action, Snapshot, State } from './types.ts';
-import { pruneDrafts } from '../chat/drafts.ts';
 import { actedOn } from '../notify/slice.ts';
 import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
 import { markOwnAnswer } from '../remote/answers.ts';
-import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
-import { useAutoTitles } from '../utility/useAutoTitles.ts';
 import { classifyInCore } from '../utility/runUtility.ts';
-import { useIdleChecks } from '../goals/useIdleChecks';
-import { useAutoSimplify } from '../simplify/useSimplify.ts';
-import { usePrSync } from '../git/usePrSync.ts';
+import { WindowReactor } from '../reactor/WindowReactor.tsx';
 
 export type { View } from './layout.ts';
 export { rankQueue };
@@ -121,22 +113,16 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     );
     return off;
   }, [replica, dispatch]);
-  useQueueRunner(state, dispatch);
-  useDelegatedReports(state.threads, dispatch);
-  useSubThreadWakes(state, dispatch);
-  useCompactInstructions(state.threads);
-  useRemoteBridge(state, dispatch);
-  useLimitResumes(state.threads, dispatch);
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
-  useAutoTitles(state.threads, dispatch);
-  useIdleChecks(state.threads, dispatch);
-  useAutoSimplify(state.threads, dispatch);
-  usePrSync(state.threads, dispatch);
-  useEffect(() => pruneDrafts(new Set(state.threads.map((t) => t.id))), [state.threads]);
-  return <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>;
+  return (
+    <HarnessContext.Provider value={value}>
+      <WindowReactor />
+      {children}
+    </HarnessContext.Provider>
+  );
 }
 
 /** A torn-off window's store: the same stream as the main window's, the same dispatch, none of the main window's work. */
@@ -222,92 +208,48 @@ function withDispatchContext(state: State, action: Action): Action {
   return action;
 }
 
-/** Sends your prefs and pins as the projection's `context` whenever they differ from the state's. */
+/**
+ * Keeps your prefs and pins (`ProjectionContext`) one value between this window and Core, which holds them in its settings
+ * store: Core's when it changes (another window, a device), yours when you change them here. A window that finds Core with
+ * none sends its own once, migrating them out of this window's storage.
+ */
 function useProjectionContext(replica: Replica, dispatch: Dispatch<Action>) {
   const prefs = usePrefs();
   const pins = useAllPins();
-  const context = useMemo((): ProjectionContext => ({ prefs: projectionPrefs(prefs), pins }), [prefs, pins]);
+  const local = useMemo((): ProjectionContext => ({ prefs: projectionPrefs(prefs), pins }), [prefs, pins]);
   const held = useStore(replica.store, (s) => s.context);
+  /** The value both sides last agreed on, as JSON. */
+  const synced = useRef<string | null>(null);
   useEffect(() => {
-    if (JSON.stringify(held) !== JSON.stringify(context)) dispatch({ type: 'context', context });
-  }, [held, context, dispatch]);
+    const core = JSON.stringify(held);
+    const mine = JSON.stringify(local);
+    const isFirst = synced.current === null;
+    if (isFirst && !replica.isContextSet()) {
+      synced.current = mine;
+      return dispatch({ type: 'context', context: local });
+    }
+    if (isFirst || core !== synced.current) {
+      synced.current = core;
+      // Written here so this window's own readers (Settings, the pin rail) show Core's values.
+      if (mine !== core) adoptContext(held);
+      return;
+    }
+    if (mine === synced.current) return;
+    synced.current = mine;
+    dispatch({ type: 'context', context: local });
+  }, [held, local, replica, dispatch]);
 }
 
-/** Sends each live thread's next queued message once its agent's turn is over; `dueQueued` says when. */
-function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
-  // The send applies on the next render; until then the same head is still due.
-  const sent = useRef(new Set<string>());
-  useEffect(() => {
-    for (const { thread, message } of dueQueued(state)) {
-      if (sent.current.has(message.id)) continue;
-      sent.current.add(message.id);
-      const focus = compactFocus(message.draft);
-      if (focus !== null) dispatch({ type: 'compact', threadId: thread.id, focus, queuedId: message.id });
-      else sendMessage(dispatch, state, thread, message, { queuedId: message.id });
-    }
-  }, [state, dispatch]);
-}
-
-/** Sends each finished delegated task's report to its thread's agent right away, steering a turn in flight; `dueReports` says which. */
-function useDelegatedReports(threads: Thread[], dispatch: Dispatch<Action>) {
-  // The report applies on the next render; until then the same one is still due.
-  const sent = useRef(new Set<string>());
-  useEffect(() => {
-    for (const { thread, subagent } of dueReports(threads)) {
-      const key = `${thread.id}:${subagent.id}`;
-      if (sent.current.has(key)) continue;
-      sent.current.add(key);
-      dispatch({ type: 'delegate-report', threadId: thread.id, subagentId: subagent.id });
-    }
-  }, [threads, dispatch]);
-}
-
-/** Starts each idle parent on its sub-threads' notes once they're all idle; `dueWakes` says which. */
-function useSubThreadWakes(state: State, dispatch: Dispatch<Action>) {
-  // The wake applies on the next render; until then the same parent is still due.
-  const woken = useRef(new Set<string>());
-  useEffect(() => {
-    const due = dueWakes(state);
-    for (const id of woken.current) if (!due.some((t) => t.id === id)) woken.current.delete(id);
-    for (const { id } of due) {
-      if (woken.current.has(id)) continue;
-      woken.current.add(id);
-      dispatch({ type: 'subthread-wake', threadId: id });
-    }
-  }, [state, dispatch]);
-}
-
-/** Resumes threads you set to Resume at reset once their reset passes; one timer for the earliest. */
-function useLimitResumes(threads: Thread[], dispatch: Dispatch<Action>) {
-  const [tick, setTick] = useState(0);
-  // The resume applies on the next render; until then the same thread is still due.
-  const resumed = useRef(new Set<string>());
-  useEffect(() => {
-    for (const t of dueResumes(threads)) {
-      const key = `${t.id}:${t.live!.limit!.resetsAt}`;
-      if (resumed.current.has(key)) continue;
-      resumed.current.add(key);
-      dispatch({ type: 'resume', threadId: t.id, atReset: true });
-    }
-    const at = nextResumeAt(threads);
-    if (at === undefined) return;
-    // setTimeout overflows past ~24.8 days; a weekly reset is well inside that.
-    const id = window.setTimeout(() => setTick((n) => n + 1), at - Date.now() + 1000);
-    return () => window.clearTimeout(id);
-  }, [threads, dispatch, tick]);
+function adoptContext({ prefs, pins }: ProjectionContext) {
+  setPrefs(projectionPrefs(prefs));
+  replaceAllPins(pins);
 }
 
 // Sequential: a handoff's stop must reach the old agent before the new one starts in the same thread.
 let pending: Promise<unknown> = Promise.resolve();
 
 function callAgent(replica: Replica, call: AgentCall) {
-  const run = () => {
-    if (call.method === 'start') return host.agent.start(call.threadId, call.options);
-    if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images, call.skills, call.speed, call.steer, call.steerId);
-    if (call.method === 'compact') return host.agent.compact(call.threadId, call.focus);
-    if (call.method === 'stopTask') return host.agent.stopTask(call.threadId, call.taskId);
-    return host.agent[call.method](call.threadId);
-  };
+  const run = () => (host.agent[call.method] as (threadId: string, ...args: unknown[]) => Promise<unknown>)(call.threadId, ...agentCallArgs(call));
   // After the commands sent so far are logged: the agent's reply folds after the message it answers.
   const next = pending.then(() => replica.sent()).then(run);
   pending = next.catch(() => {});

@@ -183,7 +183,8 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
         const id = randomUUID();
         const at = now();
         yield* sql`INSERT INTO outbox (effect_id, command_id, thread_id, effect_type, payload_json, status, available_at, created_at, updated_at)
-          VALUES (${id}, ${input.commandId}, ${input.threadId ?? null}, ${input.type}, ${JSON.stringify(input.payload ?? null)}, 'pending', ${input.availableAt ?? at}, ${at}, ${at})`;
+          VALUES (${id}, ${input.commandId}, ${input.threadId ?? null}, ${input.type}, ${JSON.stringify(input.payload ?? null)}, 'pending', ${input.availableAt ?? at}, ${at}, ${at})
+          ON CONFLICT (command_id) DO NOTHING`;
         return id;
       });
 
@@ -202,6 +203,9 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
       );
 
     const complete = (id: string) => sql`UPDATE outbox SET status = 'succeeded', updated_at = ${now()}, last_error = NULL WHERE effect_id = ${id}`.pipe(Effect.asVoid);
+
+    /** Drops the effect, so its `command_id` can be enqueued again. */
+    const release = (id: string) => sql`DELETE FROM outbox WHERE effect_id = ${id}`.pipe(Effect.asVoid);
 
     /** With `retryAt` the effect is due again then; without, it failed for good. */
     const fail = (id: string, error: string, retryAt?: string) =>
@@ -279,7 +283,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
         }),
       );
 
-    return { events: Stream.fromPubSub(published), subscribe: PubSub.subscribe(published), append, eventsAfter, loadThreads, saveThreads, listDocs, getDoc, setDoc, enqueue, claim, complete, fail, shell, thread };
+    return { events: Stream.fromPubSub(published), subscribe: PubSub.subscribe(published), append, eventsAfter, loadThreads, saveThreads, listDocs, getDoc, setDoc, enqueue, claim, complete, release, fail, shell, thread };
   }),
 }) {
   /** The store and its `SqlClient`. */

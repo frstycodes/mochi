@@ -14,8 +14,8 @@ export type ChatRow =
   | { kind: 'image'; key: string; entry: ActivityEntry }
   /** The MCP App view a tool call declared (`entry.widget`), right after the call's group. */
   | { kind: 'widget'; key: string; entry: ActivityEntry }
-  /** A subagent where it was started (`entry.subagentId`). */
-  | { kind: 'subagent'; key: string; entry: ActivityEntry }
+  /** Subagents where they were started (`entry.subagentId`), those started back to back as one row. */
+  | { kind: 'subagent'; key: string; entries: ActivityEntry[] }
   /** A message another thread's agent sent (`entry.from`) or an Auto-fix event (`entry.autofix`): a line in the log, not a bubble. It still starts a turn like yours. */
   | { kind: 'thread-message'; key: string; entry: ActivityEntry; index: number }
   /** The files a finished turn changed, after its last row. */
@@ -56,10 +56,12 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       turn = undefined;
       return rows.push({ kind: 'widget', key: `${key}-widget`, entry });
     }
-    // A subagent's row stays in view like a Mochi widget: the turn goes on in a new accordion after it.
+    // A subagent's row stays in view like a Mochi widget: the turn goes on in a new accordion after it. Several started at once share it.
     if (entry.kind === 'subagent') {
       turn = undefined;
-      return rows.push({ kind: 'subagent', key, entry });
+      const last = rows.at(-1);
+      if (last?.kind === 'subagent') return last.entries.push(entry);
+      return rows.push({ kind: 'subagent', key, entries: [entry] });
     }
     if (entry.kind === 'event') {
       const isWidget = !!entry.card || !!entry.isLimit || !!entry.compaction || !!entry.handoff || !!entry.nextMove || !!entry.subThread || !!entry.proposals;

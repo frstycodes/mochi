@@ -1,12 +1,7 @@
-import { useEffect, useRef } from 'react';
 import { isWorking } from '../agentPhase.ts';
-import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
-import { useAllPins } from './pins.ts';
-import { compactInstructions, keptContext } from './compaction.ts';
-import { parseSlash } from './slash.ts';
 
-export { compactInstructions, compactionEntry, keptContext, KEEP_CHARS, PIN_CHARS, restoreNote } from './compaction.ts';
+export { compactFocus, compactInstructions, compactionEntry, keptContext, KEEP_CHARS, PIN_CHARS, restoreNote } from './compaction.ts';
 
 /** Whether `/compact` can run now: `run`, `queue` behind a working turn (a compaction can't steer one), or `off` with why. */
 export type CompactGate = { kind: 'run' } | { kind: 'queue' } | { kind: 'off'; reason: string };
@@ -25,25 +20,4 @@ const off = (reason: string): CompactGate => ({ kind: 'off', reason });
 
 export function isCompacting(thread: Thread) {
   return thread.activity.findLast((e) => e.compaction)?.compaction?.status === 'running';
-}
-
-/** `/compact focus` → `'focus'`; anything else → null. Queued messages carry it as typed. */
-export function compactFocus(text: string) {
-  const command = parseSlash(text);
-  return command?.command.name === 'compact' ? command.arg : null;
-}
-
-/** Keeps main's copy of each live Claude thread's instructions current, so auto-compaction keeps your pins too. */
-export function useCompactInstructions(threads: Thread[]) {
-  const pins = useAllPins();
-  const sent = useRef(new Map<string, string>());
-  useEffect(() => {
-    for (const thread of threads) {
-      if (!thread.live || thread.session?.provider !== 'claude') continue;
-      const text = compactInstructions(keptContext(thread, pins[thread.id] ?? []));
-      if (sent.current.get(thread.id) === text) continue;
-      sent.current.set(thread.id, text);
-      host.agent.compactInstructions(thread.id, text).catch((error: unknown) => console.error('Sending compaction instructions failed', error));
-    }
-  }, [threads, pins]);
 }

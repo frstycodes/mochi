@@ -73,4 +73,7 @@ const snapshotSequence = Effect.gen(function* () {
   yield* sql`UPDATE thread_index SET sequence = (SELECT COALESCE(MAX(sequence), 0) FROM events)`;
 });
 
-export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial, '2_snapshot_sequence': snapshotSequence }) });
+// The reactor enqueues a command once per `command_id`, however often its rule emits it.
+const outboxCommandUnique = Effect.flatMap(SqlClient.SqlClient, (sql) => sql`CREATE UNIQUE INDEX outbox_command_idx ON outbox(command_id)`);
+
+export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial, '2_outbox_command_unique': outboxCommandUnique, '3_snapshot_sequence': snapshotSequence }) });

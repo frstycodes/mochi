@@ -5,7 +5,7 @@ import { moveContext, moveFor, questionFor } from '../goals/moves.ts';
 import { authorName } from '../model.ts';
 import { summary, type ToolEnv } from './tools.ts';
 import { decodeArgs, DEV_TOOL_TABLE, type DevToolName } from './toolTable.ts';
-import { initialControls } from './controls.ts';
+import { initialControls } from './startOptions.ts';
 
 /** Only dispatched by the opt-in dev MCP endpoint; task actions match the composer. */
 export async function runDevTool(call: AgentToolCall, env: ToolEnv): Promise<AgentToolResult> {

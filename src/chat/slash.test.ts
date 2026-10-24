@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { argumentSlots, configuredCommands, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
+import { argumentSlots, bySlashGroup, configuredCommands, slashGroup, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
 
 test('parses /side with its question, keeping line breaks', () => {
   assert.deepEqual(parseSlash('/side why Redis?')?.arg, 'why Redis?');
@@ -116,6 +116,36 @@ test('slots disappear one by one as each argument is started', () => {
   assert.equal(slotPlaceholder(' a.ts --fix extra', hint), '');
   assert.equal(slotPlaceholder(' a.ts\n', hint), '');
   assert.equal(slotPlaceholder(' ', undefined), '');
+});
+
+test('the menu groups rows by Mochi, plugin prefix or harness, best-ranked group first, rows kept together', () => {
+  const row = (name: string, source: 'mochi' | 'claude' = 'claude') => ({ name, description: '', source, isSkill: true });
+  const grouped = bySlashGroup([row('emil:review'), row('run'), row('side', 'mochi'), row('emil:animate'), row('ponytail:audit')]);
+  assert.deepEqual(grouped.map((i) => i.name), ['emil:review', 'emil:animate', 'run', 'side', 'ponytail:audit']);
+  assert.deepEqual(grouped.map(slashGroup), ['emil', 'emil', 'claude', 'mochi', 'ponytail']);
+});
+
+test('before the agent starts, leaves out the skills and plugins the profile turned off', () => {
+  const off = (kind: 'skill' | 'plugin', name: string) => ({ id: name, provider: 'claude' as const, accountId: 'a', kind, name, description: '', where: '', file: null, isOffNatively: false });
+  const listed = configuredCommands(
+    {
+      skills: [
+        { name: 'run', description: 'Launch the app', dir: '~/.claude/skills/run', enabled: true },
+        { name: 'deploy', description: 'Ship it', dir: '~/.claude/skills/deploy', enabled: true },
+      ],
+      commands: [
+        { name: 'deploy', description: 'Project copy of deploy', isSkill: true },
+        { name: 'ponytail:ponytail', description: 'A plugin skill', isSkill: true },
+        { name: 'ponytail:audit', description: 'A plugin command', isSkill: false },
+        { name: 'pony:x', description: 'Another plugin', isSkill: true },
+      ],
+    },
+    [off('skill', 'deploy'), off('plugin', 'ponytail@ponytail')],
+  );
+  assert.deepEqual(
+    listed.commands.map((c) => c.name),
+    ['run', 'pony:x'],
+  );
 });
 
 test('before the agent starts, lists enabled account skills then project, plugin and custom ones, first of a name kept', () => {

@@ -12,6 +12,11 @@ export function parseSkillMd(markdown: string, folderName: string) {
   return { name, description: description.slice(0, 1024), body };
 }
 
+/** A SKILL.md for a skill written in Mochi: its frontmatter as Claude Code and Codex read it, then the instructions. */
+export function renderSkillMd(name: string, description: string, body: string) {
+  return `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n${body.trim()}\n`;
+}
+
 /** `metadata: { internal: true }`, which the skills CLI hides unless asked; splitFrontmatter reads top-level keys only. */
 export function isInternalSkill(markdown: string) {
   const frontmatter = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
