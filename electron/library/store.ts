@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, normalize, relative, resolve } from 'node:path';
-import { EMPTY_LIBRARY, FEATURED_MARKETPLACES, itemName, parseLibrary, profileLayout, skillPlacementDir, STANDALONE_PLUGIN, type LibraryIndex, type LibraryItem, type LibrarySkill, type Marketplace, type SkillDestination, type SkillPlacement } from '../../src/library/library.ts';
+import { EMPTY_LIBRARY, FEATURED_MARKETPLACES, itemName, ownSkillItem, parseLibrary, profileLayout, skillPlacementDir, STANDALONE_PLUGIN, type LibraryIndex, type LibraryItem, type LibrarySkill, type Marketplace, type SkillDestination, type SkillPlacement } from '../../src/library/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { skillMeta, stripSecrets, type McpServerDef } from '../../src/settings/agentConfig.ts';
 import { accountFor } from '../agents/config.ts';
@@ -50,13 +50,14 @@ export async function sessionLibrary(spaceId: string, provider: Provider): Promi
 }
 
 /** Copies the account's own skills and servers into the library, turned on for the profile. Secrets become `${VAR}` notes. */
-export async function importFromAccount(spaceId: string, provider: Provider, parts: ('skills' | 'mcp')[]): Promise<string[]> {
+export async function importFromAccount(spaceId: string, provider: Provider, parts: ('skills' | 'mcp')[], names?: string[]): Promise<string[]> {
   const config = (await readProfileConfig(spaceId))[provider];
   if (config.error) throw new Error(config.error);
   const notes: string[] = [];
   const added: LibraryItem[] = [];
   if (parts.includes('skills'))
     for (const skill of config.skills) {
+      if (names && !names.includes(skill.name)) continue;
       const { files, skipped } = await readSkillFolder(skill.dir);
       if (skipped.length) notes.push(`${skill.name}: left out ${skipped.join(', ')} (not text, or over ${MAX_FILE_BYTES / 1024} KB).`);
       const { name, description } = skillMeta(files['SKILL.md'] ?? '', skill.name);
@@ -79,6 +80,13 @@ export async function importFromAccount(spaceId: string, provider: Provider, par
     return { ...current, items: [...current.items, ...fresh], profiles: { ...current.profiles, [spaceId]: [...(current.profiles[spaceId] ?? []), ...fresh.map((item) => item.id)] } };
   });
   return notes;
+}
+
+/** A skill written or uploaded in Mochi, into the library and on for the profile; a name already taken is refused, never replaced. */
+export async function addOwnSkill(spaceId: string, files: Record<string, string>) {
+  const item = ownSkillItem(files, randomUUID(), Date.now());
+  if ((await readLibrary()).items.some((other) => other.kind === 'skill' && other.name === item.name)) throw new Error(`Your library already has a skill named ${item.name}`);
+  await install(spaceId, item);
 }
 
 /**

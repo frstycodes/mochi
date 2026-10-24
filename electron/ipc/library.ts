@@ -7,7 +7,7 @@ import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
-import { addMarketplace, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, removePlacements, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
+import { addMarketplace, addOwnSkill, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, removePlacements, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
 import { popularSkillsSh, searchSkillsSh } from '../library/skillsSh.ts';
 import { UPLOAD_LIMITS } from '../library/upload.ts';
 import type { SkillDestination } from '../../src/library/library.ts';
@@ -44,12 +44,19 @@ export const library = {
     await removePlacements(item);
     return libraryEntries(await updateLibrary((index) => removeItem(index, itemId)), space);
   },
-  async importFromAccount(_sender, spaceId, provider, parts) {
+  async importFromAccount(_sender, spaceId, provider, parts, names) {
     const space = spaceIdOf(spaceId);
     if (!HARNESS_IDS.includes(provider as Provider)) throw new TypeError(`provider must be one of ${HARNESS_IDS.join(', ')}`);
     if (!Array.isArray(parts) || !parts.length || !parts.every((p) => PARTS.includes(p))) throw new TypeError(`parts must list ${PARTS.join(' and/or ')}`);
-    const notes = await importFromAccount(space, provider as Provider, parts);
+    if (names !== undefined && (!Array.isArray(names) || !names.every((n) => typeof n === 'string'))) throw new TypeError('names must list skill names');
+    const notes = await importFromAccount(space, provider as Provider, parts, names as string[] | undefined);
     return { entries: libraryEntries(await readLibrary(), space), notes };
+  },
+  async addSkill(_sender, spaceId, files) {
+    const space = spaceIdOf(spaceId);
+    const checked = Object.fromEntries(Object.entries(record(files, 'files')).map(([path, text]) => [string(path, 'path', 512), string(text, path, 1024 * 1024)]));
+    await addOwnSkill(space, checked);
+    return libraryEntries(await readLibrary(), space);
   },
   async discoverSkills(_sender, source) {
     const skills = await discoverSkills(string(source, 'source', 512));
