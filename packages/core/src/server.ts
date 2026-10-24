@@ -13,6 +13,7 @@ import { Capabilities, hostHandlers } from './hostServer.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
+import { Terminals } from './remote/terminals.ts';
 import { visibleItem } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
 import { storeHandlers } from './store/handlers.ts';
@@ -49,7 +50,7 @@ export const layerCore = (options: ServerOptions) =>
     Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
     Layer.provideMerge(layerAgents(options.userData)),
-    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), UtilityQueue.layer, Turns.layer, layerStore(options.userData).pipe(Layer.provideMerge(Capabilities.layer))).pipe(Layer.provideMerge(Run.layer))),
+    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), UtilityQueue.layer, Turns.layer, Terminals.layer, layerStore(options.userData).pipe(Layer.provideMerge(Capabilities.layer))).pipe(Layer.provideMerge(Run.layer))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(
       NodeHttpServer.layer(createServer, {
@@ -72,7 +73,7 @@ const layerStore = (userData: string | undefined) =>
     Layer.orDie,
   );
 
-type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store | Projection | Commands | Metrics;
+type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store | Projection | Commands | Metrics | Terminals;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -176,6 +177,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const commands = yield* Commands;
       const stored = storeHandlers(store, projection);
       const metrics = yield* Metrics;
+      const terminals = yield* Terminals;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -206,6 +208,12 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
             ),
           }).pipe(Effect.map((answer) => (answer ? JSON.parse(answer) : null))),
         metrics: () => metrics.stream,
+        'terminal.open': ({ terminalId, threadId }: { terminalId: string; threadId: string }) => terminals.open(terminalId, threadId),
+        'terminal.feed': ({ terminalId, data }: { terminalId: string; data: string }) => terminals.feed(terminalId, data),
+        'terminal.exit': ({ terminalId, exitCode }: { terminalId: string; exitCode: number }) => terminals.exit(terminalId, exitCode),
+        'terminal.close': ({ terminalId }: { terminalId: string }) => terminals.close(terminalId),
+        'terminal.watched': ({ terminalId }: { terminalId: string }) => terminals.watched(terminalId),
+        'terminal.output': ({ terminalId, threadId, after }: { terminalId: string; threadId: string; after: number }) => terminals.output(terminalId, threadId, after),
         ...host,
         ...agentHandlers(windowId),
         ...agentRpcHandlers,

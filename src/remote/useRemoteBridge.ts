@@ -14,7 +14,7 @@ export function useRemoteBridge(getState: () => State, dispatch: Dispatch<Action
   }, [status]);
 
   useEffect(() => {
-    const timer = setInterval(() => closeIdleShells(Date.now()), SWEEP_MS);
+    const timer = setInterval(() => void closeIdleShells(Date.now()), SWEEP_MS);
     return () => clearInterval(timer);
   }, []);
 

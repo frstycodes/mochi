@@ -52,7 +52,6 @@ await record('remote.cacheMachine', remote.cacheMachine, 'm1', '{}');
 await record('remote.commandResult', remote.commandResult, 'c1', { isOk: true, detail: 'a1b2c3d' });
 await record('remote.commandResult', remote.commandResult, 'c2', { isOk: false, error: 'No such thread' });
 await record('remote.commandResult', remote.commandResult, 'c3', { isOk: true, data: { terminalId: 'p1' } });
-await record('remote.commandResult', remote.commandResult, 'c4', { isOk: true, data: { data: '$ ls\n', next: 5 } });
 await record('remote.commandResult', remote.commandResult, 'c5', { isOk: true, data: { projects: [{ ref: 'p1', name: 'mochi' }], models: {}, defaults: { claude: '', codex: '' } } });
 const controls = { model: 'claude-opus-5-5', effort: 'high', speed: '', access: 'Auto' };
 const commands = [
@@ -90,7 +89,6 @@ const commands = [
   { type: 'terminal-open', threadId: 't', cols: 80, rows: 24 },
   { type: 'terminal-write', threadId: 't', terminalId: 'p', data: 'ls\n' },
   { type: 'terminal-resize', threadId: 't', terminalId: 'p', cols: 120, rows: 40 },
-  { type: 'terminal-read', threadId: 't', terminalId: 'p', after: 0 },
   { type: 'terminal-close', threadId: 't', terminalId: 'p' },
 ];
 for (const command of commands) await record('remote.command', remote.command, 'm1', command as never);
@@ -98,6 +96,8 @@ add('remote.onCommand', { event: { id: 'c1', deviceName: 'Laptop', command: comm
 add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'reset' } } });
 add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'thread', threadId: 't1', saved: { thread: { id: 't1' } } } } });
 add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'thread', threadId: 't1', saved: null } } });
+add('remote.onTerminalOutput', { event: { machineId: 'm1', terminalId: 'p', data: 'ls\r\n', next: 4 } });
+add('remote.onTerminalOutput', { event: { machineId: 'm1', terminalId: 'p', data: '', next: 4, exitCode: 0 } });
 add('remote.onMachines', { event: [{ id: 'm1', name: 'Studio', kind: 'mac', status: 'online', route: 'lan', scopes: ['read', 'operate', 'manage', 'code'], lastSeenAt: 1_760_000_000_000 }, { id: 'm2', name: 'Laptop', status: 'refused', scopes: [], error: 'This computer removed you' }] });
 const status = await remote.status();
 add('remote.set', { input: [{ isEnabled: true, machineName: 'Studio' }], output: { ...status, settings: { ...status.settings, isEnabled: true, machineName: 'Studio' }, addresses: ['127.0.0.1:47123'], relay: { status: 'error', error: 'Sign in to reach this computer from anywhere' } } });

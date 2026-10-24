@@ -335,6 +335,7 @@ function syncFollowers() {
         if (state.status === 'refused') void pullMembers();
       },
       onFrame: (frame) => mainWindow()?.webContents.send('remote:onMachineFrame', { machineId: machine.id, frame }),
+      onTerminal: (output) => mainWindow()?.webContents.send('remote:onTerminalOutput', { machineId: machine.id, ...output }),
       onWelcome: (welcome) => theRegistry().noteWelcome(machine.id, welcome),
       members: ownRecords,
       onMembers: (members) => void absorb(parseRecords(members)),

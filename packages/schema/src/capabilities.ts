@@ -80,8 +80,8 @@ export const metricsMethods = {
 export const capabilityOf = (namespace: string): CapabilityName =>
   namespace === 'notify' ? 'notify' : namespace === 'browser' ? 'browserView' : namespace === 'sim' ? 'sim' : 'host';
 
-/** What a paired device may call besides `device.command`. */
-const deviceScopes: Record<string, AuthScope> = { ping: 'read', shell: 'read', thread: 'read' };
+/** What a paired device may call besides `device.command`. `terminal.output` pushes a shell's output. */
+const deviceScopes: Record<string, AuthScope> = { ping: 'read', shell: 'read', thread: 'read', 'terminal.output': 'terminal' };
 
 /**
  * The scope an RPC needs: a device command's by its type, the few reads a device makes, and `local` for everything else,

@@ -80,6 +80,8 @@ export const remoteRpc = {
   onMachines: event(Schema.Array(FollowedMachine)),
   follow: invoke(T([]), Void),
   onMachineFrame: event(Schema.Struct({ machineId: S, frame: MirrorFrame })),
+  /** A followed machine's terminal, pushed as its shell prints (`terminal.output`); `next` is the offset after `data`. */
+  onTerminalOutput: event(Schema.Struct({ machineId: S, terminalId: S, data: S, next: Schema.Number, exitCode: opt(Schema.Number) })),
   cacheMachine: invoke(T([MachineId, Str(MAX_ACTION_CHARS)]), Void),
   cachedMachines: invoke(T([]), Schema.Array(Schema.Struct({ machineId: S, saved: S }))),
   command: invoke(T([MachineId, RemoteCommand]), CommandResult),
