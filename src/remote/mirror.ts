@@ -1,31 +1,45 @@
-import type { StreamFrame } from '../host/types/remote.ts';
-import type { Action, State } from '../store/index.tsx';
-import { mirrorState, reducer } from '../store/root.ts';
-import type { Saved } from '../store/persist.ts';
+import type { MirrorFrame } from '../host/types/remote.ts';
+import type { State } from '../store/index.tsx';
+import { mirrorState } from '../store/root.ts';
 import { rankQueue } from '../store/queue.ts';
-import { isListed } from '../model.ts';
+import { isListed, type Thread } from '../model.ts';
+import type { Checkpoint } from '../rewind/checkpoints.ts';
+import type { Fork } from '../rewind/fork.ts';
 import { lastActivityAt, pinnedThreads } from '../reorder.ts';
 
-/** Another computer's store as this one follows it: rebuilt from its snapshot, then each of its actions in order. */
+/** One thread's file as the machine saves it, decoded by main (`Persist.SavedThread`). */
+export interface MirroredThread {
+  thread: Thread;
+  checkpoints?: Checkpoint[];
+  fork?: Fork;
+}
+
+/** Another computer's store as this one follows it: its thread files as its `thread` streams last sent them. */
 export interface Mirror {
-  epoch: string;
-  seq: number;
+  threads: Record<string, MirroredThread>;
   state: State;
 }
 
 /**
- * Every action goes through the store's own root reducer, the machine's local UI actions (layout, panes) included: they land
- * in the scratch store's own layout slices, and a device reads only threads and the queue. Nothing runs but the reducer, so
- * no agent, schedule or file on this computer moves. An action out of order (another epoch, or one already applied) waits
- * for the snapshot that follows it.
+ * Builds a store from the thread files alone, through the store's own initial state, so nothing runs: no agent, schedule
+ * or file on this computer moves.
  */
-export function applyFrame(mirror: Mirror | undefined, frame: StreamFrame): Mirror | undefined {
-  if (frame.type === 'snapshot') {
-    const saved = frame.saved as Saved & Partial<Pick<State, 'sidechats'>>;
-    return { epoch: frame.epoch, seq: frame.seq, state: { ...mirrorState(saved), sidechats: saved.sidechats ?? {} } };
-  }
-  if (!mirror || frame.epoch !== mirror.epoch || frame.seq <= mirror.seq) return mirror;
-  return { ...mirror, seq: frame.seq, state: reducer(mirror.state, frame.action as Action) };
+export function applyFrame(mirror: Mirror | undefined, frame: MirrorFrame): Mirror {
+  if (frame.type === 'reset') return mirrorOf({});
+  const { [frame.threadId]: _replaced, ...rest } = mirror?.threads ?? {};
+  return mirrorOf(frame.saved === null ? rest : { ...rest, [frame.threadId]: frame.saved as MirroredThread });
+}
+
+/**
+ * GAP: the machine's queue (approvals and questions) is in its index, which no stream carries yet, so a mirror has none;
+ * `remoteDecisions` and ask alerts stay empty until the `shell` stream sends it.
+ */
+export function mirrorOf(threads: Record<string, MirroredThread>): Mirror {
+  const files = Object.values(threads);
+  const checkpoints = Object.fromEntries(files.flatMap((f) => (f.checkpoints ? [[f.thread.id, f.checkpoints]] : [])));
+  const forks = Object.fromEntries(files.flatMap((f) => (f.fork ? [[f.thread.id, f.fork]] : [])));
+  const state = mirrorState({ version: 1, now: 0, seq: 0, threads: files.map((f) => f.thread), queue: [], checkpoints, checkpointSeq: 0, forks });
+  return { threads, state };
 }
 
 /** What a device can answer on that machine: its agents' questions and approvals, most blocking first. */

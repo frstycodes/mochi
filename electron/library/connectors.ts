@@ -8,7 +8,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { connectorKey, GOOGLE_WORKSPACE_URL, isSameServer, OAUTH_PROVIDERS, oauthProviderFor, relayState, type DeviceCode, type OAuthProviderId } from '../../src/library/connectors.ts';
-import { RELAY_URL } from '../remote/relayClient.ts';
+import { RELAY_URL } from '@mochi/core/remote/relayClient';
 import { mochiOAuthApp } from './oauthApps.ts';
 import { ensureLocalServer, saveGoogleClient } from './googleWorkspace.ts';
 import { connectorName, toolRules, type ConnectorSettings, type ConnectorToolList, type ToolRules } from '../../src/library/connectorTools.ts';

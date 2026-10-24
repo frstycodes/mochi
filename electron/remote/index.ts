@@ -4,34 +4,35 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join as joinPath } from 'node:path';
 import sodium from 'libsodium-wrappers';
-import type { ApprovalRequest, CommandResult, FollowedMachine, MemberInfo, OtherMachine, RelayState, RemoteCommand, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
+import { Option, Schema } from 'effect';
+import { Persist, Relay } from '@mochi/schema';
+import { deviceTunnel, logToCore } from '@mochi/core/host';
+import { openLan } from '@mochi/core/remote/device';
+import type { RawLink } from '@mochi/core/remote/link';
+import { connectMachine, forgetMachineAtRelay, listMachines, listMembers, openDeviceChannel, publishMembers, type MachineConnection } from '@mochi/core/remote/relayClient';
+import type { ApprovalRequest, CommandResult, FollowedMachine, MemberInfo, OtherMachine, RelayState, RemoteCommand, RemoteCommandRequest, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
 import { accessToken, current as currentAccount, onAccountChange } from '../account/session.ts';
 import { isAnyBusy, onBusyChange } from '../agents/events.ts';
 import { createWindow, mainWindow } from '../window.ts';
 import { MachineCache } from './cache.ts';
-import { followMachine, openLan, type MachineFollower, type Route } from './client.ts';
+import { followMachine, type MachineFollower, type Route } from './client.ts';
 import { loadDeviceKeys, type DeviceKeys } from './crypto/keys.ts';
 import { networkHosts } from './interfaces.ts';
 import { holdAwake } from './keepAwake.ts';
-import type { RawLink } from './link.ts';
 import type { PairedMachine } from './registry.ts';
 import { approveMember, mergeRecords, parseRecords, resolveMembers, signMember, signRemoval, vouches, type MemberRecord, type Membership } from './members.ts';
-import { ActionLog } from './log.ts';
-import { APPROVAL_TIMEOUT_MS, deviceId, pairingCode, secureAsDevice, secureAsMachine, type Origin } from './pairing.ts';
-import { asKind, PROTOCOL_VERSION, THIS_KIND, type ServerFrame } from './protocol.ts';
+import { APPROVAL_TIMEOUT_MS, asKind, deviceId, pairingCode, secureAsDevice, secureAsMachine, THIS_KIND, type Origin } from './pairing.ts';
 import { Registry } from './registry.ts';
-import { connectMachine, forgetMachineAtRelay, listMachines, listMembers, openDeviceChannel, publishMembers, type MachineConnection } from './relayClient.ts';
-import { startRemoteServer, type RemoteServer, type RendererBridge } from './server.ts';
+import { startRemoteServer, type RemoteServer } from './server.ts';
 
 // One fixed port; a setting if it collides with something users run. `MOCHI_REMOTE_PORT` lets a dev run sit beside an installed Mochi.
 export const REMOTE_PORT = Number(process.env.MOCHI_REMOTE_PORT) || 47373;
-const SNAPSHOT_TIMEOUT_MS = 15_000;
 const COMMAND_TIMEOUT_MS = 30_000;
 const DEFAULTS: RemoteSettings = { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true };
 const WELCOME_TIMEOUT_MS = 15_000;
+const decodeMachineFrame = Schema.decodeUnknownOption(Schema.fromJsonString(Relay.MachineLinkFrame));
 
 const file = () => joinPath(app.getPath('userData'), 'remote.json');
-const log = new ActionLog();
 let settings = DEFAULTS;
 let server: RemoteServer | undefined;
 let relay: MachineConnection | undefined;
@@ -47,7 +48,6 @@ const theKeys = () => (keys ??= loadDeviceKeys(safeStorage, app.getPath('userDat
 let error: string | undefined;
 let restarting: Promise<void> = Promise.resolve();
 let isQuitting = false;
-const snapshots = new Map<string, (snapshot: Awaited<ReturnType<RendererBridge['snapshot']>>) => void>();
 const results = new Map<string, (result: CommandResult) => void>();
 /** The computers this one follows as a device, by machine id. */
 const followers = new Map<string, MachineFollower & { publicKey: string }>();
@@ -107,17 +107,6 @@ export async function setRemote(patch: Partial<RemoteSettings>) {
   if (settings.isEnabled !== previous.isEnabled || settings.allowsNetwork !== previous.allowsNetwork || settings.reachesAnywhere !== previous.reachesAnywhere) await restart();
   else broadcast();
   return remoteStatus();
-}
-
-/** Only the main window's store streams; a torn-off window's own store is ignored. */
-export function pushAction(sender: WebContents, epoch: string, seq: number, action: unknown) {
-  if (sender === mainWindow()?.webContents) server?.publish(epoch, seq, action);
-}
-
-export function answerSnapshot(sender: WebContents, requestId: string, epoch: string, seq: number, saved: unknown) {
-  if (sender !== mainWindow()?.webContents) return;
-  snapshots.get(requestId)?.({ epoch, seq, saved: saved as Awaited<ReturnType<RendererBridge['snapshot']>>['saved'] });
-  snapshots.delete(requestId);
 }
 
 export function answerCommand(sender: WebContents, id: string, result: CommandResult) {
@@ -213,17 +202,17 @@ export async function join(machineId: string) {
   const raw = await openDeviceChannel(machineId, deviceId(own.publicKey), token);
   try {
     const link = await secureAsDevice(raw, own, machineKey, settings.machineName || hostname());
-    const welcome = await new Promise<ServerFrame>((resolve, reject) => {
+    const welcome = await new Promise<Relay.MachineLinkFrame | undefined>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('That computer didn’t answer')), WELCOME_TIMEOUT_MS);
       link.onMessage((text) => {
         clearTimeout(timer);
-        resolve(JSON.parse(text) as ServerFrame);
+        resolve(Option.getOrUndefined(decodeMachineFrame(text)));
       });
       link.onClose(() => reject(new Error('That computer closed the connection')));
-      link.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION }));
+      link.send(JSON.stringify({ type: 'hello', version: Relay.PROTOCOL_VERSION } satisfies Relay.HelloFrame));
     });
-    if (welcome.type === 'refused') throw new Error(welcome.reason);
-    if (welcome.type !== 'welcome') throw new Error('That computer answered something unexpected');
+    if (welcome?.type === 'refused') throw new Error(welcome.reason);
+    if (welcome?.type !== 'welcome') throw new Error('That computer answered something unexpected');
     const theirs = parseRecords(welcome.members);
     const vouch = approveMember([...(theRegistry().records() ?? []), ...theirs], own, { publicKey: machine.publicKey, machineId: machine.id, name: machine.name, kind: asKind(welcome.machineKind) }, Date.now());
     await absorb([...theirs, vouch]);
@@ -284,20 +273,26 @@ async function pullMembers() {
 
 const ownRecords = () => theRegistry().records() ?? [];
 
-/** The main window's latest copy of a followed machine's store, kept for the next launch and for reading it offline. */
+/** The main window's latest copy of a followed machine's thread files, kept for the next launch and for reading them offline. */
 export function cacheMachine(sender: WebContents, machineId: string, saved: string) {
   if (sender !== mainWindow()?.webContents || !followers.has(machineId)) return;
   theCache().write(machineId, saved);
 }
 
+/** Each cached thread file that still decodes; a cache from before `thread` streams (a whole store) yields none. */
 export const cachedMachines = () => [...followers.keys()].flatMap((machineId) => {
   const saved = theCache().read(machineId);
-  return saved ? [{ machineId, saved }] : [];
+  const threads = saved === undefined ? undefined : Option.getOrUndefined(decodeCache(saved));
+  if (!threads) return [];
+  const valid = Object.entries(threads).flatMap(([id, file]) => Option.match(decodeThread(file), { onNone: () => [], onSome: (thread) => [[id, thread] as const] }));
+  return [{ machineId, saved: JSON.stringify(Object.fromEntries(valid)) }];
 });
+const decodeCache = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)));
+const decodeThread = Schema.decodeUnknownOption(Persist.SavedThread);
 
 export const followedMachines = (): FollowedMachine[] => [...followers.values()].map((f) => f.state());
 
-/** The main window's store starts its mirrors empty; every followed machine starts over with a snapshot. */
+/** The main window's store starts its mirrors empty; every followed machine starts over, each thread from its snapshot. */
 export function follow(sender: WebContents) {
   if (sender !== mainWindow()?.webContents) return;
   for (const follower of followers.values()) follower.resync();
@@ -343,6 +338,7 @@ function syncFollowers() {
       onWelcome: (welcome) => theRegistry().noteWelcome(machine.id, welcome),
       members: ownRecords,
       onMembers: (members) => void absorb(parseRecords(members)),
+      onRejected: (reason) => logToCore('Warn', `remote: ${machine.name}: ${reason}`),
     });
     return Object.assign(follower, { publicKey: machine.publicKey });
   }
@@ -368,11 +364,9 @@ function broadcastMachines() {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send('remote:onMachines', machines);
 }
 
-const bridge: RendererBridge = {
-  snapshot: () => askRenderer(snapshots, 'remote:onSnapshotRequest', randomUUID(), SNAPSHOT_TIMEOUT_MS, (id) => id),
-  // Its own id for the round trip: two devices may pick the same command id.
-  run: (request) => askRenderer(results, 'remote:onCommand', randomUUID(), COMMAND_TIMEOUT_MS, (id) => ({ ...request, id })).catch((e: unknown) => ({ isOk: false as const, error: e instanceof Error ? e.message : String(e) })),
-};
+/** A device's command, which Core hands to main (the `remote` capability): the main window's store runs it. */
+export const runDeviceCommand = (request: RemoteCommandRequest) =>
+  askRenderer(results, 'remote:onCommand', randomUUID(), COMMAND_TIMEOUT_MS, (id) => ({ ...request, id })).catch((e: unknown): CommandResult => ({ isOk: false, error: e instanceof Error ? e.message : String(e) }));
 
 function askRenderer<T>(pending: Map<string, (value: T) => void>, channel: string, id: string, timeoutMs: number, payload: (id: string) => unknown) {
   const win = mainWindow();
@@ -407,8 +401,8 @@ function restart() {
         hosts,
         port: REMOTE_PORT,
         secure,
-        bridge,
-        log,
+        coreFor: deviceTunnel,
+        onRejected: (device, reason) => logToCore('Warn', `remote: ${device}: ${reason}`),
         machineName: () => settings.machineName || hostname(),
         onDevicesChange: broadcast,
         members: ownRecords,
@@ -436,6 +430,7 @@ async function startRelay(listening: RemoteServer) {
       broadcast();
     },
     onMembers: () => void pullMembers(),
+    onMalformed: (frame) => logToCore('Warn', `remote: the relay sent a malformed control frame: ${frame.slice(0, 200)}`),
   });
 }
 
