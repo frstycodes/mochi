@@ -69,7 +69,7 @@ import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { PendingSteers } from './chat/SteerBubble';
 import { usePrefs, type Prefs } from './settings/prefs';
-import { MentionChips, MentionMenu, useMentionMenu, useThreadMentionFiles } from './chat/MentionMenu';
+import { MentionChips, MentionMenu, useMentionMenu, useThreadMentionDrop, useThreadMentionFiles } from './chat/MentionMenu';
 import type { Mention } from './chat/mentions';
 import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
@@ -411,6 +411,7 @@ const Composer = memo(function Composer({
   const provider = thread.providers[0];
   const root = projectRef(thread.repo);
   const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent), useThreadPlugins(provider, thread.spaceId, root, thread.agent), useThreadMentionFiles(thread));
+  const threadDrop = useThreadMentionDrop(mention);
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
@@ -460,7 +461,7 @@ const Composer = memo(function Composer({
         <div className="relative">
           <SlashMenu menu={slash} />
           <MentionMenu menu={mention} />
-          <ComposerCard data-composer className="in-data-image-over:border-ring">
+          <ComposerCard data-composer {...threadDrop} className="in-data-image-over:border-ring data-mention-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
             <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id })} />
             <MentionChips menu={mention} />
