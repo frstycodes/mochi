@@ -20,9 +20,10 @@ test('waiting jobs run by priority then arrival, one at a time', async () => {
     running--;
     return name;
   };
-  let release!: () => void;
+  let release: (() => void) | undefined;
   const held = submit(queue, 'hold', 'hold', 9, () => new Promise((resolve) => (release = () => resolve('held'))));
-  await sleep(5);
+  // Until the held job starts, the others would queue behind nothing; a slow runner takes more than a tick to start it.
+  while (!release) await sleep(1);
   const rest = Promise.all([
     submit(queue, 't1', 'simplify', PRIORITY.simplify, record('simplify')),
     submit(queue, 't2', 'audit', PRIORITY.audit, record('audit')),

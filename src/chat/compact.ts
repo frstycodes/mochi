@@ -1,8 +1,7 @@
-import { useEffect, useRef } from 'react';
 import { isWorking } from '../agentPhase.ts';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
-import { useAllPins } from './pins.ts';
+import { getThreadPins, type Pin } from './pins.ts';
 import { compactInstructions, keptContext } from './compaction.ts';
 import { parseSlash } from './slash.ts';
 
@@ -33,17 +32,8 @@ export function compactFocus(text: string) {
   return command?.command.name === 'compact' ? command.arg : null;
 }
 
-/** Keeps main's copy of each live Claude thread's instructions current, so auto-compaction keeps your pins too. */
-export function useCompactInstructions(threads: Thread[]) {
-  const pins = useAllPins();
-  const sent = useRef(new Map<string, string>());
-  useEffect(() => {
-    for (const thread of threads) {
-      if (!thread.live || thread.session?.provider !== 'claude') continue;
-      const text = compactInstructions(keptContext(thread, pins[thread.id] ?? []));
-      if (sent.current.get(thread.id) === text) continue;
-      sent.current.set(thread.id, text);
-      host.agent.compactInstructions(thread.id, text).catch((error: unknown) => console.error('Sending compaction instructions failed', error));
-    }
-  }, [threads, pins]);
+/** Keeps Core's copy of a live Claude thread's instructions current, so auto-compaction keeps your pins too. */
+export function sendCompactInstructions(thread: Thread, pins: Pin[] = getThreadPins(thread.id)) {
+  if (!thread.live || thread.session?.provider !== 'claude') return;
+  host.agent.compactInstructions(thread.id, compactInstructions(keptContext(thread, pins))).catch((error: unknown) => console.error('Sending compaction instructions failed', error));
 }

@@ -7,7 +7,8 @@ import { scheduleReducer } from '../schedule/slice.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls } from './live.ts';
-import { dueWakes, WAKE_PROMPT } from './subThreadNotes.ts';
+import { dueWakes } from './due.ts';
+import { WAKE_PROMPT } from './subThreadNotes.ts';
 
 const run = (s: State, action: Action) => [threadsReducer, queueReducer, scheduleReducer].reduce((acc, slice) => slice(acc, action), s);
 const agent = (s: State, event: AgentEvent) => run(s, { type: 'agent', event });

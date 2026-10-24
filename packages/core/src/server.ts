@@ -20,6 +20,7 @@ import type { DocTable } from './store/migrations.ts';
 import { importJson } from './store/importJson.ts';
 import { Projection } from './store/projection.ts';
 import { Store } from './store/store.ts';
+import { layerReactor } from './reactor/execute.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
 import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
 import { Watch } from './watch/watch.ts';
@@ -40,7 +41,7 @@ export interface ServerOptions {
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
 export const layerCore = (options: ServerOptions) =>
-  Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
+  Layer.mergeAll(layerRoute(options), Cache.layer, layerReactor).pipe(
     Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
     Layer.provideMerge(layerAgents(options.userData)),

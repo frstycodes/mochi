@@ -6,7 +6,8 @@ import type { Action, State } from '../store/index.tsx';
 import { parseSaved, toSaved } from '../store/saved.ts';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { dueQueued, moveQueued, queuedMessage, sendMessage, shouldQueue } from './outbox.ts';
+import { dueQueued } from '../runtime/due.ts';
+import { moveQueued, queuedMessage, sendMessage, shouldQueue } from './outbox.ts';
 
 const run = (s: State, action: Action) => threadsReducer(s, action);
 const event = (s: State, e: AgentEvent) => run(s, { type: 'agent', event: e });
@@ -30,7 +31,7 @@ function working() {
   return { s, id };
 }
 
-/** What the runner in `HarnessProvider` does: sends each due head through `sendMessage`. */
+/** What the reactor's `queue.send` does: sends each due head through `sendMessage`. */
 function runQueue(s: State) {
   for (const { thread: t, message: m } of dueQueued(s)) sendMessage((a) => (s = run(s, a)), s, t, m, { queuedId: m.id });
   return s;
