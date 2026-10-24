@@ -1,6 +1,6 @@
 import { connectorName } from '../../library/connectorTools.ts';
 import { connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
-import { FEATURED_MARKETPLACES, libraryEntries, removeItem, setItemEnabled, skillPlacementDir, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
+import { FEATURED_MARKETPLACES, libraryEntries, ownSkillItem, removeItem, setItemEnabled, skillPlacementDir, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
 import { parseSkillSource } from '../../library/skillSource.ts';
 import type { LibraryHost } from '../types/library.ts';
 import { CONNECTOR_TOOLS, fixtureParts, fixtureSkillFiles, MARKETPLACE_CATALOGS, SKILL_CATALOGS, SKILLS_SH_POPULAR, UPLOAD_REVIEW } from './libraryFixtures.ts';
@@ -31,6 +31,12 @@ export const library: LibraryHost = {
   },
   async importFromAccount() {
     throw new Error('Importing from an account needs the desktop app');
+  },
+  async addSkill(spaceId, files) {
+    const item = ownSkillItem(files, `own-${index.items.length + 1}`, Date.now());
+    if (index.items.some((other) => other.kind === 'skill' && other.name === item.name)) throw new Error(`Your library already has a skill named ${item.name}`);
+    index = setItemEnabled({ ...index, items: [...index.items, item] }, spaceId, item.id, true);
+    return libraryEntries(index, spaceId);
   },
   async discoverSkills(source) {
     await pause();

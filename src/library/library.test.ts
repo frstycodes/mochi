@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parsePluginBundle } from './pluginBundle.ts';
-import { codexServerConfig, EMPTY_LIBRARY, libraryEntries, parseLibrary, profileConnectors, profileLayout, removeItem, setItemEnabled, STANDALONE_PLUGIN, type LibraryIndex } from './library.ts';
+import { codexServerConfig, EMPTY_LIBRARY, libraryEntries, ownSkillItem, parseLibrary, profileConnectors, profileLayout, removeItem, setItemEnabled, STANDALONE_PLUGIN, type LibraryIndex } from './library.ts';
 
 const library: LibraryIndex = {
   items: [
@@ -94,4 +94,15 @@ test('a profile reaches only its own signed-in connector accounts, grouped by se
   assert.deepEqual(groups.get('linear')?.map((a) => a.alias), ['work', 'personal']);
   assert.equal(libraryEntries(index, 'work')[2].isLinked, false);
   assert.equal(libraryEntries(index, 'work')[0].title, 'linear · work');
+});
+
+test('a skill written or uploaded in Mochi needs a named SKILL.md and stays inside its folder', () => {
+  const md = '---\nname: Release-Notes\ndescription: "From merged PRs"\n---\n\nList the PRs.';
+  const item = ownSkillItem({ 'SKILL.md': md, 'ref/style.md': 'x' }, 'id1', 5);
+  assert.deepEqual([item.name, item.description, item.source, item.targets], ['release-notes', 'From merged PRs', null, ['claude', 'codex']]);
+  assert.throws(() => ownSkillItem({ 'notes.md': md }, 'id', 0), /needs a SKILL\.md/);
+  assert.throws(() => ownSkillItem({ 'SKILL.md': md, '../escape.md': 'x' }, 'id', 0), /isn't a path inside/);
+  assert.throws(() => ownSkillItem({ 'SKILL.md': md, '/abs.md': 'x' }, 'id', 0), /isn't a path inside/);
+  assert.throws(() => ownSkillItem({ 'SKILL.md': '---\ndescription: x\n---\n\nBody' }, 'id', 0), /needs a name/);
+  assert.throws(() => ownSkillItem({ 'SKILL.md': '---\nname: x\n---\n' }, 'id', 0), /no instructions/);
 });

@@ -3,6 +3,7 @@ import { serverSummary, type McpServerDef } from '../settings/agentConfig.ts';
 import type { ConnectorSettings } from './connectorTools.ts';
 import { connectorIcon } from './connectors.ts';
 import type { PluginBundle } from './pluginBundle.ts';
+import { parseSkillMd } from './skillMd.ts';
 
 /**
  * The profile library (LIBRARY.md): each item is held once, and a profile is the set of item ids it turned on. Sessions
@@ -207,6 +208,27 @@ export const STANDALONE_PLUGIN = 'mochi';
 export function skillPluginName(source: string | null) {
   const owner = source?.split('/')[0].toLowerCase().replace(/[^a-z0-9-]+/g, '-');
   return owner || STANDALONE_PLUGIN;
+}
+
+const OWN_SKILL_LIMITS = { files: 200, bytes: 512 * 1024 };
+
+/**
+ * A skill written or uploaded in Mochi, checked before it's stored: a SKILL.md naming it, relative paths inside its folder, at most
+ * 200 text files of 512 KB. Throws the reason it can't be added.
+ */
+export function ownSkillItem(files: Record<string, string>, id: string, now: number): LibrarySkill {
+  const md = files['SKILL.md'];
+  if (md === undefined) throw new Error('A skill needs a SKILL.md at the top of its folder');
+  const paths = Object.keys(files);
+  if (paths.length > OWN_SKILL_LIMITS.files) throw new Error(`A skill can hold up to ${OWN_SKILL_LIMITS.files} files`);
+  const bad = paths.find((p) => !p || p.startsWith('/') || p.includes('\\') || p.split('/').some((part) => part === '..' || part === ''));
+  if (bad !== undefined) throw new Error(`${bad || 'A file'} isn't a path inside the skill's folder`);
+  const big = paths.find((p) => new TextEncoder().encode(files[p]).length > OWN_SKILL_LIMITS.bytes);
+  if (big) throw new Error(`${big} is over ${OWN_SKILL_LIMITS.bytes / 1024} KB`);
+  const { name, description, body } = parseSkillMd(md, '');
+  if (!/^[a-z0-9]/.test(name)) throw new Error('SKILL.md needs a name: in its frontmatter');
+  if (!body) throw new Error('SKILL.md has no instructions after its frontmatter');
+  return { kind: 'skill', id, name, description, files, targets: ['claude', 'codex'], addedAt: now, source: null, icon: null };
 }
 
 /** Owners whose skills install without a warning over their files; everyone else's are read first. */

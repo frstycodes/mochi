@@ -11,8 +11,10 @@ export interface LibraryHost {
   setEnabled(spaceId: string, id: string, isEnabled: boolean): Promise<LibraryEntry[]>;
   /** Out of the library and every profile. */
   remove(spaceId: string, id: string): Promise<LibraryEntry[]>;
-  /** Copies the profile's account's own skills and servers in, turned on for the profile; `notes` says what was skipped or stripped. */
-  importFromAccount(spaceId: string, provider: Provider, parts: ('skills' | 'mcp')[]): Promise<{ entries: LibraryEntry[]; notes: string[] }>;
+  /** Copies the profile's account's own skills and servers in (only the skills in `names` when given), turned on for the profile; `notes` says what was skipped or stripped. */
+  importFromAccount(spaceId: string, provider: Provider, parts: ('skills' | 'mcp')[], names?: string[]): Promise<{ entries: LibraryEntry[]; notes: string[] }>;
+  /** Adds a skill written or uploaded in Mochi (`files` by path, SKILL.md included; `ownSkillItem` checks them), turned on for the profile. Refuses a name the library already has. */
+  addSkill(spaceId: string, files: Record<string, string>): Promise<LibraryEntry[]>;
   /** Every SKILL.md folder in a public GitHub repo or path (`owner/repo`, `owner/repo/dir`, or a github.com URL). */
   discoverSkills(source: string): Promise<CatalogSkill[]>;
   /** A found skill's text files by path, SKILL.md included, to read before installing. */
@@ -81,6 +83,7 @@ export const libraryMethods = {
   setEnabled: 'invoke',
   remove: 'invoke',
   importFromAccount: 'invoke',
+  addSkill: 'invoke',
   discoverSkills: 'invoke',
   skillFiles: 'invoke',
   installSkill: 'invoke',

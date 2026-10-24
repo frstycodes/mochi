@@ -74,8 +74,11 @@ export function useLibrary(spaceId: string) {
         }),
       ),
     setAutoUpdate: (entry: LibraryEntry, autoUpdate: boolean) => apply(`${entry.title} not changed`)(host.library.update(spaceId, entry.id, autoUpdate)),
-    importFromAccount: (provider: Provider) =>
-      host.library.importFromAccount(spaceId, provider, ['skills', 'mcp']).then(
+    /** Writes or uploads a skill into the library, on for this profile; resolves whether it was added. */
+    addSkill: (files: Record<string, string>) => apply("Skill not added")(installed((profileId) => host.library.addSkill(profileId, files))),
+    /** Everything the account has, or just the skills in `names` (Copy to Mochi on one of its rows). */
+    importFromAccount: (provider: Provider, names?: string[]) =>
+      host.library.importFromAccount(spaceId, provider, names ? ['skills'] : ['skills', 'mcp'], names).then(
         ({ entries: list, notes }) => {
           setEntries(list);
           return notes;
