@@ -1,25 +1,47 @@
-import { safeStorage } from 'electron';
 import { access, constants } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
-import { DEFAULT_SETTINGS, mergeSettings, migrateSettings, type Account, type AccountId, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ApiKeyState } from '../../src/host/types/settings.ts';
-import type { Provider } from '../../src/model.ts';
-import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/settings/accounts.ts';
-import { HARNESSES } from '../../src/settings/harnesses.ts';
-import { fallbackShell } from '../platform.ts';
-import { userPath } from '@mochi/core/shellPath';
-import { cachedDoc, writeDoc } from '@mochi/core/store/client';
+import { DEFAULT_SETTINGS, mergeSettings, migrateSettings, type Account, type AccountId, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ApiKeyState } from '../../../../src/host/types/settings.ts';
+import type { Provider } from '../../../../src/model.ts';
+import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../../../src/settings/accounts.ts';
+import { HARNESSES } from '../../../../src/settings/harnesses.ts';
+import { fallbackShell } from '../../../../electron/platform.ts';
+import { userPath } from '../shellPath.ts';
 
 export { userPath };
 
 /**
- * Agent settings shared by the settings UI and the harness adapters. Main process only.
- * Adapters read through the getters; only `electron/ipc/settings.ts` writes.
+ * Agent settings shared by the settings UI (main) and the harness adapters (Core). Each process points it at the stored
+ * document with `useAgentConfig`; only main's `electron/ipc/settings.ts` writes.
  */
 
+/** Where the settings document lives in this process, and the OS keychain the API keys are sealed with. */
+export interface AgentConfigSource {
+  read: () => unknown;
+  write: (value: unknown) => Promise<void>;
+  keychain: { isAvailable: () => Promise<boolean>; encrypt: (text: string) => Promise<string>; decrypt: (base64: string) => Promise<string> };
+}
+
+let source: AgentConfigSource | undefined;
+
+export function useAgentConfig(next: AgentConfigSource) {
+  source = next;
+}
+
+/** The document changed under this process (main saved it): the next read loads it again. */
+export function reloadAgentConfig() {
+  stored = undefined;
+  unreadable = undefined;
+}
+
+const sourceOf = () => {
+  if (!source) throw new Error('Agent settings are read before useAgentConfig');
+  return source;
+};
+
 interface Stored extends AgentSettings, AccountsState {
-  /** `safeStorage` ciphertext, base64, per harness. Decrypted only by `apiKeyFor()`, never written in clear or sent to the renderer. */
+  /** Keychain (`safeStorage`) ciphertext, base64, per harness. Decrypted only by `apiKeyFor()`, never written in clear or sent to the renderer. */
   apiKeys: Partial<Record<Provider, string>>;
   /** Folders used as the worktree root before the current one: their worktrees stay Mochi's for checkpoints, rewind and cleanup. */
   pastWorktreeRoots: string[];
@@ -92,10 +114,11 @@ export function secondOpinionModel(provider: Provider): string | undefined {
 }
 
 /** The key the user stored for this harness, or undefined. Only ever set as the harness's own variable in its child env (see `agentEnv`). */
-export function apiKeyFor(provider: Provider): string | undefined {
+export async function apiKeyFor(provider: Provider): Promise<string | undefined> {
   const cipher = load().apiKeys[provider];
-  if (!cipher || !safeStorage.isEncryptionAvailable()) return undefined;
-  return safeStorage.decryptString(Buffer.from(cipher, 'base64'));
+  if (!cipher) return undefined;
+  // A keychain that can't open it (locked, or none on this machine) means no key, as before.
+  return sourceOf().keychain.decrypt(cipher).catch(() => undefined);
 }
 
 /** The user's override, else the first matching executable on the user's login-shell PATH; null when neither exists. */
@@ -118,7 +141,7 @@ export async function resolveExecutable(provider: Provider): Promise<string | nu
 export async function agentEnv(provider: Provider, spaceId: string): Promise<NodeJS.ProcessEnv> {
   const { configDir } = await accountFor(spaceId, provider);
   const keyEnv = HARNESSES[provider].apiKey?.env;
-  const key = keyEnv && apiKeyFor(provider);
+  const key = keyEnv && (await apiKeyFor(provider));
   return { ...accountEnv(provider, configDir), PATH: await userPath(), ...(keyEnv && key && { [keyEnv]: key }) };
 }
 
@@ -172,21 +195,22 @@ export function linkAccount(spaceId: string, provider: Provider, id: AccountId):
   return accountsState();
 }
 
-export function apiKeyState(provider: Provider): ApiKeyState {
-  const key = apiKeyFor(provider);
-  return { isSet: !!key, last4: key?.slice(-4), canStore: safeStorage.isEncryptionAvailable() };
+export async function apiKeyState(provider: Provider): Promise<ApiKeyState> {
+  const key = await apiKeyFor(provider);
+  return { isSet: !!key, last4: key?.slice(-4), canStore: await sourceOf().keychain.isAvailable() };
 }
 
-export function setApiKey(provider: Provider, key: string | null) {
-  if (key !== null && !safeStorage.isEncryptionAvailable()) throw new Error('The OS keychain is not available, so the key cannot be stored safely');
+export async function setApiKey(provider: Provider, key: string | null) {
+  const { keychain } = sourceOf();
+  if (key !== null && !(await keychain.isAvailable())) throw new Error('The OS keychain is not available, so the key cannot be stored safely');
   const { [provider]: _, ...apiKeys } = load().apiKeys;
-  save({ ...load(), apiKeys: key === null ? apiKeys : { ...apiKeys, [provider]: safeStorage.encryptString(key).toString('base64') } });
+  save({ ...load(), apiKeys: key === null ? apiKeys : { ...apiKeys, [provider]: await keychain.encrypt(key) } });
 }
 
 function load(): Stored {
   if (stored) return stored;
   let saved: Partial<Stored> = {};
-  const document = cachedDoc<unknown>('settings', 'agent');
+  const document = sourceOf().read();
   try {
     if (document !== undefined && (typeof document !== 'object' || document === null || Array.isArray(document))) throw new TypeError('Agent settings are not an object');
     saved = (document === undefined ? {} : migrateSettings(document as Record<string, unknown>)) as Partial<Stored>;
@@ -207,8 +231,8 @@ let unreadable: unknown;
 function save(next: Stored) {
   if (unreadable) throw new Error('Agent settings could not be read at launch, so they are not saved over', { cause: unreadable });
   stored = next;
-  // writeDoc logs a failure; the next save writes the whole document again.
-  void writeDoc('settings', 'agent', next).catch(() => {});
+  // The writer logs a failure; the next save writes the whole document again.
+  void sourceOf().write(next).catch(() => {});
   const settings = agentSettings();
   for (const listener of listeners) listener(settings);
 }

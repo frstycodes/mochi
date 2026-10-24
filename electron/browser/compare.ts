@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { CompareBase } from '../../src/host/types/browser.ts';
 import { devTarget, pickPort } from '../../src/terminal/lsof.ts';
-import { worktreeRoot } from '../agents/config.ts';
+import { worktreeRoot } from '@mochi/core/agents/config';
 import { baseRef, localName } from '../git/branches.ts';
 import { mainRepo, runGit, topLevel } from '../git/run.ts';
 import { isFree, listeningPorts, runTargets } from '../ipc/ports.ts';

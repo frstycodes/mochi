@@ -6,7 +6,7 @@ import type { HostBridge, Namespace } from '../../src/host/types/index.ts';
 import { mainWindow } from '../window.ts';
 import type { Handlers, ServedByCore } from './handlers.ts';
 import { account } from './account.ts';
-import { agent } from './agent.ts';
+import { mainForAgents } from '../agents/events.ts';
 import { browser } from './browser.ts';
 import { data } from './data.ts';
 import { fs } from './fs.ts';
@@ -24,8 +24,9 @@ import { themes } from './themes.ts';
 import { usage } from './usage.ts';
 import { windows } from './windows.ts';
 
-const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, remote, account, projects, library, usage } satisfies {
-  [K in Namespace]: Omit<Handlers<K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]>, K extends keyof ServedByCore ? ServedByCore[K] : never>;
+// `agent` is served by Core (packages/core/src/agents/handlers.ts); main never gets those calls.
+const handlers = { pty, git, fs, ports, sim, browser, notify, windows, settings, data, schedule, themes, remote, account, projects, library, usage } satisfies {
+  [K in Exclude<Namespace, 'agent'>]: Omit<Handlers<K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]>, K extends keyof ServedByCore ? ServedByCore[K] : never>;
 };
 
 type Handler = (sender: Electron.WebContents, ...args: unknown[]) => Promise<unknown>;
@@ -40,8 +41,9 @@ const secureStorage = {
  * decodes it, then hands it here JSON-encoded, with the window's id so the handler gets its sender.
  */
 export const mainCapabilities = {
-  names: ['host', 'notify', 'browserView', 'sim', 'secureStorage'],
+  names: ['host', 'notify', 'browserView', 'sim', 'secureStorage', 'main'],
   handle: async ({ capability, method, args, windowId }) => {
+    if (capability === 'main') return (mainForAgents[method as keyof typeof mainForAgents] as (...args: unknown[]) => Promise<unknown>)(...args);
     if (capability === 'secureStorage') {
       const { input } = Capabilities.secureStorageMethods[method as keyof typeof secureStorage];
       const [text] = Schema.decodeUnknownSync(input)(args);
@@ -50,7 +52,7 @@ export const mainCapabilities = {
     const { input, output } = definitionOf(method) as { input: Schema.Codec<ReadonlyArray<unknown>, unknown>; output: Schema.Codec<unknown, unknown> };
     const sender = (windowId === undefined ? undefined : webContents.fromId(windowId)) ?? mainWindow()?.webContents;
     if (!sender) throw new Error(`No window to run ${method} for`);
-    const [namespace, name] = method.split('.') as [Namespace, string];
+    const [namespace, name] = method.split('.') as [Exclude<Namespace, 'agent'>, string];
     const result = await (handlers[namespace] as Record<string, Handler>)[name]!(sender, ...Schema.decodeUnknownSync(Schema.toCodecJson(input))(args));
     return Schema.encodeUnknownSync(Schema.toCodecJson(output))(result);
   },

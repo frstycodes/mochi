@@ -5,8 +5,8 @@ import type { McpServerStatus, SDKMessage } from '@anthropic-ai/claude-agent-sdk
 import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, userContent } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
-import { claudeFast } from '../../../src/runtime/models.ts';
-import { toolCall } from '../../../src/summary.ts';
+import { claudeFast } from '../../../../../src/runtime/models.ts';
+import { toolCall } from '../../../../../src/summary.ts';
 
 const CWD = '/repo';
 

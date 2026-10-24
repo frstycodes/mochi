@@ -5,7 +5,7 @@
   "type": "module",
   "exports": { "./*": "./src/*.ts" },
   "scripts": {
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -p .",
     "test": "node --test \"src/**/*.test.ts\""
   }
 }

@@ -4,7 +4,7 @@ import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import type { AgentEvent } from '../../src/host/types/agent.ts';
+import type { AgentEvent } from '../../../../src/host/types/agent.ts';
 import { nameThread } from './naming.ts';
 import { Starts } from './starts.ts';
 

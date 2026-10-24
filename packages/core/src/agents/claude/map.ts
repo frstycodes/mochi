@@ -1,17 +1,17 @@
 import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKTaskNotificationMessage, SDKTaskProgressMessage, SDKTaskStartedMessage, SDKTaskUpdatedMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentSubagentEvent, AgentTaskEvent, BackgroundTaskKind } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentSubagentEvent, AgentTaskEvent, BackgroundTaskKind } from '../../../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
-import { ACCOUNT_ARGUMENT } from '../../../src/library/connectors.ts';
-import type { AgentCommand, AgentInfo, McpCall, McpServer, McpWidgetResult, WebLink } from '../../../src/model.ts';
-import { describeApproval } from '../../../src/summary.ts';
-import { claudeFast } from '../../../src/runtime/models.ts';
-import { IMAGE_TOOL, imageCard } from '../../../src/runtime/imageTool.ts';
-import { MOCHI_SERVER } from '../../../src/runtime/toolTable.ts';
-import { claudeEventWindow } from '../../../src/usage/limits.ts';
-import { posixPath } from '../../platform.ts';
-import type { SaveImage } from '@mochi/core/agents/images';
+import { ACCOUNT_ARGUMENT } from '../../../../../src/library/connectors.ts';
+import type { AgentCommand, AgentInfo, McpCall, McpServer, McpWidgetResult, WebLink } from '../../../../../src/model.ts';
+import { describeApproval } from '../../../../../src/summary.ts';
+import { claudeFast } from '../../../../../src/runtime/models.ts';
+import { IMAGE_TOOL, imageCard } from '../../../../../src/runtime/imageTool.ts';
+import { MOCHI_SERVER } from '../../../../../src/runtime/toolTable.ts';
+import { claudeEventWindow } from '../../../../../src/usage/limits.ts';
+import { posixPath } from '../../../../../electron/platform.ts';
+import type { SaveImage } from '../images.ts';
 
 /**
  * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs and usage totals carry across

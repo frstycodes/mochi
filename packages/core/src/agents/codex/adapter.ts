@@ -1,16 +1,16 @@
 import os from 'node:os';
-import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
-import { saveImage } from '@mochi/core/agents/images';
-import type { GeneratedImage } from '../../../src/model.ts';
-import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
-import { codexWindows } from '../../../src/usage/limits.ts';
+import { spawnCommand, type CoreChild } from '../../runClient.ts';
+import { saveImage } from '../images.ts';
+import type { GeneratedImage } from '../../../../../src/model.ts';
+import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../../../src/host/types/agent.ts';
+import { codexWindows } from '../../../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, generatedImage, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
 import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '../instructions.ts';
-import { killTree, spawnable } from '../../platform.ts';
-import { MOCHI_TIMEOUT_MS, type MochiScope } from '../../../src/runtime/toolTable.ts';
-import { CHEAP_MODELS } from '../../../src/utility/prompts.ts';
+import { killTree, spawnable } from '../../../../../electron/platform.ts';
+import { MOCHI_TIMEOUT_MS, type MochiScope } from '../../../../../src/runtime/toolTable.ts';
+import { CHEAP_MODELS } from '../../../../../src/utility/prompts.ts';
 
 interface Live {
   codexId: string;

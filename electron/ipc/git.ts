@@ -6,7 +6,7 @@ import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
 import { addBranchWorktree, baseRef, branchNameError, headOf, listBranches, renameAutoBranch, switchBranch } from '../git/branches.ts';
-import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
+import { prDrafts, worktreeRoot, worktreeRoots } from '@mochi/core/agents/config';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
 import type { Handlers } from './handlers.ts';

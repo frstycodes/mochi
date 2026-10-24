@@ -1,14 +1,14 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { app } from 'electron';
-import type { Provider } from '../../src/model.ts';
-import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
-import { composeInstructions, instructionsFileOf, SHARED_INSTRUCTIONS, type ProfileFolder } from '../../src/settings/instructionFiles.ts';
+import type { Provider } from '../../../../src/model.ts';
+import { HARNESS_IDS } from '../../../../src/settings/harnesses.ts';
+import { composeInstructions, instructionsFileOf, SHARED_INSTRUCTIONS, type ProfileFolder } from '../../../../src/settings/instructionFiles.ts';
+import { userData } from './paths.ts';
 
 // A long file would crowd every turn's context; past this it is cut, and Settings says how long it is.
 const MAX_CHARS = 64 * 1024;
 
-const folderOf = (spaceId: string) => join(app.getPath('userData'), 'profiles', spaceId);
+const folderOf = (spaceId: string) => join(userData(), 'profiles', spaceId);
 
 /** The profile's folder with its files, made (empty) the first time so there is something to open. */
 export async function profileFolder(spaceId: string): Promise<ProfileFolder> {

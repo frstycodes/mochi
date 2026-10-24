@@ -2,8 +2,8 @@ import { constants } from 'node:fs';
 import { copyFile, cp, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
-import type { Account, ConfigPreview, FileEdit, ProfileConfig, ProviderConfig } from '../../src/host/types/settings.ts';
-import type { Provider } from '../../src/model.ts';
+import type { Account, ConfigPreview, FileEdit, ProfileConfig, ProviderConfig } from '../../../../src/host/types/settings.ts';
+import type { Provider } from '../../../../src/model.ts';
 import {
   claudeDeniedServers,
   claudeServers,
@@ -27,9 +27,9 @@ import {
   type McpEntry,
   type McpServerDef,
   type SkillEntry,
-} from '../../src/settings/agentConfig.ts';
-import { parseToml } from '../../src/settings/toml.ts';
-import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
+} from '../../../../src/settings/agentConfig.ts';
+import { parseToml } from '../../../../src/settings/toml.ts';
+import { HARNESS_IDS, HARNESSES } from '../../../../src/settings/harnesses.ts';
 import { claudeAiConnectorsOf } from './claude/claudeAiConnectors.ts';
 import { accountFor, userPath } from './config.ts';
 

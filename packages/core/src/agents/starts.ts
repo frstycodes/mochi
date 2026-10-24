@@ -1,4 +1,4 @@
-import type { SetupChoice } from '../../src/host/types/agent.ts';
+import type { SetupChoice } from '../../../../src/host/types/agent.ts';
 
 interface Pending {
   finished: Promise<void>;
