@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
 import { setAmbientPrefs } from '../../../src/store/context.ts';
 import { actionOf, COMMAND_TYPE, domainFrom, project } from './index.ts';
@@ -19,7 +19,8 @@ function runtimeGraph(entry: string) {
   };
   visit(entry);
   const root = resolve(import.meta.dirname, '../../..');
-  return { modules: [...modules].map((m) => relative(root, m)), packages: [...packages].sort() };
+  // Forward slashes on every OS: the checks below match POSIX-style paths, and Windows' backslashes would slip past them.
+  return { modules: [...modules].map((m) => relative(root, m).split(sep).join('/')), packages: [...packages].sort() };
 }
 
 const RENDERER_ONLY = /host\/(index|desktop|web|cwd)|uiStorage|settings\/prefs\.ts|chat\/pins\.ts|chat\/outbox\.ts|git\/worktrees|projects\.ts|profiles\.ts|demoData|\.tsx$/;
