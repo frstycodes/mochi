@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { parseToml, removeTomlTables, setTomlKey } from './toml.ts';
 
 test('header offsets ignore strings, comments, nested arrays and inline tables while preserving unrelated text', () => {

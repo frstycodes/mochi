@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { encodeCwd, parseClaudeLine } from './claude.ts';
 import { parseCodexLog } from './codex.ts';
 import { parseLog } from './git.ts';

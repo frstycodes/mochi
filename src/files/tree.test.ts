@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { buildTree, compactTree, filterFiles, toRanges, visibleRows } from './tree.ts';
 
 const FILES = ['README.md', 'src/files/FileTree.tsx', 'src/files/fuzzy.ts', 'src/pane/FilesTab.tsx', 'src/ui.tsx'];

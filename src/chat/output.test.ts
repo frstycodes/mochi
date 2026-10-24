@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { outputLines } from './output.ts';
 
 test('command output lines take a tone: failures red, passes green, "fail 0" summaries stay plain', () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { bareState, type RefState } from '../chat/refs.ts';
 import type { Criterion, Step, Thread } from '../model.ts';
 import { failureLine, idleVerdict, verdictTiles } from './verdict.ts';

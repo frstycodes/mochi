@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Effect, Layer } from 'effect';
 import type { SqlClient } from 'effect/sql';
 import { backupNow, BACKUPS_KEPT, listBackups } from './backup.ts';

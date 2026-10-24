@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Schema } from 'effect';
 import { projectsRpc } from './ipc/projects.ts';
 import { remoteRpc } from './ipc/remote.ts';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { isCloneUrl, normalizeOrigin, repoName } from './origin.ts';
 
 test('normalizeOrigin gives https, ssh and scp-style remotes of one repo the same identity', () => {

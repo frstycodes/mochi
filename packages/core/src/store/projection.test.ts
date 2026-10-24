@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Effect, Fiber, Layer, Schema, Stream } from 'effect';
 import { actionOf, COMMAND_TYPE, domainOf, type ReplicaItem } from '@mochi/domain';
 import type { AgentEvent } from '../../../../src/host/types/agent.ts';

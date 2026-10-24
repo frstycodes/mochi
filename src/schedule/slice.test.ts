@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { onTestFinished, test } from 'vite-plus/test';
 import type { ScheduleRun } from '../host/types/schedule.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialQueue, queueReducer } from '../store/queue.ts';
@@ -35,9 +35,9 @@ test('a scheduled thread waits for its run; the run wakes it, lands in the Queue
   assert.equal(s.threads.at(-1)!.activity.at(-1)?.text, 'Settled: Nightly dependency check finished: 2 findings');
 });
 
-test('Auto-fix: turning it on tells the agent once, events go to it as their own rows, off or capped stops them', (t) => {
+test('Auto-fix: turning it on tells the agent once, events go to it as their own rows, off or capped stops them', () => {
   setPrefs({ autofixPrs: false });
-  t.after(() => setPrefs(DEFAULT_PREFS));
+  onTestFinished(() => setPrefs(DEFAULT_PREFS));
   const create: Action = { type: 'create', title: 'Fix login', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
   let s = reduce(base(), create);
   const id = s.threads.at(-1)!.id;
@@ -67,8 +67,8 @@ test('Auto-fix: turning it on tells the agent once, events go to it as their own
   assert.equal(reduce(s, ci).threads.at(-1)!.activity.length, s.threads.at(-1)!.activity.length);
 });
 
-test('a PR new to a thread starts with your defaults, said on the thread; one it already had keeps its state', (t) => {
-  t.after(() => setPrefs(DEFAULT_PREFS));
+test('a PR new to a thread starts with your defaults, said on the thread; one it already had keeps its state', () => {
+  onTestFinished(() => setPrefs(DEFAULT_PREFS));
   const create: Action = { type: 'create', title: 'Fix login', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
   let s = reduce(base(), create);
   const id = s.threads.at(-1)!.id;

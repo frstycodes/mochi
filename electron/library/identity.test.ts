@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { LibraryConnector } from '../../src/library/library.ts';
 import { identityOf, sameAccount } from './identity.ts';
 

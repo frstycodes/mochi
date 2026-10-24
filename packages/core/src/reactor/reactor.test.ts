@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Deferred, Effect, Layer } from 'effect';
 import { COMMAND_TYPE } from '@mochi/domain';
 import type { AgentCall } from '../../../../src/runtime/live.ts';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { setAmbientPrefs } from '../../../src/store/context.ts';
 import { actionOf, COMMAND_TYPE, domainFrom, project } from './index.ts';
 

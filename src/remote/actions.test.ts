@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { commandFor } from './actions.ts';
 
 test('the shared UI’s actions become the commands that do the same on the machine', () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { autofixBody, autofixPrompt, autofixStep, type AutofixBaseline, type AutofixCheckState, type AutofixComment, type AutofixEvent, type AutofixSnapshot } from './autofix.ts';
 
 const target = { pr: 12, since: 1 };

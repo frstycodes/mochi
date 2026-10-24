@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { findSkillDirs, parseSkillSource } from './skillSource.ts';
 
 const source = (owner: string, repo: string, extra: Partial<{ ref: string; path: string; skill: string | null }> = {}) => ({ owner, repo, ref: 'HEAD', path: '', skill: null, ...extra });

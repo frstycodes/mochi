@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { EditorSelection, EditorState, type StateCommand, type Transaction } from '@codemirror/state';
 import { continueMarkup, markdownSupport, nestListItems, outdentListItems } from './markdownEditing.ts';
 

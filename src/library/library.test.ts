@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { parsePluginBundle } from './pluginBundle.ts';
 import { codexServerConfig, EMPTY_LIBRARY, libraryEntries, ownSkillItem, parseLibrary, profileConnectors, profileLayout, removeItem, setItemEnabled, STANDALONE_PLUGIN, type LibraryIndex } from './library.ts';
 

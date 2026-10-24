@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { forkPoint, takeForkAt, transcriptUuids } from './fork.ts';
 
 // A real Claude Code 2.1.296 transcript: `aaaaaaaa…` was yielded, then interrupted before Claude Code read it, so only its

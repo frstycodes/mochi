@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { nearestPage } from './useSnapPager.ts';
 
 test('a swipe ticks once per page crossed, both ways, and a programmatic move never ticks', () => {

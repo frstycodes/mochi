@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { bindingOf, checkBinding, chordOf, chordText, COMMAND_IDS, COMMANDS, conflictOf, defaultKeys, filterCommands, isCommand, parseChord, rebind, reservedReason, resetBinding, type CommandId } from './keymap.ts';
 
 const key = (code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ code, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods });

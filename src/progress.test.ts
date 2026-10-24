@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Step, Thread } from './model.ts';
 import { boardColumns, similarity, statusAt, timeAgo, goalProgress, progressLabel, duration, formatElapsed } from './progress.ts';
 import { setPrefs } from './settings/prefs.ts';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { claudeEventWindow, claudeUsageWindows, codexWindows, durationLabel, mergeWindows, toneFor, untilLabel } from './limits.ts';
 
 test('a Claude rate_limit_event becomes one window, utilization 0–1 read as a percentage', () => {

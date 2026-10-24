@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { DiffFile } from '../host/types/git.ts';
 import { DEFAULT_SETTINGS, mergeSettings } from '../host/types/settings.ts';
 import { commitPrompt, handoffPrompt, parseAudit, parseCommit, parsePr, parseTitle, prPrompt, titlePrompt, utilityCandidates, UTILITY_TASKS } from './prompts.ts';

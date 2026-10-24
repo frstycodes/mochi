@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Cause, Context, Effect, Exit, Layer, Schedule, Stream } from 'effect';
 import { HttpServer } from 'effect/http';
 import WebSocket from 'ws';

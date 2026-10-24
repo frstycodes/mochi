@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { canNavigate, isAllowedUrl } from './navigation.ts';
 
 test('file: loads directly, but a web page cannot hop to one', () => {

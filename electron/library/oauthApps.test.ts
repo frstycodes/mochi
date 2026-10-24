@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { mochiOAuthApp, mochiOAuthProviders } from './oauthApps.ts';
 
 test("Mochi's own OAuth apps come from the build, overridable per provider by env", () => {

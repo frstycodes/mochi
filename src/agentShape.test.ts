@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { blendPose, BODY_HEIGHT, EYE_R, GROUND, oneHot, PHASES, propShapes, stepWeights, VIEW } from './agentShape.ts';
 
 test('every pose keeps mochi on the canvas with its eye inside the dome, props keep a fixed shape count, and each phase moves differently', () => {

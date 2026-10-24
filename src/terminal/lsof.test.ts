@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { launchConfigs, listeningUnder, packageScripts, parseCwds, parseEtime, parseListening, parsePs, pickPort, portsByRoot } from './lsof.ts';
 
 test('lsof listeners, cwds and ps rows combine into ports under the thread root', () => {

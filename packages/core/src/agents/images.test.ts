@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { sweepImages } from './images.ts';
 
 test('the sweep deletes only old images no saved text names', async () => {

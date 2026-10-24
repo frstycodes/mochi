@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { tmpdir } from 'node:os';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { runCheck } from './check.ts';
 
 // Checks are the user's own commands, so they're written for the platform's shell: cmd.exe on Windows.

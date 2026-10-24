@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { CHAT_MIN_W, closeKind, dropTarget, EMPTY_LAYOUT, GAP, moveKind, openKind, PANE_HEADER_H, PANE_MIN_H, resizeRows, resolveLayout, type PaneLayout } from './layout.ts';
 
 const open = (...kinds: Parameters<typeof openKind>[1][]) => kinds.reduce(openKind, EMPTY_LAYOUT);

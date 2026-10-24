@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { ActivityEntry } from '../model.ts';
 import { chatRows, finalReplies, liveWorkIndex, planSummary } from './rows.ts';
 import { turnChanges, type TurnChanges } from './turnChanges.ts';

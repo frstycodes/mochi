@@ -42,7 +42,7 @@ pnpm dev
 | `pnpm electron:dev` | Desktop app with hot reload |
 | `pnpm electron:build` | Unsigned macOS `.app` in `release/` |
 | `pnpm typecheck` | Renderer, Electron main, Core and relay, with tsc-rs and its Effect diagnostics |
-| `pnpm test` | `node --test` over `src/**/*.test.ts` |
+| `pnpm test` | Vitest over every `*.test.ts`; `pnpm test --changed <ref>` runs only the tests a diff reaches |
 | `pnpm artifact` | Single-file HTML build in `artifact/` |
 
 ## Layout

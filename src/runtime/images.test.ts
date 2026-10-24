@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentEvent } from '../host/types/agent.ts';
 import { chatRows } from '../chat/rows.ts';

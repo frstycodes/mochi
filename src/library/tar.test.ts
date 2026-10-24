@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { readTar } from './tar.ts';
 
 test('readTar reads regular files, long pax paths, and skips what accept rejects', async () => {

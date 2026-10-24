@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { stepElapsedMs } from '../goals/plan.ts';
 import type { AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
 import { NOW0 } from '../model.ts';

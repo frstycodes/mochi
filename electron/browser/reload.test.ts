@@ -1,43 +1,45 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { afterEach, test, vi } from 'vite-plus/test';
 import { devTarget } from '../../src/terminal/lsof.ts';
 import { debounce, DEBOUNCE_MS, isHmrLog, isIgnored, ScrollMemory, watchTree } from './reload.ts';
+
+afterEach(() => vi.useRealTimers());
 
 test('isIgnored skips build, cache and VCS dirs and editor temp files, nothing else', () => {
   for (const rel of ['node_modules/react/index.js', '.git/index', 'dist/assets/app.js', 'web/.next/cache/x', 'src/.DS_Store', 'src/App.tsx~', 'src/.App.tsx.swp', 'node_modules\\react\\index.js']) assert.ok(isIgnored(rel), rel);
   for (const rel of ['src/App.tsx', 'index.html', 'public/build-info.json', 'src/distance.ts']) assert.ok(!isIgnored(rel), rel);
 });
 
-test('debounce runs once after the burst settles', (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('debounce runs once after the burst settles', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   let calls = 0;
   const fire = debounce(() => calls++, 100);
   fire();
-  t.mock.timers.tick(60);
+  vi.advanceTimersByTime(60);
   fire();
-  t.mock.timers.tick(60);
+  vi.advanceTimersByTime(60);
   assert.equal(calls, 0);
-  t.mock.timers.tick(40);
+  vi.advanceTimersByTime(40);
   assert.equal(calls, 1);
   fire();
   fire.cancel();
-  t.mock.timers.tick(200);
+  vi.advanceTimersByTime(200);
   assert.equal(calls, 1);
 });
 
-test('watchTree reports one change per burst, with its start, and ignores node_modules', (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+test('watchTree reports one change per burst, with its start, and ignores node_modules', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], now: 1000 });
   const seen: number[] = [];
   let emit: (paths: ReadonlyArray<string>) => void = () => {};
   let isStopped = false;
   const stop = watchTree('/repo', (since) => seen.push(since), (_root, onPaths) => ((emit = onPaths), () => (isStopped = true)));
   emit(['node_modules/dep/index.js']);
-  t.mock.timers.tick(DEBOUNCE_MS + 1);
+  vi.advanceTimersByTime(DEBOUNCE_MS + 1);
   assert.equal(seen.length, 0);
   emit(['src/a.ts']);
-  t.mock.timers.tick(50);
+  vi.advanceTimersByTime(50);
   emit(['src/b.ts']);
-  t.mock.timers.tick(DEBOUNCE_MS + 1);
+  vi.advanceTimersByTime(DEBOUNCE_MS + 1);
   assert.deepEqual(seen, [1000 + DEBOUNCE_MS + 1]);
   stop();
   assert.ok(isStopped);

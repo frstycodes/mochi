@@ -6,6 +6,6 @@
   "exports": { "./*": "./src/*.ts" },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test \"src/**/*.test.ts\""
+    "test": "vp test run --root ../.. packages/core/src"
   }
 }

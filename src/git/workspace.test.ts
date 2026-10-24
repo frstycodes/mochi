@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { branchFromTitle, branchText, tempBranch, withHead } from './workspace.ts';
 
 test('a new branch starts on prefix + 8 hex, the same for the same seed, and takes its title as a slug, made unique', () => {

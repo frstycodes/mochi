@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { BUILT_IN_RECIPES, parseRecipe, parseRecipes, parseTarget, withOverrides, type SetupTarget } from '../../src/library/recipes.ts';
 import { runRecipe, type RecipeOps } from './runRecipe.ts';
 

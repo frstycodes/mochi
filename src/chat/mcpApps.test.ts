@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { withCsp } from './mcpApps.ts';
 
 const MOBBIN = '<!doctype html><html><head>\n<script type="module" src="https://mobbin.com/a.js"></script></head><body><header>x</header></body></html>';

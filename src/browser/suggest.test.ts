@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { inlineCompletion, rankSuggestions, type Candidate } from './suggest.ts';
 
 const history = (url: string, title = ''): Candidate => ({ kind: 'history', url, title });

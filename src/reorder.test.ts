@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Thread } from './model.ts';
 import { initialThreads } from './store/threads.ts';
 import { activeThreads, descendantsOf, isSameListing, lastActivityAt, dropAt, dropPin, flattenGroups, nestBlocker, rootOf, orderBetween, parentOf, pinAt, pinMany, pinnedThreads, pinOrderOf, reorderThreads, sidebarGroups, stepPin, togglePin } from './reorder.ts';

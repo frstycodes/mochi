@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { slackClientFrom, type SlackApps } from './ownApp.ts';
 
 function apps(known: Record<string, { clientId: string; clientSecret: string }> = {}) {

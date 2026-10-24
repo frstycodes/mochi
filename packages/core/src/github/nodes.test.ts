@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { buildQuery, currentPr, toPullRequest, type Ask } from './nodes.ts';
 import type { AutofixSnapshot, BranchPrs } from './schema.ts';
 

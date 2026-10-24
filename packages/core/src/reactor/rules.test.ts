@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { LoggedEvent } from '@mochi/domain';
 import type { QueueItem, Thread } from '../../../../src/model.ts';
 import { DEFAULT_CONTEXT } from '../../../../src/store/context.ts';

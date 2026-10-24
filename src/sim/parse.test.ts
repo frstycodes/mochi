@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { frameSplitter, parseSimctlList, textToKeys, udid, url } from '../../electron/sim/parse.ts';
 
 const LIST = JSON.stringify({

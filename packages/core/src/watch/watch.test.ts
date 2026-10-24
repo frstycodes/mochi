@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Effect, Fiber, Stream } from 'effect';
 import type { WatchKey, WatchValue } from './keys.ts';
 import { globsOf } from './roots.ts';

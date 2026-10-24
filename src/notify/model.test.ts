@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { QueueItem, Step, Thread } from '../model.ts';
 import { diffNotices, groupBursts, isAddressed, isQuiet, type Notice } from './model.ts';
 import { setPrefs } from '../settings/prefs.ts';

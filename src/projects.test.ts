@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { host } from './host/index.ts';
 import type { Project } from './host/types/projects.ts';
 import { QueryObserver } from '@tanstack/react-query';

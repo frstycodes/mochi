@@ -29,7 +29,7 @@ export function mochiOAuthApp(provider: OAuthProviderId | 'google'): OAuthClient
   return { client_id: clientId, ...(clientSecret && { client_secret: clientSecret }) };
 }
 
-// Replaced by the Electron build (vite.config.ts); undefined under node --test.
+// Replaced by the Electron build (vite.config.ts); undefined in tests.
 declare const __MOCHI_OAUTH_ENV__: Record<string, string> | undefined;
 
 const BUILD_ENV = typeof __MOCHI_OAUTH_ENV__ === 'undefined' ? {} : __MOCHI_OAUTH_ENV__;

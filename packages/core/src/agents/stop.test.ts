@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { onTestFinished, test } from 'vite-plus/test';
 import { Effect } from 'effect';
 import { NO_PENDING_REQUEST, type AgentEvent } from '../../../../src/host/types/agent.ts';
 import { UtilityQueue } from '../utility/queue.ts';
@@ -66,9 +66,7 @@ async function until<A>(read: () => A | undefined | false, what: string, timeout
 }
 
 // TODO(windows): the fake `claude` is a shebang script, which Windows can't run as an executable; it needs a `.cmd` shim.
-const skip = process.platform === 'win32' && 'fake CLI is a POSIX shebang script';
-
-test('stopping a thread interrupts its session fiber, kills its Claude Code process tree and releases its pending approval', { skip }, async (t) => {
+test.skipIf(process.platform === 'win32')('stopping a thread interrupts its session fiber, kills its Claude Code process tree and releases its pending approval', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'claude-fake-'));
   const fake = path.join(dir, 'claude');
   writeFileSync(fake, FAKE_CLAUDE, { mode: 0o755 });
@@ -82,7 +80,7 @@ test('stopping a thread interrupts its session fiber, kills its Claude Code proc
   useAgentServices({ turns, queue: await Effect.runPromise(UtilityQueue.make) });
   const events: AgentEvent[] = [];
   const off = onAgentEvent((event) => events.push(event));
-  t.after(() => {
+  onTestFinished(() => {
     off();
     disposeAgents();
   });

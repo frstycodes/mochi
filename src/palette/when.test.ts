@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { singleLayout, splitLeaf, type View } from '../layout/tree.ts';
 import type { Pane, QueueItem, Thread } from '../model.ts';
 import { reviewThreads, stepIndex } from '../review/order.ts';

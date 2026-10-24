@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { byAttention, refDescription, refFromUrl, refLabel, refTone, splitRefs, type RefState } from './refs.ts';
 
 const home = { owner: 'frstycodes', repo: 'mochi' };

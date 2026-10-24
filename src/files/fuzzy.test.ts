@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { slashItems, slashMatches } from '../chat/slash.ts';
 import { fuzzyMatch, fuzzyMatches } from './fuzzy.ts';
 

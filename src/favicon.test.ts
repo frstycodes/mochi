@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { faviconFallback, faviconUrl } from './favicon.ts';
 import { CONNECTORS, connectorIcon, GOOGLE_WORKSPACE_URL } from './library/connectors.ts';
 

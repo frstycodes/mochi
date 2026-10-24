@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { SetupChoice, WorktreeSetup } from '../../src/host/types/agent.ts';
 import { includePatterns, installCommand, matchesInclude, prepareWorktree } from './setup.ts';
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Effect, Exit, Fiber, Layer } from 'effect';
 import { NodeServices } from '@effect/platform-node';
 import { TestClock } from 'effect/testing';

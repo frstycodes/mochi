@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { DRIFT_CASES, replay, score } from './drift.cases.ts';
 import { classifyWithModel, isConcrete, judgeDrift, judgeLocally, localClassifier, setDriftClassifier, stepTitleFrom, type DriftClassifier } from './drift.ts';
 import { seedThreads } from './model.ts';

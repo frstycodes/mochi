@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { skillPlacementDir } from '../../src/library/library.ts';
 import { removeSkillFolder, writeSkillFolder } from './skillFiles.ts';
 

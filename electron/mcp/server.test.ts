@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { Server } from 'node:http';
-import { registerHooks } from 'node:module';
-import test from 'node:test';
+import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -9,6 +9,8 @@ import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '@mochi/core/agents
 import { useAgentConfig } from '@mochi/core/agents/config';
 import { claudeServer as coreClaudeServer } from '@mochi/core/agents/mochiTools';
 import { GOAL_TOOLS, isGoalTool, SETTINGS_CHAT_TOOLS, TOOL_NAMES } from '../../src/runtime/toolTable.ts';
+
+afterEach(() => vi.restoreAllMocks());
 
 test('browser instructions route to Mochi, and Codex loses the cua_repl browser it reached for instead', () => {
   assert.match(mochiInstructions(), /mcp__mochi__browser_open/);
@@ -28,32 +30,25 @@ test('only the settings chat is told to read Mochi settings first; threads are t
   assert.match(mochiInstructions(), /mcp__mochi__open_settings_chat/);
 });
 
-test('Codex HTTP exposes the same browser tools as Claude and dispatches to the caller thread', async (t) => {
-  const serverUrl = new URL('./server.ts', import.meta.url).href;
-  const windowStub = `
-    import { EventEmitter } from 'node:events';
-    class Renderer extends EventEmitter {
-      async send(channel, call) {
-        const { resolveToolCall } = await import(${JSON.stringify(serverUrl)});
+test('Codex HTTP exposes the same browser tools as Claude and dispatches to the caller thread', async () => {
+  vi.doMock('electron', () => ({ app: { isPackaged: true } }));
+  vi.doMock('../window.ts', () => {
+    const webContents = Object.assign(new EventEmitter(), {
+      async send(channel: string, call: { id: string }) {
+        const { resolveToolCall } = await import('./server.ts');
         resolveToolCall(call.id, { text: JSON.stringify({ channel, ...call }) });
-      }
-    }
-    const webContents = new Renderer();
-    export const mainWindow = () => ({ webContents });
-  `;
-  const hooks = registerHooks({
-    resolve(specifier, context, next) {
-      if (context.parentURL !== serverUrl) return next(specifier, context);
-      if (specifier === 'electron') return { url: 'data:text/javascript,export const app = { isPackaged: true };', shortCircuit: true };
-      const source = specifier === '../window.ts' ? windowStub : null;
-      return source ? { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true } : next(specifier, context);
-    },
+      },
+    });
+    return { mainWindow: () => ({ webContents }) };
   });
-  t.after(() => hooks.deregister());
+  onTestFinished(() => {
+    vi.doUnmock('electron');
+    vi.doUnmock('../window.ts');
+  });
   // oxlint-disable-next-line typescript/unbound-method -- Invoked with the intercepted server as this.
   const listen = Server.prototype.listen;
-  t.mock.method(Server.prototype, 'listen', function (this: Server, ...args: Parameters<typeof listen>) {
-    t.after(() => new Promise<void>((resolve) => {
+  vi.spyOn(Server.prototype, 'listen').mockImplementation(function (this: Server, ...args: Parameters<typeof listen>) {
+    onTestFinished(() => new Promise<void>((resolve) => {
       this.close(() => resolve());
       this.closeAllConnections();
     }));
@@ -65,7 +60,7 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
   const claudeServer = (thread: string, spaceId: string, cwd: string, scope?: Parameters<typeof coreClaudeServer>[4]) => coreClaudeServer(thread, spaceId, cwd, callMochi, scope);
   const claude = new Client({ name: 'claude-check', version: '1' });
   const codex = new Client({ name: 'codex-check', version: '1' });
-  t.after(async () => { await claude.close(); await codex.close(); });
+  onTestFinished(async () => { await claude.close(); await codex.close(); });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await claudeServer('claude-thread', 'space', '/tmp').instance.connect(serverTransport);
   await claude.connect(clientTransport);
@@ -77,7 +72,7 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
   assert.deepEqual(goalTools((await codex.listTools()).tools), [...GOAL_TOOLS].sort());
   const claudeOff = new Client({ name: 'claude-off', version: '1' });
   const codexOff = new Client({ name: 'codex-off', version: '1' });
-  t.after(async () => { await claudeOff.close(); await codexOff.close(); });
+  onTestFinished(async () => { await claudeOff.close(); await codexOff.close(); });
   const [offClient, offServer] = InMemoryTransport.createLinkedPair();
   await claudeServer('claude-thread', 'space', '/tmp', { isGoalsOff: true }).instance.connect(offServer);
   await claudeOff.connect(offClient);
@@ -94,7 +89,7 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
   }
   const claudeSettings = new Client({ name: 'claude-settings', version: '1' });
   const codexSettings = new Client({ name: 'codex-settings', version: '1' });
-  t.after(async () => { await claudeSettings.close(); await codexSettings.close(); });
+  onTestFinished(async () => { await claudeSettings.close(); await codexSettings.close(); });
   const [settingsClient, settingsServer] = InMemoryTransport.createLinkedPair();
   await claudeServer('settings-thread', 'space', '/tmp', { isGoalsOff: true, isSettingsChat: true }).instance.connect(settingsServer);
   await claudeSettings.connect(settingsClient);

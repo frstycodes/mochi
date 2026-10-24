@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { parsePluginBundle } from './pluginBundle.ts';
 
 test('a plugin unpacks into skills, subagents, hooks, servers and remotes, Claude or Codex layout', () => {

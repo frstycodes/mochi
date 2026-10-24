@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { ActivityEntry, Thread } from '../model.ts';
 import { spaceUsage, threadUsage } from './model.ts';
 

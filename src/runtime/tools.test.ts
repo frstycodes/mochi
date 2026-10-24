@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { draftFrom } from '../goals/edit.ts';

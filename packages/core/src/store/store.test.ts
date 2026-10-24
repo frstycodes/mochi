@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Effect, Fiber, Layer, Stream } from 'effect';
 import type { SqlClient } from 'effect/sql';
 import { emptyShell, emptyThread, projectShell, projectThread } from '@mochi/domain';

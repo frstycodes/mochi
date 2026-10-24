@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { EXIT_MS, getToasts, toast } from './store.ts';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

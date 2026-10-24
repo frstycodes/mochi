@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { ReviewThread } from '../host/types/git.ts';
 import { parseDiff } from './parse.ts';
 import { parsePrReview, reviewArgs, threadPlace, threadPrompt } from './prReview.ts';

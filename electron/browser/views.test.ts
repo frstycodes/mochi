@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { mkdtempSync } from 'node:fs';
-import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test, type TestContext } from 'node:test';
+import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
 import { restoreScrollScript } from './reload.ts';
+
+afterEach(() => vi.useRealTimers());
 
 // One fake window, page and renderer; the stubbed `electron` hands them to views.ts.
 class FakeDebugger extends EventEmitter {
@@ -48,34 +49,33 @@ const fake = (() => {
   const owner = { id: 1, frames: 0, isDestroyed: () => false, getZoomFactor: () => 1, send: () => owner.frames++ };
   return { win, owner, page: null as FakePage | null };
 })();
-(globalThis as { __views?: typeof fake }).__views = fake;
 
-const ELECTRON = `
-  const fake = globalThis.__views;
-  export const app = { getPath: () => '/tmp' };
-  export const BrowserWindow = { fromWebContents: () => fake.win };
-  export const screen = { getDisplayMatching: () => ({ scaleFactor: 1 }) };
-  export const session = { fromPartition: () => ({ on() {}, setPermissionRequestHandler() {}, setPermissionCheckHandler() {} }) };
-  export class WebContentsView { webContents = fake.page; setVisible() {} setBounds() {} setBorderRadius() {} }
-`;
-
-async function openView(t: TestContext) {
-  const hooks = registerHooks({
-    resolve: (specifier, context, next) => (specifier === 'electron' ? { url: `data:text/javascript,${encodeURIComponent(ELECTRON)}`, shortCircuit: true } : next(specifier, context)),
-  });
-  t.after(() => hooks.deregister());
+async function openView() {
+  vi.doMock('electron', () => ({
+    app: { getPath: () => '/tmp' },
+    BrowserWindow: { fromWebContents: () => fake.win },
+    screen: { getDisplayMatching: () => ({ scaleFactor: 1 }) },
+    session: { fromPartition: () => ({ on() {}, setPermissionRequestHandler() {}, setPermissionCheckHandler() {} }) },
+    WebContentsView: class {
+      webContents = fake.page;
+      setVisible() {}
+      setBounds() {}
+      setBorderRadius() {}
+    },
+  }));
+  onTestFinished(() => vi.doUnmock('electron'));
   const views = await import('./views.ts');
   const page = (fake.page = new FakePage());
   const { id } = views.createView(fake.owner as never, 'http://localhost:5173/', 'space');
-  t.after(() => views.destroyView(fake.owner as never, id));
+  onTestFinished(() => views.destroyView(fake.owner as never, id));
   return { views, id, page };
 }
 
 // Lets the awaits in a capture or a CDP read run.
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-test('auto-reload reads the outgoing page as a navigation starts and restores it on load', async (t) => {
-  const { views, id, page } = await openView(t);
+test('auto-reload reads the outgoing page as a navigation starts and restores it on load', async () => {
+  const { views, id, page } = await openView();
   views.setAutoReload(fake.owner as never, id, mkdtempSync(join(tmpdir(), 'views-')));
   page.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true });
   page.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false });
@@ -93,12 +93,12 @@ test('auto-reload reads the outgoing page as a navigation starts and restores it
   assert.equal(page.debugger.calls.filter((m) => m === 'Runtime.evaluate').length, 1, 'stopped auto-reload reads nothing');
 });
 
-test('the mirror backs off while frames repeat, sends only changes, and stops while the window is hidden', async (t) => {
-  const { views, id, page } = await openView(t);
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('the mirror backs off while frames repeat, sends only changes, and stops while the window is hidden', async () => {
+  const { views, id, page } = await openView();
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const captures = () => page.debugger.calls.filter((m) => m === 'Page.captureScreenshot').length;
   const tick = async (ms: number) => {
-    t.mock.timers.tick(ms);
+    vi.advanceTimersByTime(ms);
     await settle();
   };
   await views.setViewMirror(fake.owner as never, id, { width: 800, height: 600 });

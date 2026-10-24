@@ -16,10 +16,18 @@ export default defineConfig(({ mode }) => ({
     jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
     rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },
     options: { typeAware: true, typeCheck: true },
-    // node:test's `test()` returns a promise the runner already tracks.
-    overrides: [{ files: ['**/*.test.ts'], rules: { 'typescript/no-floating-promises': 'off' } }],
   },
-  plugins: lazyPlugins(() => [
+  test: {
+    include: ['src/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'electron/**/*.test.ts', 'infra/**/src/**/*.test.ts'],
+    setupFiles: ['scripts/test-env.ts'],
+    // `--changed` follows imports only; a dependency bump or a fixture a test reads from disk reruns everything.
+    forceRerunTriggers: ['**/package.json', '**/{vitest,vite}.config.*', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '**/fixtures/**'],
+    // Suites that spawn Core, git or a fake CLI take seconds; the default is 5s.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
+  },
+  // Tests run the sources as Node would, without the renderer's transforms.
+  plugins: lazyPlugins(() => mode === 'test' ? [] : [
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),

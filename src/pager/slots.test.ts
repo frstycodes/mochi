@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { OFF_PIN, clampToNeighbours, isHot, pagerSlots, pinnedNeighbour, releasePage, swipeStarts } from './slots.ts';
 
 const PINS = ['a', 'b', 'c', 'd', 'e'];

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { oauthBounce } from './oauth.ts';
 
 test('a returning sign-in goes on to Mochi on this machine, with every parameter', () => {

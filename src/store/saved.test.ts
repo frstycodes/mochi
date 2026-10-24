@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { applyAgentEvent } from '../runtime/apply.ts';
 import { agentCalls } from '../runtime/live.ts';
 import type { Action, State } from './index.tsx';

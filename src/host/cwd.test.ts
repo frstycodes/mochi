@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { setWorktreePath } from '../git/worktrees.ts';
 import type { Thread } from '../model.ts';
 import { repoFor } from '../projects.ts';

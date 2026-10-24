@@ -9,7 +9,7 @@ Decided: Electron desktop shell; the web build (Vite single file / artifact) kee
 - Own only the files listed for your session. Need a change in a file another session owns → make the smallest possible edit and say so in your final report.
 - Shared hotspots, one-line edits only: `src/host/index.ts` (namespace registry), `src/pane/tabs.ts` (tab registry), `src/store/index.tsx` (slice registry), `package.json` (deps/scripts), `.claude/launch.json` (append your own entry with your port).
 - Done means: `pnpm typecheck` and `pnpm test` pass; UI changes verified in the browser preview in light and dark; Electron features also run once in `pnpm electron:dev`. Report the commands and results verbatim.
-- Non-trivial logic leaves one `node --test` check (`src/**/*.test.ts`).
+- Non-trivial logic leaves one Vitest check (`*.test.ts`).
 - Follow `DESIGN.md` (tokens, type scale, radii, motion) and reuse `src/components/ui` primitives.
 - Commit in conventional, scoped commits on your branch. No attribution lines.
 

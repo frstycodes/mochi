@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { Action, State } from '../store/index.tsx';
 import type { AutofixEvent } from '../git/autofix.ts';

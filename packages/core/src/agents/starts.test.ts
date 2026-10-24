@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Starts } from './starts.ts';
 
 test('a message sent during setup waits for the start instead of finding no agent', async () => {

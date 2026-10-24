@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { argumentSlots, bySlashGroup, configuredCommands, slashGroup, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
 
 test('parses /side with its question, keeping line breaks', () => {

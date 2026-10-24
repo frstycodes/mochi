@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { manifest } from './types/index.ts';
 import { hostTags } from '@mochi/schema';
 

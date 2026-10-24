@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mock, test } from 'node:test';
+import { test, vi } from 'vite-plus/test';
 import { WebSocket } from 'ws';
 import { createCdpRelayConnection, serveRelay, type CdpRelayTarget } from './relay.ts';
 
@@ -19,7 +19,7 @@ const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 test('announces only the page, under its real target id', async () => {
   const written: Message[] = [];
-  const relay = createCdpRelayConnection(makeTarget(mock.fn(async () => ({}))), (raw) => written.push(JSON.parse(raw)));
+  const relay = createCdpRelayConnection(makeTarget(vi.fn(async () => ({}))), (raw) => written.push(JSON.parse(raw)));
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
   relay.receive(JSON.stringify({ id: 2, method: 'Target.createTarget', params: {} }));
   await settle();
@@ -50,7 +50,7 @@ test('announces only the page, under its real target id', async () => {
 
 test('forwards page commands to the tab and lets a slow one finish last', async () => {
   const pending: Array<() => void> = [];
-  const send = mock.fn((method: string) => new Promise<unknown>((resolve) => pending.push(() => resolve({ method }))));
+  const send = vi.fn((method: string) => new Promise<unknown>((resolve) => pending.push(() => resolve({ method }))));
   const written: Message[] = [];
   const relay = createCdpRelayConnection(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
   relay.receive(JSON.stringify({ id: 5, method: 'Page.captureScreenshot', sessionId: 'mochi-page' }));
@@ -61,27 +61,27 @@ test('forwards page commands to the tab and lets a slow one finish last', async 
   assert.deepEqual(written, [{ id: 6, result: { method: 'DOM.enable' }, sessionId: 'iframe-session' }]);
   pending[0]!();
   await settle();
-  assert.deepEqual(send.mock.calls[0]!.arguments, ['Page.captureScreenshot', {}, undefined]);
-  assert.deepEqual(send.mock.calls[1]!.arguments, ['DOM.enable', {}, 'iframe-session']);
+  assert.deepEqual(send.mock.calls[0]!, ['Page.captureScreenshot', {}, undefined]);
+  assert.deepEqual(send.mock.calls[1]!, ['DOM.enable', {}, 'iframe-session']);
   assert.deepEqual(written.at(-1), { id: 5, result: { method: 'Page.captureScreenshot' }, sessionId: 'mochi-page' });
 });
 
 test('resumes paused child frames, so cross-site iframes run', async () => {
-  const send = mock.fn(async () => ({}));
+  const send = vi.fn(async () => ({}));
   const relay = createCdpRelayConnection(makeTarget(send), () => {});
   // The page's own session is already running; only its children wait.
   relay.receive(JSON.stringify({ id: 1, method: 'Runtime.runIfWaitingForDebugger', sessionId: 'mochi-page' }));
   relay.receive(JSON.stringify({ id: 2, method: 'Runtime.runIfWaitingForDebugger', sessionId: 'iframe-session' }));
   await settle();
   assert.deepEqual(
-    send.mock.calls.map((call) => call.arguments),
+    send.mock.calls,
     [['Runtime.runIfWaitingForDebugger', {}, 'iframe-session']],
   );
 });
 
 test('routes page events to the page session once the page is announced', async () => {
   const written: Message[] = [];
-  const relay = createCdpRelayConnection(makeTarget(mock.fn(async () => ({}))), (raw) => written.push(JSON.parse(raw)));
+  const relay = createCdpRelayConnection(makeTarget(vi.fn(async () => ({}))), (raw) => written.push(JSON.parse(raw)));
   relay.event('Page.loadEventFired', {}, undefined);
   assert.deepEqual(written, []);
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
@@ -96,7 +96,7 @@ test('routes page events to the page session once the page is announced', async 
 });
 
 test('gives a second page session the page commands and events', async () => {
-  const send = mock.fn(async () => ({}));
+  const send = vi.fn(async () => ({}));
   const written: Message[] = [];
   const relay = createCdpRelayConnection(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
@@ -112,7 +112,7 @@ test('gives a second page session the page commands and events', async () => {
   assert.ok(written.find((m) => m['id'] === 4)?.['error']);
   relay.receive(JSON.stringify({ id: 5, method: 'Page.startScreencast', sessionId: extra }));
   await settle();
-  assert.deepEqual(send.mock.calls.at(-1)?.arguments, ['Page.startScreencast', {}, undefined]);
+  assert.deepEqual(send.mock.calls.at(-1), ['Page.startScreencast', {}, undefined]);
   written.length = 0;
   relay.event('Page.screencastFrame', { data: 'x' }, undefined);
   assert.deepEqual(
@@ -122,7 +122,7 @@ test('gives a second page session the page commands and events', async () => {
 });
 
 test('acknowledges download behavior without touching the tab, and reports downloads on the root session', async () => {
-  const send = mock.fn(async () => ({}));
+  const send = vi.fn(async () => ({}));
   const written: Message[] = [];
   const relay = createCdpRelayConnection(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
@@ -142,7 +142,7 @@ test('acknowledges download behavior without touching the tab, and reports downl
 });
 
 test('serveRelay listens on loopback under a random path and refuses a wrong path', async () => {
-  const relay = await serveRelay(makeTarget(mock.fn(async () => ({}))));
+  const relay = await serveRelay(makeTarget(vi.fn(async () => ({}))));
   try {
     assert.match(relay.endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/[0-9a-f]{32}$/);
     const wrong = new WebSocket(new URL('/wrong', relay.endpoint));
@@ -154,7 +154,7 @@ test('serveRelay listens on loopback under a random path and refuses a wrong pat
 });
 
 test('serveRelay closes every connection after the first with 1008', async () => {
-  const relay = await serveRelay(makeTarget(mock.fn(async () => ({}))));
+  const relay = await serveRelay(makeTarget(vi.fn(async () => ({}))));
   const sockets: WebSocket[] = [];
   try {
     const first = new WebSocket(relay.endpoint);
@@ -171,7 +171,7 @@ test('serveRelay closes every connection after the first with 1008', async () =>
 });
 
 test('serveRelay answers a command sent over the accepted socket', async () => {
-  const relay = await serveRelay(makeTarget(mock.fn(async () => ({}))));
+  const relay = await serveRelay(makeTarget(vi.fn(async () => ({}))));
   const socket = new WebSocket(relay.endpoint);
   try {
     await once(socket, 'open');

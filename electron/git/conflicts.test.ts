@@ -3,12 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { conflictedPaths } from './conflicts.ts';
 
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_COUNT: '0' };
 
-test('a merge conflict on a path with a space and a newline lists that path verbatim', { skip: process.platform === 'win32' && 'Windows paths cannot hold a newline' }, async () => {
+// Windows paths cannot hold a newline.
+test.skipIf(process.platform === 'win32')('a merge conflict on a path with a space and a newline lists that path verbatim', async () => {
   const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'mochi-conflicts-')));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, env: { ...process.env, ...IDENTITY }, stdio: 'pipe' }).toString();
   const file = 'a b\nc.txt';

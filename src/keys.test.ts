@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { isMacPlatform, isMod, isNav, orderKeys, shortcutText } from './keys.ts';
 
 const press = (mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean }>) => ({ metaKey: false, ctrlKey: false, altKey: false, ...mods });

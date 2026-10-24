@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Duration, Effect, Fiber, Layer, Schedule, Stream } from 'effect';
 import { NodeServices } from '@effect/platform-node';
 import { Run } from '../run.ts';

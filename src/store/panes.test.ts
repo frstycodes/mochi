@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Pane } from '../model.ts';
 import type { State } from './index.tsx';
 import { defaultBrowserUrl } from '../terminal/devServer.ts';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { registry } from './index.ts';
 import { manifest } from './types/index.ts';
 

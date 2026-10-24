@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Context, Effect, Layer, Stream } from 'effect';
 import { HttpServer } from 'effect/http';
 import { Capabilities } from '@mochi/schema';

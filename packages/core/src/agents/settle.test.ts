@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { threadSessions } from './settle.ts';
 
 test("settling a thread takes its own session and its background agents, never another thread's", () => {

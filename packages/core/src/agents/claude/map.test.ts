@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { McpServerStatus, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, userContent } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';

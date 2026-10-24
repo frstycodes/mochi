@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { browserLabel, parseSuggestions } from './external.ts';
 
 test('browserLabel names the default browser on each platform', () => {

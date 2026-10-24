@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Effect, Exit, Fiber, Layer, Scope } from 'effect';
 import { Capabilities } from '@mochi/schema';
 import { coreUrl, makeCoreClient } from './client.ts';

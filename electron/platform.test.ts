@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { spawnable } from './platform.ts';
 
 test('only Windows shims and bare names go through cmd.exe, quoted', () => {

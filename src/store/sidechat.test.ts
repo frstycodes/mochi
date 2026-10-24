@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { firstPrompt } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { chatFor, questionText, sidechatReducer, type Quote } from './sidechat.ts';

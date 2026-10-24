@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { PullRequest, Thread } from '../model.ts';
 import { autoMergeArgs, createdPr, isArchiveDue, recordPrs } from './prs.ts';
 
