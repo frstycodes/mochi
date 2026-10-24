@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { Capabilities } from '@mochi/schema';
 import { connectCore, coreUrl, type CoreClient } from './client.ts';
 import { serveCapabilities, type CapabilityHandler } from './hostClient.ts';
+import { mintDeviceToken, type DeviceGrant } from './remote/token.ts';
 import { useCoreClient } from './runClient.ts';
 import { flushDocs, hasPendingDocs, preloadDocs, useDocsClient } from './store/client.ts';
 
@@ -28,6 +29,7 @@ export interface StartCoreOptions {
 export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions) {
   const token = randomBytes(32).toString('base64url');
   const port = freePort();
+  resolveEndpoint(port.then((port) => ({ port, token })));
   let core: UtilityProcess | undefined;
   let isQuitting = false;
 
@@ -80,6 +82,15 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
   });
   return ready().then(() => preloadDocs(['settings', 'window_bounds']));
 }
+
+let resolveEndpoint: (endpoint: Promise<{ port: number; token: string }>) => void;
+const endpoint = new Promise<{ port: number; token: string }>((resolve) => (resolveEndpoint = resolve));
+
+/** Where a paired device's tunnel reaches Core, and a fresh token holding it to that device's scopes. */
+export const deviceTunnel = async (grant: DeviceGrant) => {
+  const { port, token } = await endpoint;
+  return { url: coreUrl(port, '').split('#')[0]!, token: mintDeviceToken(token, grant) };
+};
 
 let resolveMainClient: (client: CoreClient) => void;
 const mainClient = new Promise<CoreClient>((resolve) => (resolveMainClient = resolve));
