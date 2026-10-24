@@ -35,7 +35,6 @@
     { "type": "terminal-open", "threadId": "t", "cols": 80, "rows": 24 },
     { "type": "terminal-write", "threadId": "t", "terminalId": "p", "data": "ls\r" },
     { "type": "terminal-resize", "threadId": "t", "terminalId": "p", "cols": 100, "rows": 30 },
-    { "type": "terminal-read", "threadId": "t", "terminalId": "p", "after": 0 },
     { "type": "terminal-close", "threadId": "t", "terminalId": "p" }
   ],
   "hello": [{ "type": "hello", "version": 4 }, { "type": "hello", "version": 4, "members": [{ "id": "k1" }] }],
@@ -48,7 +47,6 @@
     { "isOk": false, "error": "This connection lacks the operate scope" },
     { "isOk": true },
     { "isOk": true, "data": { "text": "hi" } },
-    { "isOk": true, "data": { "data": "$ ", "next": 2 } },
     { "isOk": true, "data": { "projects": [{ "ref": "p1", "name": "mochi" }], "models": { "claude": [{ "id": "claude-opus-5-5", "name": "Opus 5.5", "description": "", "efforts": ["high"], "speeds": [], "isDefault": true }] }, "defaults": { "claude": "", "codex": "" } } },
     { "isOk": true, "data": { "shell": "zsh", "theme": "mochi" } }
   ]

@@ -133,6 +133,38 @@ test('a device command runs where main serves `remote`, named after the device; 
   );
 });
 
+test('terminal output is pushed to a device in order; a `read`-only device is refused the stream', async () => {
+  await run(
+    Effect.gen(function* () {
+      const { window, client } = yield* setup(['read', 'terminal']);
+      yield* window['terminal.open']({ terminalId: 'p1', threadId: 't1' });
+      yield* window['terminal.feed']({ terminalId: 'p1', data: 'one ' });
+      const chunks = yield* client['terminal.output']({ terminalId: 'p1', threadId: 't1', after: 0 }).pipe(Stream.runCollect, Effect.forkChild);
+      yield* Effect.sleep(200);
+      yield* window['terminal.feed']({ terminalId: 'p1', data: 'two ' });
+      yield* window['terminal.feed']({ terminalId: 'p1', data: 'three' });
+      yield* Effect.sleep(100);
+      yield* window['terminal.exit']({ terminalId: 'p1', exitCode: 0 });
+      const received = [...(yield* Fiber.join(chunks))];
+      assert.equal(received.map((c) => c.data).join(''), 'one two three');
+      assert.equal(received.at(-1)?.exitCode, 0);
+      assert.ok(received.length > 1, 'pushed in more than one piece, not read once');
+      // Resuming from an offset skips what it already has; another thread's id gets nothing.
+      const [tail] = yield* client['terminal.output']({ terminalId: 'p1', threadId: 't1', after: 4 }).pipe(Stream.take(1), Stream.runCollect);
+      assert.equal(tail?.data, 'two three');
+      const other = yield* client['terminal.output']({ terminalId: 'p1', threadId: 't2', after: 0 }).pipe(Stream.runCollect, Effect.exit);
+      assert.ok(Exit.isFailure(other));
+
+      const reader = yield* setup(['read']);
+      yield* reader.window['terminal.open']({ terminalId: 'p1', threadId: 't1' });
+      const refused = yield* reader.client['terminal.output']({ terminalId: 'p1', threadId: 't1', after: 0 }).pipe(Stream.runCollect, Effect.exit);
+      assert.ok(Exit.isFailure(refused));
+      const error = Cause.squash(refused.cause);
+      assert.ok(error instanceof Unauthorized && error.scope === 'terminal', String(error));
+    }),
+  );
+});
+
 test('malformed frames from a device are refused and logged', async () => {
   await run(
     Effect.gen(function* () {

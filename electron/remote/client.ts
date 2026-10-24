@@ -18,6 +18,8 @@ export interface FollowOptions {
   secure: (raw: RawLink) => Promise<Link>;
   onChange: (state: FollowedMachine) => void;
   onFrame: (frame: Relay.MirrorFrame) => void;
+  /** A terminal opened on the machine printed (or exited); in order, from the offset the window last got. */
+  onTerminal: (output: { terminalId: string } & typeof Relay.TerminalOutput.Type) => void;
   /** What it said about itself, to remember for the next launch. */
   onWelcome: (welcome: { addresses: string[]; kind?: DeviceKind }) => void;
   /** This computer's membership records, sent in each hello. */
@@ -49,7 +51,7 @@ const decodeThread = Schema.decodeUnknownExit(Persist.SavedThread);
 export function followMachine(options: FollowOptions): MachineFollower {
   const { machine } = options;
   let state: FollowedMachine = { id: machine.id, name: machine.name, kind: machine.kind, status: 'connecting', scopes: [], lastSeenAt: machine.lastSeenAt };
-  let session: { scope: Scope.Closeable; fiber: Fiber.Fiber<unknown, unknown>; client?: DeviceClient } | undefined;
+  let session: { scope: Scope.Closeable; fiber: Fiber.Fiber<unknown, unknown>; client?: DeviceClient; terminals: Map<string, Fiber.Fiber<unknown, unknown>> } | undefined;
 
   const set = (patch: Partial<FollowedMachine>) => {
     state = { ...state, ...patch };
@@ -58,7 +60,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
 
   function start() {
     const scope = Scope.makeUnsafe();
-    const current: NonNullable<typeof session> = { scope, fiber: undefined as never };
+    const current: NonNullable<typeof session> = { scope, fiber: undefined as never, terminals: new Map() };
     session = current;
     options.onFrame({ type: 'reset' });
     set({ status: 'connecting', error: undefined });
@@ -92,7 +94,27 @@ export function followMachine(options: FollowOptions): MachineFollower {
 
   function stop(current: NonNullable<typeof session>) {
     if (session === current) session = undefined;
-    void Effect.runPromise(Fiber.interrupt(current.fiber).pipe(Effect.andThen(Scope.close(current.scope, Exit.void))));
+    void Effect.runPromise(Fiber.interruptAll([current.fiber, ...current.terminals.values()]).pipe(Effect.andThen(Scope.close(current.scope, Exit.void))));
+  }
+
+  /** A terminal opened on the machine pushes its output until it is closed or exits, resuming after a dropped link where it left off. */
+  function watchTerminal(current: NonNullable<typeof session>, client: DeviceClient, command: RemoteCommand, result: CommandResult) {
+    if (command.type === 'terminal-close') return void interrupt(current.terminals, command.terminalId);
+    if (command.type !== 'terminal-open' || !result.isOk || !result.data || !('terminalId' in result.data)) return;
+    const { terminalId } = result.data;
+    let after = 0;
+    const output = Stream.suspend(() => client['terminal.output']({ terminalId, threadId: command.threadId, after })).pipe(
+      Stream.runForEach((chunk) =>
+        Effect.sync(() => {
+          after = chunk.next;
+          options.onTerminal({ terminalId, ...chunk });
+        }),
+      ),
+      Effect.retry({ schedule: reconnect, while: isDropped }),
+      Effect.ignore,
+      Effect.ensuring(Effect.sync(() => void current.terminals.delete(terminalId))),
+    );
+    current.terminals.set(terminalId, Effect.runFork(output));
   }
 
   start();
@@ -103,7 +125,11 @@ export function followMachine(options: FollowOptions): MachineFollower {
       if (!client || state.status !== 'online') return { isOk: false, error: `${state.name} is offline` };
       const timeout = LONG_COMMAND_TIMEOUT_MS[command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS] ?? COMMAND_TIMEOUT_MS;
       const exit = await Effect.runPromiseExit(client['device.command']({ command }).pipe(Effect.timeout(timeout)));
-      if (Exit.isSuccess(exit)) return exit.value as CommandResult;
+      if (Exit.isSuccess(exit)) {
+        const result = exit.value as CommandResult;
+        if (session) watchTerminal(session, client, command, result);
+        return result;
+      }
       const error = Cause.squash(exit.cause);
       if (Cause.isTimeoutError(error)) return { isOk: false, error: `${state.name} didn’t answer; check the thread before trying again` };
       return { isOk: false, error: error instanceof Error ? error.message : String(error) };
@@ -181,5 +207,11 @@ const mirror = (client: DeviceClient, options: FollowOptions) =>
       Effect.ignore,
     );
   });
+
+function interrupt(fibers: Map<string, Fiber.Fiber<unknown, unknown>>, id: string) {
+  const fiber = fibers.get(id);
+  fibers.delete(id);
+  if (fiber) void Effect.runPromise(Fiber.interrupt(fiber));
+}
 
 const isDropped = (error: unknown) => error instanceof RpcClientError.RpcClientError;
