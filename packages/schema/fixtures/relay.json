@@ -38,18 +38,18 @@
     { "type": "terminal-read", "threadId": "t", "terminalId": "p", "after": 0 },
     { "type": "terminal-close", "threadId": "t", "terminalId": "p" }
   ],
-  "hello": [{ "type": "hello", "version": 3 }, { "type": "hello", "version": 3, "resume": { "epoch": "e1", "seq": 4 } }],
-  "serverFrames": [
-    { "type": "welcome", "version": 3, "deviceId": "d-laptop", "machineName": "Studio", "machineKind": "mac", "scopes": ["read", "operate", "manage", "code"], "addresses": [] },
-    { "type": "refused", "reason": "This machine speaks protocol 3; update Mochi on both sides" },
-    { "type": "members", "members": [{ "id": "k1" }] },
-    { "type": "snapshot", "epoch": "e1", "seq": 0, "saved": { "version": 1, "threads": [] } },
-    { "type": "action", "epoch": "e1", "seq": 1, "action": { "type": "rename", "threadId": "t", "title": "x" } },
-    { "type": "result", "id": "c1", "isOk": false, "error": "This device can’t interrupt: it needs the operate scope" },
-    { "type": "result", "id": "c2", "isOk": true },
-    { "type": "result", "id": "c1", "isOk": true, "data": { "text": "hi" } },
-    { "type": "result", "id": "c3", "isOk": true, "data": { "data": "$ ", "next": 2 } },
-    { "type": "result", "id": "c4", "isOk": true, "data": { "projects": [{ "ref": "p1", "name": "mochi" }], "models": { "claude": [{ "id": "claude-opus-5-5", "name": "Opus 5.5", "description": "", "efforts": ["high"], "speeds": [], "isDefault": true }] }, "defaults": { "claude": "", "codex": "" } } },
-    { "type": "result", "id": "c5", "isOk": true, "data": { "shell": "zsh", "theme": "mochi" } }
+  "hello": [{ "type": "hello", "version": 4 }, { "type": "hello", "version": 4, "members": [{ "id": "k1" }] }],
+  "machineFrames": [
+    { "type": "welcome", "version": 4, "deviceId": "d-laptop", "machineName": "Studio", "machineKind": "mac", "scopes": ["read", "operate", "manage", "code"], "addresses": [] },
+    { "type": "refused", "reason": "This machine speaks protocol 4; update Mochi on both sides" },
+    { "type": "members", "members": [{ "id": "k1" }] }
+  ],
+  "results": [
+    { "isOk": false, "error": "This connection lacks the operate scope" },
+    { "isOk": true },
+    { "isOk": true, "data": { "text": "hi" } },
+    { "isOk": true, "data": { "data": "$ ", "next": 2 } },
+    { "isOk": true, "data": { "projects": [{ "ref": "p1", "name": "mochi" }], "models": { "claude": [{ "id": "claude-opus-5-5", "name": "Opus 5.5", "description": "", "efforts": ["high"], "speeds": [], "isDefault": true }] }, "defaults": { "claude": "", "codex": "" } } },
+    { "isOk": true, "data": { "shell": "zsh", "theme": "mochi" } }
   ]
 }

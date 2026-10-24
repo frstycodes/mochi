@@ -1,25 +1,24 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { StreamFrame } from '../host/types/remote.ts';
+import type { MirrorFrame } from '../host/types/remote.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
 import { applyFrame, type Mirror } from '../remote/mirror.ts';
 import type { Action } from '../store/index.tsx';
-import { toSaved } from '../store/persist.ts';
+import { splitSaved, toSaved } from '../store/persist.ts';
 import { mirrorState, reducer } from '../store/root.ts';
 import { alertsToShow, baselineOf, remoteAlerts, type RemoteAlert, type RemoteBaseline } from './remote.ts';
 
-/** Another computer with one live thread, its stream as frames. */
+/** Another computer with one live thread; its thread file as the `thread` stream sends it after each save. */
 function machine() {
   let state = reducer(mirrorState({ version: 1, now: 900, seq: 1, threads: [], queue: [], checkpoints: {}, checkpointSeq: 0, forks: {} }), { type: 'create', title: 'Fix login', provider: 'claude', project: null, isLive: true, isBackground: true });
   const threadId = state.threads[0].id;
-  let seq = 0;
   let eventSeq = 0;
-  const act = (action: Action): StreamFrame => {
+  const snapshot = (): MirrorFrame => ({ type: 'thread', threadId, saved: JSON.parse(splitSaved(toSaved(state)).threads[threadId]) });
+  const act = (action: Action): MirrorFrame => {
     state = reducer(state, action);
-    return { type: 'action', epoch: 'e1', seq: ++seq, action: JSON.parse(JSON.stringify(action)) };
+    return snapshot();
   };
   const agent = (event: AgentEvent) => act({ type: 'agent', event: { ...event, seq: ++eventSeq } });
-  const snapshot = (): StreamFrame => ({ type: 'snapshot', epoch: 'e1', seq, saved: JSON.parse(JSON.stringify(toSaved(state))) });
   return { act, agent, snapshot, threadId };
 }
 
@@ -28,16 +27,15 @@ function follower() {
   let mirror: Mirror | undefined;
   let baseline: RemoteBaseline | undefined;
   const alerts: string[] = [];
-  const receive = (frame: StreamFrame) => {
+  const receive = (frame: MirrorFrame) => {
     mirror = applyFrame(mirror, frame);
-    if (!mirror) return;
     alerts.push(...remoteAlerts(baseline, mirror.state).map((a) => a.kind));
     baseline = baselineOf(mirror.state);
   };
-  return { receive, alerts, reconnect: () => (mirror = undefined) };
+  return { receive, alerts, reconnect: () => (mirror = applyFrame(mirror, { type: 'reset' })) };
 }
 
-test('each ask, failure and finished turn alerts once, across a reconnect’s snapshot and replayed actions', () => {
+test('each ask, failure and finished turn alerts once, across a reconnect’s snapshot and repeated saves', () => {
   const m = machine();
   const f = follower();
   f.receive(m.snapshot());
@@ -48,10 +46,10 @@ test('each ask, failure and finished turn alerts once, across a reconnect’s sn
   frames.forEach(f.receive);
   assert.deepEqual(f.alerts, ['needs-you'], 'the approval');
 
-  // The connection drops and comes back: a fresh snapshot, then the same actions again.
+  // The connection drops and comes back with a fresh snapshot; the same save may arrive twice.
   f.reconnect();
   f.receive(m.snapshot());
-  frames.forEach(f.receive);
+  f.receive(m.snapshot());
   assert.deepEqual(f.alerts, ['needs-you'], 'nothing new to say');
 
   const failed = m.agent({ threadId: m.threadId, type: 'turn-end', status: 'failed', error: 'boom' });

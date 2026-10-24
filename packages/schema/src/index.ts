@@ -2,6 +2,7 @@ export * as Agent from './agent.ts';
 export * as Model from './model.ts';
 export * as Persist from './persist.ts';
 export * as Relay from './relay.ts';
+export * as RelayWire from './relayWire.ts';
 export * as Settings from './settings.ts';
 export * as Stored from './stored.ts';
 export * as Account from './ipc/account.ts';

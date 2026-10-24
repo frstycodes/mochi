@@ -418,25 +418,6 @@
     "output": []
    }
   ],
-  "remote.push": [
-   {
-    "input": [
-     "e1",
-     1,
-     "{\"type\":\"select\",\"threadId\":\"t1\"}"
-    ]
-   }
-  ],
-  "remote.snapshot": [
-   {
-    "input": [
-     "r1",
-     "e1",
-     0,
-     "{\"v\":1,\"threads\":[]}"
-    ]
-   }
-  ],
   "remote.answerApproval": [
    {
     "input": [
@@ -1076,12 +1057,20 @@
     "event": {
      "machineId": "m1",
      "frame": {
-      "type": "snapshot",
-      "epoch": "e1",
-      "seq": 0,
+      "type": "reset"
+     }
+    }
+   },
+   {
+    "event": {
+     "machineId": "m1",
+     "frame": {
+      "type": "thread",
+      "threadId": "t1",
       "saved": {
-       "v": 1,
-       "threads": []
+       "thread": {
+        "id": "t1"
+       }
       }
      }
     }
@@ -1090,13 +1079,9 @@
     "event": {
      "machineId": "m1",
      "frame": {
-      "type": "action",
-      "epoch": "e1",
-      "seq": 1,
-      "action": {
-       "type": "select",
-       "threadId": "t1"
-      }
+      "type": "thread",
+      "threadId": "t1",
+      "saved": null
      }
     }
    }
@@ -1201,11 +1186,6 @@
      "isOnBattery": false,
      "error": "Port 47123 is taken"
     }
-   }
-  ],
-  "remote.onSnapshotRequest": [
-   {
-    "event": "r1"
    }
   ],
   "remote.join": [
@@ -3647,13 +3627,6 @@
      "isPinned": true,
      "order": null
     }
-   ]
-  ],
-  "remote.push": [
-   [
-    "e1",
-    0,
-    "{}"
    ]
   ],
   "remote.set": [

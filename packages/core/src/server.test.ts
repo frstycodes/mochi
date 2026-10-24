@@ -11,6 +11,7 @@ import WebSocket from 'ws';
 import { Capabilities } from '@mochi/schema';
 import { coreUrl, makeCoreClient } from './client.ts';
 import { makeHostCaller, serveCapabilities } from './hostClient.ts';
+import { mintDeviceToken } from './remote/token.ts';
 import { Unauthorized } from './rpc.ts';
 import { layerCore } from './server.ts';
 
@@ -25,10 +26,13 @@ const startCore = Effect.gen(function* () {
   return (Context.get(context, HttpServer.HttpServer).address as { port: number }).port;
 });
 
+/** `coreUrl`'s address, and its token as the subprotocols a client offers. */
+const dial = (url: string): [string, string[]] => [url.split('#')[0]!, url.includes('#') ? Capabilities.subprotocolsFor(url.split('#')[1]!) : []];
+
 /** A plain `ws` client speaking the JSON wire format, as a phone or a script would. */
 function plainTicks(url: string, count: number, headers: { origin?: string } = {}) {
   return new Promise<number[]>((resolve, reject) => {
-    const ws = new WebSocket(url, headers);
+    const ws = new WebSocket(...dial(url), { headers });
     const ticks: number[] = [];
     ws.on('unexpected-response', (_request, response) => reject(new Error(`refused: ${response.statusCode}`)));
     ws.on('open', () => ws.send(JSON.stringify({ _tag: 'Request', id: '1', tag: 'ticks', payload: { intervalMs: 5 }, headers: [] })));
@@ -47,7 +51,7 @@ function plainTicks(url: string, count: number, headers: { origin?: string } = {
 /** The HTTP status Core refused an upgrade with, or `open`. */
 function upgradeStatus(url: string, headers: { origin?: string } = {}) {
   return new Promise<number | 'open'>((resolve) => {
-    const ws = new WebSocket(url, headers);
+    const ws = new WebSocket(...dial(url), { headers });
     ws.on('unexpected-response', (_request, response) => resolve(response.statusCode!));
     ws.on('open', () => (ws.close(), resolve('open')));
   });
@@ -70,7 +74,7 @@ test('a window client and a plain WebSocket client get the same ticks', async ()
   );
 });
 
-test('Core refuses a missing or wrong token, a foreign Origin, another protocol version and a missing scope', async () => {
+test('Core refuses a missing, wrong or query-string token, a foreign Origin, another protocol version, a scoped window and a missing scope', async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -81,16 +85,24 @@ test('Core refuses a missing or wrong token, a foreign Origin, another protocol 
             upgradeStatus(`${base}?v=${Capabilities.PROTOCOL_VERSION}`),
             upgradeStatus(coreUrl(port, 'guess')),
             upgradeStatus(coreUrl(port, TOKEN), { origin: 'http://evil.test' }),
-            upgradeStatus(`${base}?v=${Capabilities.PROTOCOL_VERSION + 1}&token=${TOKEN}`),
+            upgradeStatus(`${base}?v=${Capabilities.PROTOCOL_VERSION + 1}#${TOKEN}`),
+            upgradeStatus(`${base}?v=${Capabilities.PROTOCOL_VERSION}&token=${TOKEN}`),
+            upgradeStatus(coreUrl(port, READ_TOKEN, 7)),
+            upgradeStatus(coreUrl(port, mintDeviceToken(TOKEN, { id: 'd1', name: 'Laptop', scopes: ['read'] }), 7)),
+            upgradeStatus(coreUrl(port, mintDeviceToken('not-cores-token', { id: 'd1', name: 'Laptop', scopes: ['read'] }))),
+            upgradeStatus(coreUrl(port, mintDeviceToken(TOKEN, { id: 'd1', name: 'Laptop', scopes: ['read'] }, Date.now() - 3_600_000))),
             upgradeStatus(coreUrl(port, TOKEN), { origin: ORIGIN }),
           ]),
         );
-        assert.deepEqual(statuses, [401, 401, 403, 426, 'open']);
+        assert.deepEqual(statuses, [401, 401, 403, 426, 401, 403, 403, 401, 401, 'open']);
 
         const reader = yield* makeCoreClient(coreUrl(port, READ_TOKEN));
         assert.equal(yield* reader.ping(), 'pong');
         const exit = yield* reader.run({ command: 'true', args: [] }).pipe(Effect.exit);
         assert.ok(Exit.isFailure(exit) && Cause.squash(exit.cause) instanceof Unauthorized);
+        const device = yield* makeCoreClient(coreUrl(port, mintDeviceToken(TOKEN, { id: 'd1', name: 'Laptop', scopes: ['read', 'operate', 'manage', 'code', 'terminal'] })));
+        const local = yield* device['docs.get']({ table: 'settings', key: 'agent' }).pipe(Effect.exit);
+        assert.ok(Exit.isFailure(local) && (Cause.squash(local.cause) as Unauthorized).scope === 'local', 'every scope a device can hold still leaves out `local`');
       }),
     ),
   );

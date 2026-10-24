@@ -16,7 +16,7 @@ import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { createSlackApp } from '../library/slackApp.ts';
 import { googleClientFrom, slackClientFrom, type SetupCapture, type SlackApps } from '../library/ownApp.ts';
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
-import { RELAY_URL } from '../remote/relayClient.ts';
+import { RELAY_URL } from '@mochi/core/remote/relayClient';
 import { setAutoUpdate, updateItem } from '../library/updates.ts';
 import type { Handlers } from './handlers.ts';
 

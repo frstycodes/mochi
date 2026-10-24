@@ -1,6 +1,5 @@
 import type { RemoteHost } from '../../src/host/types/remote.ts';
-import { parseCommand } from '../remote/protocol.ts';
-import { answerApproval, answerCommand, answerSnapshot, cachedMachines, cacheMachine, commandMachine, follow, followedMachines, join, otherMachines, pushAction, remoteStatus, removeMember, setDeviceScopes, setRemote } from '../remote/index.ts';
+import { answerApproval, answerCommand, cachedMachines, cacheMachine, commandMachine, follow, followedMachines, join, otherMachines, remoteStatus, removeMember, setDeviceScopes, setRemote } from '../remote/index.ts';
 import type { Handlers } from './handlers.ts';
 
 export const remote = {
@@ -9,12 +8,6 @@ export const remote = {
   },
   async set(_sender, patch) {
     return setRemote({ ...patch, ...(patch.machineName !== undefined && { machineName: patch.machineName.trim() }) });
-  },
-  async push(sender, epoch, seq, action) {
-    pushAction(sender, epoch, seq, JSON.parse(action));
-  },
-  async snapshot(sender, requestId, epoch, seq, saved) {
-    answerSnapshot(sender, requestId, epoch, seq, JSON.parse(saved));
   },
   async commandResult(sender, id, result) {
     answerCommand(sender, id, result);
@@ -40,10 +33,6 @@ export const remote = {
   async follow(sender) {
     follow(sender);
   },
-  async command(_sender, machineId, command) {
-    // The same check a machine runs on a device's frame, so nothing malformed leaves this computer.
-    const frame = parseCommand(JSON.stringify({ type: 'command', id: 'renderer', command }));
-    if (typeof frame === 'string') throw new TypeError(frame);
-    return commandMachine(machineId, frame.command);
-  },
+  // Core decoded `command` with the same schema the machine's Core decodes it with, so nothing malformed leaves here.
+  command: async (_sender, machineId, command) => commandMachine(machineId, command),
 } satisfies Handlers<RemoteHost>;

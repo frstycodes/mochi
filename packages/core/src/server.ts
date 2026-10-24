@@ -5,12 +5,14 @@ import { Context, Effect, Layer, Schedule, Schema, Stream } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { NodeHttpServer } from '@effect/platform-node';
-import { Capabilities as Contract, definitionOf } from '@mochi/schema';
+import { Capabilities as Contract, definitionOf, Relay } from '@mochi/schema';
 import { Cache } from './cache.ts';
 import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
 import { Capabilities, hostHandlers } from './hostServer.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
+import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
+import { visibleItem } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
 import { storeHandlers } from './store/handlers.ts';
 import type { DocTable } from './store/migrations.ts';
@@ -26,7 +28,7 @@ import { Turns } from './agents/turns.ts';
 export interface ServerOptions {
   readonly port: number;
   readonly host?: string;
-  /** Each accepted token and the scopes a connection made with it gets. */
+  /** Each accepted token and the scopes a connection made with it gets. One carrying `local` also signs device tokens (`remote/token.ts`). */
   readonly tokens: ReadonlyMap<string, ReadonlyArray<Contract.AuthScope>>;
   /** Page origins allowed to connect. A client that sends no Origin (main, a Node client) needs only the token. */
   readonly origins: ReadonlyArray<string>;
@@ -41,7 +43,15 @@ export const layerCore = (options: ServerOptions) =>
     Layer.provideMerge(layerAgents(options.userData)),
     Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), Capabilities.layer, UtilityQueue.layer, Turns.layer, layerStore(options.userData)).pipe(Layer.provideMerge(Run.layer))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
-    Layer.provideMerge(NodeHttpServer.layer(createServer, { port: options.port, host: options.host ?? '127.0.0.1', gracefulShutdownTimeout: '100 millis' })),
+    Layer.provideMerge(
+      NodeHttpServer.layer(createServer, {
+        port: options.port,
+        host: options.host ?? '127.0.0.1',
+        gracefulShutdownTimeout: '100 millis',
+        // Answers with `mochi` alone: the token subprotocol is never echoed back.
+        websocket: { handleProtocols: (offered) => (offered.has(Contract.SUBPROTOCOL) ? Contract.SUBPROTOCOL : false) },
+      }),
+    ),
   );
 
 /** The store, after the one-time import of main's JSON files, so no handler reads it before they are in. */
@@ -66,17 +76,21 @@ const connect = (options: ServerOptions, services: Context.Context<Services>) =>
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = new URL(request.url, 'http://core');
     if (url.searchParams.get('v') !== String(Contract.PROTOCOL_VERSION)) return yield* refuse(426, `Core speaks protocol ${Contract.PROTOCOL_VERSION}`);
-    const scopes = scopesOf(options.tokens, url.searchParams.get('token'));
-    if (!scopes) return yield* refuse(401, 'Unknown token');
+    // A URL ends up in logs and history; the token travels as a subprotocol (`Contract.subprotocolsFor`).
+    if (url.searchParams.has('token')) return yield* refuse(401, 'Token in the query string');
+    const identity = identify(options.tokens, Contract.tokenFromSubprotocols(request.headers['sec-websocket-protocol']));
+    if (!identity) return yield* refuse(401, 'Unknown token');
     const origin = request.headers.origin;
     if (origin !== undefined && !options.origins.includes(origin)) return yield* refuse(403, `Origin ${origin} not allowed`);
+    // Only this computer's own clients act for a window; main hands the id to the windows it trusts.
+    if (url.searchParams.has('window') && !identity.scopes.includes('local')) return yield* refuse(403, 'A scoped token can’t name a window');
     const window = Number(url.searchParams.get('window'));
     const windowId = Number.isInteger(window) && window > 0 ? window : undefined;
 
     const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
     yield* RpcServer.make(CoreWsRpcs, { disableFatalDefects: true }).pipe(
       Effect.provideService(RpcServer.Protocol, protocol),
-      Effect.provide(Layer.mergeAll(layerHandlers(windowId, options.userData), layerScopes(scopes))),
+      Effect.provide(Layer.mergeAll(layerHandlers(windowId, identity, options.userData), layerScopes(identity.scopes))),
       Effect.provide(services),
       Effect.forkScoped,
     );
@@ -110,23 +124,34 @@ const refuse = (status: number, reason: string) =>
 
 const digest = (token: string) => createHash('sha256').update(token).digest();
 
-/** Compares digests, so neither the token's length nor its content leaks through timing. */
-function scopesOf(tokens: ServerOptions['tokens'], token: string | null) {
+interface Identity {
+  readonly scopes: ReadonlyArray<Contract.AuthScope>;
+  /** Set for a paired device's tunnel. */
+  readonly device?: DeviceGrant;
+}
+
+/** A known token's scopes, or a device token signed by a `local` one. Digests are compared, so nothing leaks through timing. */
+function identify(tokens: ServerOptions['tokens'], token: string | undefined): Identity | undefined {
   if (!token) return undefined;
   const given = digest(token);
   let scopes: ReadonlyArray<Contract.AuthScope> | undefined;
   for (const [known, granted] of tokens) if (timingSafeEqual(digest(known), given)) scopes = granted;
-  return scopes;
+  if (scopes) return { scopes };
+  for (const [known, granted] of tokens) {
+    const device = granted.includes('local') ? verifyDeviceToken(known, token) : undefined;
+    if (device) return { scopes: device.scopes, device };
+  }
+  return undefined;
 }
 
 // Pattern from T3 Code's `apps/server/src/auth/RpcAuthorization.ts`.
 const layerScopes = (scopes: ReadonlyArray<Contract.AuthScope>) =>
-  Layer.succeed(ScopeAuthorization)((effect, { rpc }) => {
-    const scope = Contract.scopeOf(rpc._tag);
+  Layer.succeed(ScopeAuthorization)((effect, { rpc, payload }) => {
+    const scope = Contract.scopeOf(rpc._tag, payload);
     return scopes.includes(scope) ? effect : Effect.fail(new Unauthorized({ scope }));
   });
 
-const layerHandlers = (windowId: number | undefined, userData: string | undefined) =>
+const layerHandlers = (windowId: number | undefined, identity: Identity, userData: string | undefined) =>
   CoreWsRpcs.toLayer(
     Effect.gen(function* () {
       const run = yield* Run;
@@ -134,9 +159,9 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
       const store = yield* Store;
       const queue = yield* UtilityQueue;
       const host = hostHandlers(capabilities, windowId) as Record<string, (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>>;
-      const store_ = storeHandlers(store, userData);
       const watch = yield* Watch;
       const github = yield* GitHub;
+      const stored = storeHandlers(store, userData);
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) => Stream.fromSchedule(Schedule.spaced(intervalMs)),
@@ -169,11 +194,22 @@ const layerHandlers = (windowId: number | undefined, userData: string | undefine
         ...host,
         ...agentHandlers(windowId),
         ...agentRpcHandlers,
-        ...store_,
+        ...stored,
+        thread: (input: { threadId: string; afterSequence: number }) => stored.thread(input).pipe(Stream.map((item) => visibleItem(item, identity.scopes)), Stream.filter((item) => item !== undefined)),
+        'device.command': ({ command }: { command: Relay.RemoteCommand }) => deviceCommand(capabilities, identity.device, command),
         // Main's settings writes land here; the agents read them without a restart.
         'docs.set': (input: { table: DocTable; key: string; value?: unknown }) =>
-          store_['docs.set'](input).pipe(Effect.tap(() => Effect.sync(() => input.table === 'settings' && input.key === 'agent' && agentSettingsSaved(input.value)))),
+          stored['docs.set'](input).pipe(Effect.tap(() => Effect.sync(() => input.table === 'settings' && input.key === 'agent' && agentSettingsSaved(input.value)))),
         ...githubHandlers(github),
       } as never;
     }),
   );
+
+/** Runs in the window that owns the store, through main's `remote` capability, until Core owns the store. */
+const deviceCommand = (capabilities: Capabilities['Service'], device: DeviceGrant | undefined, command: Relay.RemoteCommand) =>
+  Effect.gen(function* () {
+    if (!device) return { isOk: false, error: 'Only a paired device sends device commands' } satisfies Relay.CommandResult;
+    const request = yield* Schema.encodeEffect(Schema.toCodecJson(Relay.RemoteCommandRequest))({ id: device.id, deviceName: device.name, command });
+    const value = yield* capabilities.call({ capability: 'remote', method: 'run', args: [request] });
+    return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(Relay.CommandResult))(value);
+  }).pipe(Effect.catch((error) => Effect.succeed<Relay.CommandResult>({ isOk: false, error: typeof error === 'string' ? error : String(error) })));

@@ -4,14 +4,17 @@ import { Socket } from 'effect/socket';
 import { Capabilities } from '@mochi/schema';
 import { CoreWsRpcs } from './rpc.ts';
 
-/** Core's socket. `windowId` is the caller's webContents id, for `host.*` handlers that act on their sender. */
+/**
+ * Core's socket. `windowId` is the caller's webContents id, for `host.*` handlers that act on their sender. The token rides
+ * in the fragment, which a WebSocket never sends: `makeCoreClient` offers it as a subprotocol.
+ */
 export const coreUrl = (port: number, token: string, windowId?: number) =>
-  `ws://127.0.0.1:${port}/ws?v=${Capabilities.PROTOCOL_VERSION}&token=${encodeURIComponent(token)}${windowId ? `&window=${windowId}` : ''}`;
+  `ws://127.0.0.1:${port}/ws?v=${Capabilities.PROTOCOL_VERSION}${windowId ? `&window=${windowId}` : ''}#${token}`;
 
 /** Redials every 250ms while Core is down; calls made meanwhile wait for it. */
 const layerProtocol = (url: string) =>
   RpcClient.layerProtocolSocket({ retryTransientErrors: true, retryPolicy: Schedule.spaced(250) }).pipe(
-    Layer.provide(Socket.layerWebSocket(url)),
+    Layer.provide(Socket.layerWebSocket(url.split('#')[0]!, { protocols: Capabilities.subprotocolsFor(url.split('#')[1] ?? '') })),
     Layer.provide(Socket.layerWebSocketConstructorGlobal),
     Layer.provide(RpcSerialization.layerJson),
   );
