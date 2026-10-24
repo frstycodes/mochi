@@ -23,6 +23,10 @@ test('a profile loads only what it turned on, for the harness each item targets'
   assert.deepEqual(claude.servers.map((s) => s.name), ['files']);
 
   assert.deepEqual(profileLayout(library, 'work', 'codex').plugins, {});
+  const sourced = { ...library, items: library.items.map((i) => (i.kind === 'skill' && i.id === 's1' ? { ...i, source: 'EmilKowalski/skills/pdf' } : i)) };
+  const owned = profileLayout(sourced, 'work', 'claude').plugins;
+  assert.ok(owned.emilkowalski?.['skills/pdf/ref/a.md'], 'a GitHub skill loads under its owner, so / reads /emilkowalski:pdf');
+  assert.equal(JSON.parse(owned.emilkowalski['.claude-plugin/plugin.json']).name, 'emilkowalski');
   assert.deepEqual(profileLayout(library, 'home', 'claude'), { plugins: {}, servers: [] });
   assert.deepEqual(profileLayout(library, 'unknown', 'claude'), { plugins: {}, servers: [] });
 });

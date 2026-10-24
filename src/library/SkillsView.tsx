@@ -22,7 +22,7 @@ export function SkillsView() {
     <LibraryPage
       id="skillsLibrary"
       noun="skills"
-      description="Installed once, then handed to the profiles that should have them, or written where npx skills add puts them. Library skills load in Claude Code threads as /mochi:name."
+      description="Installed once, then handed to the profiles that should have them, or written where npx skills add puts them. Library skills load in Claude Code threads as /owner:name, owner being the GitHub account they came from (mochi for your own)."
       count={({ entries }) => entries?.filter((e) => e.kind === 'skill').length ?? 0}
       actions={({ library }) => (
         <>

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { MOCHI_SERVER } from '../runtime/toolTable.ts';
 import { connectorIcon, connectorKey, CONNECTORS } from './connectors.ts';
-import { STANDALONE_PLUGIN, type LibraryEntry } from './library.ts';
+import { skillPluginName, type LibraryEntry } from './library.ts';
 
 /** What to show for a server, plugin or skill: its human name, its own image when it has one, the raw id for a tooltip. */
 export interface DisplayName {
@@ -35,16 +35,13 @@ export function libraryNames(entries: LibraryEntry[]) {
     return { title: /[\sA-Z]/.test(key) ? key : deslug(key), raw: key };
   };
 
-  /** `<plugin>:<skill>`, standalone skills as `mochi:<skill>`, or a bare skill name. */
+  /** `<plugin>:<skill>`, the library's own as `<owner>:<skill>` (`skillPluginName`), or a bare skill name. */
   const skill = (raw: string): DisplayName => {
-    const [owner, name] = raw.includes(':') ? raw.split(':', 2) : [STANDALONE_PLUGIN, raw];
+    const [owner, name] = raw.includes(':') ? raw.split(':', 2) : [null, raw];
     const title = deslug(name);
-    if (owner !== STANDALONE_PLUGIN) {
-      const { image } = plugin(owner);
-      return { title, raw, ...(image && { image }) };
-    }
-    const entry = entries.find((e) => e.kind === 'skill' && e.name === name);
-    return { title, raw, ...(entry?.icon && { image: entry.icon }) };
+    const entry = entries.find((e) => e.kind === 'skill' && e.name === name && (owner === null || skillPluginName(e.source) === owner));
+    const image = entry?.icon ?? (owner !== null ? plugin(owner).image : undefined);
+    return { title, raw, ...(image && { image }) };
   };
 
   /** A server's tool in words: `slack_search_messages` on `slack` → "Search messages". */

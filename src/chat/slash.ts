@@ -62,6 +62,19 @@ export function slashMatches(query: string, items: SlashItem[]): SlashItem[] {
     .map((m) => m.item);
 }
 
+/** The `/` menu's section for an item: Mochi's own, the plugin a `plugin:skill` comes from, else its harness's. */
+export function slashGroup(item: SlashItem) {
+  if (item.source === 'mochi') return 'mochi';
+  const colon = item.name.indexOf(':');
+  return colon > 0 ? item.name.slice(0, colon) : item.source;
+}
+
+/** `items` with each section's rows together, sections in the order their best match ranks, so the arrows walk the menu as it reads. */
+export function bySlashGroup(items: SlashItem[]) {
+  const order = [...new Set(items.map(slashGroup))];
+  return items.toSorted((a, b) => order.indexOf(slashGroup(a)) - order.indexOf(slashGroup(b)));
+}
+
 /** The text once `item` is picked for the `/query` at `range`: the name goes exactly where it was typed, the rest untouched. */
 export function insertToken(text: string, range: { start: number; end: number }, item: SlashItem) {
   const after = text.slice(range.end);

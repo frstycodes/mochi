@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Chat, Note, ShieldAlert, Window, X } from '@/icons';
+import { Chat, ShieldAlert, Skill, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -96,7 +96,7 @@ function MentionItem({ item }: { item: MenuItem }) {
   if (item.kind === 'skill')
     return (
       <>
-        <SkillMark skill={item.skill.name} fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />} />
+        <SkillMark skill={item.skill.name} fallback={<SkillFallback />} />
         <span className="shrink-0 font-medium" title={item.skill.name}>
           {names.skill(item.skill.name).title}
         </span>
@@ -120,6 +120,11 @@ function MentionItem({ item }: { item: MenuItem }) {
       <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.thread.repo?.project ?? 'No project'}</span>
     </>
   );
+}
+
+/** The lightbulb every skill without its own icon wears, here and in the `/` menu. */
+export function SkillFallback() {
+  return <Skill className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
 const TOOLS = new Intl.PluralRules('en');
@@ -163,7 +168,7 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
 }
 
 function ChipIcon({ mention }: { mention: Exclude<Mention, { kind: 'window' | 'file' | 'thread' }> }) {
-  if (mention.kind === 'skill') return <SkillMark skill={mention.title} fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />} />;
+  if (mention.kind === 'skill') return <SkillMark skill={mention.title} fallback={<SkillFallback />} />;
   return <McpServerMark server={mention.title} />;
 }
 

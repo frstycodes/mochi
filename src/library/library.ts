@@ -203,6 +203,12 @@ export const EMPTY_LIBRARY: LibraryIndex = { items: [], profiles: {}, marketplac
 /** Claude names a plugin's skills `<plugin>:<skill>` (verified with the SDK), so standalone skills read `mochi:<skill>`; no installed plugin may take the name. */
 export const STANDALONE_PLUGIN = 'mochi';
 
+/** The plugin a library skill loads under, so `/` reads `/<owner>:<skill>`: the GitHub owner it came from, else Mochi's own. */
+export function skillPluginName(source: string | null) {
+  const owner = source?.split('/')[0].toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  return owner || STANDALONE_PLUGIN;
+}
+
 /** Owners whose skills install without a warning over their files; everyone else's are read first. */
 export const TRUSTED_SKILL_OWNERS = ['anthropics', 'openai'];
 export const FEATURED_MARKETPLACES: Marketplace[] = [{ name: 'claude-plugins-official', source: 'anthropics/claude-plugins-official' }];
@@ -299,7 +305,13 @@ export function profileLayout(index: LibraryIndex, spaceId: string, provider: Pr
   // servers only, and only plugin servers that don't run the plugin's own files, which Codex has no folder for.
   if (provider === 'codex') return { plugins: {}, servers: [...servers, ...plugins.flatMap((p) => p.bundle.servers.filter((s) => !usesPluginRoot(s)).map(stdioDef))] };
   const folders: PluginFolders = Object.fromEntries(plugins.map((p) => [p.bundle.name, pluginFolder(p.bundle)]));
-  if (skills.length) folders[STANDALONE_PLUGIN] = standalonePlugin(skills);
+  // An owner that shares an installed plugin's name would replace its folder; those skills stay under Mochi's.
+  const byOwner = new Map<string, LibrarySkill[]>();
+  for (const skill of skills) {
+    const owner = folders[skillPluginName(skill.source)] ? STANDALONE_PLUGIN : skillPluginName(skill.source);
+    byOwner.set(owner, [...(byOwner.get(owner) ?? []), skill]);
+  }
+  for (const [name, group] of byOwner) folders[name] = standalonePlugin(name, group);
   return { plugins: folders, servers };
 }
 
@@ -357,8 +369,8 @@ export const usesPluginRoot = (server: PluginBundle['servers'][number]) => /\$\{
 
 const stdioDef = ({ name, command, args, env }: PluginBundle['servers'][number]): McpServerDef => ({ name, type: 'stdio', command, args, env });
 
-function standalonePlugin(skills: LibrarySkill[]) {
-  const manifest = { name: STANDALONE_PLUGIN, description: "Skills from this profile's Mochi library" };
+function standalonePlugin(name: string, skills: LibrarySkill[]) {
+  const manifest = { name, description: "Skills from this profile's Mochi library" };
   const files: Record<string, string> = { '.claude-plugin/plugin.json': `${JSON.stringify(manifest, null, 2)}\n` };
   for (const skill of skills) for (const [path, text] of Object.entries(skill.files)) files[`skills/${skill.name}/${path}`] = text;
   return files;
