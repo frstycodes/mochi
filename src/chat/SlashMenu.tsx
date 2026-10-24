@@ -160,13 +160,51 @@ export function useThreadSkills(provider: Provider, spaceId: string, projectRoot
 /**
  * The profile's enabled MCP servers on `provider` (and the project's `.mcp.json`), with the live agent's tool count where it
  * reported one. Before the profile config is read (or in a build without one) the live agent's own list stands in. Mochi's
- * own server is never offered.
+ * own server is never offered, nor one the profile turned off.
  */
 export function useThreadServers(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): McpServer[] {
   const config = useProfileConfig(spaceId, projectRoot);
+  const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff ?? [];
   const live = new Map((agent?.mcpServers ?? []).map((s) => [s.name, s]));
-  const servers = config ? config[provider].mcpServers.filter((m) => m.enabled).map(({ def }) => live.get(def.name) ?? { name: def.name, status: 'pending' as const }) : [...live.values()];
+  const off = new Set(config ? offItems(config[provider], nativeOff).flatMap((i) => (i.kind === 'server' || i.kind === 'connector' ? [i.name] : [])) : []);
+  const pending = (name: string) => live.get(name) ?? { name, status: 'pending' as const };
+  const servers = config
+    ? [...config[provider].mcpServers.filter((m) => m.enabled && !off.has(m.def.name)).map(({ def }) => pending(def.name)), ...(config[provider].claudeAiConnectors ?? []).filter((name) => !off.has(name)).map(pending)]
+    : [...live.values()];
   return servers.filter((s) => s.name !== MOCHI_SERVER && s.status !== 'disabled');
+}
+
+/**
+ * The plugins `@` offers, by the name their skills are prefixed with: the live agent's own, else the account's enabled ones the
+ * profile didn't turn off and the library's plugins on for the profile (Claude loads both; Codex threads get no plugin folders).
+ */
+export function useThreadPlugins(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): string[] {
+  const config = useProfileConfig(agent?.plugins ? undefined : spaceId, projectRoot);
+  const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
+  const library = useLibraryPlugins(agent?.plugins || provider !== 'claude' ? undefined : spaceId);
+  return useMemo(() => {
+    if (agent?.plugins) return agent.plugins.map((p) => p.name);
+    if (!config) return [];
+    const off = new Set(offItems(config[provider], nativeOff ?? []).map((i) => i.name));
+    const native = config[provider].plugins.filter((id) => !off.has(id)).map((id) => id.split('@')[0]);
+    return [...new Set([...native, ...library])];
+  }, [agent?.plugins, config, provider, nativeOff, library]);
+}
+
+function useLibraryPlugins(spaceId: string | undefined) {
+  const [names, setNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!spaceId) return;
+    let isCurrent = true;
+    host.library.list(spaceId).then(
+      (entries) => isCurrent && setNames(entries.filter((e) => e.kind === 'plugin' && e.isEnabled).map((e) => e.name)),
+      () => isCurrent && setNames([]),
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [spaceId]);
+  return names;
 }
 
 function useAgentCommands(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): { commands: AgentCommand[]; skills?: string[] } {
