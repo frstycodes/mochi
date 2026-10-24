@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { afterEach, test, vi } from 'vite-plus/test';
+import { afterAll, afterEach, test, vi } from 'vite-plus/test';
 import { host } from '../host/index.ts';
+import { queryClient } from '../query.ts';
 import type { MachineCatalog } from '../host/types/remote.ts';
 import type { QueueItem } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -12,11 +13,8 @@ import { closeIdleShells, shellOf, terminalCore } from './terminals.ts';
 import { markOwnAnswer } from './answers.ts';
 
 afterEach(() => vi.restoreAllMocks());
-
-async function until(isDone: () => boolean) {
-  for (let i = 0; i < 100 && !isDone(); i++) await new Promise((r) => setTimeout(r, 5));
-  assert.ok(isDone(), 'timed out');
-}
+// `loadProjects` caches in the app's QueryClient, whose 5-minute GC timer otherwise holds the worker open.
+afterAll(() => queryClient.clear());
 
 function machine() {
   const base = {
@@ -95,7 +93,8 @@ test('send goes out now to an idle agent and queues behind a working one, like t
 test('operate and manage commands dispatch the same actions the UI does, and the reducer applies them', async () => {
   const { state, threadId } = machine();
   const dispatched: Action[] = [];
-  const env = device(state, 'Laptop', dispatched);
+  const handedOff = Promise.withResolvers<void>();
+  const env = { ...device(state, 'Laptop', dispatched), dispatch: (a: Action) => void (dispatched.push(a), a.type === 'handoff' && handedOff.resolve()) };
   for (const command of [
     { type: 'rename', threadId, title: 'Ship the login fix' },
     { type: 'edit-goal', threadId, goal: 'Login works with SSO' },
@@ -108,7 +107,7 @@ test('operate and manage commands dispatch the same actions the UI does, and the
   ] as const) {
     assert.deepEqual(await runRemoteCommand(command, env), { isOk: true }, command.type);
     // The handoff drafts its prompt first, as a click here does; it lands before the next command.
-    if (command.type === 'handoff') await until(() => dispatched.some((a) => a.type === 'handoff'));
+    if (command.type === 'handoff') await handedOff.promise;
   }
   assert.deepEqual(dispatched.map((a) => a.type), ['rename', 'edit-goal', 'reorder', 'fork', 'handoff-draft', 'handoff', 'settle', 'create']);
 
