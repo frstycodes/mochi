@@ -56,7 +56,8 @@ export const layerAgents = (userData: string | undefined) =>
           decrypt: (base64) => call('secureStorage', 'decrypt', [base64]) as Promise<string>,
         },
       });
-      useMain((method, args) => call('main', method, args));
+      // The call crosses as JSON: an `undefined` field is dropped and an `undefined` argument arrives as null.
+      useMain((method, args) => call('main', method, JSON.parse(JSON.stringify(args)) as ReadonlyArray<unknown>));
       useCoreClient(Promise.resolve(clientFromRun(run)));
       // In emit order: each append waits for the one before, so the log's sequence follows the agents' own.
       let appending: Promise<unknown> = Promise.resolve();

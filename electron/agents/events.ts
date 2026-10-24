@@ -110,8 +110,8 @@ export const openWindows = () => BrowserWindow.getAllWindows().filter((w) => !w.
 /** The `main` capability: what Core's agents can't do without Electron, the window, or main's library. */
 export const mainForAgents = {
   mochiTool: (thread: string, name: string, args: Record<string, unknown>) => callMochi(thread, name, args),
-  pendingToolCalls: async (windowId: number | undefined): Promise<AgentToolCall[]> => {
-    const sender = (windowId === undefined ? undefined : webContents.fromId(windowId)) ?? mainWindow()?.webContents;
+  pendingToolCalls: async (windowId: number | null): Promise<AgentToolCall[]> => {
+    const sender = (windowId === null ? undefined : webContents.fromId(windowId)) ?? mainWindow()?.webContents;
     return sender ? undeliveredToolCalls(sender) : [];
   },
   toolResult: async (id: string, result: AgentToolResult) => resolveToolCall(id, result),

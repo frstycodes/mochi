@@ -267,7 +267,7 @@ export const agent = {
     return { id };
   },
   async pendingToolCalls(window) {
-    return main.pendingToolCalls(window);
+    return main.pendingToolCalls(window ?? null);
   },
   async toolResult(_window, id, result) {
     return main.toolResult(id, { text: result.text, isError: result.isError, ...(result.image !== undefined && { image: imageOf(result.image) }) });

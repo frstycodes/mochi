@@ -1,3 +1,5 @@
+import { accountFor as accountOf, resolveExecutable, userPath } from '../config.ts';
+
 /** One Codex login, kept in its own config directory; `configDir` unset is the user's default `~/.codex`. */
 export interface CodexAccount {
   id: string;
@@ -7,8 +9,7 @@ export interface CodexAccount {
 export type AccountFor = (spaceId: string, provider: 'codex') => Promise<CodexAccount>;
 
 export const accountFor: AccountFor = async (spaceId, provider) => {
-  // Imported lazily: config.ts loads Electron, which the adapters' node tests don't have.
-  const { account, configDir } = await (await import('../config.ts')).accountFor(spaceId, provider);
+  const { account, configDir } = await accountOf(spaceId, provider);
   return { id: account.id, configDir: configDir ?? undefined };
 };
 
@@ -27,7 +28,6 @@ export type FindCodex = () => Promise<CodexInstall | null>;
 
 /** The settings' path override, else the first `codex` on the user's login-shell PATH. */
 export const findCodex: FindCodex = async () => {
-  const { resolveExecutable, userPath } = await import('../config.ts');
   const path = await resolveExecutable('codex');
   return path ? { path, env: { ...process.env, PATH: await userPath() } } : null;
 };

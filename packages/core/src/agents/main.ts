@@ -12,7 +12,8 @@ import type { MochiScope } from '../../../../src/runtime/toolTable.ts';
  */
 export interface MainForAgents {
   mochiTool(thread: string, name: string, args: Record<string, unknown>): Promise<CallToolResult>;
-  pendingToolCalls(windowId: number | undefined): Promise<AgentToolCall[]>;
+  /** `null`: the window that asked is unknown (main picks its main window). */
+  pendingToolCalls(windowId: number | null): Promise<AgentToolCall[]>;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
   codexUrl(thread: string, scope: MochiScope): Promise<string>;
   library(spaceId: string, provider: Provider): Promise<SessionLibrary>;
