@@ -1,19 +1,39 @@
 import { Schema } from 'effect';
 import { invoke, Str } from './checks.ts';
+import { COMMAND_SCOPES, type RemoteCommand } from './relay.ts';
 
 /** Core refuses a WebSocket upgrade whose `v` differs, with HTTP 426. Bump on any breaking change to Core's RPCs. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
-/** The remote member scopes. A token carries some of them; every RPC needs one (`scopeOf`). */
-export const AuthScope = Schema.Literals(['read', 'operate', 'manage', 'code', 'terminal']);
+/**
+ * Core reads a client's token from the WebSocket subprotocols it offers, never the URL: it offers `mochi` and
+ * `mochi.token.<token>`, and Core answers with `mochi` alone. A browser can set subprotocols but not headers.
+ */
+export const SUBPROTOCOL = 'mochi';
+const TOKEN_PREFIX = 'mochi.token.';
+export const subprotocolsFor = (token: string) => [SUBPROTOCOL, `${TOKEN_PREFIX}${token}`];
+/** The token in a `Sec-WebSocket-Protocol` header, if one is offered. */
+export const tokenFromSubprotocols = (header: string | undefined) =>
+  header
+    ?.split(',')
+    .map((p) => p.trim())
+    .find((p) => p.startsWith(TOKEN_PREFIX))
+    ?.slice(TOKEN_PREFIX.length);
+
+/**
+ * The remote member scopes, and `local`: everything only this computer's own windows and main may do. A paired device's
+ * token never carries `local`. A token carries some of them; every RPC needs one (`scopeOf`).
+ */
+export const AuthScope = Schema.Literals(['read', 'operate', 'manage', 'code', 'terminal', 'local']);
 export type AuthScope = typeof AuthScope.Type;
 export const allScopes = AuthScope.literals;
 
 /**
  * What a client can do for Core that Core can't: show OS notifications, own browser-pane views, reach `safeStorage`,
  * drive simulators. `host` is every `host.*` namespace whose handler still lives in main; it shrinks as they move into Core.
+ * `remote` runs a device's command (`device.command`) in the window that owns the store, until Core owns it.
  */
-export const CapabilityName = Schema.Literals(['notify', 'browserView', 'secureStorage', 'sim', 'host']);
+export const CapabilityName = Schema.Literals(['notify', 'browserView', 'secureStorage', 'sim', 'host', 'remote']);
 export type CapabilityName = typeof CapabilityName.Type;
 
 /** Core → the client that registered `capability`. `args` and the reply's `value` are JSON-encoded with the method's schema. */
@@ -41,38 +61,12 @@ export const secureStorageMethods = {
 export const capabilityOf = (namespace: string): CapabilityName =>
   namespace === 'notify' ? 'notify' : namespace === 'browser' ? 'browserView' : namespace === 'sim' ? 'sim' : 'host';
 
-const hostScopes: Record<string, AuthScope> = {
-  pty: 'terminal',
-  fs: 'code',
-  git: 'code',
-  settings: 'manage',
-  account: 'manage',
-  remote: 'manage',
-  library: 'manage',
-  data: 'manage',
-};
+/** What a paired device may call besides `device.command`. */
+const deviceScopes: Record<string, AuthScope> = { ping: 'read', shell: 'read', thread: 'read' };
 
-const coreScopes: Record<string, AuthScope> = {
-  ping: 'read',
-  ticks: 'read',
-  log: 'operate',
-  run: 'terminal',
-  spawn: 'terminal',
-  stdin: 'terminal',
-  signal: 'terminal',
-  'capabilities.serve': 'manage',
-  'capabilities.reply': 'manage',
-  shell: 'read',
-  thread: 'read',
-  'events.append': 'operate',
-  'docs.list': 'manage',
-  'docs.get': 'manage',
-  'docs.set': 'manage',
-  watch: 'code',
-  'watch.gate': 'manage',
-  'watch.stale': 'operate',
-};
-
-// GAP: per-namespace, not per-method; `remote-core` refines it when scoped device tokens exist.
-/** The scope an RPC tag needs. Unknown tags need `manage`, so a new procedure is closed until it is classified. */
-export const scopeOf = (tag: string): AuthScope => coreScopes[tag] ?? (tag.includes('.') ? (hostScopes[tag.split('.')[0]!] ?? 'operate') : 'manage');
+/**
+ * The scope an RPC needs: a device command's by its type, the few reads a device makes, and `local` for everything else,
+ * so a new procedure stays closed to devices until it is classified here.
+ */
+export const scopeOf = (tag: string, payload?: unknown): AuthScope =>
+  tag === 'device.command' ? (COMMAND_SCOPES[(payload as { command?: { type?: RemoteCommand['type'] } } | undefined)?.command?.type!] ?? 'local') : (deviceScopes[tag] ?? 'local');

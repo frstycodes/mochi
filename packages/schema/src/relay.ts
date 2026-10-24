@@ -7,14 +7,14 @@ import { Access, AgentImage, Provider } from './model.ts';
 
 // Frames carry no `v`: they are a live wire protocol, never persisted or replayed as is, versioned as a whole by
 // `hello.version` (a device on another protocol is refused at the handshake). What they carry that is persisted is versioned
-// by its own schema: a snapshot's `saved` (`persist.ts`), an action's agent event (`agent.ts`).
+// by its own schema: a thread file (`persist.ts`).
 
 const opt = Schema.optional;
 const S = Schema.String;
 const B = Schema.Boolean;
 
-/** `PROTOCOL_VERSION` in `electron/remote/protocol.ts`: bumped on any frame change. */
-export const PROTOCOL_VERSION = 3;
+/** Bumped on any link frame change; a device on another version is refused rather than misread. */
+export const PROTOCOL_VERSION = 4;
 
 const MAX_ID = 128;
 const MAX_TEXT = 256 * 1024;
@@ -80,8 +80,8 @@ const Answers = Schema.Array(Schema.Array(Str(16 * 1024)).check(Schema.isMaxLeng
 const command = <const T extends string, F extends Schema.Struct.Fields>(type: T, fields: F) => Schema.Struct({ type: Schema.Literal(type), ...fields });
 
 /**
- * What a device can ask this computer to do: `parseRemoteCommand` (`electron/remote/protocol.ts`) as a schema, limit for
- * limit. Fields a command doesn't take are dropped; titles, goals and names come back trimmed.
+ * What a device can ask this computer to do, as the `device.command` RPC's payload. Fields a command doesn't take are
+ * dropped; titles, goals and names come back trimmed.
  */
 export const RemoteCommand = Schema.Union([
   command('catalog', {}),
@@ -159,41 +159,88 @@ export type CommandResult = typeof CommandResult.Type;
 export const RemoteCommandRequest = Schema.Struct({ id: S, deviceName: S, command: RemoteCommand });
 export type RemoteCommandRequest = typeof RemoteCommandRequest.Type;
 
-/** The first frame once paired. Off-protocol devices are refused with the reason `parseHello` gives. */
+/** The scope each command needs; Core refuses it on a connection without that scope (`scopeOf` in `capabilities.ts`). */
+export const COMMAND_SCOPES = {
+  catalog: 'read',
+  settings: 'read',
+  projects: 'read',
+  send: 'operate',
+  resolve: 'operate',
+  interrupt: 'operate',
+  fork: 'operate',
+  handoff: 'operate',
+  rewind: 'operate',
+  'side-chat': 'operate',
+  seen: 'operate',
+  create: 'manage',
+  rename: 'manage',
+  'edit-goal': 'manage',
+  pin: 'manage',
+  settle: 'manage',
+  schedule: 'manage',
+  commit: 'manage',
+  push: 'manage',
+  'open-pr': 'manage',
+  delete: 'manage',
+  setting: 'manage',
+  'add-project': 'manage',
+  'clone-project': 'manage',
+  diff: 'code',
+  'checkpoint-diff': 'code',
+  change: 'code',
+  comment: 'code',
+  files: 'code',
+  'read-file': 'code',
+  'terminal-open': 'terminal',
+  'terminal-write': 'terminal',
+  'terminal-resize': 'terminal',
+  'terminal-read': 'terminal',
+  'terminal-close': 'terminal',
+} as const satisfies Record<RemoteCommand['type'], Scope>;
+
+/**
+ * After pairing, a link carries Core's WebSocket RPC (frames with a `_tag`, tunnelled to the machine's Core) and these
+ * few frames of its own (with a `type`), about who is at each end: the membership records spread over every link.
+ */
 export const HelloFrame = Schema.Struct({
   type: Schema.Literal('hello'),
   version: Schema.Number.check(Schema.makeFilter((v: number) => v === PROTOCOL_VERSION || `This machine speaks protocol ${PROTOCOL_VERSION}; update Mochi on both sides`)),
-  resume: opt(Schema.Struct({ epoch: NonEmptyId, seq: Index })),
+  /** The device's membership records, unchecked here: `members.ts` parses and weighs them. */
   members: opt(Schema.Unknown),
 });
 export type HelloFrame = typeof HelloFrame.Type;
 
-export const CommandFrame = Schema.Struct({ type: Schema.Literal('command'), id: NonEmptyId, command: RemoteCommand });
-export type CommandFrame = typeof CommandFrame.Type;
+/** `addresses`: where the machine listens on its LAN or Tailscale, so the device tries those before the relay next time. */
+export const WelcomeFrame = Schema.Struct({
+  type: Schema.Literal('welcome'),
+  version: Schema.Number,
+  deviceId: S,
+  machineName: S,
+  machineKind: DeviceKind,
+  scopes: Schema.Array(Scope),
+  addresses: Schema.Array(S),
+  members: opt(Schema.Unknown),
+});
+export type WelcomeFrame = typeof WelcomeFrame.Type;
+
+export const RefusedFrame = Schema.Struct({ type: Schema.Literal('refused'), reason: S });
+
+/** The sender's membership records changed (a computer joined or was removed). */
+export const MembersFrame = Schema.Struct({ type: Schema.Literal('members'), members: Schema.Unknown });
+
+/** What the machine says on a link besides Core's RPC frames. */
+export const MachineLinkFrame = Schema.Union([WelcomeFrame, RefusedFrame, MembersFrame]);
+export type MachineLinkFrame = typeof MachineLinkFrame.Type;
+
+/** A device's frame after its hello: one of Core's RPC client messages, or its membership records. */
+export const DeviceLinkFrame = Schema.Union([Schema.Struct({ _tag: Schema.Literals(['Request', 'Ack', 'Interrupt', 'Ping', 'Eof']) }), MembersFrame]);
 
 /**
- * A machine's stream: a fresh base, then each store action numbered within the base's epoch. `saved` and `action` stay
- * `unknown` here; pass the snapshot's schema (`persist.ts`) to `streamFrame` to decode it whole.
+ * A followed machine's threads as main hands them to the window, one thread file (`persist.ts` `SavedThread`) at a time
+ * from that machine's `thread` streams. `null` deletes the thread; `reset` drops them all before a fresh start.
  */
-export const streamFrame = <Saved extends Schema.Top>(saved: Saved) =>
-  Schema.Union([
-    Schema.Struct({ type: Schema.Literal('snapshot'), epoch: S, seq: Schema.Number, saved }),
-    Schema.Struct({ type: Schema.Literal('action'), epoch: S, seq: Schema.Number, action: Schema.Unknown }),
-  ]);
-
-export const StreamFrame = streamFrame(Schema.Unknown);
-export type StreamFrame = typeof StreamFrame.Type;
-
-/** A machine's frame on the device. The machine proved its key at pairing; this checks the shape. */
-export const ServerFrame = Schema.Union([
-  Schema.Struct({ type: Schema.Literal('welcome'), version: Schema.Number, deviceId: S, machineName: S, machineKind: DeviceKind, scopes: Schema.Array(Scope), addresses: Schema.Array(S), members: opt(Schema.Unknown) }),
-  Schema.Struct({ type: Schema.Literal('refused'), reason: S }),
-  Schema.Struct({ type: Schema.Literal('members'), members: Schema.Unknown }),
-  ...StreamFrame.members,
-  Schema.Struct({ type: Schema.Literal('result'), id: S, ...okFields }),
-  Schema.Struct({ type: Schema.Literal('result'), id: S, ...failedFields }),
-]);
-export type ServerFrame = typeof ServerFrame.Type;
+export const MirrorFrame = Schema.Union([Schema.Struct({ type: Schema.Literal('reset') }), Schema.Struct({ type: Schema.Literal('thread'), threadId: S, saved: Schema.NullOr(Schema.Unknown) })]);
+export type MirrorFrame = typeof MirrorFrame.Type;
 
 // Mirrors `isCloneUrl` / `normalizeOrigin` in src/git/origin.ts, which this package can't import.
 const SCHEMES = ['https:', 'http:', 'ssh:', 'git:', 'git+ssh:', 'ssh+git:'];

@@ -1,6 +1,6 @@
 // Records sample calls of the projects, remote, schedule, sim, themes, usage and windows namespaces for the schema
 // round-trip tests: outputs from the web build's hosts (`src/host/web/*`), inputs and refusals from main's own tests
-// (`electron/remote/protocol.test.ts`, `electron/ipc/*`). Run from the repo root:
+// (`packages/schema/src/relay.test.ts`, `electron/ipc/*`). Run from the repo root:
 // `node --import ./scripts/test-env.ts packages/schema/scripts/record-ipc-b.ts`.
 import { writeFileSync } from 'node:fs';
 import { projects } from '../../../src/host/web/projects.ts';
@@ -47,8 +47,6 @@ await record('remote.setDeviceScopes', remote.setDeviceScopes, 'd-laptop', ['rea
 await record('remote.otherMachines', remote.otherMachines);
 await record('remote.machines', remote.machines);
 await record('remote.cachedMachines', remote.cachedMachines);
-await record('remote.push', remote.push, 'e1', 1, JSON.stringify({ type: 'select', threadId: 't1' }));
-await record('remote.snapshot', remote.snapshot, 'r1', 'e1', 0, JSON.stringify({ v: 1, threads: [] }));
 await record('remote.answerApproval', remote.answerApproval, 'a1', true);
 await record('remote.cacheMachine', remote.cacheMachine, 'm1', '{}');
 await record('remote.commandResult', remote.commandResult, 'c1', { isOk: true, detail: 'a1b2c3d' });
@@ -97,13 +95,13 @@ const commands = [
 ];
 for (const command of commands) await record('remote.command', remote.command, 'm1', command as never);
 add('remote.onCommand', { event: { id: 'c1', deviceName: 'Laptop', command: commands[3] } });
-add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'snapshot', epoch: 'e1', seq: 0, saved: { v: 1, threads: [] } } } });
-add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'action', epoch: 'e1', seq: 1, action: { type: 'select', threadId: 't1' } } } });
+add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'reset' } } });
+add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'thread', threadId: 't1', saved: { thread: { id: 't1' } } } } });
+add('remote.onMachineFrame', { event: { machineId: 'm1', frame: { type: 'thread', threadId: 't1', saved: null } } });
 add('remote.onMachines', { event: [{ id: 'm1', name: 'Studio', kind: 'mac', status: 'online', route: 'lan', scopes: ['read', 'operate', 'manage', 'code'], lastSeenAt: 1_760_000_000_000 }, { id: 'm2', name: 'Laptop', status: 'refused', scopes: [], error: 'This computer removed you' }] });
 const status = await remote.status();
 add('remote.set', { input: [{ isEnabled: true, machineName: 'Studio' }], output: { ...status, settings: { ...status.settings, isEnabled: true, machineName: 'Studio' }, addresses: ['127.0.0.1:47123'], relay: { status: 'error', error: 'Sign in to reach this computer from anywhere' } } });
 add('remote.onStatus', { event: { ...status, devices: [{ id: 'd-laptop', name: 'Laptop', kind: 'mac', scopes: ['read'], connectedAt: 1_760_000_000_000 }], members: [{ id: 'd-laptop', name: 'Laptop', scopes: ['read', 'operate'], addedAt: 1_760_000_000_000, machineStatus: 'online' }], error: 'Port 47123 is taken' } });
-add('remote.onSnapshotRequest', { event: 'r1' });
 add('remote.join', { input: ['m2'] });
 add('remote.follow', { input: [] });
 add('remote.onApproval', { event: { id: 'a1', name: 'Laptop', pairingCode: '123456', expiresAt: 1_760_000_060_000 } });
@@ -229,7 +227,6 @@ const rejected: Record<string, unknown[][]> = {
     { type: 'pin', threadId: 't', isPinned: true, order: 'first' },
     { type: 'pin', threadId: 't', isPinned: true, order: null },
   ].map((command) => ['m1', command]),
-  'remote.push': [['e1', 0, '{}']],
   'remote.set': [[{ machineName: 'x'.repeat(65) }], [{ isEnabled: 'yes' }]],
   'remote.setDeviceScopes': [['d1', ['read', 'root']]],
   'schedule.set': [

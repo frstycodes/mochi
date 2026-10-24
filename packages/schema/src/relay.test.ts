@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { Schema } from 'effect';
-import { CommandFrame, HelloFrame, RemoteCommand, ServerFrame } from './relay.ts';
+import { CommandResult, DeviceLinkFrame, HelloFrame, MachineLinkFrame, RemoteCommand } from './relay.ts';
 
 const fixtures = JSON.parse(readFileSync(new URL('../fixtures/relay.json', import.meta.url), 'utf8'));
 const decode = Schema.decodeUnknownSync(RemoteCommand);
@@ -14,11 +14,10 @@ test('recorded commands and frames round-trip', () => {
     assert.deepEqual(Schema.encodeSync(RemoteCommand)(decode(command)), command);
   }
   for (const hello of fixtures.hello) assert.deepEqual(Schema.decodeUnknownSync(HelloFrame)(hello), hello);
-  for (const frame of fixtures.serverFrames) assert.deepEqual(Schema.encodeSync(ServerFrame)(Schema.decodeUnknownSync(ServerFrame)(frame)), frame);
-  assert.deepEqual(Schema.decodeUnknownSync(CommandFrame)({ type: 'command', id: 'c1', command: { type: 'push', threadId: 't' } }), { type: 'command', id: 'c1', command: { type: 'push', threadId: 't' } });
+  for (const frame of fixtures.machineFrames) assert.deepEqual(Schema.encodeSync(MachineLinkFrame)(Schema.decodeUnknownSync(MachineLinkFrame)(frame)), frame);
+  for (const result of fixtures.results) assert.deepEqual(Schema.encodeSync(CommandResult)(Schema.decodeUnknownSync(CommandResult)(result)), result);
 });
 
-// The cases electron/remote/protocol.test.ts checks `parseRemoteCommand` against.
 test('commands keep only their own fields, and titles come back trimmed', () => {
   assert.deepEqual(decode({ type: 'fork', threadId: 't', point: { kind: 'checkpoint', n: 2 }, extra: 1 }), { type: 'fork', threadId: 't', point: { kind: 'checkpoint', n: 2 } });
   assert.deepEqual(decode({ type: 'create', title: '  Fix login  ', provider: 'codex', project: null }), { type: 'create', title: 'Fix login', provider: 'codex', project: null });
@@ -75,9 +74,10 @@ test('malformed commands are refused, never half-read', () => {
     assert.ok(isRefused(bad), JSON.stringify(bad));
 });
 
-test('a hello on another protocol, or with a bad resume point, is refused', () => {
-  assert.throws(() => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 2 }), /protocol 3/);
-  assert.throws(() => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 3, resume: { epoch: '', seq: 0 } }));
-  assert.throws(() => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 3, resume: { epoch: 'e', seq: -1 } }));
-  assert.throws(() => Schema.decodeUnknownSync(CommandFrame)({ type: 'command', id: '', command: { type: 'catalog' } }));
+test('a hello on another protocol is refused, and a device frame must be an RPC message or its members', () => {
+  assert.throws(() => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 3 }), /protocol 4/);
+  const isDeviceFrame = Schema.is(DeviceLinkFrame);
+  assert.ok(isDeviceFrame({ _tag: 'Request', id: '1', tag: 'thread', payload: {}, headers: [] }));
+  assert.ok(isDeviceFrame({ type: 'members', members: [] }));
+  for (const bad of [{ _tag: 'Exit' }, { type: 'command', id: 'c1', command: { type: 'catalog' } }, { type: 'snapshot' }, null, 'Request']) assert.ok(!isDeviceFrame(bad), JSON.stringify(bad));
 });

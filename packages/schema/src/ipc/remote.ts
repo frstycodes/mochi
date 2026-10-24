@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
-import { event, Int, invoke, Str } from '../checks.ts';
-import { CommandResult, DeviceKind, RemoteCommand, RemoteCommandRequest, Scope, StreamFrame } from '../relay.ts';
+import { event, invoke, Str } from '../checks.ts';
+import { CommandResult, DeviceKind, MirrorFrame, RemoteCommand, RemoteCommandRequest, Scope } from '../relay.ts';
 
 const opt = Schema.optional;
 const S = Schema.String;
@@ -63,16 +63,11 @@ export type RemoteStatus = typeof RemoteStatus.Type;
 
 const MAX_ACTION_CHARS = 64 * 1024 * 1024;
 const MachineId = Str(64);
-const Epoch = Str(64);
-const Seq = Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }));
 
 export const remoteRpc = {
   status: invoke(T([]), RemoteStatus),
   set: invoke(T([Schema.Struct({ isEnabled: opt(B), allowsNetwork: opt(B), machineName: opt(Str(64)), reachesAnywhere: opt(B), keepsAwake: opt(B) })]), RemoteStatus),
   onStatus: event(RemoteStatus),
-  push: invoke(T([Epoch, Seq.check(Schema.isGreaterThanOrEqualTo(1)), Str(MAX_ACTION_CHARS)]), Void),
-  snapshot: invoke(T([Str(64), Epoch, Seq, Str(MAX_ACTION_CHARS)]), Void),
-  onSnapshotRequest: event(S),
   onCommand: event(RemoteCommandRequest),
   commandResult: invoke(T([Str(128), CommandResult]), Void),
   removeMember: invoke(T([MachineId]), RemoteStatus),
@@ -84,10 +79,10 @@ export const remoteRpc = {
   machines: invoke(T([]), Schema.Array(FollowedMachine)),
   onMachines: event(Schema.Array(FollowedMachine)),
   follow: invoke(T([]), Void),
-  onMachineFrame: event(Schema.Struct({ machineId: S, frame: StreamFrame })),
+  onMachineFrame: event(Schema.Struct({ machineId: S, frame: MirrorFrame })),
   cacheMachine: invoke(T([MachineId, Str(MAX_ACTION_CHARS)]), Void),
   cachedMachines: invoke(T([]), Schema.Array(Schema.Struct({ machineId: S, saved: S }))),
   command: invoke(T([MachineId, RemoteCommand]), CommandResult),
 };
 
-export { CatalogProject, CommandResult, DeviceKind, MachineCatalog, RemoteCommand, RemoteCommandRequest, Scope, StreamFrame, TerminalOutput, ThreadPoint } from '../relay.ts';
+export { CatalogProject, CommandResult, DeviceKind, MachineCatalog, RemoteCommand, MirrorFrame, RemoteCommandRequest, Scope, TerminalOutput, ThreadPoint } from '../relay.ts';
