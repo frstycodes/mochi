@@ -2,7 +2,7 @@ import { AUTOFIX_ATTEMPTS, type AutofixEvent } from '../git/autofix.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { PullRequest, Thread } from '../model.ts';
 import { NOTE_PREFIX } from './due.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 import { mapThread } from '../store/threads.ts';
 
 const EXCERPT_CHARS = 800;

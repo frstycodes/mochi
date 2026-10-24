@@ -1,4 +1,4 @@
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import type { Review } from './verdict.ts';
 
 export type ReviewAction =

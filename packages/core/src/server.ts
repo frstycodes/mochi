@@ -19,6 +19,11 @@ import { asRunError, Run } from './run.ts';
 import { storeHandlers } from './store/handlers.ts';
 import type { DocTable } from './store/migrations.ts';
 import { importJson } from './store/importJson.ts';
+import { storeCommand } from '../../../src/remote/storeCommands.ts';
+import type { RemoteCommand } from '../../../src/host/types/remote.ts';
+import type { State } from '../../../src/store/types.ts';
+import { AgentCaller, Commands } from './store/commands.ts';
+import { Projection } from './store/projection.ts';
 import { Store } from './store/store.ts';
 import { layerReactor } from './reactor/execute.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
@@ -45,7 +50,7 @@ export const layerCore = (options: ServerOptions) =>
     Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
     Layer.provideMerge(layerAgents(options.userData)),
-    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), Capabilities.layer, UtilityQueue.layer, Turns.layer, Terminals.layer, layerStore(options.userData)).pipe(Layer.provideMerge(Run.layer))),
+    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), UtilityQueue.layer, Turns.layer, Terminals.layer, layerStore(options.userData).pipe(Layer.provideMerge(Capabilities.layer))).pipe(Layer.provideMerge(Run.layer))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(
       NodeHttpServer.layer(createServer, {
@@ -58,14 +63,17 @@ export const layerCore = (options: ServerOptions) =>
     ),
   );
 
-/** The store, after the one-time import of main's JSON files, so no handler reads it before they are in. */
+/** The store, its projection and Core's own dispatch, after the one-time import of main's JSON files, so neither reads it before they are in. */
 const layerStore = (userData: string | undefined) =>
-  Layer.effectDiscard(userData ? Effect.asVoid(importJson(userData)) : Effect.void).pipe(
+  Commands.layer.pipe(
+    Layer.provide(AgentCaller.layer),
+    Layer.provideMerge(Projection.layer(userData)),
+    Layer.provideMerge(Layer.effectDiscard(userData ? Effect.asVoid(importJson(userData)) : Effect.void)),
     Layer.provideMerge(Store.layer(userData ? path.join(userData, 'mochi.db') : ':memory:')),
     Layer.orDie,
   );
 
-type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store | Metrics | Terminals;
+type Services = Run | Capabilities | UtilityQueue | Watch | GitHub | Store | Projection | Commands | Metrics | Terminals;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -94,7 +102,7 @@ const connect = (options: ServerOptions, services: Context.Context<Services>) =>
     const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
     yield* RpcServer.make(CoreWsRpcs, { disableFatalDefects: true }).pipe(
       Effect.provideService(RpcServer.Protocol, protocol),
-      Effect.provide(Layer.mergeAll(layerHandlers(windowId, identity, options.userData), layerScopes(identity.scopes))),
+      Effect.provide(Layer.mergeAll(layerHandlers(windowId, identity), layerScopes(identity.scopes))),
       Effect.provide(services),
       Effect.forkScoped,
     );
@@ -155,7 +163,7 @@ const layerScopes = (scopes: ReadonlyArray<Contract.AuthScope>) =>
     return scopes.includes(scope) ? effect : Effect.fail(new Unauthorized({ scope }));
   });
 
-const layerHandlers = (windowId: number | undefined, identity: Identity, userData: string | undefined) =>
+const layerHandlers = (windowId: number | undefined, identity: Identity) =>
   CoreWsRpcs.toLayer(
     Effect.gen(function* () {
       const run = yield* Run;
@@ -165,7 +173,9 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
       const host = hostHandlers(capabilities, windowId) as Record<string, (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>>;
       const watch = yield* Watch;
       const github = yield* GitHub;
-      const stored = storeHandlers(store, userData);
+      const projection = yield* Projection;
+      const commands = yield* Commands;
+      const stored = storeHandlers(store, projection);
       const metrics = yield* Metrics;
       const terminals = yield* Terminals;
       return {
@@ -209,7 +219,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
         ...agentRpcHandlers,
         ...stored,
         thread: (input: { threadId: string; afterSequence: number }) => stored.thread(input).pipe(Stream.map((item) => visibleItem(item, identity.scopes)), Stream.filter((item) => item !== undefined)),
-        'device.command': ({ command }: { command: Relay.RemoteCommand }) => deviceCommand(capabilities, identity.device, command),
+        'device.command': ({ command }: { command: Relay.RemoteCommand }) => deviceCommand(capabilities, commands, projection, identity.device, command),
         // Main's settings writes land here; the agents read them without a restart.
         'docs.set': (input: { table: DocTable; key: string; value?: unknown }) =>
           stored['docs.set'](input).pipe(Effect.tap(() => Effect.sync(() => input.table === 'settings' && input.key === 'agent' && agentSettingsSaved(input.value)))),
@@ -218,11 +228,25 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
     }),
   );
 
-/** Runs in the window that owns the store, through main's `remote` capability, until Core owns the store. */
-const deviceCommand = (capabilities: Capabilities['Service'], device: DeviceGrant | undefined, command: Relay.RemoteCommand) =>
+/**
+ * A device's command: Core applies one that is store actions itself (`storeCommand`); one that needs a window's host (a diff,
+ * a terminal, a push, a send that starts the agent) runs in a window, through main's `remote` capability.
+ */
+const deviceCommand = (capabilities: Capabilities['Service'], commands: Commands['Service'], projection: Projection['Service'], device: DeviceGrant | undefined, command: Relay.RemoteCommand) =>
   Effect.gen(function* () {
     if (!device) return { isOk: false, error: 'Only a paired device sends device commands' } satisfies Relay.CommandResult;
+    // Decoded (`Relay.RemoteCommand`), so the store's mutable `RemoteCommand` shape, readonly.
+    const stored = storeCommand(command as RemoteCommand, (yield* projection.current).domain as unknown as State, device.name);
+    if (!stored) return yield* inWindow(capabilities, device, command);
+    for (const action of stored.actions) if ((yield* commands.apply(action)) === 'needs-window') return yield* inWindow(capabilities, device, command);
+    const late = stored.verdict;
+    if (late) yield* Effect.forkDetach(Effect.promise(() => late.verdict).pipe(Effect.flatMap((v) => (v.kind === 'off-goal' ? Effect.void : commands.apply({ type: 'drift-verdict', threadId: late.threadId, text: late.text, drift: v.kind, reason: v.reason })))));
+    return stored.result as Relay.CommandResult;
+  }).pipe(Effect.catch((error) => Effect.succeed<Relay.CommandResult>({ isOk: false, error: typeof error === 'string' ? error : String(error) })));
+
+const inWindow = (capabilities: Capabilities['Service'], device: DeviceGrant, command: Relay.RemoteCommand) =>
+  Effect.gen(function* () {
     const request = yield* Schema.encodeEffect(Schema.toCodecJson(Relay.RemoteCommandRequest))({ id: device.id, deviceName: device.name, command });
     const value = yield* capabilities.call({ capability: 'remote', method: 'run', args: [request] });
     return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(Relay.CommandResult))(value);
-  }).pipe(Effect.catch((error) => Effect.succeed<Relay.CommandResult>({ isOk: false, error: typeof error === 'string' ? error : String(error) })));
+  });

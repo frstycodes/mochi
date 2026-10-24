@@ -70,7 +70,7 @@ test('rewind restores the snapshot, drops later checkpoints, and one undo brings
   assert.equal(threadsReducer(s, { type: 'rewind-undo' }), s, 'only one undo');
 });
 
-test('fork copies context up to a message, opens a new branch, and records where it came from', () => {
+test('fork copies context up to a message, on a new branch, and records where it came from', () => {
   let s = base();
   const parent = thread(s, 'adm');
   const index = 4;
@@ -82,7 +82,6 @@ test('fork copies context up to a message, opens a new branch, and records where
   assert.notEqual(child.line, parent.line);
   assert.ok(child.steps.every((st) => !parent.steps.some((p) => p.id === st.id)), 'step ids are the fork’s own');
   assert.match(thread(s, 'adm').activity.at(-1)!.text, /^Forked to/);
-  assert.deepEqual(s.views.latitude, { kind: 'thread', id: child.id });
   assert.deepEqual(s.checkpoints[child.id].map((c) => c.label), ['Fork point']);
   assert.deepEqual(forkRelatives(s, 'adm').map((t) => t.id), [child.id]);
   assert.deepEqual(forkRelatives(s, child.id).map((t) => t.id), ['adm']);

@@ -1,16 +1,15 @@
 import { agentImage } from '../chat/images.ts';
-import { interruptsToSend } from '../chat/outbox.ts';
-import { projectRoot, threadCwd } from '../host/cwd.ts';
+import { interruptsToSend } from '../chat/queued.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
 import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts';
-import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
 import { hasTempBranch, startTitleRequest } from '../utility/titles.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import { autofixSend } from '../schedule/slice.ts';
-import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
+import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
+import { startEnv } from './startEnv.ts';
 import { WAKE_PROMPT } from './subThreadNotes.ts';
 import { backgroundPrompt, backgroundSession, isRunning, reportOf, withNotes } from './subagents.ts';
 
@@ -22,6 +21,15 @@ export type AgentCall =
   | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop' | 'settle' | 'keepTitle'; threadId: string }
   | { method: 'stopTask'; threadId: string; taskId: string };
+
+/** A call's `host.agent` arguments after the thread id, in the method's order. */
+export function agentCallArgs(call: AgentCall): unknown[] {
+  if (call.method === 'start') return [call.options];
+  if (call.method === 'send') return [call.text, call.images, call.skills, call.speed, call.steer, call.steerId];
+  if (call.method === 'compact') return [call.focus];
+  if (call.method === 'stopTask') return [call.taskId];
+  return [];
+}
 
 /** The `host.agent` calls an action makes for live threads; demo threads make none. `next` is the state after the action. */
 export function agentCalls(state: State, action: Action, next: () => State): AgentCall[] {
@@ -109,7 +117,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const controls = agent.provider === thread.providers[0] ? controlsOf(thread) : DEFAULT_CONTROLS[agent.provider];
       // Its own worktree branches off the thread's branch, so it starts from the thread's work.
       const workspace: StartWorkspace | undefined = agent.hasOwnWorktree && thread.repo ? { mode: 'worktree', branch: `${thread.repo.branch}-${agent.id}`, base: thread.repo.branch } : undefined;
-      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider, thread.spaceId), ...(agent.model && { model: agent.model }), ...(workspace && { workspace }) };
+      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...startEnv().agentOptions(controls, agent.provider, thread.spaceId), ...(agent.model && { model: agent.model }), ...(workspace && { workspace }) };
       return [{ method: 'start', threadId: backgroundSession(thread.id, agent.id), options }];
     }
     case 'bg-stop': {
@@ -153,7 +161,7 @@ export function unsentTurns(before: State, next: State, calls: AgentCall[]): str
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
-  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider, thread.spaceId), ...(thread.isSettingsChat && { isSettingsChat: true }), ...extra } }];
+  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...startEnv().agentOptions(controls, provider, thread.spaceId), ...(thread.isSettingsChat && { isSettingsChat: true }), ...extra } }];
 }
 
 /** A new thread's first start: its branch is its own, and main names it from its given title or first message before the agent starts. */
@@ -174,12 +182,12 @@ export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'
   const provider = thread.session?.provider ?? thread.providers[0];
   if (cwd === undefined) return;
   const workspace = isUnstarted(thread) ? firstWorkspace(thread) : startWorkspace(thread.repo);
-  return { provider, spaceId: thread.spaceId, cwd, workspace, ...agentOptions(controlsOf(thread), provider, thread.spaceId) };
+  return { provider, spaceId: thread.spaceId, cwd, workspace, ...startEnv().agentOptions(controlsOf(thread), provider, thread.spaceId) };
 }
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */
 function runFolder(thread: Thread) {
-  const cwd = threadCwd(thread);
+  const cwd = startEnv().threadCwd(thread);
   if (thread.repo && !cwd) return undefined;
   return cwd ?? null;
 }
@@ -197,20 +205,20 @@ function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: A
   const resume = seed === undefined ? thread.session?.id : undefined;
   const forkAt = restart && 'forkAt' in restart ? restart.forkAt : undefined;
   // Cleanup removed its worktree: main makes it again on the same branch, at the same path, so `resume` still finds the session.
-  const remake = isCleanedUp(thread) ? { cwd: projectRoot(thread.repo!), workspace: startWorkspace(thread.repo) } : {};
+  const remake = isCleanedUp(thread) ? { cwd: startEnv().projectRoot(thread.repo!), workspace: startWorkspace(thread.repo) } : {};
   return start(thread, provider, controlsOf(thread), seed ? `${seed}\n\n${prompt}` : prompt, { resume, ...(forkAt && { forkAt }), useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }), ...remake });
 }
 
 /** A worktree thread whose agent ran in a worktree that's gone from the list (Settings › Git and worktrees cleanup, Clean up settled worktrees). */
 function isCleanedUp(thread: Thread) {
   if (!thread.repo || workspaceMode(thread.repo) !== 'worktree' || !thread.live?.cwd) return false;
-  const root = projectRoot(thread.repo);
-  return !!root && thread.live.cwd !== root && !worktreePath(thread.id);
+  const root = startEnv().projectRoot(thread.repo);
+  return !!root && thread.live.cwd !== root && !startEnv().worktreePath(thread.id);
 }
 
 /** The project folder itself, where a worktree of a new branch is made; a folderless chat has none. */
 function threadCwdRoot(thread: Thread) {
-  return thread.repo ? (projectRoot(thread.repo) ?? undefined) : undefined;
+  return thread.repo ? (startEnv().projectRoot(thread.repo) ?? undefined) : undefined;
 }
 
 /** A real thread, not a demo one; its agent may or may not run in this launch. */

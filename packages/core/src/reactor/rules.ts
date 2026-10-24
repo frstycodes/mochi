@@ -1,16 +1,19 @@
 import type { LoggedEvent } from '@mochi/domain';
 import type { QueueItem, Thread } from '../../../../src/model.ts';
 import { dueQueued, dueReports, dueWakes } from '../../../../src/runtime/due.ts';
+import { wordCount } from '../../../../src/simplify/simplify.ts';
+import type { ProjectionContext } from '../../../../src/store/context.ts';
 import { titleRequest } from '../../../../src/utility/titles.ts';
 import type { ReactorCommand } from './commands.ts';
 
 /**
- * What Core knows of the threads: the renderer's last save of each (`thread.saved`) and the index's queue. `boot` is this
- * Core run's id, for commands whose effect lives in Core's memory and must be redone after a restart.
+ * What Core knows of the threads: its projection's threads and queue, and your prefs and pins (`context`, kept in Core's
+ * settings store). `boot` is this Core run's id, for commands whose effect lives in Core's memory and must be redone after a restart.
  */
 export interface ReactorState {
   readonly threads: ReadonlyArray<Thread>;
   readonly queue: ReadonlyArray<QueueItem>;
+  readonly context: ProjectionContext;
   readonly boot: string;
 }
 
@@ -46,21 +49,30 @@ export const autoTitles: Rule = (_event, _before, after) =>
   });
 
 /**
- * Each live Claude thread's compaction instructions, again when its goal changes and after every Core start (Claude's
- * PreCompact hook reads them from Core's memory). The window adds the pins, which only it holds, and resends on a pin change.
+ * Each live Claude thread's compaction instructions, again when its goal or pins change and after every Core start (Claude's
+ * PreCompact hook reads them from Core's memory).
  */
 export const compactInstructions: Rule = (_event, _before, after) =>
   after.threads.flatMap((t): ReactorCommand[] => {
     if (!t.live || t.session?.provider !== 'claude') return [];
-    const goal = [t.goal, ...(t.criteria ?? []).map((c) => c.text)].join('\n');
-    return [{ type: 'compact.instructions', key: `compact:${after.boot}:${t.id}:${hash(goal)}`, threadId: t.id }];
+    const kept = [t.goal, ...(t.criteria ?? []).map((c) => c.text), JSON.stringify(after.context.pins[t.id] ?? [])].join('\n');
+    return [{ type: 'compact.instructions', key: `compact:${after.boot}:${t.id}:${hash(kept)}`, threadId: t.id }];
   });
 
-/** A turn's end gathers its idle record: checks, uncommitted files, the audit. */
-export const idleChecks: Rule = (event) => (event.threadId ? [{ type: 'idle.gather', key: `idle:${event.sequence}`, threadId: event.threadId }] : []);
+/** A turn's end gets its idle record: gathered (checks, uncommitted files, the audit) with goals on, only marked without. */
+export const idleChecks: Rule = (event, _before, after) => {
+  if (!event.threadId) return [];
+  const type = after.context.prefs.goals ? 'idle.gather' : 'idle.mark';
+  return [{ type, key: `idle:${event.sequence}`, threadId: event.threadId }];
+};
 
-/** A turn's end simplifies its last reply when Settings › Simplify › auto says so; the window holds that setting. */
-export const autoSimplify: Rule = (event) => (event.threadId ? [{ type: 'simplify.auto', key: `simplify:${event.sequence}`, threadId: event.threadId }] : []);
+/** A turn's end simplifies its last reply when Settings › Simplify › auto is on and the reply is long enough for it. */
+export const autoSimplify: Rule = (event, _before, after) => {
+  const { simplifyAuto, simplifyAutoWords } = after.context.prefs;
+  const reply = after.threads.find((t) => t.id === event.threadId)?.activity.findLast((e) => e.kind === 'message' && (e.who === 'claude' || e.who === 'codex'));
+  if (!event.threadId || !simplifyAuto || !reply || reply.simplified || wordCount(reply.text) < simplifyAutoWords) return [];
+  return [{ type: 'simplify.auto', key: `simplify:${event.sequence}`, threadId: event.threadId }];
+};
 
 /** A tool that pushes or opens a PR makes Core read the branch's PRs now and fast while CI runs. */
 export const prSync: Rule = (event) => {
@@ -70,17 +82,25 @@ export const prSync: Rule = (event) => {
 };
 
 /** A deleted thread's drafts go with it. */
-export const draftsPrune: Rule = (event) => (event.threadId ? [{ type: 'drafts.prune', key: `drafts:${event.threadId}`, threadId: event.threadId }] : []);
+export const draftsPrune: Rule = (_event, before, after) =>
+  before.threads.filter((t) => !after.threads.some((a) => a.id === t.id)).map((t) => ({ type: 'drafts.prune', key: `drafts:${t.id}`, threadId: t.id }));
+
+/** Rules over the whole state, run after each fold that changed it. */
+export const STATE_RULES: ReadonlyArray<Rule> = [queueRunner, delegatedReports, subThreadWakes, limitResumes, autoTitles, compactInstructions, draftsPrune];
 
 /** Rules by the event type they react to. */
 export const RULES: Readonly<Record<string, ReadonlyArray<Rule>>> = {
-  'thread.saved': [queueRunner, delegatedReports, subThreadWakes, limitResumes, autoTitles, compactInstructions],
-  'thread.deleted': [draftsPrune],
   'agent.turn-end': [idleChecks, autoSimplify],
   'agent.tool': [prSync],
 };
 
-export const react = (event: LoggedEvent, before: ReactorState, after: ReactorState) => (RULES[event.type] ?? []).flatMap((rule) => rule(event, before, after));
+/** A streamed reply's tokens make nothing due: the state rules wait for the event after them. */
+const STREAMED = new Set(['agent.message', 'agent.reasoning', 'agent.usage']);
+
+export const react = (event: LoggedEvent, before: ReactorState, after: ReactorState) => [
+  ...(before.threads === after.threads && before.queue === after.queue && before.context === after.context) || STREAMED.has(event.type) ? [] : STATE_RULES.flatMap((rule) => rule(event, before, after)),
+  ...(RULES[event.type] ?? []).flatMap((rule) => rule(event, before, after)),
+];
 
 /** FNV-1a: a short key for text that would make a long one. */
 function hash(text: string) {

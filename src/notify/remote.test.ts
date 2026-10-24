@@ -4,7 +4,7 @@ import type { MirrorFrame } from '../host/types/remote.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
 import { applyFrame, type Mirror } from '../remote/mirror.ts';
 import type { Action } from '../store/index.tsx';
-import { splitSaved, toSaved } from '../store/persist.ts';
+import { splitSaved, toSaved } from '../store/saved.ts';
 import { mirrorState, reducer } from '../store/root.ts';
 import { alertsToShow, baselineOf, remoteAlerts, type RemoteAlert, type RemoteBaseline } from './remote.ts';
 

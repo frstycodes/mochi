@@ -177,20 +177,6 @@
  ],
  "data": [
   {
-   "method": "load",
-   "input": [],
-   "output": null
-  },
-  {
-   "method": "save",
-   "input": [
-    "{\"v\":1}",
-    {
-     "t1": "{\"thread\":{}}"
-    }
-   ]
-  },
-  {
    "method": "loadReplay",
    "input": [
     "t1"

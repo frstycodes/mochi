@@ -1,7 +1,7 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
 import { isMultiTab, PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind, type PaneVisual } from '../model.ts';
 import { closeKind, EMPTY_LAYOUT, moveKind, openKind, type PaneLayout } from '../pane/layout.ts';
-import type { Action, State } from './index.tsx';
+import type { Action, State } from './types.ts';
 import { showsDemoData } from '../demoData.ts';
 import { runningBackground } from '../runtime/subagents.ts';
 import { defaultBrowserUrl, listeningPorts } from '../terminal/devServer.ts';

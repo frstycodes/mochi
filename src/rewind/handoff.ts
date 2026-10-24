@@ -1,6 +1,6 @@
 import type { ActivityEntry, Handoff, Provider, Step, Thread } from '../model.ts';
 import { log, mapThread } from '../store/threads.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 
 export interface DiffStat {
   files: number;

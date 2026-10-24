@@ -4,8 +4,8 @@ import type { DraftedCriterion } from '../utility/prompts.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type Handoff, type IdleCheck, type LineSlot, type PendingSteer, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadProposal, type ThreadRef, type TurnReport } from '../model.ts';
 import { addProposal, findProposal, proposalBlocker, updateProposal } from '../chat/proposals.ts';
 import { markSent } from '../chat/threadMessages.ts';
-import { interruptsToSend, orderQueue, pauseQueue } from '../chat/outbox.ts';
-import { compactionEntry } from '../chat/compact.ts';
+import { interruptsToSend, orderQueue, pauseQueue } from '../chat/queued.ts';
+import { compactionEntry } from '../chat/compaction.ts';
 import { shownImage } from '../chat/images.ts';
 import { sourcePrompt } from '../sources.ts';
 import { hasGoal, KEEPS_TO_MUTE, type DriftKind } from '../drift.ts';
@@ -20,18 +20,17 @@ import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, turnUndo, 
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import { contextMax } from '../runtime/models.ts';
-import { handoff, handoffBlocker, handoffDraft, handoffFail } from '../rewind/handoff.ts';
-import { getPrefs } from '../settings/prefs.ts';
-import { threadCwd } from '../host/cwd.ts';
-import { projectRef, repoFor } from '../projects.ts';
+import { failDrafts, handoff, handoffBlocker, handoffDraft, handoffFail } from '../rewind/handoff.ts';
+import { DEFAULT_CONTEXT, prefsNow, type ProjectionContext } from './context.ts';
+import { threadRoot } from '../git/root.ts';
+import { projectRef, repoFor } from '../projectRef.ts';
 import { autofixTitle } from '../git/autofix.ts';
 import { canAutofix } from '../git/autofixToggle.ts';
 import { recordPrs } from '../git/prs.ts';
 import { repoWorkspace, tempBranch, withHead, type WorkspaceDraft } from '../git/workspace.ts';
-import type { Action, Snapshot, State } from './index.tsx';
-import { getRestored } from './persist.ts';
+import type { Action, Snapshot, State } from './types.ts';
+import type { Saved } from './saved.ts';
 import { markSeen, type SeenAction } from './seen.ts';
-import { showsDemoData } from '../demoData.ts';
 import type { TriggerDraft } from '../schedule/calls.ts';
 import { describeTrigger } from '../schedule/describe.ts';
 
@@ -44,10 +43,16 @@ export interface ThreadsState {
   rewindUndo: RewindUndo | null;
   /** Fork thread id → where it was forked from. */
   forks: Record<string, Fork>;
+  /** Your prefs and pins as the folds read them (`src/store/context.ts`). */
+  context: ProjectionContext;
 }
 
 export type ThreadsAction =
   | { type: 'tick' }
+  /** A window's prefs and pins, sent when they differ from the state's, so Core folds with them too. */
+  | { type: 'context'; context: ProjectionContext }
+  /** The main window loaded (again); `threadIds` are the threads whose Mochi tool calls it asks anew (`pendingToolCalls`). */
+  | { type: 'window-loaded'; threadIds: string[] }
   | SeenAction
   /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
   | { type: 'agent'; event: SeqAgentEvent; ms?: number }
@@ -59,7 +64,7 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; /** The thread's title when given, in place of one cut from `title`: no model renames it. */ name?: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[]; /** Started as a sub-thread of another thread. */ parent?: SubThreadLink; /** The profile's settings chat (Settings › Ask Mochi). */ isSettingsChat?: true }
+  | { type: 'create'; /** The profile it opens in; dispatch fills in yours (`withDispatchContext`). */ spaceId?: string; title: string; /** The thread's title when given, in place of one cut from `title`: no model renames it. */ name?: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[]; /** Started as a sub-thread of another thread. */ parent?: SubThreadLink; /** The profile's settings chat (Settings › Ask Mochi). */ isSettingsChat?: true }
   /** Make `threadId` a sub-thread of `parentId` (a drag, the Similar row, the row menu); it leaves Pinned, sub-threads aren't pinned. */
   | { type: 'nest'; threadId: string; parentId: string; criterionId?: string }
   | { type: 'unnest'; threadId: string }
@@ -156,7 +161,7 @@ export type ThreadsAction =
   | { type: 'proposal-answer'; threadId: string; proposalId: string; state: 'dismissed' | 'here'; reason?: string };
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
-export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
+export function initialThreads(saved: Saved | null = null, isDemo = true): ThreadsState {
   // Demo threads start read, as a restored save does.
   const demo = isDemo ? seedThreads().map((t) => ({ ...t, seenActivity: t.activity.length })) : [];
   let checkpointSeq = saved?.checkpointSeq ?? 0;
@@ -175,6 +180,7 @@ export function initialThreads(saved = getRestored(), isDemo = showsDemoData()):
     checkpointSeq,
     rewindUndo: null,
     forks: saved?.forks ?? {},
+    context: DEFAULT_CONTEXT,
   };
 }
 
@@ -187,6 +193,10 @@ function reduce(state: State, action: Action): State {
   switch (action.type) {
     case 'tick':
       return tick(state);
+    case 'context':
+      return { ...state, context: action.context };
+    case 'window-loaded':
+      return windowLoaded(state, action.threadIds);
     case 'seen':
       return markSeen(state, action);
     case 'agent':
@@ -401,6 +411,21 @@ function reduce(state: State, action: Action): State {
   }
 }
 
+/**
+ * What ran in the window that went away: a handoff draft never answers, and a Mochi tool call's open card waits on a run
+ * that ended with it; the new window runs that call again and asks anew.
+ */
+function windowLoaded(state: State, threadIds: string[]): State {
+  const reasked = new Set(state.queue.filter((q) => q.tool && threadIds.includes(q.threadId)).map((q) => q.id));
+  const threads = state.threads.map((t) => {
+    const kept = reasked.size ? t.activity.filter((e) => !(e.card?.isOpen && reasked.has(e.card.id))) : t.activity;
+    const activity = failDrafts(kept.length === t.activity.length ? t.activity : kept, 'Stopped when the window reloaded');
+    return activity === t.activity ? t : { ...t, activity };
+  });
+  const isSame = !reasked.size && threads.every((t, i) => t === state.threads[i]);
+  return isSame ? state : { ...state, threads, queue: state.queue.filter((q) => !reasked.has(q.id)) };
+}
+
 /** An emptied queue drops its pause with it. */
 /**
  * The agent read a message you sent into its turn: it joins the transcript here, after the agent's latest step. Read after the turn
@@ -444,7 +469,7 @@ export function seePrs(state: State, threadId: string, prs: PullRequest[]): Stat
   if (!thread) return state;
   const next = recordPrs(thread.prs, prs);
   if (next === thread.prs) return state;
-  const { autofixPrs, autoArchivePrs } = getPrefs();
+  const { autofixPrs, autoArchivePrs } = prefsNow();
   const isNew = (pr: PullRequest) => !thread.prs.some((p) => p.number === pr.number);
   const withDefaults = (pr: PullRequest): PullRequest => ({ ...pr, ...(autoArchivePrs && { autoArchive: true }), ...(autofixPrs && canAutofix(thread, pr) && { autofixSince: state.now }) });
   const recorded = next.map((pr) => (isNew(pr) ? withDefaults(pr) : pr));
@@ -524,20 +549,21 @@ export function freeLine(threads: Thread[]): LineSlot {
 function create(state: State, action: Extract<Action, { type: 'create' }>): State {
   const now = state.now;
   const id = `new-${state.seq}`;
+  const spaceId = action.spaceId ?? state.spaceId;
   const base = (sid: string, title: string): Step => ({ id: sid, title, status: 'ready', addedAt: now, addedBy: action.provider });
   const isLive = !!action.isLive;
   // A live thread's own steps come from its agent's plan; the placeholders are for the demo adapter.
   const steps = isLive ? [] : [base(`${id}-1`, 'Read the code involved'), base(`${id}-2`, 'Make the change'), base(`${id}-3`, 'Add tests')];
   const thread: Thread = {
     id,
-    spaceId: state.spaceId,
-    repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, threadTempBranch(state.spaceId, id, now)) : null,
+    spaceId,
+    repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: prefsNow().workspaceMode }, threadTempBranch(spaceId, id, now)) : null,
     title: action.name ?? titleFrom(action.title),
     ...(action.name && { isTitleRenamed: true }),
     goal: '',
     providers: [action.provider],
     status: 'running',
-    line: freeLine(state.threads.filter((t) => t.spaceId === state.spaceId)),
+    line: freeLine(state.threads.filter((t) => t.spaceId === spaceId)),
     startedAt: now,
     revisions: [],
     steps,
@@ -554,20 +580,20 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     // An agent wrote its first prompt, so its first turn is no one's request: it can only propose threads.
     ...(action.isBackground && { turn: { start: action.branchFrom ? 1 : 0, isAgentDriven: true as const } }),
   };
-  if (isLive) thread.live = { isWorking: true, cwd: threadCwd(thread) ?? undefined };
+  if (isLive) thread.live = { isWorking: true, cwd: threadRoot(thread) ?? undefined };
   // Detached: a message before the first run starts the agent the way a restored thread does.
   if (isLive && action.schedule) {
     thread.live = { ...thread.live!, isWorking: false, isDetached: true };
     thread.activity.push({ at: now, who: 'harness', kind: 'event', text: `Scheduled: ${describeTrigger(action.schedule.when)}` });
   }
   const threads = [...state.threads, thread];
-  return { ...state, threads, seq: state.seq + 1, views: action.isBackground ? state.views : { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
+  return { ...state, threads, seq: state.seq + 1 };
 }
 
 /** The temp branch `create` gives the next thread, which the composer shows before you send. */
 export const nextTempBranch = (state: Pick<State, 'spaceId' | 'seq' | 'now'>) => threadTempBranch(state.spaceId, `new-${state.seq}`, state.now);
 
-const threadTempBranch = (spaceId: string, threadId: string, at: number) => tempBranch(getPrefs().branchPrefix, `${spaceId}/${threadId}/${at}`);
+const threadTempBranch = (spaceId: string, threadId: string, at: number) => tempBranch(prefsNow().branchPrefix, `${spaceId}/${threadId}/${at}`);
 
 /** `fallback` names the branch when the draft doesn't: a project folder thread is on whatever branch the folder is. */
 function withWorkspace(repo: NonNullable<Thread['repo']>, draft: WorkspaceDraft, fallback: string): NonNullable<Thread['repo']> {
@@ -700,7 +726,7 @@ function startProposal(state: State, action: Extract<Action, { type: 'proposal-s
   const thread = state.threads.find((t) => t.id === action.threadId);
   if (!thread || proposalBlocker(thread, action.proposalId, state.now)) return state;
   const { proposal } = findProposal(thread, action.proposalId)!;
-  const next = create(state, { type: 'create', title: proposal.brief, name: proposal.title, ...proposal.create, isBackground: true });
+  const next = create(state, { type: 'create', spaceId: thread.spaceId, title: proposal.brief, name: proposal.title, ...proposal.create, isBackground: true });
   const id = `new-${state.seq}`;
   return { ...next, threads: mapThread(next.threads, thread.id, (t) => updateProposal(t, proposal.id, { state: 'started', threadId: id })) };
 }
@@ -725,7 +751,7 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   const branchFrom = action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
   // Branching off the current branch is a new worktree from it; off the base, the default.
   const workspace: WorkspaceDraft | undefined = source.repo && action.branchFrom === 'current' ? { mode: 'worktree', base: source.repo.branch } : undefined;
-  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live, workspace });
+  return create(next, { type: 'create', spaceId: source.spaceId, title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live, workspace });
 }
 
 /** A handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */

@@ -1,6 +1,6 @@
 import type { Thread } from '../model.ts';
 import { freeLine, log, mapThread } from '../store/threads.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 import { checkpointAt, threadAt, type Checkpoint } from './checkpoints.ts';
 
 export type ForkPoint = { kind: 'message'; index: number } | { kind: 'checkpoint'; n: number };
@@ -47,7 +47,6 @@ export function forkThread(state: State, threadId: string, point: ForkPoint): St
     checkpoints: { ...state.checkpoints, [id]: [start] },
     checkpointSeq: state.checkpointSeq + 1,
     seq: state.seq + 1,
-    views: { ...state.views, [parent.spaceId]: { kind: 'thread', id } },
   };
 }
 

@@ -9,7 +9,7 @@ import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { runRemoteCommand } from './commands.ts';
 import { closeIdleShells, shellOf, terminalCore } from './terminals.ts';
-import { tapAction } from './tap.ts';
+import { markOwnAnswer } from './answers.ts';
 
 async function until(isDone: () => boolean) {
   for (let i = 0; i < 100 && !isDone(); i++) await new Promise((r) => setTimeout(r, 5));
@@ -32,11 +32,11 @@ function machine() {
   return { state: { ...s, threads, queue: [item('q-1'), item('q-2')] }, threadId };
 }
 
+// Settings › General › While the agent is working: queue, as Core's context holds it.
 const device = (state: State, deviceName: string, dispatched: Action[]) => ({
-  state,
+  state: { ...state, context: { ...state.context, prefs: { ...state.context.prefs, whileWorking: 'queue' as const } } },
   dispatch: (a: Action) => void dispatched.push(a),
   deviceName,
-  whileWorking: 'queue' as const,
 });
 
 test('the first answer to a queue item wins; a later one, even against the same stale store, hears where it went', async () => {
@@ -49,8 +49,8 @@ test('the first answer to a queue item wins; a later one, even against the same 
 
 test('an answer given on the machine itself wins over a device', async () => {
   const { state } = machine();
-  // What the store tap sees when the machine's own Queue answers.
-  tapAction({ type: 'answer', queueId: 'q-2' });
+  // The machine's own Queue answering (`useStoreDispatch`).
+  markOwnAnswer('q-2');
   const dispatched: Action[] = [];
   const result = await runRemoteCommand({ type: 'resolve', queueId: 'q-2' }, device(state, 'Laptop', dispatched));
   assert.equal(result.isOk, false);

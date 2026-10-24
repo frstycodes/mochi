@@ -1,5 +1,5 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
-import type { Action, State } from './index.tsx';
+import type { Action, State } from './types.ts';
 import type { ModelChoice } from '../host/types/settings.ts';
 import { projectRef } from '../projects.ts';
 import { panesReducer } from './panes.ts';

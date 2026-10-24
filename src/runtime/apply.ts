@@ -1,11 +1,11 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
 import { noteCollisions } from './collisions.ts';
 import type { ActivityEntry, AgentInfo, Compaction, Provider, QueueItem, Step, Thread } from '../model.ts';
-import { compactionEntry, keptContext, restoreNote } from '../chat/compact.ts';
-import { getThreadPins } from '../chat/pins.ts';
-import { pauseQueue } from '../chat/outbox.ts';
+import { compactionEntry, keptContext, restoreNote } from '../chat/compaction.ts';
+import { pinsOf } from '../store/context.ts';
+import { pauseQueue } from '../chat/queued.ts';
 import { similarity } from '../progress.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import { completeStep, log, mapStep, mapThread, readSteer, seePrs, withGeneratedTitle } from '../store/threads.ts';
 import { createdPr } from '../git/prs.ts';
 import { withHead } from '../git/workspace.ts';
@@ -122,7 +122,7 @@ function applyCompaction(t: Thread, event: Extract<AgentEvent, { type: 'compacti
   });
   const withContext = event.postTokens !== undefined ? { ...ended, context: { ...ended.context, used: event.postTokens } } : ended;
   if (event.error || actor(t) !== 'codex' || !withContext.live) return withContext;
-  const note = restoreNote(keptContext(t, getThreadPins(t.id)), before.focus);
+  const note = restoreNote(keptContext(t, pinsOf(t.id)), before.focus);
   return note ? { ...withContext, live: { ...withContext.live, notes: [...(withContext.live.notes ?? []), note] } } : withContext;
 }
 

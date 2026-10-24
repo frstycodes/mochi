@@ -1,7 +1,8 @@
 import type { AgentTaskEvent, BackgroundTaskKind, SubagentStatus } from '../host/types/agent.ts';
 import type { BackgroundTask, Provider, Subagent, Thread } from '../model.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import { mapThread } from '../store/threads.ts';
+import { wallNow } from '../store/context.ts';
 
 /** Folds a `task` event into its thread's `backgroundTasks`. The first end wins, like subagents'. */
 export function applyTask(state: State, thread: Thread, event: AgentTaskEvent, provider: Provider): State {
@@ -18,7 +19,7 @@ export function applyTask(state: State, thread: Thread, event: AgentTaskEvent, p
       provider,
       title: event.title || event.command || 'Task',
       status: 'running',
-      startedAt: Date.now(),
+      startedAt: wallNow(),
       ...(event.command && { command: event.command }),
       ...(event.outputFile && { outputFile: event.outputFile }),
     };
@@ -28,7 +29,7 @@ export function applyTask(state: State, thread: Thread, event: AgentTaskEvent, p
   const next: BackgroundTask = {
     ...existing,
     ...(event.outputFile && { outputFile: event.outputFile }),
-    ...(event.phase === 'end' && { status: event.status ?? 'done', endedAt: Date.now(), ...(event.exitCode !== undefined && { exitCode: event.exitCode }) }),
+    ...(event.phase === 'end' && { status: event.status ?? 'done', endedAt: wallNow(), ...(event.exitCode !== undefined && { exitCode: event.exitCode }) }),
   };
   return update((tasks) => tasks.map((t) => (t.id === event.id ? next : t)));
 }

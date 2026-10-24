@@ -1,5 +1,6 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
+import { setAmbientPins } from '../store/context.ts';
 
 /** A pinned message, or a passage inside one, kept per thread so it can be found again from the chat's outline rail. */
 export interface Pin {
@@ -18,8 +19,10 @@ let pins: Pins = pinsSlice.getState().value;
 const listeners = new Set<() => void>();
 const EMPTY: Pin[] = [];
 
-/** Outside React: the store reads them when a compaction starts or ends. */
+/** Outside React. */
 export const getThreadPins = (threadId: string) => pins[threadId] ?? EMPTY;
+
+setAmbientPins(() => pins);
 
 export function useThreadPins(threadId: string) {
   return useSyncExternalStore(subscribe, () => pins[threadId] ?? EMPTY);

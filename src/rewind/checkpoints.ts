@@ -1,8 +1,7 @@
-import type { ActivityEntry, QueueItem, Step, Thread, ThreadStatus } from '../model.ts';
+import { isWorking, type ActivityEntry, type QueueItem, type Step, type Thread, type ThreadStatus } from '../model.ts';
 import { statusAt } from '../progress.ts';
 import { log, mapThread } from '../store/threads.ts';
-import { isWorking } from '../agentPhase.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 
 /** The thread's transcript and steps at a step boundary, plus the commit holding its worktree's files once one was saved. */
 export interface Checkpoint {

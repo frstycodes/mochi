@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { AgentEvent } from '../host/types/agent.ts';
 import { agentCalls } from '../runtime/live.ts';
 import type { Action, State } from '../store/index.tsx';
-import { parseSaved, toSaved } from '../store/persist.ts';
+import { parseSaved, toSaved } from '../store/saved.ts';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { dueQueued } from '../runtime/due.ts';

@@ -69,7 +69,7 @@ export const SavedIndex = Schema.Union([
 ]);
 export type SavedIndex = typeof SavedIndexV1.Type;
 
-/** What the desktop app saves between launches, joined from the index and thread files (`src/store/persist.ts` `Saved`). */
+/** What the desktop app saves between launches, joined from the index and thread files (`src/store/saved.ts` `Saved`). */
 const SavedV1 = Schema.Struct({
   v: Schema.Literal(1),
   now: Schema.Number,

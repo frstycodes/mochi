@@ -5,7 +5,7 @@ import { MAX_REPLAY_BYTES, type DataHost } from '../../src/host/types/data.ts';
 import { saveImage } from '@mochi/core/agents/images';
 import { embedReplay, isSelfContained, replayFileName } from '../../src/replay/page.ts';
 import { indexHtml } from '../window.ts';
-import type { Handlers, ServedByCore } from './handlers.ts';
+import type { Handlers } from './handlers.ts';
 
 const replays = () => join(app.getPath('userData'), 'replays');
 const replayFile = (threadId: string) => join(replays(), `${threadId}.jsonl`);
@@ -64,7 +64,7 @@ export const data = {
   async saveImage(_sender, mediaType, base64) {
     return saveImage(mediaType, base64);
   },
-} satisfies Omit<Handlers<DataHost>, ServedByCore['data']>;
+} satisfies Handlers<DataHost>;
 
 function orNull(error: NodeJS.ErrnoException) {
   if (error.code === 'ENOENT') return null;

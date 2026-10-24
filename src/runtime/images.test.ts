@@ -6,7 +6,7 @@ import { chatRows } from '../chat/rows.ts';
 import { applyAgentEvent } from './apply.ts';
 import type { State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
-import { parseSaved, toSaved } from '../store/persist.ts';
+import { parseSaved, toSaved } from '../store/saved.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { createMapper } from '@mochi/core/agents/claude/map';
 import { mapNotification, threadState } from '@mochi/core/agents/codex/map';

@@ -1,5 +1,5 @@
 import type { Thread } from '../model.ts';
-import type { Saved } from '../store/persist.ts';
+import type { Saved } from '../store/saved.ts';
 import type { State } from '../store/index.tsx';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';

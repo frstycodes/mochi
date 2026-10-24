@@ -57,13 +57,23 @@ const initial = Effect.gen(function* () {
       updated_at TEXT NOT NULL
     )
   `;
-  // The renderer's `SavedIndex` (src/store/persist.ts): one row.
+  // The renderer's `SavedIndex` (src/store/saved.ts): one row.
   yield* sql`CREATE TABLE thread_index (id INTEGER PRIMARY KEY CHECK (id = 1), payload_json TEXT NOT NULL, updated_at TEXT NOT NULL)`;
   for (const table of docTables) yield* sql.unsafe(`CREATE TABLE ${table} (key TEXT PRIMARY KEY, payload_json TEXT NOT NULL, updated_at TEXT NOT NULL)`);
   yield* sql`CREATE TABLE imports (source TEXT PRIMARY KEY, status TEXT NOT NULL, detail TEXT, at TEXT NOT NULL)`;
 });
 
+/**
+ * Core writes the thread snapshots from its projection: the index records the log sequence they hold. A snapshot the renderer
+ * saved held everything logged before it, so it starts at the log's end.
+ */
+const snapshotSequence = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`ALTER TABLE thread_index ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0`;
+  yield* sql`UPDATE thread_index SET sequence = (SELECT COALESCE(MAX(sequence), 0) FROM events)`;
+});
+
 // The reactor enqueues a command once per `command_id`, however often its rule emits it.
 const outboxCommandUnique = Effect.flatMap(SqlClient.SqlClient, (sql) => sql`CREATE UNIQUE INDEX outbox_command_idx ON outbox(command_id)`);
 
-export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial, '2_outbox_command_unique': outboxCommandUnique }) });
+export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial, '2_outbox_command_unique': outboxCommandUnique, '3_snapshot_sequence': snapshotSequence }) });

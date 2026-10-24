@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { applyAgentEvent } from '../runtime/apply.ts';
 import { agentCalls } from '../runtime/live.ts';
 import type { Action, State } from './index.tsx';
-import { joinSaved, parseSaved, splitSaved, toSaved } from './persist.ts';
+import { joinSaved, parseSaved, splitSaved, toSaved } from './saved.ts';
 import { initialQueue } from './queue.ts';
 import { initialThreads, threadsReducer } from './threads.ts';
 
@@ -90,7 +90,9 @@ test('a save splits into an index and a file per thread, re-encodes only changed
   const first = splitSaved(saved);
   assert.deepEqual(Object.keys(first.threads), [a, b]);
   assert.ok(!first.index.includes('"activity"'), 'the index holds no thread');
-  assert.deepEqual(joinSaved({ index: first.index, threads: Object.values(first.threads) }), { ...plain(saved), threadIds: [a, b] });
+  assert.deepEqual(joinSaved({ index: first.index, threads: Object.values(first.threads) }), plain(saved));
+  assert.deepEqual(joinSaved({ index: first.index, threads: [first.threads[a]!, '{"thread":{"id":3}}'] })!.threads.map((t) => t.id), [a], 'a file that is no SavedThread costs that thread');
+  assert.equal(joinSaved({ index: '{"version":2,"threadIds":[]}', threads: [] }), null, 'an index this version can’t read loads as nothing, never as an empty save');
 
   s = applyAgentEvent(s, { threadId: b, type: 'session', provider: 'claude', sessionId: 'sess-b' });
   const second = splitSaved(toSaved(s));
