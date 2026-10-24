@@ -1,3 +1,4 @@
+import { listenKeydown, commandOf, type CommandId } from '../keymap';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronDownSmall, Rewind10, FileText, Share, Forward10, Pause, Play, SkipForwardAlt, SkipBack, VideoPlay, X } from '@/icons';
@@ -17,15 +18,15 @@ import type { DiffFile } from '../host/types/git';
 import { PreviewContext, SplitContext, type SplitInfo } from '../layout/SplitContext';
 import type { Thread } from '../model';
 import { isTyping } from '../keys';
-import { Shortcut } from '../Shortcut';
-import { HarnessScope, useHarness, type State } from '../store';
+import { BoundShortcut } from '../Shortcut';
+import { StoreScope, useHarness, type State } from '../store';
 import { TITLE_BAR, TitleBar } from '../TitleBar';
 import { summarize } from '../summary';
 import { TooltipIconButton } from '../ui';
 import { DiffStat, DiffView, Expand } from '../WorkLog';
 import type { ReplayExport } from './export';
 import { exportedCheckpoints, liveCheckpoints, loadRecording, shareReplay, type CheckpointSource } from './load';
-import { closeReplay, useReplayRoute } from './open';
+import { goBack, useEscapeBack, useReplayRoute } from '../routes/nav';
 import type { Recording } from './record';
 import { createReplayer, markers, replayedThread, stepsBy, timeline, type Marker, type MarkerKind } from './rebuild';
 
@@ -35,9 +36,9 @@ export function ReplayView() {
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
   const recording = useRecording(thread);
-  useCloseOnEscape();
+  useEscapeBack();
   const onExport = thread ? () => void shareReplay(state, thread) : undefined;
-  const header = <ReplayHeader title={thread?.title ?? 'Thread'} onExport={recording ? onExport : undefined} onClose={closeReplay} />;
+  const header = <ReplayHeader title={thread?.title ?? 'Thread'} onExport={recording ? onExport : undefined} onClose={goBack} />;
   if (recording === undefined) return <ReplayLoading header={header} />;
   if (!recording || !thread) return <NothingRecorded header={header} />;
   return <ReplayPlayer key={thread.id} recording={recording} checkpoints={liveCheckpoints(state, thread)} header={header} />;
@@ -74,17 +75,6 @@ function useRecording(thread: Thread | undefined) {
   return recording;
 }
 
-function useCloseOnEscape() {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target)) return;
-      closeReplay();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-}
-
 function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: () => void; onClose?: () => void }) {
   const hasSidebar = !!useOptionalSidebar();
   const content = (
@@ -100,7 +90,7 @@ function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: 
         </Button>
       )}
       {!!onClose && (
-        <TooltipIconButton label="Close replay" hint="Back to the thread (Esc)" onClick={onClose}>
+        <TooltipIconButton label="Close replay" hint={<BoundShortcut command="dismiss" />} onClick={onClose}>
           <X />
         </TooltipIconButton>
       )}
@@ -150,13 +140,13 @@ function ReplayPlayer({ recording, checkpoints, header }: { recording: Recording
 /** The real chat view on the scratch store: changing only when a step lands, never on a playhead frame. */
 const ReplayTranscript = memo(function ReplayTranscript({ state, thread }: { state: State; thread: Thread }) {
   return (
-    <HarnessScope state={state} dispatch={NO_DISPATCH}>
+    <StoreScope state={state} dispatch={NO_DISPATCH}>
       <SplitContext.Provider value={SPLIT}>
         <PreviewContext.Provider value>
           <ChatView thread={thread} isReadOnly />
         </PreviewContext.Provider>
       </SplitContext.Provider>
-    </HarnessScope>
+    </StoreScope>
   );
 });
 
@@ -244,27 +234,29 @@ function useReplayKeys(playback: Playback) {
   latest.current = playback;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+      if (e.defaultPrevented || isTyping(e.target)) return;
       const { toggle, seek, seekStep, clock, total, n, marks } = latest.current;
       const marker = (by: 1 | -1) => (by > 0 ? marks.find((m) => m.n > n) : marks.findLast((m) => m.n < n));
       const actions: Record<string, () => void> = {
-        ' ': toggle,
-        k: toggle,
-        j: () => seek(clock - 10_000),
-        l: () => seek(clock + 10_000),
-        ArrowLeft: () => (e.shiftKey ? seekStep(marker(-1)?.n ?? 0) : seekStep(n - 1)),
-        ArrowRight: () => (e.shiftKey ? seekStep(marker(1)?.n ?? n) : seekStep(n + 1)),
-        Home: () => seek(0),
-        End: () => seek(total),
+        'replay-toggle': toggle,
+        'replay-toggle-k': toggle,
+        'replay-back': () => seek(clock - 10_000),
+        'replay-forward': () => seek(clock + 10_000),
+        'replay-previous': () => seekStep(n - 1),
+        'replay-next': () => seekStep(n + 1),
+        'replay-marker-previous': () => seekStep(marker(-1)?.n ?? 0),
+        'replay-marker-next': () => seekStep(marker(1)?.n ?? n),
+        'replay-start': () => seek(0),
+        'replay-end': () => seek(total),
       };
-      const action = actions[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+      const command = commandOf(e, Object.keys(actions) as CommandId[]);
+      const action = command && actions[command];
       if (!action) return;
       // Also keeps Space from clicking the focused button (it would toggle twice) or scrolling the transcript.
       e.preventDefault();
       action();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, []);
 }
 
@@ -275,19 +267,19 @@ function Transport({ playback, isCapped, files }: { playback: Playback; isCapped
       <Timeline playback={playback} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-0.5">
-          <TooltipIconButton label="Previous event" hint="← (Shift+← for the previous marker)" disabled={n === 0} onClick={() => seekStep(n - 1)}>
+          <TooltipIconButton label="Previous event" hint={<><BoundShortcut command="replay-previous" /> event, <BoundShortcut command="replay-marker-previous" /> marker</>} disabled={n === 0} onClick={() => seekStep(n - 1)}>
             <SkipBack />
           </TooltipIconButton>
           <Button size="icon" className="rounded-full" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
             {isPlaying ? <Pause filled /> : <Play filled />}
           </Button>
-          <TooltipIconButton label="Next event" hint="→ (Shift+→ for the next marker)" disabled={n >= times.length} onClick={() => seekStep(n + 1)}>
+          <TooltipIconButton label="Next event" hint={<><BoundShortcut command="replay-next" /> event, <BoundShortcut command="replay-marker-next" /> marker</>} disabled={n >= times.length} onClick={() => seekStep(n + 1)}>
             <SkipForwardAlt />
           </TooltipIconButton>
-          <TooltipIconButton label="Back 10 seconds" hint="J" className="max-sm:hidden" onClick={() => seek(clock - 10_000)}>
+          <TooltipIconButton label="Back 10 seconds" hint={<BoundShortcut command="replay-back" />} className="max-sm:hidden" onClick={() => seek(clock - 10_000)}>
             <Rewind10 />
           </TooltipIconButton>
-          <TooltipIconButton label="Forward 10 seconds" hint="L" className="max-sm:hidden" onClick={() => seek(clock + 10_000)}>
+          <TooltipIconButton label="Forward 10 seconds" hint={<BoundShortcut command="replay-forward" />} className="max-sm:hidden" onClick={() => seek(clock + 10_000)}>
             <Forward10 />
           </TooltipIconButton>
         </div>
@@ -318,9 +310,9 @@ function Transport({ playback, isCapped, files }: { playback: Playback; isCapped
         <span className="flex-1" />
         {isCapped && <span>Recording stopped at its size cap; the replay ends there</span>}
         <span className="flex items-center gap-1.5">
-          <Shortcut keys={['Space']} /> play
-          <Shortcut keys={['left', 'right']} /> step
-          <Shortcut keys={['J', 'K', 'L']} /> seek
+          <BoundShortcut command="replay-toggle" /> play
+          <BoundShortcut command="replay-previous" /><BoundShortcut command="replay-next" /> step
+          <BoundShortcut command="replay-back" /><BoundShortcut command="replay-toggle-k" /><BoundShortcut command="replay-forward" /> seek
         </span>
       </div>
     </div>

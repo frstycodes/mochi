@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+import { useDebounced } from '../hooks/useDebounced';
 import { useEffect, useId, useState } from 'react';
 import { ChevronDown, Hierarchy2, WarningAlt } from '@/icons';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
@@ -17,6 +19,7 @@ import { MetaChip } from '../MetaChip';
 import { SwitchBranchDialog } from './SwitchBranchDialog';
 import { useBranches } from './useGit';
 import { isUnstarted, type WorkspaceDraft } from './workspace';
+import { queryKeys } from '../queryKeys';
 
 const NAME_CHECK_MS = 250;
 
@@ -258,21 +261,7 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
 }
 
 function useBranchNameError(root: string, name: string | undefined) {
-  const [result, setResult] = useState<{ key: string; error: string | null }>({ key: '', error: null });
-  const key = `${root}\n${name}`;
-  useEffect(() => {
-    if (name === undefined) return;
-    let isCurrent = true;
-    const timer = setTimeout(() => {
-      host.git.branchNameError(root, name).then(
-        (error) => isCurrent && setResult({ key, error }),
-        () => isCurrent && setResult({ key, error: null }),
-      );
-    }, NAME_CHECK_MS);
-    return () => {
-      isCurrent = false;
-      clearTimeout(timer);
-    };
-  }, [root, name, key]);
-  return name !== undefined && result.key === key ? result.error : null;
+  const settled = useDebounced(name, NAME_CHECK_MS);
+  const nameQuery = useQuery({ queryKey: queryKeys.git.branchNameError(root, settled), queryFn: () => host.git.branchNameError(root, settled!), enabled: settled !== undefined });
+  return name === settled ? nameQuery.data ?? null : null;
 }

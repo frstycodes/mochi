@@ -1,13 +1,15 @@
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from '@/toast/store';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { host } from '../host';
-import type { CommandData, CommandResult, FollowedMachine, MachineCatalog, RemoteCommand } from '../host/types/remote';
-import { HarnessScope, type Action, type State } from '../store';
-import { toSaved } from '../store/persist';
+import type { CommandData, CommandResult, FollowedMachine, RemoteCommand } from '../host/types/remote';
+import { StoreScope, type Action, type State } from '../store';
 import { commandFor } from './actions';
-import { applyFrame, type Mirror } from './mirror';
-import { openRemoteThread } from './open';
+import { applyFrame, cachedMirror, type Mirror } from './mirror';
+import { openRemoteThread } from '../routes/nav';
 
 /** A computer this one follows, with its store as far as the stream has brought it; no state before its first snapshot. */
 export interface FollowedView {
@@ -32,28 +34,16 @@ const NOT_SENT: CommandResult = { isOk: false, error: 'Not sent' };
 
 /** Follows every computer this one paired with: their streams mirrored here, their commands sent from here. */
 export function MachinesProvider({ children }: { children: ReactNode }) {
-  const [followed, setFollowed] = useState<FollowedMachine[]>([]);
+  const machinesQuery = useQuery({ queryKey: queryKeys.remote.machines(), queryFn: () => host.remote.machines() });
+  const followed = machinesQuery.data ?? [];
+  const cachedQuery = useQuery({ queryKey: queryKeys.remote.cachedMachines(), queryFn: () => host.remote.cachedMachines(), staleTime: Infinity });
   const [mirrors, setMirrors] = useState<Record<string, Mirror | undefined>>({});
   const [asking, setAsking] = useState<Asking | null>(null);
 
   useEffect(() => {
-    void host.remote.machines().then(setFollowed, (error: unknown) => console.error('Reading your other computers failed', error));
-    const offMachines = host.remote.onMachines(setFollowed);
-    // What each machine last sent, until it sends a fresh snapshot: its epoch is none, so no live action applies to it.
-    void host.remote.cachedMachines().then(
-      (cached) =>
-        setMirrors((all) =>
-          cached.reduce((next, { machineId, saved }) => (next[machineId] ? next : { ...next, [machineId]: applyFrame(undefined, { type: 'snapshot', epoch: '', seq: 0, saved: JSON.parse(saved) }) }), all),
-        ),
-      (error: unknown) => console.error('Reading your other computers’ saved threads failed', error),
-    );
-    const offFrames = host.remote.onMachineFrame(({ machineId, frame }) =>
-      setMirrors((all) => {
-        const next = applyFrame(all[machineId], frame);
-        return next === all[machineId] ? all : { ...all, [machineId]: next };
-      }),
-    );
-    // Before this, frames went nowhere: every machine starts over with a snapshot.
+    const offMachines = host.remote.onMachines(() => { void queryClient.invalidateQueries({ queryKey: queryKeys.remote.machines() }); });
+    const offFrames = host.remote.onMachineFrame(({ machineId, frame }) => setMirrors((all) => ({ ...all, [machineId]: applyFrame(all[machineId], frame) })));
+    // Before this, frames went nowhere: every machine starts over, each thread from its snapshot.
     void host.remote.follow();
     return () => {
       offMachines();
@@ -61,6 +51,11 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!cachedQuery.data) return;
+    // Each cached thread file is decoded again here (`cachedMirror`), as a streamed one is.
+    setMirrors((all) => cachedQuery.data.reduce((next, { machineId, saved }) => (next[machineId] ? next : { ...next, [machineId]: cached(cachedMirror(JSON.parse(saved))) }), all));
+  }, [cachedQuery.data]);
   useMirrorCache(mirrors);
   const machines = useMemo(() => followed.map((machine) => ({ machine, state: mirrors[machine.id]?.state })), [followed, mirrors]);
   const latest = useRef(machines);
@@ -116,6 +111,10 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
 
 const CACHE_EVERY_MS = 5000;
 
+/** Mirrors read back from the cache: nothing new in them to save. */
+const fromCache = new WeakSet<Mirror>();
+const cached = (mirror: Mirror) => (fromCache.add(mirror), mirror);
+
 /** Saves each mirror that changed, at most every few seconds; a busy stream still gets saved while it runs. */
 function useMirrorCache(mirrors: Record<string, Mirror | undefined>) {
   const latest = useRef(mirrors);
@@ -127,10 +126,9 @@ function useMirrorCache(mirrors: Record<string, Mirror | undefined>) {
     timer.current = setTimeout(() => {
       timer.current = undefined;
       for (const [machineId, mirror] of Object.entries(latest.current)) {
-        // A mirror from the cache itself has no epoch: nothing new to save.
-        if (!mirror?.epoch || saved.current.get(machineId) === mirror) continue;
+        if (!mirror || fromCache.has(mirror) || saved.current.get(machineId) === mirror) continue;
         saved.current.set(machineId, mirror);
-        host.remote.cacheMachine(machineId, JSON.stringify(toSaved(mirror.state))).catch((error: unknown) => console.error('Saving another computer’s threads failed', error));
+        host.remote.cacheMachine(machineId, JSON.stringify(mirror.threads)).catch((error: unknown) => console.error('Saving another computer’s threads failed', error));
       }
     }, CACHE_EVERY_MS);
   }, [mirrors]);
@@ -153,24 +151,10 @@ export function useMachines() {
 /** That machine's catalog, read when it comes online; `reload` reads it again (after adding a project there). */
 export function useMachineCatalog(machine: FollowedMachine | undefined) {
   const { ask } = useMachines();
-  const [read, setRead] = useState<{ machineId: string; catalog: MachineCatalog } | null>(null);
-  const [reads, setReads] = useState(0);
   const machineId = machine?.id;
   const isOnline = machine?.status === 'online';
-  useEffect(() => {
-    if (!machineId || !isOnline) return;
-    let isCurrent = true;
-    ask(machineId, { type: 'catalog' }).then(
-      (catalog) => isCurrent && setRead({ machineId, catalog }),
-      (error: unknown) => console.error('Reading that computer’s projects and models failed', error),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [ask, machineId, isOnline, reads]);
-  const reload = useCallback(() => setReads((n) => n + 1), []);
-  // A reload keeps the list it had meanwhile; another machine, or this one offline, has none until it answers.
-  return { catalog: isOnline && read && read.machineId === machineId ? read.catalog : null, reload };
+  const catalogQuery = useQuery({ queryKey: queryKeys.remote.catalog(machineId, isOnline), queryFn: () => ask(machineId!, { type: 'catalog' }), enabled: !!machineId && isOnline });
+  return { catalog: isOnline ? catalogQuery.data ?? null : null, reload: () => { void catalogQuery.refetch(); } };
 }
 
 /**
@@ -192,7 +176,7 @@ export function RemoteScope({ machine, state, onOpenTab, children }: { machine: 
     },
     [machine.id, machine.name, run, ask, onOpenTab],
   );
-  return <HarnessScope state={state} dispatch={dispatch}>{children}</HarnessScope>;
+  return <StoreScope state={state} dispatch={dispatch}>{children}</StoreScope>;
 }
 
 const COMMAND_VERBS = {
@@ -229,7 +213,6 @@ const COMMAND_VERBS = {
   'terminal-open': 'open a terminal',
   'terminal-write': 'type in the terminal',
   'terminal-resize': 'resize the terminal',
-  'terminal-read': 'read the terminal',
   'terminal-close': 'close the terminal',
 } satisfies Record<RemoteCommand['type'], string>;
 

@@ -1,5 +1,5 @@
 import type { AgentPhase } from './agentShape.ts';
-import type { ActivityEntry, Thread, WebLink } from './model.ts';
+import { isWorking, type ActivityEntry, type Thread, type WebLink } from './model.ts';
 import { namesNow } from './library/names.ts';
 import { HARNESSES } from './settings/harnesses.ts';
 import { parseTool, toolVerb, type ToolCall, type ToolVerb } from './summary.ts';
@@ -28,10 +28,7 @@ export function entryPhase(entry?: ActivityEntry): AgentPhase {
 /** The pose for a tool call's text ("Run pnpm test" → run). */
 export const toolPhase = (text: string): AgentPhase => VERB_PHASE[toolVerb(text)];
 
-/** A live thread keeps `running` between turns; only its agent knows whether it's working. Demo threads run while their status says so. */
-export function isWorking(thread: Thread) {
-  return thread.live ? thread.live.isWorking : thread.status === 'running';
-}
+export { isWorking } from './model.ts';
 
 export const SETUP_LABEL = 'Setting up worktree…';
 

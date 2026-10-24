@@ -1,10 +1,10 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useId, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
-import { revealIn } from '@/lib/revealIn';
+import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';
-import type { ProfileConfig } from '../host/types/settings';
 import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
 import { offItems } from '../library/nativeOverrides';
 import { useProfiles } from '../profiles';
@@ -12,19 +12,15 @@ import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { isAbsolutePath } from '../projects';
 import type { Caret } from './ComposerEditor';
+import { CaretMenu, forwardKey } from './CaretMenu';
 import { SkillFallback } from './MentionMenu';
 import { SkillMark } from './McpIcon';
 import { bySlashGroup, configuredCommands, insertToken, slashGroup, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
+import { queryKeys } from '../queryKeys';
+import { libraryQuery } from '../library/queries';
 
-/** Above the composer while the caret ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
+/** Above the caret while it ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
 export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
-  const list = useRef<HTMLDivElement>(null);
-  const current = menu.isOpen ? menu.matches[menu.active] : undefined;
-  useEffect(() => {
-    const row = current && list.current?.querySelector(`[data-name="${CSS.escape(current.name)}"]`);
-    if (row) revealIn(list.current!, row);
-  }, [current]);
-  if (!menu.isOpen) return null;
   // `matches` arrive with each section's rows together (`bySlashGroup`), so a section is a run of one group.
   const groups = menu.matches.reduce<SlashItem[][]>((runs, item) => {
     const last = runs.at(-1);
@@ -33,23 +29,16 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
     return runs;
   }, []);
   return (
-    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-overlay">
+    <CaretMenu isOpen={menu.isOpen} editor={menu.editor} listRef={menu.listRef} listId={menu.listId} label="Commands and skills" value={menu.activeKey} onValueChange={menu.setActiveKey} onDismiss={menu.dismiss}>
       {groups.map((group) => (
-        <div key={slashGroup(group[0])} role="group" aria-label={groupName(group[0])} className="flex flex-col gap-0.5">
-          <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
-            {groupName(group[0])}
-          </div>
+        <CommandGroup key={slashGroup(group[0])} heading={groupName(group[0])}>
           {group.map((item) => (
-            <div
-              key={item.name}
-              data-name={item.name}
-              id={optionId(menu.listId, item)}
-              role="option"
-              aria-selected={item === current}
-              onPointerDown={(e) => e.preventDefault()}
+            <CommandItem
+              key={itemKey(item)}
+              value={itemKey(item)}
               aria-disabled={!!item.disabledReason || undefined}
-              onClick={() => menu.choose(item)}
-              className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:aria-selected:bg-accent/60"
+              onSelect={() => menu.choose(item)}
+              className="h-8 rounded-md type-body aria-disabled:text-muted-foreground aria-disabled:data-selected:bg-accent/60"
             >
               <SlashIcon item={item} />
               <span className="shrink-0 font-medium">/{item.name}</span>
@@ -60,11 +49,11 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
               ) : (
                 menu.isMidText && !item.isSkill && <span className="ml-auto shrink-0 type-caption text-warning">Runs only at the start of a message</span>
               )}
-            </div>
+            </CommandItem>
           ))}
-        </div>
+        </CommandGroup>
       ))}
-    </div>
+    </CaretMenu>
   );
 }
 
@@ -83,17 +72,18 @@ const groupName = (item: SlashItem) => {
   const group = slashGroup(item);
   return group === item.source ? HARNESSES[item.source].name : group;
 };
-const optionId = (listId: string, item: SlashItem) => `${listId}-${item.source}-${item.name.replace(/\W/g, '_')}`;
+const itemKey = (item: SlashItem) => `${item.source}:${item.name}`;
 
 /**
- * The menu's state and the editor props that drive it: arrows move, Enter or Tab picks, Esc closes until the text changes.
+ * The menu's state and the editor props that drive it: arrows move (cmdk does the moving), Enter or Tab picks, Esc (the popover's) closes until the text changes.
  * Picking puts the name where it was typed, nothing else moves. Needs the composer's `PromptInputProvider`.
  */
 export function useSlashMenu(items: SlashItem[]) {
   const listId = useId();
   const { textInput } = usePromptInputController();
   const text = textInput.value;
-  const [active, setActive] = useState(0);
+  const [activeKey, setActiveKey] = useState<string>();
+  const listRef = useRef<HTMLDivElement>(null);
   const [dismissedAt, setDismissedAt] = useState<string>();
   // The caret as of the text it was read with; a programmatic change (send, pick) puts it at the end.
   const [caret, setCaret] = useState<Caret>();
@@ -102,12 +92,12 @@ export function useSlashMenu(items: SlashItem[]) {
   const range = at === null ? null : slashQueryAt(text, at);
   const matches = range ? bySlashGroup(slashMatches(range.query, items)) : [];
   const isOpen = matches.length > 0 && dismissedAt !== text;
-  const index = Math.min(active, matches.length - 1);
+  const index = Math.max(0, matches.findIndex((m) => itemKey(m) === activeKey));
 
   const choose = (item: SlashItem) => {
     if (!range || item.disabledReason) return;
     const next = insertToken(text, range, item);
-    setActive(0);
+    setActiveKey(undefined);
     // With text right after it, the caret ends the full name and would reopen the menu on it.
     setDismissedAt(next.text);
     const view = editor.current;
@@ -124,11 +114,9 @@ export function useSlashMenu(items: SlashItem[]) {
   const onKeyDown = (e: KeyboardEvent, view: EditorView) => {
     editor.current = view;
     if (!isOpen) return;
-    const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
-    if (step) setActive((index + step + matches.length) % matches.length);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') forwardKey(listRef.current, e);
     else if (e.key === 'Enter' || e.key === 'Tab') choose(matches[index]);
-    else if (e.key === 'Escape') setDismissedAt(text);
-    else return setActive(0);
+    else return setActiveKey(undefined);
     e.preventDefault();
     e.stopPropagation();
   };
@@ -136,9 +124,9 @@ export function useSlashMenu(items: SlashItem[]) {
   const editorProps = {
     onKeyDown,
     onCaret,
-    attributes: { 'aria-autocomplete': 'list', 'aria-controls': isOpen ? listId : undefined, 'aria-activedescendant': isOpen ? optionId(listId, matches[index]) : undefined },
+    attributes: { 'aria-autocomplete': 'list', 'aria-controls': isOpen ? listId : undefined },
   };
-  return { listId, matches, active: index, isOpen, isMidText: !!range && range.start > 0, choose, editorProps };
+  return { listId, matches, activeKey: matches[index] && itemKey(matches[index]), setActiveKey, dismiss: () => setDismissedAt(text), editor, listRef, isOpen, isMidText: !!range && range.start > 0, choose, editorProps };
 }
 
 /**
@@ -192,19 +180,8 @@ export function useThreadPlugins(provider: Provider, spaceId: string, projectRoo
 }
 
 function useLibraryPlugins(spaceId: string | undefined) {
-  const [names, setNames] = useState<string[]>([]);
-  useEffect(() => {
-    if (!spaceId) return;
-    let isCurrent = true;
-    host.library.list(spaceId).then(
-      (entries) => isCurrent && setNames(entries.filter((e) => e.kind === 'plugin' && e.isEnabled).map((e) => e.name)),
-      () => isCurrent && setNames([]),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
-  return names;
+  const entriesQuery = useQuery({ ...libraryQuery(spaceId ?? ''), enabled: !!spaceId });
+  return useMemo(() => (entriesQuery.data ?? []).filter((e) => e.kind === 'plugin' && e.isEnabled).map((e) => e.name), [entriesQuery.data]);
 }
 
 function useAgentCommands(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): { commands: AgentCommand[]; skills?: string[] } {
@@ -221,30 +198,7 @@ function useConfiguredCommands(provider: Provider, spaceId: string, projectRoot:
 }
 
 function useProfileConfig(spaceId: string | undefined, projectRoot: string | null) {
-  const key = spaceId && configKey(spaceId, projectRoot);
-  const [config, setConfig] = useState<{ key: string; value?: ProfileConfig }>();
-  useEffect(() => {
-    if (!spaceId || !key) return;
-    let isCurrent = true;
-    configFor(spaceId, projectRoot).then(
-      (value) => isCurrent && setConfig({ key, value }),
-      () => isCurrent && setConfig({ key }),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId, projectRoot, key]);
-  return config && config.key === key ? config.value : undefined;
-}
-
-// GAP: one read per profile and project per launch; a skill added while Mochi runs shows once the agent reports it, or after a restart.
-const configs = new Map<string, ReturnType<typeof host.settings.agentConfig>>();
-function configFor(spaceId: string, projectRoot: string | null) {
-  const key = configKey(spaceId, projectRoot);
-  // The web build's fixture projects are bare names, not folders to read.
   const root = projectRoot && isAbsolutePath(projectRoot) ? projectRoot : undefined;
-  if (!configs.has(key)) configs.set(key, host.settings.agentConfig(spaceId, root).catch((error) => (configs.delete(key), Promise.reject(error))));
-  return configs.get(key)!;
+  const configQuery = useQuery({ queryKey: queryKeys.profile.config.root(spaceId, root), queryFn: () => host.settings.agentConfig(spaceId!, root), enabled: !!spaceId });
+  return configQuery.data;
 }
-
-const configKey = (spaceId: string, projectRoot: string | null) => `${spaceId}\n${projectRoot ?? ''}`;

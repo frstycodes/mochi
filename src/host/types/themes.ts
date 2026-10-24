@@ -4,7 +4,7 @@ import type { Manifest } from './manifest.ts';
 
 /**
  * VS Code color themes (DESIGN.md › Color themes): Open VSX's Themes category and the user's own theme files. The desktop
- * app keeps them under userData/themes; the web build keeps them in localStorage. Main reads only `extension/package.json`
+ * app keeps them under userData/themes; the web build keeps them in browser storage. Main reads only `extension/package.json`
  * and the theme files it names from a downloaded .vsix, never extracting or running anything else.
  */
 export interface ThemesHost {

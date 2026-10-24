@@ -1,6 +1,8 @@
 import { useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import type { ChatRow } from './rows';
 import { hasGaps, transcriptGaps } from './transcriptGaps';
 
@@ -58,7 +60,7 @@ export function Transcript({ ref, threadId, rows, remembered, children }: { ref:
       <div className="absolute inset-x-0 top-0 flex flex-col gap-5" style={{ translate: `0 ${top}px` }}>
         {items.map((item) => (
           <div key={item.key} ref={virtualizer.measureElement} data-index={item.index} data-chat-row={item.index}>
-            {children(rows[item.index], item.index)}
+            <ErrorBoundary FallbackComponent={ErrorFallback}>{children(rows[item.index], item.index)}</ErrorBoundary>
           </div>
         ))}
       </div>

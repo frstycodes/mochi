@@ -1,4 +1,5 @@
-import type { Action, State } from './index.tsx';
+import { persistedSlice } from '../lib/uiStorage.ts';
+import type { Action, State } from './types.ts';
 import type { ModelChoice } from '../host/types/settings.ts';
 import { projectRef } from '../projects.ts';
 import { panesReducer } from './panes.ts';
@@ -49,6 +50,7 @@ export type SideChatAction =
   | { type: 'sidechat-promote'; threadId: string; tabId: string; id: string; to: 'message' | 'thread' };
 
 export const SIDECHAT_STORAGE_KEY = 'harness.sidechat.v1';
+const storageSlice = persistedSlice<SideChatState['sidechats']>(SIDECHAT_STORAGE_KEY, {});
 const EMPTY: SideChat = { messages: [] };
 
 export function initialSideChat(saved = loadSideChats()): SideChatState {
@@ -97,17 +99,12 @@ export function questionText(message: SideMessage) {
 export const SOURCE_NAMES = { diff: 'Diff hunk', terminal: 'Terminal output', file: 'File range' } satisfies Record<QuoteSource, string>;
 
 export function saveSideChats(sidechats: SideChatState['sidechats']) {
-  try {
-    localStorage.setItem(SIDECHAT_STORAGE_KEY, JSON.stringify(sidechats));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): side chats last for the session.
-  }
+  storageSlice.setState({ value: sidechats });
 }
 
 function loadSideChats(): SideChatState['sidechats'] {
   try {
-    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(SIDECHAT_STORAGE_KEY);
-    const saved: SideChatState['sidechats'] = raw ? JSON.parse(raw) : {};
+    const saved = storageSlice.getState().value;
     // A reload cuts any answer mid-stream; its listener is gone, so it would spin forever.
     return mapChats(saved, ({ pending: _, ...c }) => ({ ...c, messages: c.messages.map((m) => ({ ...m, isStreaming: false })) }));
   } catch {

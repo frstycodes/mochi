@@ -1,7 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { useDiffTheme } from '../themes/highlight';
 import type { DiffLineAnnotation } from '@pierre/diffs';
-import { PatchDiff } from '@pierre/diffs/react';
+import { PatchDiff } from '../files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronDown, MessageText, Minus, PlusBold, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -168,7 +167,6 @@ interface HunkDiffProps {
 }
 
 function HunkDiff({ patch, diffStyle, annotations, onComment, renderAnnotation }: HunkDiffProps) {
-  const diffTheme = useDiffTheme();
   return (
     <PatchDiff<Annotation>
       patch={patch}
@@ -179,7 +177,6 @@ function HunkDiff({ patch, diffStyle, annotations, onComment, renderAnnotation }
         hunkSeparators: 'simple',
         disableFileHeader: true,
         overflow: 'wrap',
-        ...diffTheme,
         enableGutterUtility: true,
         onGutterUtilityClick: (range) => onComment(range.side ?? 'additions', range.start),
       }}

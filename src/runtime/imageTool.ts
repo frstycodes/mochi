@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 import type { GeneratedImage } from '../model.ts';
 
 /**
@@ -21,9 +21,9 @@ export const IMAGE_TOOL_DESCRIPTION =
   "Generate an image (illustration, icon, mockup, photo, texture) from a text prompt. The user sees it in the thread as it's made; you get the image back. Pass saveTo to also write it into your worktree, like \"public/hero.png\". Takes up to a minute or two and counts against the user's plan, so make one at a time.";
 
 export const IMAGE_TOOL_SHAPE = {
-  prompt: z.string().min(1).max(4000).describe('What to draw: subject, style, composition, colors, any text to render'),
-  size: z.enum(Object.keys(IMAGE_SIZES) as [ImageSize, ...ImageSize[]]).optional().describe('Default square'),
-  saveTo: z.string().optional().describe('A path inside your worktree to copy the image to, like "assets/logo.png"'),
+  prompt: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4000)).annotate({ description: 'What to draw: subject, style, composition, colors, any text to render' }),
+  size: Schema.optionalKey(Schema.Literals(Object.keys(IMAGE_SIZES) as ImageSize[]).annotate({ description: 'Default square' })),
+  saveTo: Schema.optionalKey(Schema.String.annotate({ description: 'A path inside your worktree to copy the image to, like "assets/logo.png"' })),
 };
 
 const PATH_LINE = 'Image file: ';

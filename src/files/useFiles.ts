@@ -1,38 +1,15 @@
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
+import { useWatchQuery, watchKey } from '../watch/useWatchQuery.ts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { host } from '@/host';
 import type { FileContent } from '@/host/types/fs';
 
-const RELIST_DELAY_MS = 300;
-
-// The last listing per root, so a second view of the same folder (the `@` menu beside the Files tab) starts from it.
-const listings = new Map<string, string[]>();
-
-/** The root's file list, re-listed shortly after anything under it changes. */
+/** The root's file list, re-listed by Core when a file under it is created or deleted. */
 export function useFileList(root: string | null) {
-  const [files, setFiles] = useState<string[] | null>(() => (root && listings.get(root)) || null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!root) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const relist = () =>
-      host.fs.list(root).then(
-        (list) => (listings.set(root, list), setFiles(list), setError(null)),
-        (e: Error) => setError(e.message),
-      );
-    void relist();
-    void host.fs.watch(root);
-    const off = host.fs.onChange((change) => {
-      if (change.root !== root) return;
-      clearTimeout(timer);
-      timer = setTimeout(relist, RELIST_DELAY_MS);
-    });
-    return () => {
-      off();
-      clearTimeout(timer);
-      void host.fs.unwatch(root);
-    };
-  }, [root]);
-  return { files, error };
+  const [filesQuery] = useWatchQuery(queryKeys.files.list(root), root ? { _tag: 'files', root } : null, (value) => value.files as string[], () => host.fs.list(root!));
+  return { files: filesQuery.data ?? null, error: filesQuery.error?.message ?? null };
 }
 
 export type OpenFile = ReturnType<typeof useOpenFile>;
@@ -50,33 +27,19 @@ export function useOpenFile(root: string, path: string) {
   const latest = useRef({ content, draft });
   latest.current = { content, draft };
 
+  const contentQuery = useQuery({ queryKey: queryKeys.files.content(root, path), queryFn: () => host.fs.read(root, path), staleTime: 0 });
+  useEffect(() => { setContent(null); setDraft(null); setConflict(null); setError(null); }, [root, path]);
   useEffect(() => {
-    let isCurrent = true;
-    setContent(null);
+    const next = contentQuery.data;
+    if (!next) return;
+    const { content: prev, draft: mine } = latest.current;
+    if (prev?.kind === 'text' && next.kind === 'text' && next.text === prev.text) return;
+    const isDirty = mine !== null && prev?.kind === 'text' && mine !== prev.text && !(next.kind === 'text' && next.text === mine);
+    if (isDirty && next.kind === 'text') return setConflict({ text: next.text, mtimeMs: next.mtimeMs });
+    setContent(next);
     setDraft(null);
-    setConflict(null);
-    setError(null);
-    const load = () =>
-      host.fs.read(root, path).then(
-        (next) => {
-          if (!isCurrent) return;
-          const { content: prev, draft: mine } = latest.current;
-          if (prev?.kind === 'text' && next.kind === 'text' && next.text === prev.text) return;
-          // Our own save can echo back through the watcher before `write` resolves: disk equal to the draft is not a conflict.
-          const isDirty = mine !== null && prev?.kind === 'text' && mine !== prev.text && !(next.kind === 'text' && next.text === mine);
-          if (isDirty && next.kind === 'text') return setConflict({ text: next.text, mtimeMs: next.mtimeMs });
-          setContent(next);
-          setDraft(null);
-        },
-        (e: Error) => isCurrent && setError(e.message),
-      );
-    void load();
-    const off = host.fs.onChange((change) => change.root === root && change.path === path && void load());
-    return () => {
-      isCurrent = false;
-      off();
-    };
-  }, [root, path]);
+  }, [contentQuery.data]);
+  useEffect(() => watchKey({ _tag: 'changes', root }, (value) => { if (value._tag === 'changes' && value.paths.includes(path)) void queryClient.invalidateQueries({ queryKey: queryKeys.files.content(root, path) }); }), [root, path]);
 
   const saved = content?.kind === 'text' ? content.text : null;
   const isDirty = draft !== null && saved !== null && draft !== saved;
@@ -109,5 +72,5 @@ export function useOpenFile(root: string, path: string) {
     setConflict(null);
   }, [conflict]);
 
-  return { content, error, draft: draft ?? saved, isDirty, isSaving, conflict, setDraft, save, keepMine, takeTheirs };
+  return { content, error: error ?? contentQuery.error?.message ?? null, draft: draft ?? saved, isDirty, isSaving, conflict, setDraft, save, keepMine, takeTheirs };
 }

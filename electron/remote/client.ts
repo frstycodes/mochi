@@ -1,15 +1,13 @@
-import { randomUUID } from 'node:crypto';
-import WebSocket from 'ws';
-import type { CommandResult, DeviceKind, FollowedMachine, RemoteCommand, StreamFrame } from '../../src/host/types/remote.ts';
-import { keepAlive, socketLink, type Link, type RawLink } from './link.ts';
-import { PairingRefused } from './pairing.ts';
-import { asKind, parseServerFrame, PROTOCOL_VERSION } from './protocol.ts';
+import { Cause, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
+import { RpcClientError } from 'effect/rpc';
+import { Persist, type Relay } from '@mochi/schema';
+import { makeDeviceClient, type DeviceClient, type Route } from '@mochi/core/remote/device';
+import type { Link, RawLink } from '@mochi/core/remote/link';
+import { reconnect } from '@mochi/core/remote/reconnect';
+import type { CommandResult, DeviceKind, FollowedMachine, RemoteCommand } from '../../src/host/types/remote.ts';
+import { asKind, PairingRefused } from './pairing.ts';
 
-/** One way to reach a machine. LAN and Tailscale addresses come first; the relay last. */
-export interface Route {
-  kind: 'lan' | 'relay';
-  open(): Promise<RawLink>;
-}
+export type { Route };
 
 export interface FollowOptions {
   /** `lastSeenAt`: from an earlier launch, for "offline since" before this one ever reached it. */
@@ -19,174 +17,201 @@ export interface FollowOptions {
   /** The pairing exchange as a returning device (`secureAsDevice`). */
   secure: (raw: RawLink) => Promise<Link>;
   onChange: (state: FollowedMachine) => void;
-  onFrame: (frame: StreamFrame) => void;
+  onFrame: (frame: Relay.MirrorFrame) => void;
+  /** A terminal opened on the machine printed (or exited); in order, from the offset the window last got. */
+  onTerminal: (output: { terminalId: string } & typeof Relay.TerminalOutput.Type) => void;
   /** What it said about itself, to remember for the next launch. */
   onWelcome: (welcome: { addresses: string[]; kind?: DeviceKind }) => void;
   /** This computer's membership records, sent in each hello. */
   members?: () => unknown;
   /** The machine's records, from its welcome or a later `members` frame. */
   onMembers?: (members: unknown) => void;
+  /** A thread file from the machine that didn't decode, for the log. */
+  onRejected: (reason: string) => void;
 }
 
 export interface MachineFollower {
   state(): FollowedMachine;
   command(command: RemoteCommand): Promise<CommandResult>;
-  /** Starts over without resuming: the next frames are a fresh snapshot, then actions. */
+  /** Starts over: the window drops what it has and every thread comes again from its snapshot. */
   resync(): void;
   close(): void;
 }
 
-const LAN_TIMEOUT_MS = 2000;
-const MAX_BACKOFF_MS = 30_000;
 const COMMAND_TIMEOUT_MS = 60_000;
 /** A clone runs as long as the repository takes to download. */
 const LONG_COMMAND_TIMEOUT_MS = { 'clone-project': 15 * 60_000, 'add-project': 2 * 60_000 } satisfies Partial<Record<RemoteCommand['type'], number>>;
+const decodeThread = Schema.decodeUnknownExit(Persist.SavedThread);
 
 /**
- * This computer's connection to one machine it paired with, as a device: kept open with backoff, resuming the stream where
- * it left off. Commands never queue while it's offline: sending later could spend usage unasked (DEVICES.md › Offline).
+ * This computer's connection to one machine it paired with, as a device: that machine's Core as an RPC client, its thread
+ * list from the `shell` stream and each thread from the `thread` stream a window there reads. Commands never queue while
+ * it's offline: sending later could spend usage unasked (DEVICES.md › Offline).
  */
 export function followMachine(options: FollowOptions): MachineFollower {
   const { machine } = options;
   let state: FollowedMachine = { id: machine.id, name: machine.name, kind: machine.kind, status: 'connecting', scopes: [], lastSeenAt: machine.lastSeenAt };
-  let link: Link | undefined;
-  let resume: { epoch: string; seq: number } | undefined;
-  let attempt = 0;
-  let retry: ReturnType<typeof setTimeout> | undefined;
-  // A resync or close makes an attempt still in flight stale.
-  let generation = 0;
-  const pending = new Map<string, (result: CommandResult) => void>();
+  let session: { scope: Scope.Closeable; fiber: Fiber.Fiber<unknown, unknown>; client?: DeviceClient; terminals: Map<string, Fiber.Fiber<unknown, unknown>> } | undefined;
 
   const set = (patch: Partial<FollowedMachine>) => {
     state = { ...state, ...patch };
     options.onChange(state);
   };
 
-  async function connect() {
-    const run = ++generation;
-    clearTimeout(retry);
-    set({ status: 'connecting' });
-    const opened = await openFirst(options.routes(), options.secure);
-    if (run !== generation) return 'link' in opened && opened.link.close(1000, 'Superseded');
-    if ('refusal' in opened) return set({ status: 'refused', route: undefined, scopes: [], error: opened.refusal });
-    if ('error' in opened) return offline(opened.error);
-    attach(opened.link, opened.route, run);
+  function start() {
+    const scope = Scope.makeUnsafe();
+    const current: NonNullable<typeof session> = { scope, fiber: undefined as never, terminals: new Map() };
+    session = current;
+    options.onFrame({ type: 'reset' });
+    set({ status: 'connecting', error: undefined });
+    const program = Effect.gen(function* () {
+      current.client = yield* makeDeviceClient({
+        routes: options.routes,
+        secure: options.secure,
+        isRefusal: (error) => error instanceof PairingRefused,
+        members: options.members,
+        onMembers: options.onMembers,
+        onWelcome: (welcome, route) => {
+          const kind = asKind(welcome.machineKind) ?? state.kind;
+          options.onWelcome({ addresses: [...welcome.addresses], kind });
+          if (welcome.members !== undefined) options.onMembers?.(welcome.members);
+          set({ status: 'online', route, name: welcome.machineName, kind, scopes: [...welcome.scopes], error: undefined, lastSeenAt: Date.now() });
+        },
+        onOffline: (error) => {
+          if (session !== current || state.status === 'refused') return;
+          set({ status: 'offline', route: undefined, error, lastSeenAt: state.status === 'online' ? Date.now() : state.lastSeenAt });
+        },
+        onRefused: (reason) => {
+          if (session !== current) return;
+          set({ status: 'refused', route: undefined, scopes: [], error: reason });
+          stop(current);
+        },
+      });
+      yield* mirror(current.client, options);
+    }).pipe(Scope.provide(scope));
+    current.fiber = Effect.runFork(program);
   }
 
-  function attach(opened: Link, route: Route['kind'], run: number) {
-    link = opened;
-    opened.onMessage((text) => onFrame(text, route));
-    opened.onClose(() => {
-      if (link !== opened) return;
-      link = undefined;
-      for (const answer of pending.values()) answer({ isOk: false, error: 'The connection dropped; check the thread before trying again' });
-      pending.clear();
-      if (run !== generation || state.status === 'refused') return;
-      offline(state.error ?? 'The connection dropped', state.status === 'online' ? Date.now() : state.lastSeenAt);
-    });
-    opened.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...(resume && { resume }), ...(options.members && { members: options.members() }) }));
+  function stop(current: NonNullable<typeof session>) {
+    if (session === current) session = undefined;
+    void Effect.runPromise(Fiber.interruptAll([current.fiber, ...current.terminals.values()]).pipe(Effect.andThen(Scope.close(current.scope, Exit.void))));
   }
 
-  function onFrame(text: string, route: Route['kind']) {
-    const frame = parseServerFrame(text);
-    switch (frame?.type) {
-      case 'welcome':
-        attempt = 0;
-        const kind = asKind(frame.machineKind) ?? state.kind;
-        options.onWelcome({ addresses: Array.isArray(frame.addresses) ? frame.addresses.filter((a) => typeof a === 'string') : [], kind });
-        if (frame.members !== undefined) options.onMembers?.(frame.members);
-        return set({ status: 'online', route, name: frame.machineName, kind, scopes: frame.scopes, error: undefined, lastSeenAt: Date.now() });
-      case 'members':
-        return options.onMembers?.(frame.members);
-      case 'refused':
-        // The machine couldn't serve the stream this time (it says to reconnect); the close that follows retries.
-        return set({ error: frame.reason });
-      case 'snapshot':
-      case 'action':
-        resume = { epoch: frame.epoch, seq: frame.seq };
-        return options.onFrame(frame);
-      case 'result': {
-        const { type: _type, id, ...result } = frame;
-        pending.get(id)?.(result as CommandResult);
-        pending.delete(id);
-      }
-    }
+  /** A terminal opened on the machine pushes its output until it is closed or exits, resuming after a dropped link where it left off. */
+  function watchTerminal(current: NonNullable<typeof session>, client: DeviceClient, command: RemoteCommand, result: CommandResult) {
+    if (command.type === 'terminal-close') return void interrupt(current.terminals, command.terminalId);
+    if (command.type !== 'terminal-open' || !result.isOk || !result.data || !('terminalId' in result.data)) return;
+    const { terminalId } = result.data;
+    let after = 0;
+    const output = Stream.suspend(() => client['terminal.output']({ terminalId, threadId: command.threadId, after })).pipe(
+      Stream.runForEach((chunk) =>
+        Effect.sync(() => {
+          after = chunk.next;
+          options.onTerminal({ terminalId, ...chunk });
+        }),
+      ),
+      Effect.retry({ schedule: reconnect, while: isDropped }),
+      Effect.ignore,
+      Effect.ensuring(Effect.sync(() => void current.terminals.delete(terminalId))),
+    );
+    current.terminals.set(terminalId, Effect.runFork(output));
   }
 
-  function offline(error: string, lastSeenAt = state.lastSeenAt) {
-    set({ status: 'offline', route: undefined, error, lastSeenAt });
-    retry = setTimeout(() => void connect(), Math.min(MAX_BACKOFF_MS, 1000 * 2 ** attempt++));
-  }
-
-  void connect();
+  start();
   return {
     state: () => state,
-    command(command) {
-      const open = link;
-      if (!open || state.status !== 'online') return Promise.resolve({ isOk: false, error: `${state.name} is offline` });
-      const id = randomUUID();
-      return new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          pending.delete(id);
-          resolve({ isOk: false, error: `${state.name} didn’t answer; check the thread before trying again` });
-        }, LONG_COMMAND_TIMEOUT_MS[command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS] ?? COMMAND_TIMEOUT_MS);
-        pending.set(id, (result) => {
-          clearTimeout(timer);
-          resolve(result);
-        });
-        open.send(JSON.stringify({ type: 'command', id, command }));
-      });
+    async command(command) {
+      const client = session?.client;
+      if (!client || state.status !== 'online') return { isOk: false, error: `${state.name} is offline` };
+      const timeout = LONG_COMMAND_TIMEOUT_MS[command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS] ?? COMMAND_TIMEOUT_MS;
+      const exit = await Effect.runPromiseExit(client['device.command']({ command }).pipe(Effect.timeout(timeout)));
+      if (Exit.isSuccess(exit)) {
+        const result = exit.value as CommandResult;
+        if (session) watchTerminal(session, client, command, result);
+        return result;
+      }
+      const error = Cause.squash(exit.cause);
+      if (Cause.isTimeoutError(error)) return { isOk: false, error: `${state.name} didn’t answer; check the thread before trying again` };
+      return { isOk: false, error: error instanceof Error ? error.message : String(error) };
     },
     resync() {
-      resume = undefined;
-      attempt = 0;
-      link?.close(1000, 'Starting over');
-      void connect();
+      if (session) stop(session);
+      start();
     },
     close() {
-      generation++;
-      clearTimeout(retry);
-      link?.close(1000, 'Stopped following');
+      if (session) stop(session);
     },
   };
 }
 
-/**
- * The first route that pairs. Only the relay's refusal is final: an address on the LAN may since belong to another computer,
- * which refuses a key it never paired with.
- */
-async function openFirst(routes: Route[], secure: FollowOptions['secure']): Promise<{ link: Link; route: Route['kind'] } | { refusal: string } | { error: string }> {
-  let error = 'No way to reach it';
-  for (const route of routes) {
-    let raw: RawLink | undefined;
-    try {
-      raw = await route.open();
-      return { link: await secure(raw), route: route.kind };
-    } catch (e) {
-      raw?.close(1000, 'Pairing failed');
-      if (e instanceof PairingRefused && route.kind === 'relay') return { refusal: e.message };
-      error = e instanceof Error ? e.message : String(e);
-    }
-  }
-  return { error };
+/** The machine's threads, kept in step with its `shell` and `thread` streams; each resumes after the last sequence it saw. */
+const mirror = (client: DeviceClient, options: FollowOptions) =>
+  Effect.gen(function* () {
+    const following = new Map<string, Fiber.Fiber<unknown, unknown>>();
+    const after = new Map<string, number>();
+
+    const send = (threadId: string, saved: unknown) => {
+      if (saved === null) return options.onFrame({ type: 'thread', threadId, saved: null });
+      const decoded = decodeThread(saved);
+      if (Exit.isSuccess(decoded)) return options.onFrame({ type: 'thread', threadId, saved: decoded.value });
+      options.onRejected(`Thread ${threadId} didn’t decode: ${Cause.pretty(decoded.cause).slice(0, 500)}`);
+    };
+
+    const thread = (threadId: string) =>
+      Stream.suspend(() => client.thread({ threadId, afterSequence: after.get(threadId) ?? 0 })).pipe(
+        Stream.runForEach((item) =>
+          Effect.sync(() => {
+            if (item._tag === 'snapshot') {
+              after.set(threadId, item.sequence);
+              return send(threadId, item.saved);
+            }
+            after.set(threadId, item.event.sequence);
+            if (item.event.type === 'thread.deleted') send(threadId, null);
+          }),
+        ),
+        Effect.retry({ schedule: reconnect, while: isDropped }),
+        Effect.ignore,
+      );
+
+    const follow = (threadId: string) =>
+      Effect.gen(function* () {
+        if (!following.has(threadId)) following.set(threadId, yield* Effect.forkChild(thread(threadId)));
+      });
+    const unfollow = (threadId: string) =>
+      Effect.gen(function* () {
+        const fiber = following.get(threadId);
+        if (!fiber) return;
+        following.delete(threadId);
+        after.delete(threadId);
+        yield* Fiber.interrupt(fiber);
+        send(threadId, null);
+      });
+
+    yield* client.shell().pipe(
+      Stream.runForEach((item) =>
+        Effect.gen(function* () {
+          if (item._tag === 'snapshot') {
+            const ids = new Set(item.shell.threads.map((t) => t.id));
+            for (const id of [...following.keys()]) if (!ids.has(id)) yield* unfollow(id);
+            for (const id of ids) yield* follow(id);
+            return;
+          }
+          const { type, threadId } = item.event;
+          if (!threadId) return;
+          if (type === 'thread.deleted') yield* unfollow(threadId);
+          if (type === 'thread.saved') yield* follow(threadId);
+        }),
+      ),
+      // Without `read` (or past any other refusal) there is nothing to mirror; commands still go.
+      Effect.retry({ schedule: reconnect, while: isDropped }),
+      Effect.ignore,
+    );
+  });
+
+function interrupt(fibers: Map<string, Fiber.Fiber<unknown, unknown>>, id: string) {
+  const fiber = fibers.get(id);
+  fibers.delete(id);
+  if (fiber) void Effect.runPromise(Fiber.interrupt(fiber));
 }
 
-/** A machine's server on its LAN or Tailscale address, kept alive by WebSocket pings. */
-export function openLan(address: string): Promise<RawLink> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://${address}`);
-    const timer = setTimeout(() => {
-      ws.terminate();
-      reject(new Error(`Nothing answered at ${address}`));
-    }, LAN_TIMEOUT_MS);
-    ws.on('open', () => {
-      clearTimeout(timer);
-      keepAlive(ws, () => ws.ping());
-      resolve(socketLink(ws));
-    });
-    ws.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
-}
+const isDropped = (error: unknown) => error instanceof RpcClientError.RpcClientError;

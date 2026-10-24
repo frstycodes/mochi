@@ -1,6 +1,7 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { isMultiTab, PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind, type PaneVisual } from '../model.ts';
 import { closeKind, EMPTY_LAYOUT, moveKind, openKind, type PaneLayout } from '../pane/layout.ts';
-import type { Action, State } from './index.tsx';
+import type { Action, State } from './types.ts';
 import { showsDemoData } from '../demoData.ts';
 import { runningBackground } from '../runtime/subagents.ts';
 import { defaultBrowserUrl, listeningPorts } from '../terminal/devServer.ts';
@@ -34,6 +35,7 @@ export type PanesAction =
   | { type: 'pane-show-agent'; threadId: string; subagentId?: string };
 
 const STORAGE_KEY = 'harness.panes.v1';
+const storageSlice = persistedSlice<Pane[]>(STORAGE_KEY, []);
 
 export function initialPanes(saved = loadPanes()): PanesState {
   const savedIds = new Set(saved.map((p) => p.threadId));
@@ -176,17 +178,12 @@ function withLayout(pane: Pane, layout: PaneLayout): Pane {
 }
 
 export function savePanes(panes: Pane[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(panes));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): tabs just don't persist.
-  }
+  storageSlice.setState({ value: panes });
 }
 
 function loadPanes(): Pane[] {
   try {
-    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
-    const panes: Pane[] = raw ? JSON.parse(raw) : [];
+    const panes = storageSlice.getState().value;
     // Browser tabs float only while an agent drives them, so an old manual pop-out goes back in the pane.
     return panes.map((p) => migrate({ ...p, tabs: p.tabs.filter((t) => PANE_TAB_KINDS.includes(t.kind)).map((t) => (t.kind === 'browser' ? { ...t, isPopped: false } : t)) }));
   } catch {

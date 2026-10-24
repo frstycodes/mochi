@@ -1,11 +1,10 @@
 import { AUTOFIX_ATTEMPTS, type AutofixEvent } from '../git/autofix.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { PullRequest, Thread } from '../model.ts';
-import { subThreadsOf } from '../reorder.ts';
-import type { State } from '../store/index.tsx';
+import { NOTE_PREFIX } from './due.ts';
+import type { State } from '../store/types.ts';
 import { mapThread } from '../store/threads.ts';
 
-const NOTE_PREFIX = '[Sub-thread ';
 const EXCERPT_CHARS = 800;
 
 export const WAKE_PROMPT = 'Your sub-threads are idle; their notes are above. Carry on with your work.';
@@ -46,16 +45,6 @@ export function notePrsEnded(state: State, before: Thread): State {
 export function prEnded(prev: PullRequest[], next: PullRequest[]): PullRequest[] {
   const isEnded = (p?: PullRequest) => p?.state === 'merged' || p?.state === 'closed';
   return next.filter((p) => isEnded(p) && !isEnded(prev.find((q) => q.number === p.number)));
-}
-
-/** Parents holding sub-thread notes that nothing else will deliver: idle, nothing queued or waiting on you, and every sub-thread idle. */
-export function dueWakes(state: Pick<State, 'threads' | 'queue'>): Thread[] {
-  return state.threads.filter((t) => {
-    if (!t.live || t.live.isWorking || t.live.starting || t.status === 'settled' || t.queued?.length) return false;
-    if (!t.live.notes?.some((n) => n.startsWith(NOTE_PREFIX))) return false;
-    if (state.queue.some((q) => q.threadId === t.id && (q.kind === 'approval' || q.kind === 'question'))) return false;
-    return !subThreadsOf(state.threads, t.id).some((s) => s.live?.isWorking || s.live?.starting);
-  });
 }
 
 function addNote(state: State, sub: Thread, note: string): State {

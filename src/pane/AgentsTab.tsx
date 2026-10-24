@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ArrowLeft, BackgroundTask, ChevronRight, Send, Stop } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
@@ -27,6 +28,7 @@ import { VizThreadProvider } from '../viz/WidgetVisual';
 import { CallList, CallRow, DiffStat, DiffView, Expand, RunOutput } from '../WorkLog';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
+import { queryKeys } from '../queryKeys';
 
 /** Everything this thread's agent started beside its turn as cards, running first; a card opens that task's page (an agent's transcript, a command's output) in place of the list. */
 export function AgentsTab({ thread, tab }: PaneTabProps) {
@@ -362,26 +364,10 @@ function NoTasks() {
 
 /** The command's output, read from the file its harness writes it to: re-read every second while it runs, once more when it ends. */
 function useTaskRun(task: TaskRow): RunResult | Pick<RunResult, 'lines'> | undefined {
-  const [text, setText] = useState('');
   const { outputFile, status } = task;
   const isRunning = status === 'running';
-  useEffect(() => {
-    if (!outputFile) return;
-    let isCurrent = true;
-    const { dir, name } = splitPath(outputFile);
-    const read = () =>
-      host.fs.read(dir, name).then(
-        (content) => isCurrent && content.kind === 'text' && setText(content.text),
-        () => {}, // Not written yet; the next read picks it up.
-      );
-    void read();
-    if (!isRunning) return () => void (isCurrent = false);
-    const id = setInterval(read, OUTPUT_POLL_MS);
-    return () => {
-      isCurrent = false;
-      clearInterval(id);
-    };
-  }, [outputFile, isRunning]);
+  const outputQuery = useQuery({ queryKey: queryKeys.agent.taskOutput(outputFile, isRunning), queryFn: () => { const { dir, name } = splitPath(outputFile!); return host.fs.read(dir, name); }, enabled: !!outputFile, refetchInterval: isRunning ? OUTPUT_POLL_MS : false, staleTime: 0 });
+  const text = outputQuery.data?.kind === 'text' ? outputQuery.data.text : '';
   const lines = outputLines(text);
   if (task.exitCode !== undefined) return { exitCode: task.exitCode, lines };
   return status === 'done' ? { exitCode: 0, lines } : { lines };

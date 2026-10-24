@@ -1,4 +1,4 @@
 import type { SimHost } from '../types/sim.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const sim = (): SimHost => bridge().sim;
+export const sim = (): SimHost => desktopNamespace('sim');

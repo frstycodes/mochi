@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { ChevronDown, Copy, Key, Sparkles, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -16,9 +17,10 @@ import { appInfo, appProviderFor, connectorFor, connectorIcon, freeAlias, isSame
 import { LibraryIcon } from './LibraryParts';
 import { serviceName } from './names';
 import type { Library } from './useLibrary';
-import { closeSettings } from '../settings/open';
+import { goHome } from '../routes/nav';
 import { getPrefs } from '../settings/prefs';
 import { useDispatch } from '../store';
+import { queryKeys } from '../queryKeys';
 
 /**
  * Adds an account on a remote MCP server: what to call it, then how it signs in. Without a `url` it's a custom server and
@@ -70,7 +72,7 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
     dispatch({ type: 'create', title: prompt, provider: getPrefs().agent, project: null, isLive: host.isDesktop });
     onConnected();
     // The new thread opens behind Settings; leave it so the setup shows.
-    closeSettings();
+    goHome();
   };
   const deviceCode = useDeviceCode(isBusy ? url : null);
   const submit = () => {
@@ -256,9 +258,8 @@ function OwnAppHint({ provider }: { provider: AppProviderId | undefined }) {
 }
 
 function useOwnAppRedirect() {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => void host.library.ownAppRedirect().then(setUrl, () => undefined), []);
-  return url;
+  const redirectQuery = useQuery({ queryKey: queryKeys.library.ownAppRedirect(), queryFn: () => host.library.ownAppRedirect() });
+  return redirectQuery.data ?? null;
 }
 
 /** The one-time code a device sign-in for `url` is waiting on; null until main sends one, or when nothing is signing in. */
@@ -288,7 +289,6 @@ function DeviceCodePanel({ code }: { code: DeviceCode }) {
 
 /** Which providers accounts can sign in with without bringing an app; null until main answers. Read per dialog: saving a Google client changes it. */
 function useMochiOAuthApps() {
-  const [apps, setApps] = useState<AppProviderId[] | null>(null);
-  useEffect(() => void host.library.oauthApps().then(setApps, () => setApps([])), []);
-  return apps;
+  const appsQuery = useQuery({ queryKey: queryKeys.library.oauthApps(), queryFn: () => host.library.oauthApps(), staleTime: 0 });
+  return appsQuery.data ?? (appsQuery.isError ? [] : null);
 }

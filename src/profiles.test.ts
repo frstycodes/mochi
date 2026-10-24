@@ -1,11 +1,10 @@
+import { browserStorage } from './lib/uiStorage.ts';
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 
 const storage = new Map<string, string>();
-Object.defineProperty(globalThis, 'localStorage', {
-  configurable: true,
-  value: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => void storage.set(k, v) },
-});
+mock.method(browserStorage, 'getItem', (key: string) => storage.get(key) ?? null);
+mock.method(browserStorage, 'setItem', (key: string, value: string) => void storage.set(key, value));
 const { DEFAULT_SPACES } = await import('./model.ts');
 const { MAX_PROFILES, PROFILES_KEY, addProfile, getProfiles, newProfileId, parseProfiles, removeProfile, updateProfile } = await import('./profiles.ts');
 
@@ -33,7 +32,7 @@ test('add, rename, remove and undo keep the order and persist', () => {
   assert.deepEqual(getProfiles().map((p) => p.id), ['latitude', 'liane', 'personal-2']);
   undo();
   assert.deepEqual(getProfiles().map((p) => p.id), ['latitude', 'personal', 'liane', 'personal-2']);
-  assert.equal(JSON.parse(storage.get(PROFILES_KEY)!).length, 4);
+  assert.equal(JSON.parse(storage.get(PROFILES_KEY)!).state.value.length, 4);
 });
 
 test('the last profile stays and the list stops at the cap', () => {

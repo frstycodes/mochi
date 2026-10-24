@@ -1,3 +1,4 @@
+import { browserStorage } from '../lib/uiStorage.ts';
 import { toast } from '../toast/store.ts';
 import { getPage, openPage, updatePage } from '../browser/pages.ts';
 import { normalizeUrl } from '../browser/url.ts';
@@ -6,7 +7,7 @@ import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import { getProfiles, removeProfile, updateProfile } from '../profiles.ts';
 import { saveDraft, settingsChatDraftKey } from '../chat/drafts.ts';
-import { openSettings } from '../settings/open.ts';
+import { openSettings } from '../routes/nav.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { agentAskSecondOpinion } from '../secondOpinion/run.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -51,7 +52,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
 /** next-themes keeps the choice under `theme`; nothing stored (or storage blocked) means its default, System. */
 function storedTheme() {
   try {
-    return localStorage.getItem('theme') ?? 'system';
+    return browserStorage.getItem('theme') ?? 'system';
   } catch {
     return 'system';
   }

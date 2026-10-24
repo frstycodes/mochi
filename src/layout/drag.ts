@@ -1,4 +1,7 @@
-import { useSyncExternalStore } from 'react';
+import { createElement, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from 'react';
+import { Accessibility, AutoScroller, Cursor, defaultPreset, Feedback, PointerActivationConstraints, PointerSensor, type Droppable } from '@dnd-kit/dom';
+import { DOMRectangle } from '@dnd-kit/dom/utilities';
+import { DragDropProvider } from '@dnd-kit/react';
 import { zoneAt, type View, type Zone } from './tree.ts';
 
 export interface DragSession {
@@ -74,3 +77,53 @@ function hitLeaf(x: number, y: number, view: View): DragSession['hit'] {
   if (!leafEl) return null;
   return { leafId: leafEl.dataset.leafId!, zone: zoneAt(leafEl.getBoundingClientRect(), x, y, view.kind !== 'tab') };
 }
+
+export type SurfaceHandlers = Pick<ComponentProps<typeof DragDropProvider>, 'onDragStart' | 'onDragMove' | 'onDragOver' | 'onDragEnd'>;
+
+/**
+ * One drag source's dnd-kit provider: pointer only (Enter on a row must still open it), nothing moved in place (sources draw their
+ * own ghost or the shared chip), Esc cancels. `canStart` gets the pressed element, any without it; `autoScroll` scrolls vertically
+ * near the edges. `distance`, `canStart` and `autoScroll` are read once.
+ */
+export function DragSurface({ distance, canStart, autoScroll = false, children, ...handlers }: { distance: number; canStart?: (target: Element) => boolean; autoScroll?: boolean; children: ReactNode } & SurfaceHandlers) {
+  const [sensors] = useState(() => [
+    PointerSensor.configure({
+      activationConstraints: () => [new PointerActivationConstraints.Distance({ value: distance })],
+      preventActivation: (e) => !!canStart && !(e.target instanceof Element && canStart(e.target)),
+    }),
+  ]);
+  const [plugins] = useState(() => [
+    ...defaultPreset.plugins.filter((p) => p !== Accessibility && p !== Cursor && p !== Feedback && p !== AutoScroller),
+    Feedback.configure({ feedback: 'none' }),
+    ...(autoScroll ? [AutoScroller.configure({ threshold: { x: 0, y: EDGE_SCROLL_SHARE } })] : []),
+  ]);
+  // dnd-kit computes collisions only once a shape is set, and again whenever it changes: Feedback keeps it under the pointer, but
+  // `feedback: 'none'` skips that, so the surface does it.
+  const [shape] = useState<{ start?: DOMRectangle }>({});
+  const onDragStart: SurfaceHandlers['onDragStart'] = (event, manager) => {
+    const element = manager.dragOperation.source?.element;
+    shape.start = element && new DOMRectangle(element);
+    if (shape.start) manager.dragOperation.shape = shape.start;
+    handlers.onDragStart?.(event, manager);
+  };
+  const onDragMove: SurfaceHandlers['onDragMove'] = (event, manager) => {
+    const { transform } = manager.dragOperation;
+    if (shape.start) manager.dragOperation.shape = shape.start.translate(transform.x, transform.y);
+    handlers.onDragMove?.(event, manager);
+  };
+  return createElement(DragDropProvider, { sensors, plugins, ...handlers, onDragStart, onDragMove }, children);
+}
+
+// About 40px of a full-height sidebar.
+const EDGE_SCROLL_SHARE = 0.05;
+
+/** A droppable hit only while the pointer is over the middle half of its height: the rest of the row is for reordering. */
+export const middleHalf: Droppable['collisionDetector'] = ({ droppable, dragOperation }) => {
+  // Typed over dnd-kit's abstract droppable; the DOM one, with an element, is what `useDroppable` registers. Measured live, not from
+  // `droppable.shape`: rows gliding to a new slot move by transform.
+  const rect = (droppable as unknown as Droppable).element?.getBoundingClientRect();
+  const { x, y } = dragOperation.position.current;
+  if (!rect || x < rect.left || x > rect.right || y < rect.top + rect.height / 4 || y > rect.bottom - rect.height / 4) return null;
+  // Type 2 is CollisionType.PointerIntersection and priority 2 is CollisionPriority.Normal; both enums live in @dnd-kit/abstract.
+  return { id: droppable.id, value: 1, type: 2, priority: 2 };
+};

@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { terminalShell } from '../agents/config.ts';
+import { terminalShell } from '@mochi/core/agents/config';
 import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';

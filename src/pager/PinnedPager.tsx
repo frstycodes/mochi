@@ -5,7 +5,6 @@ import { haptic } from '../haptic';
 import { LeafView, Workspace, WorkspaceEffects } from '../layout/Workspace';
 import type { Leaf } from '../layout/tree';
 import { Overview } from '../stage/Overview';
-import { useWindowSyncHost } from '../stage/windowSync';
 import { useDispatch, useHarnessSelector, type State } from '../store';
 import { useSnapPager } from '../useSnapPager';
 import { isHot, OFF_PIN, slotsOf, type PagerSlots } from './slots';
@@ -79,7 +78,6 @@ export function PinnedPager() {
 
 /** The pager's whole-state side effects, in a leaf of their own so the pages don't re-render with every change. */
 function PagerEffects() {
-  useWindowSyncHost();
   usePagerKeys();
   return null;
 }

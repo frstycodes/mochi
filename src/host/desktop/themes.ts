@@ -1,4 +1,4 @@
 import type { ThemesHost } from '../types/themes.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const themes = (): ThemesHost => bridge().themes;
+export const themes = (): ThemesHost => desktopNamespace('themes');

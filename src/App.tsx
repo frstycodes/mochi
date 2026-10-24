@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { QueryProvider } from './QueryProvider';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
+import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/toast/Toaster';
 import { useResolvedQueueToasts } from './QueueToast';
@@ -14,15 +17,13 @@ import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
-import { PinnedPager } from './pager/PinnedPager';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
 import { useGlobalKeys } from './palette/useGlobalKeys';
-import { ReviewModeProvider, useReviewMode } from './review/useReviewMode';
-import { ReviewView } from './review/ReviewView';
-import { useSettingsRoute } from './settings/open';
+import { RouterProvider } from '@tanstack/react-router';
+import { getRouter } from './routes/router';
+import { usePathname, useSettingsRoute } from './routes/nav';
 import { usePrefs } from './settings/prefs';
-import { SettingsPage } from './settings/SettingsPage';
 import { AgentSettingsProvider } from './settings/AgentSettings';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
@@ -34,19 +35,17 @@ import { useIdleScrollbars } from './useIdleScrollbars';
 import { useAutoArchive } from './git/autoArchive';
 import { useCheckoutRecovery, useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
-import { useReplayRoute } from './replay/open';
-import { ReplayPage, ReplayView } from './replay/ReplayView';
+import { ReplayPage } from './replay/ReplayView';
 import { ColorThemeController } from './themes/ColorThemeController';
 import { DeviceApprovalLayer } from './remote/DeviceApproval';
-import { useRemoteThreadRoute } from './remote/open';
-import { RemoteThreadView } from './remote/RemoteThreadView';
 import { MachinesProvider } from './remote/useMachines';
 import { useLibraryNamesLoader } from './library/useLibrary';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
 
-export function App() {
+export function App() { return <QueryProvider><AppContent /></QueryProvider>; }
+function AppContent() {
   const route = useHashRoute();
   useIdleScrollbars();
   return (
@@ -54,30 +53,33 @@ export function App() {
       <ColorThemeController />
       <ReducedMotion>
         <TooltipProvider delayDuration={400}>
-          {embeddedReplay ? (
-            <ReplayPage payload={embeddedReplay} />
-          ) : route === 'design' ? (
-            <DesignPage />
-          ) : route.startsWith('/window/') ? (
-            <TornWindow threadId={route.slice('/window/'.length)} />
-          ) : (
-            <HarnessProvider>
-              <MachinesProvider>
-                <ReviewModeProvider>
-                  <Shell />
-                </ReviewModeProvider>
-              </MachinesProvider>
-              <Orbit />
-              <PhotoViewer />
-              <FileViewer />
-              <ScheduleLayer />
-              <RenameLayer />
-              <GoalEditorLayer />
-              <DeviceApprovalLayer />
-              <Toaster />
-              <AppZoomChip />
-            </HarnessProvider>
-          )}
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[route]}>
+            {embeddedReplay ? (
+              <ReplayPage payload={embeddedReplay} />
+            ) : route === 'design' ? (
+              <DesignPage />
+            ) : route.startsWith('/window/') ? (
+              <TornWindow threadId={route.slice('/window/'.length)} />
+            ) : (
+              <HarnessProvider>
+                <MachinesProvider>
+                    {/* Inside the store's provider: a crash in the shell (the sidebar) keeps the store and its running agents. */}
+                    <ErrorBoundary FallbackComponent={ErrorFallback}>
+                      <Shell />
+                    </ErrorBoundary>
+                </MachinesProvider>
+                <Orbit />
+                <PhotoViewer />
+                <FileViewer />
+                <ScheduleLayer />
+                <RenameLayer />
+                <GoalEditorLayer />
+                <DeviceApprovalLayer />
+                <Toaster />
+                <AppZoomChip />
+              </HarnessProvider>
+            )}
+          </ErrorBoundary>
         </TooltipProvider>
       </ReducedMotion>
     </ThemeProvider>
@@ -122,10 +124,8 @@ function Shell() {
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
-  const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
-  const isReplayOpen = !!useReplayRoute();
-  const isRemoteOpen = !!useRemoteThreadRoute();
+  const pathname = usePathname();
   useSettingsShortcut();
 
   const content = (
@@ -133,7 +133,9 @@ function Shell() {
       {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
       <SidebarInset className="isolate order-last min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[pathname]}>
+            <RouterProvider router={getRouter()} />
+          </ErrorBoundary>
         </div>
       </SidebarInset>
       {/* After the page in the DOM, back on the left through `order-last` above: Electron applies app-region in document order, so the page's drag headers would otherwise swallow the sidebar's toggle. */}

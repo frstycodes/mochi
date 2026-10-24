@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/react-query';
 import type { ProviderConfig } from '../host/types/settings.ts';
 import { authorName, settingRef, type Provider, type Space } from '../model.ts';
 import { linkedAccountId, profilesUsing } from '../settings/accounts.ts';
@@ -12,6 +13,7 @@ import { openInNewTab, refView, tabView } from './browserTools.ts';
 import { ownAppSetup } from '../library/ownApps.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
+import { queryKeys } from '../queryKeys.ts';
 
 type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'list_connectors' | 'connect_account' | 'run_setup' | 'update_setup_step' | 'remove_mcp_server' | 'remove_profile';
 
@@ -36,11 +38,8 @@ export const SETTINGS_TOOLS = {
   update_settings: {
     run: async (ctx) => {
       const { args, caller } = ctx;
-      const loaded = new Map<string, Promise<{ sources: SettingSources; catalog: Setting[] }>>();
-      const load = (profile: Space) => {
-        if (!loaded.has(profile.id)) loaded.set(profile.id, sourcesFor(ctx, profile).then((sources) => ({ sources, catalog: settingsCatalog({ profile, config: sources.config }) })));
-        return loaded.get(profile.id)!;
-      };
+      const loaded = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, gcTime: Infinity, retry: false, networkMode: 'always' } } });
+      const load = (profile: Space) => loaded.fetchQuery({ queryKey: queryKeys.profile.settingsSources(profile.id), queryFn: () => sourcesFor(ctx, profile).then((sources) => ({ sources, catalog: settingsCatalog({ profile, config: sources.config }) })) });
       const changes: { key: string; value: string; profileId?: string }[] = [];
       const before: Record<string, string> = {};
       const labels: string[] = [];

@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SafeStorage } from 'electron';
 import sodium from 'libsodium-wrappers';
+import type { DeviceKeys } from '@mochi/core/remote/session';
 
-/** Ed25519; `session.ts` converts it to X25519 for `crypto_kx`. */
-export type DeviceKeys = { publicKey: Uint8Array; privateKey: Uint8Array };
+export type { DeviceKeys };
 
 /** `persisted: false` → the key lives in memory only and a new one is made on the next launch. */
 export type LoadedDeviceKeys = { keys: DeviceKeys; persisted: boolean };

@@ -98,7 +98,7 @@ test('TOML: reads values, quoted and dotted headers, arrays of tables, multi-lin
     tables.map((t) => t.path.join('.')),
     ['mcp_servers.probe', 'mcp_servers.probe.env', 'mcp_servers.dotted.name', 'skills.config', 'notice'],
   );
-  assert.throws(() => parseToml('a = "open'), /line 1: unterminated string/);
+  assert.throws(() => parseToml('a = "open'), /config.toml line 1:/);
 });
 
 test('Codex: reads servers, translating pass-through variables to ${VAR}', () => {

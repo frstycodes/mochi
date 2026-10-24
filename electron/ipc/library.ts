@@ -1,79 +1,61 @@
 import type { WebContents } from 'electron';
 import { statSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
 import { connectorKey, type DeviceCode } from '../../src/library/connectors.ts';
 import { libraryEntries, removeItem, setItemEnabled, type LibraryConnector } from '../../src/library/library.ts';
 import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
-import type { Provider } from '../../src/model.ts';
-import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
 import { addMarketplace, addOwnSkill, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, removePlacements, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
 import { popularSkillsSh, searchSkillsSh } from '../library/skillsSh.ts';
-import { UPLOAD_LIMITS } from '../library/upload.ts';
 import type { SkillDestination } from '../../src/library/library.ts';
 import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
 import { overrideStep, playwrightOps, recipeFor } from '../library/recipeRunner.ts';
 import { runRecipe } from '../library/runRecipe.ts';
 import { addConnectorAccount, forgetAccount, listConnectorTools, nameFromServer, readSecrets, recordIdentity, renameConnector, saveSecrets, signIn, withSettings } from '../library/connectors.ts';
-import { TOOL_PERMISSIONS, type ConnectorSettings, type ToolPermission } from '../../src/library/connectorTools.ts';
 import { sameAccount } from '../library/identity.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { createSlackApp } from '../library/slackApp.ts';
 import { googleClientFrom, slackClientFrom, type SetupCapture, type SlackApps } from '../library/ownApp.ts';
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
-import { RELAY_URL } from '../remote/relayClient.ts';
+import { RELAY_URL } from '@mochi/core/remote/relayClient';
 import { setAutoUpdate, updateItem } from '../library/updates.ts';
-import { record, spaceIdOf, string, type Handlers } from './handlers.ts';
-
-const PARTS = ['skills', 'mcp'] as const;
+import type { Handlers } from './handlers.ts';
 
 export const library = {
   async list(_sender, spaceId) {
-    return libraryEntries(await readLibrary(), spaceIdOf(spaceId));
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async setEnabled(_sender, spaceId, id, isEnabled) {
-    if (typeof isEnabled !== 'boolean') throw new TypeError('isEnabled must be a boolean');
-    const space = spaceIdOf(spaceId);
-    return libraryEntries(await updateLibrary((index) => setItemEnabled(index, space, string(id, 'id', 64), isEnabled)), space);
+    return libraryEntries(await updateLibrary((index) => setItemEnabled(index, spaceId, id, isEnabled)), spaceId);
   },
   async remove(_sender, spaceId, id) {
-    const space = spaceIdOf(spaceId);
-    const itemId = string(id, 'id', 64);
-    const item = (await readLibrary()).items.find((i) => i.id === itemId);
-    if (item?.kind === 'connector') await forgetAccount(itemId);
+    const item = (await readLibrary()).items.find((i) => i.id === id);
+    if (item?.kind === 'connector') await forgetAccount(id);
     await removePlacements(item);
-    return libraryEntries(await updateLibrary((index) => removeItem(index, itemId)), space);
+    return libraryEntries(await updateLibrary((index) => removeItem(index, id)), spaceId);
   },
   async importFromAccount(_sender, spaceId, provider, parts, names) {
-    const space = spaceIdOf(spaceId);
-    if (!HARNESS_IDS.includes(provider as Provider)) throw new TypeError(`provider must be one of ${HARNESS_IDS.join(', ')}`);
-    if (!Array.isArray(parts) || !parts.length || !parts.every((p) => PARTS.includes(p))) throw new TypeError(`parts must list ${PARTS.join(' and/or ')}`);
-    if (names !== undefined && (!Array.isArray(names) || !names.every((n) => typeof n === 'string'))) throw new TypeError('names must list skill names');
-    const notes = await importFromAccount(space, provider as Provider, parts, names as string[] | undefined);
-    return { entries: libraryEntries(await readLibrary(), space), notes };
+    const notes = await importFromAccount(spaceId, provider, parts, names);
+    return { entries: libraryEntries(await readLibrary(), spaceId), notes };
   },
   async addSkill(_sender, spaceId, files) {
-    const space = spaceIdOf(spaceId);
-    const checked = Object.fromEntries(Object.entries(record(files, 'files')).map(([path, text]) => [string(path, 'path', 512), string(text, path, 1024 * 1024)]));
-    await addOwnSkill(space, checked);
-    return libraryEntries(await readLibrary(), space);
+    await addOwnSkill(spaceId, files);
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async discoverSkills(_sender, source) {
-    const skills = await discoverSkills(string(source, 'source', 512));
+    const skills = await discoverSkills(source);
     return skills.map(({ name, description, source: from, files, icon, commit }) => ({ name, description, source: from, fileCount: Object.keys(files).length, icon, commit }));
   },
   async skillFiles(_sender, source, name) {
-    const skill = (await discoverSkills(string(source, 'source', 512))).find((s) => s.name === string(name, 'name', 128));
-    if (!skill) throw new Error(`${name as string} isn't in ${source as string}`);
+    const skill = (await discoverSkills(source)).find((s) => s.name === name);
+    if (!skill) throw new Error(`${name} isn't in ${source}`);
     return skill.files;
   },
   async installSkill(_sender, spaceId, source, name, destination) {
-    const space = spaceIdOf(spaceId);
-    await installSkill(space, string(source, 'source', 512), string(name, 'name', 128), skillDestination(destination));
-    return libraryEntries(await readLibrary(), space);
+    await installSkill(spaceId, source, name, skillDestination(destination));
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async searchSkillsSh(_sender, query) {
-    return searchSkillsSh(string(query, 'query', 200));
+    return searchSkillsSh(query);
   },
   async popularSkillsSh() {
     return popularSkillsSh();
@@ -82,41 +64,33 @@ export const library = {
     return marketplaces();
   },
   async addMarketplace(_sender, source) {
-    await addMarketplace(string(source, 'source', 512));
+    await addMarketplace(source);
     return marketplaces();
   },
   async removeMarketplace(_sender, name) {
-    await removeMarketplace(string(name, 'name', 128));
+    await removeMarketplace(name);
     return marketplaces();
   },
   async marketplaceCatalog(_sender, name) {
-    const marketplace = (await marketplaces()).find((m) => m.name === string(name, 'name', 128));
-    if (!marketplace) throw new Error(`No marketplace named ${name as string}`);
+    const marketplace = (await marketplaces()).find((m) => m.name === name);
+    if (!marketplace) throw new Error(`No marketplace named ${name}`);
     return fetchMarketplace(marketplace.source);
   },
   async installPlugin(_sender, spaceId, marketplace, name) {
-    const space = spaceIdOf(spaceId);
-    await installPlugin(space, string(marketplace, 'marketplace', 128), string(name, 'name', 128));
-    return libraryEntries(await readLibrary(), space);
+    await installPlugin(spaceId, marketplace, name);
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async reviewUpload(_sender, file) {
-    const { name, bytes } = pluginFile(file);
-    return reviewUploadedPlugin(name, bytes);
+    return reviewUploadedPlugin(file.name, file.bytes);
   },
   async installUpload(_sender, spaceId, file, choice) {
-    const space = spaceIdOf(spaceId);
-    const { name, bytes } = pluginFile(file);
-    const picked = record(choice, 'choice');
-    const targets = picked.targets;
-    if (!Array.isArray(targets) || !targets.length || !targets.every((t) => HARNESS_IDS.includes(t as Provider))) throw new TypeError(`targets must list ${HARNESS_IDS.join(' and/or ')}`);
-    if (!Array.isArray(picked.profileIds)) throw new TypeError('profileIds must be a list of profile ids');
-    await installUploadedPlugin(name, bytes, string(picked.sha256, 'sha256', 64), targets as Provider[], picked.profileIds.map(spaceIdOf));
-    return libraryEntries(await readLibrary(), space);
+    await installUploadedPlugin(file.name, file.bytes, choice.sha256, choice.targets, choice.profileIds);
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async addConnector(sender, spaceId, input, options) {
-    const space = spaceIdOf(spaceId);
-    const { inPane, secretFrom, slackTokenFrom, fromSetup } = connectOptions(options);
-    const fields = connectorInput(input);
+    const space = spaceId;
+    const { inPane, secretFrom, slackTokenFrom, fromSetup } = options ?? {};
+    const fields = connectorFields(input);
     if (secretFrom) fields.clientSecret = await secretOnPage(sender, secretFrom);
     if (slackTokenFrom) Object.assign(fields, await slackAppFrom(sender, slackTokenFrom));
     if (fromSetup) Object.assign(fields, await clientFromSetup(fields.url, takeCapture(sender, fields.url)));
@@ -131,83 +105,47 @@ export const library = {
     return [...mochiOAuthProviders(), ...((await hasGoogleClient()) ? (['google'] as const) : [])];
   },
   async runSetup(sender, connector, viewId, options) {
-    const name = string(connector, 'connector', 64);
-    const view = string(viewId, 'viewId', 32);
-    if (!/^view-\d+$/.test(view)) throw new TypeError('viewId is not a view id');
-    const { params, fromStep } = setupOptions(options);
-    const { result, captured, params: own } = await runRecipe(await recipeFor(name), params, playwrightOps(await pageOfView(sender, view)), fromStep);
-    if (Object.keys(captured).length) captures.set(`${sender.id}/${name}`, { values: captured, params: own, at: Date.now() });
+    const { params = {}, fromStep } = options ?? {};
+    const { result, captured, params: own } = await runRecipe(await recipeFor(connector), params, playwrightOps(await pageOfView(sender, viewId)), fromStep);
+    if (Object.keys(captured).length) captures.set(`${sender.id}/${connector}`, { values: captured, params: own, at: Date.now() });
     return result;
   },
   async updateSetupStep(_sender, connector, stepId, target) {
-    return overrideStep(string(connector, 'connector', 64), string(stepId, 'stepId', 64), target);
+    return overrideStep(connector, stepId, target);
   },
   async ownAppRedirect() {
     return `${RELAY_URL}/oauth/callback`;
   },
   async signIn(sender, spaceId, id) {
-    const space = spaceIdOf(spaceId);
-    const account = (await readLibrary()).items.find((i) => i.id === string(id, 'id', 64));
+    const account = (await readLibrary()).items.find((i) => i.id === id);
     if (account?.kind !== 'connector') throw new Error('No such connector account');
     await signIn(account, deviceCodeTo(sender));
-    return libraryEntries(await readLibrary(), space);
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async update(_sender, spaceId, id, autoUpdate) {
-    const space = spaceIdOf(spaceId);
-    const itemId = string(id, 'id', 64);
-    if (autoUpdate === undefined) await updateItem(itemId);
-    else if (typeof autoUpdate === 'boolean') await setAutoUpdate(itemId, autoUpdate);
-    else throw new TypeError('autoUpdate must be a boolean');
-    return libraryEntries(await readLibrary(), space);
+    if (autoUpdate === undefined) await updateItem(id);
+    else await setAutoUpdate(id, autoUpdate);
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async renameConnector(_sender, spaceId, key, name) {
-    const space = spaceIdOf(spaceId);
-    const title = string(name, 'name', 64).trim();
-    if (!title) throw new TypeError('Give the connector a name');
-    await renameConnector(string(key, 'key', 128), title);
-    return libraryEntries(await readLibrary(), space);
+    await renameConnector(key, name.trim());
+    return libraryEntries(await readLibrary(), spaceId);
   },
   async connectorSettings() {
     return (await readLibrary()).connectors ?? {};
   },
   async listConnectorTools(_sender, key) {
-    return listConnectorTools(string(key, 'key', 128));
+    return listConnectorTools(key);
   },
   async setConnectorSettings(_sender, key, settings) {
-    const chosen = connectorSettingsInput(settings);
-    const index = await updateLibrary((current) => withSettings(current, string(key, 'key', 128), ({ toolList }) => ({ ...chosen, ...(toolList && { toolList }) })));
+    const chosen = { ...(settings.isOff === true && { isOff: true }), tools: settings.tools ?? {} };
+    const index = await updateLibrary((current) => withSettings(current, key, ({ toolList }) => ({ ...chosen, ...(toolList && { toolList }) })));
     return index.connectors ?? {};
   },
 } satisfies Handlers<LibraryHost>;
 
-function connectorSettingsInput(value: unknown): Omit<ConnectorSettings, 'toolList'> {
-  const input = record(value, 'settings');
-  if (input.isOff !== undefined && typeof input.isOff !== 'boolean') throw new TypeError('isOff must be a boolean');
-  const tools = Object.entries(input.tools === undefined ? {} : record(input.tools, 'tools'));
-  if (tools.length > 1000) throw new TypeError('tools holds at most 1000 choices');
-  for (const [name, permission] of tools) {
-    string(name, 'tool name', 128);
-    if (!TOOL_PERMISSIONS.includes(permission as ToolPermission)) throw new TypeError(`${name} must be one of ${TOOL_PERMISSIONS.join(', ')}`);
-  }
-  return { ...(input.isOff === true && { isOff: true }), tools: Object.fromEntries(tools) as Record<string, ToolPermission> };
-}
-
 /** A device sign-in's code goes to the window that started it, for the dialog to show. */
 const deviceCodeTo = (sender: WebContents) => (code: DeviceCode) => !sender.isDestroyed() && sender.send('library:onDeviceCode', code);
-
-function connectOptions(value: unknown) {
-  if (value === undefined) return {};
-  const options = record(value, 'options');
-  return { inPane: options.inPane === true, secretFrom: pageRef(options.secretFrom, 'secretFrom'), slackTokenFrom: pageRef(options.slackTokenFrom, 'slackTokenFrom'), fromSetup: options.fromSetup === true };
-}
-
-function pageRef(value: unknown, name: string): PageRef | undefined {
-  if (value === undefined) return undefined;
-  const at = record(value, name);
-  const viewId = string(at.viewId, 'viewId', 32);
-  if (!/^view-\d+$/.test(viewId)) throw new TypeError('viewId is not a view id');
-  return { viewId, ref: string(at.ref, 'ref', 64) };
-}
 
 /** Mochi's Slack app, created with the configuration token on the page; the token and the credentials stay in main. */
 async function slackAppFrom(sender: WebContents, at: PageRef) {
@@ -258,14 +196,6 @@ function clientFromSetup(url: string, capture: SetupCapture) {
   throw new Error(`fromSetup is for Slack and Google Workspace, not ${key}`);
 }
 
-function setupOptions(value: unknown) {
-  if (value === undefined) return { params: {} };
-  const options = record(value, 'options');
-  const params = options.params === undefined ? {} : record(options.params, 'params');
-  if (Object.keys(params).length > 8) throw new TypeError('params holds at most 8 values');
-  return { params: Object.fromEntries(Object.entries(params).map(([k, v]) => [k, string(v, k, 200)])), fromStep: options.fromStep === undefined ? undefined : string(options.fromStep, 'fromStep', 64) };
-}
-
 /** The client secret where an agent pointed: read in main, so it reaches only the keychain. A masked or empty field is refused. */
 async function secretOnPage(sender: WebContents, at: PageRef) {
   const value = await valueAt(sender, at, (v) => v.length >= 8 && !/^[•*·●\s]+$/.test(v));
@@ -281,38 +211,19 @@ async function valueAt(sender: WebContents, { viewId, ref }: PageRef, isValid: (
   return isValid(copied) ? copied : '';
 }
 
-const ALIAS = /^[a-z0-9][a-z0-9-]{0,31}$/;
+type ConnectorAccountInput = Parameters<LibraryHost['addConnector']>[1];
 
-/** A server on https, or on this machine; an alias that can be an enum value and part of a key. */
-function connectorInput(value: unknown) {
-  const input = record(value, 'account');
-  const url = string(input.url, 'url', 2048);
-  const parsed = URL.canParse(url) ? new URL(url) : null;
-  const isLocal = parsed?.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
-  if (!parsed || (parsed.protocol !== 'https:' && !isLocal)) throw new TypeError('The server URL must start with https:// (or http://localhost)');
-  const alias = string(input.alias, 'alias', 32);
-  if (!ALIAS.test(alias)) throw new TypeError('Name the account with lowercase letters, digits and dashes, like work or personal');
-  const optional = (key: string) => (input[key] === undefined || input[key] === '' ? undefined : string(input[key], key, 4096));
-  return { url, alias, name: optional('name')?.slice(0, 64), apiKey: optional('apiKey'), clientId: optional('clientId'), clientSecret: optional('clientSecret') };
+/** Empty optional fields count as unset. */
+function connectorFields(input: ConnectorAccountInput) {
+  const optional = (value?: string) => value || undefined;
+  return { url: input.url, alias: input.alias, name: optional(input.name)?.slice(0, 64), apiKey: optional(input.apiKey), clientId: optional(input.clientId), clientSecret: optional(input.clientSecret) };
 }
 
-function pluginFile(value: unknown) {
-  const file = record(value, 'file');
-  if (!(file.bytes instanceof Uint8Array)) throw new TypeError('file.bytes must be a Uint8Array');
-  if (file.bytes.length > UPLOAD_LIMITS.archiveBytes) throw new TypeError(`The file is over ${UPLOAD_LIMITS.archiveBytes / 1_000_000} MB`);
-  return { name: string(file.name, 'file.name', 255), bytes: file.bytes };
-}
-
-// GAP: a project path is checked to be an absolute folder, not that it is one of the profile's projects.
-function skillDestination(value: unknown): SkillDestination | undefined {
-  if (value === undefined) return undefined;
-  const input = record(value, 'destination');
-  if (input.scope === 'library') return { scope: 'library' };
-  if (input.scope !== 'user' && input.scope !== 'project') throw new TypeError('destination.scope must be library, user or project');
-  const providers = input.providers;
-  if (!Array.isArray(providers) || !providers.length || !providers.every((p) => HARNESS_IDS.includes(p as Provider))) throw new TypeError(`destination.providers must list ${HARNESS_IDS.join(' and/or ')}`);
-  if (input.scope === 'user') return { scope: 'user', providers: [...new Set(providers as Provider[])] };
-  const project = string(input.project, 'destination.project', 1024);
-  if (!isAbsolute(project) || !statSync(project, { throwIfNoEntry: false })?.isDirectory()) throw new TypeError('destination.project must be a project folder');
-  return { scope: 'project', providers: [...new Set(providers as Provider[])], project };
+// GAP: a project path is checked to be an existing folder, not that it is one of the profile's projects.
+function skillDestination(input: SkillDestination | undefined): SkillDestination | undefined {
+  if (!input || input.scope === 'library') return input;
+  const providers = [...new Set(input.providers)];
+  if (input.scope === 'user') return { scope: 'user', providers };
+  if (!statSync(input.project, { throwIfNoEntry: false })?.isDirectory()) throw new TypeError('destination.project must be a project folder');
+  return { scope: 'project', providers, project: input.project };
 }

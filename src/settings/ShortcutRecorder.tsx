@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RotateLeft } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { checkBinding, chordOf, COMMANDS, defaultKeys, isCustom, rebind, type CommandId, type OnConflict } from '../keymap';
+import { checkBinding, chordOf, COMMANDS, defaultKeys, isCustom, rebind, type CommandId, type OnConflict, listenKeydown } from '../keymap';
 import type { Key } from '../keys';
 import { Shortcut, useBinding } from '../Shortcut';
 import { TooltipIconButton } from '../ui';
@@ -109,16 +109,28 @@ export function useRecording(isRecording: boolean, on: { onCancel: () => void; o
   latest.current = on;
   useEffect(() => {
     if (!isRecording) return;
+    let isAltOnly = false;
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopImmediatePropagation();
       const isBare = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
       if (isBare && e.key === 'Escape') return latest.current.onCancel();
       if (isBare && e.key === 'Backspace') return latest.current.onClear();
+      isAltOnly = e.key === 'Alt' && !e.metaKey && !e.ctrlKey && !e.shiftKey;
       const chord = chordOf(e);
       if (chord) latest.current.onChord(chord);
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    const stop = listenKeydown(onKey, true);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!isAltOnly || e.key !== 'Alt') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      latest.current.onChord(['alt']);
+    };
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      stop();
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
   }, [isRecording]);
 }

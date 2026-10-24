@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { SimAppearance, SimContentSize } from '@/host/types/sim';
@@ -6,28 +8,19 @@ import { message } from './useSimulators';
 
 /** Appearance and Dynamic Type of a booted device, read on mount and written optimistically. */
 export function useDeviceSettings(udid: string | null) {
-  const [appearance, setAppearanceState] = useState<SimAppearance | null>(null);
-  const [contentSize, setContentSizeState] = useState<SimContentSize | null>(null);
-
-  useEffect(() => {
-    if (!udid) return;
-    let isLive = true;
-    host.sim.appearance(udid).then((value) => isLive && setAppearanceState(value), () => {});
-    host.sim.contentSize(udid).then((value) => isLive && setContentSizeState(value), () => {});
-    return () => {
-      isLive = false;
-    };
-  }, [udid]);
-
+  const appearanceQuery = useQuery({ queryKey: queryKeys.sim.appearance(udid), queryFn: () => host.sim.appearance(udid!), enabled: !!udid });
+  const sizeQuery = useQuery({ queryKey: queryKeys.sim.contentSize(udid), queryFn: () => host.sim.contentSize(udid!), enabled: !!udid });
+  const appearance = appearanceQuery.data ?? null;
+  const contentSize = sizeQuery.data ?? null;
   const setAppearance = (value: SimAppearance) => {
     if (!udid) return;
-    setAppearanceState(value);
-    host.sim.setAppearance(udid, value).catch((e) => toast.error(message(e)));
+    queryClient.setQueryData(queryKeys.sim.appearance(udid), value);
+    host.sim.setAppearance(udid, value).finally(() => queryClient.invalidateQueries({ queryKey: queryKeys.sim.appearance(udid) })).catch((e) => toast.error(message(e)));
   };
   const setContentSize = (value: SimContentSize) => {
     if (!udid) return;
-    setContentSizeState(value);
-    host.sim.setContentSize(udid, value).catch((e) => toast.error(message(e)));
+    queryClient.setQueryData(queryKeys.sim.contentSize(udid), value);
+    host.sim.setContentSize(udid, value).finally(() => queryClient.invalidateQueries({ queryKey: queryKeys.sim.contentSize(udid) })).catch((e) => toast.error(message(e)));
   };
 
   return { appearance, contentSize, setAppearance, setContentSize };

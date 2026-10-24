@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
+import { cached } from '../cache.ts';
 
 /** Where web, app and desktop projects keep their icon, most specific first. Relative to the project's folder. */
 export const FAVICON_PATHS = [
@@ -63,18 +64,15 @@ export async function findFavicon(folder: string) {
   return null;
 }
 
-const cache = new Map<string, { mtimeMs: number; url: string }>();
+// The key carries the mtime, so a changed file is read again; the TTL only bounds how long old ones linger.
+const ICON_TTL = '1 day';
 
 /** A data URL for an icon file, read again only when the file changes. Null when it's gone or too big. */
 export async function iconUrl(file: string) {
   const info = await stat(file).catch(() => null);
   const type = ICON_TYPES[extname(file).toLowerCase() as keyof typeof ICON_TYPES];
   if (!info?.isFile() || info.size > MAX_ICON_BYTES || !type) return null;
-  const cached = cache.get(file);
-  if (cached?.mtimeMs === info.mtimeMs) return cached.url;
-  const url = `data:${type};base64,${(await readFile(file)).toString('base64')}`;
-  cache.set(file, { mtimeMs: info.mtimeMs, url });
-  return url;
+  return cached(`icon:${file}:${info.mtimeMs}`, ICON_TTL, async () => `data:${type};base64,${(await readFile(file)).toString('base64')}`);
 }
 
 /** An uploaded icon, stored as `<dir>/<projectId>.<ext>` (any earlier one with another extension removed). */

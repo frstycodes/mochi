@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import { access, constants } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { runCommand } from '@mochi/core/runClient';
 import type { Editor } from '../../src/host/types/fs.ts';
 
 // A GUI-launched app doesn't get the shell's PATH, so the CLI bundled inside each .app is tried before PATH.
@@ -10,6 +10,8 @@ const CLIS = {
   cursor: { bundle: 'Cursor.app/Contents/Resources/app/bin/cursor', bin: 'cursor', args: (file: string) => ['-g', file] },
   zed: { bundle: 'Zed.app/Contents/MacOS/cli', bin: 'zed', args: (file: string) => [file] },
 } satisfies Record<Editor, unknown>;
+
+const LAUNCH_TIMEOUT_MS = 30_000;
 
 export async function installedEditors() {
   const found = await Promise.all((Object.keys(CLIS) as Editor[]).map(async (editor) => ((await findCli(editor)) ? [editor] : [])));
@@ -21,7 +23,8 @@ export async function openInEditor(editor: Editor, root: string, file: string, l
   const cli = await findCli(editor);
   if (!cli) throw new Error(`${editor} is not installed`);
   const target = line ? `${file}:${line}` : file;
-  spawn(cli, [root, ...(file ? CLIS[editor].args(target) : [])], { detached: true, stdio: 'ignore' }).unref();
+  // The editor's CLI hands the request to the running app and exits.
+  await runCommand(cli, [root, ...(file ? CLIS[editor].args(target) : [])], { timeout: LAUNCH_TIMEOUT_MS });
 }
 
 async function findCli(editor: Editor) {

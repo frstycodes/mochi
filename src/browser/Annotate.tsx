@@ -1,3 +1,4 @@
+import { listenKeydown, isCommand } from '../keymap';
 import { useEffect, useReducer, useRef, useState, type PointerEvent } from 'react';
 import { ArrowUpRight, Pen, Redo, Stop, TextTool, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -5,8 +6,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Thread } from '@/model';
-import { isMod } from '../keys';
-import { Shortcut } from '../Shortcut';
+import { BoundShortcut } from '../Shortcut';
 import { TooltipIconButton } from '../ui';
 import { sendAnnotated } from './actions';
 import { ANNOTATION_COLORS, EMPTY_HISTORY, history, isTooSmall, shapePath, type AnnotationTool, type Point, type Shape } from './annotations';
@@ -75,13 +75,13 @@ export function Annotator({ thread, pageId, image, name }: { thread: Thread; pag
   useEffect(() => {
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable=true]')) return;
-      if (e.key === 'Escape') return updatePage(pageId, { annotating: null });
-      if (!isMod(e) || e.key.toLowerCase() !== 'z') return;
+      if (isCommand(e, 'dismiss')) return updatePage(pageId, { annotating: null });
+      const isRedo = isCommand(e, 'annotation-redo');
+      if (!isRedo && !isCommand(e, 'annotation-undo')) return;
       e.preventDefault();
-      dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
+      dispatch({ type: isRedo ? 'redo' : 'undo' });
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return listenKeydown(onKeyDown);
   }, [pageId]);
 
   const send = async () => {
@@ -126,10 +126,10 @@ export function Annotator({ thread, pageId, image, name }: { thread: Thread; pag
             </button>
           ))}
         </div>
-        <TooltipIconButton label="Undo" hint={<Shortcut keys={['mod', 'Z']} />} disabled={!past.length} onClick={() => dispatch({ type: 'undo' })}>
+        <TooltipIconButton label="Undo" hint={<BoundShortcut command="annotation-undo" />} disabled={!past.length} onClick={() => dispatch({ type: 'undo' })}>
           <Undo />
         </TooltipIconButton>
-        <TooltipIconButton label="Redo" hint={<Shortcut keys={['mod', 'shift', 'Z']} />} disabled={!future.length} onClick={() => dispatch({ type: 'redo' })}>
+        <TooltipIconButton label="Redo" hint={<BoundShortcut command="annotation-redo" />} disabled={!future.length} onClick={() => dispatch({ type: 'redo' })}>
           <Redo />
         </TooltipIconButton>
         <div className="ml-auto flex items-center gap-1">

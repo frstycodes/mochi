@@ -1,5 +1,5 @@
 import type { Thread } from '../model.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 
 const SLICES = ['queue', 'panes', 'layouts', 'watched'] as const;
 

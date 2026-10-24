@@ -16,7 +16,8 @@ import { projectRoot } from './host/cwd';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
 import { MachineModelsContext, useDefaultModels } from './ModelControls';
-import { initialControls, type ThreadControls } from './runtime/controls';
+import type { ThreadControls } from './runtime/controls';
+import { initialControls } from './runtime/startOptions';
 import { contextMax } from './runtime/models';
 import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
@@ -204,7 +205,7 @@ function NewThread() {
                     inlineMentions={mention.inlineMentions}
                     {...menuProps}
                     onKeyDown={(e, view) => {
-                      mention.editorProps.onKeyDown(e);
+                      mention.editorProps.onKeyDown(e, view);
                       if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
                       if (e.defaultPrevented || e.key !== 'Escape' || hasDraft) return;
                       e.preventDefault();
@@ -231,7 +232,7 @@ function NewThread() {
                 <>
                   <ProjectPicker value={project} onChange={changeProject} projects={projects} />
                   {!!project && <WorkspaceControls workspace={workspace} />}
-                  {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+                  <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
                 </>
               )}
             </ComposerMeta>

@@ -1,3 +1,6 @@
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from '@/toast/store';
 import { host } from '../host';
@@ -17,7 +20,9 @@ export interface ToolsConnector {
 
 /** The connectors in the library, their settings, and listing their tools: any never listed is listed on first view. */
 export function useConnectorTools(entries: LibraryEntry[] | null) {
-  const [settings, setSettings] = useState<Record<string, ConnectorSettings> | null>(null);
+  const settingsQuery = useQuery({ queryKey: queryKeys.library.connectorSettings(), queryFn: () => host.library.connectorSettings() });
+  const settings = settingsQuery.data ?? null;
+  const setSettings = (next: Record<string, ConnectorSettings> | ((current: Record<string, ConnectorSettings> | undefined) => Record<string, ConnectorSettings>)) => queryClient.setQueryData(queryKeys.library.connectorSettings(), next);
   const [listing, setListing] = useState<Set<string>>(new Set());
   const connectors = entries && connectorsOf(entries);
 
@@ -29,9 +34,7 @@ export function useConnectorTools(entries: LibraryEntry[] | null) {
     ).finally(() => setListing((keys) => new Set([...keys].filter((k) => k !== key))));
   };
 
-  useEffect(() => {
-    host.library.connectorSettings().then(setSettings, (error: Error) => toast.error("Couldn't read connector settings", { description: error.message }));
-  }, []);
+
 
   const unlisted = settings && connectors ? connectors.filter((c) => !settings[c.key]?.toolList && !listing.has(c.key)).map((c) => c.key) : [];
   useEffect(() => unlisted.forEach(list), [unlisted.join()]);
@@ -42,7 +45,7 @@ export function useConnectorTools(entries: LibraryEntry[] | null) {
     setSettings((all) => ({ ...all, [key]: { ...next, ...(toolList && { toolList }) } }));
     void host.library.setConnectorSettings(key, next).then(setSettings, (error: Error) => {
       toast.error('Not saved', { description: error.message });
-      void host.library.connectorSettings().then(setSettings, () => {});
+      void queryClient.invalidateQueries({ queryKey: queryKeys.library.connectorSettings() });
     });
   };
 

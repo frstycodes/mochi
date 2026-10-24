@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import sodium from 'libsodium-wrappers';
+import { queuedReader, type RawLink } from '@mochi/core/remote/link';
 import { DEFAULT_SCOPES } from '../../src/host/types/remote.ts';
 import type { DeviceKeys } from './crypto/keys.ts';
-import { THIS_KIND } from './protocol.ts';
-import { queuedReader, type RawLink } from './link.ts';
-import { deviceId, pairingCode, PairingRefused, secureAsDevice, secureAsMachine, type MachineSide, type Origin, type PairedDevice } from './pairing.ts';
+import { deviceId, pairingCode, PairingRefused, secureAsDevice, secureAsMachine, THIS_KIND, type MachineSide, type Origin, type PairedDevice } from './pairing.ts';
 
 await sodium.ready;
 

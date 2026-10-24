@@ -3,27 +3,27 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, normalize, relative, resolve } from 'node:path';
-import { EMPTY_LIBRARY, FEATURED_MARKETPLACES, itemName, ownSkillItem, parseLibrary, profileLayout, skillPlacementDir, STANDALONE_PLUGIN, type LibraryIndex, type LibraryItem, type LibrarySkill, type Marketplace, type SkillDestination, type SkillPlacement } from '../../src/library/library.ts';
+import { FEATURED_MARKETPLACES, itemName, ownSkillItem, parseLibrary, profileLayout, skillPlacementDir, STANDALONE_PLUGIN, type LibraryIndex, type LibraryItem, type LibrarySkill, type Marketplace, type SkillDestination, type SkillPlacement } from '../../src/library/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { skillMeta, stripSecrets, type McpServerDef } from '../../src/settings/agentConfig.ts';
-import { accountFor } from '../agents/config.ts';
-import { expand, expandAll, readProfileConfig } from '../agents/profileConfig.ts';
+import { accountFor } from '@mochi/core/agents/config';
+import { expand, expandAll, readProfileConfig } from '@mochi/core/agents/profileConfig';
 import { CatalogError, discoverSkills, fetchMarketplace, fetchPluginBundle, normalizeMarketplaceSource } from './catalog.ts';
 import { removeSkillFolder, writeSkillFolder } from './skillFiles.ts';
 import { reviewUpload, unpackUpload, UploadError } from './upload.ts';
+import { readDoc, writeDoc } from '@mochi/core/store/client';
 
 /**
- * The library index in userData/library.json, and each profile's plugin folders under userData/library/<profile>/, one
+ * The library index in Core's `library` table, and each profile's plugin folders under userData/library/<profile>/, one
  * folder per content hash so a running session never sees one change under it.
  */
-const indexFile = () => join(app.getPath('userData'), 'library.json');
 const foldersRoot = () => join(app.getPath('userData'), 'library');
 
 let index: Promise<LibraryIndex> | undefined;
 let writes = Promise.resolve();
 
 export function readLibrary(): Promise<LibraryIndex> {
-  index ??= readFile(indexFile(), 'utf8').then(parseLibrary, () => EMPTY_LIBRARY);
+  index ??= readDoc('library', 'index').then((saved) => parseLibrary(saved === undefined ? null : JSON.stringify(saved)));
   return index;
 }
 
@@ -31,9 +31,7 @@ export function readLibrary(): Promise<LibraryIndex> {
 export function updateLibrary(change: (current: LibraryIndex) => LibraryIndex): Promise<LibraryIndex> {
   const next = writes.then(async () => {
     const updated = change(await readLibrary());
-    const tmp = `${indexFile()}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify(updated), { mode: 0o600 });
-    await rename(tmp, indexFile());
+    await writeDoc('library', 'index', updated);
     index = Promise.resolve(updated);
     return updated;
   });

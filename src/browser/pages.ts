@@ -1,3 +1,4 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
 import { host } from '@/host';
 import type { BrowserContextMenu, BrowserDevtools, BrowserDialog, BrowserEmulation, CompareBase } from '@/host/types/browser';
@@ -68,8 +69,10 @@ const pages = new Map<string, Page>();
 const listeners = new Set<() => void>();
 const byHostId = new Map<string, string>();
 let tabListener: ((request: TabRequest) => void) | null = null;
-let history = load<string[]>(HISTORY_KEY, []);
-let titles = load<Record<string, string>>(TITLES_KEY, {});
+const historySlice = persistedSlice<string[]>(HISTORY_KEY, []);
+const titlesSlice = persistedSlice<Record<string, string>>(TITLES_KEY, {});
+let history = historySlice.getState().value;
+let titles = titlesSlice.getState().value;
 
 export const pageKey = (threadId: string, tabId: string) => `${threadId}/${tabId}`;
 /** The base branch's page in a before/after compare lives beside its tab's page and goes with it. */
@@ -285,21 +288,9 @@ function seed(key: string, url: string): Page {
   return page;
 }
 
-function load<T>(key: string, fallback: T): T {
-  try {
-    return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 /** Titles are kept only for URLs still in the history, so clearing it clears them too. */
 function saveHistory() {
   titles = Object.fromEntries(history.flatMap((url) => (titles[url] ? [[url, titles[url]]] : [])));
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    localStorage.setItem(TITLES_KEY, JSON.stringify(titles));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): history lasts for the session.
-  }
+  historySlice.setState({ value: history });
+  titlesSlice.setState({ value: titles });
 }

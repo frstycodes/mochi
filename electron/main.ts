@@ -1,9 +1,9 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, crashReporter } from 'electron';
 import { startDevMcp } from './mcp/server.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
-import { setImageDir } from './agents/images.ts';
-import { registerIpc } from './ipc/index.ts';
+import { setImageDir } from '@mochi/core/agents/images';
+import { mainCapabilities } from './ipc/index.ts';
 import { startLibraryUpdates } from './library/updates.ts';
 import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
@@ -11,18 +11,25 @@ import { startScheduler } from './schedule/scheduler.ts';
 import { startTray } from './tray.ts';
 import { appIconImage, startAppIcon } from './appIcon.ts';
 import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
+import { serveFrames } from './frameProtocol.ts';
+import { startCore } from '@mochi/core/host';
+import './fs/watch.ts';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
 setImageDir(path.join(app.getPath('userData'), 'images'));
+// Minidumps stay local, under `app.getPath('crashDumps')`.
+crashReporter.start({ uploadToServer: false });
+process.on('uncaughtException', (error) => console.error('Uncaught exception in main', error));
+process.on('unhandledRejection', (reason) => console.error('Unhandled rejection in main', reason));
 
 const hasTray = process.platform !== 'darwin';
 // One Mochi per profile on Windows and Linux: a second launch opens a window in the running one (`startTray`).
 if (hasTray && !app.requestSingleInstanceLock()) app.exit();
+serveFrames();
 
-app.whenReady().then(() => {
+app.whenReady().then(() => startCore({ isTrusted: isTrustedUrl, origins: [process.env.VITE_DEV_SERVER_URL ? new URL(process.env.VITE_DEV_SERVER_URL).origin : 'file://'], capabilities: mainCapabilities })).then(() => {
   startAppIcon();
-  registerIpc(isTrustedUrl);
   startWatch();
   void startScheduler();
   startLibraryUpdates();

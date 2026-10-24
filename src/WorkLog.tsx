@@ -1,16 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
-import { useDiffTheme } from './themes/highlight';
-import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
-import { File, PatchDiff } from '@pierre/diffs/react';
+import { ErrorBoundary } from 'react-error-boundary';
+import { File, PatchDiff } from './files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Check, ChevronRight, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
 import type { ActivityEntry, AgentCommand, WebLink } from './model';
-import { clock } from './progress';
+import { clock, formatElapsed } from './progress';
 import { usePrefs } from './settings/prefs';
 import { eventLine, isApprovalChatter, parseTool, toolCall, turnSummary, type ToolCall } from './summary';
 import { hostname, type CurrentAction } from './agentPhase';
@@ -95,7 +95,11 @@ export function WorkLog({ entries, skills = [], action }: { entries: ActivityEnt
             if (e.kind !== 'tool') return <EventRow key={i} entry={e} />;
             const call = parseTool(e.text);
             if (call.verb === 'Skill') return <SkillRow key={i} name={call.target} description={skills.find((s) => s.name === call.target)?.description} />;
-            return <CallRow key={i} entry={e} isRunning={isLive && i === lastTool} files={files} />;
+            return (
+              <ErrorBoundary key={i} fallbackRender={(props) => <li className="p-2"><ErrorFallback {...props} /></li>}>
+                <CallRow entry={e} isRunning={isLive && i === lastTool} files={files} />
+              </ErrorBoundary>
+            );
           })}
         </CallList>
       </Expand>
@@ -128,6 +132,7 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
   const run = runOf(entry);
   const detail = callDetail(entry, call, files);
   const description = describeCall(entry);
+  if (import.meta.env.DEV && entry.text.includes(DEV_THROW)) throw new Error(`Dev-only test card: a tool call containing ${DEV_THROW} throws`);
 
   return (
     <li className="flex flex-col">
@@ -159,6 +164,9 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
     </li>
   );
 }
+
+// Dev builds only: a call whose text contains this (`echo mochi-dev-throw`) crashes its own card, to check the card's error boundary.
+const DEV_THROW = 'mochi-dev-throw';
 
 /** The row's sentence; for a file call ("Edited redis.ts") the name is a link that opens the file in the side pane's Files tab. */
 function CallText({ call, description, hasOwnDescription, files }: { call: ToolCall; description: string; hasOwnDescription: boolean; files: ThreadFiles | null }) {
@@ -221,9 +229,7 @@ function CallGlyph({ call, links = [] }: { call: ToolCall; links?: WebLink[] }) 
 
 /** The first lines of a file the agent read, highlighted like the viewer; the whole file opens in the viewer. */
 function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
-  const diffTheme = useDiffTheme();
   const [state, setState] = useState<{ text?: string; error?: string }>({});
-  const isReady = useHighlighterReady();
   useEffect(() => {
     let isCurrent = true;
     loadViewerFile({ source: 'workspace', ...fileAt(files, fileLink(path).path) }).then(
@@ -233,14 +239,14 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
     return () => void (isCurrent = false);
   }, [files, path]);
   if (state.error) return <p className="type-caption text-subtle-foreground">{state.error}</p>;
-  if (state.text === undefined || !isReady) return <p className="type-caption text-subtle-foreground">Loading…</p>;
+  if (state.text === undefined) return <p className="type-caption text-subtle-foreground">Loading…</p>;
   const lines = state.text.split('\n');
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       <File
         file={{ name: path.split('/').pop() ?? path, contents: lines.slice(0, PREVIEW_LINES).join('\n') }}
         disableWorkerPool
-        options={{ disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
+        options={{ disableFileHeader: true, overflow: 'scroll' }}
         style={DIFF_STYLE}
         className="max-h-64 overflow-auto"
       />
@@ -542,40 +548,16 @@ function ExitBadge({ run }: { run: RunResult }) {
   return (
     <span className={cn('flex items-center gap-1 font-mono text-xs tabular', ok ? 'text-subtle-foreground' : 'text-destructive')}>
       {ok ? <Check className="size-3.5 text-success" /> : <X className="size-3.5" />}
-      {ok ? (run.ms === undefined ? 'exit 0' : seconds(run.ms)) : `exit ${run.exitCode}`}
+      {ok ? (run.ms === undefined ? 'exit 0' : formatElapsed(run.ms, 'precise')) : `exit ${run.exitCode}`}
     </span>
   );
-}
-
-function seconds(ms: number) {
-  return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
-
-const HIGHLIGHTER = { theme: DEFAULT_THEMES, lang: 'text' } as const;
-
-/**
- * Pierre 1.5.2 drops the first render while its shared highlighter is still loading (`applyHighlightResult` returns
- * early on an empty render cache), so the first diff of a session stayed blank. Mount it once the highlighter is up.
- */
-function useHighlighterReady() {
-  const [isReady, setReady] = useState(() => !!getHighlighterIfLoaded(HIGHLIGHTER));
-  useEffect(() => {
-    if (isReady) return;
-    let isCurrent = true;
-    void getSharedHighlighter(getHighlighterOptions(HIGHLIGHTER.lang, { theme: HIGHLIGHTER.theme })).then(() => isCurrent && setReady(true));
-    return () => void (isCurrent = false);
-  }, [isReady]);
-  return isReady;
 }
 
 const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties;
 
 /** One bordered diff per file in the patch. */
 export function DiffView({ patch }: { patch: string }) {
-  const diffTheme = useDiffTheme();
   const { diffStyle } = usePrefs();
-  const isReady = useHighlighterReady();
-  if (!isReady) return null;
   return (
     <div className="flex flex-col gap-2">
       {patchSections(patch).map((section, i) => (
@@ -583,7 +565,7 @@ export function DiffView({ patch }: { patch: string }) {
           <PatchDiff
             patch={section}
             disableWorkerPool
-            options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
+            options={{ diffStyle, disableFileHeader: true, overflow: 'scroll' }}
             style={DIFF_STYLE}
             className="max-h-80 overflow-auto"
           />

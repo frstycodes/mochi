@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Shortcut } from '../Shortcut';
 import { SidebarResizer } from '../SidebarResizer';
-import { closeSettings, openSettings, useSettingsRoute } from './open';
+import { goBack, openSettings, useSettingsRoute } from '../routes/nav';
 import { SECTION_GROUPS, searchSettings, type SectionId } from './sections';
 import { HARNESS_IDS } from './harnesses';
 import { useAgentSettings } from './AgentSettings';
@@ -86,7 +86,7 @@ export function SettingsSidebar({ width, onResize }: { width: number; onResize: 
       <SidebarFooter className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={closeSettings}>
+            <SidebarMenuButton onClick={goBack}>
               <ArrowLeft />
               Back to app
               <Shortcut keys={['Esc']} className="ml-auto max-md:hidden" />

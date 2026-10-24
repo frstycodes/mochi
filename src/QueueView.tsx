@@ -39,7 +39,7 @@ import { RemoteScope, useMachines } from './remote/useMachines';
 import { Seen, useSeen } from './notify/useSeen';
 import { isQueueUnread } from './store/seen';
 import { UnreadDot } from './ui';
-import { isCommand } from './keymap';
+import { isCommand, listenKeydown } from './keymap';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
@@ -130,8 +130,7 @@ function useListKeys(count: number, index: number, setSelected: (i: number) => v
       if (isCommand(e, 'list-next')) setSelected(Math.min(count - 1, index + 1));
       if (isCommand(e, 'list-previous')) setSelected(Math.max(0, index - 1));
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [count, index, setSelected]);
 }
 

@@ -1,56 +1,38 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, ReviewVerdict, SwitchOptions, WorktreeOptions } from '../../src/host/types/git.ts';
+import type { ChangeTarget, DiffFile, GitHost, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
 import { addBranchWorktree, baseRef, branchNameError, headOf, listBranches, renameAutoBranch, switchBranch } from '../git/branches.ts';
-import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
+import { prDrafts, worktreeRoot, worktreeRoots } from '@mochi/core/agents/config';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
-import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
-import { integer, record, string, type Handlers } from './handlers.ts';
+import type { Handlers } from './handlers.ts';
 import { runCheck } from '../git/check.ts';
-import { autoMergeArgs, mergeArgs, prsByWorktree, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
+import { conflictedPaths } from '../git/conflicts.ts';
+import { autoMergeArgs, mergeArgs, type MergeMethods } from '../../src/git/prs.ts';
 import { parsePrReview, prReviewQuery, replyThreadArgs, resolveThreadArgs, reviewArgs } from '../../src/git/prReview.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
-const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
-const SWITCH_CHANGES = ['refuse', 'stash', 'commit', 'bring', 'discard'] satisfies SwitchOptions['changes'][];
 // ponytail: untracked files diff one process each; capped so a missing .gitignore can't fork thousands.
 const MAX_UNTRACKED = 200;
-const MAX_PATCH = 8 * 1024 * 1024;
 // Enough to hold a stack trace and the failing assertion, small enough to send as one message.
 const CI_LOG_LINES = 150;
 
-// A turn's files; far above what one turn edits, low enough to fit in a git command line.
-const MAX_RESTORE = 500;
-
-// ponytail: the repo's newest PRs of any state; a thread's PR older than this many others goes unseen. Upgrade: `--search head:<branch>` per branch.
-const PR_LIST_LIMIT = 100;
-
-// ponytail: one query per batch; GitHub's GraphQL node limit is far above this.
-const MAX_REFS = 50;
-
-// GitHub's own cap on a comment body.
-const MAX_COMMENT = 65536;
-const REVIEW_VERDICTS = ['approve', 'request-changes', 'comment'] satisfies ReviewVerdict[];
-
 export const git = {
   async status(_sender, cwd) {
-    const top = await topLevel(string(cwd, 'cwd'));
+    const top = await topLevel(cwd);
     const [branch, porcelain] = await Promise.all([currentBranch(top), runGit(top, ['status', '--porcelain=v1', '-z'])]);
     return { branch, files: parseStatus(porcelain) };
   },
 
   async diff(_sender, cwd, scope, chosenBase) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const which = oneOf(scope, SCOPES, 'scope');
-    const [branch, base] = await Promise.all([currentBranch(top), chosenBase === undefined ? baseRef(top) : string(chosenBase, 'base', 255)]);
+    const top = await topLevel(cwd);
+    const [branch, base] = await Promise.all([currentBranch(top), chosenBase === undefined ? baseRef(top) : chosenBase]);
     const untracked = await untrackedDiffs(top);
-    if (which === 'uncommitted') {
+    if (scope === 'uncommitted') {
       const [staged, unstaged] = await Promise.all([runGit(top, ['diff', '--cached', ...DIFF_FLAGS]), runGit(top, ['diff', ...DIFF_FLAGS])]);
       return { branch, base, files: [...parseDiff(staged, true), ...parseDiff(unstaged, false), ...untracked] };
     }
@@ -79,86 +61,61 @@ export const git = {
   },
 
   async commit(_sender, cwd, message) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const text = string(message, 'message', 10_000).trim();
-    if (!text) throw new Error('Commit message is empty');
-    await runGit(top, ['commit', '-m', text]);
+    const top = await topLevel(cwd);
+    await runGit(top, ['commit', '-m', message.trim()]);
     return (await runGit(top, ['rev-parse', '--short', 'HEAD'])).trim();
   },
 
   async push(_sender, cwd, user) {
-    await pushAs(await topLevel(string(cwd, 'cwd')), githubAccount(user));
+    await pushAs(await topLevel(cwd), githubAccount(user));
   },
 
   async createPr(_sender, cwd, value, user) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const pr = record(value, 'pr');
-    const title = string(pr.title, 'pr.title', 256).trim();
-    if (!title) throw new Error('PR title is empty');
-    const base = pr.base === undefined ? [] : ['--base', string(pr.base, 'pr.base', 256)];
-    const args = ['pr', 'create', '--title', title, '--body', string(pr.body, 'pr.body', 65_536), ...base, ...(prDrafts() ? ['--draft'] : [])];
+    const top = await topLevel(cwd);
+    const base = value.base === undefined ? [] : ['--base', value.base];
+    const args = ['pr', 'create', '--title', value.title.trim(), '--body', value.body, ...base, ...(prDrafts() ? ['--draft'] : [])];
     return (await runGh(top, args, githubAccount(user))).trim();
   },
 
-  async pr(_sender, cwd, user) {
-    return readPr(string(cwd, 'cwd'), githubAccount(user));
-  },
-
-  async worktreePrs(_sender, value, user) {
-    if (!Array.isArray(value)) throw new TypeError('worktrees must be an array');
-    const worktrees = value.slice(0, MAX_REFS).map((w, i) => string(w, `worktrees[${i}]`));
-    const args = ['pr', 'list', '--state', 'all', '--limit', String(PR_LIST_LIMIT), '--json', 'number,url,title,state,isDraft,headRefName,isCrossRepository'];
-    try {
-      const tops = await Promise.all(worktrees.map((w) => topLevel(w).catch(() => null)));
-      const branches = await Promise.all(tops.map((top) => (top ? currentBranch(top) : Promise.resolve('HEAD'))));
-      const first = tops.find((top) => top !== null);
-      if (!first) return [];
-      return prsByWorktree(worktrees, branches, JSON.parse(await runGh(first, args, githubAccount(user))) as GhPr[]);
-    } catch {
-      return [];
-    }
-  },
-
   async setAutoMerge(_sender, cwd, pr, isOn, user) {
-    const top = await topLevel(string(cwd, 'cwd'));
+    const top = await topLevel(cwd);
     const account = githubAccount(user);
-    const allowed = isOn === true ? (JSON.parse(await runGh(top, ['repo', 'view', '--json', 'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed'], account)) as MergeMethods) : null;
-    await runGh(top, autoMergeArgs(integer(pr, 'pr', 1, 1e9), allowed), account);
+    const allowed = isOn ? (JSON.parse(await runGh(top, ['repo', 'view', '--json', 'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed'], account)) as MergeMethods) : null;
+    await runGh(top, autoMergeArgs(pr, allowed), account);
   },
 
   async prReview(_sender, cwd, pr, user) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const n = integer(pr, 'pr', 1, 1e9);
+    const top = await topLevel(cwd);
     const account = githubAccount(user);
-    const [json, patch] = await Promise.all([runGh(top, prReviewQuery(n), account), runGh(top, ['pr', 'diff', String(n), '--color', 'never'], account)]);
+    const [json, patch] = await Promise.all([runGh(top, prReviewQuery(pr), account), runGh(top, ['pr', 'diff', String(pr), '--color', 'never'], account)]);
     return parsePrReview(json, parseDiff(patch, false));
   },
 
   async commentPr(_sender, cwd, pr, body, user) {
-    await runGh(await topLevel(string(cwd, 'cwd')), ['pr', 'comment', String(integer(pr, 'pr', 1, 1e9)), '--body', string(body, 'body', MAX_COMMENT)], githubAccount(user));
+    await runGh(await topLevel(cwd), ['pr', 'comment', String(pr), '--body', body], githubAccount(user));
   },
 
   async replyThread(_sender, cwd, threadId, body, user) {
-    await runGh(await topLevel(string(cwd, 'cwd')), replyThreadArgs(nodeId(threadId), string(body, 'body', MAX_COMMENT)), githubAccount(user));
+    await runGh(await topLevel(cwd), replyThreadArgs(threadId, body), githubAccount(user));
   },
 
   async resolveThread(_sender, cwd, threadId, isResolved, user) {
-    await runGh(await topLevel(string(cwd, 'cwd')), resolveThreadArgs(nodeId(threadId), isResolved === true), githubAccount(user));
+    await runGh(await topLevel(cwd), resolveThreadArgs(threadId, isResolved), githubAccount(user));
   },
 
   async reviewPr(_sender, cwd, pr, verdict, body, user) {
-    await runGh(await topLevel(string(cwd, 'cwd')), reviewArgs(integer(pr, 'pr', 1, 1e9), oneOf(verdict, REVIEW_VERDICTS, 'verdict'), string(body, 'body', MAX_COMMENT)), githubAccount(user));
+    await runGh(await topLevel(cwd), reviewArgs(pr, verdict, body), githubAccount(user));
   },
 
   async mergePr(_sender, cwd, pr, user) {
-    const top = await topLevel(string(cwd, 'cwd'));
+    const top = await topLevel(cwd);
     const account = githubAccount(user);
     const allowed = JSON.parse(await runGh(top, ['repo', 'view', '--json', 'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed'], account)) as MergeMethods;
-    await runGh(top, mergeArgs(integer(pr, 'pr', 1, 1e9), allowed), account);
+    await runGh(top, mergeArgs(pr, allowed), account);
   },
 
   async ciLog(_sender, cwd, link, user) {
-    return failedLog(await topLevel(string(cwd, 'cwd')), string(link, 'checkLink', 2048), githubAccount(user));
+    return failedLog(await topLevel(cwd), link, githubAccount(user));
   },
 
   async ghAccounts() {
@@ -166,96 +123,77 @@ export const git = {
   },
 
   async repoSlug(_sender, cwd) {
-    const url = await runGit(string(cwd, 'cwd'), ['remote', 'get-url', 'origin']).catch(() => '');
+    const url = await runGit(cwd, ['remote', 'get-url', 'origin']).catch(() => '');
     const remote = parseRemote(url);
     if (!remote || remote.host !== GITHUB_COM) return null;
     const [owner, repo] = remote.path.split('/');
     return { owner, repo };
   },
 
-  async refStates(_sender, cwd, value, user) {
-    if (!Array.isArray(value)) throw new TypeError('refs must be an array');
-    const refs = value.slice(0, MAX_REFS).map(validRef).filter((r) => r !== null);
-    if (refs.length === 0) return {};
-    // A settled thread's worktree is gone; spawning gh there fails with ENOENT, so read as gh's active account from home.
-    const folder = cwd === null ? null : string(cwd, 'cwd');
-    const hasFolder = folder !== null && existsSync(folder);
-    const dir = hasFolder ? folder : homedir();
-    const account = hasFolder ? githubAccount(user) : undefined;
-    // gh exits 1 when any ref doesn't resolve and still prints the others; no gh, no login or offline leaves every ref unknown.
-    const json = await runGh(dir, refsQuery(refs), account, { okCodes: [0, 1] }).catch(() => '');
-    try {
-      return parseRefs(json, refs);
-    } catch {
-      return {};
-    }
-  },
-
   async renameAutoBranch(_sender, cwd, expected, title) {
-    const dir = insideWorktreeRoot(string(cwd, 'cwd'));
-    return renameAutoBranch(dir, string(expected, 'expected', 255), string(title, 'title', 255));
+    const dir = insideWorktreeRoot(cwd);
+    return renameAutoBranch(dir, expected, title);
   },
   async sync(_sender, cwd, chosenBase) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const base = chosenBase === undefined ? await baseRef(top) : string(chosenBase, 'base', 255);
+    const top = await topLevel(cwd);
+    const base = chosenBase === undefined ? await baseRef(top) : chosenBase;
     if (base.startsWith('origin/')) await runGit(top, ['fetch', 'origin', base.slice('origin/'.length)]);
     try {
       await runGit(top, ['merge', '--no-edit', base]);
       return { base, conflicts: [] };
     } catch (error) {
-      const conflicts = (await runGit(top, ['diff', '--name-only', '--diff-filter=U'])).split('\n').filter(Boolean);
+      const conflicts = await conflictedPaths(top);
       if (conflicts.length === 0) throw error;
       return { base, conflicts };
     }
   },
 
   async addWorktree(_sender, root, threadId, branch, options) {
-    return addWorktree(string(root, 'root'), string(threadId, 'threadId', 64), string(branch, 'branch', 255), worktreeOptions(options));
+    return addWorktree(root, threadId, branch, options);
   },
 
   async branches(_sender, root) {
-    return listBranches(await topLevel(string(root, 'root')));
+    return listBranches(await topLevel(root));
   },
 
   async branchNameError(_sender, root, name) {
-    return branchNameError(await topLevel(string(root, 'root')), string(name, 'name', 255));
+    return branchNameError(await topLevel(root), name);
   },
 
   async switchBranch(_sender, root, branch, options) {
-    const changes = oneOf(record(options, 'options').changes, SWITCH_CHANGES, 'options.changes');
-    await switchBranch(await topLevel(string(root, 'root')), string(branch, 'branch', 255), { changes });
+    await switchBranch(await topLevel(root), branch, options);
   },
 
   async worktrees(_sender, root) {
-    const top = await mainRepo(string(root, 'root'));
+    const top = await mainRepo(root);
     return (await listWorktrees(top)).filter((w) => isUnderWorktreeRoot(w.path));
   },
 
   async head(_sender, cwd) {
-    return headOf(await topLevel(string(cwd, 'cwd')));
+    return headOf(await topLevel(cwd));
   },
 
   async removeWorktree(_sender, path) {
-    const dir = insideWorktreeRoot(string(path, 'path'));
+    const dir = insideWorktreeRoot(path);
     await runGit(await mainRepo(dir), ['worktree', 'remove', dir]);
   },
 
   async diskUsage(_sender, path) {
-    const top = await topLevel(string(path, 'path'));
+    const top = await topLevel(path);
     return Number((await run('du', top, ['-sk', top])).split('\t')[0]) * 1024;
   },
 
   // Checkpoints and rewind only run in a Mochi worktree: resetting a branch is never done to the user's own checkout.
   async checkpoint(_sender, cwd, threadId, n) {
-    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
-    const ref = checkpointRef(string(threadId, 'threadId', 64), n === 'turn' || n === 'undo' ? n : integer(n, 'n', 0, 1_000_000));
+    const top = insideWorktreeRoot(await topLevel(cwd));
+    const ref = checkpointRef(threadId, n);
     return snapshot(top, ref, `harness checkpoint ${ref.split('/').pop()}`);
   },
 
   async restoreCheckpoint(_sender, cwd, threadId, n, hasUndo) {
-    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
-    const id = string(threadId, 'threadId', 64);
-    const which = n === 'undo' ? 'undo' : integer(n, 'n', 0, 1_000_000);
+    const top = insideWorktreeRoot(await topLevel(cwd));
+    const id = threadId;
+    const which = n;
     const commit = await resolveCommit(top, checkpointRef(id, which));
     if (!commit) throw new Error(`Checkpoint ${which} does not exist`);
     if (which !== 'undo' && hasUndo !== true) await snapshot(top, checkpointRef(id, 'undo'), 'harness checkpoint before rewind');
@@ -265,11 +203,10 @@ export const git = {
   },
 
   async restoreFiles(_sender, cwd, threadId, n, paths) {
-    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
-    const id = string(threadId, 'threadId', 64);
-    const which = n === 'undo' ? 'undo' : integer(n, 'n', 0, 1_000_000);
-    if (!Array.isArray(paths) || paths.length === 0 || paths.length > MAX_RESTORE) throw new TypeError(`paths must list 1 to ${MAX_RESTORE} files`);
-    const files = paths.map((p, i) => inside(top, string(p, `paths[${i}]`, 4096)));
+    const top = insideWorktreeRoot(await topLevel(cwd));
+    const id = threadId;
+    const which = n;
+    const files = paths.map((p) => inside(top, p));
     const commit = await resolveCommit(top, checkpointRef(id, which));
     if (!commit) throw new Error(`Checkpoint ${which} has no saved files`);
     if (which !== 'undo') await snapshot(top, checkpointRef(id, 'undo'), 'harness checkpoint before undoing a turn');
@@ -278,9 +215,9 @@ export const git = {
   },
 
   async rewindPreview(_sender, cwd, threadId, n) {
-    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
-    const id = string(threadId, 'threadId', 64);
-    const index = integer(n, 'n', 0, 1_000_000);
+    const top = insideWorktreeRoot(await topLevel(cwd));
+    const id = threadId;
+    const index = n;
     const commit = await resolveCommit(top, checkpointRef(id, index));
     if (!commit) throw new Error(`Checkpoint ${index} has no saved files`);
     const now = await snapshotCommit(top, 'harness rewind preview');
@@ -290,9 +227,9 @@ export const git = {
   },
 
   async checkpointDiff(_sender, cwd, threadId, n) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const index = integer(n, 'n', 0, 1_000_000);
-    const commit = await resolveCommit(top, checkpointRef(string(threadId, 'threadId', 64), index));
+    const top = await topLevel(cwd);
+    const index = n;
+    const commit = await resolveCommit(top, checkpointRef(threadId, index));
     if (!commit) throw new Error(`Checkpoint ${index} has no saved files`);
     const [branch, base] = await Promise.all([currentBranch(top), baseRef(top)]);
     const from = await runGit(top, ['merge-base', commit, base]).then((s) => s.trim(), () => `${commit}^`);
@@ -300,24 +237,23 @@ export const git = {
   },
 
   async turnDiff(_sender, cwd, from, to) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const end = to === undefined ? await snapshotCommit(top, 'harness turn diff') : commitHash(to, 'to');
-    return parseDiff(await runGit(top, ['diff', commitHash(from, 'from'), end, ...DIFF_FLAGS]), false);
+    const top = await topLevel(cwd);
+    const end = to === undefined ? await snapshotCommit(top, 'harness turn diff') : to;
+    return parseDiff(await runGit(top, ['diff', from, end, ...DIFF_FLAGS]), false);
   },
 
   async runCheck(_sender, cwd, command) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    return runCheck(top, string(command, 'command', 2000));
+    const top = await topLevel(cwd);
+    return runCheck(top, command);
   },
 
   async forkWorktree(_sender, cwd, threadId, branch, from) {
-    const source = await topLevel(string(cwd, 'cwd'));
+    const source = await topLevel(cwd);
     const top = await mainRepo(source);
-    const id = string(threadId, 'threadId', 64);
-    if (!/^[\w-]+$/.test(id)) throw new Error('threadId must be letters, digits, - or _');
-    const name = (await runGit(top, ['check-ref-format', '--branch', string(branch, 'branch', 255)])).trim();
-    const point = from === undefined ? null : record(from, 'from');
-    const commit = point ? await resolveCommit(source, checkpointRef(string(point.threadId, 'from.threadId', 64), integer(point.n, 'from.n', 0, 1_000_000))) : '';
+    const id = threadId;
+    const name = (await runGit(top, ['check-ref-format', '--branch', branch])).trim();
+    const point = from === undefined ? null : from;
+    const commit = point ? await resolveCommit(source, checkpointRef(point.threadId, point.n)) : '';
     if (point && !commit) throw new Error('That checkpoint has no saved files');
     const dir = join(worktreeRoot(), basename(top), id);
     if (existsSync(dir)) throw new Error(`${dir} already exists`);
@@ -326,7 +262,10 @@ export const git = {
     if (commit) await applyFiles(dir, commit);
     return dir;
   },
-} satisfies Handlers<GitHost>;
+} satisfies Handlers<Omit<GitHost, CoreServed>>;
+
+/** Core's GitHub service answers these (`packages/core/src/github/handlers.ts`); main never sees the call. */
+export type CoreServed = 'pr' | 'worktreePrs' | 'refStates';
 
 /**
  * The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. A new branch starts at
@@ -347,22 +286,9 @@ export async function createWorktree(root: string, threadId: string, branch: str
   return { dir, isNew: true };
 }
 
-export function worktreeOptions(value: unknown): WorktreeOptions {
-  if (value === undefined) return {};
-  const o = record(value, 'options');
-  if (o.isExisting !== undefined && typeof o.isExisting !== 'boolean') throw new TypeError('options.isExisting must be a boolean');
-  return { base: o.base === undefined ? undefined : string(o.base, 'options.base', 255), isExisting: o.isExisting as boolean | undefined };
-}
-
-async function change(cwd: unknown, value: unknown) {
-  const top = await topLevel(string(cwd, 'cwd'));
-  const raw = record(value, 'target');
-  const target: ChangeTarget = {
-    path: inside(top, string(raw.path, 'target.path')),
-    staged: raw.staged === true,
-    untracked: raw.untracked === true,
-    patch: raw.patch === undefined ? undefined : string(raw.patch, 'target.patch', MAX_PATCH),
-  };
+async function change(cwd: string, value: ChangeTarget) {
+  const top = await topLevel(cwd);
+  const target: ChangeTarget = { ...value, path: inside(top, value.path) };
   if (target.patch) checkPatch(top, target.patch, target.path);
   return { top, target };
 }
@@ -394,41 +320,6 @@ export async function failedLog(top: string, link: string, account: GithubAccoun
   return log.split('\n').slice(-lines).join('\n');
 }
 
-/** The branch's PR and its checks, or null when the branch has none. */
-export async function readPr(cwd: string, account: GithubAccountRef | undefined): Promise<PrInfo | null> {
-  const top = await topLevel(cwd);
-  const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state,title'], account).catch((error: Error) => {
-    if (/no (open )?pull requests? found|no git remotes/i.test(error.message)) return null;
-    throw error;
-  });
-  if (!view) return null;
-  // gh exits 8 while checks are pending and 1 when one failed or none are reported; stdout still holds the JSON.
-  const checks = await runGh(top, ['pr', 'checks', '--json', 'name,bucket,link'], account, { okCodes: [0, 1, 8] }).catch(() => '');
-  return { ...(JSON.parse(view) as { number: number; url: string; state: string; title: string }), checks: parseChecks(checks) };
-}
-
-const BUCKETS = ['pass', 'fail', 'pending', 'skipping', 'cancel'] satisfies CheckState[];
-
-function parseChecks(json: string): PrCheck[] {
-  if (!json.trim()) return [];
-  return (JSON.parse(json) as { name: string; bucket: string; link?: string }[]).map((c) => ({
-    name: c.name,
-    state: (BUCKETS as string[]).includes(c.bucket) ? (c.bucket as CheckState) : 'pending',
-    link: c.link || undefined,
-  }));
-}
-
-function commitHash(value: unknown, name: string) {
-  const sha = string(value, name, 64);
-  if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha)) throw new TypeError(`${name} must be a commit hash`);
-  return sha;
-}
-
-function oneOf<T extends string>(value: unknown, options: readonly T[], name: string): T {
-  if (!options.includes(value as T)) throw new TypeError(`${name} must be one of ${options.join(', ')}`);
-  return value as T;
-}
-
 /** Thread worktrees live under the worktree root (Settings › Git and worktrees), never inside the project, so its own `git status` stays clean. */
 function insideWorktreeRoot(path: string) {
   const abs = resolve(path);
@@ -438,11 +329,4 @@ function insideWorktreeRoot(path: string) {
 
 function isUnderWorktreeRoot(path: string) {
   return worktreeRoots().some((root) => path.startsWith(root + sep));
-}
-
-/** A GraphQL node id (`PRRT_kwDO…`); anything else is refused before it reaches gh's argv. */
-function nodeId(value: unknown) {
-  const id = string(value, 'threadId', 128);
-  if (!/^[A-Za-z0-9_=-]+$/.test(id)) throw new TypeError('threadId must be a GitHub node id');
-  return id;
 }

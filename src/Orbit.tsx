@@ -1,5 +1,7 @@
+import { listenKeydown, isCommand, commandOf } from './keymap';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Dialog as DialogPrimitive } from 'radix-ui';
 import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { goalProgress, progressLabel } from './progress';
@@ -93,35 +95,39 @@ export function Orbit() {
   }, [selectedKey]);
 
   return (
-    <AnimatePresence>
-      {center && (
-        <motion.div
-          key="orbit"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.1 }}
-          className="fixed inset-0 z-[400] touch-none select-none"
-          style={{ background: 'var(--scrim)' }}
-          aria-hidden={false}
-          role="dialog"
-          aria-label="Orbit: move toward a destination and release"
-        >
-          <svg className="pointer-events-none absolute inset-0 h-full w-full">
-            <circle cx={center.x} cy={center.y} r={R_IN * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
-            <circle cx={center.x} cy={center.y} r={R_OUT * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
-            <line x1={center.x} y1={center.y} x2={pointer.x} y2={pointer.y} stroke="var(--foreground)" strokeOpacity={selected ? 0.5 : 0.2} strokeWidth={1.5} />
-          </svg>
-          <div className="absolute flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-center text-xs leading-tight text-subtle-foreground shadow-[var(--elev-popover)]" style={{ left: center.x, top: center.y }}>
-            {selected ? 'Go' : 'Cancel'}
-          </div>
-          {items.map((it, i) => (
-            <OrbitNode key={it.key} item={it} center={center} isSelected={selected?.key === it.key} index={i} />
-          ))}
-          {selected && peekKey === selected.key && <Peek item={selected} center={center} />}
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <DialogPrimitive.Root open={center !== null} onOpenChange={(open) => !open && setCenter(null)}>
+      <AnimatePresence>
+        {center && (
+          <DialogPrimitive.Portal forceMount>
+            <DialogPrimitive.Content asChild forceMount aria-describedby={undefined}>
+              <motion.div
+                key="orbit"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.1 }}
+                className="fixed inset-0 z-[400] touch-none outline-none select-none"
+                style={{ background: 'var(--scrim)' }}
+              >
+                <DialogPrimitive.Title className="sr-only">Orbit: move toward a destination and release</DialogPrimitive.Title>
+                <svg className="pointer-events-none absolute inset-0 h-full w-full">
+                  <circle cx={center.x} cy={center.y} r={R_IN * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
+                  <circle cx={center.x} cy={center.y} r={R_OUT * center.k} fill="none" stroke="var(--border)" strokeDasharray="2 6" />
+                  <line x1={center.x} y1={center.y} x2={pointer.x} y2={pointer.y} stroke="var(--foreground)" strokeOpacity={selected ? 0.5 : 0.2} strokeWidth={1.5} />
+                </svg>
+                <div className="absolute flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-center text-xs leading-tight text-subtle-foreground shadow-[var(--elev-popover)]" style={{ left: center.x, top: center.y }}>
+                  {selected ? 'Go' : 'Cancel'}
+                </div>
+                {items.map((it, i) => (
+                  <OrbitNode key={it.key} item={it} center={center} isSelected={selected?.key === it.key} index={i} />
+                ))}
+                {selected && peekKey === selected.key && <Peek item={selected} center={center} />}
+              </motion.div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        )}
+      </AnimatePresence>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -307,6 +313,7 @@ function useOrbitTriggers(handlers: {
     let pressTimer: ReturnType<typeof setTimeout> | undefined;
     let press: { x: number; y: number } | null = null;
     let via: 'alt' | 'pointer' | null = null;
+    let triggerCode: string | null = null;
 
     const onPointerMove = (e: PointerEvent) => {
       last.x = e.clientX;
@@ -318,13 +325,17 @@ function useOrbitTriggers(handlers: {
       if (h.current.isOpen) h.current.move(e.clientX, e.clientY);
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && h.current.isOpen) {
+      if (e.defaultPrevented) return;
+      if (isCommand(e, 'dismiss') && h.current.isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         via = null;
         h.current.cancel();
         return;
       }
-      if (e.key === 'Alt') {
+      if (isCommand(e, 'orbit-hold')) {
         if (e.repeat || h.current.isOpen) return;
+        triggerCode = e.code;
         altTimer = setTimeout(() => {
           via = 'alt';
           h.current.open(last.x, last.y);
@@ -332,11 +343,15 @@ function useOrbitTriggers(handlers: {
         return;
       }
       clearTimeout(altTimer);
-      const digit = /^Digit([1-4])$/.exec(e.code);
-      if (h.current.isOpen && digit && h.current.digit(Number(digit[1]))) e.preventDefault();
+      const command = commandOf(e, ['orbit-1', 'orbit-2', 'orbit-3', 'orbit-4']);
+      if (h.current.isOpen && command && h.current.digit(Number(command.slice('orbit-'.length)))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Alt') return;
+      if (e.code !== triggerCode) return;
+      triggerCode = null;
       clearTimeout(altTimer);
       if (via === 'alt' && h.current.isOpen) h.current.commit();
       via = null;
@@ -377,7 +392,11 @@ function useOrbitTriggers(handlers: {
     };
 
     window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('keydown', onKeyDown);
+    const onCapture = (e: KeyboardEvent) => {
+      if (h.current.isOpen) onKeyDown(e);
+    };
+    listenKeydown(onCapture, true);
+    listenKeydown(onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointerup', onPointerUp);
@@ -389,6 +408,7 @@ function useOrbitTriggers(handlers: {
       clearTimeout(altTimer);
       clearTimeout(pressTimer);
       window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('keydown', onCapture, true);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('pointerdown', onPointerDown);

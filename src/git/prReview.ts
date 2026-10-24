@@ -1,5 +1,6 @@
 import type { DiffFile, PrComment, PrReview, ReviewThread, ReviewVerdict } from '../host/types/git.ts';
-import { rollupCheck, untrusted, type GqlContext } from './autofix.ts';
+import { rollupCheck, type GqlContext } from '@mochi/core/github/nodes';
+import { untrusted } from './autofix.ts';
 import { hunkCovers } from './files.ts';
 
 // ponytail: first 100 threads and the last 100 comments; a PR past that shows a partial review. Upgrade: paginate on `pageInfo`.

@@ -1,10 +1,9 @@
-import { execFile } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
+import { runCommand } from '@mochi/core/runClient';
 import { resolveRoot } from './contain.ts';
 
-const run = promisify(execFile);
+const GIT_TIMEOUT_MS = 30_000;
 const MAX_FILES = 50_000;
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
 
@@ -16,7 +15,7 @@ export async function listFiles(root: string) {
 }
 
 async function gitFiles(cwd: string) {
-  const git = (...args: string[]) => run('git', ['ls-files', '-z', ...args], { cwd, maxBuffer: 64 * 1024 * 1024 }).then((r) => r.stdout.split('\0').filter(Boolean));
+  const git = (...args: string[]) => runCommand('git', ['ls-files', '-z', ...args], { cwd, timeout: GIT_TIMEOUT_MS }).then((r) => r.stdout.split('\0').filter(Boolean));
   const [present, deleted] = await Promise.all([git('--cached', '--others', '--exclude-standard'), git('--deleted')]);
   const gone = new Set(deleted);
   return [...new Set(present)].filter((f) => !gone.has(f));

@@ -15,7 +15,7 @@ interface Entry extends Automated {
   win: BrowserWindow;
   owner: WebContents;
   bounds: BrowserBounds | null;
-  mirror: { width: number; height: number; timer: NodeJS.Timeout | null } | null;
+  mirror: Mirror | null;
   emulation: BrowserEmulation | null;
   zoom: number;
   devtools: WebContentsView | null;
@@ -26,8 +26,6 @@ interface Entry extends Automated {
   /** Epoch ms of the last main-frame load start and the last HMR log, to tell whether the dev server handled a change itself. */
   loadedAt: number;
   hmrAt: number;
-  /** Scroll polling pauses while a restore settles, or it would record the top of the freshly loaded page. */
-  holdScrollUntil: number;
   /** Escape in the page closes the find bar only while a search is open. */
   isFinding: boolean;
   /** Counts snapshots; an agent ref carries the one it came from. */
@@ -37,12 +35,23 @@ interface Entry extends Automated {
   favicon: string | null;
 }
 
+interface Mirror {
+  width: number;
+  height: number;
+  timer: NodeJS.Timeout | null;
+  delay: number;
+  /** The last frame sent; an identical capture isn't sent again. */
+  last: string | null;
+  /** Set while the window is hidden or minimized; its 'show' or 'restore' resumes the mirror. */
+  isPaused: boolean;
+}
+
 const DEVTOOLS_SHARE = 0.45;
 // net::ERR_ABORTED: a navigation replaced by another one, not a failure.
 const ERR_ABORTED = -3;
 // Isolated world for the picker so the page can't see or tamper with it.
 const PICK_WORLD = 1001;
-// Scroll memory reads and restores the page from its own isolated world, apart from the picker's.
+// Scroll restore and the agent's scroll reads run in their own isolated world, apart from the picker's.
 const AGENT_WORLD = 1002;
 const LOG_LIMIT = 200;
 const LOG_LEVELS = ['debug', 'info', 'warning', 'error'] as const;
@@ -50,10 +59,11 @@ const LOG_LEVELS = ['debug', 'info', 'warning', 'error'] as const;
 const MAX_CAPTURE_HEIGHT = 16384;
 // The floating window is at most ~480 CSS px wide, so frames past 2x that are wasted bytes.
 const MIRROR_MAX_WIDTH = 960;
+// The mirror captures every 100 ms while the page changes, backing off to 800 ms while it doesn't; a page state change or an
+// agent action brings it back to 100 ms.
 const MIRROR_INTERVAL_MS = 100;
+const MIRROR_IDLE_MS = 800;
 const MIRROR_QUALITY = 70;
-const SCROLL_POLL_MS = 300;
-const SCROLL_HOLD_MS = 2500;
 
 const views = new Map<string, Entry>();
 const hardenedSessions = new Set<string>();
@@ -77,11 +87,12 @@ const PAGE_PREFERENCES = { sandbox: true, contextIsolation: true, nodeIntegratio
 
 function register(view: WebContentsView, owner: WebContents, win: BrowserWindow) {
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false, automation: null, snapshotGeneration: 0, dialog: null, favicon: null };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, isFinding: false, automation: null, snapshotGeneration: 0, dialog: null, favicon: null };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
   wire(id, entry);
+  resumeMirrorsOn(win);
   win.once('closed', () => {
     entry.stopAutoReload?.();
     dropPage(entry);
@@ -148,7 +159,7 @@ export function setViewBounds(owner: WebContents, id: string, bounds: BrowserBou
 export async function setViewMirror(owner: WebContents, id: string, viewport: { width: number; height: number } | null) {
   const entry = get(owner, id);
   stopMirror(entry);
-  entry.mirror = viewport && { ...viewport, timer: null };
+  entry.mirror = viewport && { ...viewport, timer: null, delay: MIRROR_INTERVAL_MS, last: null, isPaused: false };
   layout(entry);
   const e = entry.emulation;
   const dbg = await debuggerFor(entry.view.webContents);
@@ -161,6 +172,8 @@ export async function setViewMirror(owner: WebContents, id: string, viewport: { 
 async function sendFrame(id: string, entry: Entry) {
   const mirror = entry.mirror;
   if (!mirror || entry.owner.isDestroyed() || entry.view.webContents.isDestroyed()) return;
+  mirror.timer = null;
+  if (!entry.win.isVisible() || entry.win.isMinimized()) return void (mirror.isPaused = true);
   const dbg = await debuggerFor(entry.view.webContents);
   // CDP, not capturePage: the view is hidden, and CDP renders it anyway. Screencast sends no frames for a hidden view.
   const scale = Math.min(1, MIRROR_MAX_WIDTH / (mirror.width * screen.getDisplayMatching(entry.win.getBounds()).scaleFactor));
@@ -171,8 +184,34 @@ async function sendFrame(id: string, entry: Entry) {
     return (await dbg.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: MIRROR_QUALITY, clip })) as { data: string };
   })().catch(() => null);
   if (entry.mirror !== mirror) return;
-  if (shot && !entry.owner.isDestroyed()) entry.owner.send('browser:onEvent', { id, type: 'frame', data: `data:image/jpeg;base64,${shot.data}` } satisfies BrowserEvent);
-  mirror.timer = setTimeout(() => void sendFrame(id, entry), MIRROR_INTERVAL_MS);
+  const isChanged = !!shot && shot.data !== mirror.last;
+  if (isChanged && !entry.owner.isDestroyed()) entry.owner.send('browser:onEvent', { id, type: 'frame', data: `data:image/jpeg;base64,${shot.data}` } satisfies BrowserEvent);
+  if (isChanged) mirror.last = shot.data;
+  mirror.delay = isChanged ? MIRROR_INTERVAL_MS : Math.min(mirror.delay * 2, MIRROR_IDLE_MS);
+  mirror.timer = setTimeout(() => void sendFrame(id, entry), mirror.delay);
+}
+
+/** Back to full rate, capturing now unless a capture is already under way. */
+function kickMirror(id: string, entry: Entry) {
+  const mirror = entry.mirror;
+  if (!mirror) return;
+  mirror.delay = MIRROR_INTERVAL_MS;
+  if (!mirror.timer && !mirror.isPaused) return;
+  clearTimeout(mirror.timer ?? undefined);
+  mirror.isPaused = false;
+  void sendFrame(id, entry);
+}
+
+const resumable = new WeakSet<BrowserWindow>();
+
+function resumeMirrorsOn(win: BrowserWindow) {
+  if (resumable.has(win)) return;
+  resumable.add(win);
+  const resume = () => {
+    for (const [id, entry] of views) if (entry.win === win && entry.mirror?.isPaused) kickMirror(id, entry);
+  };
+  win.on('show', resume);
+  win.on('restore', resume);
 }
 
 function stopMirror(entry: Entry) {
@@ -191,7 +230,8 @@ export function setAutoReload(owner: WebContents, id: string, root: string | nul
   if (!root) return;
   const wc = entry.view.webContents;
   let isOn = true;
-  const poll = setInterval(() => void rememberScroll(entry), SCROLL_POLL_MS);
+  const remember = ({ isMainFrame, isSameDocument }: { isMainFrame: boolean; isSameDocument: boolean }) => isMainFrame && !isSameDocument && rememberScroll(entry);
+  wc.on('did-start-navigation', remember);
   const stopWatch = watchTree(root, (since) =>
     setTimeout(() => {
       if (isOn && !wc.isDestroyed() && entry.loadedAt < since && entry.hmrAt < since) wc.reload();
@@ -199,16 +239,22 @@ export function setAutoReload(owner: WebContents, id: string, root: string | nul
   );
   entry.stopAutoReload = () => {
     isOn = false;
-    clearInterval(poll);
+    wc.off('did-start-navigation', remember);
     stopWatch();
   };
 }
 
-async function rememberScroll(entry: Entry) {
+/**
+ * The outgoing page's scroll position, read as its navigation starts: the page stays until the new one commits. Raw CDP, since
+ * executeJavaScript waits for the new page to load and reads that. The command must go out synchronously inside the
+ * 'did-start-navigation' listener (the debugger is attached since `wire`): sent a tick later, it was held and answered by the new
+ * page. A commit that wins the race fails the read, and the load gets only Chromium's own restore.
+ */
+function rememberScroll(entry: Entry) {
   const wc = entry.view.webContents;
-  if (wc.isDestroyed() || wc.isLoading() || Date.now() < entry.holdScrollUntil) return;
-  const pos = (await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: READ_SCROLL_SCRIPT }]).catch(() => null)) as ScrollPos | null;
-  if (pos) entry.scroll.remember(wc.getURL(), pos);
+  const url = wc.getURL();
+  const read = wc.debugger.sendCommand('Runtime.evaluate', { expression: READ_SCROLL_SCRIPT, returnByValue: true }) as Promise<{ result: { value?: ScrollPos } }>;
+  read.then(({ result }) => result.value && entry.scroll.remember(url, result.value)).catch(() => {});
 }
 
 /** Reads the page's scroll position, after moving it to `to` when given. */
@@ -470,7 +516,10 @@ export async function actOnView(owner: WebContents, id: string, act: BrowserAct)
   const done = new AbortController();
   const result = await Promise.race([runAct(entry, page, act), dialogOpened(entry, done.signal)])
     .catch(rethrowForAgent)
-    .finally(() => done.abort());
+    .finally(() => {
+      done.abort();
+      kickMirror(id, entry);
+    });
   const downloaded = downloadsSince(id, startedAt).map((d) => `Downloaded ${d.name} to ${d.path}`);
   return downloaded.length ? { note: [result.note, ...downloaded].filter(Boolean).join('; ') } : result;
 }
@@ -654,7 +703,8 @@ function get(owner: WebContents, id: string) {
 function wire(id: string, entry: Entry) {
   const wc = entry.view.webContents;
   const emit = (event: BrowserEvent) => !entry.owner.isDestroyed() && entry.owner.send('browser:onEvent', event);
-  const state = () =>
+  const state = () => {
+    kickMirror(id, entry);
     emit({
       id,
       type: 'state',
@@ -666,6 +716,7 @@ function wire(id: string, entry: Entry) {
       error: entry.error,
       favicon: entry.favicon,
     });
+  };
 
   // Before `state` so the new load reports no stale error.
   wc.on('did-start-loading', () => {
@@ -675,7 +726,6 @@ function wire(id: string, entry: Entry) {
   wc.on('did-finish-load', () => {
     const pos = entry.stopAutoReload && entry.scroll.take(wc.getURL());
     if (!pos) return;
-    entry.holdScrollUntil = Date.now() + SCROLL_HOLD_MS;
     void wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: restoreScrollScript(pos) }]).catch(() => {});
   });
   wc.on('did-navigate', () => (entry.favicon = null));

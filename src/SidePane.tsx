@@ -1,5 +1,6 @@
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { Reorder } from 'motion/react';
+import { useDraggable } from '@dnd-kit/react';
 import { Globe, Plus, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { revealIn } from '@/lib/revealIn';
@@ -10,7 +11,7 @@ import { PaneHeader, PaneSlots, PaneTitle } from './pane/PaneHeader';
 import { CHAT_MIN_W, dropTarget, GAP, resizeColumns, resizeRows, resolveLayout, shareAt, type PaneLayout, type PaneRect, type ResolvedLayout } from './pane/layout';
 import { isOverPinDrop, setPinned } from './pane/headerPins';
 import { NoPanes } from './pane/NoPanes';
-import { cancelDrag, endDrag, moveDrag, startDrag } from './layout/drag';
+import { cancelDrag, DragSurface, endDrag, moveDrag, startDrag, type SurfaceHandlers } from './layout/drag';
 import { splitTabIds } from './layout/tree';
 import { PreviewContext } from './layout/SplitContext';
 import { pageKey, usePage } from './browser/pages';
@@ -18,7 +19,7 @@ import { useSize } from './browser/PageSurface';
 import { useDispatch, useHarnessSelector } from './store';
 import { layoutOf, shownTab } from './store/panes';
 import { isMod } from './keys';
-import { commandOf } from './keymap';
+import { commandOf, isCommand, listenKeydown } from './keymap';
 import { TAB_MENU } from './menus/menus';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 
@@ -63,35 +64,36 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const showFocus = kinds.length > 1;
 
   return (
-    <div ref={areaRef} onKeyDown={onKeyDown} data-motion={isSliding ? 'slide' : undefined} className={cn('relative h-full min-h-0 overflow-hidden', isAnimating && !isResizing && 'pane-layout-animating')}>
-      {!!chat && (
-        <div className="pane-chat absolute inset-y-0 left-0 min-w-0" style={{ width: size.w ? chatWidth : '100%' }}>
-          {chat}
-        </div>
-      )}
-      {size.w > 0 &&
-        kinds.map((kind) => (
-          <PaneCard
-            key={kind}
-            thread={thread}
-            pane={pane}
-            kind={kind}
-            rect={resolved.rects[kind]!}
-            isFocused={layout.focused === kind}
-            showFocus={showFocus}
-            isExpanded={layout.expanded === kind}
-            isMoving={move.kind === kind}
-            entering={entering.kinds.includes(kind) ? (entering.isSlide ? 'slide' : 'fade') : undefined}
-            onHeaderPointerDown={(e) => move.start(e, kind)}
-          />
+    <DragSurface distance={DRAG_THRESHOLD} canStart={isPaneGrab} {...move.handlers}>
+      <div ref={areaRef} onKeyDown={onKeyDown} data-motion={isSliding ? 'slide' : undefined} className={cn('relative h-full min-h-0 overflow-hidden', isAnimating && !isResizing && 'pane-layout-animating')}>
+        {!!chat && (
+          <div className="pane-chat absolute inset-y-0 left-0 min-w-0" style={{ width: size.w ? chatWidth : '100%' }}>
+            {chat}
+          </div>
+        )}
+        {size.w > 0 &&
+          kinds.map((kind) => (
+            <PaneCard
+              key={kind}
+              thread={thread}
+              pane={pane}
+              kind={kind}
+              rect={resolved.rects[kind]!}
+              isFocused={layout.focused === kind}
+              showFocus={showFocus}
+              isExpanded={layout.expanded === kind}
+              isMoving={move.kind === kind}
+              entering={entering.kinds.includes(kind) ? (entering.isSlide ? 'slide' : 'fade') : undefined}
+            />
+          ))}
+        {leaving.map(({ kind, rect, isSlide }) => (
+          <LeavingPane key={`leaving:${kind}`} kind={kind} rect={rect} isSlide={isSlide} />
         ))}
-      {leaving.map(({ kind, rect, isSlide }) => (
-        <LeavingPane key={`leaving:${kind}`} kind={kind} rect={rect} isSlide={isSlide} />
-      ))}
-      {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
-      {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onPreview={(patch) => setDraft((d) => ({ ...d, ...patch }))} onResizing={onResizing} />}
-      {!!move.indicator && <span aria-hidden className="pointer-events-none absolute z-30 rounded-full bg-foreground/50" style={move.indicator} />}
-    </div>
+        {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
+        {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onPreview={(patch) => setDraft((d) => ({ ...d, ...patch }))} onResizing={onResizing} />}
+        {!!move.indicator && <span aria-hidden className="pointer-events-none absolute z-30 rounded-full bg-foreground/50" style={move.indicator} />}
+      </div>
+    </DragSurface>
   );
 }
 
@@ -195,7 +197,6 @@ function PaneCard({
   isExpanded,
   isMoving,
   entering,
-  onHeaderPointerDown,
 }: {
   thread: Thread;
   pane: Pane;
@@ -206,15 +207,16 @@ function PaneCard({
   isExpanded: boolean;
   isMoving: boolean;
   entering: 'slide' | 'fade' | undefined;
-  onHeaderPointerDown: (e: ReactPointerEvent) => void;
 }) {
   const dispatch = useDispatch();
+  const { ref, handleRef } = useDraggable({ id: kind });
   const tab = shownTab(pane, kind);
   const Content = PANE_TABS[kind].component;
   const focus = () => !isFocused && dispatch({ type: 'pane-focus-kind', threadId: thread.id, kind });
 
   return (
     <section
+      ref={ref}
       aria-label={PANE_TABS[kind].title}
       data-pane={kind}
       data-panes-of={thread.id}
@@ -241,7 +243,7 @@ function PaneCard({
           isExpanded={isExpanded}
           onExpand={() => dispatch({ type: 'pane-expand', threadId: thread.id, kind: isExpanded ? undefined : kind })}
           onClose={() => dispatch({ type: 'pane-close-kind', threadId: thread.id, kind })}
-          onDragStart={onHeaderPointerDown}
+          dragHandle={handleRef}
         />
         {isMultiTab(kind) && <PaneTabs thread={thread} pane={pane} kind={kind} shown={tab} />}
         <div className={cn('min-h-0 flex-1', rect.isCollapsed && 'hidden')}>{!!tab && <Content thread={thread} pane={pane} tab={tab} />}</div>
@@ -405,54 +407,43 @@ function usePaneMove(threadId: string, pane: Pane, resolved: ResolvedLayout, are
   const dispatch = useDispatch();
   const [kind, setKind] = useState<PaneTabKind>();
   const [target, setTarget] = useState<{ col: number; row: number; line: React.CSSProperties }>();
-  const latest = useRef({ resolved, pane });
-  latest.current = { resolved, pane };
-
-  const start = (e: ReactPointerEvent, dragged: PaneTabKind) => {
-    if (e.button !== 0 || (e.target as Element).closest('button, a, input, select, [role=tab], [role=combobox]')) return;
-    const from = { x: e.clientX, y: e.clientY };
-    let isDragging = false;
-    let current: typeof target;
-    const tab = shownTab(latest.current.pane, dragged);
-    const onMove = (ev: PointerEvent) => {
-      if (!isDragging && Math.hypot(ev.clientX - from.x, ev.clientY - from.y) < DRAG_THRESHOLD) return;
-      if (!isDragging) {
-        isDragging = true;
-        setKind(dragged);
-        if (tab) startDrag({ kind: 'tab', threadId, tabId: tab.id }, PANE_TABS[dragged].title, ev.clientX, ev.clientY);
-      }
-      moveDrag(ev.clientX, ev.clientY);
-      const area = areaRef.current?.getBoundingClientRect();
-      current = area ? dropTarget(latest.current.resolved, ev.clientX - area.x, ev.clientY - area.y) : undefined;
-      setTarget(current);
-    };
-    const finish = (isCancelled: boolean, ev?: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('keydown', onKey, true);
-      setKind(undefined);
-      setTarget(undefined);
-      if (!isDragging) return;
-      if (isCancelled) return cancelDrag();
-      const landed = endDrag();
-      if (current) return dispatch({ type: 'pane-move-kind', threadId, kind: dragged, col: current.col, row: current.row });
-      if (ev && isOverPinDrop(ev.clientX, ev.clientY)) return setPinned(dragged, true);
-      if (landed) dispatch({ type: 'layout-drop', ...landed });
-    };
-    const onUp = (ev: PointerEvent) => finish(false, ev);
-    const onKey = (ev: globalThis.KeyboardEvent) => {
-      if (ev.key !== 'Escape' || !isDragging) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      finish(true);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('keydown', onKey, true);
+  const targetAt = ({ x, y }: { x: number; y: number }) => {
+    const area = areaRef.current?.getBoundingClientRect();
+    return area ? dropTarget(resolved, x - area.x, y - area.y) : undefined;
   };
 
-  return { kind, start, indicator: target?.line };
+  const handlers: SurfaceHandlers = {
+    onDragStart: ({ operation }) => {
+      const dragged = operation.source!.id as PaneTabKind;
+      const tab = shownTab(pane, dragged);
+      const { x, y } = operation.position.current;
+      setKind(dragged);
+      if (tab) startDrag({ kind: 'tab', threadId, tabId: tab.id }, PANE_TABS[dragged].title, x, y);
+    },
+    onDragMove: ({ operation }) => {
+      const at = operation.position.current;
+      moveDrag(at.x, at.y);
+      setTarget(targetAt(at));
+    },
+    onDragEnd: ({ operation, canceled }) => {
+      const dragged = operation.source!.id as PaneTabKind;
+      const at = operation.position.current;
+      setKind(undefined);
+      setTarget(undefined);
+      if (canceled) return cancelDrag();
+      const landed = endDrag();
+      const current = targetAt(at);
+      if (current) return dispatch({ type: 'pane-move-kind', threadId, kind: dragged, col: current.col, row: current.row });
+      if (isOverPinDrop(at.x, at.y)) return setPinned(dragged, true);
+      if (landed) dispatch({ type: 'layout-drop', ...landed });
+    },
+  };
+
+  return { kind, handlers, indicator: target?.line };
 }
+
+/** Presses on the header's own controls and tabs click them; anywhere else on it drags the pane. */
+const isPaneGrab = (target: Element) => !target.closest('button, a, input, select, [role=tab], [role=combobox]');
 
 /** Next / previous pane and Close tab are commands (`src/keymap.ts`); mod 1–9 picks a tab of a multi-tab pane and stays fixed. */
 function usePaneKeys(threadId: string, pane: Pane, layout: PaneLayout) {
@@ -487,12 +478,11 @@ function useEscapeExpand(threadId: string, isExpanded: boolean) {
   useEffect(() => {
     if (!isExpanded || isPreview) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!isCommand(e, 'dismiss') || e.defaultPrevented) return;
       if (e.target instanceof Element && e.target.closest('.xterm, input, textarea, [contenteditable], [role=dialog], [role=menu], [role=listbox]')) return;
       e.preventDefault();
       dispatch({ type: 'pane-expand', threadId, kind: undefined });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [dispatch, threadId, isExpanded, isPreview]);
 }

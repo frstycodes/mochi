@@ -1,15 +1,15 @@
+import { v7 as uuidv7 } from 'uuid';
 import { app } from 'electron';
-import { writeFileSync } from 'node:fs';
-import { readFile, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { Effect, Stream } from 'effect';
+import { keyedStreams } from '@mochi/core/github/client';
+import type { OpenPr } from '@mochi/core/github/schema';
+import { mainCoreClient } from '@mochi/core/host';
+import { readDoc, writeDoc } from '@mochi/core/store/client';
 import type { AgentEvent } from '../../src/host/types/agent.ts';
 import type { ScheduleEvent, ScheduleRun, Trigger, TriggerInput } from '../../src/host/types/schedule.ts';
 import { describeCron } from '../../src/schedule/cron.ts';
-import { afterLaunch, cronDecision, prEvents, prPrompt, summaryLine, SUMMARY_HINT, triggerAfter, withRun, type PrSnapshot } from '../../src/schedule/due.ts';
-import { isBusy, keepWhenClosed, onAgentEvent, openWindows } from '../agents/events.ts';
-import { githubAccount, runGh } from '../git/gh.ts';
-import { startAgent } from '../ipc/agent.ts';
-import { pollCi } from '../notify/watch.ts';
+import { afterLaunch, cronDecision, prEvents, prPrompt, summaryLine, SUMMARY_HINT, triggerAfter, withRun } from '../../src/schedule/due.ts';
+import { isBusy, keepWhenClosed, onAgentEvent, openWindows, startAgent } from '../agents/events.ts';
 import { mainWindow } from '../window.ts';
 
 /**
@@ -24,6 +24,7 @@ interface Saved {
 }
 
 const TICK_MS = 30_000;
+// PR triggers whose thread was busy when their PRs changed fire on this beat once it's idle.
 const POLL_MS = 2 * 60_000;
 // A day of quiet windows stays far under this; past it the oldest agent events go, run events are always kept.
 const MAX_OUTBOX = 5_000;
@@ -31,21 +32,20 @@ const MAX_SEEN = 500;
 
 let triggers: Trigger[] = [];
 let outbox: ScheduleEvent[] = [];
+/** PR trigger's thread id → the open PRs Core last reported for its `prWatch`, and which watch they came from. */
+const openPrs = new Map<string, { key: string; prs: ReadonlyArray<OpenPr> }>();
 /** Thread id → its trigger's run in flight, with the agent's latest message for the summary. */
 const active = new Map<string, { run: ScheduleRun; name: string; message: string }>();
-let nextId = 0;
-
-const file = () => join(app.getPath('userData'), 'schedules.json');
 
 export async function startScheduler() {
-  const saved = await readFile(file(), 'utf8').then((text) => JSON.parse(text) as Saved, () => null);
+  const saved = await readDoc<Saved>('schedule', 'schedules');
   const now = Date.now();
   // Runs that were going when Mochi quit stopped with it.
   triggers = (saved?.triggers ?? []).map((t) => afterLaunch({ ...t, runs: t.runs.map((r) => (r.status === 'running' ? { ...r, status: 'interrupted' as const, endedAt: now, error: 'Mochi quit during the run' } : r)) }, now));
   outbox = saved?.outbox ?? [];
   keepWhenClosed((event) => keep({ type: 'agent', event }));
   onAgentEvent(watch);
-  save();
+  changed();
   setInterval(tick, TICK_MS);
   setInterval(() => void poll(), POLL_MS);
 }
@@ -102,30 +102,36 @@ function tick() {
   }
 }
 
-/** One gh call per PR trigger; a thread that is working waits, its events stay unseen until the next poll. Then watched threads' CI. */
+type PrWatch = { threadId: string; cwd: string; isReviewRequested: boolean; githubUser?: string };
+
+const prWatch = (t: Trigger): PrWatch | null =>
+  t.when.kind === 'pr' && !t.isPaused && t.start.cwd ? { threadId: t.threadId, cwd: t.start.cwd, isReviewRequested: t.when.event === 'review-requested', githubUser: t.githubUser } : null;
+
+// Core reads each repository once for every surface on it, fast after a push and backing off to every 10 minutes.
+const prStreams = keyedStreams(
+  ({ cwd, isReviewRequested, githubUser }: PrWatch) => Stream.unwrap(Effect.map(Effect.promise(mainCoreClient), (client) => client['github.openPrs']({ cwd, isReviewRequested, githubUser }))),
+  (watch, prs) => {
+    openPrs.set(watch.threadId, { key: JSON.stringify(watch), prs });
+    void poll();
+  },
+  (watch, error) => console.warn(`PR watch for ${watch.threadId} failed: ${error instanceof Error ? error.message : String(error)}`),
+);
+
+/** Each PR trigger's latest open PRs against its baseline; a thread that is working waits, its events stay unseen until it's idle. */
 async function poll() {
   for (const trigger of triggers) {
-    if (trigger.when.kind !== 'pr' || trigger.isPaused || !trigger.start.cwd) continue;
+    const watch = prWatch(trigger);
+    const latest = openPrs.get(trigger.threadId);
+    // A list from the trigger's previous settings (another event or folder) would fire against the new baseline.
+    if (!watch || latest?.key !== JSON.stringify(watch)) continue;
     if (active.has(trigger.threadId) || isBusy(trigger.threadId)) continue;
-    try {
-      const prs = await openPrs(trigger.start.cwd, trigger.when.event === 'review-requested', trigger.githubUser);
-      const { fires, baseline } = prEvents(trigger, prs);
-      if (baseline) update(trigger.threadId, (t) => ({ ...t, seen: baseline }));
-      const fire = fires[0];
-      if (!fire) continue;
-      update(trigger.threadId, (t) => ({ ...t, seen: [...(t.seen ?? []), fire.key].slice(-MAX_SEEN) }));
-      await startRun(trigger, fire.reason, prPrompt(trigger.prompt, fire));
-    } catch (error) {
-      console.warn(`PR poll for ${trigger.threadId} failed: ${(error as Error).message}`);
-    }
+    const { fires, baseline } = prEvents(trigger, latest.prs.map((pr) => ({ ...pr, labels: [...pr.labels], statusCheckRollup: [...pr.statusCheckRollup] })));
+    if (baseline) update(trigger.threadId, (t) => ({ ...t, seen: baseline }));
+    const fire = fires[0];
+    if (!fire) continue;
+    update(trigger.threadId, (t) => ({ ...t, seen: [...(t.seen ?? []), fire.key].slice(-MAX_SEEN) }));
+    await startRun(trigger, fire.reason, prPrompt(trigger.prompt, fire));
   }
-  await pollCi(deliver);
-}
-
-async function openPrs(cwd: string, isReviewRequested: boolean, githubUser: string | undefined): Promise<PrSnapshot[]> {
-  const args = ['pr', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,headRefName,headRefOid,labels,statusCheckRollup', ...(isReviewRequested ? ['--search', 'review-requested:@me'] : [])];
-  const prs = JSON.parse(await runGh(cwd, args, githubAccount(githubUser))) as PrSnapshot[];
-  return prs.map((pr) => ({ ...pr, isReviewRequested }));
 }
 
 async function startRun(trigger: Trigger, reason: string, prompt: string) {
@@ -170,7 +176,7 @@ function update(threadId: string, fn: (t: Trigger) => Trigger) {
   changed();
 }
 
-function deliver(event: ScheduleEvent) {
+export function deliver(event: ScheduleEvent) {
   if (!mainWindow()) return keep(event);
   for (const win of openWindows()) win.webContents.send('schedule:onEvent', event);
 }
@@ -192,35 +198,31 @@ function keep(event: ScheduleEvent) {
 
 function changed() {
   save();
+  prStreams(triggers.flatMap((t) => prWatch(t) ?? []));
   const list = triggers.map(strip);
   for (const win of openWindows()) win.webContents.send('schedule:onChange', list);
 }
 
 const strip = (t: Trigger): Trigger => ({ ...t, seen: undefined });
-const runId = () => `run-${Date.now().toString(36)}-${++nextId}`;
+const runId = () => `run-${uuidv7()}`;
 const describe = (t: Trigger) => (t.when.kind === 'cron' ? describeCron(t.when.cron) : `PR ${t.when.event}`);
 
-// Saves are serialized and go through a temp file, so a quit mid-write leaves the previous file whole.
-let writing: Promise<void> = Promise.resolve();
 let timer: ReturnType<typeof setTimeout> | undefined;
-
-const snapshot = () => JSON.stringify({ version: 1, triggers, outbox } satisfies Saved);
 
 function save() {
   clearTimeout(timer);
-  timer = setTimeout(() => {
-    timer = undefined;
-    const text = snapshot();
-    writing = writing.catch(() => {}).then(async () => {
-      await writeFile(`${file()}.tmp`, text, { mode: 0o600 });
-      await rename(`${file()}.tmp`, file());
-    });
-  }, 200);
+  timer = setTimeout(flush, 200);
 }
 
-// A save still waiting on its timer is written now; an async one already in flight finishes on its own.
+function flush() {
+  timer = undefined;
+  // writeDoc logs a failure; the next change writes the whole document again.
+  void writeDoc('schedule', 'schedules', { version: 1, triggers, outbox } satisfies Saved).catch(() => {});
+}
+
+// A save still waiting on its timer goes now; quitting waits for Core to have it (`startCore`).
 app.on('before-quit', () => {
   if (!timer) return;
   clearTimeout(timer);
-  writeFileSync(file(), snapshot(), { mode: 0o600 });
+  flush();
 });

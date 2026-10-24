@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from 'react';
+import { useIsFetching, useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { host } from '../host/index.ts';
 import type { Provider, Thread } from '../model.ts';
 import { linkedAccountId, signInCommand } from '../settings/accounts.ts';
@@ -10,12 +12,6 @@ export interface Reviewer {
   reason?: string;
 }
 
-const TTL_MS = 60_000;
-/** `${spaceId}:${provider}` → why that account can't review ('' when it can), checked at most once a minute. */
-const checked = new Map<string, { at: number; reason: string | null }>();
-const listeners = new Set<() => void>();
-let version = 0;
-
 /**
  * Who would give `thread` a second opinion and whether it can: the other provider's account for the thread's profile
  * must be installed and signed in. Demo threads use the scripted reviewer, which always can. Reading this starts a
@@ -25,50 +21,37 @@ export function reviewerFor(thread: Thread): Reviewer {
   const provider = otherProvider(thread.providers[0]);
   if (!thread.repo) return { provider, reason: 'This chat has no project, so there is no diff to review' };
   if (!thread.live || !host.isDesktop) return { provider };
-  const key = `${thread.spaceId}:${provider}`;
-  const hit = checked.get(key);
-  if (!hit || Date.now() - hit.at > TTL_MS) check(key, thread.spaceId, provider);
-  if (!hit || hit.reason === null) return { provider, reason: `Checking whether ${providerName(provider)} is signed in…` };
-  return hit.reason ? { provider, reason: hit.reason } : { provider };
+  const options = reviewerQuery(thread.spaceId, provider);
+  const state = queryClient.getQueryState<string>(options.queryKey);
+  if (!state || Date.now() - state.dataUpdatedAt > 60_000) void queryClient.fetchQuery(options).catch(() => {});
+  const reason = state?.data;
+  if (reason === undefined) return { provider, reason: `Checking whether ${providerName(provider)} is signed in…` };
+  return reason ? { provider, reason } : { provider };
 }
 
 /** `reviewerFor` that waits for the sign-in check instead of answering "Checking…", for an agent's own request. */
 export async function checkReviewer(thread: Thread): Promise<Reviewer> {
   const reviewer = reviewerFor(thread);
   if (!thread.live || !host.isDesktop || !thread.repo) return reviewer;
-  const reason = await reasonFor(thread.spaceId, reviewer.provider);
+  const reason = await queryClient.fetchQuery(reviewerQuery(thread.spaceId, reviewer.provider));
   return reason ? { provider: reviewer.provider, reason } : { provider: reviewer.provider };
 }
 
 export function useReviewer(thread: Thread): Reviewer {
-  useReviewerChecks();
-  return reviewerFor(thread);
+  const provider = otherProvider(thread.providers[0]);
+  const reviewerQueryResult = useQuery({ ...reviewerQuery(thread.spaceId, provider), enabled: !!thread.repo && !!thread.live && host.isDesktop });
+  if (!thread.repo) return { provider, reason: 'This chat has no project, so there is no diff to review' };
+  if (!thread.live || !host.isDesktop) return { provider };
+  const reason = reviewerQueryResult.data;
+  return reason === undefined ? { provider, reason: `Checking whether ${providerName(provider)} is signed in…` } : reason ? { provider, reason } : { provider };
 }
 
-/** Re-renders when a sign-in check lands, for lists that call `reviewerFor` (palette, context menus). */
 export function useReviewerChecks() {
-  useSyncExternalStore(subscribe, () => version);
+  useIsFetching({ queryKey: queryKeys.reviewer.all() });
 }
 
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-};
-
-const inFlight = new Set<string>();
-
-function check(key: string, spaceId: string, provider: Provider) {
-  if (inFlight.has(key)) return;
-  inFlight.add(key);
-  if (!checked.has(key)) checked.set(key, { at: 0, reason: null });
-  void reasonFor(spaceId, provider)
-    .catch((error: unknown) => `Couldn't check ${providerName(provider)}: ${error instanceof Error ? error.message : String(error)}`)
-    .then((reason) => {
-      inFlight.delete(key);
-      checked.set(key, { at: Date.now(), reason });
-      version++;
-      listeners.forEach((listener) => listener());
-    });
+function reviewerQuery(spaceId: string, provider: Provider) {
+  return { queryKey: queryKeys.reviewer.check(spaceId, provider), staleTime: 60_000, queryFn: () => reasonFor(spaceId, provider).catch((error: unknown) => `Couldn't check ${providerName(provider)}: ${error instanceof Error ? error.message : String(error)}`) };
 }
 
 async function reasonFor(spaceId: string, provider: Provider): Promise<string> {

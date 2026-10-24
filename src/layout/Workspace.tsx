@@ -1,9 +1,12 @@
+import { listenKeydown } from '../keymap';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { ErrorBoundary } from 'react-error-boundary';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
 import { Edit, Folder, Ban, Inbox, Route, Chart } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
@@ -19,7 +22,7 @@ import { useDispatch, useHarnessSelector, useThread } from '../store';
 import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
-import { useSplitTabDrag } from './useSplitTabDrag';
+import { SplitTabHandle } from './SplitTabHandle';
 import { PaneSlotBar, PaneSlots } from '../pane/PaneHeader';
 import { LeafBar } from './SplitControls';
 import { PreviewContext, SplitContext } from './SplitContext';
@@ -130,7 +133,9 @@ export function LeafView({ leaf, isMulti, isZoomed, isFirst, isPreview = false }
           onFocusCapture={() => isTabbing() && focus()}
           className={cn('relative h-full min-h-0 min-w-0 bg-background outline-none', isMulti && 'overflow-hidden rounded-xl border border-transparent', isMulti && isFocused && 'border-foreground/20')}
         >
-          <LeafContent leafId={leaf.id} view={leaf.view} />
+          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[JSON.stringify(leaf.view)]}>
+            <LeafContent leafId={leaf.id} view={leaf.view} />
+          </ErrorBoundary>
           <DropZone leafId={leaf.id} />
         </section>
       </PreviewContext.Provider>
@@ -194,17 +199,16 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
   const thread = useThread(threadId);
   const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === threadId));
   const tab = pane?.tabs.find((t) => t.id === tabId);
-  const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind, tab ? tabTitle(tab) : '');
   if (!thread || !pane || !tab) return <ClosedTab />;
   const { icon: Icon, component: Content } = PANE_TABS[tab.kind];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <LeafBar>
-        <span onPointerDown={onDragHandle} className="app-no-drag flex min-w-0 cursor-grab items-center gap-2 select-none active:cursor-grabbing">
+        <SplitTabHandle threadId={threadId} tabId={tabId} kind={tab.kind} label={tabTitle(tab)}>
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{tabTitle(tab)}</span>
-        </span>
+        </SplitTabHandle>
         <button type="button" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })} className="min-w-0 cursor-default truncate font-normal text-subtle-foreground hover:text-foreground">
           {thread.title}
         </button>
@@ -310,7 +314,7 @@ function useFocusFollows(ref: RefObject<HTMLElement | null>, isFocused: boolean)
 }
 
 let lastTabAt = 0;
-if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => e.key === 'Tab' && (lastTabAt = performance.now()), true);
+if (typeof window !== 'undefined') listenKeydown((e) => e.key === 'Tab' && (lastTabAt = performance.now()), true);
 
 /** Tabbing into a split focuses it; programmatic focus (a composer autofocusing on mount) must not. */
 function isTabbing() {

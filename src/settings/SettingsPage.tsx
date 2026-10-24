@@ -7,7 +7,8 @@ import { SharedSettingsNotice } from '../remote/SharedSettingsNotice';
 import { useMachines } from '../remote/useMachines';
 import { useHarness } from '../store';
 import { TitleBar } from '../TitleBar';
-import { closeSettings, openSettings, useSettingsRoute, type SettingsRoute } from './open';
+import type { SettingsRoute } from '../routes/locations';
+import { useEscapeBack, useSettingsRoute } from '../routes/nav';
 import { prefersReducedMotion } from './prefs';
 import { SettingsChat, settingsChatOf } from './SettingsChat';
 import { SETTINGS_SECTIONS, type SettingsSection } from './sections';
@@ -20,7 +21,7 @@ export function SettingsPage() {
   const Subpage = route?.subpage ? (section as SettingsSection).subpage : undefined;
   const [machineId, setMachineId] = useState<string | null>(null);
   const machine = useMachines().machines.find((m) => m.machine.id === machineId)?.machine;
-  useEscapeBack(route);
+  useEscapeBack();
   useFlashSetting(route);
   if (section.id === 'chat') return <SettingsChatPage />;
 
@@ -71,23 +72,6 @@ function SettingsChatPage() {
       </div>
     </div>
   );
-}
-
-/** Esc goes back to the app (from a subpage, to its section), unless it's closing a menu or popover first, or leaving a text field (then a second Esc goes back). */
-function useEscapeBack(route: SettingsRoute | null) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (document.querySelector('[data-radix-popper-content-wrapper], [role=dialog], [role=alertdialog]')) return;
-      const target = e.target as HTMLElement;
-      if (target.matches?.('input, textarea, select')) return void target.blur();
-      // A subpage steps back to its section first.
-      if (route?.subpage) return openSettings(route.section);
-      closeSettings();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [route]);
 }
 
 const FLASH_MS = 1200;

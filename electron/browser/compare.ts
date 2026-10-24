@@ -1,20 +1,20 @@
-import type { ChildProcess } from 'node:child_process';
 import { existsSync, lstatSync, symlinkSync, unlinkSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { CompareBase } from '../../src/host/types/browser.ts';
 import { devTarget, pickPort } from '../../src/terminal/lsof.ts';
-import { worktreeRoot } from '../agents/config.ts';
+import { worktreeRoot } from '@mochi/core/agents/config';
 import { baseRef, localName } from '../git/branches.ts';
 import { mainRepo, runGit, topLevel } from '../git/run.ts';
 import { isFree, listeningPorts, runTargets } from '../ipc/ports.ts';
 import { killTree, spawnShell } from '../platform.ts';
-import { userPath } from '../shellPath.ts';
+import type { CoreChild } from '@mochi/core/runClient';
+import { userPath } from '@mochi/core/shellPath';
 
 interface Session {
   dir: string;
   main: string;
-  child: ChildProcess | null;
+  child: CoreChild | null;
 }
 
 const FIRST_COMPARE_PORT = 5400;
@@ -62,8 +62,7 @@ async function serve(threadId: string, session: Session, cwd: string, branch: st
   const target = devTarget(runTargets(dir));
   if (!target) throw new Error(`${branch} has no dev script (package.json "dev", "start", "serve" or "preview", or .claude/launch.json) to serve it with`);
   const port = target.port ?? (await pickPort(FIRST_COMPARE_PORT, new Set(), isFree));
-  // Detached: the dev server and its children form one process group, stopped together.
-  const child = spawnShell(target.command, { cwd: dir, detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH: await userPath(), PORT: String(port), BROWSER: 'none' } });
+  const child = spawnShell(target.command, { cwd: dir, env: { ...process.env, PATH: await userPath(), PORT: String(port), BROWSER: 'none' } });
   session.child = child;
   let log = '';
   const keep = (chunk: Buffer) => (log = (log + chunk.toString()).slice(-LOG_TAIL));
@@ -74,7 +73,7 @@ async function serve(threadId: string, session: Session, cwd: string, branch: st
   const start = Date.now();
   while (Date.now() - start < BOOT_TIMEOUT_MS) {
     if (sessions.get(threadId) !== session) throw new Error('Compare was closed');
-    if (child.exitCode !== null) throw new Error(`\`${target.command}\` exited with ${child.exitCode}\n${log.trim()}`);
+    if (child.hasExited) throw new Error(`\`${target.command}\` exited with ${child.exitCode}\n${log.trim()}`);
     const [listening] = await listeningPorts(dir);
     if (listening) return { origin: `http://localhost:${listening.port}`, branch, isReused: false };
     await new Promise((r) => setTimeout(r, POLL_MS));
@@ -99,6 +98,6 @@ export function stopAllCompares() {
   for (const session of sessions.values()) killGroup(session.child);
 }
 
-function killGroup(child: ChildProcess | null) {
+function killGroup(child: CoreChild | null) {
   if (child) killTree(child);
 }

@@ -3,16 +3,24 @@ import { test } from 'node:test';
 import type { AgentEvent } from '../host/types/agent.ts';
 import { agentCalls } from '../runtime/live.ts';
 import type { Action, State } from '../store/index.tsx';
-import { parseSaved, toSaved } from '../store/persist.ts';
+import { parseSaved, toSaved } from '../store/saved.ts';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { dueQueued, moveQueued, queuedMessage, sendMessage, shouldQueue } from './outbox.ts';
+import { dueQueued } from '../runtime/due.ts';
+import { moveQueued, queuedMessage, sendMessage, shouldQueue } from './outbox.ts';
 
 const run = (s: State, action: Action) => threadsReducer(s, action);
 const event = (s: State, e: AgentEvent) => run(s, { type: 'agent', event: e });
 const thread = (s: State, id: string) => s.threads.find((t) => t.id === id)!;
 const drafts = (s: State, id: string) => (thread(s, id).queued ?? []).map((m) => m.draft);
 const message = (draft: string) => queuedMessage(draft, { mentions: [], isCommand: false, typedSkills: [] });
+
+test('queued messages use unique, time-ordered UUID v7 identifiers', () => {
+  const ids = Array.from({ length: 100 }, () => message('draft').id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(ids, [...ids].sort());
+  for (const id of ids) assert.match(id, /^m-[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/);
+});
 
 /** A live thread mid-turn with "first", "second", "third" queued. */
 function working() {
@@ -23,7 +31,7 @@ function working() {
   return { s, id };
 }
 
-/** What the runner in `HarnessProvider` does: sends each due head through `sendMessage`. */
+/** What the reactor's `queue.send` does: sends each due head through `sendMessage`. */
 function runQueue(s: State) {
   for (const { thread: t, message: m } of dueQueued(s)) sendMessage((a) => (s = run(s, a)), s, t, m, { queuedId: m.id });
   return s;

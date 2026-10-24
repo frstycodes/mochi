@@ -9,7 +9,7 @@ export type SharedAccess = (typeof SHARED_ACCESS)[number];
 
 /**
  * What each harness does in each mode: the `permissionMode` its adapter takes (Claude: `electron/agents/claude/sessions.ts`,
- * Codex: `POLICIES` in `electron/agents/codex/adapter.ts`) and the line the composer's menu shows. A harness without a mode leaves it out.
+ * Codex: `POLICIES` in `packages/core/src/agents/codex/adapter.ts`) and the line the composer's menu shows. A harness without a mode leaves it out.
  */
 export const PERMISSIONS = {
   claude: {

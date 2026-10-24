@@ -4,7 +4,8 @@ import type { AgentEvent } from '../host/types/agent.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { dueQueued, queuedMessage } from '../chat/outbox.ts';
+import { queuedMessage } from '../chat/outbox.ts';
+import { dueQueued } from './due.ts';
 import { agentCalls, CONTINUE_PROMPT } from './live.ts';
 import { dueResumes, nextResumeAt } from './limits.ts';
 

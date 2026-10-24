@@ -19,9 +19,10 @@ import { TitleBar } from '../TitleBar';
 import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
+import { goBack } from '../routes/nav';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
-import { isCommand } from '../keymap';
+import { isCommand, listenKeydown } from '../keymap';
 import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
@@ -33,19 +34,19 @@ export function ReviewView() {
   const index = Math.min(selected, Math.max(0, threads.length - 1));
   const thread = threads[index];
   const step = (by: 1 | -1) => setSelected(stepIndex(index, threads.length, by));
-  useReviewKeys(step, close);
+  useReviewKeys(step, goBack);
   useCloseOnNavigate(close);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ReviewHeader position={thread ? `${index + 1} of ${threads.length}` : undefined} onClose={close} />
+      <ReviewHeader position={thread ? `${index + 1} of ${threads.length}` : undefined} onClose={goBack} />
       {thread ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 md:grid md:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
           <ReviewSummary key={thread.id} thread={thread} onSkip={() => step(1)} />
           <ReviewSurface key={`surface-${thread.id}`} thread={thread} />
         </div>
       ) : (
-        <NothingToReview onClose={close} />
+        <NothingToReview onClose={goBack} />
       )}
     </div>
   );
@@ -267,12 +268,10 @@ function useReviewKeys(step: (by: 1 | -1) => void, close: () => void) {
       if (e.defaultPrevented) return;
       if (isCommand(e, 'list-next')) return step(1);
       if (isCommand(e, 'list-previous')) return step(-1);
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable], [role=dialog], [role=alertdialog]')) return;
-      if (e.key === 'Escape') close();
+      if (isCommand(e, 'dismiss')) close();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [step, close]);
 }
 

@@ -1,3 +1,4 @@
+import { persistedSlice } from './lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
 import { showsDemoData } from './demoData.ts';
 import { DEFAULT_SPACES, SPACE_ICON_NAMES, type Space, type SpaceIconName } from './model.ts';
@@ -13,6 +14,7 @@ export const MAX_PROFILES = 9;
 /** A desktop install without demo data starts with this one profile. */
 export const FIRST_PROFILE: Space = { id: 'personal', name: 'Personal', icon: 'home', plans: { claude: '', codex: '' }, github: '' };
 
+const profilesSlice = persistedSlice(PROFILES_KEY, startingProfiles(), parseProfiles);
 let profiles = load();
 const listeners = new Set<() => void>();
 
@@ -100,21 +102,12 @@ function isProfile(value: unknown): value is Space {
 
 function write(next: Space[]) {
   profiles = next;
-  try {
-    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): edits last for this session.
-  }
+  profilesSlice.setState({ value: profiles });
   listeners.forEach((l) => l());
 }
 
 function load() {
-  let list: Space[];
-  try {
-    list = parseProfiles(localStorage.getItem(PROFILES_KEY));
-  } catch {
-    list = startingProfiles();
-  }
+  const list = profilesSlice.getState().value;
   // Demo threads live in the demo's profiles, so with demo data on any you don't have join the list (unsaved; they hold threads, so can't be removed).
   if (!showsDemoData()) return list;
   return [...list, ...DEFAULT_SPACES.filter((d) => !list.some((p) => p.id === d.id))].slice(0, MAX_PROFILES);
@@ -128,6 +121,7 @@ function subscribe(listener: () => void) {
 if (typeof window !== 'undefined')
   window.addEventListener('storage', (e) => {
     if (e.key !== PROFILES_KEY) return;
+    void profilesSlice.persist.rehydrate();
     profiles = load();
     listeners.forEach((l) => l());
   });

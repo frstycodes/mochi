@@ -1,11 +1,10 @@
+import { browserStorage } from '../lib/uiStorage.ts';
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 
 const storage = new Map<string, string>();
-Object.defineProperty(globalThis, 'localStorage', {
-  configurable: true,
-  value: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => void storage.set(k, v) },
-});
+mock.method(browserStorage, 'getItem', (key: string) => storage.get(key) ?? null);
+mock.method(browserStorage, 'setItem', (key: string, value: string) => void storage.set(key, value));
 const { DEFAULT_PREFS, PREFS_KEY, getPrefs, parsePrefs, reloadPrefs, setPrefs, subscribePrefs } = await import('./prefs.ts');
 
 test('parsePrefs falls back to defaults for missing, mistyped and unparseable values', () => {
@@ -29,7 +28,7 @@ test('setPrefs persists, notifies, and survives a reload from storage', () => {
   const unsubscribe = subscribePrefs(() => calls++);
   setPrefs({ searchEngine: 'kagi' });
   assert.equal(getPrefs().searchEngine, 'kagi');
-  assert.equal(JSON.parse(storage.get(PREFS_KEY)!).searchEngine, 'kagi');
+  assert.equal(JSON.parse(storage.get(PREFS_KEY)!).state.value.searchEngine, 'kagi');
   assert.equal(calls, 1);
   storage.set(PREFS_KEY, JSON.stringify({ searchEngine: 'bing' }));
   reloadPrefs();

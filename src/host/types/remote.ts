@@ -73,8 +73,8 @@ export interface FollowedMachine {
   lastSeenAt?: number;
 }
 
-/** A machine's stream as a device applies it: a fresh base, then each store action numbered within the base's epoch. */
-export type StreamFrame = { type: 'snapshot'; epoch: string; seq: number; saved: unknown } | { type: 'action'; epoch: string; seq: number; action: unknown };
+/** A followed machine's threads, one thread file (`SavedThread`, src/store/saved.ts) at a time; `null` deletes it. */
+export type MirrorFrame = { type: 'reset' } | { type: 'thread'; threadId: string; saved: unknown };
 
 /** "Allow <name>?" on this computer's screen. */
 export interface ApprovalRequest {
@@ -178,7 +178,6 @@ export type RemoteCommand =
   | { type: 'terminal-write'; threadId: string; terminalId: string; data: string }
   | { type: 'terminal-resize'; threadId: string; terminalId: string; cols: number; rows: number }
   /** Output from offset `after` on; the device polls with the `next` it got. */
-  | { type: 'terminal-read'; threadId: string; terminalId: string; after: number }
   | { type: 'terminal-close'; threadId: string; terminalId: string };
 
 export type ThreadPoint = { kind: 'message'; index: number } | { kind: 'checkpoint'; n: number };
@@ -195,7 +194,6 @@ export interface CommandData {
   files: { paths: string[]; isTruncated: boolean };
   'read-file': { text: string };
   'terminal-open': { terminalId: string };
-  'terminal-read': TerminalOutput;
 }
 
 /** What a new thread on this computer can start in and with. */
@@ -214,10 +212,16 @@ export interface CatalogProject {
 
 export interface TerminalOutput {
   data: string;
-  /** Where the next read starts. */
+  /** Where the chunk after this one starts. */
   next: number;
   /** Set once the shell exited. */
   exitCode?: number;
+}
+
+/** One push of a followed machine's terminal. */
+export interface TerminalChunk extends TerminalOutput {
+  machineId: string;
+  terminalId: string;
 }
 
 export type CommandResult =
@@ -239,11 +243,6 @@ export interface RemoteHost {
   status(): Promise<RemoteStatus>;
   set(patch: Partial<RemoteSettings>): Promise<RemoteStatus>;
   onStatus(listener: (status: RemoteStatus) => void): () => void;
-  /** One store action, JSON, numbered `seq` within `epoch`. */
-  push(epoch: string, seq: number, action: string): Promise<void>;
-  /** Answers `onSnapshotRequest`: `toSaved` JSON of the store with exactly actions 1…`seq` of `epoch` applied. */
-  snapshot(requestId: string, epoch: string, seq: number, saved: string): Promise<void>;
-  onSnapshotRequest(listener: (requestId: string) => void): () => void;
   onCommand(listener: (request: RemoteCommandRequest) => void): () => void;
   commandResult(id: string, result: CommandResult): Promise<void>;
   /** Removes a computer from all of yours and ends its connections everywhere; it has to join again. */
@@ -259,9 +258,11 @@ export interface RemoteHost {
   /** The computers this one follows, and how each connection stands. */
   machines(): Promise<FollowedMachine[]>;
   onMachines(listener: (machines: FollowedMachine[]) => void): () => void;
-  /** The main window's mirrors start empty: every followed machine sends a fresh snapshot, then its actions. */
+  /** The main window's mirrors start empty: every followed machine starts over, each thread from its snapshot. */
   follow(): Promise<void>;
-  onMachineFrame(listener: (message: { machineId: string; frame: StreamFrame }) => void): () => void;
+  onMachineFrame(listener: (message: { machineId: string; frame: MirrorFrame }) => void): () => void;
+  /** Output of a terminal opened on a followed machine (`terminal-open`), pushed as it prints; the last chunk of an exited shell has `exitCode`. */
+  onTerminalOutput(listener: (message: TerminalChunk) => void): () => void;
   /** Keeps a followed machine's store (`toSaved` JSON) encrypted on this computer, for launch and offline reading. */
   cacheMachine(machineId: string, saved: string): Promise<void>;
   cachedMachines(): Promise<{ machineId: string; saved: string }[]>;
@@ -273,9 +274,6 @@ export const remoteMethods = {
   status: 'invoke',
   set: 'invoke',
   onStatus: 'event',
-  push: 'invoke',
-  snapshot: 'invoke',
-  onSnapshotRequest: 'event',
   onCommand: 'event',
   commandResult: 'invoke',
   removeMember: 'invoke',
@@ -288,6 +286,7 @@ export const remoteMethods = {
   onMachines: 'event',
   follow: 'invoke',
   onMachineFrame: 'event',
+  onTerminalOutput: 'event',
   cacheMachine: 'invoke',
   cachedMachines: 'invoke',
   command: 'invoke',

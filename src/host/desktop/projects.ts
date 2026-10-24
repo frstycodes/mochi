@@ -1,4 +1,4 @@
 import type { ProjectsHost } from '../types/projects.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const projects = (): ProjectsHost => bridge().projects;
+export const projects = (): ProjectsHost => desktopNamespace('projects');

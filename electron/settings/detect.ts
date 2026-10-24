@@ -1,15 +1,13 @@
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
 import { createInterface } from 'node:readline';
+import { runCommand, RunError, spawnCommand } from '@mochi/core/runClient';
 import type { Account, AgentInstall, AgentLogin } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { parseClaudeAuth, parseCodexAccount, parseVersion } from '../../src/settings/parse.ts';
-import { accountEnv, resolveExecutable, userPath } from '../agents/config.ts';
+import { accountEnv, resolveExecutable, userPath } from '@mochi/core/agents/config';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
 import { killTree, spawnable } from '../platform.ts';
 
 const TIMEOUT_MS = 10_000;
-const exec = promisify(execFile);
 
 export async function latestVersion(provider: Provider): Promise<string | null> {
   try {
@@ -32,7 +30,7 @@ export async function updateHarness(provider: Provider): Promise<void> {
   if (!path) throw new Error(`${HARNESSES[provider].name} is not installed`);
   const target = spawnable(path, ['update']);
   try {
-    await exec(target.file, target.args, { env: { ...accountEnv(provider, null), PATH: await userPath() }, timeout: 180_000, maxBuffer: 1 << 20, shell: target.shell, windowsHide: true });
+    await runCommand(target.file, target.args, { env: { ...accountEnv(provider, null), PATH: await userPath() }, timeout: 180_000, shell: target.shell });
   } catch (error) {
     const failure = error as Error & { stderr?: string };
     throw new Error(failure.stderr?.trim().split('\n').at(-1) || failure.message);
@@ -67,14 +65,14 @@ async function claudeLogin(path: string, env: NodeJS.ProcessEnv): Promise<AgentL
 function codexLogin(path: string, env: NodeJS.ProcessEnv): Promise<AgentLogin> {
   return new Promise((resolve) => {
     const target = spawnable(path, ['app-server']);
-    const child = spawn(target.file, target.args, { env, stdio: ['pipe', 'pipe', 'ignore'], shell: target.shell, windowsHide: true });
+    const child = spawnCommand(target.file, target.args, { env, shell: target.shell });
     const finish = (login: AgentLogin) => {
       clearTimeout(timer);
       killTree(child);
       resolve(login);
     };
     const timer = setTimeout(() => finish({ state: 'unknown', reason: 'codex app-server did not answer in time' }), TIMEOUT_MS);
-    child.on('error', (error) => finish({ state: 'unknown', reason: error.message }));
+    child.on('error', (error: Error) => finish({ state: 'unknown', reason: error.message }));
     child.on('exit', () => finish({ state: 'unknown', reason: 'codex app-server exited early' }));
     // EPIPE when the server dies before reading: unhandled, it would crash the main process. `exit` reports it.
     child.stdin.on('error', () => {});
@@ -95,11 +93,12 @@ function codexLogin(path: string, env: NodeJS.ProcessEnv): Promise<AgentLogin> {
   });
 }
 
-function run(file: string, args: string[], env: NodeJS.ProcessEnv): Promise<{ stdout: string; error?: string }> {
+async function run(file: string, args: string[], env: NodeJS.ProcessEnv): Promise<{ stdout: string; error?: string }> {
   const target = spawnable(file, args);
-  return new Promise((resolve) =>
-    execFile(target.file, target.args, { env, timeout: TIMEOUT_MS, maxBuffer: 1 << 20, shell: target.shell, windowsHide: true }, (error, stdout) =>
-      resolve({ stdout: String(stdout), error: error ? (error.killed ? `${args.join(' ')} timed out` : error.message.split('\n')[0]) : undefined }),
-    ),
-  );
+  try {
+    return { stdout: (await runCommand(target.file, target.args, { env, timeout: TIMEOUT_MS, shell: target.shell })).stdout };
+  } catch (error) {
+    if (!(error instanceof RunError)) throw error;
+    return { stdout: error.stdout ?? '', error: error.timedOut ? `${args.join(' ')} timed out` : (error.stderr.trim() || error.message).split('\n')[0] };
+  }
 }

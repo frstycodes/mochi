@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Check, Edit, Pencil, Folder, FolderPlus, FolderMove, Image, Link, Search, Trash } from '@/icons';
 import { toast } from '@/toast/store';
@@ -23,6 +24,7 @@ import { useMachines } from './remote/useMachines';
 import { useHarness, useSpaceThreads, useHarnessSelector } from './store';
 import { OverflowIcon } from './ui';
 import { SettingsCard, SettingsSection } from './settings/parts';
+import { queryKeys } from './queryKeys';
 
 const FOOTER = 'Removing a project only takes it off this list; its folder stays on disk. Icons come from a favicon in the folder (public/, app/, static/ and the like) unless you upload one.';
 /** Past this many, a filter sits over the list. */
@@ -90,21 +92,11 @@ function ThisComputerProjects() {
 /** Another computer's projects, read there; Add project runs there too, in its own projects folder. */
 function MachineProjects({ machine }: { machine: FollowedMachine }) {
   const { ask } = useMachines();
-  const [projects, setProjects] = useState<Project[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reads, setReads] = useState(0);
-  useEffect(() => {
-    let isCurrent = true;
-    ask(machine.id, { type: 'projects' }).then(
-      (read) => isCurrent && setProjects(read),
-      (e: unknown) => isCurrent && setError(gitError(e)),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [ask, machine.id, reads]);
+  const projectsQuery = useQuery({ queryKey: queryKeys.projects.machine(machine.id), queryFn: () => ask(machine.id, { type: 'projects' }) });
+  const projects = projectsQuery.data ?? null;
+  const error = projectsQuery.error ? gitError(projectsQuery.error) : null;
   const canAdd = machine.status === 'online' && machine.scopes.includes('manage');
-  const add = canAdd && <AddProjectButton machine={machine} onAdded={() => setReads((n) => n + 1)} />;
+  const add = canAdd && <AddProjectButton machine={machine} onAdded={() => { void projectsQuery.refetch(); }} />;
 
   if (error) return <p className="px-1 type-meta text-destructive">{error}</p>;
   if (!projects) return <Spinner className="mx-auto" />;

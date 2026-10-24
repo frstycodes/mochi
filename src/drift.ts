@@ -1,6 +1,6 @@
 import type { Thread } from './model.ts';
 import { tokens } from './progress.ts';
-import { getPrefs } from './settings/prefs.ts';
+import { prefsNow } from './store/context.ts';
 
 export type DriftKind = 'on-goal' | 'scope-add' | 'off-goal';
 
@@ -31,11 +31,11 @@ export function isConcrete(text: string) {
 }
 
 /** A goal Mochi shows and acts on: set by the agent or you, with goals on in Settings. Drift is measured only then. */
-export const hasGoal = (thread: Thread) => getPrefs().goals && !!thread.goal.trim();
+export const hasGoal = (thread: Thread) => prefsNow().goals && !!thread.goal.trim();
 
 /** Clear on-goal cases are settled here; the rest go to the classifier, and only a confident off-goal from it suggests a new thread. */
 export function judgeDrift(prompt: string, thread: Thread): DriftVerdict | Promise<DriftVerdict> {
-  if (!getPrefs().driftGuard) return { kind: 'on-goal', reason: 'Drift guard is off' };
+  if (!prefsNow().driftGuard) return { kind: 'on-goal', reason: 'Drift guard is off' };
   if (thread.drift?.isMuted) return { kind: 'on-goal', reason: 'Drift guard off for this thread' };
   if (!hasGoal(thread)) return { kind: 'on-goal', reason: 'No goal yet' };
   return judgeLocally(prompt, thread) ?? classifyDrift(prompt, thread);

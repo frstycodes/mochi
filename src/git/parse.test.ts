@@ -69,6 +69,16 @@ test('parseDiff reads C-quoted paths', () => {
   assert.equal(file.staged, true);
 });
 
+test('raw hunk boundaries ignore header text inside changed lines, and decode Git octal paths', () => {
+  const header = 'diff --git "a/\\303\\251.txt" "b/\\303\\251.txt"\n--- "a/\\303\\251.txt"\n+++ "b/\\303\\251.txt"\n';
+  const first = '@@ -1 +1 @@\n-old\n+@@ -10 +10 @@\n';
+  const second = '@@ -10 +10 @@\n-x\n+y\n';
+  const [file] = parseDiff(header + first + second, false);
+  assert.equal(file.path, 'é.txt');
+  assert.equal(file.patch, header + first + second);
+  assert.deepEqual(file.hunks.map((hunk) => hunk.patch), [header + first, header + second]);
+});
+
 test('a hunk patch applies to the index on its own', () => {
   const dir = mkdtempSync(join(tmpdir(), 'harness-parse-'));
   const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8' });

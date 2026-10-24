@@ -1,18 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { basicSetup } from 'codemirror';
-import { css } from '@codemirror/lang-css';
-import { go } from '@codemirror/lang-go';
-import { html } from '@codemirror/lang-html';
-import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
-import { markdown } from '@codemirror/lang-markdown';
-import { python } from '@codemirror/lang-python';
-import { rust } from '@codemirror/lang-rust';
-import { yaml } from '@codemirror/lang-yaml';
-import { HighlightStyle, LanguageSupport, StreamLanguage, syntaxHighlighting } from '@codemirror/language';
-import { shell } from '@codemirror/legacy-modes/mode/shell';
-import { EditorState, type Extension } from '@codemirror/state';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { languageFor } from './languages';
 import { tags as t } from '@lezer/highlight';
 
 /** `isWrapped` folds long lines instead of scrolling sideways, for reading prose-heavy files in a narrow pane. */
@@ -23,7 +14,7 @@ export default function CodeEditor({ path, value, line, column, readOnly, isWrap
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    const lang = languageFor(path);
+    const language = new Compartment();
     const editor = new EditorView({
       parent: host.current!,
       state: EditorState.create({
@@ -32,7 +23,7 @@ export default function CodeEditor({ path, value, line, column, readOnly, isWrap
           basicSetup,
           editorTheme,
           syntaxHighlighting(highlightStyle),
-          lang ? lang() : [],
+          language.of([]),
           readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
           isWrapped ? EditorView.lineWrapping : [],
           EditorView.updateListener.of((update) => update.docChanged && onChangeRef.current?.(update.state.doc.toString())),
@@ -40,13 +31,20 @@ export default function CodeEditor({ path, value, line, column, readOnly, isWrap
       }),
     });
     view.current = editor;
+    void languageFor(path).then(
+      (support) => view.current === editor && editor.dispatch({ effects: language.reconfigure(support ?? []) }),
+      (error: unknown) => console.error('Could not load the file language', error),
+    );
     if (line) {
       const target = editor.state.doc.line(Math.min(line, editor.state.doc.lines));
       const [from, to] = (column ?? [0, 0]).map((c) => target.from + Math.min(c, target.length));
       editor.dispatch({ selection: { anchor: from, head: to }, effects: EditorView.scrollIntoView(from, { y: 'center' }) });
     }
     if (!readOnly) editor.focus();
-    return () => editor.destroy();
+    return () => {
+      view.current = null;
+      editor.destroy();
+    };
     // A new path is a new document (fresh undo history); `value` changes are synced below without rebuilding.
   }, [path]);
 
@@ -57,25 +55,6 @@ export default function CodeEditor({ path, value, line, column, readOnly, isWrap
   }, [value]);
 
   return <div ref={host} className="h-full min-h-0 overflow-hidden" />;
-}
-
-const LANGUAGES: [RegExp, () => LanguageSupport][] = [
-  [/\.(ts|mts|cts)$/i, () => javascript({ typescript: true })],
-  [/\.tsx$/i, () => javascript({ typescript: true, jsx: true })],
-  [/\.(js|mjs|cjs|jsx)$/i, () => javascript({ jsx: true })],
-  [/\.(json|jsonc)$/i, json],
-  [/\.(css|scss|less)$/i, css],
-  [/\.(html?|svg|xml|vue)$/i, html],
-  [/\.(md|mdx|markdown)$/i, markdown],
-  [/\.py$/i, python],
-  [/\.rs$/i, rust],
-  [/\.go$/i, go],
-  [/\.ya?ml$/i, yaml],
-  [/\.(sh|bash|zsh)$/i, () => new LanguageSupport(StreamLanguage.define(shell))],
-];
-
-function languageFor(path: string) {
-  return LANGUAGES.find(([re]) => re.test(path))?.[1];
 }
 
 // A color theme's syntax colors (`--syntax-*`, src/themes/map.ts) when it sets them; else GitHub Primer's, AA on both

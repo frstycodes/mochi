@@ -1,7 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FitAddon } from '@xterm/addon-fit';
-import { Terminal } from '@xterm/xterm';
-import '@xterm/xterm/css/xterm.css';
+import { useQuery } from '@tanstack/react-query';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowUp, Columns, Rows, X } from '@/icons';
 import { ConversationContent, Conversation, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
@@ -36,13 +34,14 @@ import { PANE_TABS } from '../pane/tabs';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { chatFor } from '../store/sidechat';
 import { useHarness } from '../store';
-import { onThemeChange, terminalTheme } from '../terminal/theme';
 import { DiffStat } from '../WorkLog';
 import { TooltipIconButton } from '../ui';
 import { REMOTE_SIDE_CHAT_TAB } from './commands';
 import { useMachines } from './useMachines';
+import { queryKeys } from '../queryKeys';
 
 // Lazy so CodeMirror parses only when a file is first opened.
+const RemoteTerminal = lazy(() => import('./RemoteTerminal'));
 const CodeEditor = lazy(() => import('../files/CodeEditor'));
 
 /** Panes another computer's thread can open here, each reading from and acting on that computer, and the scope each needs. */
@@ -92,7 +91,7 @@ export function RemotePane({
         <div className="flex min-h-0 flex-1 flex-col">
           {kind === 'changes' && <RemoteChanges machine={machine} thread={thread} />}
           {kind === 'files' && <RemoteFiles machine={machine} thread={thread} file={file} />}
-          {kind === 'terminal' && <RemoteTerminal machine={machine} thread={thread} />}
+          {kind === 'terminal' && <Suspense><RemoteTerminal machine={machine} thread={thread} /></Suspense>}
           {kind === 'sidechat' && <RemoteSideChat machine={machine} thread={thread} />}
         </div>
       </PaneSlots>
@@ -103,28 +102,10 @@ export function RemotePane({
 const DIFF_POLL_MS = 4000;
 
 /** A read from the machine, again every `pollMs` while it's online; the last data stays on screen across a failed read. */
-function useMachineRead<T>(machine: FollowedMachine, load: () => Promise<T>, pollMs?: number) {
-  const [result, setResult] = useState<{ data?: T; error?: string }>({});
-  const latest = useRef(load);
-  latest.current = load;
-  const refresh = useCallback(async () => {
-    try {
-      const data = await load();
-      if (latest.current === load) setResult({ data });
-    } catch (error) {
-      if (latest.current === load) setResult((r) => ({ ...r, error: gitError(error) }));
-    }
-  }, [load]);
+function useMachineRead<T>(machine: FollowedMachine, key: readonly unknown[], load: () => Promise<T>, pollMs?: number) {
   const isOnline = machine.status === 'online';
-  useEffect(() => {
-    setResult({});
-    if (!isOnline) return;
-    void refresh();
-    if (!pollMs) return;
-    const id = setInterval(refresh, pollMs);
-    return () => clearInterval(id);
-  }, [refresh, pollMs, isOnline]);
-  return { ...result, isLoading: isOnline && !('data' in result) && !result.error, refresh };
+  const machineQuery = useQuery({ queryKey: queryKeys.remote.read(machine.id, key), queryFn: load, enabled: isOnline, refetchInterval: pollMs ?? false });
+  return { data: machineQuery.data, error: machineQuery.error ? gitError(machineQuery.error) : undefined, isLoading: isOnline && machineQuery.isPending, refresh: async () => { await machineQuery.refetch(); } };
 }
 
 /** The Changes tab on the machine's worktree: staging, reverting and line notes run there. */
@@ -137,7 +118,7 @@ function RemoteChanges({ machine, thread }: { machine: FollowedMachine; thread: 
   const saved = (state.checkpoints[thread.id] ?? []).filter((c) => !!c.ref);
   const { diffStyle } = usePrefs();
   const diffQuery = useMachineRead(
-    machine,
+    machine, ['diff', thread.id, scope],
     useCallback(
       () => (checkpoint === undefined ? ask(machine.id, { type: 'diff', threadId: thread.id, scope: scope as DiffScope }) : ask(machine.id, { type: 'checkpoint-diff', threadId: thread.id, n: checkpoint })),
       [ask, machine.id, thread.id, scope, checkpoint],
@@ -257,7 +238,7 @@ function useRemoteChangeActions({ machine, thread, canStage, diffStyle, confirm,
 function RemoteFiles({ machine, thread, file }: { machine: FollowedMachine; thread: Thread; file?: FileTarget }) {
   const { ask } = useMachines();
   const list = useMachineRead(
-    machine,
+    machine, ['files', thread.id],
     useCallback(() => ask(machine.id, { type: 'files', threadId: thread.id }), [ask, machine.id, thread.id]),
   );
   const [expanded, setExpanded] = useState(() => new Set<string>());
@@ -301,7 +282,7 @@ function RemoteFiles({ machine, thread, file }: { machine: FollowedMachine; thre
 function RemoteFile({ machine, thread, path, line }: { machine: FollowedMachine; thread: Thread; path: string; line?: number }) {
   const { ask } = useMachines();
   const file = useMachineRead(
-    machine,
+    machine, ['file', thread.id, path],
     useCallback(() => ask(machine.id, { type: 'read-file', threadId: thread.id, path }), [ask, machine.id, thread.id, path]),
   );
   return (
@@ -319,100 +300,6 @@ function RemoteFile({ machine, thread, path, line }: { machine: FollowedMachine;
         )}
       </div>
     </>
-  );
-}
-
-const TERMINAL_POLL_MS = 250;
-const TERMINAL_RETRY_MS = 2000;
-
-/**
- * A shell on the machine in the thread's folder, opened for this pane and closed with it. Output is read by polling from an
- * offset; keystrokes go out in order, batched while one write is on its way.
- */
-function RemoteTerminal({ machine, thread }: { machine: FollowedMachine; thread: Thread }) {
-  const { ask } = useMachines();
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    const term = new Terminal({
-      fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-      fontSize: 12,
-      lineHeight: 1.4,
-      cursorInactiveStyle: 'none',
-      minimumContrastRatio: 4.5,
-      theme: terminalTheme(),
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(boxRef.current!);
-    fit.fit();
-    const offTheme = onThemeChange(() => (term.options.theme = terminalTheme()));
-    const at = { threadId: thread.id };
-    let terminalId: string | undefined;
-    let isClosed = false;
-    let next = 0;
-    let typed = '';
-    let isWriting = false;
-    const flush = async () => {
-      if (isWriting || !typed || !terminalId) return;
-      isWriting = true;
-      const data = typed;
-      typed = '';
-      await ask(machine.id, { type: 'terminal-write', ...at, terminalId, data }).catch((e: unknown) => setError(gitError(e)));
-      isWriting = false;
-      void flush();
-    };
-    term.onData((data) => {
-      typed += data;
-      void flush();
-    });
-    term.onResize(({ cols, rows }) => terminalId && void ask(machine.id, { type: 'terminal-resize', ...at, terminalId, cols, rows }).catch(() => {}));
-    const observer = new ResizeObserver(() => boxRef.current!.clientWidth > 0 && fit.fit());
-    observer.observe(boxRef.current!);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      if (isClosed || !terminalId) return;
-      try {
-        const output = await ask(machine.id, { type: 'terminal-read', ...at, terminalId, after: next });
-        next = output.next;
-        if (output.data) term.write(output.data);
-        if (output.exitCode !== undefined) {
-          term.write(`\r\n\x1b[2m[process exited with ${output.exitCode}]\x1b[0m\r\n`);
-          return;
-        }
-        setError(null);
-      } catch (e) {
-        // A dropped link comes back on its own; the shell keeps running there, so reading picks up where it left off.
-        setError(gitError(e));
-        timer = setTimeout(() => void poll(), TERMINAL_RETRY_MS);
-        return;
-      }
-      timer = setTimeout(() => void poll(), TERMINAL_POLL_MS);
-    };
-    void ask(machine.id, { type: 'terminal-open', ...at, cols: term.cols, rows: term.rows }).then(
-      (opened) => {
-        terminalId = opened.terminalId;
-        if (isClosed) return void ask(machine.id, { type: 'terminal-close', ...at, terminalId }).catch(() => {});
-        term.focus();
-        void poll();
-      },
-      (e: unknown) => setError(gitError(e)),
-    );
-    return () => {
-      isClosed = true;
-      clearTimeout(timer);
-      observer.disconnect();
-      offTheme();
-      term.dispose();
-      if (terminalId) void ask(machine.id, { type: 'terminal-close', ...at, terminalId }).catch(() => {});
-    };
-  }, [ask, machine.id, thread.id]);
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-2">
-      <div ref={boxRef} className="min-h-0 min-w-0 flex-1 overflow-hidden" />
-      {!!error && <p className="type-caption text-destructive">{error}</p>}
-      <p className="type-caption text-subtle-foreground">A shell on {machine.name}, in this thread’s folder. It closes with this pane.</p>
-    </div>
   );
 }
 

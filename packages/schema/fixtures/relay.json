@@ -1,0 +1,53 @@
+{
+  "commands": [
+    { "type": "catalog" },
+    { "type": "settings" },
+    { "type": "projects" },
+    { "type": "send", "threadId": "t", "text": "why?" },
+    { "type": "resolve", "queueId": "q", "answers": [["Yes"], []] },
+    { "type": "interrupt", "threadId": "t" },
+    { "type": "fork", "threadId": "t", "point": { "kind": "checkpoint", "n": 2 } },
+    { "type": "handoff", "threadId": "t", "to": "codex" },
+    { "type": "rewind", "threadId": "t", "point": { "kind": "message", "index": 2 }, "mode": "files" },
+    { "type": "side-chat", "threadId": "t", "text": "why?" },
+    { "type": "seen", "threadId": "t", "queueIds": ["q1", "q2"] },
+    { "type": "create", "title": "Fix login", "provider": "claude", "project": "ref", "controls": { "model": "opus", "effort": "high", "speed": "", "access": "Manual" }, "images": [{ "mediaType": "image/png", "data": "iVBORw0KGgo=", "thumb": "data:image/png;base64,iVBORw0KGgo=" }] },
+    { "type": "create", "title": "Fix login", "provider": "codex", "project": null },
+    { "type": "rename", "threadId": "t", "title": "x" },
+    { "type": "edit-goal", "threadId": "t", "goal": "Ship it" },
+    { "type": "pin", "threadId": "t", "isPinned": true, "order": 1.5 },
+    { "type": "settle", "threadId": "t", "isSettled": true },
+    { "type": "schedule", "threadId": "t", "action": "pause" },
+    { "type": "commit", "threadId": "t", "message": "fix: login" },
+    { "type": "push", "threadId": "t" },
+    { "type": "open-pr", "threadId": "t", "title": "Fix", "body": "" },
+    { "type": "delete", "threadId": "t" },
+    { "type": "add-project", "name": "fresh", "publish": "private" },
+    { "type": "clone-project", "source": { "url": "git@gitlab.com:me/repo.git" } },
+    { "type": "clone-project", "source": { "github": "frstycodes/mochi" } },
+    { "type": "setting", "key": "shell", "value": "zsh" },
+    { "type": "diff", "threadId": "t", "scope": "branch" },
+    { "type": "checkpoint-diff", "threadId": "t", "n": 0 },
+    { "type": "change", "threadId": "t", "action": "revert", "target": { "path": "src/a.ts", "staged": false, "patch": "@@" } },
+    { "type": "comment", "threadId": "t", "path": "a", "side": "additions", "line": 1, "text": "x" },
+    { "type": "files", "threadId": "t" },
+    { "type": "read-file", "threadId": "t", "path": "a" },
+    { "type": "terminal-open", "threadId": "t", "cols": 80, "rows": 24 },
+    { "type": "terminal-write", "threadId": "t", "terminalId": "p", "data": "ls\r" },
+    { "type": "terminal-resize", "threadId": "t", "terminalId": "p", "cols": 100, "rows": 30 },
+    { "type": "terminal-close", "threadId": "t", "terminalId": "p" }
+  ],
+  "hello": [{ "type": "hello", "version": 4 }, { "type": "hello", "version": 4, "members": [{ "id": "k1" }] }],
+  "machineFrames": [
+    { "type": "welcome", "version": 4, "deviceId": "d-laptop", "machineName": "Studio", "machineKind": "mac", "scopes": ["read", "operate", "manage", "code"], "addresses": [] },
+    { "type": "refused", "reason": "This machine speaks protocol 4; update Mochi on both sides" },
+    { "type": "members", "members": [{ "id": "k1" }] }
+  ],
+  "results": [
+    { "isOk": false, "error": "This connection lacks the operate scope" },
+    { "isOk": true },
+    { "isOk": true, "data": { "text": "hi" } },
+    { "isOk": true, "data": { "projects": [{ "ref": "p1", "name": "mochi" }], "models": { "claude": [{ "id": "claude-opus-5-5", "name": "Opus 5.5", "description": "", "efforts": ["high"], "speeds": [], "isDefault": true }] }, "defaults": { "claude": "", "codex": "" } } },
+    { "isOk": true, "data": { "shell": "zsh", "theme": "mochi" } }
+  ]
+}

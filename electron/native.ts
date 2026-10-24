@@ -1,13 +1,13 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { app } from 'electron';
+import { runCommand } from '@mochi/core/runClient';
+import { cached } from './cache.ts';
 
-const run = promisify(execFile);
-const binaries = new Map<string, Promise<string | null>>();
+const COMPILE_TIMEOUT_MS = 5 * 60_000;
+const NATIVE_TTL = '365 days';
 
 /**
  * The path of a Swift helper binary, macOS only: in a packaged app the copy scripts/build-native.mjs shipped as a resource,
@@ -15,8 +15,7 @@ const binaries = new Map<string, Promise<string | null>>();
  */
 export function nativeHelper(name: string, source: string) {
   if (process.platform !== 'darwin') return Promise.resolve(null);
-  if (!binaries.has(name)) binaries.set(name, (app.isPackaged ? shipped(name) : compiled(name, source)).catch((error) => (console.warn(`Native helper ${name} unavailable`, error), null)));
-  return binaries.get(name)!;
+  return cached(`native:${name}`, NATIVE_TTL, () => (app.isPackaged ? shipped(name) : compiled(name, source)).catch((error) => (console.warn(`Native helper ${name} unavailable`, error), null)));
 }
 
 async function shipped(name: string) {
@@ -32,6 +31,6 @@ async function compiled(name: string, source: string) {
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, `${name}-${hash}.swift`);
   await writeFile(file, source);
-  await run('xcrun', ['swiftc', '-O', file, '-o', binary]);
+  await runCommand('xcrun', ['swiftc', '-O', file, '-o', binary], { timeout: COMPILE_TIMEOUT_MS });
   return binary;
 }

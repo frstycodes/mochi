@@ -1,13 +1,10 @@
 import type { Dispatch } from 'react';
-import { queuedMessage, sendMessage, shouldQueue } from '../chat/outbox.ts';
 import { openedPr } from '../git/prs.ts';
-import { draftFrom } from '../goals/edit.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type { CommandResult, MachineCatalog, RemoteCommand } from '../host/types/remote.ts';
 import type { Project } from '../host/types/projects.ts';
 import type { Thread } from '../model.ts';
-import { reviewNote } from '../git/files.ts';
 import { getProfiles } from '../profiles.ts';
 import { byRecentUse, cloneProject, createProject, loadProjects } from '../projects.ts';
 import { rewindThread } from '../rewind/run.ts';
@@ -17,22 +14,26 @@ import { HARNESS_IDS } from '../settings/harnesses.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { askSideChat } from '../sidechat/ask.ts';
 import { chatFor } from '../store/sidechat.ts';
-import { closeShell, openShell, readShell, shellOf } from './terminals.ts';
-import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
+import { closeShell, openShell, shellOf } from './terminals.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
 import { handOffHere } from '../rewind/runHandoff.ts';
-import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
-import { answeredBy, markAnswered } from './tap.ts';
+import { storeCommand, type StoreCommand } from './storeCommands.ts';
 
 export interface CommandEnv {
   state: State;
   dispatch: Dispatch<Action>;
   deviceName: string;
-  whileWorking: Prefs['whileWorking'];
 }
 
 const ok: CommandResult = { isOk: true };
+
+/** A store command's actions, here; a send's late drift verdict as the composer's would come. */
+function applyStored({ result, actions, verdict }: StoreCommand, dispatch: Dispatch<Action>): CommandResult {
+  for (const action of actions) dispatch(action);
+  void verdict?.verdict.then((v) => v.kind !== 'off-goal' && dispatch({ type: 'drift-verdict', threadId: verdict.threadId, text: verdict.text, drift: v.kind, reason: v.reason }));
+  return result;
+}
 const fail = (error: string): CommandResult => ({ isOk: false, error });
 
 /**
@@ -42,43 +43,23 @@ const fail = (error: string): CommandResult => ({ isOk: false, error });
  */
 export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv): Promise<CommandResult> {
   const { state, dispatch } = env;
-  if (command.type === 'resolve') return resolve(command, env);
+  const stored = storeCommand(command, state, env.deviceName);
+  if (stored) return applyStored(stored, dispatch);
   if (command.type === 'catalog') return { isOk: true, data: await catalog(state) };
   if (command.type === 'settings') return { isOk: true, data: writableValues(await machineSources(state)) };
   if (command.type === 'projects') return { isOk: true, data: (await projectsHere(state)).map(withSmallIcon) };
   if (command.type === 'add-project' || command.type === 'clone-project') return addProject(command, state);
   if (command.type === 'create') return create(command, env);
   if (command.type === 'setting') return setting(command, env);
-  if (command.type === 'seen') return seen(command, env);
-  const thread = state.threads.find((t) => t.id === command.threadId);
+  const thread = state.threads.find((t) => t.id === (command as { threadId?: string }).threadId);
   if (!thread) return fail('No such thread on this machine');
   switch (command.type) {
-    case 'send':
-      return send(thread, command.text, env);
-    case 'interrupt':
-      if (!thread.live?.isWorking) return fail('The agent isn’t working');
-      dispatch({ type: 'interrupt', threadId: thread.id });
-      return ok;
-    case 'fork':
-      dispatch({ type: 'fork', threadId: thread.id, point: command.point });
-      return ok;
     case 'handoff': {
       const blocker = handoffBlocker(thread, command.to);
       if (blocker) return fail(blocker);
       handOffHere(thread, dispatch, command.to);
       return ok;
     }
-    case 'rename':
-      dispatch({ type: 'rename', threadId: thread.id, title: command.title });
-      return ok;
-    case 'edit-goal':
-      dispatch({ type: 'edit-goal', threadId: thread.id, draft: { ...draftFrom(thread), goal: command.goal } });
-      return ok;
-    case 'pin':
-      return pin(thread, command, env);
-    case 'settle':
-      if ((thread.status === 'settled') !== command.isSettled) dispatch({ type: command.isSettled ? 'settle' : 'unsettle', threadId: thread.id });
-      return ok;
     case 'schedule':
       return schedule(thread, command.action);
     case 'commit':
@@ -92,16 +73,6 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
     }
     case 'side-chat':
       return sideChat(thread, command.text, env);
-    case 'delete':
-      dispatch({ type: 'delete', threadIds: [thread.id] });
-      return ok;
-    case 'comment':
-      dispatch({
-        type: 'say',
-        threadId: thread.id,
-        entry: { who: 'you', kind: 'message', text: reviewNote(command.path, command.side, command.line, command.text) },
-      });
-      return ok;
   }
   const cwd = threadCwd(thread);
   if (!cwd) return fail('This thread has no folder on this machine');
@@ -143,8 +114,6 @@ function terminal(thread: Thread, cwd: string, command: TerminalCommand): Promis
   const shell = shellOf(command.terminalId, thread.id);
   if (!shell) return fail('That terminal is closed');
   switch (command.type) {
-    case 'terminal-read':
-      return { isOk: true, data: readShell(shell, command.after) };
     case 'terminal-write':
       return host.pty.write(command.terminalId, command.data).then(() => ok);
     case 'terminal-resize':
@@ -258,43 +227,6 @@ async function setting({ key, value }: Extract<RemoteCommand, { type: 'setting' 
   }
 }
 
-function resolve(command: Extract<RemoteCommand, { type: 'resolve' }>, { state, dispatch, deviceName }: CommandEnv): CommandResult {
-  const by = answeredBy(command.queueId);
-  if (by !== undefined) return fail(`Already answered on ${by}`);
-  const item = state.queue.find((q) => q.id === command.queueId);
-  if (!item) return fail('This is no longer waiting for an answer');
-  // `operate` answers the agent; settling reviews, runs and collisions is the thread's own business (`manage`).
-  if (item.kind !== 'approval' && item.kind !== 'question') return fail('Only approvals and questions can be answered from a device');
-  if (item.kind === 'question' && !command.answers?.length) return fail('A question needs answers');
-  // Before the dispatch: the store applies it on the next render, and a second answer can arrive before that.
-  markAnswered(command.queueId, deviceName);
-  dispatch({ type: 'answer', queueId: command.queueId, answers: command.answers });
-  return ok;
-}
-
-/** The composer's path: queued behind a working agent per Settings › General › While the agent is working, otherwise sent now. */
-function send(thread: Thread, text: string, { state, dispatch, whileWorking }: CommandEnv): CommandResult {
-  const message = queuedMessage(text, { mentions: [], isCommand: false, typedSkills: [] });
-  if (shouldQueue(thread, whileWorking, false)) dispatch({ type: 'queued-add', threadId: thread.id, message });
-  else sendMessage(dispatch, state, thread, message);
-  return ok;
-}
-
-/** The sidebar's pin toggle (mod Shift P), only when it changes something. */
-function pin(thread: Thread, { isPinned, order }: Extract<RemoteCommand, { type: 'pin' }>, { state, dispatch }: CommandEnv): CommandResult {
-  if (isPinned && order !== undefined) {
-    if (!pinAt(state.threads, thread.spaceId, thread.id, order)) return fail('Pinned is full; unpin a thread first');
-    dispatch({ type: 'pin-at', threadId: thread.id, order });
-    return ok;
-  }
-  const isPinnedNow = pinnedThreads(state.threads, thread.spaceId).some((t) => t.id === thread.id);
-  if (isPinnedNow === isPinned) return ok;
-  const lists = togglePin(state.threads, thread.spaceId, thread.id);
-  if (!lists) return fail('Pinned is full; unpin a thread first');
-  dispatch({ type: 'reorder', ...lists, at: Date.now() });
-  return ok;
-}
-
 async function schedule(thread: Thread, action: Extract<RemoteCommand, { type: 'schedule' }>['action']): Promise<CommandResult> {
   const triggers = await host.schedule.list();
   if (!triggers.some((t) => t.threadId === thread.id)) return fail('This thread has no schedule');
@@ -320,9 +252,3 @@ async function ship(thread: Thread, command: Extract<RemoteCommand, { type: 'com
   return { isOk: true, detail: url };
 }
 
-/** Queue cards answered meanwhile are skipped, not refused: the device looked at them all the same. */
-function seen(command: Extract<RemoteCommand, { type: 'seen' }>, { state, dispatch }: CommandEnv): CommandResult {
-  if (command.threadId && !state.threads.some((t) => t.id === command.threadId)) return fail('No such thread on this machine');
-  dispatch({ type: 'seen', threadId: command.threadId, queueIds: command.queueIds });
-  return ok;
-}

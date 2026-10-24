@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '../files/fuzzy.ts';
 import type { ProviderConfig } from '../host/types/settings.ts';
 import type { NativeItem } from '../library/nativeItems.ts';
 import type { AgentCommand, Provider } from '../model.ts';
@@ -56,7 +57,7 @@ export function slashQueryAt(text: string, caret = text.length) {
 export function slashMatches(query: string, items: SlashItem[]): SlashItem[] {
   const q = query.toLowerCase();
   return items
-    .map((item, i) => ({ item, i, rank: fuzzyRank(item.name.toLowerCase(), q) }))
+    .map((item, i) => ({ item, i, rank: fuzzyMatch(item.name, q)?.rank ?? null }))
     .filter((m) => m.rank !== null)
     .sort((a, b) => a.rank! - b.rank! || a.i - b.i)
     .map((m) => m.item);
@@ -80,17 +81,6 @@ export function insertToken(text: string, range: { start: number; end: number },
   const after = text.slice(range.end);
   const token = `/${item.name}${/^\s/.test(after) ? '' : ' '}`;
   return { text: `${text.slice(0, range.start)}${token}${after}`, caret: range.start + token.length };
-}
-
-function fuzzyRank(name: string, query: string) {
-  if (name.startsWith(query)) return 0;
-  if (name.includes(query)) return 1;
-  let at = 0;
-  for (const ch of query) {
-    at = name.indexOf(ch, at) + 1;
-    if (at === 0) return null;
-  }
-  return 2;
 }
 
 /** Every known `/name` in the text, at its start or after whitespace, in order: what the composer colours. */

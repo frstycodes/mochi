@@ -1,30 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
 import { host } from '@/host';
 import type { Simulator } from '@/host/types/sim';
+import { queryKeys } from '../queryKeys';
+import { useWatchQuery } from '../watch/useWatchQuery';
 
-const POLL_MS = 5000;
-
-/** Simulators on this Mac, refreshed every few seconds so boots from Xcode or the CLI show up. */
+/** Simulators on this Mac, pushed by Core while something shows them, so boots from Xcode or the CLI show up. */
 export function useSimulators() {
-  const [simulators, setSimulators] = useState<Simulator[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      setSimulators(await host.sim.list());
-      setError(null);
-    } catch (e) {
-      setError(message(e));
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const timer = setInterval(refresh, POLL_MS);
-    return () => clearInterval(timer);
-  }, [refresh]);
-
-  return { simulators, error, refresh };
+  const [simulatorsQuery, refresh] = useWatchQuery(queryKeys.sim.list(), { _tag: 'sim' }, (value) => value.simulators as Simulator[], () => host.sim.list());
+  return { simulators: simulatorsQuery.data ?? null, error: simulatorsQuery.error ? message(simulatorsQuery.error) : null, refresh };
 }
 
 /** Electron prefixes IPC errors with "Error invoking remote method 'sim:x': Error: "; the rest is the useful part. */

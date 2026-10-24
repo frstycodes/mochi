@@ -1,4 +1,4 @@
 import type { GitHost } from '../types/git.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const git = (): GitHost => bridge().git;
+export const git = (): GitHost => desktopNamespace('git');

@@ -1,3 +1,4 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import {
   buildPreset,
   closeLeaf,
@@ -25,7 +26,7 @@ import { getProfiles } from '../profiles.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Thread } from '../model.ts';
 import { pinnedThreads } from '../reorder.ts';
-import type { Action, State } from './index.tsx';
+import type { Action, State } from './types.ts';
 import { showsDemoData } from '../demoData.ts';
 
 export type { View };
@@ -61,6 +62,7 @@ export type LayoutAction =
   | { type: 'overview-toggle'; isOpen?: boolean };
 
 const STORAGE_KEY = 'harness.layouts.v1';
+const storageSlice = persistedSlice<Saved>(STORAGE_KEY, { layouts: {}, watched: [] });
 
 // The demo's profiles open on their demo work; every other profile opens on a new thread.
 const DEMO_VIEWS: Record<string, View> = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } };
@@ -87,6 +89,15 @@ function reduce(state: State, action: Action): State {
   const edit = () => materialize(layout, state.orientation);
 
   switch (action.type) {
+    // A thread you start or fork opens in the focused split; one an agent started in the background doesn't. The thread slice
+    // ran first, so the new thread's id took the sequence number before the current one.
+    case 'create':
+    case 'drift-new-thread':
+    case 'fork': {
+      const id = `${action.type === 'fork' ? 'fork' : 'new'}-${state.seq - 1}`;
+      if ((action.type === 'create' && action.isBackground) || !state.threads.some((t) => t.id === id)) return state;
+      return set({ ...layout, root: setLeafView(layout.root, layout.focusId, { kind: 'thread', id }) });
+    }
     case 'go': {
       const view = action.view;
       const threadId = view.kind === 'thread' ? view.id : view.kind === 'tab' ? view.threadId : undefined;
@@ -247,16 +258,12 @@ function presetViews(state: State, count: number): View[] {
 type Saved = Pick<LayoutState, 'layouts' | 'watched'>;
 
 export function saveLayouts(state: Saved) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ layouts: state.layouts, watched: state.watched }));
-  } catch {
-    // Storage blocked (private window, artifact preview): layouts just don't persist.
-  }
+  storageSlice.setState({ value: { layouts: state.layouts, watched: state.watched } });
 }
 
 function loadLayouts(): Saved {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
+    const raw = storageSlice.getState().value;
     const saved = getPrefs().restoreLayout ? (raw?.layouts ?? {}) : {};
     const layouts = Object.fromEntries(Object.entries(saved).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
     return { layouts, watched: Array.isArray(raw?.watched) ? raw.watched : [] };

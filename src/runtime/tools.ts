@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentPlanItem, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
@@ -20,7 +19,7 @@ import { BROWSER_TOOLS } from './browserTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS } from './controls.ts';
 import { resolveRun } from './models.ts';
-import { APPROVAL_TIMEOUT_MS, isGoalTool, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
+import { APPROVAL_TIMEOUT_MS, decodeArgs, isGoalTool, isQuiet, tierOf, TOOL_TABLE, type ArgsOf, type ToolName } from './toolTable.ts';
 import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
 
@@ -122,7 +121,7 @@ export interface Outcome {
   site?: string;
 }
 
-export type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
+export type Args<K extends ToolName> = ArgsOf<(typeof TOOL_TABLE)[K]['shape']>;
 
 export interface ToolSpec<K extends ToolName> {
   run: (ctx: ToolContext<Args<K>>, options: string[]) => Outcome | Promise<Outcome>;
@@ -143,9 +142,9 @@ export async function runTool(call: AgentToolCall, env: ToolEnv, deadline = Date
   if (!caller) return fail(`No thread ${call.threadId}`);
   if (!Object.hasOwn(TOOL_TABLE, call.name)) return fail(`No Mochi tool ${call.name}`);
   const name = call.name as ToolName;
-  const parsed = z.object(TOOL_TABLE[name].shape).safeParse(call.args);
-  if (!parsed.success) return fail(parsed.error.issues.map((i) => `${i.path.join('.') || 'args'}: ${i.message}`).join('; '));
-  const ctx = context(env, caller, parsed.data, name, deadline);
+  const parsed = decodeArgs(TOOL_TABLE[name].shape, call.args);
+  if ('error' in parsed) return fail(parsed.error);
+  const ctx = context(env, caller, parsed.args, name, deadline);
   const spec = SPECS[name] as ToolSpec<ToolName>;
   const tier = tierOf(name);
   const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);

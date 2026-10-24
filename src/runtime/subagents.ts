@@ -1,7 +1,8 @@
 import type { AgentEvent, AgentSubagentEvent } from '../host/types/agent.ts';
 import type { Provider, Subagent, SubagentStep, Thread } from '../model.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 import { log, mapThread } from '../store/threads.ts';
+import { wallNow } from '../store/context.ts';
 
 /** A task a thread's agent hands to another provider (`delegate_task`), run as a Mochi background agent. */
 export interface BackgroundStart {
@@ -31,7 +32,7 @@ export function applySubagent(state: State, thread: Thread, event: AgentSubagent
       name: event.name ?? 'Agent',
       isBackground: !!event.isBackground,
       status: 'running',
-      startedAt: Date.now(),
+      startedAt: wallNow(),
       tokens: 0,
       steps: [],
     };
@@ -186,11 +187,6 @@ export function backgroundPrompt(start: BackgroundStart) {
   return `${start.prompt}\n\nAnother agent's thread delegated this task to you. Work on your own; nobody can answer questions. End with a short report of what you did and found: it is sent back to that agent.`;
 }
 
-/** Delegated tasks that ended on their own and whose report hasn't gone to their thread's agent yet. */
-export function dueReports(threads: Thread[]) {
-  return threads.flatMap((thread) => (thread.live ? (thread.subagents ?? []).filter((s) => s.isReportDue).map((subagent) => ({ thread, subagent })) : []));
-}
-
 /** The notes (Codex compaction restores) a thread's agent gets ahead of the next message, then cleared; a note the message already carries isn't repeated. */
 export function withNotes(thread: Thread, text: string) {
   const notes = (thread.live?.notes ?? []).filter((n) => !text.includes(n));
@@ -245,7 +241,7 @@ function patch(s: Subagent, e: AgentSubagentEvent): Subagent {
   return {
     ...next,
     status: e.status ?? 'done',
-    endedAt: Date.now(),
+    endedAt: wallNow(),
     activity: undefined,
     result: e.result ?? next.message,
   };

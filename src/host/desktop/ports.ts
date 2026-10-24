@@ -1,4 +1,4 @@
 import type { PortsHost } from '../types/ports.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const ports = (): PortsHost => bridge().ports;
+export const ports = (): PortsHost => desktopNamespace('ports');

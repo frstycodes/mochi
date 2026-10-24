@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { readDoc } from '@mochi/core/store/client';
 import { projectRegistry } from './registry.ts';
 
 function scratch() {
@@ -14,12 +15,12 @@ function scratch() {
   execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:frstycodes/Mochi.git'], { cwd: repo });
   const plain = join(dir, 'notes');
   mkdirSync(plain);
-  return { dir, repo, plain, file: join(dir, 'userData', 'projects.json') };
+  return { dir, repo, plain, icons: join(dir, 'userData', 'project-icons') };
 }
 
 test('migrate takes a profile’s recents and thread folders in once, skipping duplicates, names and missing folders', async () => {
-  const { dir, repo, plain, file } = scratch();
-  const registry = projectRegistry(file);
+  const { dir, repo, plain, icons } = scratch();
+  const registry = projectRegistry(icons, dir);
   const first = await registry.migrate('personal', [repo, `${repo}/`, plain, 'fixture-name', join(dir, 'gone')]);
   assert.deepEqual(
     first.map((p) => [p.name, p.path, p.origin, p.isMissing]),
@@ -32,14 +33,14 @@ test('migrate takes a profile’s recents and thread folders in once, skipping d
   assert.equal((await registry.migrate('personal', [plain])).length, 1, 'a second migrate only lists: a removed folder stays removed');
   assert.deepEqual(await registry.migrate('work', []), [], 'each profile has its own list');
 
-  const reloaded = projectRegistry(file);
-  assert.deepEqual((await reloaded.list('personal')).map((p) => p.id), [first[0].id], 'saved to disk');
-  assert.equal(JSON.parse(readFileSync(file, 'utf8')).spaces.personal.isMigrated, true);
+  const reloaded = projectRegistry(icons, dir);
+  assert.deepEqual((await reloaded.list('personal')).map((p) => p.id), [first[0].id], 'saved');
+  assert.equal((await readDoc<{ spaces: Record<string, { isMigrated: boolean }> }>('projects', dir))!.spaces.personal!.isMigrated, true);
 });
 
 test('add returns a listed folder as it is; rename, relocate and remove change only the list', async () => {
-  const { dir, repo, plain, file } = scratch();
-  const registry = projectRegistry(file);
+  const { dir, repo, plain, icons } = scratch();
+  const registry = projectRegistry(icons, dir);
   const added = await registry.add('p', repo);
   assert.equal((await registry.add('p', repo)).id, added.id);
   await assert.rejects(registry.add('p', 'relative/path'), /isn’t a full path/);
@@ -59,8 +60,8 @@ test('add returns a listed folder as it is; rename, relocate and remove change o
 });
 
 test('a project shows the favicon its folder has, or the image you upload, or its letter', async () => {
-  const { dir, repo, file } = scratch();
-  const registry = projectRegistry(file);
+  const { dir, repo, icons } = scratch();
+  const registry = projectRegistry(icons, dir);
   const added = await registry.add('p', repo);
   assert.equal(added.icon, null, 'no favicon anywhere: the letter');
   mkdirSync(join(repo, 'public'));

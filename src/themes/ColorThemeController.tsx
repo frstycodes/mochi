@@ -1,9 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { host } from '@/host';
 import { APPEARANCES, type Appearance } from '@/host/types/windows';
 import { themeTokens } from './map';
-import { refreshThemes, useColorTheme } from './store';
+import { readThemes, useColorTheme } from './store';
+import { queryKeys } from '../queryKeys';
 
 /**
  * Paints the color theme on screen: its tokens as inline custom properties on <html> (beating index.css's Mochi values),
@@ -19,13 +21,7 @@ export function ColorThemeController() {
     if (APPEARANCES.includes(appearance as Appearance)) void host.windows.setAppearance(appearance as Appearance);
   }, [appearance]);
 
-  useEffect(() => {
-    void refreshThemes().catch((error: Error) => console.warn('themes: could not list installed themes:', error.message));
-    // A custom theme edited in another app shows up when you come back.
-    const onFocus = () => void refreshThemes().catch(() => {});
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, []);
+  useQuery({ queryKey: queryKeys.themes.installed(), queryFn: readThemes, staleTime: 0 });
 
   useLayoutEffect(() => {
     const root = document.documentElement;

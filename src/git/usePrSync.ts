@@ -1,84 +1,51 @@
-import { useEffect, useRef, type Dispatch } from 'react';
+import { useQueries } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { toPullRequest } from '@mochi/core/github/nodes';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
 import { getProfiles } from '../profiles.ts';
+import { branchPrsQuery, refreshGithub } from './githubWatch.ts';
 import { worktreePath } from './worktrees.ts';
-import type { Action } from '../store/index.tsx';
+import { useDispatch, useHarnessSelector } from '../store/index.tsx';
 
-// The ref chips' freshness (`useRefState`): a focus within this of the last read reuses it.
-const TTL_MS = 60_000;
-const PUSHES_OR_OPENS = /\b(git\s+push|gh\s+pr)\b/;
-
-interface RepoWorktrees {
-  key: string;
+interface WatchedWorktree {
+  threadId: string;
+  worktree: string;
   githubUser?: string;
-  /** Worktree path → its thread. */
-  worktrees: Map<string, string>;
 }
 
-const readAt = new Map<string, number>();
-
 /**
- * Records gh's PRs for every unsettled worktree thread's branch on `thread.prs`, so every surface reads one list: one `gh pr list`
- * per repo and account, at launch, on window focus past the TTL, and when a turn that pushed or ran `gh pr` ends. Nothing polls.
+ * Records GitHub's PRs for every unsettled worktree thread's branch on `thread.prs`, so every surface reads one list. Each worktree
+ * watches its branch through Core, which reads each repository once per poll for every surface on it. A turn that pushed or ran
+ * `gh pr` asks Core to read now: the reactor's `pr.refresh` (`refreshThreadPrs`).
  */
-export function usePrSync(threads: Thread[], dispatch: Dispatch<Action>) {
-  const latest = useRef(threads);
-  latest.current = threads;
-  const keys = repoWorktrees(threads)
-    .map((r) => r.key)
-    .join('\n');
-
+export function usePrSync() {
+  const watched = useHarnessSelector((s) => watchedWorktrees(s.threads), isSameWatched);
+  const dispatch = useDispatch();
+  const prs = useQueries({ queries: watched.map((w) => ({ ...branchPrsQuery(w.worktree, w.githubUser), enabled: host.isDesktop })), combine: (results) => results.map((result) => result.data) });
   useEffect(() => {
-    if (!host.isDesktop) return;
-    readStale(latest.current, dispatch);
-    const onFocus = () => readStale(latest.current, dispatch);
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [keys, dispatch]);
-
-  useEffect(() => {
-    if (!host.isDesktop) return;
-    const pushed = new Set<string>();
-    return host.agent.onEvent((event) => {
-      if (event.type === 'tool' && event.phase === 'start' && PUSHES_OR_OPENS.test(event.text)) pushed.add(event.threadId);
-      if (event.type !== 'turn-end' || !pushed.delete(event.threadId)) return;
-      const repo = repoWorktrees(latest.current).find((r) => [...r.worktrees.values()].includes(event.threadId));
-      if (repo) read(repo, dispatch);
+    watched.forEach(({ threadId }, i) => {
+      const found = prs[i]?.prs.map(toPullRequest);
+      if (found?.length) dispatch({ type: 'prs-seen', threadId, prs: found });
     });
-  }, [dispatch]);
+  }, [watched, prs, dispatch]);
 }
 
-function readStale(threads: Thread[], dispatch: Dispatch<Action>) {
-  for (const repo of repoWorktrees(threads)) if (Date.now() - (readAt.get(repo.key) ?? 0) > TTL_MS) read(repo, dispatch);
+/** Core reads the thread's branch PRs now and fast while CI runs. */
+export function refreshThreadPrs(threads: Thread[], threadId: string) {
+  const w = watchedWorktrees(threads).find((t) => t.threadId === threadId);
+  if (w) refreshGithub({ cwd: w.worktree, githubUser: w.githubUser, isPush: true });
 }
 
-function read(repo: RepoWorktrees, dispatch: Dispatch<Action>) {
-  readAt.set(repo.key, Date.now());
-  void host.git.worktreePrs([...repo.worktrees.keys()], repo.githubUser).then((found) => {
-    for (const [worktree, threadId] of repo.worktrees) {
-      const prs = found.filter((f) => f.worktree === worktree).map((f) => f.pr);
-      if (prs.length > 0) dispatch({ type: 'prs-seen', threadId, prs });
-    }
-  });
-}
+const isSameWatched = (a: WatchedWorktree[], b: WatchedWorktree[]) =>
+  a.length === b.length && a.every((w, i) => w.threadId === b[i]!.threadId && w.worktree === b[i]!.worktree && w.githubUser === b[i]!.githubUser);
 
-/**
- * Unsettled live threads in their own worktree, grouped by project and profile account. Main reads each worktree's branch, since
- * the agent may have switched from the one the thread was made on; a project folder thread's branch can be anyone's.
- */
-function repoWorktrees(threads: Thread[]): RepoWorktrees[] {
+/** Unsettled live threads in their own worktree. Core reads each worktree's branch, since the agent may have switched from the one the thread was made on. */
+function watchedWorktrees(threads: Thread[]): WatchedWorktree[] {
   const profiles = getProfiles();
-  const repos = new Map<string, RepoWorktrees>();
-  for (const t of threads) {
+  return threads.flatMap((t) => {
     const worktree = worktreePath(t.id);
-    if (!t.live || t.status === 'settled' || !t.repo?.path || !worktree) continue;
-    const githubUser = profiles.find((p) => p.id === t.spaceId)?.github || undefined;
-    const groupKey = `${t.repo.path}\u0000${githubUser ?? ''}`;
-    const repo = repos.get(groupKey) ?? { key: groupKey, githubUser, worktrees: new Map() };
-    repo.worktrees.set(worktree, t.id);
-    repos.set(groupKey, repo);
-  }
-  // A new worktree in a repo is a new key, so it's read without waiting out the TTL.
-  return [...repos.values()].map((r) => ({ ...r, key: `${r.key}\u0000${[...r.worktrees.keys()].sort().join(',')}` }));
+    if (!t.live || t.status === 'settled' || !t.repo?.path || !worktree) return [];
+    return [{ threadId: t.id, worktree, githubUser: profiles.find((p) => p.id === t.spaceId)?.github || undefined }];
+  });
 }

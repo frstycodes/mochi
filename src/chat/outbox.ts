@@ -1,13 +1,10 @@
 import { useSyncExternalStore, type Dispatch } from 'react';
-import { isWorking } from '../agentPhase.ts';
-import { judgeDrift, type DriftVerdict } from '../drift.ts';
+import type { DriftVerdict } from '../drift.ts';
 import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
-import type { Prefs } from '../settings/prefs.ts';
-import type { Action, State } from '../store/index.tsx';
-import { agentImage, shownImage } from './images.ts';
-import { withReferences } from './mentions.ts';
+import type { Action, State } from '../store/types.ts';
+import { sendAction } from './queued.ts';
 
-type WhileWorking = Prefs['whileWorking'];
+export { interruptsToSend, orderQueue, pauseQueue, queuedMessage, shouldQueue } from './queued.ts';
 
 export const PAUSE_REASONS = {
   failed: 'The last turn failed',
@@ -16,31 +13,6 @@ export const PAUSE_REASONS = {
   restart: 'Mochi restarted',
 } satisfies Record<QueuePause, string>;
 
-/** Whether a message sent now waits for the turn to end: the setting, flipped for this one send while mod is held. */
-export function shouldQueue(thread: Thread, whileWorking: WhileWorking, isHeld: boolean) {
-  return isWorking(thread) && (whileWorking === 'queue') !== isHeld;
-}
-
-/** The head of each live thread's queue whose agent is idle, not paused and not waiting on your answer. */
-export function dueQueued(state: Pick<State, 'threads' | 'queue'>): { thread: Thread; message: QueuedMessage }[] {
-  return state.threads.flatMap((thread) => {
-    const message = thread.queued?.[0];
-    // A steer the agent hasn't read yet goes first: it will start the next turn if this one ended before reading it.
-    if (!message || !thread.live || thread.queuePause || thread.live.isWorking || thread.live.starting || thread.steering || thread.status === 'settled') return [];
-    if (state.queue.some((q) => q.threadId === thread.id && (q.kind === 'approval' || q.kind === 'question'))) return [];
-    return [{ thread, message }];
-  });
-}
-
-export function pauseQueue(thread: Thread, reason: QueuePause): Thread {
-  return thread.queued?.length ? { ...thread, queuePause: reason } : thread;
-}
-
-/** `ids` first in their order; anything they miss (queued meanwhile) keeps its place after them. */
-export function orderQueue(queued: QueuedMessage[], ids: string[]) {
-  const byId = new Map(queued.map((m) => [m.id, m]));
-  return [...ids.flatMap((id) => byId.get(id) ?? []), ...queued.filter((m) => !ids.includes(m.id))];
-}
 
 /** One step up (-1) or down (1); the ends stay put. */
 export function moveQueued(ids: string[], id: string, step: -1 | 1) {
@@ -50,12 +22,6 @@ export function moveQueued(ids: string[], id: string, step: -1 | 1) {
   const next = [...ids];
   [next[from], next[to]] = [next[to], next[from]];
   return next;
-}
-
-/** Whether taking back `ids` (the clicked one first) stops the turn: only while the turn Send now was clicked in still runs. */
-export function interruptsToSend(thread: Thread, ids: string[]) {
-  const clicked = thread.steering?.find((s) => s.message.id === ids[0]);
-  return !!thread.live?.isWorking && clicked?.sendNow === 'pending';
 }
 
 /**
@@ -77,11 +43,6 @@ export async function sendSteerNow(dispatch: Dispatch<Action>, thread: Thread, i
   return ids.length > 0;
 }
 
-let nextId = 0;
-
-export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 'draft'>): QueuedMessage {
-  return { id: `m-${Date.now().toString(36)}-${nextId++}`, draft, ...fields };
-}
 
 /**
  * Sends a message now: references resolve and the drift guard judges it against the thread as it is at this moment, so a
@@ -89,16 +50,13 @@ export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 
  * It steers: a turn in flight takes it at its next step; an idle agent starts a turn with it.
  */
 export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'threads'>, thread: Thread, message: QueuedMessage, extra?: { queuedId?: string }) {
-  const { draft, images = [] } = message;
-  const { text, ...references } = withReferences(draft, message.mentions, state.threads, { isCommand: message.isCommand, provider: thread.providers[0], typedSkills: message.typedSkills });
   // A new message answers an open suggestion by ignoring it.
   setDriftPending(thread.id, null);
-  const verdict = judgeDrift(text, thread);
-  const isSettled = !(verdict instanceof Promise);
-  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, images: [...references.images, ...images.map(agentImage)], shownImages: images.map(shownImage), steers: true, typed: message, ...extra });
+  const { action, text, verdict } = sendAction(state, thread, message, extra);
+  dispatch(action);
   void Promise.resolve(verdict).then((v) => {
     if (v.kind === 'off-goal') return setDriftPending(thread.id, { text, verdict: v });
-    if (!isSettled) dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift: v.kind, reason: v.reason });
+    if (verdict instanceof Promise) dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift: v.kind, reason: v.reason });
   });
 }
 

@@ -1,3 +1,6 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { useSyncExternalStore } from 'react';
 import { useTheme } from 'next-themes';
 import { host } from '../host';
@@ -5,7 +8,7 @@ import { getPrefs, setPrefs, subscribePrefs, usePrefs } from '../settings/prefs'
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from './model';
 
 // The chosen themes themselves, so a launch paints them before main has listed what's installed.
-const ACTIVE_KEY = 'mochi.themes.active.v1';
+const activeSlice = persistedSlice<State['active']>('mochi.themes.active.v1', {});
 
 interface State {
   installed: ColorTheme[];
@@ -15,7 +18,7 @@ interface State {
   active: Partial<Record<ThemeSlot, ColorTheme>>;
 }
 
-let state: State = { installed: [], isLoaded: false, preview: null, active: readActive() };
+let state: State = { installed: [], isLoaded: false, preview: null, active: activeSlice.getState().value };
 const listeners = new Set<() => void>();
 
 function update(patch: Partial<State>) {
@@ -33,9 +36,14 @@ export function useThemesState() {
 }
 
 export async function refreshThemes() {
+  await queryClient.fetchQuery({ queryKey: queryKeys.themes.installed(), queryFn: readThemes, staleTime: 0 });
+}
+
+export async function readThemes() {
   const installed = await host.themes.list();
   update({ installed, isLoaded: true });
   syncActive();
+  return installed;
 }
 
 export function setThemePreview(preview: ColorTheme | null) {
@@ -74,19 +82,7 @@ function syncActive() {
   const dark = themeFor(prefs.darkTheme, 'dark', state) ?? undefined;
   if (state.active.light === light && state.active.dark === dark) return;
   update({ active: { light, dark } });
-  try {
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ light, dark }));
-  } catch {
-    // Storage full or blocked: the next launch paints Mochi until the list loads.
-  }
-}
-
-function readActive(): State['active'] {
-  try {
-    return JSON.parse(localStorage.getItem(ACTIVE_KEY) ?? '{}') as State['active'];
-  } catch {
-    return {};
-  }
+  activeSlice.setState({ value: { light, dark } });
 }
 
 if (typeof window !== 'undefined') subscribePrefs(syncActive);

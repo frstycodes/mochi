@@ -5,8 +5,10 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import electron from 'vite-plugin-electron/simple';
+import { csp } from './scripts/csp.ts';
 
 export default defineConfig(({ mode }) => ({
+  base: './',
   fmt: { singleQuote: true, printWidth: 160 },
   // GAP: format check is off until in-flight branches land; turning it on reformats ~210 files in one commit.
   check: { fmt: false },
@@ -21,17 +23,18 @@ export default defineConfig(({ mode }) => ({
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
-    viteSingleFile(),
+    mode === 'artifact' && viteSingleFile(),
+    mode === 'electron' && csp(),
     mode === 'electron' &&
       electron({
         // node-pty is a native addon: bundling it breaks its `.node` and spawn-helper lookups.
         // playwright-core resolves its own package.json and reads files beside it at runtime.
         main: {
-          entry: 'electron/main.ts',
+          entry: ['electron/main.ts', 'packages/core/src/core.ts'],
           vite: {
             // Mochi's OAuth app secrets (electron/library/oauthApps.ts), from the gitignored .env.local.
             define: { __MOCHI_OAUTH_ENV__: JSON.stringify(loadEnv(mode, import.meta.dirname, 'MOCHI_OAUTH_')) },
-            build: { rolldownOptions: { external: ['node-pty', /^playwright-core(\/|$)/] } },
+            build: { rolldownOptions: { external: ['node-pty', '@parcel/watcher', /^playwright-core(\/|$)/] } },
           },
         },
         // A sandboxed preload must be CommonJS; `.cjs` keeps it CJS under the package's `"type": "module"`.

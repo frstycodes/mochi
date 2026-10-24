@@ -1,5 +1,5 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import path from 'node:path';
+import { spawnCommand, type CoreChild, type SpawnCommandOptions } from '@mochi/core/runClient';
 
 const isWindows = process.platform === 'win32';
 
@@ -9,10 +9,10 @@ export function fallbackShell() {
   return process.platform === 'darwin' ? '/bin/zsh' : '/bin/sh';
 }
 
-/** `command` through your login shell (`-lc`), so it finds the same tools your terminal does; through cmd.exe on Windows, which has no login shell. */
-export function spawnShell(command: string, options: SpawnOptions) {
-  if (isWindows) return spawn(command, { ...options, shell: true, windowsHide: true });
-  return spawn(process.env.SHELL || fallbackShell(), ['-lc', command], options);
+/** `command` through your login shell (`-lc`), so it finds the same tools your terminal does; through cmd.exe on Windows, which has no login shell. Runs in Core. */
+export function spawnShell(command: string, options: SpawnCommandOptions) {
+  if (isWindows) return spawnCommand(command, [], { ...options, shell: true });
+  return spawnCommand(process.env.SHELL || fallbackShell(), ['-lc', command], options);
 }
 
 /**
@@ -24,23 +24,14 @@ export function spawnable(file: string, args: string[], onWindows = isWindows): 
   return { file: [file, ...args].map(quoteForCmd).join(' '), args: [], shell: true };
 }
 
-export function spawnFile(file: string, args: string[], options: SpawnOptions) {
+export function spawnFile(file: string, args: string[], options: SpawnCommandOptions) {
   const target = spawnable(file, args);
-  return spawn(target.file, target.args, { ...options, shell: target.shell, windowsHide: true });
+  return spawnCommand(target.file, target.args, { ...options, shell: target.shell });
 }
 
-/**
- * Stops `child` and what it started. POSIX: its process group when it was spawned `detached` (it leads one), else just it.
- * Windows has no groups, and a `shell` child is cmd.exe with the real process under it, so the whole tree goes through taskkill.
- */
-export function killTree(child: ChildProcess) {
-  if (!child.pid || child.exitCode !== null) return;
-  if (isWindows) return void spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }).on('error', () => child.kill());
-  try {
-    process.kill(-child.pid, 'SIGTERM');
-  } catch {
-    child.kill();
-  }
+/** Stops `child` and what it started: Core's runner kills the whole process tree, so no group or taskkill handling is left here. */
+export function killTree(child: CoreChild) {
+  if (!child.hasExited) child.kill();
 }
 
 /** A relative path with `/` separators, the form the renderer, git and file-collision checks compare on every platform. */

@@ -1,3 +1,6 @@
+import { browserStorage, persistedFamily, uiStorageEntries } from '../lib/uiStorage.ts';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { useSyncExternalStore } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -9,6 +12,7 @@ import { host } from '../host';
 import { getPrefs, subscribePrefs } from '../settings/prefs';
 import { filePathsIn } from './links';
 import { onThemeChange, terminalTheme } from './theme';
+import { TERMINAL_STORAGE_PREFIX } from './storage';
 
 export type SessionKind = 'shell' | 'agent' | 'build';
 
@@ -59,7 +63,7 @@ interface SavedGroup {
   scrollback: Record<string, string>;
 }
 
-export const TERMINAL_STORAGE_PREFIX = 'harness.terminal.v1:';
+const terminalSlice = persistedFamily<SavedGroup | null>(TERMINAL_STORAGE_PREFIX, null);
 const SAVED_SCROLLBACK_ROWS = 1000;
 const FAILURE_OUTPUT_LINES = 80;
 // 130 is Ctrl C, 143 SIGTERM (the Ports tab's stop): the user ended it, nothing to fix.
@@ -70,7 +74,6 @@ const contexts = new Map<string, GroupContext>();
 const byPty = new Map<string, TerminalSession>();
 // Output can beat the spawn reply that tells us which session a pty id belongs to.
 const earlyOutput = new Map<string, string>();
-const threadPorts = new Map<string, Promise<number>>();
 const listeners = new Set<() => void>();
 let nextSessionId = 0;
 let isWired = false;
@@ -225,8 +228,7 @@ function linesSince(term: Terminal, fromLine: number) {
 }
 
 function portFor(threadId: string) {
-  if (!threadPorts.has(threadId)) threadPorts.set(threadId, host.ports.allocate(threadId));
-  return threadPorts.get(threadId)!;
+  return queryClient.fetchQuery({ queryKey: queryKeys.ports.threadPort(threadId), queryFn: () => host.ports.allocate(threadId), staleTime: Infinity });
 }
 
 function shellTitle(group: TerminalGroup) {
@@ -274,9 +276,11 @@ function wireHost() {
 
 /** Drops saved scrollback and wipes what open shells show above their prompt; the shells keep running. */
 export function clearTerminalHistory() {
-  try {
-    Object.keys(localStorage).filter((k) => k.startsWith(TERMINAL_STORAGE_PREFIX)).forEach((k) => localStorage.removeItem(k));
-  } catch {}
+  for (const [key] of uiStorageEntries()) {
+    if (!key.startsWith(TERMINAL_STORAGE_PREFIX)) continue;
+    terminalSlice(key.slice(TERMINAL_STORAGE_PREFIX.length)).setState({ value: null });
+    browserStorage.removeItem(key);
+  }
   groups.forEach((g) => g.sessions.forEach((s) => s.kind === 'shell' && s.term.clear()));
 }
 
@@ -287,17 +291,13 @@ function saveGroup(group: TerminalGroup) {
     focused: group.focused,
     scrollback: Object.fromEntries(group.sessions.filter((s) => s.kind === 'shell').map((s) => [s.id, s.serialize.serialize({ scrollback: SAVED_SCROLLBACK_ROWS })])),
   };
-  try {
-    localStorage.setItem(TERMINAL_STORAGE_PREFIX + group.key, JSON.stringify(saved));
-  } catch {
-    // Storage full or blocked: scrollback just doesn't survive the reload.
-  }
+  terminalSlice(group.key).setState({ value: saved });
 }
 
 function loadGroup(key: string): SavedGroup | null {
   if (!host.isDesktop || !getPrefs().restoreTerminals) return null;
   try {
-    const saved: SavedGroup | null = JSON.parse(localStorage.getItem(TERMINAL_STORAGE_PREFIX + key) ?? 'null');
+    const saved: SavedGroup | null = terminalSlice(key).getState().value;
     return saved?.sessions.length ? saved : null;
   } catch {
     return null;

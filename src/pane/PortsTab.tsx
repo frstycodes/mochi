@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ArrowUpRight, Copy, FileCode, Globe, Pip, Play, Plug, Terminal, Trash } from '@/icons';
 import { toast } from '@/toast/store';
@@ -15,13 +16,13 @@ import { useDispatch } from '../store';
 import { nextTabId } from '../store/panes';
 import { portUrl } from '../terminal/devServer';
 import { refreshPorts, usePorts } from '../terminal/ports';
-import { addShell } from '../terminal/sessions';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { TooltipIconButton } from '../ui';
 import { PlannedTab } from './PlannedTab';
 import { PortIcon } from './PortIcon';
 import { PaneList, PaneListItem, PaneListItemTrail, PaneSection, PaneSectionHeader, PaneSectionTitle } from './PaneList';
 import type { PaneTabProps } from './tabs';
+import { queryKeys } from '../queryKeys';
 
 export function PortsTab({ thread, pane }: PaneTabProps) {
   const cwd = threadCwd(thread);
@@ -174,19 +175,18 @@ function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
   const dispatch = useDispatch();
   const openers = usePaneOpeners(thread.id);
   const listening = usePorts(thread.id, cwd);
-  const [targets, setTargets] = useState<RunTarget[]>();
-  const [threadPort, setThreadPort] = useState<number>();
-  useEffect(() => {
-    void host.ports.targets(cwd).then(setTargets, () => setTargets([]));
-    void host.ports.allocate(thread.id).then(setThreadPort);
-  }, [cwd, thread.id]);
+  const targetsQuery = useQuery({ queryKey: queryKeys.ports.launchTargets(cwd), queryFn: () => host.ports.targets(cwd) });
+  const portQuery = useQuery({ queryKey: queryKeys.ports.threadPort(thread.id), queryFn: () => host.ports.allocate(thread.id), staleTime: Infinity });
+  const targets = targetsQuery.data ?? (targetsQuery.isError ? [] : undefined);
+  const threadPort = portQuery.data;
 
   return {
     listening,
     targets,
     threadPort,
     /** Runs in the thread's terminal tab, opening one if there is none. */
-    run(target: RunTarget) {
+    async run(target: RunTarget) {
+      const { addShell } = await import('../terminal/sessions');
       const terminal = pane.tabs.find((t) => t.kind === 'terminal' && !t.isPopped);
       const tabId = terminal?.id ?? nextTabId(pane.tabs);
       addShell(`${thread.id}/${tabId}`, { cwd, threadId: thread.id, links: openers }, { title: target.name, command: target.command });

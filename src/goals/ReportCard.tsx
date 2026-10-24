@@ -1,3 +1,4 @@
+import { listenKeydown, isCommand } from '../keymap';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, XCircle, Hierarchy2, History, MessageText, CheckBadge, WarningAlt } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -13,7 +14,6 @@ import { openTurn } from '../chat/turnChanges';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { OPEN_PR_PROMPT } from '../git/prs';
 import type { ThreadPr } from '../git/useThreadPrs';
-import { isMod } from '../keys';
 import { useHarness, useDispatch } from '../store';
 import { CallList, Expand } from '../WorkLog';
 import { continuePrompt, withUnseenGaps, type Move } from './moves';
@@ -151,13 +151,12 @@ function useMoveShortcut(isOn: boolean, take: () => void) {
     if (!isOn) return;
     // Capture, so it runs before the message box's own Enter (which would submit the empty box).
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' || !isMod(e) || !isFromChat(card.current, e.target)) return;
+      if (!isCommand(e, 'report-take-move') || !isFromChat(card.current, e.target)) return;
       e.preventDefault();
       e.stopPropagation();
       take();
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    return listenKeydown(onKey, true);
   });
   return card;
 }

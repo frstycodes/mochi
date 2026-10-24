@@ -1,7 +1,7 @@
 /**
  * What a composer holds before it's sent: per thread (`threadDraftKey`) and per profile's new-thread page (`newThreadDraftKey`).
  * Read from memory, so switching threads restores at once; written to IndexedDB in userData (debounced) for relaunches.
- * IndexedDB stores the attachment Blobs as files on disk, not as base64 in localStorage.
+ * IndexedDB stores the attachment Blobs as files on disk, not as base64 in browser storage.
  */
 export interface DraftFile {
   filename?: string;
@@ -63,10 +63,6 @@ export function clearDraft(key: string) {
 }
 
 /** Drops the drafts of threads that no longer exist. */
-export function pruneDrafts(threadIds: Set<string>) {
-  for (const key of drafts.keys()) if (key.startsWith('thread:') && !threadIds.has(key.slice('thread:'.length))) clearDraft(key);
-}
-
 export function flushDrafts() {
   for (const key of timers.keys()) {
     clearTimeout(timers.get(key));

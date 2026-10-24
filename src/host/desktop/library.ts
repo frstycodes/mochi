@@ -1,4 +1,4 @@
 import type { LibraryHost } from '../types/library.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const library = (): LibraryHost => bridge().library;
+export const library = (): LibraryHost => desktopNamespace('library');

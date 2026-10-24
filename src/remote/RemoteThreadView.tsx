@@ -18,7 +18,6 @@ import { rewindBlockedReason, type RewindMode } from '../rewind/checkpoints';
 import { REWIND_MODE_ORDER, REWIND_MODES } from '../rewind/modes';
 import { ComposerCard } from '../Composer';
 import type { FollowedMachine, Scope } from '../host/types/remote';
-import { isTyping } from '../keys';
 import { PreviewContext, SplitContext, type SplitInfo } from '../layout/SplitContext';
 import type { Thread } from '../model';
 import { QueueDecision } from '../QueueView';
@@ -26,7 +25,7 @@ import { useHarness, useView } from '../store';
 import { TitleBar } from '../TitleBar';
 import { ForkIcon, OverflowIcon, TooltipIconButton } from '../ui';
 import { DeviceIcon } from './DeviceIcon';
-import { closeRemoteThread, useRemoteThreadRoute } from './open';
+import { goBack, goHome, useEscapeBack, useRemoteThreadRoute } from '../routes/nav';
 import { remoteDecisions } from './mirror';
 import { MachinePresence } from './MachinePresence';
 import { REMOTE_PANES, RemotePane, type RemotePaneKind } from './RemotePanes';
@@ -118,16 +117,9 @@ function useCloseOnLeave() {
   const view = useView();
   const opened = useRef(view);
   useEffect(() => {
-    if (view !== opened.current) closeRemoteThread();
+    if (view !== opened.current) goHome();
   }, [view]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target)) return;
-      closeRemoteThread();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  useEscapeBack();
 }
 
 const can = (machine: FollowedMachine, scope: Scope) => machine.status === 'online' && machine.scopes.includes(scope);
@@ -205,7 +197,7 @@ function RemoteHeader({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <TooltipIconButton label="Close" hint="Back to this computer’s threads (Esc)" onClick={closeRemoteThread}>
+      <TooltipIconButton label="Close" hint="Back to this computer’s threads (Esc)" onClick={goBack}>
         <X />
       </TooltipIconButton>
       <ShipDialog kind={shipping} machine={machine} thread={thread} onClose={() => setShipping(null)} />
@@ -225,7 +217,7 @@ function RemoteHeader({
                 void run(machine.id, {
                   type: 'delete',
                   threadId: thread.id,
-                }).then((r) => r.isOk && closeRemoteThread())
+                }).then((r) => r.isOk && goBack())
               }
             >
               Delete thread
@@ -481,7 +473,7 @@ function Missing({ machine, title, description, isLoading }: { machine?: Followe
       <TitleBar>
         {!!machine && <DeviceIndicator machine={machine} />}
         <span className="flex-1" />
-        <TooltipIconButton label="Close" hint="Back to this computer’s threads (Esc)" onClick={closeRemoteThread}>
+        <TooltipIconButton label="Close" hint="Back to this computer’s threads (Esc)" onClick={goBack}>
           <X />
         </TooltipIconButton>
       </TitleBar>

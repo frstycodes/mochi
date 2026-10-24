@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { clockFor } from './useNow.ts';
+
+test('clocks share a timer per granularity, pause while hidden, refresh on return, and stop when unused', (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: 1000 });
+  const document = Object.assign(new EventTarget(), { hidden: false });
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: document });
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'document', original);
+    else Reflect.deleteProperty(globalThis, 'document');
+  });
+  const clock = clockFor(1000);
+  assert.equal(clockFor(1000), clock);
+  let updates = 0;
+  const unsubscribe = clock.subscribe(() => updates++);
+  const other = clock.subscribe(() => updates++);
+  t.mock.timers.tick(1000);
+  assert.equal(clock.getSnapshot(), 2000);
+  assert.equal(updates, 3);
+  document.hidden = true;
+  document.dispatchEvent(new Event('visibilitychange'));
+  t.mock.timers.tick(5000);
+  assert.equal(clock.getSnapshot(), 2000);
+  assert.equal(updates, 3);
+  document.hidden = false;
+  document.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(clock.getSnapshot(), 7000);
+  unsubscribe();
+  t.mock.timers.tick(1000);
+  assert.equal(updates, 6);
+  other();
+  t.mock.timers.tick(1000);
+  assert.equal(clock.getSnapshot(), 8000);
+  assert.equal(updates, 6);
+  const idle = clockFor(null);
+  const stop = idle.subscribe(() => assert.fail('idle clocks never tick'));
+  t.mock.timers.tick(1000);
+  assert.equal(idle.getSnapshot(), null);
+  stop();
+});

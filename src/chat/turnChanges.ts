@@ -1,3 +1,5 @@
+import { parsePatchFiles } from '@pierre/diffs';
+import { parseDiff, rawFilePatches } from '../git/parse.ts';
 import type { ActivityEntry } from '../model.ts';
 import { toolCall } from '../summary.ts';
 
@@ -73,7 +75,9 @@ export function isTurnUndone(activity: ActivityEntry[], start: number) {
 
 /** A unified diff split per file (`@pierre/diffs`' PatchDiff throws on more than one); sections without a hunk (an empty file created) are dropped. */
 export function patchSections(patch: string) {
-  return patch.split(/^(?=diff --git )/m).filter((s) => /^@@/m.test(s));
+  const sections = rawFilePatches(patch);
+  if (!sections.length) return /^@@/m.test(patch) ? [patch] : [];
+  return sections.filter((section) => parsePatchFiles(section).some(({ files }) => files.some((file) => file.hunks.length)));
 }
 
 const isYourMessage = (e: ActivityEntry) => e.who === 'you' && e.kind === 'message';
@@ -92,7 +96,7 @@ function fileEdits(entry: ActivityEntry) {
   if (entry.kind !== 'tool' || entry.skill || entry.mcp) return [];
   const call = toolCall(entry);
   if (call.verb !== 'Edit' && call.verb !== 'Write') return [];
-  const sections = entry.patch?.split(/^(?=diff --git )/m).filter((s) => s.startsWith('diff --git ')) ?? [];
+  const sections = entry.patch ? parseDiff(entry.patch, false) : [];
   if (!sections.length)
     return [
       {
@@ -102,11 +106,9 @@ function fileEdits(entry: ActivityEntry) {
         patch: entry.patch,
       },
     ];
-  return sections.map((patch) => {
-    const { added = 0, removed = 0 } = toolCall({ text: '', patch });
+  return sections.map(({ path: header, added, removed, patch }) => {
     // Claude's patches name the file by its base name only; the call's target has its path.
-    const header = /^diff --git a\/.+ b\/(.+)$/m.exec(patch)?.[1];
-    const path = !header || call.target === header || call.target.endsWith(`/${header}`) ? call.target : header;
+    const path = call.target === header || call.target.endsWith(`/${header}`) ? call.target : header;
     return { path, added, removed, patch };
   });
 }

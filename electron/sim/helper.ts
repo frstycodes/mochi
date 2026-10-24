@@ -1,19 +1,18 @@
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { app, type WebContents } from 'electron';
+import { runCommand, spawnCommand, type CoreChild } from '@mochi/core/runClient';
 import type { SimFrame } from '../../src/host/types/sim.ts';
 import { frameSplitter } from './parse.ts';
 import helperSource from './simhelper.swift?raw';
 
-const run = promisify(execFile);
+const COMPILE_TIMEOUT_MS = 5 * 60_000;
 
 interface Stream {
   /** Unset while the helper compiles. */
-  child?: ChildProcessWithoutNullStreams;
+  child?: CoreChild;
   viewers: Set<WebContents>;
   size: Promise<{ width: number; height: number }>;
   /** Replayed to viewers that join an idle screen: the helper only sends frames when the screen changes. */
@@ -24,7 +23,7 @@ const streams = new Map<string, Stream>();
 let helperPath: Promise<string> | undefined;
 
 export async function developerDir() {
-  const { stdout } = await run('xcode-select', ['-p']);
+  const { stdout } = await runCommand('xcode-select', ['-p'], { timeout: 10_000 });
   return stdout.trim();
 }
 
@@ -72,7 +71,7 @@ function spawnStream(udid: string): Stream {
   Promise.all([compileHelper(), developerDir()])
     .then(([binary, devDir]) => {
       if (streams.get(udid) !== stream) return;
-      const child = spawn(binary, [devDir, udid]);
+      const child = spawnCommand(binary, [devDir, udid]);
       stream.child = child;
       child.stdout.on(
         'data',
@@ -111,7 +110,7 @@ function compileHelper() {
     await mkdir(dir, { recursive: true });
     const source = path.join(dir, `simhelper-${hash}.swift`);
     await writeFile(source, helperSource);
-    await run('xcrun', ['swiftc', '-O', source, '-o', binary]);
+    await runCommand('xcrun', ['swiftc', '-O', source, '-o', binary], { timeout: COMPILE_TIMEOUT_MS });
     return binary;
   })().catch((error: Error) => {
     helperPath = undefined;

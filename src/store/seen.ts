@@ -1,5 +1,5 @@
 import type { QueueItem, Thread } from '../model.ts';
-import type { State } from './index.tsx';
+import type { State } from './types.ts';
 
 /** Opened, here or on another device: the thread's activity so far and its open asks; or Queue cards looked at. Owned by the thread's computer. */
 export type SeenAction = { type: 'seen'; threadId?: string; queueIds?: string[] };

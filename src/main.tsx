@@ -5,16 +5,14 @@ import { host } from './host';
 import { followZoom } from './appZoom';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { IS_MAC } from './keys';
-import { restoreFailed, restoreSaved } from './store/persist';
+import { startStore } from './store';
 import { loadDrafts } from './chat/drafts';
 import './index.css';
 
 if (host.isDesktop) showWindowChrome();
 
-// The store is created on first render, so last launch's threads are read before it.
-host.data
-  .load()
-  .then(restoreSaved, (error: unknown) => restoreFailed(error))
+// The store holds Core's threads from the first render.
+startStore()
   .then(() => loadDrafts())
   .then(() => {
     createRoot(document.getElementById('root')!).render(

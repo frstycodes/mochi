@@ -3,7 +3,7 @@ import { toast } from '../toast/store.ts';
 import { pinnedThreads, togglePin } from '../reorder';
 import { useHarness, type State } from '../store';
 import { ARROW_SIDE, findLeaf, neighbourInDirection, type Rect } from './tree';
-import { commandOf, pinnedCommand, type CommandId } from '../keymap';
+import { commandOf, pinnedCommand, type CommandId, listenKeydown } from '../keymap';
 import { startRename } from '../rename';
 
 const FOCUS = { 'split-focus-left': 'ArrowLeft', 'split-focus-right': 'ArrowRight', 'split-focus-up': 'ArrowUp', 'split-focus-down': 'ArrowDown' } as const satisfies Partial<Record<CommandId, keyof typeof ARROW_SIDE>>;
@@ -63,8 +63,7 @@ export function useLayoutKeys() {
       const view = { kind: 'thread', id: thread.id } as const;
       dispatch(index % 2 ? { type: 'layout-split', view } : { type: 'go', view });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [dispatch]);
 }
 

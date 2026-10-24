@@ -22,18 +22,17 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import type { CodeHighlighterPlugin } from "@streamdown/code";
 import type { ThemeRegistrationAny } from "shiki";
-import { shikiTheme } from "@/themes/highlight";
+import { shikiTheme } from "@/themes/shiki";
 import { LIGHT_CODE_SURFACES, readableTokenColors } from "@/themes/map";
 import type { ColorTheme } from "@/themes/model";
 import { useColorTheme } from "@/themes/store";
 import { Streamdown, type PluginConfig } from "streamdown";
-import { useWordReveal, WORD_REVEAL } from "@/chat/wordReveal";
 import { withDiffFences } from "@/chat/diffCodePlugin";
+import { markdownPlugins } from "@/chat/markdownPlugins";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -328,19 +327,14 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 export const MessageResponse = memo(
   ({ className, plugins, isAnimating = false, ...props }: MessageResponseProps) => {
-    const loaded = useStreamdownPlugins();
+    const loaded = useStreamdownPlugins(typeof props.children === "string" ? props.children : "");
     const { mode, light, dark } = useColorTheme();
     const code = useMemo(() => themedCodePlugin(light, dark), [loaded, light, dark]);
     const merged = useMemo(() => ({ ...loaded, ...(code && { code }), ...plugins }), [loaded, code, plugins]);
     const mermaid = useMemo(() => ({ config: { theme: mode === "dark" ? "dark" : "neutral" } as const }), [mode]);
     // Streamdown's memoised blocks ignore a changed mermaid config or code plugin, so a block keeps the old theme until remounted.
     const hasFence = typeof props.children === "string" && props.children.includes("```");
-    // Streamdown drops the word wrappers once isAnimating goes false, so words still queued would pop in together.
-    const isRevealing = useTrailingTrue(isAnimating, STREAM_DRAIN_MS);
-    const ref = useRef<HTMLDivElement>(null);
-    useWordReveal(ref, isRevealing);
     return (
-      <div ref={ref} className="contents">
         <Streamdown
           key={hasFence ? `${mode}:${code ? `${light?.id}:${dark?.id}` : ""}` : undefined}
           className={cn(
@@ -349,11 +343,9 @@ export const MessageResponse = memo(
           )}
           plugins={merged}
           mermaid={mermaid}
-          animated
-          isAnimating={isRevealing}
+          isAnimating={isAnimating}
           {...props}
         />
-      </div>
     );
   },
   (prevProps, nextProps) =>
@@ -362,19 +354,6 @@ export const MessageResponse = memo(
 );
 
 MessageResponse.displayName = "MessageResponse";
-
-// Streamdown only wraps words in spans; useWordReveal animates them, because Streamdown's own CSS animation re-stamps shown words with a 0ms duration on every delta, cutting their fade short.
-const STREAM_DRAIN_MS = WORD_REVEAL.maxBacklogMs + WORD_REVEAL.duration;
-
-function useTrailingTrue(value: boolean, holdMs: number) {
-  const [held, setHeld] = useState(value);
-  useEffect(() => {
-    if (value) return setHeld(true);
-    const timer = setTimeout(() => setHeld(false), holdMs);
-    return () => clearTimeout(timer);
-  }, [value, holdMs]);
-  return value || held;
-}
 
 let loadedPlugins: PluginConfig = {};
 let codeModule: typeof import("@streamdown/code") | null = null;
@@ -390,35 +369,44 @@ function themedCodePlugin(light: ColorTheme | null, dark: ColorTheme | null) {
   if (!plugin) codePlugins.set(key, (plugin = withDiffFences(codeModule.createCodePlugin({ themes }))));
   return plugin;
 }
-let pluginsLoading: Promise<PluginConfig> | null = null;
+const pluginsLoading: Partial<Record<keyof ReturnType<typeof markdownPlugins>, Promise<unknown>>> = {};
 
-// Dynamic imports keep mermaid, KaTeX and the highlighter out of the first parse; messages render plain until they land.
-function loadStreamdownPlugins() {
-  pluginsLoading ??= Promise.all([
+const PLUGIN_LOADERS = {
+  code: () => Promise.all([
     import("@streamdown/code"),
-    import("@streamdown/math"),
-    import("@streamdown/mermaid"),
-    import("@streamdown/cjk"),
-    import("katex/dist/katex.min.css"),
-    // The shiki alias (src/lib/shiki-slim.ts) bundles no themes, so the code plugin gets theme objects instead of names.
     import("shiki/dist/themes/github-light.mjs"),
     import("shiki/dist/themes/github-dark.mjs"),
-  ]).then(([code, math, mermaid, cjk, , light, dark]) => {
+  ]).then(([code, light, dark]) => {
     codeModule = code;
     // github-light's orange, red, green and grey tokens read under 4.5:1 on Mochi's code background.
     const readableLight = { ...light.default, tokenColors: readableTokenColors(light.default.tokenColors ?? [], LIGHT_CODE_SURFACES) };
     defaultCodeThemes = [readableLight, dark.default];
-    loadedPlugins = { code: withDiffFences(code.createCodePlugin({ themes: defaultCodeThemes })), math: math.math, mermaid: mermaid.mermaid, cjk: cjk.cjk };
-    return loadedPlugins;
-  });
-  return pluginsLoading;
-}
+    loadedPlugins = { ...loadedPlugins, code: withDiffFences(code.createCodePlugin({ themes: defaultCodeThemes })) };
+  }),
+  math: () => Promise.all([import("@streamdown/math"), import("katex/dist/katex.min.css")]).then(([math]) => {
+    loadedPlugins = { ...loadedPlugins, math: math.math };
+  }),
+  mermaid: () => import("@streamdown/mermaid").then(({ mermaid }) => {
+    loadedPlugins = { ...loadedPlugins, mermaid };
+  }),
+  cjk: () => import("@streamdown/cjk").then(({ cjk }) => {
+    loadedPlugins = { ...loadedPlugins, cjk };
+  }),
+};
 
-function useStreamdownPlugins() {
+function useStreamdownPlugins(text: string) {
   const [plugins, setPlugins] = useState(loadedPlugins);
+  const { code, math, mermaid, cjk } = markdownPlugins(text);
   useEffect(() => {
-    loadStreamdownPlugins().then(setPlugins);
-  }, []);
+    const needed = { code, math, mermaid, cjk };
+    const keys = (Object.keys(needed) as (keyof typeof needed)[]).filter((key) => needed[key]);
+    let isCurrent = true;
+    void Promise.all(keys.map((key) => pluginsLoading[key] ??= PLUGIN_LOADERS[key]())).then(
+      () => isCurrent && setPlugins(loadedPlugins),
+      (error: unknown) => console.error("Could not load markdown plugins", error),
+    );
+    return () => void (isCurrent = false);
+  }, [code, math, mermaid, cjk]);
   return plugins;
 }
 

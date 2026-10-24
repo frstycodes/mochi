@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useHarness } from '../store';
-import { commandOf } from '../keymap';
+import { commandOf, listenKeydown, isCommand } from '../keymap';
 import { pinnedNeighbour, slotsOf } from './slots';
 
 /**
@@ -16,7 +16,7 @@ export function usePagerKeys() {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       const s = latest.current;
-      if (e.key === 'Escape' && s.isOverview) {
+      if (isCommand(e, 'dismiss') && s.isOverview) {
         e.preventDefault();
         return dispatch({ type: 'overview-toggle', isOpen: false });
       }
@@ -32,8 +32,7 @@ export function usePagerKeys() {
       e.preventDefault();
       dispatch({ type: 'go', view: { kind: 'thread', id } });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [dispatch]);
 }
 

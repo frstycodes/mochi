@@ -11,9 +11,6 @@ export const remote: RemoteHost = {
     throw new Error('Devices need the desktop app');
   },
   onStatus: () => () => {},
-  async push() {},
-  async snapshot() {},
-  onSnapshotRequest: () => () => {},
   onCommand: () => () => {},
   async commandResult() {},
   async removeMember() {
@@ -36,6 +33,7 @@ export const remote: RemoteHost = {
   onMachines: () => () => {},
   async follow() {},
   onMachineFrame: () => () => {},
+  onTerminalOutput: () => () => {},
   async cacheMachine() {},
   async cachedMachines() {
     return [];

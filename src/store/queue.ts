@@ -1,7 +1,6 @@
 import { answerText, seedQueue, type EventGlyph, type QueueItem } from '../model.ts';
-import type { Action, State } from './index.tsx';
-import { getRestored } from './persist.ts';
-import { showsDemoData } from '../demoData.ts';
+import type { Action, State } from './types.ts';
+import type { Saved } from './saved.ts';
 import { log, mapStep, mapThread } from './threads.ts';
 
 export interface QueueState {
@@ -16,7 +15,7 @@ export type QueueAction =
   /** Closes a Mochi widget: the card leaves the queue and its place in the thread becomes the one-line `text`. */
   | { type: 'card-record'; queueId: string; text: string; glyph?: EventGlyph; site?: string };
 
-export function initialQueue(saved = getRestored(), isDemo = showsDemoData()): QueueState {
+export function initialQueue(saved: Saved | null = null, isDemo = true): QueueState {
   return { queue: [...(isDemo ? seedQueue() : []), ...(saved?.queue ?? [])] };
 }
 

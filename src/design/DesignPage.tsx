@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { EventLine, MochiWidget } from '../chat/MochiWidget';
 import { ArrowUp, CheckCircle, Grid as WidgetGlyph, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -63,13 +63,11 @@ import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
 import { SplitContext } from '../layout/SplitContext';
-import { ReviewModeProvider } from '../review/useReviewMode';
 import { HarnessProvider, useHarness } from '../store';
 import { ProgressRing, ProviderMark, StepStatusIcon, ThreadStatusIcon, lineColor, stepLabel } from '../ui';
 import { ColorPair } from './color-pair';
 import { Block, Grid, Section } from './layout';
 import { AgentLoaderBlock } from './sections/agent-loader';
-import { DataSection } from './sections/data';
 import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
@@ -102,32 +100,32 @@ const SECTIONS = [
   ['rules', 'Do and don’t'],
 ] as const;
 
+const DataSection = lazy(() => import('./sections/data').then((m) => ({ default: m.DataSection })));
+
 export function DesignPage() {
   return (
     <HarnessProvider>
       <MachinesProvider>
-        <ReviewModeProvider>
-          <ScrollArea className="h-full">
-            <DesignHeader />
-            <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
-              <Overview />
-              <Foundations />
-              <Actions />
-              <InputsSection />
-              <NavigationSection />
-              <Display />
-              <DataSection />
-              <Feedback />
-              <OverlaysSection />
-              <Conversation />
-              <ImagesSection />
-              <EmbedsSection />
-              <Recipes />
-              <NativeItemsSection />
-              <Rules />
-            </main>
-          </ScrollArea>
-        </ReviewModeProvider>
+        <ScrollArea className="h-full">
+          <DesignHeader />
+          <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
+            <Overview />
+            <Foundations />
+            <Actions />
+            <InputsSection />
+            <NavigationSection />
+            <Display />
+            <Suspense><DataSection /></Suspense>
+            <Feedback />
+            <OverlaysSection />
+            <Conversation />
+            <ImagesSection />
+            <EmbedsSection />
+            <Recipes />
+            <NativeItemsSection />
+            <Rules />
+          </main>
+        </ScrollArea>
       </MachinesProvider>
       <Orbit />
       <PhotoViewer />

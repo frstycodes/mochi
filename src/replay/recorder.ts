@@ -1,7 +1,6 @@
 import { host } from '../host/index.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
-import { tapAction } from '../remote/tap.ts';
 import { compact, linesFor, toLines, type ReplayLine } from './record.ts';
 
 const FLUSH_MS = 1000;
@@ -17,7 +16,6 @@ let timer: ReturnType<typeof setTimeout> | undefined;
  * on writes a fresh one and the replay jumps over the gap instead of replaying a store it never saw.
  */
 export function recordAction(state: State, action: Action) {
-  tapAction(action);
   if (action.type === 'delete') return forget(action.threadIds);
   if (!getPrefs().recordReplays) return started.clear();
   const captured = linesFor(state, action, Date.now(), (id) => started.has(id));

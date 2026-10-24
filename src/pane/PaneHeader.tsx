@@ -1,4 +1,4 @@
-import { createContext, useContext, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ExitFullscreen, Fullscreen, X } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -55,7 +55,7 @@ export function PaneHeader({
   isExpanded,
   onExpand,
   onClose,
-  onDragStart,
+  dragHandle,
 }: {
   kind: PaneTabKind;
   threadId: string;
@@ -63,14 +63,22 @@ export function PaneHeader({
   isExpanded: boolean;
   onExpand: () => void;
   onClose: () => void;
-  onDragStart: (e: PointerEvent) => void;
+  dragHandle: (el: HTMLElement | null) => void;
 }) {
   const { title, icon: Icon } = PANE_TABS[kind];
   const hasOwnMenu = useContext(SlotsContext)?.hasMenu;
   const header = useRef<HTMLElement>(null);
   useCaptionInset(header);
+  const ref = useCallback(
+    (el: HTMLElement | null) => {
+      header.current = el;
+      dragHandle(el);
+    },
+    [dragHandle],
+  );
   return (
-    <header ref={header} data-pane-header onPointerDown={onDragStart} className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
+    // Pressing here starts a drag (dnd-kit stops the moves reaching Orbit), so a long press must not open Orbit.
+    <header ref={ref} data-pane-header data-no-orbit className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
       <PaneTitleSlot>
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <h2 className="truncate type-meta font-medium">{title}</h2>

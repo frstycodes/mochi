@@ -3,6 +3,7 @@ import * as zlib from 'node:zlib';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { cached } from '../cache.ts';
 import type { Provider } from '../../src/model.ts';
 import type { TokenBucket, UsageSession } from '../../src/host/types/usage.ts';
 import { localDay } from '../../src/usage/days.ts';
@@ -24,22 +25,22 @@ export interface UsageRecord {
   cacheWrite1h: number;
 }
 
-/** Parsed records per log file, reused while the file's size and mtime hold; a log only grows, so a change re-reads it whole. */
-const parsed = new Map<string, { size: number; mtimeMs: number; records: UsageRecord[] }>();
+// Parsed records per log file; the key carries size and mtime, so a log that grew is re-read whole.
+const RECORDS_TTL = '1 hour';
 
 export async function fileRecords(path: string, parse: (lines: AsyncIterable<string>) => Promise<UsageRecord[]>) {
   const info = await stat(path);
-  const hit = parsed.get(path);
-  if (hit && hit.size === info.size && hit.mtimeMs === info.mtimeMs) return hit.records;
+  return cached(`usage:${path}:${info.size}:${info.mtimeMs}`, RECORDS_TTL, () => readRecords(path, parse));
+}
+
+async function readRecords(path: string, parse: (lines: AsyncIterable<string>) => Promise<UsageRecord[]>) {
   const isZstd = path.endsWith('.zst');
   // Codex compresses archived rollouts with zstd, which Node's zlib reads from 22.15; an older runtime skips them.
   if (isZstd && typeof zlib.createZstdDecompress !== 'function') return [];
   const file = createReadStream(path);
   const input = isZstd ? file.pipe(zlib.createZstdDecompress()) : file;
   const lines = createInterface({ input: input.setEncoding('utf8'), crlfDelay: Infinity });
-  const records = await parse(lines);
-  parsed.set(path, { size: info.size, mtimeMs: info.mtimeMs, records });
-  return records;
+  return parse(lines);
 }
 
 /** Every `.jsonl` (or zstd `.jsonl.zst`) under `dir` modified at or after `since`; none when the folder is missing. */
