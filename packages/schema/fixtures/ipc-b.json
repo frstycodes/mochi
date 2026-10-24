@@ -466,18 +466,6 @@
    },
    {
     "input": [
-     "c4",
-     {
-      "isOk": true,
-      "data": {
-       "data": "$ ls\n",
-       "next": 5
-      }
-     }
-    ]
-   },
-   {
-    "input": [
      "c5",
      {
       "isOk": true,
@@ -1002,21 +990,6 @@
       "terminalId": "p",
       "cols": 120,
       "rows": 40
-     }
-    ],
-    "output": {
-     "isOk": false,
-     "error": "Other computers need the desktop app"
-    }
-   },
-   {
-    "input": [
-     "m1",
-     {
-      "type": "terminal-read",
-      "threadId": "t",
-      "terminalId": "p",
-      "after": 0
      }
     ],
     "output": {
@@ -2216,6 +2189,25 @@
     "event": {
      "type": "focus",
      "threadId": "t1"
+    }
+   }
+  ],
+  "remote.onTerminalOutput": [
+   {
+    "event": {
+     "machineId": "m1",
+     "terminalId": "p",
+     "data": "ls\r\n",
+     "next": 4
+    }
+   },
+   {
+    "event": {
+     "machineId": "m1",
+     "terminalId": "p",
+     "data": "",
+     "next": 4,
+     "exitCode": 0
     }
    }
   ]

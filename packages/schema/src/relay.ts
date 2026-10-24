@@ -119,7 +119,6 @@ export const RemoteCommand = Schema.Union([
   command('terminal-open', { threadId: Id, cols: Size, rows: Size }),
   command('terminal-write', { threadId: Id, terminalId: Id, data: Str(MAX_TEXT).check(Schema.isMinLength(1)) }),
   command('terminal-resize', { threadId: Id, terminalId: Id, cols: Size, rows: Size }),
-  command('terminal-read', { threadId: Id, terminalId: Id, after: Index }),
   command('terminal-close', { threadId: Id, terminalId: Id }),
 ]);
 export type RemoteCommand = typeof RemoteCommand.Type;
@@ -141,7 +140,6 @@ export const TerminalOutput = Schema.Struct({ data: S, next: Schema.Number, exit
 const CommandData = Schema.Union([
   MachineCatalog,
   GitDiff,
-  TerminalOutput,
   Schema.Struct({ paths: Schema.Array(S), isTruncated: B }),
   Schema.Array(Project),
   Schema.Record(S, S),
@@ -194,7 +192,6 @@ export const COMMAND_SCOPES = {
   'terminal-open': 'terminal',
   'terminal-write': 'terminal',
   'terminal-resize': 'terminal',
-  'terminal-read': 'terminal',
   'terminal-close': 'terminal',
 } as const satisfies Record<RemoteCommand['type'], Scope>;
 

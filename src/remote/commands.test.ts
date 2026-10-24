@@ -8,7 +8,7 @@ import { initialNotifications } from '../notify/slice.ts';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { runRemoteCommand } from './commands.ts';
-import { closeIdleShells } from './terminals.ts';
+import { closeIdleShells, shellOf, terminalCore } from './terminals.ts';
 import { tapAction } from './tap.ts';
 
 async function until(isDone: () => boolean) {
@@ -180,7 +180,7 @@ test('code commands make the Changes and Files tabs’ host calls in the thread�
   });
 });
 
-test('a device shell runs in the thread’s folder and is that thread’s alone; output reads from an offset', async (t) => {
+test('a device shell runs in the thread’s folder and is that thread’s alone; its output goes to Core in order', async (t) => {
   const { state, threadId } = machine();
   const env = device(state, 'Laptop', []);
   t.mock.method(host.ports, 'allocate', async () => 4100);
@@ -190,16 +190,20 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
   t.mock.method(host.pty, 'onData', (listener: typeof emit) => ((emit = listener), () => {}));
   t.mock.method(host.pty, 'onExit', () => () => {});
   t.mock.method(host.pty, 'kill', async () => {});
+  const core: [string, unknown][] = [];
+  let isWatched = false;
+  t.mock.method(terminalCore, 'call', async (tag: string, payload: unknown) => (core.push([tag, payload]), tag === 'terminal.watched' ? isWatched : undefined));
 
   const opened = await runRemoteCommand({ type: 'terminal-open', threadId, cols: 80, rows: 24 }, env);
   assert.deepEqual(opened, { isOk: true, data: { terminalId: 'pty-remote-1' } });
   assert.deepEqual(spawn.mock.calls[0].arguments, [{ cwd: '/work/reply', cols: 80, rows: 24, port: 4100, threadId }]);
   emit({ id: 'pty-remote-1', data: 'hello ' });
   emit({ id: 'pty-remote-1', data: 'world' });
-  assert.deepEqual(await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 6 }, env), {
-    isOk: true,
-    data: { data: 'world', next: 11 },
-  });
+  assert.deepEqual(core, [
+    ['terminal.open', { terminalId: 'pty-remote-1', threadId }],
+    ['terminal.feed', { terminalId: 'pty-remote-1', data: 'hello ' }],
+    ['terminal.feed', { terminalId: 'pty-remote-1', data: 'world' }],
+  ]);
   await runRemoteCommand({ type: 'terminal-write', threadId, terminalId: 'pty-remote-1', data: 'ls\r' }, env);
   assert.deepEqual(write.mock.calls[0].arguments, ['pty-remote-1', 'ls\r']);
 
@@ -217,15 +221,15 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
     { isOk: false, error: 'That terminal is closed' },
     'the machine’s own terminals are out of reach',
   );
-  closeIdleShells(Date.now() + 30_000);
-  assert.equal((await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 11 }, env)).isOk, true, 'a shell in use stays open');
-  closeIdleShells(Date.now() + 61_000);
-  assert.deepEqual(await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 0 }, env), { isOk: false, error: 'That terminal is closed' }, 'a device that left without closing it');
-  await runRemoteCommand({ type: 'terminal-close', threadId, terminalId: 'pty-remote-1' }, env);
-  assert.deepEqual(await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 0 }, env), {
-    isOk: false,
-    error: 'That terminal is closed',
-  });
+  await closeIdleShells(Date.now() + 30_000);
+  assert.equal(shellOf('pty-remote-1', threadId)?.threadId, threadId, 'a shell in use stays open');
+  isWatched = true;
+  await closeIdleShells(Date.now() + 61_000);
+  assert.ok(shellOf('pty-remote-1', threadId), 'a shell a device is watching stays open');
+  isWatched = false;
+  await closeIdleShells(Date.now() + 200_000);
+  assert.equal(shellOf('pty-remote-1', threadId), undefined, 'a device that left without closing it');
+  assert.deepEqual(core.at(-1), ['terminal.close', { terminalId: 'pty-remote-1' }]);
 });
 
 test('a new thread starts only in a project the machine listed, by its id, with the controls and images sent', async (t) => {

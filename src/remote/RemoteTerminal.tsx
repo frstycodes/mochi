@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
+import { host } from '../host';
 import { gitError } from '../git/useGit';
-import type { FollowedMachine } from '../host/types/remote';
+import type { FollowedMachine, TerminalChunk } from '../host/types/remote';
 import type { Thread } from '../model';
 import { onThemeChange, terminalTheme } from '../terminal/theme';
 import { useMachines } from './useMachines';
 
 /**
- * A shell on the machine in the thread's folder, opened for this pane and closed with it. Output is read by polling from an
- * offset; keystrokes go out in order, batched while one write is on its way.
+ * A shell on the machine in the thread's folder, opened for this pane and closed with it. The machine pushes its output as it
+ * prints (resuming after a dropped link, in main); keystrokes go out in order, batched while one write is on its way.
  */
 export default function RemoteTerminal({ machine, thread }: { machine: FollowedMachine; thread: Thread }) {
   const { ask } = useMachines();
@@ -33,8 +34,7 @@ export default function RemoteTerminal({ machine, thread }: { machine: FollowedM
     const at = { threadId: thread.id };
     let terminalId: string | undefined;
     let isClosed = false;
-    let next = 0;
-    let typed = '';
+        let typed = '';
     let isWriting = false;
     const flush = async () => {
       if (isWriting || !typed || !terminalId) return;
@@ -52,38 +52,30 @@ export default function RemoteTerminal({ machine, thread }: { machine: FollowedM
     term.onResize(({ cols, rows }) => terminalId && void ask(machine.id, { type: 'terminal-resize', ...at, terminalId, cols, rows }).catch(() => {}));
     const observer = new ResizeObserver(() => boxRef.current!.clientWidth > 0 && fit.fit());
     observer.observe(boxRef.current!);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      if (isClosed || !terminalId) return;
-      try {
-        const output = await ask(machine.id, { type: 'terminal-read', ...at, terminalId, after: next });
-        next = output.next;
-        if (output.data) term.write(output.data);
-        if (output.exitCode !== undefined) {
-          term.write(`\r\n\x1b[2m[process exited with ${output.exitCode}]\x1b[0m\r\n`);
-          return;
-        }
-        setError(null);
-      } catch (e) {
-        // A dropped link comes back on its own; the shell keeps running there, so reading picks up where it left off.
-        setError(gitError(e));
-        timer = setTimeout(() => void poll(), TERMINAL_RETRY_MS);
-        return;
-      }
-      timer = setTimeout(() => void poll(), TERMINAL_POLL_MS);
+    // The first chunks can beat the open's reply, so they wait for the id they belong to.
+    const early: TerminalChunk[] = [];
+    const show = (chunk: TerminalChunk) => {
+      if (chunk.terminalId !== terminalId) return;
+      if (chunk.data) term.write(chunk.data);
+      if (chunk.exitCode !== undefined) term.write(`\r\n\x1b[2m[process exited with ${chunk.exitCode}]\x1b[0m\r\n`);
     };
+    const offOutput = host.remote.onTerminalOutput((chunk) => {
+      if (chunk.machineId !== machine.id) return;
+      if (terminalId === undefined) early.push(chunk);
+      else show(chunk);
+    });
     void ask(machine.id, { type: 'terminal-open', ...at, cols: term.cols, rows: term.rows }).then(
       (opened) => {
         terminalId = opened.terminalId;
         if (isClosed) return void ask(machine.id, { type: 'terminal-close', ...at, terminalId }).catch(() => {});
         term.focus();
-        void poll();
+        early.splice(0).forEach(show);
       },
       (e: unknown) => setError(gitError(e)),
     );
     return () => {
       isClosed = true;
-      clearTimeout(timer);
+      offOutput();
       observer.disconnect();
       offTheme();
       term.dispose();
@@ -98,6 +90,3 @@ export default function RemoteTerminal({ machine, thread }: { machine: FollowedM
     </div>
   );
 }
-
-const TERMINAL_POLL_MS = 250;
-const TERMINAL_RETRY_MS = 2000;

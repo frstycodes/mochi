@@ -178,7 +178,6 @@ export type RemoteCommand =
   | { type: 'terminal-write'; threadId: string; terminalId: string; data: string }
   | { type: 'terminal-resize'; threadId: string; terminalId: string; cols: number; rows: number }
   /** Output from offset `after` on; the device polls with the `next` it got. */
-  | { type: 'terminal-read'; threadId: string; terminalId: string; after: number }
   | { type: 'terminal-close'; threadId: string; terminalId: string };
 
 export type ThreadPoint = { kind: 'message'; index: number } | { kind: 'checkpoint'; n: number };
@@ -195,7 +194,6 @@ export interface CommandData {
   files: { paths: string[]; isTruncated: boolean };
   'read-file': { text: string };
   'terminal-open': { terminalId: string };
-  'terminal-read': TerminalOutput;
 }
 
 /** What a new thread on this computer can start in and with. */
@@ -214,10 +212,16 @@ export interface CatalogProject {
 
 export interface TerminalOutput {
   data: string;
-  /** Where the next read starts. */
+  /** Where the chunk after this one starts. */
   next: number;
   /** Set once the shell exited. */
   exitCode?: number;
+}
+
+/** One push of a followed machine's terminal. */
+export interface TerminalChunk extends TerminalOutput {
+  machineId: string;
+  terminalId: string;
 }
 
 export type CommandResult =
@@ -257,6 +261,8 @@ export interface RemoteHost {
   /** The main window's mirrors start empty: every followed machine starts over, each thread from its snapshot. */
   follow(): Promise<void>;
   onMachineFrame(listener: (message: { machineId: string; frame: MirrorFrame }) => void): () => void;
+  /** Output of a terminal opened on a followed machine (`terminal-open`), pushed as it prints; the last chunk of an exited shell has `exitCode`. */
+  onTerminalOutput(listener: (message: TerminalChunk) => void): () => void;
   /** Keeps a followed machine's store (`toSaved` JSON) encrypted on this computer, for launch and offline reading. */
   cacheMachine(machineId: string, saved: string): Promise<void>;
   cachedMachines(): Promise<{ machineId: string; saved: string }[]>;
@@ -280,6 +286,7 @@ export const remoteMethods = {
   onMachines: 'event',
   follow: 'invoke',
   onMachineFrame: 'event',
+  onTerminalOutput: 'event',
   cacheMachine: 'invoke',
   cachedMachines: 'invoke',
   command: 'invoke',

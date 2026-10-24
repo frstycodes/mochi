@@ -213,7 +213,6 @@ const COMMAND_VERBS = {
   'terminal-open': 'open a terminal',
   'terminal-write': 'type in the terminal',
   'terminal-resize': 'resize the terminal',
-  'terminal-read': 'read the terminal',
   'terminal-close': 'close the terminal',
 } satisfies Record<RemoteCommand['type'], string>;
 

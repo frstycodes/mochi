@@ -17,7 +17,7 @@ import { HARNESS_IDS } from '../settings/harnesses.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { askSideChat } from '../sidechat/ask.ts';
 import { chatFor } from '../store/sidechat.ts';
-import { closeShell, openShell, readShell, shellOf } from './terminals.ts';
+import { closeShell, openShell, shellOf } from './terminals.ts';
 import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
 import { handOffHere } from '../rewind/runHandoff.ts';
@@ -143,8 +143,6 @@ function terminal(thread: Thread, cwd: string, command: TerminalCommand): Promis
   const shell = shellOf(command.terminalId, thread.id);
   if (!shell) return fail('That terminal is closed');
   switch (command.type) {
-    case 'terminal-read':
-      return { isOk: true, data: readShell(shell, command.after) };
     case 'terminal-write':
       return host.pty.write(command.terminalId, command.data).then(() => ok);
     case 'terminal-resize':
