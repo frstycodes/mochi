@@ -3,6 +3,7 @@ import { Context, Effect, Layer, PubSub, Stream } from 'effect';
 import { SqlClient } from 'effect/sql';
 import { MAX_REPLAY_BYTES, MAX_REPLAY_EVENTS, summarizeProjects, summarizeThread, type LoggedEvent, type ShellItem, type ThreadItem } from '@mochi/domain';
 import { docTables, migrate, type DocTable } from './migrations.ts';
+import { backupSchedule, restoreLayer } from './backup.ts';
 import * as NodeSqliteClient from './nodeSqliteClient.ts';
 
 export interface AppendInput {
@@ -264,9 +265,10 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
   static readonly layer = (filename: string) =>
     Layer.effect(this, this.make).pipe(
       Layer.provide(layerSetup),
+      Layer.provide(filename === ':memory:' ? Layer.empty : backupSchedule(filename)),
       // ponytail: no checkpoint worker; it needs SQLite's NOOP checkpoint, which Node 24's bundled SQLite 3.50 lacks, and
       // logs a fallback warning on every launch. Turn it on once Electron's Node ships SQLite ≥ 3.51.
-      Layer.provideMerge(NodeSqliteClient.layer({ filename, readerWorker: true, checkpointWorker: false })),
+      Layer.provideMerge(NodeSqliteClient.layer({ filename, readerWorker: true, checkpointWorker: false }).pipe(Layer.provide(restoreLayer(filename)))),
     );
 }
 
