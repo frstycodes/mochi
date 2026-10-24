@@ -6,6 +6,7 @@ import { Gate, StaleKind, WatchKey, WatchValue } from './watch/keys.ts';
 import { GithubRpcs } from './github/schema.ts';
 import { AgentRpcs } from './agents/rpc.ts';
 import { DeviceRpcs } from './remote/rpc.ts';
+import { MetricsRpcs } from './metrics/schema.ts';
 
 // Here rather than in run.ts so a window's client imports no node built-ins.
 export class RunError extends Schema.TaggedError<RunError>()('RunError', {
@@ -76,4 +77,4 @@ export class Unauthorized extends Schema.TaggedError<Unauthorized>()('Unauthoriz
 export class ScopeAuthorization extends RpcMiddleware.Service<ScopeAuthorization>()('mochi/core/ScopeAuthorization', { error: Unauthorized }) {}
 
 /** Everything served on Core's WebSocket. */
-export class CoreWsRpcs extends CoreRpcs.merge(HostRpcs, StoreRpcs, GithubRpcs, AgentRpcs, DeviceRpcs).middleware(ScopeAuthorization) {}
+export class CoreWsRpcs extends CoreRpcs.merge(HostRpcs, StoreRpcs, GithubRpcs, AgentRpcs, DeviceRpcs, MetricsRpcs).middleware(ScopeAuthorization) {}

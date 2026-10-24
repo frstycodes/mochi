@@ -22,7 +22,7 @@ import { hasGoal } from '../drift';
 import { getPrefs } from '../settings/prefs';
 import { startRename } from '../rename';
 import { openSettings } from '../routes/nav';
-import { openReplay } from '../routes/nav';
+import { openDeveloper, openReplay } from '../routes/nav';
 import { shareReplay } from '../replay/load';
 import { askInSideChat } from '../sidechat/AskInSideChat';
 import { askSecondOpinion } from '../secondOpinion/run';
@@ -78,6 +78,7 @@ export const ACTIONS = [
   { id: 'go-skills', group: 'Go to', title: 'Skills', icon: Skill, keywords: 'library skill install github', run: () => openSettings('skills') },
   { id: 'go-plugins', group: 'Go to', title: 'Plugins', icon: Plugin, keywords: 'library plugin marketplace install', run: () => openSettings('plugins') },
   { id: 'go-connectors', group: 'Go to', title: 'Connectors', icon: Connector, keywords: 'library connector account mcp server sign in oauth', run: () => openSettings('connectors') },
+  { id: 'go-developer', group: 'Go to', title: 'Developer', icon: Monitor, keywords: 'metrics cpu gpu memory processes spawns spans logs performance', when: (s) => s.isDesktop, run: () => openDeveloper() },
   { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Settings, command: 'go-settings', keywords: 'agents claude codex accounts login api key preferences', run: () => openSettings() },
   { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, command: 'go-new', run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 

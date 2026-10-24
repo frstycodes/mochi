@@ -117,9 +117,9 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
     <PromptInputProvider key={thread.id}>
       <div data-chat={thread.id} className="relative flex min-h-0 flex-1 flex-col" style={isReadOnly ? ({ '--composer-h': '0px' } as React.CSSProperties) : undefined}>
         {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
-        <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
+        <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="mt-(--chat-top,0px) min-h-0 flex-1">
           <VizThreadProvider value={thread.id}>
-            <ConversationContent scrollClassName="[scroll-timeline:--chat_y]" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-[calc(var(--chat-top,0px)+1.5rem)] pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
+            <ConversationContent scrollClassName="scroll-fade-y" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
               <div ref={messages} className="contents">
                 {hasGoal(thread) && <GoalCard thread={thread} />}
                 {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}

@@ -88,15 +88,9 @@ export function ThreadView({ thread }: { thread: Thread }) {
   );
   // The header belongs to the chat column, so the panes run to the top of the window beside it, like Claude's.
   const chat = (
-    <div className="relative flex h-full min-w-0 flex-col [--chat-top:2.75rem] [timeline-scope:--chat]">
-      {/* The transcript scrolls under the header, so the header floats over it. */}
-      <div className="absolute inset-x-0 top-0 z-20">
-        <div aria-hidden className="header-edge absolute inset-x-0 top-0 -z-10 h-[calc(100%+2.5rem)]">
-          <i />
-          <i />
-          <i />
-          <i />
-        </div>
+    <div className="relative flex h-full min-w-0 flex-col [--chat-top:2.75rem]">
+      {/* Opaque; the transcript starts below it and fades in through scroll-fade-y. */}
+      <div className="absolute inset-x-0 top-0 z-20 bg-background">
         {header}
       </div>
       <div

@@ -1,7 +1,9 @@
 import { Effect, Layer } from 'effect';
-import { NodeRuntime } from '@effect/platform-node';
+import { NodeHttpClient, NodeRuntime } from '@effect/platform-node';
+import { Otlp } from 'effect/observability';
 import { Capabilities } from '@mochi/schema';
 import { layerLog } from './log.ts';
+import { layerSpans } from './metrics/spans.ts';
 import { layerCore } from './server.ts';
 
 // Core's entry: main forks it as a utilityProcess, and plain `node` runs it too (tests). Main picks the port and the token.
@@ -23,4 +25,9 @@ const program = Effect.logInfo('Core started').pipe(
   Effect.andThen(Layer.launch(layerCore(options))),
 );
 
-NodeRuntime.runMain(program.pipe(Effect.provide(layerLog(env('MOCHI_LOG_FILE')))));
+// Spans always reach the developer page; with MOCHI_OTLP_URL set (an OpenTelemetry collector's base URL) they are exported too.
+const exporter = process.env.MOCHI_OTLP_URL
+  ? Otlp.layerJson({ baseUrl: process.env.MOCHI_OTLP_URL, resource: { serviceName: 'mochi-core' } }).pipe(Layer.provide(NodeHttpClient.layerUndici))
+  : Layer.empty;
+
+NodeRuntime.runMain(program.pipe(Effect.provide(layerSpans.pipe(Layer.provide(exporter))), Effect.provide(layerLog(env('MOCHI_LOG_FILE')))));
