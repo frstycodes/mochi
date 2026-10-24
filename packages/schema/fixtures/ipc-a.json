@@ -777,39 +777,39 @@
      {
       "name": "main",
       "isRemote": false,
-      "committedAt": 1792651326970,
+      "committedAt": 1792861734509,
       "worktree": "/repo"
      },
      {
       "name": "feat/admin-usage",
       "isRemote": false,
-      "committedAt": 1792634046970,
+      "committedAt": 1792844454509,
       "worktree": "~/.mochi/worktrees/latitude/adm"
      },
      {
       "name": "feat/api-rate-limits",
       "isRemote": false,
-      "committedAt": 1792608126970
+      "committedAt": 1792818534509
      },
      {
       "name": "fix/checkout-e2e",
       "isRemote": false,
-      "committedAt": 1792521726970
+      "committedAt": 1792732134509
      },
      {
       "name": "feat/better-auth-session-rotation-and-device-trust-for-enterprise-sso",
       "isRemote": false,
-      "committedAt": 1792392126970
+      "committedAt": 1792602534509
      },
      {
       "name": "origin/release/2026-10",
       "isRemote": true,
-      "committedAt": 1792305726970
+      "committedAt": 1792516134509
      },
      {
       "name": "origin/feat/onboarding-emails",
       "isRemote": true,
-      "committedAt": 1791873726970
+      "committedAt": 1792084134509
      }
     ]
    }
@@ -1041,7 +1041,7 @@
      "isLinked": null,
      "alias": null,
      "autoUpdate": true,
-     "updatedAt": 1792478526963,
+     "updatedAt": 1792688934497,
      "commit": null,
      "placements": []
     },
@@ -1173,6 +1173,244 @@
      "skills",
      "mcp"
     ]
+   ]
+  },
+  {
+   "method": "importFromAccount",
+   "input": [
+    "personal",
+    "claude",
+    [
+     "skills"
+    ],
+    [
+     "pdf"
+    ]
+   ]
+  },
+  {
+   "method": "addSkill",
+   "input": [
+    "personal",
+    {
+     "SKILL.md": "---\nname: release-notes\ndescription: Drafts release notes\n---\nList merged PRs by area.\n",
+     "templates/notes.md": "## Changes\n"
+    }
+   ],
+   "output": [
+    {
+     "id": "skill-pdf",
+     "kind": "skill",
+     "name": "pdf",
+     "title": "pdf",
+     "description": "Extract text and tables, fill forms, merge and split PDF files.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/pdf",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "skill-frontend-design",
+     "kind": "skill",
+     "name": "frontend-design",
+     "title": "frontend-design",
+     "description": "Distinctive, production-grade interfaces that avoid generic AI looks.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "anthropics/skills/skills/frontend-design",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-code-review",
+     "kind": "plugin",
+     "name": "code-review",
+     "title": "Code review",
+     "description": "Review a pull request with agents for bugs, security and style.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/anthropics.png?size=96",
+     "contents": "2 skills · 3 agents",
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": 1792688934497,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "plugin-linear",
+     "kind": "plugin",
+     "name": "linear",
+     "title": "Linear",
+     "description": "Issues, projects and cycles from Linear.",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "claude-plugins-official",
+     "icon": "https://github.com/linear.png?size=96",
+     "contents": "1 skill",
+     "remotes": [
+      {
+       "name": "linear",
+       "url": "https://mcp.linear.app/mcp"
+      }
+     ],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": true,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-work",
+     "kind": "connector",
+     "name": "linear:work",
+     "title": "Linear · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-linear-personal",
+     "kind": "connector",
+     "name": "linear:personal",
+     "title": "Linear · personal",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.linear.app/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=linear.app&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": true,
+     "alias": "personal",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "connector-notion-work",
+     "kind": "connector",
+     "name": "notion:work",
+     "title": "Notion · work",
+     "description": "",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": false,
+     "profileIds": [
+      "latitude"
+     ],
+     "source": "https://mcp.notion.com/mcp",
+     "icon": "https://www.google.com/s2/favicons?domain=notion.so&sz=64",
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": false,
+     "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "own-8",
+     "kind": "skill",
+     "name": "release-notes",
+     "title": "release-notes",
+     "description": "Drafts release notes",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": true,
+     "profileIds": [
+      "personal"
+     ],
+     "source": null,
+     "icon": null,
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    }
    ]
   },
   {
@@ -1341,7 +1579,7 @@
      "isLinked": null,
      "alias": null,
      "autoUpdate": true,
-     "updatedAt": 1792478526963,
+     "updatedAt": 1792688934497,
      "commit": null,
      "placements": []
     },
@@ -1449,6 +1687,32 @@
      "unsupported": [],
      "isLinked": false,
      "alias": "work",
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
+     "id": "own-8",
+     "kind": "skill",
+     "name": "release-notes",
+     "title": "release-notes",
+     "description": "Drafts release notes",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": true,
+     "profileIds": [
+      "personal"
+     ],
+     "source": null,
+     "icon": null,
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
      "autoUpdate": null,
      "updatedAt": null,
      "commit": null,
@@ -1935,7 +2199,7 @@
      "isLinked": null,
      "alias": null,
      "autoUpdate": true,
-     "updatedAt": 1792478526963,
+     "updatedAt": 1792688934497,
      "commit": null,
      "placements": []
     },
@@ -2049,6 +2313,32 @@
      "placements": []
     },
     {
+     "id": "own-8",
+     "kind": "skill",
+     "name": "release-notes",
+     "title": "release-notes",
+     "description": "Drafts release notes",
+     "targets": [
+      "claude",
+      "codex"
+     ],
+     "isEnabled": true,
+     "profileIds": [
+      "personal"
+     ],
+     "source": null,
+     "icon": null,
+     "contents": null,
+     "remotes": [],
+     "unsupported": [],
+     "isLinked": null,
+     "alias": null,
+     "autoUpdate": null,
+     "updatedAt": null,
+     "commit": null,
+     "placements": []
+    },
+    {
      "id": "skill-pdf",
      "kind": "skill",
      "name": "pdf",
@@ -2129,7 +2419,7 @@
    ],
    "output": {
     "tools": [],
-    "listedAt": 1792651330288,
+    "listedAt": 1792861737819,
     "error": "No account on it is signed in."
    }
   },
@@ -2152,7 +2442,7 @@
      },
      "toolList": {
       "tools": [],
-      "listedAt": 1792651330288,
+      "listedAt": 1792861737819,
       "error": "No account on it is signed in."
      }
     }
@@ -2276,13 +2566,13 @@
        "port": 3000,
        "pid": 48302,
        "command": "node server.js",
-       "startedAt": 1792648810289
+       "startedAt": 1792859217820
       },
       {
        "port": 5173,
        "pid": 48211,
        "command": "node node_modules/.bin/vite",
-       "startedAt": 1792650970289
+       "startedAt": 1792861377820
       }
      ]
     }

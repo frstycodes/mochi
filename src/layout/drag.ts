@@ -61,10 +61,17 @@ export function useDragSelector<T>(select: (s: DragSession | null) => T) {
   );
 }
 
+/** A composer marks itself `data-mention-drop`; a thread released over it is mentioned there (`MENTION_DROP_EVENT`), never opened in a split. */
+export const MENTION_DROP_EVENT = 'mochi:mention-thread';
+
+export function mentionDropAt(x: number, y: number) {
+  return document.elementsFromPoint(x, y).map((el) => el.closest<HTMLElement>('[data-mention-drop]')).find(Boolean) ?? null;
+}
+
 /** Drag ghosts are `pointer-events: none`, so the topmost leaf under the pointer is the target. Tab strips and the sidebar are never targets; for a pane tab neither is a thread header (it pins there instead) nor a side pane. A pane tab never replaces a split, it always opens beside one. */
 function hitLeaf(x: number, y: number, view: View): DragSession['hit'] {
   const els = document.elementsFromPoint(x, y);
-  const blocked = view.kind === 'tab' ? '[role=tablist], [data-sidebar=sidebar], [data-pin-drop], [data-side-pane]' : '[role=tablist], [data-sidebar=sidebar]';
+  const blocked = view.kind === 'tab' ? '[role=tablist], [data-sidebar=sidebar], [data-pin-drop], [data-side-pane]' : '[role=tablist], [data-sidebar=sidebar], [data-mention-drop]';
   if (els.some((el) => el.closest(blocked))) return null;
   const leafEl = els.map((el) => el.closest<HTMLElement>('[data-leaf-id]')).find(Boolean);
   if (!leafEl) return null;

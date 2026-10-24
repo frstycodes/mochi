@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { CheckBadge, Download, ExternalLink, Import, Plus } from '@/icons';
+import { CheckBadge, Download, ExternalLink, FileText, Folder, Import, Pen, Plus } from '@/icons';
+import { GithubMarkIcon } from '@/icons/github';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from '@/toast/store';
 import { host } from '../host';
@@ -11,6 +12,8 @@ import { ProviderMark } from '../ui';
 import { AddSkillsDialog } from './AddSkillsDialog';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { NativeSections } from './NativeSections';
+import type { NativeItem } from './nativeItems';
+import { useSkillUpload, WriteSkillDialog } from './NewSkillDialog';
 import { CatalogErrorRow, EmptyRow, EntryRow, filterBy, GroupControl, LibraryRow, PAGE, SimilarNote, useSimilarNative } from './LibraryParts';
 import { SkillGroups } from './SkillGroups';
 import { SKILLS_SH } from './skillsSh';
@@ -22,12 +25,12 @@ export function SkillsView() {
     <LibraryPage
       id="skillsLibrary"
       noun="skills"
-      description="Installed once, then handed to the profiles that should have them, or written where npx skills add puts them. Library skills load in Claude Code threads as /mochi:name."
+      description="Installed once, then handed to the profiles that should have them, or written where npx skills add puts them. Library skills load in Claude Code threads as /owner:name, owner being the GitHub account they came from (mochi for your own)."
       count={({ entries }) => entries?.filter((e) => e.kind === 'skill').length ?? 0}
       actions={({ library }) => (
         <>
           {host.isDesktop && <ImportMenu library={library} />}
-          <AddFromGitHub library={library} />
+          <AddSkillMenu library={library} />
         </>
       )}
       library={InstalledSkills}
@@ -66,7 +69,7 @@ function InstalledSkills({ library, query, showDiscover }: Parameters<PagePart>[
           )}
         </SettingsCard>
       </SettingsSection>
-      <NativeSections kinds={['skill']} query={query} />
+      <NativeSections kinds={['skill']} query={query} onCopy={(item) => copyToLibrary(library, item)} />
     </>
   );
 }
@@ -154,17 +157,51 @@ function AddControl({ isInstalled, name, onAdd }: { isInstalled: boolean; name: 
   );
 }
 
-function AddFromGitHub({ library }: { library: Library }) {
+/** Every way into the library: a GitHub repo, one you write here, or a SKILL.md or skill folder from this computer. */
+function AddSkillMenu({ library }: { library: Library }) {
   const [adding, setAdding] = useState<string | null>(null);
+  const [isWriting, setWriting] = useState(false);
+  const upload = useSkillUpload(library);
   return (
     <>
-      <Button size="xs" onClick={() => setAdding('')}>
-        <Plus />
-        Add from GitHub
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="xs">
+            <Plus />
+            Add skill
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onSelect={() => setAdding('')}>
+            <GithubMarkIcon />
+            From GitHub
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setWriting(true)}>
+            <Pen />
+            Write a skill
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => upload.pick('file')}>
+            <FileText />
+            Upload a SKILL.md
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => upload.pick('folder')}>
+            <Folder />
+            Upload a skill folder
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {upload.inputs}
       <AddSkillsDialog source={adding} onClose={() => setAdding(null)} library={library} />
+      <WriteSkillDialog isOpen={isWriting} onClose={() => setWriting(false)} library={library} />
     </>
   );
+}
+
+function copyToLibrary(library: Library, item: NativeItem) {
+  void library.importFromAccount(item.provider, [item.name]).then((notes) => {
+    if (notes) toast(`Copied ${item.name} to your library`, { description: notes.join(' ') || 'On for this profile. Its copy in ' + HARNESSES[item.provider].name + ' stays as it is.' });
+  });
 }
 
 function useDebounced(value: string, ms: number) {

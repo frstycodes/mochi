@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { Schema } from 'effect';
+import { Mention } from './model.ts';
 import { Saved, SavedIndex, SavedThread } from './persist.ts';
 
 const recorded = JSON.parse(readFileSync(new URL('../fixtures/saved.json', import.meta.url), 'utf8'));
@@ -46,4 +47,9 @@ test('a v1 file must not carry legacy values, and a later version is refused', (
   assert.throws(() => Schema.decodeUnknownSync(SavedThread)({ v: 1, thread: waiting }));
   assert.throws(() => Schema.decodeUnknownSync(SavedThread)({ ...file, v: 2 }));
   assert.throws(() => Schema.decodeUnknownSync(SavedIndex)({ ...recorded.index, version: 2 }));
+});
+
+test('a plugin @-mention round-trips', () => {
+  const mention = { kind: 'plugin', id: 'plugin:emilkowalski', title: 'emilkowalski' };
+  assert.deepEqual(Schema.encodeSync(Mention)(Schema.decodeUnknownSync(Mention)(mention)), mention);
 });

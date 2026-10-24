@@ -65,7 +65,10 @@ async function until<A>(read: () => A | undefined | false, what: string, timeout
   }
 }
 
-test('stopping a thread interrupts its session fiber, kills its Claude Code process tree and releases its pending approval', async (t) => {
+// TODO(windows): the fake `claude` is a shebang script, which Windows can't run as an executable; it needs a `.cmd` shim.
+const skip = process.platform === 'win32' && 'fake CLI is a POSIX shebang script';
+
+test('stopping a thread interrupts its session fiber, kills its Claude Code process tree and releases its pending approval', { skip }, async (t) => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'claude-fake-'));
   const fake = path.join(dir, 'claude');
   writeFileSync(fake, FAKE_CLAUDE, { mode: 0o755 });
