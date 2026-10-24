@@ -22,12 +22,15 @@ export function useIdleVerdict(thread: Thread) {
   );
 }
 
-/** A thread's one status, for its ring: criteria met, the verdict's tone and word (live threads; a demo thread has needs-you only), working or not. */
+/**
+ * A thread's one status, for its ring: criteria met, the verdict's tone and word (live threads; a demo thread has needs-you only), working or not.
+ * Needs you wins over working: a live agent stays mid-turn while it waits on your approval or answer, and that wait is what the row must say.
+ */
 export function useThreadStatus(thread: Thread) {
   const verdict = useIdleVerdict(thread);
   const shown = thread.live && verdict && verdict.kind !== 'idle' && verdict.kind !== 'checking' ? verdict : null;
-  const working = isWorking(thread);
   const needsYou = thread.status === 'needs-you';
+  const working = isWorking(thread) && !needsYou;
   const tone = working ? null : (shown?.tone ?? (needsYou ? 'warning' : null));
   const status = working ? 'Working' : (shown?.chip ?? (needsYou ? 'Needs you' : 'Idle'));
   return { progress: goalProgress(thread), verdict: shown, tone, status, isWorking: working };

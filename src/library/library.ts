@@ -3,6 +3,7 @@ import { serverSummary, type McpServerDef } from '../settings/agentConfig.ts';
 import type { ConnectorSettings } from './connectorTools.ts';
 import { connectorIcon } from './connectors.ts';
 import type { PluginBundle } from './pluginBundle.ts';
+import { parseSkillMd } from './skillMd.ts';
 
 /**
  * The profile library (LIBRARY.md): each item is held once, and a profile is the set of item ids it turned on. Sessions
@@ -203,6 +204,33 @@ export const EMPTY_LIBRARY: LibraryIndex = { items: [], profiles: {}, marketplac
 /** Claude names a plugin's skills `<plugin>:<skill>` (verified with the SDK), so standalone skills read `mochi:<skill>`; no installed plugin may take the name. */
 export const STANDALONE_PLUGIN = 'mochi';
 
+/** The plugin a library skill loads under, so `/` reads `/<owner>:<skill>`: the GitHub owner it came from, else Mochi's own. */
+export function skillPluginName(source: string | null) {
+  const owner = source?.split('/')[0].toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  return owner || STANDALONE_PLUGIN;
+}
+
+const OWN_SKILL_LIMITS = { files: 200, bytes: 512 * 1024 };
+
+/**
+ * A skill written or uploaded in Mochi, checked before it's stored: a SKILL.md naming it, relative paths inside its folder, at most
+ * 200 text files of 512 KB. Throws the reason it can't be added.
+ */
+export function ownSkillItem(files: Record<string, string>, id: string, now: number): LibrarySkill {
+  const md = files['SKILL.md'];
+  if (md === undefined) throw new Error('A skill needs a SKILL.md at the top of its folder');
+  const paths = Object.keys(files);
+  if (paths.length > OWN_SKILL_LIMITS.files) throw new Error(`A skill can hold up to ${OWN_SKILL_LIMITS.files} files`);
+  const bad = paths.find((p) => !p || p.startsWith('/') || p.includes('\\') || p.split('/').some((part) => part === '..' || part === ''));
+  if (bad !== undefined) throw new Error(`${bad || 'A file'} isn't a path inside the skill's folder`);
+  const big = paths.find((p) => new TextEncoder().encode(files[p]).length > OWN_SKILL_LIMITS.bytes);
+  if (big) throw new Error(`${big} is over ${OWN_SKILL_LIMITS.bytes / 1024} KB`);
+  const { name, description, body } = parseSkillMd(md, '');
+  if (!/^[a-z0-9]/.test(name)) throw new Error('SKILL.md needs a name: in its frontmatter');
+  if (!body) throw new Error('SKILL.md has no instructions after its frontmatter');
+  return { kind: 'skill', id, name, description, files, targets: ['claude', 'codex'], addedAt: now, source: null, icon: null };
+}
+
 /** Owners whose skills install without a warning over their files; everyone else's are read first. */
 export const TRUSTED_SKILL_OWNERS = ['anthropics', 'openai'];
 export const FEATURED_MARKETPLACES: Marketplace[] = [{ name: 'claude-plugins-official', source: 'anthropics/claude-plugins-official' }];
@@ -299,7 +327,13 @@ export function profileLayout(index: LibraryIndex, spaceId: string, provider: Pr
   // servers only, and only plugin servers that don't run the plugin's own files, which Codex has no folder for.
   if (provider === 'codex') return { plugins: {}, servers: [...servers, ...plugins.flatMap((p) => p.bundle.servers.filter((s) => !usesPluginRoot(s)).map(stdioDef))] };
   const folders: PluginFolders = Object.fromEntries(plugins.map((p) => [p.bundle.name, pluginFolder(p.bundle)]));
-  if (skills.length) folders[STANDALONE_PLUGIN] = standalonePlugin(skills);
+  // An owner that shares an installed plugin's name would replace its folder; those skills stay under Mochi's.
+  const byOwner = new Map<string, LibrarySkill[]>();
+  for (const skill of skills) {
+    const owner = folders[skillPluginName(skill.source)] ? STANDALONE_PLUGIN : skillPluginName(skill.source);
+    byOwner.set(owner, [...(byOwner.get(owner) ?? []), skill]);
+  }
+  for (const [name, group] of byOwner) folders[name] = standalonePlugin(name, group);
   return { plugins: folders, servers };
 }
 
@@ -357,8 +391,8 @@ export const usesPluginRoot = (server: PluginBundle['servers'][number]) => /\$\{
 
 const stdioDef = ({ name, command, args, env }: PluginBundle['servers'][number]): McpServerDef => ({ name, type: 'stdio', command, args, env });
 
-function standalonePlugin(skills: LibrarySkill[]) {
-  const manifest = { name: STANDALONE_PLUGIN, description: "Skills from this profile's Mochi library" };
+function standalonePlugin(name: string, skills: LibrarySkill[]) {
+  const manifest = { name, description: "Skills from this profile's Mochi library" };
   const files: Record<string, string> = { '.claude-plugin/plugin.json': `${JSON.stringify(manifest, null, 2)}\n` };
   for (const skill of skills) for (const [path, text] of Object.entries(skill.files)) files[`skills/${skill.name}/${path}`] = text;
   return files;

@@ -565,11 +565,8 @@ function TasksCard({ thread, open }: CardProps) {
   const tasks = threadTasks(thread);
   const running = tasks.filter(isActive);
   const finished = tasks.filter((t) => !isActive(t));
-  const openTask = (task: TaskRow) => {
-    if (task.subagent) return () => open.agent(task.id);
-    const file = task.outputFile;
-    return file ? () => open.output(file) : undefined;
-  };
+  // Every task has its page in the Background tasks tab: an agent's transcript, a command's live output and exit code.
+  const openTask = (task: TaskRow) => () => open.agent(task.id);
   return (
     <>
       <CardHeader title="Background tasks" meta={running.length || undefined} />
@@ -587,15 +584,11 @@ function TasksCard({ thread, open }: CardProps) {
 }
 
 /** The finished tasks stay out of the card: their row opens them in a popover beside it, each with its outcome and how long it ran. */
-function FinishedTasks({ thread, tasks, openTask }: { thread: Thread; tasks: TaskRow[]; openTask: (task: TaskRow) => (() => void) | undefined }) {
+function FinishedTasks({ thread, tasks, openTask }: { thread: Thread; tasks: TaskRow[]; openTask: (task: TaskRow) => () => void }) {
   const [isOpen, setOpen] = useState(false);
-  const pick = (task: TaskRow) => {
-    const onOpen = openTask(task);
-    if (!onOpen) return undefined;
-    return () => {
-      setOpen(false);
-      onOpen();
-    };
+  const pick = (task: TaskRow) => () => {
+    setOpen(false);
+    openTask(task)();
   };
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>

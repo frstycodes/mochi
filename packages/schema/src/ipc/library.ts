@@ -161,6 +161,15 @@ const Name = Str(128);
 const Key = Str(128);
 const Entries = Schema.Array(LibraryEntry);
 
+// A key that fails a Record's key schema is skipped, not refused, so paths are checked on the whole record.
+const isSkillPath = (p: string) => !!p && p.length <= 512 && !p.startsWith('/') && !p.includes('\\') && !p.split('/').some((part) => part === '..' || part === '');
+/** A skill folder written in the app, `ownSkillItem`'s limits: a top-level SKILL.md, ≤200 text files of ≤512 KB at relative paths. */
+const SkillFolder = Schema.Record(S, S.check(Schema.makeFilter((text) => new TextEncoder().encode(text).length <= 512 * 1024 || 'a skill file is over 512 KB'))).check(
+  Schema.makeFilter((files) => 'SKILL.md' in files || 'A skill needs a SKILL.md at the top of its folder'),
+  Schema.makeFilter((files) => Object.keys(files).length <= 200 || 'A skill can hold up to 200 files'),
+  Schema.makeFilter((files) => Object.keys(files).every(isSkillPath) || "a file isn't a path inside the skill's folder"),
+);
+
 /**
  * `LibraryHost` (`src/host/types/library.ts`). Main still checks a project destination is a folder and dedupes providers.
  */
@@ -168,7 +177,8 @@ export const libraryRpc = {
   list: invoke(T([SpaceId]), Entries),
   setEnabled: invoke(T([SpaceId, ItemId, B]), Entries),
   remove: invoke(T([SpaceId, ItemId]), Entries),
-  importFromAccount: invoke(T([SpaceId, Provider, Schema.Array(Schema.Literals(['skills', 'mcp'])).check(Schema.isMinLength(1))]), Schema.Struct({ entries: Entries, notes: Schema.Array(S) })),
+  importFromAccount: invoke(T([SpaceId, Provider, Schema.Array(Schema.Literals(['skills', 'mcp'])).check(Schema.isMinLength(1)), o(Schema.Array(Name))]), Schema.Struct({ entries: Entries, notes: Schema.Array(S) })),
+  addSkill: invoke(T([SpaceId, SkillFolder]), Entries),
   discoverSkills: invoke(T([Source]), Schema.Array(CatalogSkill)),
   skillFiles: invoke(T([Source, Name]), Schema.Record(S, S)),
   installSkill: invoke(T([SpaceId, Source, Name, o(SkillDestination)]), Entries),

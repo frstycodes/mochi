@@ -5,7 +5,7 @@ import { serializeMentions, type FileMention } from './fileMentions.ts';
 
 /**
  * What `@` in the thread composer can point at. A window carries the screenshot taken when you picked it; a skill or MCP
- * server tells the agent what to use for this message (`id` is prefixed so it can't collide with a thread's). A file or a
+ * server tells the agent what to use for this message, as does a plugin (`id` is prefixed so it can't collide with a thread's). A file or a
  * thread stays in the text as a token (`@src/a.ts`, `@Fix login`) where you typed it; the rest show as chips.
  */
 export type Mention =
@@ -13,6 +13,7 @@ export type Mention =
   | { kind: 'window'; id: string; title: string; icon?: string; image: AgentImage }
   | { kind: 'skill'; id: string; title: string; description: string }
   | { kind: 'mcp'; id: string; title: string; toolCount?: number }
+  | { kind: 'plugin'; id: string; title: string }
   | FileMention;
 
 /** Mentioned inside the text rather than as a chip. */
@@ -21,7 +22,7 @@ export const isInline = (mention: Mention) => mention.kind === 'file' || mention
 /** A file row: `name` bright, `dir` (where it sits, as you'd type it) dimmed. */
 export type FileOption = { kind: 'file'; mention: FileMention; name: string; dir: string };
 
-export type MentionOption = FileOption | { kind: 'thread'; thread: Thread } | { kind: 'window'; window: AppWindow } | { kind: 'skill'; skill: AgentCommand } | { kind: 'mcp'; server: McpServer };
+export type MentionOption = FileOption | { kind: 'thread'; thread: Thread } | { kind: 'window'; window: AppWindow } | { kind: 'skill'; skill: AgentCommand } | { kind: 'mcp'; server: McpServer } | { kind: 'plugin'; plugin: string };
 
 const MAX_OPTIONS = 6;
 const DIGEST_MESSAGES = 8;
@@ -37,8 +38,8 @@ export function withoutQuery(text: string) {
   return text.replace(/(^|\s)@[^\s@]*$/, '$1');
 }
 
-/** Threads (not `selfId`, none settled), windows, skills, then MCP servers whose name contains the query, at most six of each. */
-export function mentionOptions(query: string, threads: Thread[], windows: AppWindow[], selfId: string, skills: AgentCommand[] = [], servers: McpServer[] = []): MentionOption[] {
+/** Threads (not `selfId`, none settled), windows, skills, connectors, then plugins whose name contains the query, at most six of each. */
+export function mentionOptions(query: string, threads: Thread[], windows: AppWindow[], selfId: string, skills: AgentCommand[] = [], servers: McpServer[] = [], plugins: string[] = []): MentionOption[] {
   const q = query.toLowerCase();
   const hit = (title: string) => title.toLowerCase().includes(q);
   return [
@@ -58,6 +59,10 @@ export function mentionOptions(query: string, threads: Thread[], windows: AppWin
       .filter((s) => hit(s.name))
       .slice(0, MAX_OPTIONS)
       .map((server) => ({ kind: 'mcp' as const, server })),
+    ...plugins
+      .filter(hit)
+      .slice(0, MAX_OPTIONS)
+      .map((plugin) => ({ kind: 'plugin' as const, plugin })),
   ];
 }
 
@@ -66,7 +71,8 @@ const MENTION_GROUPS = [
   { kind: 'thread', label: 'Threads' },
   { kind: 'window', label: 'Windows' },
   { kind: 'skill', label: 'Skills' },
-  { kind: 'mcp', label: 'MCP servers' },
+  { kind: 'mcp', label: 'Connectors' },
+  { kind: 'plugin', label: 'Plugins' },
 ] as const;
 
 /** The menu's sections in order with their items, empty ones left out. The screen-recording prompt sits with the windows it would unlock. */
@@ -80,10 +86,11 @@ export function mentionFor(option: Exclude<MentionOption, { kind: 'window' }>): 
   if (option.kind === 'file') return option.mention;
   if (option.kind === 'thread') return { kind: 'thread', id: option.thread.id, title: option.thread.title };
   if (option.kind === 'skill') return { kind: 'skill', id: `skill:${option.skill.name}`, title: option.skill.name, description: option.skill.description };
+  if (option.kind === 'plugin') return { kind: 'plugin', id: `plugin:${option.plugin}`, title: option.plugin };
   return { kind: 'mcp', id: `mcp:${option.server.name}`, title: option.server.name, ...(option.server.toolCount !== undefined && { toolCount: option.server.toolCount }) };
 }
 
-export const optionId = (option: MentionOption) => (option.kind === 'file' ? option.mention.id : option.kind === 'thread' ? option.thread.id : option.kind === 'window' ? option.window.id : option.kind === 'skill' ? `skill:${option.skill.name}` : `mcp:${option.server.name}`);
+export const optionId = (option: MentionOption) => (option.kind === 'file' ? option.mention.id : option.kind === 'thread' ? option.thread.id : option.kind === 'window' ? option.window.id : option.kind === 'skill' ? `skill:${option.skill.name}` : option.kind === 'plugin' ? `plugin:${option.plugin}` : `mcp:${option.server.name}`);
 
 /**
  * What the transcript shows (`text`: the chip references as `@title`, then your message as written) and what the agent gets
@@ -109,7 +116,7 @@ export function withReferences(message: string, mentions: Mention[], threads: Th
     const thread = threads.find((t) => t.id === m.id);
     return [thread ? threadDigest(thread) : `<thread title="${attr(m.title)}">No longer available.</thread>`];
   });
-  const uses = [...skills.map((name) => skillLine(name, provider)), ...mentions.flatMap((m) => (m.kind === 'mcp' ? [serverLine(m.title, provider)] : []))];
+  const uses = [...skills.map((name) => skillLine(name, provider)), ...mentions.flatMap((m) => (m.kind === 'mcp' ? [serverLine(m.title, provider)] : m.kind === 'plugin' ? [pluginLine(m.title)] : []))];
   const images = mentions.flatMap((m) => (m.kind === 'window' ? [m.image] : []));
   const preamble = [context.length ? `The user referenced these for context:\n\n${context.join('\n\n')}` : '', uses.join('\n')].filter(Boolean).join('\n\n');
   return { text, prompt: isCommand ? `${body}\n\n${preamble}` : `${preamble}\n\n${body}`, images, skills };
@@ -122,6 +129,8 @@ const skillLine = (name: string, provider: Provider) =>
 // Claude names a server's tools `mcp__<server>__<tool>`, its name's characters outside [A-Za-z0-9_-] as `_`.
 const serverLine = (name: string, provider: Provider) =>
   `For this message, prefer the tools of the "${name}" MCP server${provider === 'claude' ? ` (mcp__${name.replace(/[^a-zA-Z0-9_-]/g, '_')}__*)` : ''} over other ways to do the same thing.`;
+
+const pluginLine = (name: string) => `For this message, prefer what the "${name}" plugin brings (its skills, commands and tools, named "${name}:…") over other ways to do the same thing.`;
 
 /** A compact transcript: the goal, where it stands, then the latest messages. Tool calls and events are left out. */
 export function threadDigest(thread: Thread) {

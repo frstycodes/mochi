@@ -20,6 +20,11 @@ export function followZoom() {
   window.addEventListener('resize', sync);
 }
 
+/** `--lights-end` in `index.css`, in CSS px, for code that measures against it. */
+export function lightsEnd() {
+  return 75 / zoom;
+}
+
 /** The app's ⌘+ / ⌘− zoom factor; always 1 off the desktop app. */
 export function useAppZoom() {
   return useSyncExternalStore(subscribe, () => zoom);

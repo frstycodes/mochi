@@ -81,6 +81,14 @@ test('inputs main refuses today are refused', () => {
   refuses(libraryRpc.addConnector, ['personal', { url: 'http://example.com/mcp', alias: 'work' }]);
   refuses(libraryRpc.addConnector, ['personal', { url: 'https://example.com/mcp', alias: 'Work Account' }]);
   refuses(libraryRpc.importFromAccount, ['personal', 'claude', []]);
+  refuses(libraryRpc.importFromAccount, ['personal', 'claude', ['skills'], [1]]);
+  refuses(libraryRpc.addSkill, ['personal', { 'notes.md': 'x' }]);
+  refuses(libraryRpc.addSkill, ['personal', { 'SKILL.md': 'x', '../escape.md': 'x' }]);
+  refuses(libraryRpc.addSkill, ['personal', { 'SKILL.md': 'x', '/etc/passwd': 'x' }]);
+  refuses(libraryRpc.addSkill, ['personal', { 'SKILL.md': 'x', 'a\\b.md': 'x' }]);
+  refuses(libraryRpc.addSkill, ['personal', { 'SKILL.md': 'x', ['a'.repeat(513)]: 'x' }]);
+  refuses(libraryRpc.addSkill, ['personal', { 'SKILL.md': 'x'.repeat(512 * 1024 + 1) }]);
+  refuses(libraryRpc.addSkill, ['personal', Object.fromEntries([['SKILL.md', 'x'], ...Array.from({ length: 200 }, (_, i) => [`f${i}.md`, 'x'])])]);
   refuses(libraryRpc.setConnectorSettings, ['k', { tools: { search: 'always' } }]);
   refuses(libraryRpc.runSetup, ['slack', 'view-1', { params: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`p${i}`, 'x'])) }]);
   refuses(libraryRpc.reviewUpload, [{ name: 'a.zip', bytes: new Uint8Array(20_000_001) }]);

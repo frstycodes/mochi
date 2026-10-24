@@ -59,7 +59,7 @@ import { HandoffRow } from './chat/HandoffRow';
 import { compactFocus, compactGate } from './chat/compact';
 import { parseSlash, resolveToken, typedSkills, type SlashItem } from './chat/slash';
 import { rehypeSlashTokens } from './chat/rehypeRefs';
-import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
+import { SlashMenu, useSlashItems, useSlashMenu, useThreadPlugins, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
@@ -69,12 +69,12 @@ import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { PendingSteers } from './chat/SteerBubble';
 import { usePrefs, type Prefs } from './settings/prefs';
-import { MentionChips, MentionMenu, useMentionMenu, useThreadMentionFiles } from './chat/MentionMenu';
+import { MentionChips, MentionMenu, useMentionMenu, useThreadMentionDrop, useThreadMentionFiles } from './chat/MentionMenu';
 import type { Mention } from './chat/mentions';
 import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
-import { SubagentRow } from './agents/SubagentRow';
+import { SubagentGroup } from './agents/SubagentRow';
 import { rememberedScroll, Transcript, type TranscriptHandle } from './chat/Transcript';
 
 export type MessageBar = ComponentType<{ thread: Thread; index: number; align: 'start' | 'end' }>;
@@ -212,10 +212,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'changes') return <TurnChangesCard thread={thread} turn={row.turn} isReadOnly={isReadOnly} />;
-  if (row.kind === 'subagent') {
-    const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
-    return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
-  }
+  if (row.kind === 'subagent') return <SubagentGroup thread={thread} entries={row.entries} />;
   if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
   if (row.kind === 'widget') return <McpAppCard threadId={thread.id} widget={row.entry.widget!} />;
   if (row.kind === 'thread-message') return row.entry.autofix ? <AutofixEventRow entry={row.entry} event={row.entry.autofix} index={row.index} /> : <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
@@ -413,7 +410,8 @@ const Composer = memo(function Composer({
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const root = projectRef(thread.repo);
-  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent), useThreadMentionFiles(thread));
+  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent), useThreadPlugins(provider, thread.spaceId, root, thread.agent), useThreadMentionFiles(thread));
+  const threadDrop = useThreadMentionDrop(mention);
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
@@ -463,7 +461,7 @@ const Composer = memo(function Composer({
         <div className="relative">
           <SlashMenu menu={slash} />
           <MentionMenu menu={mention} />
-          <ComposerCard data-composer className="in-data-image-over:border-ring">
+          <ComposerCard data-composer {...threadDrop} className="in-data-image-over:border-ring data-mention-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
             <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id })} />
             <MentionChips menu={mention} />

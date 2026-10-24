@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useDeferredValue, useId, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
-import { Chat, Note, ShieldAlert, Window, X } from '@/icons';
+import { Chat, Plug, ShieldAlert, Skill, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -18,22 +18,24 @@ import { useHarnessSelector } from '../store';
 import { isSameListing } from '../reorder';
 import { useLibraryNames } from '../library/names';
 import { CaretMenu, forwardKey } from './CaretMenu';
+import { MENTION_DROP_EVENT, useDragSelector } from '../layout/drag';
+import { isInside } from '../pane/headerPins';
 import { FileMark } from './FileMark';
 import { browseEntries, browseQuery, browseTarget, fileMentionFor, mentionTokens, parentDir, rankFiles, tokenText, worktreeMention } from './fileMentions';
-import { McpServerMark, SkillMark } from './McpIcon';
+import { McpServerMark, PluginMark, SkillMark } from './McpIcon';
 import { isInline, mentionFor, mentionGroups, mentionOptions, mentionQuery, optionId, withoutQuery, type FileOption, type Mention, type MentionOption } from './mentions';
 import { queryKeys } from '../queryKeys';
 
 type MenuItem = MentionOption | { kind: 'permission' };
 
 /**
- * Above the caret while the text ends in `@` and part of a name: the worktree's files, threads, windows, skills and
- * MCP servers, grouped. `@../`, `@~/` and `@/` turn it into a browser of that folder.
+ * Above the caret while the text ends in `@` and part of a name: the worktree's files, threads, windows, skills,
+ * connectors and plugins, grouped. `@../`, `@~/` and `@/` turn it into a browser of that folder.
  */
 export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> }) {
   const groups = mentionGroups(menu.items);
   return (
-    <CaretMenu isOpen={menu.isOpen} editor={menu.editor} listRef={menu.listRef} listId={menu.listId} label="Reference a file, thread, window, skill or MCP server" value={menu.activeKey} onValueChange={menu.setActiveKey} onDismiss={menu.dismiss}>
+    <CaretMenu isOpen={menu.isOpen} editor={menu.editor} listRef={menu.listRef} listId={menu.listId} label="Reference a file, thread, window, skill, connector or plugin" value={menu.activeKey} onValueChange={menu.setActiveKey} onDismiss={menu.dismiss}>
       {groups.map((group) => (
         <CommandGroup key={group.kind} heading={groups.length > 1 ? group.label : undefined}>
           {group.items.map((item) => (
@@ -76,7 +78,7 @@ function MentionItem({ item }: { item: MenuItem }) {
   if (item.kind === 'skill')
     return (
       <>
-        <SkillMark skill={item.skill.name} fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />} />
+        <SkillMark skill={item.skill.name} fallback={<SkillFallback />} />
         <span className="shrink-0 font-medium" title={item.skill.name}>
           {names.skill(item.skill.name).title}
         </span>
@@ -93,6 +95,15 @@ function MentionItem({ item }: { item: MenuItem }) {
         <span className="ml-auto shrink-0 type-caption text-subtle-foreground tabular">{toolCountLabel(item.server)}</span>
       </>
     );
+  if (item.kind === 'plugin')
+    return (
+      <>
+        <PluginMark plugin={item.plugin} fallback={<PluginFallback />} />
+        <span className="min-w-0 truncate font-medium" title={item.plugin}>
+          {names.plugin(item.plugin).title}
+        </span>
+      </>
+    );
   return (
     <>
       <Chat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -100,6 +111,15 @@ function MentionItem({ item }: { item: MenuItem }) {
       <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.thread.repo?.project ?? 'No project'}</span>
     </>
   );
+}
+
+/** The lightbulb every skill without its own icon wears, here and in the `/` menu. */
+export function SkillFallback() {
+  return <Skill className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
+}
+
+function PluginFallback() {
+  return <Plug className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
 const TOOLS = new Intl.PluralRules('en');
@@ -129,8 +149,8 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
           ) : (
             <ChipIcon mention={m} />
           )}
-          <span className={cn('min-w-0 truncate', (m.kind === 'skill' || m.kind === 'mcp') && 'text-info')} title={m.kind === 'skill' ? m.description : m.kind === 'mcp' ? m.title : undefined}>
-            {m.kind === 'skill' ? names.skill(m.title).title : m.kind === 'mcp' ? names.server(m.title).title : m.title}
+          <span className={cn('min-w-0 truncate', m.kind !== 'window' && 'text-info')} title={m.kind === 'skill' ? m.description : m.kind === 'mcp' || m.kind === 'plugin' ? m.title : undefined}>
+            {m.kind === 'skill' ? names.skill(m.title).title : m.kind === 'mcp' ? names.server(m.title).title : m.kind === 'plugin' ? names.plugin(m.title).title : m.title}
           </span>
           {m.kind === 'mcp' && m.toolCount !== undefined && <span className="shrink-0 type-caption text-subtle-foreground tabular">{m.toolCount}</span>}
           <button type="button" aria-label={`Remove ${m.title}`} onClick={() => menu.remove(m.id)} className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -143,7 +163,8 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
 }
 
 function ChipIcon({ mention }: { mention: Exclude<Mention, { kind: 'window' | 'file' | 'thread' }> }) {
-  if (mention.kind === 'skill') return <SkillMark skill={mention.title} fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />} />;
+  if (mention.kind === 'skill') return <SkillMark skill={mention.title} fallback={<SkillFallback />} />;
+  if (mention.kind === 'plugin') return <PluginMark plugin={mention.title} fallback={<PluginFallback />} />;
   return <McpServerMark server={mention.title} />;
 }
 
@@ -153,7 +174,7 @@ function ChipIcon({ mention }: { mention: Exclude<Mention, { kind: 'window' | 'f
  * folder enters it, and Backspace or ← on an empty segment goes up one. A picked file or thread goes into the text as a
  * token where the `@` was. Needs the composer's `PromptInputProvider`.
  */
-export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: McpServer[], files: MentionFiles = NO_FILES) {
+export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: McpServer[], plugins: string[], files: MentionFiles = NO_FILES) {
   const listId = useId();
   const threads = useHarnessSelector((s) => s.threads, isSameListing);
   const { textInput } = usePromptInputController();
@@ -172,7 +193,7 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   const fileOptions = useFileOptions(isQuerying ? query : null, files);
 
   const picked = new Set(mentions.map((m) => m.id));
-  const others = browse ? [] : mentionOptions(query ?? '', threads, screen.windows, selfId, skills, servers).filter((o) => !picked.has(optionId(o)));
+  const others = browse ? [] : mentionOptions(query ?? '', threads, screen.windows, selfId, skills, servers, plugins).filter((o) => !picked.has(optionId(o)));
   const options = [...fileOptions, ...others];
   const items: MenuItem[] = !browse && isBlocked(screen.access) ? [...options, { kind: 'permission' }] : options;
   const isOpen = isQuerying && items.length > 0;
@@ -197,6 +218,14 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
     textInput.setInput(`${withoutQuery(text)}@${dir}`);
   };
   const remove = (id: string) => setMentions((all) => all.filter((m) => m.id !== id));
+  /** A thread dropped on the composer: its token at the end of the text, as if picked from the menu. */
+  const mentionThread = (threadId: string) => {
+    const thread = threads.find((t) => t.id === threadId);
+    if (!thread || thread.id === selfId) return;
+    const mention = mentionFor({ kind: 'thread', thread });
+    textInput.setInput(`${text}${text && !/\s$/.test(text) ? ' ' : ''}@${mention.title} `);
+    add(mention);
+  };
 
   const onKeyDown = (e: KeyboardEvent, view?: EditorView) => {
     if (view) editor.current = view;
@@ -223,7 +252,26 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   // Edit on a queued message brings its references back beside any you already picked.
   const restore = (list: Mention[]) => setMentions((all) => [...all, ...list.filter((m) => !all.some((a) => a.id === m.id))]);
   const inlineMentions = useMemo(() => mentions.filter((m) => m.kind === 'file' || m.kind === 'thread'), [mentions]);
-  return { listId, items, activeKey: current && itemKey(current), setActiveKey, dismiss: () => setDismissedAt(text), editor, listRef, isOpen, choose, mentions, inlineMentions, remove, restore, clear: () => setMentions([]), editorProps };
+  return { listId, items, activeKey: current && itemKey(current), setActiveKey, dismiss: () => setDismissedAt(text), editor, listRef, isOpen, choose, mentions, inlineMentions, remove, mentionThread, restore, clear: () => setMentions([]), editorProps };
+}
+
+/**
+ * Makes the composer a drop target for a thread dragged from the sidebar: `isOver` while one hovers it, and the drop mentions
+ * that thread (`mentionThread`). Spread `dropProps` on the composer card.
+ */
+export function useThreadMentionDrop(menu: ReturnType<typeof useMentionMenu>) {
+  // A callback ref: the composer can mount after this hook does (a new thread's composer waits for its project step).
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const isOver = useDragSelector((s) => s?.view.kind === 'thread' && !!el && isInside(el, s.x, s.y));
+  const latest = useRef(menu.mentionThread);
+  latest.current = menu.mentionThread;
+  useEffect(() => {
+    if (!el) return;
+    const onDrop = (e: Event) => latest.current((e as CustomEvent<string>).detail);
+    el.addEventListener(MENTION_DROP_EVENT, onDrop);
+    return () => el.removeEventListener(MENTION_DROP_EVENT, onDrop);
+  }, [el]);
+  return { ref: setEl, 'data-mention-drop': '', 'data-mention-over': isOver || undefined };
 }
 
 /** Where `@` finds files: the folder the thread works in, and the files it opened or edited lately (relative, newest first). */

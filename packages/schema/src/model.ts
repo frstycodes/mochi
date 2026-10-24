@@ -196,6 +196,7 @@ export const Mention = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('window'), id: Schema.String, title: Schema.String, icon: opt(Schema.String), image: AgentImage }),
   Schema.Struct({ kind: Schema.Literal('skill'), id: Schema.String, title: Schema.String, description: Schema.String }),
   Schema.Struct({ kind: Schema.Literal('mcp'), id: Schema.String, title: Schema.String, toolCount: opt(Schema.Number) }),
+  Schema.Struct({ kind: Schema.Literal('plugin'), id: Schema.String, title: Schema.String }),
   FileMention,
 ]);
 export type Mention = typeof Mention.Type;
