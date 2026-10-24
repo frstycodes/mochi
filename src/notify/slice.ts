@@ -1,6 +1,6 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
 import type { QueueItem, Thread } from '../model.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import { diffNotices, isAddressed, type Addressing, type Notice, type QuietHours } from './model.ts';
 
 export interface NotificationsState {

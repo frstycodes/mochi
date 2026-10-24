@@ -4,9 +4,11 @@ import { isWorking } from '../agentPhase.ts';
 import { judgeDrift, type DriftVerdict } from '../drift.ts';
 import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
 import type { Prefs } from '../settings/prefs.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import { agentImage, shownImage } from './images.ts';
 import { withReferences } from './mentions.ts';
+
+export { interruptsToSend, orderQueue, pauseQueue } from './queued.ts';
 
 type WhileWorking = Prefs['whileWorking'];
 
@@ -33,16 +35,6 @@ export function dueQueued(state: Pick<State, 'threads' | 'queue'>): { thread: Th
   });
 }
 
-export function pauseQueue(thread: Thread, reason: QueuePause): Thread {
-  return thread.queued?.length ? { ...thread, queuePause: reason } : thread;
-}
-
-/** `ids` first in their order; anything they miss (queued meanwhile) keeps its place after them. */
-export function orderQueue(queued: QueuedMessage[], ids: string[]) {
-  const byId = new Map(queued.map((m) => [m.id, m]));
-  return [...ids.flatMap((id) => byId.get(id) ?? []), ...queued.filter((m) => !ids.includes(m.id))];
-}
-
 /** One step up (-1) or down (1); the ends stay put. */
 export function moveQueued(ids: string[], id: string, step: -1 | 1) {
   const from = ids.indexOf(id);
@@ -51,12 +43,6 @@ export function moveQueued(ids: string[], id: string, step: -1 | 1) {
   const next = [...ids];
   [next[from], next[to]] = [next[to], next[from]];
   return next;
-}
-
-/** Whether taking back `ids` (the clicked one first) stops the turn: only while the turn Send now was clicked in still runs. */
-export function interruptsToSend(thread: Thread, ids: string[]) {
-  const clicked = thread.steering?.find((s) => s.message.id === ids[0]);
-  return !!thread.live?.isWorking && clicked?.sendNow === 'pending';
 }
 
 /**

@@ -1,7 +1,8 @@
 import type { AgentEvent, AgentSubagentEvent } from '../host/types/agent.ts';
 import type { Provider, Subagent, SubagentStep, Thread } from '../model.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 import { log, mapThread } from '../store/threads.ts';
+import { wallNow } from '../store/context.ts';
 
 /** A task a thread's agent hands to another provider (`delegate_task`), run as a Mochi background agent. */
 export interface BackgroundStart {
@@ -31,7 +32,7 @@ export function applySubagent(state: State, thread: Thread, event: AgentSubagent
       name: event.name ?? 'Agent',
       isBackground: !!event.isBackground,
       status: 'running',
-      startedAt: Date.now(),
+      startedAt: wallNow(),
       tokens: 0,
       steps: [],
     };
@@ -245,7 +246,7 @@ function patch(s: Subagent, e: AgentSubagentEvent): Subagent {
   return {
     ...next,
     status: e.status ?? 'done',
-    endedAt: Date.now(),
+    endedAt: wallNow(),
     activity: undefined,
     result: e.result ?? next.message,
   };

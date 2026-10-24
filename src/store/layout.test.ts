@@ -35,6 +35,16 @@ test('dropping an open thread on an edge moves it; in the centre it swaps', () =
   assert.deepEqual(threadIds(swapped), ['b', 'a']);
 });
 
+test('a thread you start or fork opens in the focused split; one an agent starts in the background does not', () => {
+  // The thread slice ran first: the new thread holds the sequence number before the current one.
+  const created = { ...start(), seq: 4, threads: [...start().threads, { id: 'new-3', spaceId: 's' }, { id: 'fork-3', spaceId: 's' }] } as unknown as State;
+  const create: Action = { type: 'create', title: 't', provider: 'claude', project: null };
+  assert.deepEqual(threadIds(run(created, create)), ['new-3']);
+  assert.deepEqual(threadIds(run(created, { ...create, isBackground: true })), ['a']);
+  assert.deepEqual(threadIds(run(created, { type: 'fork', threadId: 'a', point: { kind: 'message', index: 0 } })), ['fork-3']);
+  assert.deepEqual(threadIds(run({ ...created, threads: start().threads } as State, create)), ['a'], 'nothing opens when no thread was made');
+});
+
 test('a view written by another slice lands in the focused split', () => {
   const s = run({ ...start(), views: { s: th('b') } }, { type: 'pause' } as Action);
   assert.deepEqual(threadIds(s), ['b']);

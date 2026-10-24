@@ -2,7 +2,7 @@ import type { MissedRuns, TriggerInput, TriggerWhen } from '../host/types/schedu
 import { firstPrompt, type Thread } from '../model.ts';
 import { getProfiles } from '../profiles.ts';
 import { scheduledStart } from '../runtime/live.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 
 export interface TriggerDraft {
   when: TriggerWhen;

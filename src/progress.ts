@@ -1,6 +1,6 @@
 import { isMet, type Step, type StepStatus, type Thread } from './model.ts';
 import { summarize } from './summary.ts';
-import { getPrefs } from './settings/prefs.ts';
+import { prefsNow } from './store/context.ts';
 
 export function statusAt(step: Step, t: number): StepStatus | null {
   if (step.addedAt > t) return null;
@@ -22,7 +22,7 @@ export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', v
  * checks), never from the agent's own percentage.
  */
 export function goalProgress(thread: Thread) {
-  const criteria = getPrefs().goals ? (thread.criteria ?? []) : [];
+  const criteria = prefsNow().goals ? (thread.criteria ?? []) : [];
   const met = criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length;
   return { met, total: criteria.length, phase: phaseOf(thread, criteria.length > 0 && met === criteria.length) };
 }

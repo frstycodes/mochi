@@ -12,7 +12,7 @@ setPrefs({ goals: true });
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 
-test('New thread from a finished goal settles it, keeps its open-PR review queued, creates and opens the new one', () => {
+test('New thread from a finished goal settles it, keeps its open-PR review queued, creates the new one', () => {
   const s = threadsReducer(base(), { type: 'drift-new-thread', threadId: 'auth', prompt: 'Add dark mode to settings', branchFrom: 'current' });
   const auth = s.threads.find((t) => t.id === 'auth')!;
   const created = s.threads.at(-1)!;
@@ -23,7 +23,6 @@ test('New thread from a finished goal settles it, keeps its open-PR review queue
   assert.equal(created.goal, '', 'the goal is drafted after, never copied');
   assert.equal(created.repo?.project, 'latitude');
   assert.equal(created.activity[0].text, 'Branched off feat/better-auth');
-  assert.deepEqual(s.views.latitude, { kind: 'thread', id: created.id });
 });
 
 test('New thread from an unfinished goal leaves it running', () => {

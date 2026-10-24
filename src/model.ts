@@ -8,7 +8,7 @@ import type { WorkspaceDraft } from './git/workspace.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import type { PaneLayout } from './pane/layout.ts';
-import { shallowEqual } from './store/external.ts';
+import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 import { vizGalleryThread } from './viz/fixtures.ts';
 import { longThreadFromUrl } from './longThread.ts';
 import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
@@ -313,6 +313,11 @@ export interface WebLink {
 /** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
 /** Shown with the other threads (sidebar, palette, queue, list_threads); a settings chat lives only in Settings. */
 export const isListed = (thread: Thread) => !thread.isSettingsChat;
+
+/** A live thread keeps `running` between turns; only its agent knows whether it's working. Demo threads run while their status says so. */
+export function isWorking(thread: Thread) {
+  return thread.live ? thread.live.isWorking : thread.status === 'running';
+}
 
 /** The same thread but for what an agent's events stream into it: its transcript and the seq of the last event applied. */
 export function isStreamedOnly(a: Thread, b: Thread) {

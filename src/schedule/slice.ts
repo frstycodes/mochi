@@ -1,8 +1,7 @@
-import { v7 as uuidv7 } from 'uuid';
 import { duration } from '../progress.ts';
 import type { ScheduleEvent, ScheduleRun } from '../host/types/schedule.ts';
 import type { PullRequest, QueueItem, Thread } from '../model.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import { autofixBody, autofixPrompt, autofixTitle, type AutofixEvent } from '../git/autofix.ts';
 import { ciTitle } from '../notify/watch.ts';
 import { notePr, notePrsEnded, prEscalation } from '../runtime/subThreadNotes.ts';
@@ -53,7 +52,8 @@ function ciResult(state: State, { threadId, result }: Extract<ScheduleEvent, { t
   if (result.status === 'pass') return { ...state, threads };
   const [check] = result.failed;
   const item: QueueItem = {
-    id: `q-ci-${threadId}-${result.pr}-${uuidv7()}`,
+    // A newer failure replaces the card, so the minute it landed tells it from the last one.
+    id: `q-ci-${threadId}-${result.pr}-${now}`,
     kind: 'ci',
     threadId,
     title,

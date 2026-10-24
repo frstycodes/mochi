@@ -1,11 +1,11 @@
-import { threadCwd } from '../host/cwd.ts';
+import { threadRoot } from '../git/root.ts';
 import type { QueueItem, Thread } from '../model.ts';
-import type { State } from '../store/index.tsx';
+import type { State } from '../store/types.ts';
 import { summarize } from '../summary.ts';
 
 /** Files the thread's agent edited or wrote, relative to its own worktree so two worktrees of one repo compare. */
 export function editedFiles(t: Thread) {
-  const root = threadCwd(t)?.replace(/\/$/, '');
+  const root = threadRoot(t)?.replace(/\/$/, '');
   return new Set(summarize(t.activity).files.map((f) => (root && f.path.startsWith(`${root}/`) ? f.path.slice(root.length + 1) : f.path)));
 }
 

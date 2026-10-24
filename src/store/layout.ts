@@ -26,7 +26,7 @@ import { getProfiles } from '../profiles.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Thread } from '../model.ts';
 import { pinnedThreads } from '../reorder.ts';
-import type { Action, State } from './index.tsx';
+import type { Action, State } from './types.ts';
 import { showsDemoData } from '../demoData.ts';
 
 export type { View };
@@ -89,6 +89,15 @@ function reduce(state: State, action: Action): State {
   const edit = () => materialize(layout, state.orientation);
 
   switch (action.type) {
+    // A thread you start or fork opens in the focused split; one an agent started in the background doesn't. The thread slice
+    // ran first, so the new thread's id took the sequence number before the current one.
+    case 'create':
+    case 'drift-new-thread':
+    case 'fork': {
+      const id = `${action.type === 'fork' ? 'fork' : 'new'}-${state.seq - 1}`;
+      if ((action.type === 'create' && action.isBackground) || !state.threads.some((t) => t.id === id)) return state;
+      return set({ ...layout, root: setLeafView(layout.root, layout.focusId, { kind: 'thread', id }) });
+    }
     case 'go': {
       const view = action.view;
       const threadId = view.kind === 'thread' ? view.id : view.kind === 'tab' ? view.threadId : undefined;

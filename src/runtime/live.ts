@@ -8,7 +8,7 @@ import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts'
 import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
 import { hasTempBranch, startTitleRequest } from '../utility/titles.ts';
-import type { Action, State } from '../store/index.tsx';
+import type { Action, State } from '../store/types.ts';
 import { autofixSend } from '../schedule/slice.ts';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { WAKE_PROMPT } from './subThreadNotes.ts';
