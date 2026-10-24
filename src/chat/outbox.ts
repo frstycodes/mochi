@@ -22,17 +22,6 @@ export function shouldQueue(thread: Thread, whileWorking: WhileWorking, isHeld: 
   return isWorking(thread) && (whileWorking === 'queue') !== isHeld;
 }
 
-/** The head of each live thread's queue whose agent is idle, not paused and not waiting on your answer. */
-export function dueQueued(state: Pick<State, 'threads' | 'queue'>): { thread: Thread; message: QueuedMessage }[] {
-  return state.threads.flatMap((thread) => {
-    const message = thread.queued?.[0];
-    // A steer the agent hasn't read yet goes first: it will start the next turn if this one ended before reading it.
-    if (!message || !thread.live || thread.queuePause || thread.live.isWorking || thread.live.starting || thread.steering || thread.status === 'settled') return [];
-    if (state.queue.some((q) => q.threadId === thread.id && (q.kind === 'approval' || q.kind === 'question'))) return [];
-    return [{ thread, message }];
-  });
-}
-
 export function pauseQueue(thread: Thread, reason: QueuePause): Thread {
   return thread.queued?.length ? { ...thread, queuePause: reason } : thread;
 }

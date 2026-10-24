@@ -1,7 +1,5 @@
 import { useSyncExternalStoreWithSelector } from 'use-sync-external-store/with-selector';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch, type ReactNode } from 'react';
-import { dueQueued, sendMessage } from '../chat/outbox.ts';
-import { compactFocus, useCompactInstructions } from '../chat/compact.ts';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type Dispatch, type ReactNode } from 'react';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -12,9 +10,6 @@ import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, unsentTurns, type AgentCall } from '../runtime/live.ts';
-import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
-import { dueReports } from '../runtime/subagents.ts';
-import { dueWakes } from '../runtime/subThreadNotes.ts';
 import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
@@ -26,7 +21,6 @@ import { saveSideChats, type SideChatAction, type SideChatState } from './sidech
 import { saveThreads } from './persist.ts';
 import { createExternalState, fixedStore, shallowEqual, type HarnessStore } from './external.ts';
 import { initialState, reducer } from './root.ts';
-import { pruneDrafts } from '../chat/drafts.ts';
 import type { ThreadsAction, ThreadsState } from './threads.ts';
 import type { UiAction, UiState } from './ui.ts';
 import type { ReviewAction } from '../secondOpinion/slice.ts';
@@ -36,12 +30,8 @@ import type { ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
 import { tapAction } from '../remote/tap.ts';
-import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
-import { useAutoTitles } from '../utility/useAutoTitles.ts';
 import { classifyInCore } from '../utility/runUtility.ts';
-import { useIdleChecks } from '../goals/useIdleChecks';
-import { useAutoSimplify } from '../simplify/useSimplify.ts';
-import { usePrSync } from '../git/usePrSync.ts';
+import { WindowReactor } from '../reactor/WindowReactor.tsx';
 
 export type { View } from './layout.ts';
 export { rankQueue };
@@ -163,94 +153,24 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     void host.agent.pendingToolCalls().then((calls) => calls.forEach(onToolCall), (error: unknown) => console.error('Taking back tool calls after reload failed', error));
     return off;
   }, [external, dispatch]);
-  useQueueRunner(state, dispatch);
-  useDelegatedReports(state.threads, dispatch);
-  useSubThreadWakes(state, dispatch);
-  useCompactInstructions(state.threads);
-  useRemoteBridge(state, dispatch);
-  useLimitResumes(state.threads, dispatch);
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
-  useAutoTitles(state.threads, dispatch);
-  useIdleChecks(state.threads, dispatch);
-  useAutoSimplify(state.threads, dispatch);
-  usePrSync(state.threads, dispatch);
   useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
-  useEffect(() => pruneDrafts(new Set(state.threads.map((t) => t.id))), [state.threads]);
   const store = useMemo(() => ({ getState: external.getState, subscribe: external.subscribe, dispatch }), [external, dispatch]);
-  return <HarnessContext.Provider value={store}>{children}</HarnessContext.Provider>;
+  return (
+    <HarnessContext.Provider value={store}>
+      <WindowReactor />
+      {children}
+    </HarnessContext.Provider>
+  );
 }
 
 /** Hands its children a store React already holds: a mirrored window, another computer's threads, a replay. */
 export function HarnessScope({ state, dispatch, children }: { state: State; dispatch: Dispatch<Action>; children: ReactNode }) {
   const store = useMemo(() => fixedStore(state, dispatch), [state, dispatch]);
   return <HarnessContext.Provider value={store}>{children}</HarnessContext.Provider>;
-}
-
-/** Sends each live thread's next queued message once its agent's turn is over; `dueQueued` says when. */
-function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
-  // The send applies on the next render; until then the same head is still due.
-  const sent = useRef(new Set<string>());
-  useEffect(() => {
-    for (const { thread, message } of dueQueued(state)) {
-      if (sent.current.has(message.id)) continue;
-      sent.current.add(message.id);
-      const focus = compactFocus(message.draft);
-      if (focus !== null) dispatch({ type: 'compact', threadId: thread.id, focus, queuedId: message.id });
-      else sendMessage(dispatch, state, thread, message, { queuedId: message.id });
-    }
-  }, [state, dispatch]);
-}
-
-/** Sends each finished delegated task's report to its thread's agent right away, steering a turn in flight; `dueReports` says which. */
-function useDelegatedReports(threads: Thread[], dispatch: Dispatch<Action>) {
-  // The report applies on the next render; until then the same one is still due.
-  const sent = useRef(new Set<string>());
-  useEffect(() => {
-    for (const { thread, subagent } of dueReports(threads)) {
-      const key = `${thread.id}:${subagent.id}`;
-      if (sent.current.has(key)) continue;
-      sent.current.add(key);
-      dispatch({ type: 'delegate-report', threadId: thread.id, subagentId: subagent.id });
-    }
-  }, [threads, dispatch]);
-}
-
-/** Starts each idle parent on its sub-threads' notes once they're all idle; `dueWakes` says which. */
-function useSubThreadWakes(state: State, dispatch: Dispatch<Action>) {
-  // The wake applies on the next render; until then the same parent is still due.
-  const woken = useRef(new Set<string>());
-  useEffect(() => {
-    const due = dueWakes(state);
-    for (const id of woken.current) if (!due.some((t) => t.id === id)) woken.current.delete(id);
-    for (const { id } of due) {
-      if (woken.current.has(id)) continue;
-      woken.current.add(id);
-      dispatch({ type: 'subthread-wake', threadId: id });
-    }
-  }, [state, dispatch]);
-}
-
-/** Resumes threads you set to Resume at reset once their reset passes; one timer for the earliest. */
-function useLimitResumes(threads: Thread[], dispatch: Dispatch<Action>) {
-  const [tick, setTick] = useState(0);
-  // The resume applies on the next render; until then the same thread is still due.
-  const resumed = useRef(new Set<string>());
-  useEffect(() => {
-    for (const t of dueResumes(threads)) {
-      const key = `${t.id}:${t.live!.limit!.resetsAt}`;
-      if (resumed.current.has(key)) continue;
-      resumed.current.add(key);
-      dispatch({ type: 'resume', threadId: t.id, atReset: true });
-    }
-    const at = nextResumeAt(threads);
-    if (at === undefined) return;
-    // setTimeout overflows past ~24.8 days; a weekly reset is well inside that.
-    const id = window.setTimeout(() => setTick((n) => n + 1), at - Date.now() + 1000);
-    return () => window.clearTimeout(id);
-  }, [threads, dispatch, tick]);
 }
 
 // Sequential: a handoff's stop must reach the old agent before the new one starts in the same thread.

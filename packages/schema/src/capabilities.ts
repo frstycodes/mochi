@@ -32,9 +32,10 @@ export const allScopes = AuthScope.literals;
  * What a client can do for Core that Core can't: show OS notifications, own browser-pane views, reach `safeStorage`,
  * drive simulators. `host` is every `host.*` namespace whose handler still lives in main; it shrinks as they move into Core.
  * `remote` runs a device's command (`device.command`) in the window that owns the store, until Core owns it.
+ * `reactor` runs the reactor's commands (`packages/core/src/reactor/commands.ts`) in the window that owns the store, until Core owns it.
  * `main` is what Core's agents ask of main (`MainForAgents` in packages/core/src/agents/main.ts), not a `host.*` namespace.
  */
-export const CapabilityName = Schema.Literals(['notify', 'browserView', 'secureStorage', 'sim', 'host', 'remote', 'metrics', 'main']);
+export const CapabilityName = Schema.Literals(['notify', 'browserView', 'secureStorage', 'sim', 'host', 'remote', 'metrics', 'main', 'reactor']);
 export type CapabilityName = typeof CapabilityName.Type;
 
 /** Core → the client that registered `capability`. `args` and the reply's `value` are JSON-encoded with the method's schema. */

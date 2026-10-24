@@ -63,4 +63,7 @@ const initial = Effect.gen(function* () {
   yield* sql`CREATE TABLE imports (source TEXT PRIMARY KEY, status TEXT NOT NULL, detail TEXT, at TEXT NOT NULL)`;
 });
 
-export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial }) });
+// The reactor enqueues a command once per `command_id`, however often its rule emits it.
+const outboxCommandUnique = Effect.flatMap(SqlClient.SqlClient, (sql) => sql`CREATE UNIQUE INDEX outbox_command_idx ON outbox(command_id)`);
+
+export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial, '2_outbox_command_unique': outboxCommandUnique }) });

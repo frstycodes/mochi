@@ -186,11 +186,6 @@ export function backgroundPrompt(start: BackgroundStart) {
   return `${start.prompt}\n\nAnother agent's thread delegated this task to you. Work on your own; nobody can answer questions. End with a short report of what you did and found: it is sent back to that agent.`;
 }
 
-/** Delegated tasks that ended on their own and whose report hasn't gone to their thread's agent yet. */
-export function dueReports(threads: Thread[]) {
-  return threads.flatMap((thread) => (thread.live ? (thread.subagents ?? []).filter((s) => s.isReportDue).map((subagent) => ({ thread, subagent })) : []));
-}
-
 /** The notes (Codex compaction restores) a thread's agent gets ahead of the next message, then cleared; a note the message already carries isn't repeated. */
 export function withNotes(thread: Thread, text: string) {
   const notes = (thread.live?.notes ?? []).filter((n) => !text.includes(n));

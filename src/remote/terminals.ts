@@ -49,7 +49,7 @@ export function shellOf(id: string, threadId: string) {
   return shell;
 }
 
-/** How often the bridge closes idle shells (`useRemoteBridge`). */
+/** How often the bridge closes idle shells (`useRemoteBridge`, in `WindowReactor`). */
 export const SWEEP_MS = IDLE_MS / 2;
 
 /** Closes shells no device has used for `IDLE_MS` and none is watching. */

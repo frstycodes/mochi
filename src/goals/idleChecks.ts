@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch } from 'react';
+import type { Dispatch } from 'react';
 import { mayHaveEdited } from '../chat/turnChanges';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
@@ -9,21 +9,11 @@ import { auditPrompt, parseAudit } from '../utility/prompts';
 import { runUtility } from '../utility/runUtility';
 import { runCriterionCheck } from './checks';
 
-// Per launch: a thread seen idle at startup gets no pass, its last turn ended before this launch.
-const wasWorking = new Map<string, boolean>();
-
-/** When a thread's agent goes idle, gathers what its verdict reads (`verdict.ts`): criterion checks, then uncommitted files and the transcript audit. */
-export function useIdleChecks(threads: Thread[], dispatch: Dispatch<Action>) {
-  useEffect(() => {
-    for (const t of threads) {
-      const isWorking = !!t.live?.isWorking;
-      const was = wasWorking.get(t.id);
-      wasWorking.set(t.id, isWorking);
-      if (!was || isWorking || !t.live) continue;
-      if (getPrefs().goals) void gather(t, dispatch);
-      else markIdle(t, dispatch);
-    }
-  }, [threads, dispatch]);
+/** When a thread's agent goes idle (the reactor's `idle.gather`), gathers what its verdict reads (`verdict.ts`): criterion checks, then uncommitted files and the transcript audit. */
+export function gatherIdle(t: Thread, dispatch: Dispatch<Action>) {
+  if (!t.live) return;
+  if (getPrefs().goals) void gather(t, dispatch);
+  else markIdle(t, dispatch);
 }
 
 /** Without goals there is nothing to gather, but each turn still needs its own idle record: the end-of-turn card reads it. */
