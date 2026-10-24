@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vp dev",
     "build": "tsc -b && vp build",
-    "typecheck": "tsc -b && tsc -p electron && tsc -p infra/relay",
+    "typecheck": "tsc -b && tsc -p packages/core && tsc -p electron && tsc -p infra/relay",
     "test": "node --import ./scripts/test-env.ts --test \"src/**/*.test.ts\" \"packages/*/src/**/*.test.ts\" \"electron/**/*.test.ts\" \"infra/**/src/**/*.test.ts\"",
     "artifact": "pnpm build --mode artifact && node scripts/artifact.mjs",
     "electron:dev": "vp dev --mode electron",

@@ -9,8 +9,8 @@ import type { ThreadAddressed, WatchConfig } from '../../src/host/types/notify.t
 import { isAddressed, isQuiet } from '../../src/notify/model.ts';
 import { resetLabel } from '../../src/usage/limits.ts';
 import { ciTitle, ciTransition, coalesce, type CiSeen, type OsNotice } from '../../src/notify/watch.ts';
-import { emitAgentEvent, onAgentEvent } from '../agents/events.ts';
-import { resolveRequest } from '../ipc/agent.ts';
+import { onAgentEvent, resolveRequest } from '../agents/events.ts';
+
 import { deliver } from '../schedule/scheduler.ts';
 import { syncAutofix } from './autofix.ts';
 import { createWindow, mainWindow } from '../window.ts';
@@ -147,8 +147,7 @@ function show(notice: OsNotice) {
 /** Same as answering the Queue card; the `resolved` event takes the card away in every window, or waits for the next one. */
 async function answer(threadId: string, requestId: string, isAllowed: boolean) {
   try {
-    await resolveRequest(requestId, isAllowed ? { kind: 'allow' } : { kind: 'deny', message: 'Denied from a notification' });
-    emitAgentEvent({ threadId, type: 'resolved', requestId });
+    await resolveRequest(threadId, requestId, isAllowed ? { kind: 'allow' } : { kind: 'deny', message: 'Denied from a notification' });
   } catch (error) {
     console.warn(`Answering ${requestId} from a notification failed: ${(error as Error).message}`);
     open(threadId);

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { AgentAskContext } from '../../src/host/types/agent.ts';
-import { migrateSettings, type ModelChoice } from '../../src/host/types/settings.ts';
-import { sideChatChoice } from '../../src/runtime/controls.ts';
+import type { AgentAskContext } from '../../../../src/host/types/agent.ts';
+import { migrateSettings, type ModelChoice } from '../../../../src/host/types/settings.ts';
+import { sideChatChoice } from '../../../../src/runtime/controls.ts';
 import { ask, utility, type Asker } from './ask.ts';
 
 const context: AgentAskContext = { spaceId: 'work', title: 'Rate limiter', goal: 'Add a rate limiter', steps: [], activity: [], diff: null };

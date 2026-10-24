@@ -1,10 +1,10 @@
 import type { SettingsHost } from '../../src/host/types/settings.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
-import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '../agents/profileConfig.ts';
-import { copyProfileFolder, profileFolder } from '../agents/profileFolder.ts';
-import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
+import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '@mochi/core/agents/profileConfig';
+import { copyProfileFolder, profileFolder } from '@mochi/core/agents/profileFolder';
+import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '@mochi/core/agents/config';
 import { detect, latestVersion, updateHarness } from '../settings/detect.ts';
-import { noteLogin } from '../agents/models.ts';
+import { noteLogin } from '../agents/events.ts';
 import { isNewerVersion } from '../../src/settings/parse.ts';
 import type { Handlers } from './handlers.ts';
 

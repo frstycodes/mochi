@@ -1,12 +1,11 @@
 import os from 'node:os';
 import * as sdk from '@anthropic-ai/claude-agent-sdk';
 import { query, type Options, type SDKMessage, type SDKUserMessage, type SpareProcess } from '@anthropic-ai/claude-agent-sdk';
-import { app } from 'electron';
-import type { AgentInstall } from '../../../src/host/types/settings.ts';
-import { CLASSIFY_PROMPT, classifyInput } from '../../../src/drift.ts';
-import type { Thread } from '../../../src/model.ts';
-import { cached, uncache } from '../../cache.ts';
-import { detect } from '../../settings/detect.ts';
+import type { AgentInstall } from '../../../../../src/host/types/settings.ts';
+import { CLASSIFY_PROMPT, classifyInput } from '../../../../../src/drift.ts';
+import type { Thread } from '../../../../../src/model.ts';
+import { cached, uncache } from '../../../../../electron/cache.ts';
+import { detect } from '../../../../../electron/settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
 
 const CLASSIFY_MODEL = 'claude-haiku-5-5';
@@ -169,7 +168,8 @@ function discard(accountId: string) {
   void parked.spare.then((s) => s?.close());
 }
 
-app.on('before-quit', () => [...spares.keys()].forEach(discard));
+/** Core is stopping: the parked spare processes go with it. */
+export const discardSpares = () => [...spares.keys()].forEach(discard);
 
 // `detect` spawns `claude` twice; a 4s classify budget can't pay that every time. Only logged-in results are kept.
 async function detectCached(accountId: string, fresh: () => Promise<AgentInstall>) {

@@ -1,28 +1,29 @@
 import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
-import { saveImage } from '@mochi/core/agents/images';
+import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage, type SDKUserMessageReplay } from '@anthropic-ai/claude-agent-sdk';
-import { app } from 'electron';
-import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
-import type { McpWidgetResource } from '../../../src/model.ts';
+import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../../../src/host/types/agent.ts';
+import type { McpWidgetResource } from '../../../../../src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
-import { HARNESSES } from '../../../src/settings/harnesses.ts';
-import { toClaude } from '../../../src/settings/agentConfig.ts';
-import { sessionConnectors, sessionToolRules } from '../../library/connectors.ts';
-import { claudePermissions } from '../../../src/library/connectorTools.ts';
-import { sessionLibrary } from '../../library/store.ts';
-import { claudeNativeSettings, offItems } from '../../../src/library/nativeOverrides.ts';
+import { HARNESSES } from '../../../../../src/settings/harnesses.ts';
+import { toClaude } from '../../../../../src/settings/agentConfig.ts';
+import { claudePermissions } from '../../../../../src/library/connectorTools.ts';
+import { claudeNativeSettings, offItems } from '../../../../../src/library/nativeOverrides.ts';
 import { readProfileConfig } from '../profileConfig.ts';
 import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, HIDDEN_PLAN_TOOLS, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent } from './map.ts';
-import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
+import { AUTO_ALLOWED, claudeServer, SERVER } from '../mochiTools.ts';
 import { emitAgentEvent } from '../events.ts';
+import { main } from '../main.ts';
+import { accountEnv, apiKeyFor, concurrencyCap, defaultModel, userPath } from '../config.ts';
+import { detect } from '../../../../../electron/settings/detect.ts';
+import { spawnThroughRun } from './spawn.ts';
 import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
 import { profileInstructions } from '../profileFolder.ts';
 import { recordLimits } from '../limits.ts';
-import { claudeEventWindow } from '../../../src/usage/limits.ts';
-import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { claudeEventWindow } from '../../../../../src/usage/limits.ts';
+import { MOCHI_TIMEOUT_MS } from '../../../../../src/runtime/toolTable.ts';
 import { recordClaudeAiConnectors } from './claudeAiConnectors.ts';
 import { FORK_MISSING_NOTICE, FORK_REFUSED_NOTICE, forkPoint, MISSING_FORK_POINT, takeForkAt, transcriptUuids } from './fork.ts';
 
@@ -44,6 +45,8 @@ interface Session {
   wake: EventEmitter;
   mapper: ReturnType<typeof createMapper>;
   query?: Query;
+  /** Claude Code's process, spawned through Core's `run`; killing it takes its tree down. */
+  child?: ReturnType<typeof spawnThroughRun>;
   abort?: AbortController;
   /** Fixed at start: a thread never moves to another Claude account, its transcript lives in that account's config dir. */
   account: ClaudeAccount;
@@ -184,11 +187,13 @@ export function resolveClaude(requestId: string, decision: AgentDecision) {
   return true;
 }
 
-// Quitting closes every Claude Code process; their transcripts are already on disk, so each thread resumes from its
-// persisted session id when the user next sends. Nothing resumes on launch: that would spend the user's usage unasked.
-app.on('before-quit', () => {
+/**
+ * Core is stopping: every Claude Code process closes. Their transcripts are already on disk, so each thread resumes from its
+ * persisted session id when the user next sends. Nothing resumes on launch: that would spend the user's usage unasked.
+ */
+export function stopAllClaude() {
   for (const threadId of [...sessions.keys()]) stopClaude(threadId);
-});
+}
 
 /** The profile's turned-off native items as flag-layer settings, read from the account's config (the thread's project included, for its `.mcp.json`). */
 async function nativeOffSettings(options: AgentRunOptions) {
@@ -198,7 +203,7 @@ async function nativeOffSettings(options: AgentRunOptions) {
 }
 
 async function schedule(session: Session) {
-  const cap = (await config()).concurrencyCap() || DEFAULT_CAP;
+  const cap = concurrencyCap() || DEFAULT_CAP;
   const live = [...sessions.values()].filter((s) => s.query).length;
   if (live >= cap) {
     evictIdle() ? void launch(session) : waiting.push(session);
@@ -213,18 +218,18 @@ async function launch(session: Session) {
   const sentBefore = session.sent.length;
   let isForkRefused = false;
   try {
-    const { accountEnv, apiKeyFor, defaultModel, userPath } = await config();
     const { configDir = null } = session.account;
-    const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
+    const install = await detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
     if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
     // A consequential Mochi call waits on the user's card; Claude Code's own MCP timeout would cut it short.
     const base = { ...accountEnv('claude', configDir), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) };
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
-    const key = options.useApiKey ? apiKeyFor('claude') : undefined;
+    const key = options.useApiKey ? await apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
     const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
-    const [library, connectors, toolRules, native, profileText] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId), sessionToolRules(options.spaceId), nativeOffSettings(options), profileInstructions(options.spaceId, 'claude')]);
+    const [library, native, profileText] = await Promise.all([main.library(options.spaceId, 'claude'), nativeOffSettings(options), profileInstructions(options.spaceId, 'claude')]);
+    const { connectors, rules: toolRules } = library;
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     const { forkAt, isMissing } = await takeForkAt(session);
@@ -237,6 +242,8 @@ async function launch(session: Session) {
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
+        // Through Core's `run`, so stopping the session kills Claude Code's whole process tree (its MCP servers and shells too).
+        spawnClaudeCodeProcess: (spawn) => (session.child = spawnThroughRun(spawn)),
         // A settings chat isn't Claude Code: no coding preset, no built-in tools, none of the profile's plugins or servers.
         // The profile's own instructions (its folder's mochi.md and claude.md) follow Mochi's; the account's CLAUDE.md loads as usual.
         systemPrompt: options.isSettingsChat ? mochiInstructions(options) : { type: 'preset', preset: 'claude_code', append: [mochiInstructions(options), profileText].filter(Boolean).join('\n\n') },
@@ -264,7 +271,7 @@ async function launch(session: Session) {
         mcpServers: {
           ...(!options.isSettingsChat && Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig]))),
           ...(!options.isSettingsChat && Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }]))),
-          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, options),
+          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, main.mochiTool, options),
         },
         hooks: { ...compactHooks(threadId), PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)] },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
@@ -337,12 +344,16 @@ export async function readClaudeWidget(threadId: string, server: string, uri: st
 /** Ends a session's process and hands its slot to the next waiting thread. The record stays for `send` unless stopped. */
 function release(session: Session) {
   const { query: q, abort } = session;
+  const child = session.child;
   session.query = undefined;
   session.abort = undefined;
+  session.child = undefined;
   session.isBusy = false;
   dropApprovals(session.threadId, 'The session ended');
   abort?.abort();
   q?.close();
+  // The SDK closes stdin and kills only after a grace period; SIGTERM to the group now still lets Claude Code flush its transcript.
+  child?.kill('SIGTERM');
   if (!q) return;
   const next = waiting.shift();
   if (next) void launch(next);
@@ -436,8 +447,5 @@ function dropApprovals(threadId: string, message: string) {
     emit({ threadId, type: 'resolved', requestId: id });
   }
 }
-
-// Imported lazily: config.ts loads Electron, which the adapters' node tests don't have.
-const config = () => import('../config.ts');
 
 const emit = emitAgentEvent;

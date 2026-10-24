@@ -1,16 +1,16 @@
 import os from 'node:os';
-import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
-import { saveImage } from '@mochi/core/agents/images';
-import type { GeneratedImage } from '../../../src/model.ts';
-import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
-import { codexWindows } from '../../../src/usage/limits.ts';
+import { spawnCommand, type CoreChild } from '../../runClient.ts';
+import { saveImage } from '../images.ts';
+import type { GeneratedImage } from '../../../../../src/model.ts';
+import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../../../src/host/types/agent.ts';
+import { codexWindows } from '../../../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, generatedImage, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
 import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '../instructions.ts';
-import { killTree, spawnable } from '../../platform.ts';
-import { MOCHI_TIMEOUT_MS, type MochiScope } from '../../../src/runtime/toolTable.ts';
-import { CHEAP_MODELS } from '../../../src/utility/prompts.ts';
+import { killTree, spawnable } from '../../../../../electron/platform.ts';
+import { MOCHI_TIMEOUT_MS, type MochiScope } from '../../../../../src/runtime/toolTable.ts';
+import { CHEAP_MODELS } from '../../../../../src/utility/prompts.ts';
 
 interface Live {
   codexId: string;
@@ -80,7 +80,7 @@ const ASK_THREAD = {
 const IMAGE_THREAD = { ...ASK_THREAD, config: { ...ASK_THREAD.config, 'features.image_generation': true } };
 const IMAGE_INSTRUCTIONS = 'Generate exactly one image for the prompt with your image generation tool, then reply with one short line. Do nothing else.';
 /**
- * Mirrors Claude's `AUTO_ALLOWED` (`electron/mcp/server.ts`): Mochi asks with its own card, so Codex never prompts, and a
+ * Mirrors Claude's `AUTO_ALLOWED` (`../mochiTools.ts`): Mochi asks with its own card, so Codex never prompts, and a
  * call may wait on that card as long as main does. `tool_timeout_sec` read in 0.155.1's binary; the approval key was verified against its config schema.
  */
 const MOCHI_APPROVALS = { 'mcp_servers.mochi.default_tools_approval_mode': 'approve', 'mcp_servers.mochi.tool_timeout_sec': MOCHI_TIMEOUT_MS / 1000 };
@@ -113,7 +113,7 @@ export class CodexAdapter {
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
-  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. `profileText` is the profile's own instructions for Codex (its folder's mochi.md and codex.md). */
+  /** `toolsUrl` is the thread's Mochi tools server (main's loopback HTTP, `electron/mcp/server.ts`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. `profileText` is the profile's own instructions for Codex (its folder's mochi.md and codex.md). */
   constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>, libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>, profileText?: (spaceId: string) => Promise<string>) {
     this.emit = emit;
     this.accountFor = accountFor;
@@ -328,7 +328,7 @@ export class CodexAdapter {
   }
 
   /**
-   * One image on the profile's Codex account, for Claude's `generate_image` (`electron/mcp/imageGen.ts`): an ephemeral
+   * One image on the profile's Codex account, for Claude's `generate_image` (`../mochiTools.ts`): an ephemeral
    * thread with nothing on but image generation. Resolves to its `imageGeneration` item as the card shows it; throws a
    * message the calling agent can relay.
    */

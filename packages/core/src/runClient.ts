@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough, Writable } from 'node:stream';
 import { Effect, Layer, Stream } from 'effect';
 import type { makeCoreClient } from './client.ts';
-import { asRunError, RunError } from './run.ts';
+import { asRunError, RunError, type Run } from './run.ts';
 
 // No `electron` import: electron/git/run.ts goes through this, and its tests run under plain node.
 
@@ -37,16 +37,20 @@ let local: Promise<Client> | undefined;
 function localClient(): Promise<Client> {
   local ??= (async () => {
     const [{ NodeServices }, { Run }] = await Promise.all([import('@effect/platform-node'), import('./run.ts')]);
-    const run = await Effect.runPromise(Effect.service(Run).pipe(Effect.provide(Run.layer.pipe(Layer.provide(NodeServices.layer)))));
-    return {
-      run: (p: { command: string; args: readonly string[]; timeoutMs?: number; env?: Record<string, string> }) =>
-        run.run(p.command, p.args, { ...p, timeout: p.timeoutMs }).pipe(Effect.mapError(asRunError(p.command))),
-      spawn: (p: { command: string; args: readonly string[]; timeoutMs?: number }) => run.spawn(p.command, p.args, { ...p, timeout: p.timeoutMs }),
-      stdin: (p: { id: number; data: Uint8Array | null }) => run.write(p.id, p.data),
-      signal: (p: { id: number; signal: string }) => run.signal(p.id, p.signal as NodeJS.Signals),
-    } as unknown as Client;
+    return clientFromRun(await Effect.runPromise(Effect.service(Run).pipe(Effect.provide(Run.layer.pipe(Layer.provide(NodeServices.layer))))));
   })();
   return local;
+}
+
+/** The calls this module makes, served by a `Run` in this process: Core's own, so its agents' processes are Core's children. */
+export function clientFromRun(run: Run['Service']): Client {
+  return {
+    run: (p: { command: string; args: readonly string[]; timeoutMs?: number; env?: Record<string, string> }) =>
+      run.run(p.command, p.args, { ...p, timeout: p.timeoutMs }).pipe(Effect.mapError(asRunError(p.command))),
+    spawn: (p: { command: string; args: readonly string[]; timeoutMs?: number }) => run.spawn(p.command, p.args, { ...p, timeout: p.timeoutMs }),
+    stdin: (p: { id: number; data: Uint8Array | null }) => run.write(p.id, p.data),
+    signal: (p: { id: number; signal: string }) => run.signal(p.id, p.signal as NodeJS.Signals),
+  } as unknown as Client;
 }
 
 const client = () => backend ?? localClient();

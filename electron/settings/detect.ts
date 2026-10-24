@@ -3,7 +3,7 @@ import { runCommand, RunError, spawnCommand } from '@mochi/core/runClient';
 import type { Account, AgentInstall, AgentLogin } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { parseClaudeAuth, parseCodexAccount, parseVersion } from '../../src/settings/parse.ts';
-import { accountEnv, resolveExecutable, userPath } from '../agents/config.ts';
+import { accountEnv, resolveExecutable, userPath } from '@mochi/core/agents/config';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
 import { killTree, spawnable } from '../platform.ts';
 

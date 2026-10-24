@@ -5,7 +5,7 @@ import { Context, Effect, Layer, Schedule, Schema, Stream } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { NodeHttpServer } from '@effect/platform-node';
-import { Capabilities as Contract, Relay } from '@mochi/schema';
+import { Capabilities as Contract, definitionOf, Relay } from '@mochi/schema';
 import { Cache } from './cache.ts';
 import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
@@ -16,11 +16,15 @@ import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
 import { visibleItem } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
 import { storeHandlers } from './store/handlers.ts';
+import type { DocTable } from './store/migrations.ts';
 import { importJson } from './store/importJson.ts';
 import { Store } from './store/store.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
 import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
 import { Watch } from './watch/watch.ts';
+import { agent, classify, utilityCall } from './agents/handlers.ts';
+import { agentRpcHandlers, agentSettingsSaved, layerAgents } from './agents/layer.ts';
+import { Turns } from './agents/turns.ts';
 
 export interface ServerOptions {
   readonly port: number;
@@ -38,7 +42,8 @@ export const layerCore = (options: ServerOptions) =>
   Layer.mergeAll(layerRoute(options), Cache.layer).pipe(
     Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
-    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), Capabilities.layer, UtilityQueue.layer, layerStore(options.userData)).pipe(Layer.provideMerge(Run.layer))),
+    Layer.provideMerge(layerAgents(options.userData)),
+    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), Capabilities.layer, UtilityQueue.layer, Turns.layer, layerStore(options.userData)).pipe(Layer.provideMerge(Run.layer))),
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(
       NodeHttpServer.layer(createServer, {
@@ -94,6 +99,28 @@ const connect = (options: ServerOptions, services: Context.Context<Services>) =>
     return yield* httpEffect;
   }).pipe(Effect.provide(RpcSerialization.layerJson));
 
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/**
+ * `host.agent.*`, served in Core: the window's id goes to each method first. Results are read through the method's schema, as
+ * main's were (`hostHandlers`), so records the adapters make without `v` go out at the current version.
+ */
+const agentHandlers = (windowId: number | undefined) =>
+  Object.fromEntries(
+    Object.entries(agent).map(([method, handle]) => {
+      const tag = `agent.${method}`;
+      const output = Schema.toCodecJson(definitionOf(tag).output);
+      return [
+        tag,
+        (args: ReadonlyArray<unknown>) =>
+          Effect.tryPromise({ try: () => (handle as (...args: unknown[]) => Promise<unknown>)(windowId, ...args), catch: messageOf }).pipe(
+            // A void method's JSON form is null.
+            Effect.flatMap((value) => Schema.decodeUnknownEffect(output)(value ?? null).pipe(Effect.mapError(messageOf))),
+          ),
+      ];
+    }),
+  );
+
 const refuse = (status: number, reason: string) =>
   Effect.as(Effect.logWarning(`Refused a socket: ${reason}`).pipe(Effect.annotateLogs({ source: 'core' })), HttpServerResponse.text(reason, { status }));
 
@@ -134,9 +161,6 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
       const store = yield* Store;
       const queue = yield* UtilityQueue;
       const host = hostHandlers(capabilities, windowId) as Record<string, (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>>;
-      // The model call itself still runs in main (`agent.utility`, `agent.classify` on the `host` capability); Core decides when, and which one.
-      const model = (tag: string, args: ReadonlyArray<unknown>) =>
-        host[tag]!(args).pipe(Effect.catch((error) => Effect.logWarning(`${tag} failed: ${error}`).pipe(Effect.annotateLogs({ source: 'core' }), Effect.as(null))));
       const watch = yield* Watch;
       const github = yield* GitHub;
       const stored = storeHandlers(store, userData);
@@ -157,21 +181,29 @@ const layerHandlers = (windowId: number | undefined, identity: Identity, userDat
         watch: ({ key }: { key: WatchKey }) => watch.watch(key),
         'watch.gate': (gate: Gate) => watch.setGate(gate),
         'watch.stale': ({ kinds }: { kinds: ReadonlyArray<StaleKind> }) => watch.markStale(kinds),
-        'utility.run': ({ task, spaceId, prompt, thread }: { task: keyof typeof PRIORITY; spaceId: string; prompt: string; thread?: string }) =>
-          queue.submit({ thread, kind: task, priority: PRIORITY[task], promptChars: prompt.length, run: model('agent.utility', [task, spaceId, prompt]) as Effect.Effect<string | null> }),
-        'utility.classify': ({ prompt, thread }: { prompt: string; thread: { id: string } }) =>
+        'utility.run': ({ task, spaceId, prompt, thread }: { task: Exclude<keyof typeof PRIORITY, 'classify'>; spaceId: string; prompt: string; thread?: string }) =>
+          queue.submit({ thread, kind: task, priority: PRIORITY[task], promptChars: prompt.length, run: utilityCall(task, spaceId, prompt) }),
+        'utility.classify': ({ prompt, thread }: { prompt: string; thread: Parameters<typeof classify>[1] }) =>
           queue.submit({
             thread: thread.id,
             kind: 'classify',
             priority: PRIORITY.classify,
             promptChars: prompt.length,
-            run: Effect.map(model('agent.classify', [prompt, thread]), (verdict) => (verdict ? JSON.stringify(verdict) : null)),
+            run: Effect.tryPromise(() => classify(prompt, thread)).pipe(
+              Effect.map((verdict) => JSON.stringify(verdict)),
+              Effect.catch((error) => Effect.as(Effect.logWarning(`classify failed: ${error}`).pipe(Effect.annotateLogs({ source: 'core' })), null)),
+            ),
           }).pipe(Effect.map((answer) => (answer ? JSON.parse(answer) : null))),
         metrics: () => metrics.stream,
         ...host,
+        ...agentHandlers(windowId),
+        ...agentRpcHandlers,
         ...stored,
         thread: (input: { threadId: string; afterSequence: number }) => stored.thread(input).pipe(Stream.map((item) => visibleItem(item, identity.scopes)), Stream.filter((item) => item !== undefined)),
         'device.command': ({ command }: { command: Relay.RemoteCommand }) => deviceCommand(capabilities, identity.device, command),
+        // Main's settings writes land here; the agents read them without a restart.
+        'docs.set': (input: { table: DocTable; key: string; value?: unknown }) =>
+          stored['docs.set'](input).pipe(Effect.tap(() => Effect.sync(() => input.table === 'settings' && input.key === 'agent' && agentSettingsSaved(input.value)))),
         ...githubHandlers(github),
       } as never;
     }),

@@ -9,8 +9,7 @@ import type { AgentEvent } from '../../src/host/types/agent.ts';
 import type { ScheduleEvent, ScheduleRun, Trigger, TriggerInput } from '../../src/host/types/schedule.ts';
 import { describeCron } from '../../src/schedule/cron.ts';
 import { afterLaunch, cronDecision, prEvents, prPrompt, summaryLine, SUMMARY_HINT, triggerAfter, withRun } from '../../src/schedule/due.ts';
-import { isBusy, keepWhenClosed, onAgentEvent, openWindows } from '../agents/events.ts';
-import { startAgent } from '../ipc/agent.ts';
+import { isBusy, keepWhenClosed, onAgentEvent, openWindows, startAgent } from '../agents/events.ts';
 import { mainWindow } from '../window.ts';
 
 /**

@@ -1,7 +1,7 @@
-import type { AgentAskContext, AgentAskMessage, AgentAskModel } from '../../src/host/types/agent.ts';
-import type { ModelChoice } from '../../src/host/types/settings.ts';
-import type { Provider } from '../../src/model.ts';
-import { UTILITY_INSTRUCTIONS, utilityCandidates, type UtilityTask } from '../../src/utility/prompts.ts';
+import type { AgentAskContext, AgentAskMessage, AgentAskModel } from '../../../../src/host/types/agent.ts';
+import type { ModelChoice } from '../../../../src/host/types/settings.ts';
+import type { Provider } from '../../../../src/model.ts';
+import { UTILITY_INSTRUCTIONS, utilityCandidates, type UtilityTask } from '../../../../src/utility/prompts.ts';
 
 const UTILITY_TIMEOUT_MS = 20_000;
 

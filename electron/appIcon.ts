@@ -1,7 +1,7 @@
 import { app, BrowserWindow, nativeImage, type NativeImage } from 'electron';
 import path from 'node:path';
 import { APP_ICONS, type AppIcon } from '../src/settings/settingOptions.ts';
-import { agentSettings, onAgentSettingsChange } from './agents/config.ts';
+import { agentSettings, onAgentSettingsChange } from '@mochi/core/agents/config';
 import { setTrayImage } from './tray.ts';
 
 /**

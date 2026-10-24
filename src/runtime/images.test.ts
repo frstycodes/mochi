@@ -8,8 +8,8 @@ import type { State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { parseSaved, toSaved } from '../store/persist.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { createMapper } from '../../electron/agents/claude/map.ts';
-import { mapNotification, threadState } from '../../electron/agents/codex/map.ts';
+import { createMapper } from '@mochi/core/agents/claude/map';
+import { mapNotification, threadState } from '@mochi/core/agents/codex/map';
 import type { SaveImage } from '@mochi/core/agents/images';
 
 const THREAD = 'adm';

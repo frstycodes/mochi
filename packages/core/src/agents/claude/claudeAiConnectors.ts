@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { McpServerStatus } from '@anthropic-ai/claude-agent-sdk';
-import { app } from 'electron';
+import { userData } from '../paths.ts';
 
 /**
  * The claude.ai connectors each Claude account last reported, kept across restarts. Claude Code fetches them from the
@@ -9,7 +9,7 @@ import { app } from 'electron';
  * `mcpServerStatus()`. GAP: an account no Mochi thread has run on yet lists none.
  */
 let known: Record<string, string[]> | null = null;
-const file = () => join(app.getPath('userData'), 'claude-ai-connectors.json');
+const file = () => join(userData(), 'claude-ai-connectors.json');
 
 async function load() {
   known ??= await readFile(file(), 'utf8').then((text) => JSON.parse(text) as Record<string, string[]>, () => ({}));

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { POLICIES } from '../../electron/agents/codex/adapter.ts';
-import { permissionOptions } from '../../electron/agents/claude/map.ts';
+import { POLICIES } from '@mochi/core/agents/codex/adapter';
+import { permissionOptions } from '@mochi/core/agents/claude/map';
 import { ACCESS, accessOf } from './access.ts';
 import { agentOptions } from './controls.ts';
 import { parsePrefs } from '../settings/prefs.ts';

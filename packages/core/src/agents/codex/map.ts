@@ -1,9 +1,9 @@
 import path from 'node:path';
-import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, AgentTaskEvent, LimitWindow } from '../../../src/host/types/agent.ts';
-import type { AgentCommand, AgentInfo, GeneratedImage, McpServer, WebLink } from '../../../src/model.ts';
-import { codexWindows, hottest, mergeWindows } from '../../../src/usage/limits.ts';
-import { posixPath } from '../../platform.ts';
-import type { SaveImage } from '@mochi/core/agents/images';
+import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, AgentTaskEvent, LimitWindow } from '../../../../../src/host/types/agent.ts';
+import type { AgentCommand, AgentInfo, GeneratedImage, McpServer, WebLink } from '../../../../../src/model.ts';
+import { codexWindows, hottest, mergeWindows } from '../../../../../src/usage/limits.ts';
+import { posixPath } from '../../../../../electron/platform.ts';
+import type { SaveImage } from '../images.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {

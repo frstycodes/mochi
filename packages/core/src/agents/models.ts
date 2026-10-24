@@ -1,10 +1,10 @@
-import type { AgentLogin } from '../../src/host/types/settings.ts';
-import type { AgentModel } from '../../src/host/types/agent.ts';
-import type { Provider } from '../../src/model.ts';
+import type { AgentLogin } from '../../../../src/host/types/settings.ts';
+import type { AgentModel } from '../../../../src/host/types/agent.ts';
+import type { Provider } from '../../../../src/model.ts';
 import { claudeModels } from './claude/map.ts';
 import { claudeSupportedModels } from './claude/oneshot.ts';
 import type { CodexAdapter } from './codex/adapter.ts';
-import { cached, uncache } from '../cache.ts';
+import { cached, uncache } from '../../../../electron/cache.ts';
 import { accountFor } from './config.ts';
 
 // A failed read isn't kept, so the next call tries again.

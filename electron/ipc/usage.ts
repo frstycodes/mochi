@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { UsageHost, UsageReport } from '../../src/host/types/usage.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
-import { accountsState } from '../agents/config.ts';
+import { accountsState } from '@mochi/core/agents/config';
 import { githubAccount } from '../git/gh.ts';
 import { claudeRecords } from '../usage/claude.ts';
 import { codexRecords } from '../usage/codex.ts';

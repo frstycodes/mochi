@@ -5,7 +5,9 @@ import test from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '../agents/instructions.ts';
+import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '@mochi/core/agents/instructions';
+import { useAgentConfig } from '@mochi/core/agents/config';
+import { claudeServer as coreClaudeServer } from '@mochi/core/agents/mochiTools';
 import { GOAL_TOOLS, isGoalTool, SETTINGS_CHAT_TOOLS, TOOL_NAMES } from '../../src/runtime/toolTable.ts';
 
 test('browser instructions route to Mochi, and Codex loses the cua_repl browser it reached for instead', () => {
@@ -43,7 +45,7 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
     resolve(specifier, context, next) {
       if (context.parentURL !== serverUrl) return next(specifier, context);
       if (specifier === 'electron') return { url: 'data:text/javascript,export const app = { isPackaged: true };', shortCircuit: true };
-      const source = specifier === '../window.ts' ? windowStub : specifier === '../agents/config.ts' ? 'export const agentSettings = () => ({ imageGen: "off" });' : null;
+      const source = specifier === '../window.ts' ? windowStub : null;
       return source ? { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true } : next(specifier, context);
     },
   });
@@ -57,7 +59,10 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
     }));
     return listen.apply(this, args);
   });
-  const { claudeServer, codexUrl } = await import('./server.ts');
+  const { callMochi, codexUrl } = await import('./server.ts');
+  useAgentConfig({ read: () => undefined, write: async () => {}, keychain: { isAvailable: async () => false, encrypt: async () => '', decrypt: async () => '' } });
+  // Core builds Claude's in-process server; its calls come back to main's `callMochi`, as Codex's HTTP ones do.
+  const claudeServer = (thread: string, spaceId: string, cwd: string, scope?: Parameters<typeof coreClaudeServer>[4]) => coreClaudeServer(thread, spaceId, cwd, callMochi, scope);
   const claude = new Client({ name: 'claude-check', version: '1' });
   const codex = new Client({ name: 'codex-check', version: '1' });
   t.after(async () => { await claude.close(); await codex.close(); });

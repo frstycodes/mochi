@@ -1,5 +1,5 @@
-import type { AgentEvent } from '../../src/host/types/agent.ts';
-import { renameAutoBranch } from '../git/branches.ts';
+import type { AgentEvent } from '../../../../src/host/types/agent.ts';
+import { renameAutoBranch } from '../../../../electron/git/branches.ts';
 import type { Starts } from './starts.ts';
 
 // How long past its worktree setup a new thread's agent waits for its title, so it starts on the named branch.

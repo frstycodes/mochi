@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
-import type { AgentEvent } from '../../../src/host/types/agent.ts';
+import type { AgentEvent } from '../../../../../src/host/types/agent.ts';
 import { CodexAdapter, imageModel, reply } from './adapter.ts';
 import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';

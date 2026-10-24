@@ -2,43 +2,41 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
-import { app } from 'electron';
 import { Effect } from 'effect';
-import { coreClient } from '@mochi/core/host';
-import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskEvent, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type AgentStartOptions, type AgentToolResult, type StartWorkspace } from '../../src/host/types/agent.ts';
-import { classifyWithModel } from '../../src/drift.ts';
-import type { McpWidgetResource, Provider } from '../../src/model.ts';
-import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, claudeRunOptions, readClaudeWidget, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, unsteerClaude, stopClaude, stopClaudeTask } from '../agents/claude/sessions.ts';
-import { CodexAdapter } from '../agents/codex/adapter.ts';
-import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
-import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
-import { limitsOf, recordLimits } from '../agents/limits.ts';
-import { claudeUsageWindows } from '../../src/usage/limits.ts';
-import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
-import { ask as askAgent, utility } from '../agents/ask.ts';
-import { models } from '../agents/models.ts';
-import { resolveRun } from '../../src/runtime/models.ts';
-import { codexUrl, resolveToolCall, setImageGenerator, undeliveredToolCalls } from '../mcp/server.ts';
-import { commandPrompt, parseTitle, type UtilityTask } from '../../src/utility/prompts.ts';
-import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle, onAgentEvent } from '../agents/events.ts';
-import { createWorktree } from './git.ts';
-import { prepareWorktree } from '../git/setup.ts';
-import { Starts } from '../agents/starts.ts';
-import { nameThread } from '../agents/naming.ts';
-import { threadSessions } from '../agents/settle.ts';
-import { killThreadSessions } from '../pty/sessions.ts';
-import { stopCompare } from '../browser/compare.ts';
-import { headOf, switchBranch } from '../git/branches.ts';
-import { topLevel } from '../git/run.ts';
-import { codexToolConfig } from '../../src/library/connectorTools.ts';
-import { codexServerConfig } from '../../src/library/library.ts';
-import { sessionConnectors, sessionToolRules } from '../library/connectors.ts';
-import { sessionLibrary } from '../library/store.ts';
-import { codexNativeConfig, offItems } from '../../src/library/nativeOverrides.ts';
-import { readProfileConfig } from '../agents/profileConfig.ts';
-import type { Handlers } from './handlers.ts';
-import { profileInstructions } from '../agents/profileFolder.ts';
+import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskEvent, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type AgentStartOptions, type AgentToolResult, type StartWorkspace } from '../../../../src/host/types/agent.ts';
+import { classifyWithModel } from '../../../../src/drift.ts';
+import type { McpWidgetResource, Provider, Thread } from '../../../../src/model.ts';
+import { askClaude, classifyClaude, claudeLimits, discardSpares, warmClaude } from './claude/oneshot.ts';
+import { claudeRewindPoint, claudeRunOptions, readClaudeWidget, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopAllClaude, unsteerClaude, stopClaude, stopClaudeTask } from './claude/sessions.ts';
+import { CodexAdapter } from './codex/adapter.ts';
+import { reviewClaude, type ReviewUpdate } from './review.ts';
+import { accountFor, agentSettings, secondOpinionModel } from './config.ts';
+import { limitsOf, recordLimits } from './limits.ts';
+import { claudeUsageWindows } from '../../../../src/usage/limits.ts';
+import { VERDICT_SCHEMA } from '../../../../src/secondOpinion/verdict.ts';
+import { ask as askAgent, utility } from './ask.ts';
+import { models } from './models.ts';
+import { resolveRun } from '../../../../src/runtime/models.ts';
+import { setImageGenerator } from './mochiTools.ts';
+import { main } from './main.ts';
+import { userData } from './paths.ts';
+import type { Turns } from './turns.ts';
+import type { UtilityQueue } from '../utility/queue.ts';
+import { PRIORITY } from '../utility/queue.ts';
+import { commandPrompt, parseTitle, type UtilityTask } from '../../../../src/utility/prompts.ts';
+import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle, onAgentEvent, push } from './events.ts';
+import { createWorktree } from '../../../../electron/ipc/git.ts';
+import { prepareWorktree } from '../../../../electron/git/setup.ts';
+import { Starts } from './starts.ts';
+import { nameThread } from './naming.ts';
+import { threadSessions } from './settle.ts';
+import { headOf, switchBranch } from '../../../../electron/git/branches.ts';
+import { topLevel } from '../../../../electron/git/run.ts';
+import { codexToolConfig } from '../../../../src/library/connectorTools.ts';
+import { codexServerConfig } from '../../../../src/library/library.ts';
+import { codexNativeConfig, offItems } from '../../../../src/library/nativeOverrides.ts';
+import { readProfileConfig } from './profileConfig.ts';
+import { profileInstructions } from './profileFolder.ts';
 
 let nextId = 0;
 // Claude rejects images over 5 MB; base64 runs 4/3 of that.
@@ -48,7 +46,7 @@ const broadcast = emitAgentEvent;
 
 /** The live read, kept on disk so a view still opens once no Claude session runs (after a restart). The view's own scripts load from the network either way. */
 async function readWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource> {
-  const file = join(app.getPath('userData'), 'mcp-apps', `${createHash('sha256').update(`${server}\n${uri}`).digest('hex')}.json`);
+  const file = join(userData(), 'mcp-apps', `${createHash('sha256').update(`${server}\n${uri}`).digest('hex')}.json`);
   try {
     const resource = await readClaudeWidget(threadId, server, uri);
     await mkdir(dirname(file), { recursive: true });
@@ -70,9 +68,9 @@ const codex = new CodexAdapter(
   },
   undefined,
   undefined,
-  codexUrl,
+  (thread, scope) => main.codexUrl(thread, scope),
   async ({ spaceId, cwd, nativeOff }) => {
-    const [{ servers }, connectors, rules, native] = await Promise.all([sessionLibrary(spaceId, 'codex'), sessionConnectors(spaceId), sessionToolRules(spaceId), codexNativeOff(spaceId, cwd, nativeOff)]);
+    const [{ servers, connectors, rules }, native] = await Promise.all([main.library(spaceId, 'codex'), codexNativeOff(spaceId, cwd, nativeOff)]);
     const tools = Object.entries(rules).map(([key, keyRules]) => codexToolConfig(key, keyRules));
     const mochi = { ...codexServerConfig(servers), ...Object.fromEntries(connectors.map(([name, url]) => [`mcp_servers.${name}.url`, url])) };
     // A turned-off native server shares `mcp_servers.<name>` with a library server or connector of that name; Mochi's own stays on.
@@ -111,18 +109,56 @@ async function codexNativeOff(spaceId: string, cwd: string, ids: string[] | unde
   return codexNativeConfig(offItems((await readProfileConfig(spaceId, cwd)).codex, ids));
 }
 codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
-app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 setImageGenerator('codex', codex.generateImage.bind(codex));
 const starts = new Starts();
 // A delegated task's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
 const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
+let turns: Turns['Service'] | undefined;
+let queue: UtilityQueue['Service'] | undefined;
+
+/** Set once by the agents layer. */
+export function useAgentServices(services: { turns: Turns['Service']; queue: UtilityQueue['Service'] }) {
+  ({ turns, queue } = services);
+}
+
+const required = <A>(service: A | undefined) => {
+  if (!service) throw new Error('The agents service is not running');
+  return service;
+};
+
+/**
+ * Each thread's session is a fiber on `Turns` from `start` until `stop`: stopping it interrupts the fiber, whose release
+ * stops the adapter, which kills the session's process tree (spawned through `run`) and drops its pending approvals.
+ */
+async function runSession(threadId: string) {
+  const sessions = required(turns);
+  await Effect.runPromise(sessions.stop(threadId));
+  const session = Effect.acquireRelease(Effect.void, () => Effect.promise(() => stopSession(threadId))).pipe(Effect.andThen(Effect.never));
+  await Effect.runPromise(sessions.start(threadId, () => session).pipe(Effect.mapError((message) => new Error(message))));
+}
+
+async function endSession(threadId: string) {
+  if (turns) await Effect.runPromise(turns.stop(threadId));
+  // A thread with no fiber (stopped already, or started before a Core restart) still gets its leftovers stopped.
+  await stopSession(threadId);
+}
+
+type WindowHandlers<T> = {
+  [K in keyof T as T[K] extends (...args: never[]) => Promise<unknown> ? K : never]: T[K] extends (...args: infer A) => infer R ? (window: number | undefined, ...args: A) => R : never;
+};
+
+/** `host.agent.*`, served by Core. `window` is the calling window's id, for the answers pushed back to it alone. */
 export const agent = {
-  async start(_sender, threadId, options) {
-    return startAgent(threadId, options);
+  async start(_window, threadId, options) {
+    await runSession(threadId);
+    return startAgent(threadId, options).catch(async (error: unknown) => {
+      await endSession(threadId);
+      throw error;
+    });
   },
-  async send(_sender, threadId, text, pictures, skills, speed, steer, steerId) {
+  async send(_window, threadId, text, pictures, skills, speed, steer, steerId) {
     // Sent while the worktree is being set up: it goes to the agent once that start is through.
     await starts.wait(threadId);
     const run = claudeRunOptions(threadId) ?? codex.runOptions(threadId);
@@ -133,78 +169,77 @@ export const agent = {
     if (hasClaudeSession(threadId)) return sendClaude(threadId, text, pictures, tier, steer === true, steerId);
     return codex.send(threadId, text, pictures, skills, tier, steer === true, steerId);
   },
-  async unsteer(_sender, threadId, steerId) {
+  async unsteer(_window, threadId, steerId) {
     if (hasClaudeSession(threadId)) return unsteerClaude(threadId, steerId);
     return codex.unsteer(threadId, steerId);
   },
-  async compact(_sender, threadId, focus) {
+  async compact(_window, threadId, focus) {
     await starts.wait(threadId);
     if (!hasClaudeSession(threadId) && !codex.owns(threadId)) throw new Error(NO_AGENT_PROCESS);
     markBusy(threadId);
     if (hasClaudeSession(threadId)) return compactClaude(threadId, focus);
     return codex.compact(threadId);
   },
-  async compactInstructions(_sender, threadId, instructions) {
+  async compactInstructions(_window, threadId, instructions) {
     setClaudeCompactInstructions(threadId, instructions);
   },
-  async interrupt(_sender, threadId) {
+  async interrupt(_window, threadId) {
     if (starts.abort(threadId)) return;
     if (hasClaudeSession(threadId)) return interruptClaude(threadId);
     if (codex.owns(threadId)) return codex.interrupt(threadId);
     // Nothing running for this thread (already stopped, or never started this launch): nothing to interrupt.
   },
-  async setupChoice(_sender, threadId, choice) {
+  async setupChoice(_window, threadId, choice) {
     if (!starts.choose(threadId, choice)) throw new Error("This thread's worktree setup isn't waiting on you");
   },
-  async keepTitle(_sender, threadId) {
+  async keepTitle(_window, threadId) {
     starts.keepTitle(threadId);
   },
-  async resolve(_sender, requestId, decision) {
+  async resolve(_window, requestId, decision) {
     return resolveRequest(requestId, decision);
   },
-  async stop(_sender, threadId) {
-    return stopSession(threadId);
+  async stop(_window, threadId) {
+    return endSession(threadId);
   },
-  async settle(_sender, threadId) {
+  async settle(_window, threadId) {
     const id = threadId;
-    killThreadSessions(id);
-    await Promise.all([...threadSessions(id, [...claudeSessionIds(), ...codex.threadIds(), ...starts.ids()]).map(stopSession), stopCompare(id)]);
+    await Promise.all([...threadSessions(id, [...claudeSessionIds(), ...codex.threadIds(), ...starts.ids()]).map(endSession), main.settle(id)]);
   },
-  async attached(_sender, threads) {
+  async attached(_window, threads) {
     return threads
       .filter((t) => hasClaudeSession(t.threadId) || codex.owns(t.threadId))
       .map(({ threadId, after }) => ({ threadId, isWorking: isBusy(threadId), events: after === undefined ? [] : eventsSince(threadId, after) }));
   },
-  async stopTask(_sender, threadId, taskId) {
+  async stopTask(_window, threadId, taskId) {
     if (hasClaudeSession(threadId)) return stopClaudeTask(threadId, taskId);
     if (codex.owns(threadId)) return codex.stopTask(threadId, taskId);
     // Its parent's process is gone, so the task already stopped with it.
   },
-  async warm(_sender, spaceId) {
+  async warm(_window, spaceId) {
     return warmClaude(spaceId);
   },
-  async models(_sender, provider, spaceId) {
+  async models(_window, provider, spaceId) {
     return models(codex, provider, spaceId);
   },
-  async limits(_sender, provider, spaceId, refresh) {
+  async limits(_window, provider, spaceId, refresh) {
     if (refresh) await refreshLimits(provider, spaceId).catch((error) => console.warn(`Could not read ${provider} limits`, error));
     return limitsOf((await accountFor(spaceId, provider)).account.id, provider);
   },
-  async rewindFiles(_sender, threadId, text) {
+  async rewindFiles(_window, threadId, text) {
     if (hasClaudeSession(threadId)) return rewindClaude(threadId, text);
   },
-  async rewindPoint(_sender, threadId, text) {
+  async rewindPoint(_window, threadId, text) {
     if (hasClaudeSession(threadId)) return claudeRewindPoint(threadId, text);
     return codex.rewindPoint(threadId, text);
   },
-  async readWidget(_sender, threadId, server, uri) {
+  async readWidget(_window, threadId, server, uri) {
     return readWidget(threadId, server, uri);
   },
-  async ask(sender, context, messages, asker) {
+  // GAP: a window that closes mid-answer no longer stops its ask or review; each runs to its end and its events go nowhere.
+  async ask(window, context, messages, asker) {
     const id = `ask-${++nextId}`;
-    const send = (event: AgentAskEvent) => !sender.isDestroyed() && sender.send('agent:onAskEvent', event);
+    const send = (event: AgentAskEvent) => push({ channel: 'agent:onAskEvent', payload: event, windowId: window });
     const abort = new AbortController();
-    sender.once('destroyed', () => abort.abort());
     void (async () => {
       try {
         const { model } = await offered(asker.provider, context.spaceId, asker.model, undefined);
@@ -216,12 +251,11 @@ export const agent = {
     })();
     return { id };
   },
-  async review(sender, request) {
+  async review(window, request) {
     const run = { ...request, cwd: await agentFolder('review', request.cwd) };
     const id = `review-${++nextId}`;
-    const send = (event: AgentReviewEvent) => !sender.isDestroyed() && sender.send('agent:onReviewEvent', event);
+    const send = (event: AgentReviewEvent) => push({ channel: 'agent:onReviewEvent', payload: event, windowId: window });
     const abort = new AbortController();
-    sender.once('destroyed', () => abort.abort());
     void (async () => {
       try {
         const { model } = await offered(run.provider, run.spaceId, secondOpinionModel(run.provider), undefined);
@@ -232,33 +266,45 @@ export const agent = {
     })();
     return { id };
   },
-  async pendingToolCalls(sender) {
-    return undeliveredToolCalls(sender);
+  async pendingToolCalls(window) {
+    return main.pendingToolCalls(window ?? null);
   },
-  async toolResult(_sender, id, result) {
-    resolveToolCall(id, { text: result.text, isError: result.isError, ...(result.image !== undefined && { image: imageOf(result.image) }) });
+  async toolResult(_window, id, result) {
+    return main.toolResult(id, { text: result.text, isError: result.isError, ...(result.image !== undefined && { image: imageOf(result.image) }) });
   },
-  async utility(_sender, task, spaceId, prompt) {
+  async utility(_window, task, spaceId, prompt) {
     return executeUtility(task, spaceId, prompt);
   },
-  async classify(_sender, prompt, thread) {
-    return classifyWithModel(prompt, thread, (signal) => classifyClaude(prompt, thread, signal));
+  async classify(_window, prompt, thread) {
+    return classify(prompt, thread);
   },
-} satisfies Handlers<AgentHost>;
+} satisfies WindowHandlers<AgentHost>;
 
-/** Queued in Core (`utility.run`), which calls `agent.utility` below when it is this job's turn. */
-async function runUtility(task: UtilityTask, spaceId: string, prompt: string, thread?: string) {
-  const client = await coreClient();
-  return Effect.runPromise(client['utility.run']({ task, spaceId, prompt, thread }));
+/** Queued in Core's utility queue, which runs `executeUtility` when it is this job's turn. */
+export function runUtility(task: UtilityTask, spaceId: string, prompt: string, thread?: string) {
+  return Effect.runPromise(required(queue).submit({ thread, kind: task, priority: PRIORITY[task], promptChars: prompt.length, run: utilityCall(task, spaceId, prompt) }));
 }
 
-/** One model call, no queue: Core's executor for `utility.run`. */
+/** The queued model call: a failure answers null, so its caller keeps its local behaviour. */
+export const utilityCall = (task: UtilityTask, spaceId: string, prompt: string) =>
+  Effect.tryPromise(() => executeUtility(task, spaceId, prompt)).pipe(Effect.catch((error) => Effect.as(Effect.logWarning(`utility ${task} failed: ${error}`).pipe(Effect.annotateLogs({ source: 'agents' })), null)));
+
+export const classify = (prompt: string, thread: Thread) => classifyWithModel(prompt, thread, (signal) => classifyClaude(prompt, thread, signal));
+
+/** One model call, no queue. */
 async function executeUtility(task: UtilityTask, spaceId: string, prompt: string) {
   const offers = (provider: Provider) => models(codex, provider, spaceId).then((list) => list.map((m) => m.id), () => []);
   const startedAt = performance.now();
   const answer = await utility(ASKERS, offers, agentSettings().utilityModels[task], spaceId, task, prompt);
   console.info(`utility ${task}: ${answer ? `${answer.provider} ${answer.model}` : 'no model answered, local fallback'} in ${Math.round(performance.now() - startedAt)}ms`);
   return answer?.text ?? null;
+}
+
+/** Core is stopping: every agent process goes with it. */
+export function disposeAgents() {
+  stopAllClaude();
+  discardSpares();
+  codex.dispose();
 }
 
 /** Stopping a session with no agent process is a no-op, so settling twice or settling then deleting never errors. */
