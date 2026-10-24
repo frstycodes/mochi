@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import { CheckCircle } from '@/icons';
+import { AlertCircle, CheckCircle, PauseCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -124,8 +124,8 @@ export function NextMoveActions({ labels, onPick }: { labels: string[]; onPick: 
 /** The thread's plan in the chat; a running step's time ticks every second while the window is visible. */
 export function ThreadPlan({ thread, isWorking }: { thread: Thread; isWorking: boolean }) {
   const now = useHarnessSelector((s) => s.now);
-  const nowMs = useNowMs(thread.steps.some(isTicking));
-  return <PlanList items={planItems(thread.steps, now, nowMs)} slot={thread.line} isWorking={isWorking} />;
+  const nowMs = useNowMs(isWorking && thread.steps.some(isTicking));
+  return <PlanList items={planItems(thread.steps, now, nowMs, isWorking)} slot={thread.line} />;
 }
 
 /** One clock for the whole list: ticks each second while `isTicking` and the document is visible, idle otherwise. */
@@ -150,39 +150,46 @@ function useNowMs(isTicking: boolean) {
   return nowMs;
 }
 
-/** The agent's own to-do list, each step with how long it took; hidden once every step is done. The running step spins only while `isWorking`. */
-export function PlanList({ items, slot, isWorking }: { items: PlanItem[]; slot: LineSlot; isWorking: boolean }) {
+/** The agent's own to-do list, each step with how long it took; hidden once every step is done. Only a `running` step moves. */
+export function PlanList({ items, slot }: { items: PlanItem[]; slot: LineSlot }) {
   if (isPlanComplete(items)) return null;
   return (
     <CallList aria-label="Plan" className="divide-y-0 py-1">
       {items.map((item) => (
-        <PlanRow key={item.title} item={item} slot={slot} isWorking={isWorking} />
+        <PlanRow key={item.title} item={item} slot={slot} />
       ))}
     </CallList>
   );
 }
 
-function PlanRow({ item, slot, isWorking }: { item: PlanItem; slot: LineSlot; isWorking: boolean }) {
+function PlanRow({ item, slot }: { item: PlanItem; slot: LineSlot }) {
+  const { title, status, ms, note } = item;
+  const isRunning = status === 'running';
   return (
-    <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta">
-      <PlanIcon status={item.status} slot={slot} isWorking={isWorking} />
-      {item.status === 'running' ? (
+    <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta" title={note}>
+      <PlanIcon status={status} slot={slot} />
+      {isRunning ? (
         <Shimmer as="span" className="min-w-0 flex-1 truncate">
-          {item.title}
+          {title}
         </Shimmer>
       ) : (
-        <span className={cn('min-w-0 flex-1 truncate', item.status === 'done' ? 'text-muted-foreground' : 'text-foreground/75')}>{item.title}</span>
+        <span className={cn('min-w-0 flex-1 truncate', TITLE_CLASS[status])}>{title}</span>
       )}
-      <span className="sr-only">{STATUS_LABEL[item.status]}</span>
-      {item.ms !== undefined && <span className={cn('shrink-0 tabular-nums', item.status === 'running' ? 'text-foreground/75' : 'text-subtle-foreground')}>{planDuration(item.ms, item.status === 'running')}</span>}
+      <span className="sr-only">{STATUS_LABEL[status]}</span>
+      {status === 'blocked' && <span className="shrink-0 text-warning">Needs you</span>}
+      {ms !== undefined && <span className={cn('shrink-0 tabular-nums', isRunning ? 'text-foreground/75' : 'text-subtle-foreground')}>{planDuration(ms, isRunning)}</span>}
     </li>
   );
 }
 
-function PlanIcon({ status, slot, isWorking }: { status: PlanItem['status']; slot: LineSlot; isWorking: boolean }) {
+function PlanIcon({ status, slot }: { status: PlanItem['status']; slot: LineSlot }) {
   if (status === 'done') return <CheckCircle filled aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
-  if (status === 'running') return <ProgressRing met={0} total={1} slot={slot} size={14} isWorking={isWorking} />;
+  if (status === 'running') return <ProgressRing met={0} total={1} slot={slot} size={14} isWorking />;
+  if (status === 'paused') return <PauseCircle aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />;
+  if (status === 'blocked') return <AlertCircle aria-hidden className="size-3.5 shrink-0 text-warning" />;
   return <span aria-hidden className="m-px size-3 shrink-0 rounded-full border border-dashed border-subtle-foreground" />;
 }
 
-const STATUS_LABEL = { done: ', done', running: ', in progress', pending: ', up next' } satisfies Record<PlanItem['status'], string>;
+const TITLE_CLASS = { done: 'text-muted-foreground', running: '', paused: 'text-foreground/75', blocked: 'text-foreground', pending: 'text-foreground/75' } satisfies Record<PlanItem['status'], string>;
+
+const STATUS_LABEL = { done: ', done', running: ', in progress', paused: ', paused', blocked: ', needs you', pending: ', up next' } satisfies Record<PlanItem['status'], string>;
