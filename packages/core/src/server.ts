@@ -1,11 +1,11 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import path from 'node:path';
-import { Context, Effect, Layer, Schedule, Stream } from 'effect';
+import { Context, Effect, Layer, Schedule, Schema, Stream } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { NodeHttpServer } from '@effect/platform-node';
-import { Capabilities as Contract } from '@mochi/schema';
+import { Capabilities as Contract, definitionOf } from '@mochi/schema';
 import { Cache } from './cache.ts';
 import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
@@ -85,13 +85,24 @@ const connect = (options: ServerOptions, services: Context.Context<Services>) =>
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** `host.agent.*`, served in Core: the window's id goes to each method first. */
+/**
+ * `host.agent.*`, served in Core: the window's id goes to each method first. Results are read through the method's schema, as
+ * main's were (`hostHandlers`), so records the adapters make without `v` go out at the current version.
+ */
 const agentHandlers = (windowId: number | undefined) =>
   Object.fromEntries(
-    Object.entries(agent).map(([method, handle]) => [
-      `agent.${method}`,
-      (args: ReadonlyArray<unknown>) => Effect.tryPromise({ try: () => (handle as (...args: unknown[]) => Promise<unknown>)(windowId, ...args), catch: messageOf }),
-    ]),
+    Object.entries(agent).map(([method, handle]) => {
+      const tag = `agent.${method}`;
+      const output = Schema.toCodecJson(definitionOf(tag).output);
+      return [
+        tag,
+        (args: ReadonlyArray<unknown>) =>
+          Effect.tryPromise({ try: () => (handle as (...args: unknown[]) => Promise<unknown>)(windowId, ...args), catch: messageOf }).pipe(
+            // A void method's JSON form is null.
+            Effect.flatMap((value) => Schema.decodeUnknownEffect(output)(value ?? null).pipe(Effect.mapError(messageOf))),
+          ),
+      ];
+    }),
   );
 
 const refuse = (status: number, reason: string) =>
