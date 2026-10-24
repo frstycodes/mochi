@@ -457,6 +457,22 @@
   }
 }
 
+/* Blur costs GPU every frame the content behind changes, so the composer is glass only while focused; at rest it is a card-level fill with the same edge. */
+@utility surface-glass-focus {
+  background: var(--card);
+  border-color: var(--glass-edge);
+  &:focus-within {
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(1.6);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    &:focus-within {
+      background: var(--card);
+      backdrop-filter: none;
+    }
+  }
+}
+
 /* Floating windows (expanded goal, PiP satellites). Glass is allowed here because content scrolls underneath. */
 @utility surface-float {
   backdrop-filter: blur(24px) saturate(1.5);
@@ -629,54 +645,6 @@
 }
 [data-scrolling] {
   scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
-}
-
-/* Under an overlaid header: a progressive blur (layers stack, each starting higher, so the blur compounds toward the top, like iOS) under a wash of the page colour. Shown only once the `--chat` scroller has moved, so a resting thread has no edge. */
-@keyframes header-edge-in {
-  to {
-    opacity: 1;
-  }
-}
-@utility header-edge {
-  pointer-events: none;
-  /* The fade goes on each layer, never their parent: a parent below opacity 1 is a backdrop root, and the blurs inside it would sample nothing. */
-  & > i,
-  &::after {
-    position: absolute;
-    inset: 0;
-    /* Hidden at rest: a transcript that doesn't overflow has an inactive timeline, which leaves the base value in place. */
-    opacity: 0;
-    /* Shorthand first: `animation` resets animation-timeline. */
-    animation: header-edge-in linear both;
-    animation-timeline: --chat;
-    animation-range: 0 1.5rem;
-  }
-  & > i:nth-child(1) {
-    backdrop-filter: blur(2px);
-    mask-image: linear-gradient(to top, transparent, #000 25%);
-  }
-  & > i:nth-child(2) {
-    backdrop-filter: blur(4px);
-    mask-image: linear-gradient(to top, transparent 25%, #000 50%);
-  }
-  & > i:nth-child(3) {
-    backdrop-filter: blur(8px);
-    mask-image: linear-gradient(to top, transparent 50%, #000 75%);
-  }
-  & > i:nth-child(4) {
-    backdrop-filter: blur(16px);
-    mask-image: linear-gradient(to top, transparent 75%, #000);
-  }
-  &::after {
-    content: '';
-    background: linear-gradient(
-      to bottom,
-      color-mix(in oklab, var(--background) 85%, transparent),
-      color-mix(in oklab, var(--background) 60%, transparent) 35%,
-      color-mix(in oklab, var(--background) 25%, transparent) 70%,
-      transparent
-    );
-  }
 }
 
 /* Fades an edge only while there is more content past it. A scroller that doesn't overflow has an inactive timeline, so both fades stay 0. */
