@@ -1,7 +1,7 @@
 import type { PtyHost } from '@mochi/domain/host/types/pty';
 import type { HostMethods } from '../hostMethods.ts';
 import { resolveCwd } from './cwd.ts';
-import { ownedSession, spawnSession } from './sessions.ts';
+import { killSession, ownedSession, spawnSession } from './sessions.ts';
 
 /** `host.pty`; shell integration files go under `userData`. */
 export const ptyHost = (userData: string) =>
@@ -19,6 +19,6 @@ export const ptyHost = (userData: string) =>
       ownedSession(caller, id).resize(cols, rows);
     },
     async kill(caller, id) {
-      ownedSession(caller, id).kill();
+      killSession(caller, id);
     },
   }) satisfies HostMethods<PtyHost>;

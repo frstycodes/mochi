@@ -93,9 +93,6 @@ it.live(
         'number',
       );
 
-      // GAP: on the Windows runner node-pty 1.1's ConPTY teardown (`conpty_console_list_agent`: "AttachConsole failed")
-      // crashes the test worker with a heap corruption; Windows terminals in Core stay unverified until that is understood.
-      if (process.platform === 'win32') return;
       let seen = '';
       const output = yield* client.agentPush().pipe(
         Stream.filter((item) => item.channel.startsWith('pty:')),
@@ -117,7 +114,15 @@ it.live(
         Effect.timeoutOption('20 seconds'),
       );
       assert.ok(Option.isSome(isDone), `pty pushed: ${seen.slice(-800)}`);
+      // Kill it and wait for its exit before the scope closes: a ConPTY torn down mid-kill crashes the worker on Windows.
+      const exited = yield* client.agentPush().pipe(
+        Stream.filter((item) => item.channel === 'pty:onExit'),
+        Stream.runHead,
+        Effect.forkScoped({ startImmediately: true }),
+      );
+      yield* client.ping();
       yield* Effect.promise(() => call('pty.kill', [id]));
+      assert.ok(Option.isSome(yield* Fiber.join(exited)));
     }),
 );
 

@@ -70,18 +70,26 @@ export function ownedSession({ closed: owner }: Caller, id: string) {
   return session.pty;
 }
 
+export function killSession(caller: Caller, id: string) {
+  ownedSession(caller, id);
+  end(id);
+}
+
 /** A settled thread's terminals, and the dev servers running in them; the renderer hears each exit like any other. */
 export function killThreadSessions(threadId: string) {
-  for (const session of sessions.values())
-    if (session.threadId === threadId) session.pty.kill();
+  for (const [id, session] of sessions)
+    if (session.threadId === threadId) end(id);
 }
 
 function killOwnedBy(owner: AbortSignal) {
-  for (const [id, session] of sessions)
-    if (session.owner === owner) {
-      session.pty.kill();
-      sessions.delete(id);
-    }
+  for (const [id, session] of sessions) if (session.owner === owner) end(id);
 }
 
-process.on('exit', () => sessions.forEach(({ pty }) => pty.kill()));
+// Each session is killed once: killing a ConPTY twice (a kill, then its connection closing, then exit) can crash on Windows.
+function end(id: string) {
+  const session = sessions.get(id);
+  sessions.delete(id);
+  session?.pty.kill();
+}
+
+process.on('exit', () => [...sessions.keys()].forEach(end));
