@@ -7,13 +7,19 @@ const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><r
 
 const files = new Map<string, { text: string; mtimeMs: number }>(
   Object.entries({
-    'README.md': '# Mochi\n\nA calm workspace for running many coding agents at once.\n\n- **Threads** with goals and steps\n- A side pane with `Preview`, `Changes`, `Terminal` and `Files`\n\n```ts\nexport const answer = 42;\n```\n',
-    'package.json': '{\n  "name": "harness-proto",\n  "private": true,\n  "scripts": { "dev": "vite", "test": "node --test" },\n  "dependencies": { "react": "^19.3.0" }\n}\n',
-    'src/App.tsx': "import { useState } from 'react';\n\nexport function App() {\n  const [count, setCount] = useState(0);\n  return <button onClick={() => setCount((c) => c + 1)}>Clicked {count} times</button>;\n}\n",
-    'src/SidePane.tsx': "export function SidePane() {\n  return <aside>Preview, Changes, Terminal and Files</aside>;\n}\n",
-    'src/index.css': ':root {\n  --background: oklch(0.975 0.003 285);\n}\n\nbody {\n  background: var(--background);\n}\n',
+    'README.md':
+      '# Mochi\n\nA calm workspace for running many coding agents at once.\n\n- **Threads** with goals and steps\n- A side pane with `Preview`, `Changes`, `Terminal` and `Files`\n\n```ts\nexport const answer = 42;\n```\n',
+    'package.json':
+      '{\n  "name": "harness-proto",\n  "private": true,\n  "scripts": { "dev": "vite", "test": "node --test" },\n  "dependencies": { "react": "^19.3.0" }\n}\n',
+    'src/App.tsx':
+      "import { useState } from 'react';\n\nexport function App() {\n  const [count, setCount] = useState(0);\n  return <button onClick={() => setCount((c) => c + 1)}>Clicked {count} times</button>;\n}\n",
+    'src/SidePane.tsx':
+      'export function SidePane() {\n  return <aside>Preview, Changes, Terminal and Files</aside>;\n}\n',
+    'src/index.css':
+      ':root {\n  --background: oklch(0.975 0.003 285);\n}\n\nbody {\n  background: var(--background);\n}\n',
     'src/logo.svg': LOGO_SVG,
-    'scripts/build.py': 'import sys\n\n\ndef main() -> int:\n    print("building", sys.argv[1:])\n    return 0\n',
+    'scripts/build.py':
+      'import sys\n\n\ndef main() -> int:\n    print("building", sys.argv[1:])\n    return 0\n',
   }).map(([path, text]) => [path, { text, mtimeMs: 1 }]),
 );
 // A few files outside the fixture project, so `@../` and `@~/` have something to browse.
@@ -45,14 +51,17 @@ export const fs: FsHost = {
   async write(_root, path, text, { baseMtimeMs, force }) {
     const file = files.get(path);
     if (!file) throw new Error(`${path} does not exist`);
-    if (!force && file.mtimeMs !== baseMtimeMs) return { status: 'conflict', ...file };
+    if (!force && file.mtimeMs !== baseMtimeMs)
+      return { status: 'conflict', ...file };
     const mtimeMs = file.mtimeMs + 1;
     files.set(path, { text, mtimeMs });
     return { status: 'saved', mtimeMs };
   },
   async search(_root, id, pattern, options) {
     const regex = compileQuery(pattern, options);
-    for (const [path, { text }] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const [path, { text }] of [...files].sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
       const lines = matchLines(text, regex, SEARCH_LIMIT);
       if (lines.length) hitListeners.forEach((l) => l({ id, path, lines }));
     }
@@ -75,21 +84,45 @@ export const fs: FsHost = {
     const full = path.replace(/\/+$/, '') || '~';
     const parent = full.slice(0, full.lastIndexOf('/'));
     if (FOLDERS[full]) return { path: full, names: FOLDERS[full] };
-    return FOLDERS[parent]?.includes(full.slice(full.lastIndexOf('/') + 1)) ? { path: full, names: [] } : null;
+    return FOLDERS[parent]?.includes(full.slice(full.lastIndexOf('/') + 1))
+      ? { path: full, names: [] }
+      : null;
   },
   async entries(at) {
-    const full = at.startsWith('~') ? joinPath('~', `.${at.slice(1)}`) : joinPath(WEB_PROJECT, at);
+    const full = at.startsWith('~')
+      ? joinPath('~', `.${at.slice(1)}`)
+      : joinPath(WEB_PROJECT, at);
     if (full === WEB_PROJECT) {
       const top = [...files.keys()].map((f) => f.split('/'));
-      return { path: full, dirs: [...new Set(top.filter((p) => p.length > 1).map((p) => p[0]))].sort(), files: top.filter((p) => p.length === 1).map((p) => p[0]).sort() };
+      return {
+        path: full,
+        dirs: [
+          ...new Set(top.filter((p) => p.length > 1).map((p) => p[0])),
+        ].sort(),
+        files: top
+          .filter((p) => p.length === 1)
+          .map((p) => p[0])
+          .sort(),
+      };
     }
     if (!FOLDERS[full] && !OUTSIDE_FILES[full]) return null;
-    return { path: full, dirs: FOLDERS[full] ?? [], files: OUTSIDE_FILES[full] ?? [] };
+    return {
+      path: full,
+      dirs: FOLDERS[full] ?? [],
+      files: OUTSIDE_FILES[full] ?? [],
+    };
   },
   // GAP: the File System Access API never exposes a path, only the folder's name.
   async pickFolder() {
-    const picker = (window as Window & { showDirectoryPicker?: () => Promise<{ name: string }> }).showDirectoryPicker;
-    if (!picker) throw new Error('This browser has no folder picker. Type the path instead.');
+    const picker = (
+      window as Window & {
+        showDirectoryPicker?: () => Promise<{ name: string }>;
+      }
+    ).showDirectoryPicker;
+    if (!picker)
+      throw new Error(
+        'This browser has no folder picker. Type the path instead.',
+      );
     try {
       return (await picker()).name;
     } catch {

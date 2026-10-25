@@ -7,8 +7,16 @@ import { runCheck } from './check.ts';
 const isWindows = process.platform === 'win32';
 
 test('runCheck reports the exit code and the output tail, failing or not', async () => {
-  const failed = await runCheck(tmpdir(), isWindows ? 'echo checking& echo boom 1>&2& exit /b 3' : 'echo checking; echo boom >&2; exit 3');
+  const failed = await runCheck(
+    tmpdir(),
+    isWindows
+      ? 'echo checking& echo boom 1>&2& exit /b 3'
+      : 'echo checking; echo boom >&2; exit 3',
+  );
   assert.equal(failed.exitCode, 3);
   assert.match(failed.output, /checking\r?\nboom$/);
-  assert.equal((await runCheck(tmpdir(), isWindows ? 'exit /b 0' : 'true')).exitCode, 0);
+  assert.equal(
+    (await runCheck(tmpdir(), isWindows ? 'exit /b 0' : 'true')).exitCode,
+    0,
+  );
 });

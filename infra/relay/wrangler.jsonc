@@ -3,11 +3,16 @@
   "name": "mochi-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  "durable_objects": { "bindings": [{ "name": "ACCOUNTS", "class_name": "AccountRelay" }] },
+  "durable_objects": {
+    "bindings": [{ "name": "ACCOUNTS", "class_name": "AccountRelay" }],
+  },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountRelay"] }],
   // Served at https://mochi-relay.<your-subdomain>.workers.dev. For your own domain (its DNS on Cloudflare), uncomment and set:
   // "routes": [{ "pattern": "relay.example.com", "custom_domain": true }],
   "workers_dev": true,
   // Clerk development instance. TODO(owner: Sandesh): the production issuer and client at launch.
-  "vars": { "CLERK_ISSUER": "https://amazed-hyena-4980.clerk.accounts.dev", "CLERK_CLIENT_ID": "DrmXYYxWDX3SDT5B" }
+  "vars": {
+    "CLERK_ISSUER": "https://amazed-hyena-4980.clerk.accounts.dev",
+    "CLERK_CLIENT_ID": "DrmXYYxWDX3SDT5B",
+  },
 }

@@ -17,7 +17,10 @@ const STALE = 'a6962bb2-8bf0-4def-9ddb-7757556ab5df';
 async function configDir() {
   const dir = await mkdtemp(join(tmpdir(), 'mochi-claude-config-'));
   await mkdir(join(dir, 'projects', '-tmp-proj'), { recursive: true });
-  await copyFile(new URL('./fixtures/interrupted.jsonl', import.meta.url), join(dir, 'projects', '-tmp-proj', `${SESSION}.jsonl`));
+  await copyFile(
+    new URL('./fixtures/interrupted.jsonl', import.meta.url),
+    join(dir, 'projects', '-tmp-proj', `${SESSION}.jsonl`),
+  );
   return dir;
 }
 
@@ -25,7 +28,10 @@ test("the transcript's entries are what resumeSessionAt can name; a message inte
   const uuids = await transcriptUuids(await configDir(), SESSION);
   assert.ok(uuids.has(WRITTEN) && uuids.has(EARLIER));
   assert.equal(uuids.has(UNWRITTEN), false);
-  assert.equal((await transcriptUuids(await configDir(), 'no-such-session')).size, 0);
+  assert.equal(
+    (await transcriptUuids(await configDir(), 'no-such-session')).size,
+    0,
+  );
 });
 
 test('the rewind point steps back over our own unwritten messages, and is null when nothing before is in the transcript', async () => {
@@ -34,14 +40,36 @@ test('the rewind point steps back over our own unwritten messages, and is null w
     { uuid: UNWRITTEN, after: EARLIER },
     { uuid: 'dropped', after: UNWRITTEN },
   ];
-  assert.equal(forkPoint(sent, 1, uuids), EARLIER, 'the unwritten message never reached the agent, so forking before it drops nothing it saw');
-  assert.equal(forkPoint([{ uuid: WRITTEN, after: EARLIER }, { uuid: 'dropped', after: WRITTEN }], 1, uuids), WRITTEN);
-  assert.equal(forkPoint([{ uuid: 'dropped', after: STALE }], 0, uuids), null, 'an unknown entry that is not ours: start fresh with the transcript');
+  assert.equal(
+    forkPoint(sent, 1, uuids),
+    EARLIER,
+    'the unwritten message never reached the agent, so forking before it drops nothing it saw',
+  );
+  assert.equal(
+    forkPoint(
+      [
+        { uuid: WRITTEN, after: EARLIER },
+        { uuid: 'dropped', after: WRITTEN },
+      ],
+      1,
+      uuids,
+    ),
+    WRITTEN,
+  );
+  assert.equal(
+    forkPoint([{ uuid: 'dropped', after: STALE }], 0, uuids),
+    null,
+    'an unknown entry that is not ours: start fresh with the transcript',
+  );
   assert.equal(forkPoint([{ uuid: 'dropped', after: null }], 0, uuids), null);
 });
 
 test('rewind → stop → send → send: the fork is made by the first launch only, so a refused fork is never replayed', async () => {
-  const session = { options: { resume: SESSION, forkAt: WRITTEN }, sessionId: SESSION, account: { configDir: await configDir() } };
+  const session = {
+    options: { resume: SESSION, forkAt: WRITTEN },
+    sessionId: SESSION,
+    account: { configDir: await configDir() },
+  };
   assert.deepEqual(await takeForkAt(session), { forkAt: WRITTEN });
   // The fork failed before init, so the session id is unchanged: the next send's relaunch resumes the whole session.
   assert.equal(session.options.forkAt, undefined);
@@ -49,13 +77,21 @@ test('rewind → stop → send → send: the fork is made by the first launch on
 });
 
 test("a forkAt the session doesn't have (the reported a6962bb2…) is dropped before Claude Code sees it, once", async () => {
-  const session = { options: { resume: SESSION, forkAt: STALE }, sessionId: SESSION, account: { configDir: await configDir() } };
+  const session = {
+    options: { resume: SESSION, forkAt: STALE },
+    sessionId: SESSION,
+    account: { configDir: await configDir() },
+  };
   assert.deepEqual(await takeForkAt(session), { isMissing: true });
   assert.deepEqual(await takeForkAt(session), {});
 });
 
 test('lost process → send: a relaunch on the fork it already made resumes the fork, never forks again', async () => {
-  const session = { options: { resume: SESSION, forkAt: WRITTEN }, sessionId: 'the-fork-id', account: { configDir: await configDir() } };
+  const session = {
+    options: { resume: SESSION, forkAt: WRITTEN },
+    sessionId: 'the-fork-id',
+    account: { configDir: await configDir() },
+  };
   assert.deepEqual(await takeForkAt(session), {});
   assert.equal(session.options.forkAt, undefined);
 });

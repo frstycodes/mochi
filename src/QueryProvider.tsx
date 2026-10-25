@@ -3,5 +3,7 @@ import type { ReactNode } from 'react';
 import { queryClient } from './query.ts';
 
 export function QueryProvider({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
 }

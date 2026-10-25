@@ -25,14 +25,20 @@ test('only the first read migrates, so the change main announces for it settles 
   let onIdle = () => {};
   // Called while a fetch is in flight: the next notification with nothing fetching comes after it finished.
   const settled = () => new Promise<void>((resolve) => (onIdle = resolve));
-  const stop = new QueryObserver(queryClient, projectsQueryOptions('loop-check', [])).subscribe(() => {
+  const stop = new QueryObserver(
+    queryClient,
+    projectsQueryOptions('loop-check', []),
+  ).subscribe(() => {
     if (queryClient.isFetching({ queryKey }) === 0) onIdle();
   });
   try {
     await settled();
     refreshProjects('loop-check');
     await settled();
-    assert.deepEqual(calls.filter((c) => c === 'migrate'), ['migrate']);
+    assert.deepEqual(
+      calls.filter((c) => c === 'migrate'),
+      ['migrate'],
+    );
     assert.ok(calls.length <= 3, `settled after ${calls.join(', ')}`);
   } finally {
     stop();

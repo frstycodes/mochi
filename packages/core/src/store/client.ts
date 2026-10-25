@@ -7,7 +7,9 @@ import type { AppendInput } from './store.ts';
 // `electron` import: modules using it run under plain node in tests, where documents stay in this process.
 
 type Docs = {
-  list: (table: DocTable) => Promise<ReadonlyArray<{ key: string; value: unknown }>>;
+  list: (
+    table: DocTable,
+  ) => Promise<ReadonlyArray<{ key: string; value: unknown }>>;
   set: (table: DocTable, key: string, value: unknown) => Promise<void>;
   append: (input: AppendInput) => Promise<unknown>;
 };
@@ -20,17 +22,31 @@ let pending = 0;
 /** Main points this at its Core client (`startCore`). Calls retry across a Core restart (`retryIdempotent`). */
 export function useDocsClient(client: Promise<CoreClient>) {
   backend = {
-    list: async (table) => Effect.runPromise((await client)['docs.list']({ table })),
-    set: async (table, key, value) => Effect.runPromise((await client)['docs.set']({ table, key, value })),
-    append: async (input) => Effect.runPromise((await client)['events.append']({ ...input, payload: input.payload ?? null })),
+    list: async (table) =>
+      Effect.runPromise((await client)['docs.list']({ table })),
+    set: async (table, key, value) =>
+      Effect.runPromise((await client)['docs.set']({ table, key, value })),
+    append: async (input) =>
+      Effect.runPromise(
+        (await client)['events.append']({
+          ...input,
+          payload: input.payload ?? null,
+        }),
+      ),
   };
 }
 
 // ponytail: tests and the web build's absence of Core get a per-process map; same calls, no second store.
 const memory = new Map<string, unknown>();
 const local: Docs = {
-  list: async (table) => [...memory].filter(([id]) => id.startsWith(`${table}/`)).map(([id, value]) => ({ key: id.slice(table.length + 1), value })),
-  set: async (table, key, value) => void (value === undefined ? memory.delete(`${table}/${key}`) : memory.set(`${table}/${key}`, value)),
+  list: async (table) =>
+    [...memory]
+      .filter(([id]) => id.startsWith(`${table}/`))
+      .map(([id, value]) => ({ key: id.slice(table.length + 1), value })),
+  set: async (table, key, value) =>
+    void (value === undefined
+      ? memory.delete(`${table}/${key}`)
+      : memory.set(`${table}/${key}`, value)),
   append: async () => {},
 };
 const docs = () => backend ?? local;
@@ -40,14 +56,19 @@ export async function readDocs<T>(table: DocTable): Promise<Map<string, T>> {
   await writes.get(table);
   const cached = preloaded.get(table);
   if (cached) return new Map(cached) as Map<string, T>;
-  return new Map((await docs().list(table)).map(({ key, value }) => [key, value as T]));
+  return new Map(
+    (await docs().list(table)).map(({ key, value }) => [key, value as T]),
+  );
 }
 
-export const readDoc = async <T>(table: DocTable, key: string) => (await readDocs<T>(table)).get(key);
+export const readDoc = async <T>(table: DocTable, key: string) =>
+  (await readDocs<T>(table)).get(key);
 
 /** Reads `tables` once so `cachedDoc` can answer synchronously; main awaits it before anything reads them. */
 export async function preloadDocs(tables: ReadonlyArray<DocTable>) {
-  await Promise.all(tables.map(async (table) => preloaded.set(table, await readDocs(table))));
+  await Promise.all(
+    tables.map(async (table) => preloaded.set(table, await readDocs(table))),
+  );
 }
 
 /** For callers that can't wait: only for a table `preloadDocs` read. */
@@ -58,12 +79,24 @@ export function cachedDoc<T>(table: DocTable, key: string): T | undefined {
 }
 
 /** Writes one at a time per table, each the whole document; `undefined` deletes it. A failure is logged, and rejects. */
-export function writeDoc(table: DocTable, key: string, value: unknown): Promise<void> {
+export function writeDoc(
+  table: DocTable,
+  key: string,
+  value: unknown,
+): Promise<void> {
   const cached = preloaded.get(table);
-  if (cached) void (value === undefined ? cached.delete(key) : cached.set(key, value));
+  if (cached)
+    void (value === undefined ? cached.delete(key) : cached.set(key, value));
   pending++;
-  const next = (writes.get(table) ?? Promise.resolve()).then(() => docs().set(table, key, value)).finally(() => pending--);
-  writes.set(table, next.catch((error: unknown) => console.error(`Saving ${table}/${key} failed`, error)));
+  const next = (writes.get(table) ?? Promise.resolve())
+    .then(() => docs().set(table, key, value))
+    .finally(() => pending--);
+  writes.set(
+    table,
+    next.catch((error: unknown) =>
+      console.error(`Saving ${table}/${key} failed`, error),
+    ),
+  );
   return next;
 }
 
@@ -79,5 +112,9 @@ let appending: Promise<unknown> = Promise.resolve();
  * `eventId` set, a resend after a dropped socket is logged once.
  */
 export function logEvent(input: AppendInput) {
-  appending = appending.then(() => docs().append(input)).catch((error: unknown) => console.error(`Logging ${input.type} failed`, error));
+  appending = appending
+    .then(() => docs().append(input))
+    .catch((error: unknown) =>
+      console.error(`Logging ${input.type} failed`, error),
+    );
 }

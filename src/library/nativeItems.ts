@@ -26,13 +26,19 @@ export interface NativeItem {
   def?: McpServerDef;
 }
 
-export const NATIVE_KIND_LABELS = { skill: 'Skill', plugin: 'Plugin', server: 'MCP server', connector: 'Connector' } satisfies Record<NativeKind, string>;
+export const NATIVE_KIND_LABELS = {
+  skill: 'Skill',
+  plugin: 'Plugin',
+  server: 'MCP server',
+  connector: 'Connector',
+} satisfies Record<NativeKind, string>;
 
 /** Every item one account's config loads, skills, then plugins, then servers, then claude.ai connectors. */
 export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
   const { provider, account } = config;
   const base = { provider, accountId: account.id };
-  const id = (kind: NativeKind, scope: string, name: string) => `${provider}:${account.id}:${kind}:${scope}:${name}`;
+  const id = (kind: NativeKind, scope: string, name: string) =>
+    `${provider}:${account.id}:${kind}:${scope}:${name}`;
   const skills = config.skills.map((skill) => ({
     ...base,
     id: id('skill', 'user', skill.name),
@@ -66,7 +72,9 @@ export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
     ].join(' · '),
     // A project's .mcp.json is opened from the project, not from here.
     file: scope === 'project' ? null : serverConfigFile(account),
-    ...(needs.length && { problem: `Needs ${LIST.format(needs)} set to start` }),
+    ...(needs.length && {
+      problem: `Needs ${LIST.format(needs)} set to start`,
+    }),
     isOffNatively: !enabled,
     def,
   }));
@@ -85,21 +93,35 @@ export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
 
 /** The account's own folder, as the user would type it. */
 export function accountDir(account: Account) {
-  return account.configDir ? tilde(account.configDir) : account.provider === 'claude' ? '~/.claude' : '~/.codex';
+  return account.configDir
+    ? tilde(account.configDir)
+    : account.provider === 'claude'
+      ? '~/.claude'
+      : '~/.codex';
 }
 
 /** `off` with `ids` added (isOff) or taken out, each once. */
-export function withOff(off: readonly string[] | undefined, ids: readonly string[], isOff: boolean): string[] {
+export function withOff(
+  off: readonly string[] | undefined,
+  ids: readonly string[],
+  isOff: boolean,
+): string[] {
   const rest = (off ?? []).filter((id) => !ids.includes(id));
   return isOff ? [...rest, ...ids] : rest;
 }
 
 /** Where the account's own servers are written: Claude's `.claude.json` beside its config folder (in the home folder by default), Codex's config.toml. */
 const serverConfigFile = (account: Account): DiskFile =>
-  account.provider === 'codex' ? { root: accountDir(account), path: 'config.toml' } : { root: account.configDir ?? '~', path: '.claude.json' };
+  account.provider === 'codex'
+    ? { root: accountDir(account), path: 'config.toml' }
+    : { root: account.configDir ?? '~', path: '.claude.json' };
 
 const serverFile = (account: Account) =>
-  account.provider === 'codex' ? `${accountDir(account)}/config.toml` : account.configDir ? `${tilde(account.configDir)}/.claude.json` : '~/.claude.json';
+  account.provider === 'codex'
+    ? `${accountDir(account)}/config.toml`
+    : account.configDir
+      ? `${tilde(account.configDir)}/.claude.json`
+      : '~/.claude.json';
 
 const tilde = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
 

@@ -16,12 +16,27 @@ export interface PlanItem {
 }
 
 /** The agent's plan as the chat's to-do list. `now` is Mochi's minute clock, `nowMs` the wall clock. */
-export function planItems(steps: Step[], now: number, nowMs: number, isWorking: boolean): PlanItem[] {
+export function planItems(
+  steps: Step[],
+  now: number,
+  nowMs: number,
+  isWorking: boolean,
+): PlanItem[] {
   return steps.flatMap((s) => {
     if (s.status === 'dropped') return [];
     const ms = stepElapsedMs(s, now, nowMs);
-    const status = s.status === 'running' && !(isWorking && isTicking(s)) ? 'paused' : PLAN_STATUS[s.status];
-    return [{ title: s.title, status, ...(ms !== undefined && { ms }), ...(s.status === 'blocked' && !!s.note && { note: s.note }) }];
+    const status =
+      s.status === 'running' && !(isWorking && isTicking(s))
+        ? 'paused'
+        : PLAN_STATUS[s.status];
+    return [
+      {
+        title: s.title,
+        status,
+        ...(ms !== undefined && { ms }),
+        ...(s.status === 'blocked' && !!s.note && { note: s.note }),
+      },
+    ];
   });
 }
 
@@ -33,9 +48,16 @@ export function isPlanComplete(items: PlanItem[]) {
 /** Wall-clock ms for a step the agent stamped; a demo step, or one finished or stopped by an action without `ms`, has only Mochi's minute clock. */
 export function stepElapsedMs(step: Step, now: number, nowMs: number) {
   const { startedMs, doneAt, stoppedAt } = step;
-  const endMs = doneAt !== undefined ? step.doneMs : stoppedAt !== undefined ? step.stoppedMs : nowMs;
-  if (startedMs !== undefined && endMs !== undefined) return Math.max(0, endMs - startedMs);
-  if (step.startedAt !== undefined) return ((doneAt ?? stoppedAt ?? now) - step.startedAt) * 60_000;
+  const endMs =
+    doneAt !== undefined
+      ? step.doneMs
+      : stoppedAt !== undefined
+        ? step.stoppedMs
+        : nowMs;
+  if (startedMs !== undefined && endMs !== undefined)
+    return Math.max(0, endMs - startedMs);
+  if (step.startedAt !== undefined)
+    return ((doneAt ?? stoppedAt ?? now) - step.startedAt) * 60_000;
 }
 
 /** A running step whose clock still moves: the turn it runs in hasn't ended. */
@@ -43,4 +65,9 @@ export function isTicking(step: Step) {
   return step.status === 'running' && step.stoppedAt === undefined;
 }
 
-const PLAN_STATUS = { done: 'done', running: 'running', ready: 'pending', blocked: 'blocked' } satisfies Record<Exclude<StepStatus, 'dropped'>, PlanItem['status']>;
+const PLAN_STATUS = {
+  done: 'done',
+  running: 'running',
+  ready: 'pending',
+  blocked: 'blocked',
+} satisfies Record<Exclude<StepStatus, 'dropped'>, PlanItem['status']>;

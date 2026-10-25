@@ -15,8 +15,10 @@ const MAX_FOLDERS = 500;
 export const fs = {
   list: (_sender, root) => listFiles(root),
   read: (_sender, root, path) => readInside(root, path),
-  write: (_sender, root, path, text, options) => writeInside(root, path, text, options),
-  search: (sender, root, id, pattern, options) => searchFor(sender, root, id, pattern, options),
+  write: (_sender, root, path, text, options) =>
+    writeInside(root, path, text, options),
+  search: (sender, root, id, pattern, options) =>
+    searchFor(sender, root, id, pattern, options),
   cancelSearch: async (_sender, id) => cancelSearch(id),
   editors: () => installedEditors(),
   openIn: async (_sender, editor, root, path, line) => {
@@ -24,26 +26,40 @@ export const fs = {
     await openInEditor(editor, await resolveRoot(root), file, line);
   },
   reveal: async (_sender, root, path) => {
-    shell.showItemInFolder(path ? await resolveInside(root, path) : await resolveRoot(root));
+    shell.showItemInFolder(
+      path ? await resolveInside(root, path) : await resolveRoot(root),
+    );
   },
   pickFolder: async (sender, defaultPath) => {
     const start = defaultPath?.replace(/^~(?=\/|$)/, homedir());
-    const options = { defaultPath: start ?? homedir(), properties: ['openDirectory', 'createDirectory'] } satisfies Electron.OpenDialogOptions;
+    const options = {
+      defaultPath: start ?? homedir(),
+      properties: ['openDirectory', 'createDirectory'],
+    } satisfies Electron.OpenDialogOptions;
     const window = BrowserWindow.fromWebContents(sender);
-    const { canceled, filePaths } = await (window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options));
+    const { canceled, filePaths } = await (window
+      ? dialog.showOpenDialog(window, options)
+      : dialog.showOpenDialog(options));
     return canceled ? null : (filePaths[0] ?? null);
   },
   folders: async (_sender, at) => {
     const dir = path.resolve(at.replace(/^~(?=\/|$)/, homedir()));
     if (!(await stat(dir).catch(() => null))?.isDirectory()) return null;
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-    const names = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
-    return { path: dir, names: names.sort((a, b) => a.localeCompare(b)).slice(0, MAX_FOLDERS) };
+    const names = entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => e.name);
+    return {
+      path: dir,
+      names: names.sort((a, b) => a.localeCompare(b)).slice(0, MAX_FOLDERS),
+    };
   },
   entries: async (_sender, at) => {
     const dir = path.resolve(at.replace(/^~(?=\/|$)/, homedir()));
     if (!(await stat(dir).catch(() => null))?.isDirectory()) return null;
-    const entries = (await readdir(dir, { withFileTypes: true }).catch(() => [])).sort((a, b) => a.name.localeCompare(b.name));
+    const entries = (
+      await readdir(dir, { withFileTypes: true }).catch(() => [])
+    ).sort((a, b) => a.name.localeCompare(b.name));
     const names = (isDir: boolean) =>
       entries
         .filter((e) => e.isDirectory() === isDir)

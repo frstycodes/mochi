@@ -1,5 +1,10 @@
 import { useEffect } from 'react';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
@@ -29,8 +34,22 @@ function TornThread({ threadId }: { threadId: string }) {
   if (!thread) return <Gone />;
   return (
     // Desktop windows hide the title bar: with no sidebar here, the header clears the traffic lights itself.
-    <main className={cn('h-full min-w-0 flex-1', host.isDesktop && '[&_header]:pl-20')}>
-      <LeafView leaf={{ kind: 'leaf', id: 'window', view: { kind: 'thread', id: threadId } }} isMulti={false} isZoomed={false} isFirst={false} />
+    <main
+      className={cn(
+        'h-full min-w-0 flex-1',
+        host.isDesktop && '[&_header]:pl-20',
+      )}
+    >
+      <LeafView
+        leaf={{
+          kind: 'leaf',
+          id: 'window',
+          view: { kind: 'thread', id: threadId },
+        }}
+        isMulti={false}
+        isZoomed={false}
+        isFirst={false}
+      />
     </main>
   );
 }

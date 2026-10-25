@@ -6,7 +6,11 @@ export const SIDEBAR_DEFAULT_PX = 256;
 const MIN_PX = 208;
 const MAX_PX = 420;
 const KEY_STEP_PX = 16;
-const widthSlice = persistedSlice('harness.sidebar-width', SIDEBAR_DEFAULT_PX, (raw) => clampWidth(Number(raw) || SIDEBAR_DEFAULT_PX));
+const widthSlice = persistedSlice(
+  'harness.sidebar-width',
+  SIDEBAR_DEFAULT_PX,
+  (raw) => clampWidth(Number(raw) || SIDEBAR_DEFAULT_PX),
+);
 
 /** Sidebar width, remembered per browser. */
 export function useSidebarWidth() {
@@ -28,8 +32,19 @@ function clampWidth(px: number) {
  * (no React render per move) and commits on release; double-click resets. Not `--sidebar-width` on the wrapper: a custom property
  * there restyles every node of the app per move (~37ms with a long chat open, against ~1ms for the two widths).
  */
-export function SidebarResizer({ width, onCommit }: { width: number; onCommit: (px: number) => void }) {
-  const drag = useRef<{ x: number; w: number; wrapper: HTMLElement; sized: HTMLElement[] } | null>(null);
+export function SidebarResizer({
+  width,
+  onCommit,
+}: {
+  width: number;
+  onCommit: (px: number) => void;
+}) {
+  const drag = useRef<{
+    x: number;
+    w: number;
+    wrapper: HTMLElement;
+    sized: HTMLElement[];
+  } | null>(null);
   const live = useRef(width);
 
   return (
@@ -42,11 +57,19 @@ export function SidebarResizer({ width, onCommit }: { width: number; onCommit: (
       aria-valuemax={MAX_PX}
       tabIndex={0}
       onPointerDown={(e) => {
-        const wrapper = e.currentTarget.closest<HTMLElement>('[data-slot=sidebar-wrapper]');
-        const sidebar = e.currentTarget.closest<HTMLElement>('[data-slot=sidebar]');
+        const wrapper = e.currentTarget.closest<HTMLElement>(
+          '[data-slot=sidebar-wrapper]',
+        );
+        const sidebar = e.currentTarget.closest<HTMLElement>(
+          '[data-slot=sidebar]',
+        );
         if (!wrapper || !sidebar) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        const sized = [...sidebar.querySelectorAll<HTMLElement>('[data-slot=sidebar-gap], [data-slot=sidebar-container]')];
+        const sized = [
+          ...sidebar.querySelectorAll<HTMLElement>(
+            '[data-slot=sidebar-gap], [data-slot=sidebar-container]',
+          ),
+        ];
         drag.current = { x: e.clientX, w: width, wrapper, sized };
         live.current = width;
         wrapper.setAttribute('data-sidebar-resizing', '');

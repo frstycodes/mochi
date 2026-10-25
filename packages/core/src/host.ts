@@ -1,4 +1,9 @@
-import { app, utilityProcess, type UtilityProcess, type WebContents } from 'electron';
+import {
+  app,
+  utilityProcess,
+  type UtilityProcess,
+  type WebContents,
+} from 'electron';
 import { Effect, Schedule } from 'effect';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
@@ -8,7 +13,12 @@ import { connectCore, coreUrl, type CoreClient } from './client.ts';
 import { serveCapabilities, type CapabilityHandler } from './hostClient.ts';
 import { mintDeviceToken, type DeviceGrant } from './remote/token.ts';
 import { useCoreClient } from './runClient.ts';
-import { flushDocs, hasPendingDocs, preloadDocs, useDocsClient } from './store/client.ts';
+import {
+  flushDocs,
+  hasPendingDocs,
+  preloadDocs,
+  useDocsClient,
+} from './store/client.ts';
 
 const RESTART_DELAY_MS = 1000;
 let mainConnection: ReturnType<typeof connectCore> | undefined;
@@ -17,7 +27,10 @@ export interface StartCoreOptions {
   isTrusted: (url: string) => boolean;
   /** Page origins Core accepts; Electron reports a `file://` page as `file://`. */
   origins: ReadonlyArray<string>;
-  capabilities: { names: ReadonlyArray<Capabilities.CapabilityName>; handle: CapabilityHandler };
+  capabilities: {
+    names: ReadonlyArray<Capabilities.CapabilityName>;
+    handle: CapabilityHandler;
+  };
 }
 
 /**
@@ -26,7 +39,11 @@ export interface StartCoreOptions {
  * Clients redial on their own, so a restart needs nothing from here beyond the respawn. Resolves once Core answers and the
  * documents main reads synchronously (`cachedDoc`) are loaded.
  */
-export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions) {
+export function startCore({
+  isTrusted,
+  origins,
+  capabilities,
+}: StartCoreOptions) {
   const token = randomBytes(32).toString('base64url');
   const port = freePort();
   resolveEndpoint(port.then((port) => ({ port, token })));
@@ -35,13 +52,16 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
 
   // A call made before a client's first open fails instead of waiting, so pages get the URL once Core answers main.
   let isReady: Promise<number> | undefined;
-  const ready = () => (isReady ??= port.then(async (port) => (await pingUntilUp(), port)));
+  const ready = () =>
+    (isReady ??= port.then(async (port) => (await pingUntilUp(), port)));
   const sendUrl = (contents: WebContents) =>
     void ready().then((port) => {
       if (contents.isDestroyed() || !isTrusted(contents.getURL())) return;
       contents.send('core:url', coreUrl(port, token, contents.id));
     });
-  app.on('browser-window-created', (_event, win) => win.webContents.on('did-finish-load', () => sendUrl(win.webContents)));
+  app.on('browser-window-created', (_event, win) =>
+    win.webContents.on('did-finish-load', () => sendUrl(win.webContents)),
+  );
   // Core holds the documents main last wrote; quitting waits for them to land before it stops Core.
   app.on('before-quit', (event) => {
     if (!hasPendingDocs()) return;
@@ -64,7 +84,11 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
     };
     const spawn = () => {
       // Bundled into dist-electron/main.js, beside the `core` entry.
-      core = utilityProcess.fork(path.join(import.meta.dirname, 'core.js'), [], { serviceName: 'Mochi Core', env });
+      core = utilityProcess.fork(
+        path.join(import.meta.dirname, 'core.js'),
+        [],
+        { serviceName: 'Mochi Core', env },
+      );
       core.once('exit', (code) => {
         if (isQuitting) return;
         setTimeout(() => {
@@ -78,29 +102,44 @@ export function startCore({ isTrusted, origins, capabilities }: StartCoreOptions
     useCoreClient(mainConnection.then(({ client }) => client));
     useDocsClient(mainConnection.then(({ client }) => client));
     void mainConnection.then(({ client }) => resolveMainClient(client));
-    void mainConnection.then(({ client }) => Effect.runFork(serveCapabilities(client, capabilities.names, capabilities.handle)));
+    void mainConnection.then(({ client }) =>
+      Effect.runFork(
+        serveCapabilities(client, capabilities.names, capabilities.handle),
+      ),
+    );
   });
   return ready().then(() => preloadDocs(['settings', 'window_bounds']));
 }
 
-let resolveEndpoint: (endpoint: Promise<{ port: number; token: string }>) => void;
-const endpoint = new Promise<{ port: number; token: string }>((resolve) => (resolveEndpoint = resolve));
+let resolveEndpoint: (
+  endpoint: Promise<{ port: number; token: string }>,
+) => void;
+const endpoint = new Promise<{ port: number; token: string }>(
+  (resolve) => (resolveEndpoint = resolve),
+);
 
 /** Where a paired device's tunnel reaches Core, and a fresh token holding it to that device's scopes. */
 export const deviceTunnel = async (grant: DeviceGrant) => {
   const { port, token } = await endpoint;
-  return { url: coreUrl(port, '').split('#')[0]!, token: mintDeviceToken(token, grant) };
+  return {
+    url: coreUrl(port, '').split('#')[0]!,
+    token: mintDeviceToken(token, grant),
+  };
 };
 
 let resolveMainClient: (client: CoreClient) => void;
-const mainClient = new Promise<CoreClient>((resolve) => (resolveMainClient = resolve));
+const mainClient = new Promise<CoreClient>(
+  (resolve) => (resolveMainClient = resolve),
+);
 
 /** Main's own Core client; waits for `startCore` to connect. */
 export const mainCoreClient = () => mainClient;
 
 const pingUntilUp = async () => {
   const { client } = await mainConnection!;
-  await Effect.runPromise(client.ping().pipe(Effect.retry(Schedule.spaced(100))));
+  await Effect.runPromise(
+    client.ping().pipe(Effect.retry(Schedule.spaced(100))),
+  );
 };
 
 // ponytail: another process could take the port between this probe and Core's bind, and Core would keep failing to start.
@@ -120,8 +159,19 @@ function freePort() {
 export const coreClient = async () => (await mainConnection!).client;
 
 /** Main's log lines go to Core's file, retried for 5s while Core restarts; after that they go to main's stderr. */
-export function logToCore(level: 'Debug' | 'Info' | 'Warn' | 'Error', message: string) {
+export function logToCore(
+  level: 'Debug' | 'Info' | 'Warn' | 'Error',
+  message: string,
+) {
   void mainConnection
-    ?.then(({ client }) => Effect.runPromise(client.log({ level, source: 'main', message }).pipe(Effect.retry({ times: 50, schedule: Schedule.spaced(100) }))))
-    .catch((error: unknown) => console.error(`Core is unreachable; ${level}: ${message}`, error));
+    ?.then(({ client }) =>
+      Effect.runPromise(
+        client
+          .log({ level, source: 'main', message })
+          .pipe(Effect.retry({ times: 50, schedule: Schedule.spaced(100) })),
+      ),
+    )
+    .catch((error: unknown) =>
+      console.error(`Core is unreachable; ${level}: ${message}`, error),
+    );
 }

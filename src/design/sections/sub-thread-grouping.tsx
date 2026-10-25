@@ -17,14 +17,21 @@ export function SubThreadGroupingBlock({ rl }: { rl: Thread }) {
     >
       <div className="flex flex-wrap items-start gap-6">
         <figure className="flex w-[min(100%,520px)] flex-col gap-2">
-          <figcaption className="type-caption text-muted-foreground">Goal card · Similar, on “Load test the rate limiter”</figcaption>
+          <figcaption className="type-caption text-muted-foreground">
+            Goal card · Similar, on “Load test the rate limiter”
+          </figcaption>
           <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-            <p className="type-body text-pretty">The limiter holds 2k req/s per key with p99 under 50ms, measured with k6 against staging.</p>
+            <p className="type-body text-pretty">
+              The limiter holds 2k req/s per key with p99 under 50ms, measured
+              with k6 against staging.
+            </p>
             <SimilarSuggestions />
           </div>
         </figure>
         <figure className="flex w-[256px] flex-col gap-2">
-          <figcaption className="type-caption text-muted-foreground">Drag a row onto another to nest it; drag it off to move it out</figcaption>
+          <figcaption className="type-caption text-muted-foreground">
+            Drag a row onto another to nest it; drag it off to move it out
+          </figcaption>
           <NestSandbox rl={rl} />
         </figure>
       </div>
@@ -42,28 +49,53 @@ function SimilarSuggestions() {
     <ul aria-label="Similar work" className="flex flex-col gap-1">
       {isNested ? (
         <li className="flex items-center gap-2 rounded-lg bg-muted/40 py-1 pr-1 pl-2.5">
-          <DiagramTree aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+          <DiagramTree
+            aria-hidden
+            className="size-3.5 shrink-0 text-muted-foreground"
+          />
           <span className="min-w-0 flex-1 truncate type-meta text-muted-foreground">
-            Sub-thread of <span className="text-foreground">{PARENT}</span>, for “{COVERS}”
+            Sub-thread of <span className="text-foreground">{PARENT}</span>, for
+            “{COVERS}”
           </span>
           <Button variant="ghost" size="sm" onClick={() => setNested(false)}>
             Undo
           </Button>
         </li>
       ) : (
-        <SimilarRow relation="Related: " title={PARENT} status="In progress" detail={`Its goal covers this one: “${COVERS}”`}>
+        <SimilarRow
+          relation="Related: "
+          title={PARENT}
+          status="In progress"
+          detail={`Its goal covers this one: “${COVERS}”`}
+        >
           <Button variant="outline" size="sm" onClick={() => setNested(true)}>
             Nest under it
           </Button>
         </SimilarRow>
       )}
-      <SimilarRow relation="Already in " title="Benchmark the gateway under load" status="Archived, PR #98 merged" />
+      <SimilarRow
+        relation="Already in "
+        title="Benchmark the gateway under load"
+        status="Archived, PR #98 merged"
+      />
     </ul>
   );
 }
 
 /** The shipped Similar row's look, with a second line for why it fits and room for the nest action. */
-function SimilarRow({ relation, title, status, detail, children }: { relation: string; title: string; status: string; detail?: string; children?: ReactNode }) {
+function SimilarRow({
+  relation,
+  title,
+  status,
+  detail,
+  children,
+}: {
+  relation: string;
+  title: string;
+  status: string;
+  detail?: string;
+  children?: ReactNode;
+}) {
   return (
     <li className="flex items-center gap-2 rounded-lg bg-muted/40 py-1 pr-1 pl-2.5">
       <CopyStack aria-hidden className="size-3.5 shrink-0 text-warning" />
@@ -73,13 +105,20 @@ function SimilarRow({ relation, title, status, detail, children }: { relation: s
           <span className="text-foreground">{title}</span>
           <span className="text-subtle-foreground"> · {status}</span>
         </span>
-        {!!detail && <span className="truncate type-caption text-subtle-foreground">{detail}</span>}
+        {!!detail && (
+          <span className="truncate type-caption text-subtle-foreground">
+            {detail}
+          </span>
+        )}
       </span>
       {children}
       <Button variant="ghost" size="sm">
         Open
       </Button>
-      <TooltipIconButton label="Dismiss" hint="Not the same work; stop showing it here">
+      <TooltipIconButton
+        label="Dismiss"
+        hint="Not the same work; stop showing it here"
+      >
         <XSquare />
       </TooltipIconButton>
     </li>
@@ -92,10 +131,46 @@ interface SandboxRow extends RowFixture {
 }
 
 const START: SandboxRow[] = [
-  { id: 'rl', title: PARENT, met: 2, total: 5, tone: null, isWorking: true, status: 'Working', reason: 'Wiring per-key overrides' },
-  { id: 'hd', parentId: 'rl', title: 'Return RateLimit-* headers', met: 2, total: 2, tone: 'success', status: 'In review', reason: 'PR #141 in review', pr: { number: 141, status: 'open' } },
-  { id: 'lt', title: 'Load test the rate limiter', met: 0, total: 2, tone: null, isWorking: true, status: 'Working', reason: 'Running k6 at 2k req/s' },
-  { id: 'fx', title: 'Fix flaky checkout e2e', met: 1, total: 2, tone: 'warning', status: 'Needs you', reason: 'Answer 2 questions' },
+  {
+    id: 'rl',
+    title: PARENT,
+    met: 2,
+    total: 5,
+    tone: null,
+    isWorking: true,
+    status: 'Working',
+    reason: 'Wiring per-key overrides',
+  },
+  {
+    id: 'hd',
+    parentId: 'rl',
+    title: 'Return RateLimit-* headers',
+    met: 2,
+    total: 2,
+    tone: 'success',
+    status: 'In review',
+    reason: 'PR #141 in review',
+    pr: { number: 141, status: 'open' },
+  },
+  {
+    id: 'lt',
+    title: 'Load test the rate limiter',
+    met: 0,
+    total: 2,
+    tone: null,
+    isWorking: true,
+    status: 'Working',
+    reason: 'Running k6 at 2k req/s',
+  },
+  {
+    id: 'fx',
+    title: 'Fix flaky checkout e2e',
+    met: 1,
+    total: 2,
+    tone: 'warning',
+    status: 'Needs you',
+    reason: 'Answer 2 questions',
+  },
 ];
 
 type Drop = { kind: 'nest'; parentId: string } | { kind: 'out' };
@@ -108,16 +183,33 @@ function NestSandbox({ rl }: { rl: Thread }) {
   const [rows, setRows] = useState(START);
   const [dragged, setDragged] = useState<string | null>(null);
   const [over, setOver] = useState<Drop | null>(null);
-  const [last, setLast] = useState<{ before: SandboxRow[]; text: string } | null>(null);
+  const [last, setLast] = useState<{
+    before: SandboxRow[];
+    text: string;
+  } | null>(null);
   const roots = rows.filter((r) => !r.parentId);
   const moving = rows.find((r) => r.id === dragged);
-  const canNestUnder = (target: SandboxRow) => !!moving && target.id !== moving.id && !target.parentId && moving.parentId !== target.id && !rows.some((r) => r.parentId === moving.id);
+  const canNestUnder = (target: SandboxRow) =>
+    !!moving &&
+    target.id !== moving.id &&
+    !target.parentId &&
+    moving.parentId !== target.id &&
+    !rows.some((r) => r.parentId === moving.id);
   const drop = (to: Drop) => {
     if (!moving) return;
     const title = (id: string) => rows.find((r) => r.id === id)!.title;
-    const text = to.kind === 'nest' ? `${moving.title} is now a sub-thread of ${title(to.parentId)}` : `${moving.title} is a thread of its own again`;
+    const text =
+      to.kind === 'nest'
+        ? `${moving.title} is now a sub-thread of ${title(to.parentId)}`
+        : `${moving.title} is a thread of its own again`;
     setLast({ before: rows, text });
-    setRows(rows.map((r) => (r.id === moving.id ? { ...r, parentId: to.kind === 'nest' ? to.parentId : undefined } : r)));
+    setRows(
+      rows.map((r) =>
+        r.id === moving.id
+          ? { ...r, parentId: to.kind === 'nest' ? to.parentId : undefined }
+          : r,
+      ),
+    );
   };
   const end = () => {
     setDragged(null);
@@ -132,9 +224,15 @@ function NestSandbox({ rl }: { rl: Thread }) {
   return (
     <div className="flex flex-col gap-2">
       <ul
-        className={cn('flex flex-col gap-0.5 rounded-xl border bg-sidebar p-2', over?.kind === 'out' && 'border-foreground/20')}
+        className={cn(
+          'flex flex-col gap-0.5 rounded-xl border bg-sidebar p-2',
+          over?.kind === 'out' && 'border-foreground/20',
+        )}
         onDragOver={onListOver}
-        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setOver(null)}
+        onDragLeave={(e) =>
+          !e.currentTarget.contains(e.relatedTarget as Node | null) &&
+          setOver(null)
+        }
         onDrop={(e) => {
           e.preventDefault();
           if (over) drop(over);
@@ -163,10 +261,18 @@ function NestSandbox({ rl }: { rl: Thread }) {
                 <ParentRow row={root} rl={rl} />
               </DragRow>
               {children.length > 0 && (
-                <ul aria-label={`Sub-threads of ${root.title}`} className="-mt-1 ml-[15px] flex flex-col gap-0.5">
+                <ul
+                  aria-label={`Sub-threads of ${root.title}`}
+                  className="-mt-1 ml-[15px] flex flex-col gap-0.5"
+                >
                   {children.map((c, i) => (
                     <Branch key={c.id} isLast={i === children.length - 1}>
-                      <DragRow row={c} isDragged={dragged === c.id} onStart={() => setDragged(c.id)} onEnd={end}>
+                      <DragRow
+                        row={c}
+                        isDragged={dragged === c.id}
+                        onStart={() => setDragged(c.id)}
+                        onEnd={end}
+                      >
                         <ChildRow row={c} rl={rl} />
                       </DragRow>
                     </Branch>
@@ -177,14 +283,25 @@ function NestSandbox({ rl }: { rl: Thread }) {
           );
         })}
       </ul>
-      <p role="status" className="flex min-h-7 items-center gap-2 px-1 type-caption text-muted-foreground">
+      <p
+        role="status"
+        className="flex min-h-7 items-center gap-2 px-1 type-caption text-muted-foreground"
+      >
         {over ? (
-          <span className="min-w-0 flex-1">{over.kind === 'nest' ? `Drop to nest under ${rows.find((r) => r.id === over.parentId)!.title}` : 'Drop to move it out'}</span>
+          <span className="min-w-0 flex-1">
+            {over.kind === 'nest'
+              ? `Drop to nest under ${rows.find((r) => r.id === over.parentId)!.title}`
+              : 'Drop to move it out'}
+          </span>
         ) : (
           !!last && (
             <>
               <span className="min-w-0 flex-1">{last.text}</span>
-              <Button variant="ghost" size="xs" onClick={() => (setRows(last.before), setLast(null))}>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => (setRows(last.before), setLast(null))}
+              >
                 Undo
               </Button>
             </>
@@ -196,7 +313,23 @@ function NestSandbox({ rl }: { rl: Thread }) {
 }
 
 /** A draggable row; while it's a drop target an inside hairline marks it, and the row being dragged dims. */
-function DragRow({ row, isDragged, isTarget, onStart, onEnd, onOver, children }: { row: RowFixture; isDragged: boolean; isTarget?: boolean; onStart: () => void; onEnd: () => void; onOver?: (e: DragEvent) => void; children: ReactNode }) {
+function DragRow({
+  row,
+  isDragged,
+  isTarget,
+  onStart,
+  onEnd,
+  onOver,
+  children,
+}: {
+  row: RowFixture;
+  isDragged: boolean;
+  isTarget?: boolean;
+  onStart: () => void;
+  onEnd: () => void;
+  onOver?: (e: DragEvent) => void;
+  children: ReactNode;
+}) {
   return (
     <div
       draggable
@@ -207,7 +340,11 @@ function DragRow({ row, isDragged, isTarget, onStart, onEnd, onOver, children }:
       }}
       onDragEnd={onEnd}
       onDragOver={onOver}
-      className={cn('rounded-lg border border-transparent', isTarget && 'border-foreground/20 bg-sidebar-accent', isDragged && 'opacity-50')}
+      className={cn(
+        'rounded-lg border border-transparent',
+        isTarget && 'border-foreground/20 bg-sidebar-accent',
+        isDragged && 'opacity-50',
+      )}
     >
       {children}
     </div>

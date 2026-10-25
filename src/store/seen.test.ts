@@ -3,7 +3,12 @@ import { test } from 'vite-plus/test';
 import type { Thread } from '../model.ts';
 import { isUnread } from './seen.ts';
 
-const thread = (isWorking: boolean, seenActivity: number) => ({ activity: [{}, {}], seenActivity, live: { isWorking } }) as unknown as Thread;
+const thread = (isWorking: boolean, seenActivity: number) =>
+  ({
+    activity: [{}, {}],
+    seenActivity,
+    live: { isWorking },
+  }) as unknown as Thread;
 
 test('a working thread is not unread until its turn ends', () => {
   assert.equal(isUnread(thread(true, 0)), false);

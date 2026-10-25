@@ -4,7 +4,10 @@ import { Capabilities } from '@mochi/schema';
 
 // No node built-ins here: the developer page imports it through rpc.ts.
 
-export const SpawnRate = Schema.Struct({ binary: Schema.String, perMinute: Schema.Number });
+export const SpawnRate = Schema.Struct({
+  binary: Schema.String,
+  perMinute: Schema.Number,
+});
 export const WatchSubscription = Schema.Struct({
   kind: Schema.String,
   /** The key's path, when it has one. */
@@ -13,8 +16,16 @@ export const WatchSubscription = Schema.Struct({
   /** How often it reads now; null when it reads only on change, or the machine is asleep. */
   intervalMs: Schema.NullOr(Schema.Number),
 });
-export const ThreadEventRate = Schema.Struct({ threadId: Schema.String, perSecond: Schema.Number });
-export const SpanRecord = Schema.Struct({ name: Schema.String, durationMs: Schema.Number, endedAt: Schema.Number, isOk: Schema.Boolean });
+export const ThreadEventRate = Schema.Struct({
+  threadId: Schema.String,
+  perSecond: Schema.Number,
+});
+export const SpanRecord = Schema.Struct({
+  name: Schema.String,
+  durationMs: Schema.Number,
+  endedAt: Schema.Number,
+  isOk: Schema.Boolean,
+});
 
 /** One second of Core's own numbers plus main's `app.getAppMetrics()`. */
 export const MetricsSnapshot = Schema.Struct({
@@ -31,4 +42,6 @@ export const MetricsSnapshot = Schema.Struct({
 });
 export type MetricsSnapshot = typeof MetricsSnapshot.Type;
 
-export class MetricsRpcs extends RpcGroup.make(Rpc.make('metrics', { success: MetricsSnapshot, stream: true })) {}
+export class MetricsRpcs extends RpcGroup.make(
+  Rpc.make('metrics', { success: MetricsSnapshot, stream: true }),
+) {}

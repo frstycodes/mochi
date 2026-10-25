@@ -1,8 +1,21 @@
-import { isValidElement, useRef, type ComponentProps, type ReactNode } from 'react';
-import { CodeBlockDownloadButton, defaultComponents, type ExtraProps } from 'streamdown';
+import {
+  isValidElement,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
+import {
+  CodeBlockDownloadButton,
+  defaultComponents,
+  type ExtraProps,
+} from 'streamdown';
 import { Code, DiagramTree, Download } from '@/icons';
 import { buttonVariants } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { EmbedFrame } from './EmbedFrame';
 import { VIZ_LANGUAGES } from './fence';
@@ -23,7 +36,12 @@ export function CodeFrame(props: ComponentProps<'code'> & ExtraProps) {
       </MermaidFrame>
     );
   return (
-    <EmbedFrame icon={Code} title={language || 'Code'} className={cn('my-3', FLUSH)} actions={<CodeActions code={code} language={language} />}>
+    <EmbedFrame
+      icon={Code}
+      title={language || 'Code'}
+      className={cn('my-3', FLUSH)}
+      actions={<CodeActions code={code} language={language} />}
+    >
       <DefaultCode {...props} />
     </EmbedFrame>
   );
@@ -40,15 +58,28 @@ const FLUSH = cn(
   '[&_[data-streamdown=code-block-body]]:rounded-none [&_[data-streamdown=code-block-body]]:border-0 [&_[data-streamdown=code-block-body]]:p-3',
 );
 
-function MermaidFrame({ code, children }: { code: string; children: ReactNode }) {
+function MermaidFrame({
+  code,
+  children,
+}: {
+  code: string;
+  children: ReactNode;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const svg = () => {
-    const el = box.current?.querySelector<SVGSVGElement>('[aria-label="Mermaid chart"] svg');
+    const el = box.current?.querySelector<SVGSVGElement>(
+      '[aria-label="Mermaid chart"] svg',
+    );
     if (!el) throw new Error('Nothing to export yet');
     return serializeSvg(el);
   };
   return (
-    <VisualFrame icon={DiagramTree} title="Diagram" source={{ text: code, ext: 'mmd', type: 'text/plain' }} svg={svg}>
+    <VisualFrame
+      icon={DiagramTree}
+      title="Diagram"
+      source={{ text: code, ext: 'mmd', type: 'text/plain' }}
+      svg={svg}
+    >
       {/* Until the mermaid plugin loads, Streamdown shows the fence as a code block. */}
       <div ref={box} className={cn(FLUSH, MERMAID_FLUSH)}>
         {children}
@@ -71,7 +102,12 @@ function CodeActions({ code, language }: { code: string; language: string }) {
       <Tooltip>
         <TooltipTrigger asChild>
           {/* Streamdown's button: it knows each language's file extension. */}
-          <CodeBlockDownloadButton code={code} language={language} title={undefined} className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}>
+          <CodeBlockDownloadButton
+            code={code}
+            language={language}
+            title={undefined}
+            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+          >
             <Download />
           </CodeBlockDownloadButton>
         </TooltipTrigger>
@@ -83,6 +119,10 @@ function CodeActions({ code, language }: { code: string; language: string }) {
 
 function codeText(children: ReactNode) {
   if (typeof children === 'string') return children;
-  if (isValidElement<{ children?: unknown }>(children) && typeof children.props.children === 'string') return children.props.children;
+  if (
+    isValidElement<{ children?: unknown }>(children) &&
+    typeof children.props.children === 'string'
+  )
+    return children.props.children;
   return '';
 }

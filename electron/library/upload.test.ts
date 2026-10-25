@@ -8,13 +8,40 @@ import { deflateRawSync, gzipSync } from 'node:zlib';
 import { reviewUpload, unpackUpload, UPLOAD_LIMITS } from './upload.ts';
 
 const PLUGIN = {
-  '.claude-plugin/plugin.json': JSON.stringify({ name: 'review-kit', version: '1.2.0', description: 'Review helpers', author: { name: 'Sam' } }),
-  'skills/triage/SKILL.md': '---\nname: triage\ndescription: Sort issues\n---\nSteps',
+  '.claude-plugin/plugin.json': JSON.stringify({
+    name: 'review-kit',
+    version: '1.2.0',
+    description: 'Review helpers',
+    author: { name: 'Sam' },
+  }),
+  'skills/triage/SKILL.md':
+    '---\nname: triage\ndescription: Sort issues\n---\nSteps',
   'commands/ship.md': '---\ndescription: Ship it\n---\nShip',
-  'agents/security.md': '---\nname: security\ndescription: Finds holes\n---\nLook',
-  'hooks/hooks.json': JSON.stringify({ hooks: { PostToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}"/fmt.sh', args: ['--fix'] }] }] } }),
+  'agents/security.md':
+    '---\nname: security\ndescription: Finds holes\n---\nLook',
+  'hooks/hooks.json': JSON.stringify({
+    hooks: {
+      PostToolUse: [
+        {
+          matcher: 'Edit',
+          hooks: [
+            {
+              type: 'command',
+              command: '"${CLAUDE_PLUGIN_ROOT}"/fmt.sh',
+              args: ['--fix'],
+            },
+          ],
+        },
+      ],
+    },
+  }),
   'fmt.sh': '#!/bin/sh\nprettier --write "$1"',
-  '.mcp.json': JSON.stringify({ mcpServers: { db: { command: 'npx', args: ['-y', 'pg-mcp'], env: { PGPASSWORD: 'x' } }, linear: { url: 'https://mcp.linear.app/mcp' } } }),
+  '.mcp.json': JSON.stringify({
+    mcpServers: {
+      db: { command: 'npx', args: ['-y', 'pg-mcp'], env: { PGPASSWORD: 'x' } },
+      linear: { url: 'https://mcp.linear.app/mcp' },
+    },
+  }),
   'logo.png': '\x89PNG\0\0binary',
 };
 
@@ -26,7 +53,13 @@ test('a .plugin zipped from inside the folder, and a .tgz of the folder itself, 
     writeFileSync(join(dir, path), text);
   }
   // Built in-process (deflated, like `zip -r` makes Cowork's .plugin): Windows runners have no zip binary.
-  const plugin = zip(Object.entries(PLUGIN).map(([path, body]) => ({ path, body, deflate: true })));
+  const plugin = zip(
+    Object.entries(PLUGIN).map(([path, body]) => ({
+      path,
+      body,
+      deflate: true,
+    })),
+  );
   // Gzipped separately: bsdtar pads its own -z output, which a gzip stream reader rejects as trailing junk.
   const tgz = gzipSync(execFileSync('tar', ['-c', '-C', root, 'review-kit']));
 
@@ -37,12 +70,33 @@ test('a .plugin zipped from inside the folder, and a .tgz of the folder itself, 
     assert.equal(review.name, 'review-kit');
     assert.equal(review.version, '1.2.0');
     assert.equal(review.author, 'Sam');
-    assert.deepEqual(review.skills.map((s) => s.name), ['triage', 'ship']);
-    assert.deepEqual(review.agents.map((a) => a.name), ['security']);
-    assert.deepEqual(review.hooks, [{ event: 'PostToolUse', matcher: 'Edit', condition: null, type: 'command', run: '"${CLAUDE_PLUGIN_ROOT}"/fmt.sh --fix' }]);
-    assert.deepEqual(review.servers, [{ name: 'db', run: 'npx -y pg-mcp', env: ['PGPASSWORD'] }]);
-    assert.deepEqual(review.remotes, [{ name: 'linear', url: 'https://mcp.linear.app/mcp' }]);
-    assert.deepEqual(review.loads, { claude: '2 skills, 1 agent, 1 hook, 1 server', codex: '1 server' });
+    assert.deepEqual(
+      review.skills.map((s) => s.name),
+      ['triage', 'ship'],
+    );
+    assert.deepEqual(
+      review.agents.map((a) => a.name),
+      ['security'],
+    );
+    assert.deepEqual(review.hooks, [
+      {
+        event: 'PostToolUse',
+        matcher: 'Edit',
+        condition: null,
+        type: 'command',
+        run: '"${CLAUDE_PLUGIN_ROOT}"/fmt.sh --fix',
+      },
+    ]);
+    assert.deepEqual(review.servers, [
+      { name: 'db', run: 'npx -y pg-mcp', env: ['PGPASSWORD'] },
+    ]);
+    assert.deepEqual(review.remotes, [
+      { name: 'linear', url: 'https://mcp.linear.app/mcp' },
+    ]);
+    assert.deepEqual(review.loads, {
+      claude: '2 skills, 1 agent, 1 hook, 1 server',
+      codex: '1 server',
+    });
     assert.equal(review.sha256.length, 64);
     assert.equal(review.existing, null);
   }
@@ -50,30 +104,91 @@ test('a .plugin zipped from inside the folder, and a .tgz of the folder itself, 
 
 test('paths that leave the plugin reject the whole file', async () => {
   const manifest = { path: '.claude-plugin/plugin.json', body: '{"name":"x"}' };
-  await assert.rejects(unpackUpload(zip([manifest, { path: '../evil.sh', body: 'x' }])), /points outside the plugin/);
-  await assert.rejects(unpackUpload(zip([manifest, { path: 'skills/../../evil.sh', body: 'x' }])), /points outside the plugin/);
-  await assert.rejects(unpackUpload(zip([manifest, { path: '/etc/evil', body: 'x' }])), /absolute path/);
-  await assert.rejects(unpackUpload(zip([manifest, { path: 'C:/evil', body: 'x' }])), /absolute path/);
-  await assert.rejects(unpackUpload(zip([manifest, { path: 'skills\\..\\evil', body: 'x' }])), /won’t unpack/);
-  await assert.rejects(unpackUpload(tar([manifest, { path: '../evil.sh', body: 'x' }])), /points outside the plugin/);
-  await assert.rejects(unpackUpload(tar([manifest, { path: '/etc/evil', body: 'x' }])), /absolute path/);
+  await assert.rejects(
+    unpackUpload(zip([manifest, { path: '../evil.sh', body: 'x' }])),
+    /points outside the plugin/,
+  );
+  await assert.rejects(
+    unpackUpload(zip([manifest, { path: 'skills/../../evil.sh', body: 'x' }])),
+    /points outside the plugin/,
+  );
+  await assert.rejects(
+    unpackUpload(zip([manifest, { path: '/etc/evil', body: 'x' }])),
+    /absolute path/,
+  );
+  await assert.rejects(
+    unpackUpload(zip([manifest, { path: 'C:/evil', body: 'x' }])),
+    /absolute path/,
+  );
+  await assert.rejects(
+    unpackUpload(zip([manifest, { path: 'skills\\..\\evil', body: 'x' }])),
+    /won’t unpack/,
+  );
+  await assert.rejects(
+    unpackUpload(tar([manifest, { path: '../evil.sh', body: 'x' }])),
+    /points outside the plugin/,
+  );
+  await assert.rejects(
+    unpackUpload(tar([manifest, { path: '/etc/evil', body: 'x' }])),
+    /absolute path/,
+  );
 });
 
 test('links pointing outside reject the file; ones inside become copies', async () => {
   const manifest = { path: '.claude-plugin/plugin.json', body: '{"name":"x"}' };
-  await assert.rejects(unpackUpload(zip([manifest, { path: 'skills/a/SKILL.md', body: '../../../../etc/passwd', symlink: true }])), /outside the plugin/);
-  await assert.rejects(unpackUpload(tar([manifest, { path: 'passwd', link: '/etc/passwd', type: '2' }])), /outside the plugin/);
-  await assert.rejects(unpackUpload(tar([manifest, { path: 'skills/a', link: '../../x', type: '2' }])), /outside the plugin/);
-  await assert.rejects(unpackUpload(tar([manifest, { path: 'b', link: '../x', type: '1' }])), /outside the plugin/);
-  const inside = await unpackUpload(zip([manifest, { path: 'real.md', body: 'hello' }, { path: 'docs/alias.md', body: '../real.md', symlink: true }]));
+  await assert.rejects(
+    unpackUpload(
+      zip([
+        manifest,
+        {
+          path: 'skills/a/SKILL.md',
+          body: '../../../../etc/passwd',
+          symlink: true,
+        },
+      ]),
+    ),
+    /outside the plugin/,
+  );
+  await assert.rejects(
+    unpackUpload(
+      tar([manifest, { path: 'passwd', link: '/etc/passwd', type: '2' }]),
+    ),
+    /outside the plugin/,
+  );
+  await assert.rejects(
+    unpackUpload(
+      tar([manifest, { path: 'skills/a', link: '../../x', type: '2' }]),
+    ),
+    /outside the plugin/,
+  );
+  await assert.rejects(
+    unpackUpload(tar([manifest, { path: 'b', link: '../x', type: '1' }])),
+    /outside the plugin/,
+  );
+  const inside = await unpackUpload(
+    zip([
+      manifest,
+      { path: 'real.md', body: 'hello' },
+      { path: 'docs/alias.md', body: '../real.md', symlink: true },
+    ]),
+  );
   assert.equal(inside.files.get('docs/alias.md'), 'hello');
 });
 
 test('size and count caps, and files that are not plugin archives', async () => {
-  const many = Array.from({ length: UPLOAD_LIMITS.files + 1 }, (_, i) => ({ path: `f${i}.md`, body: '' }));
+  const many = Array.from({ length: UPLOAD_LIMITS.files + 1 }, (_, i) => ({
+    path: `f${i}.md`,
+    body: '',
+  }));
   await assert.rejects(unpackUpload(zip(many)), /over 2000 files/);
-  await assert.rejects(unpackUpload(new Uint8Array(UPLOAD_LIMITS.archiveBytes + 1)), /over 20 MB/);
-  await assert.rejects(unpackUpload(new TextEncoder().encode('just text')), /Not a plugin archive/);
+  await assert.rejects(
+    unpackUpload(new Uint8Array(UPLOAD_LIMITS.archiveBytes + 1)),
+    /over 20 MB/,
+  );
+  await assert.rejects(
+    unpackUpload(new TextEncoder().encode('just text')),
+    /Not a plugin archive/,
+  );
 });
 
 test('a missing or broken manifest says what a plugin needs', async () => {
@@ -81,18 +196,47 @@ test('a missing or broken manifest says what a plugin needs', async () => {
     const bytes = zip(entries);
     return reviewUpload('x.zip', bytes, await unpackUpload(bytes), []);
   };
-  await assert.rejects(review([{ path: 'skills/a/SKILL.md', body: '---\nname: a\n---\nA' }]), /No plugin manifest: a plugin has \.claude-plugin\/plugin\.json/);
-  await assert.rejects(review([{ path: '.claude-plugin/marketplace.json', body: '{}' }]), /This is a marketplace/);
-  await assert.rejects(review([{ path: '.claude-plugin/plugin.json', body: '{name' }]), /isn't valid JSON/);
-  await assert.rejects(review([{ path: '.claude-plugin/plugin.json', body: '{}' }]), /has no name/);
-  await assert.rejects(review([{ path: '.claude-plugin/plugin.json', body: '{"name":"empty"}' }]), /no skills, commands, agents, hooks or MCP servers/);
-  await assert.rejects(review([{ path: '.claude-plugin/plugin.json', body: '{"name":"mochi"}' }, { path: 'skills/a/SKILL.md', body: 'A' }]), /name Mochi gives its own skills/);
+  await assert.rejects(
+    review([{ path: 'skills/a/SKILL.md', body: '---\nname: a\n---\nA' }]),
+    /No plugin manifest: a plugin has \.claude-plugin\/plugin\.json/,
+  );
+  await assert.rejects(
+    review([{ path: '.claude-plugin/marketplace.json', body: '{}' }]),
+    /This is a marketplace/,
+  );
+  await assert.rejects(
+    review([{ path: '.claude-plugin/plugin.json', body: '{name' }]),
+    /isn't valid JSON/,
+  );
+  await assert.rejects(
+    review([{ path: '.claude-plugin/plugin.json', body: '{}' }]),
+    /has no name/,
+  );
+  await assert.rejects(
+    review([{ path: '.claude-plugin/plugin.json', body: '{"name":"empty"}' }]),
+    /no skills, commands, agents, hooks or MCP servers/,
+  );
+  await assert.rejects(
+    review([
+      { path: '.claude-plugin/plugin.json', body: '{"name":"mochi"}' },
+      { path: 'skills/a/SKILL.md', body: 'A' },
+    ]),
+    /name Mochi gives its own skills/,
+  );
   // Codex's portable layout: a root plugin.json; a plugin Codex can't load anything from says so.
-  const codex = await review([{ path: 'plugin.json', body: '{"name":"figma"}' }, { path: 'skills/a/SKILL.md', body: 'A' }]);
+  const codex = await review([
+    { path: 'plugin.json', body: '{"name":"figma"}' },
+    { path: 'skills/a/SKILL.md', body: 'A' },
+  ]);
   assert.deepEqual(codex.review.loads, { claude: '1 skill', codex: null });
 });
 
-type ZipEntry = { path: string; body: string; symlink?: boolean; deflate?: boolean };
+type ZipEntry = {
+  path: string;
+  body: string;
+  symlink?: boolean;
+  deflate?: boolean;
+};
 
 // Stored or deflated entries; a symlink is a Unix entry holding its target.
 function zip(entries: ZipEntry[]) {
@@ -133,7 +277,12 @@ function zip(entries: ZipEntry[]) {
 }
 
 // ustar headers written by hand, since tar itself won't archive ../ or absolute names as given.
-function tar(entries: ({ path: string; body: string } | { path: string; link: string; type: '1' | '2' })[]) {
+function tar(
+  entries: (
+    | { path: string; body: string }
+    | { path: string; link: string; type: '1' | '2' }
+  )[],
+) {
   const blocks: Buffer[] = [];
   for (const entry of entries) {
     const body = Buffer.from('body' in entry ? entry.body : '');

@@ -21,12 +21,27 @@ export function filterFiles(files: string[], query: string) {
   for (const { file, indices } of matches) {
     let start = 0;
     for (const end of [...segmentEnds(file), file.length]) {
-      const inName = indices.filter((i) => i >= start && i < end).map((i) => i - start);
-      if (inName.length) highlights.set(file.slice(0, end), [...new Set([...(highlights.get(file.slice(0, end)) ?? []), ...inName])].sort((a, b) => a - b));
+      const inName = indices
+        .filter((i) => i >= start && i < end)
+        .map((i) => i - start);
+      if (inName.length)
+        highlights.set(
+          file.slice(0, end),
+          [
+            ...new Set([
+              ...(highlights.get(file.slice(0, end)) ?? []),
+              ...inName,
+            ]),
+          ].sort((a, b) => a - b),
+        );
       start = end + 1;
     }
   }
-  return { files: matches.map((m) => m.file), highlights, best: matches[0]?.file ?? null };
+  return {
+    files: matches.map((m) => m.file),
+    highlights,
+    best: matches[0]?.file ?? null,
+  };
 }
 
 function segmentEnds(file: string) {
@@ -41,7 +56,8 @@ export function buildTree(files: string[]) {
     parts.forEach((name, i) => {
       const path = parts.slice(0, i + 1).join('/');
       if (index.has(path)) return;
-      const node: TreeNode = i === parts.length - 1 ? { name, path } : { name, path, children: [] };
+      const node: TreeNode =
+        i === parts.length - 1 ? { name, path } : { name, path, children: [] };
       index.get(parts.slice(0, i).join('/'))!.children!.push(node);
       index.set(path, node);
     });
@@ -52,7 +68,11 @@ export function buildTree(files: string[]) {
 function sortTree(nodes: TreeNode[]): TreeNode[] {
   return nodes
     .map((n) => (n.children ? { ...n, children: sortTree(n.children) } : n))
-    .sort((a, b) => Number(!a.children) - Number(!b.children) || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        Number(!a.children) - Number(!b.children) ||
+        a.name.localeCompare(b.name),
+    );
 }
 
 /** Folders whose only child is a folder merge into one row (`host/types`), like VS Code's compact folders. */
@@ -60,14 +80,24 @@ export function compactTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((node) => {
     if (!node.children) return node;
     const [only, ...rest] = node.children;
-    if (only?.children && rest.length === 0) return compactTree([{ ...only, name: `${node.name}/${only.name}` }])[0];
+    if (only?.children && rest.length === 0)
+      return compactTree([{ ...only, name: `${node.name}/${only.name}` }])[0];
     return { ...node, children: compactTree(node.children) };
   });
 }
 
 /** The rows on screen, top to bottom: every folder open when `expanded` is `'all'`. */
-export function visibleRows(nodes: TreeNode[], expanded: Pick<Set<string>, 'has'> | 'all', depth = 0): TreeRow[] {
-  return nodes.flatMap((node) => [{ node, depth }, ...(node.children && (expanded === 'all' || expanded.has(node.path)) ? visibleRows(node.children, expanded, depth + 1) : [])]);
+export function visibleRows(
+  nodes: TreeNode[],
+  expanded: Pick<Set<string>, 'has'> | 'all',
+  depth = 0,
+): TreeRow[] {
+  return nodes.flatMap((node) => [
+    { node, depth },
+    ...(node.children && (expanded === 'all' || expanded.has(node.path))
+      ? visibleRows(node.children, expanded, depth + 1)
+      : []),
+  ]);
 }
 
 export function ancestors(path: string) {

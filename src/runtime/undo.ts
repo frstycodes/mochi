@@ -12,8 +12,16 @@ export interface ToolUndo {
 }
 
 export function captureUndo(before: State, after: State): ToolUndo | null {
-  const pick = (s: State): Slices => ({ threads: s.threads, queue: s.queue, panes: s.panes, layouts: s.layouts, watched: s.watched });
-  const changed = before.threads !== after.threads || SLICES.some((k) => before[k] !== after[k]);
+  const pick = (s: State): Slices => ({
+    threads: s.threads,
+    queue: s.queue,
+    panes: s.panes,
+    layouts: s.layouts,
+    watched: s.watched,
+  });
+  const changed =
+    before.threads !== after.threads ||
+    SLICES.some((k) => before[k] !== after[k]);
   return changed ? { before: pick(before), after: pick(after) } : null;
 }
 
@@ -21,7 +29,10 @@ export function captureUndo(before: State, after: State): ToolUndo | null {
  * Puts back what the call changed, field by field, wherever it still holds the call's result: a thread whose title you
  * renamed since keeps your title, an agent's later activity stays. Activity is never rolled back. `kept` counts what changed since.
  */
-export function applyUndo(state: State, { before, after }: ToolUndo): { state: State; kept: number } {
+export function applyUndo(
+  state: State,
+  { before, after }: ToolUndo,
+): { state: State; kept: number } {
   let kept = 0;
   const was = new Map(before.threads.map((t) => [t.id, t]));
   const did = new Map(after.threads.map((t) => [t.id, t]));
@@ -40,8 +51,16 @@ export function applyUndo(state: State, { before, after }: ToolUndo): { state: S
     return [restored];
   });
   const order = (list: Thread[]) => list.map((t) => t.id).join();
-  const isReordered = order(before.threads.filter((t) => did.has(t.id))) !== order(after.threads.filter((t) => was.has(t.id)));
-  let next: State = { ...state, threads: isReordered && order(state.threads) === order(after.threads) ? sortLike(threads, before.threads) : threads };
+  const isReordered =
+    order(before.threads.filter((t) => did.has(t.id))) !==
+    order(after.threads.filter((t) => was.has(t.id)));
+  let next: State = {
+    ...state,
+    threads:
+      isReordered && order(state.threads) === order(after.threads)
+        ? sortLike(threads, before.threads)
+        : threads,
+  };
   for (const key of SLICES) {
     if (before[key] === after[key]) continue;
     if (state[key] !== after[key]) kept++;
@@ -52,5 +71,9 @@ export function applyUndo(state: State, { before, after }: ToolUndo): { state: S
 
 function sortLike(threads: Thread[], reference: Thread[]) {
   const rank = new Map(reference.map((t, i) => [t.id, i]));
-  return [...threads].sort((a, b) => (rank.get(a.id) ?? reference.length) - (rank.get(b.id) ?? reference.length));
+  return [...threads].sort(
+    (a, b) =>
+      (rank.get(a.id) ?? reference.length) -
+      (rank.get(b.id) ?? reference.length),
+  );
 }

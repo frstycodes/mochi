@@ -6,5 +6,7 @@ export const layerLog = (file: string) => {
   electronLog.transports.file.resolvePathFn = () => file;
   electronLog.transports.file.format = '{text}';
   electronLog.transports.console.format = '{text}';
-  return Logger.layer([Logger.map(Logger.formatLogFmt, (line) => electronLog.info(line))]);
+  return Logger.layer([
+    Logger.map(Logger.formatLogFmt, (line) => electronLog.info(line)),
+  ]);
 };

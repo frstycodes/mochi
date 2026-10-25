@@ -6,7 +6,11 @@ import type { Provider } from '../model.ts';
 import type { Check, Decoded, Rpc, Same } from './check.ts';
 
 /** `Stored` in electron/agents/config.ts, as main reads the file: every field optional. */
-type SettingsFile = H.AgentSettingsPatch & Partial<H.AccountsState> & { apiKeys?: Partial<Record<Provider, string>>; pastWorktreeRoots?: string[] };
+type SettingsFile = H.AgentSettingsPatch &
+  Partial<H.AccountsState> & {
+    apiKeys?: Partial<Record<Provider, string>>;
+    pastWorktreeRoots?: string[];
+  };
 
 export type Conformance = [
   Check<Same<Decoded<typeof Settings.AgentSettings>, H.AgentSettings>>,

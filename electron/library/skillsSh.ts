@@ -1,4 +1,8 @@
-import { parseLeaderboard, SKILLS_SH, skillsShSkill } from '../../src/library/skillsSh.ts';
+import {
+  parseLeaderboard,
+  SKILLS_SH,
+  skillsShSkill,
+} from '../../src/library/skillsSh.ts';
 import { cached } from './catalog.ts';
 
 /**
@@ -10,10 +14,32 @@ export function searchSkillsSh(query: string) {
   const q = query.trim();
   if (q.length < 2) return Promise.resolve([]);
   return cached(`skills.sh:search:${q.toLowerCase()}`, async () => {
-    const response = await fetch(`${SKILLS_SH}/api/search?${new URLSearchParams({ q, limit: '50' })}`, { headers: { 'User-Agent': 'mochi' } });
-    if (!response.ok) throw new Error(`skills.sh search failed (HTTP ${response.status})`);
-    const { skills } = (await response.json()) as { skills?: { source?: string; skillId?: string; name?: string; installs?: number }[] };
-    return (skills ?? []).flatMap((s) => (s.source && s.skillId ? [skillsShSkill(s.source, s.skillId, s.name ?? s.skillId, s.installs ?? 0)] : []));
+    const response = await fetch(
+      `${SKILLS_SH}/api/search?${new URLSearchParams({ q, limit: '50' })}`,
+      { headers: { 'User-Agent': 'mochi' } },
+    );
+    if (!response.ok)
+      throw new Error(`skills.sh search failed (HTTP ${response.status})`);
+    const { skills } = (await response.json()) as {
+      skills?: {
+        source?: string;
+        skillId?: string;
+        name?: string;
+        installs?: number;
+      }[];
+    };
+    return (skills ?? []).flatMap((s) =>
+      s.source && s.skillId
+        ? [
+            skillsShSkill(
+              s.source,
+              s.skillId,
+              s.name ?? s.skillId,
+              s.installs ?? 0,
+            ),
+          ]
+        : [],
+    );
   });
 }
 
@@ -24,8 +50,11 @@ export function searchSkillsSh(query: string) {
  */
 export function popularSkillsSh() {
   return cached('skills.sh:popular', async () => {
-    const response = await fetch(SKILLS_SH, { headers: { 'User-Agent': 'mochi' } });
-    if (!response.ok) throw new Error(`skills.sh didn't answer (HTTP ${response.status})`);
+    const response = await fetch(SKILLS_SH, {
+      headers: { 'User-Agent': 'mochi' },
+    });
+    if (!response.ok)
+      throw new Error(`skills.sh didn't answer (HTTP ${response.status})`);
     return parseLeaderboard(await response.text());
   });
 }

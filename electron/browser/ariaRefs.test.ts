@@ -52,16 +52,25 @@ test('rewrites only the ref attribute and keeps the rest of each line', () => {
   assert.equal(lines[4], `  - 'button "x: y" [ref=g3-e3]'`);
   assert.equal(lines[8], '    - textbox "Name" [ref=g3-e10]: Ada');
   assert.equal(lines[17], '  - generic [ref=g3-e19]: Drag me');
-  assert.equal(lines[18], '  - link "Download file" [ref=g3-e22] [cursor=pointer]:');
+  assert.equal(
+    lines[18],
+    '  - link "Download file" [ref=g3-e22] [cursor=pointer]:',
+  );
   assert.equal(lines[19], '    - /url: /download');
 });
 
 test('a ref in a text value is not a ref', () => {
-  assert.deepEqual(agentSnapshot('- text: see [ref=e5]', 1), { text: '- text: see [ref=e5]', refs: [] });
+  assert.deepEqual(agentSnapshot('- text: see [ref=e5]', 1), {
+    text: '- text: see [ref=e5]',
+    refs: [],
+  });
 });
 
 test('cuts a long page at a line and keeps only the refs it shows', () => {
-  const yaml = Array.from({ length: 5000 }, (_, i) => `- button "Button number ${i}" [ref=e${i}]`).join('\n');
+  const yaml = Array.from(
+    { length: 5000 },
+    (_, i) => `- button "Button number ${i}" [ref=e${i}]`,
+  ).join('\n');
   const { text, refs } = agentSnapshot(yaml, 1);
   assert.ok(text.length <= 40_100);
   assert.equal(text.split('\n').at(-1), '- … (page truncated)');
@@ -77,10 +86,19 @@ test('maps an agent ref back to its aria-ref selector only for the current gener
 });
 
 test('hides client secrets from the snapshot text and ref names, keeping the refs', () => {
-  const yaml = ['- textbox "Client secret" [ref=e1]: GOCSPX-FxS67JACQ3V8Bftlr0MIzCo', '- generic [ref=e2]: 7575573b1c2a4400de6115a61b557acc', '- button "Copy 7575573b1c2a4400de6115a61b557acc" [ref=e3]', '- generic [ref=e4]: 8325458480016.12371342152640', '- textbox "Access Token" [ref=e5]: xoxe.xoxp-1-Mi0yLTgzMjU'].join('\n');
+  const yaml = [
+    '- textbox "Client secret" [ref=e1]: GOCSPX-FxS67JACQ3V8Bftlr0MIzCo',
+    '- generic [ref=e2]: 7575573b1c2a4400de6115a61b557acc',
+    '- button "Copy 7575573b1c2a4400de6115a61b557acc" [ref=e3]',
+    '- generic [ref=e4]: 8325458480016.12371342152640',
+    '- textbox "Access Token" [ref=e5]: xoxe.xoxp-1-Mi0yLTgzMjU',
+  ].join('\n');
   const { text, refs } = agentSnapshot(yaml, 1);
   assert.doesNotMatch(text, /GOCSPX|7575573b|xoxe/);
   assert.match(text, /8325458480016\.12371342152640/, 'a client ID stays');
-  assert.deepEqual(refs.map((r) => r.ref), ['g1-e1', 'g1-e2', 'g1-e3', 'g1-e4', 'g1-e5']);
+  assert.deepEqual(
+    refs.map((r) => r.ref),
+    ['g1-e1', 'g1-e2', 'g1-e3', 'g1-e4', 'g1-e5'],
+  );
   assert.equal(refs[2].name, 'Copy [secret hidden by Mochi]');
 });

@@ -21,33 +21,33 @@ Decided: Electron desktop shell; the web build (Vite single file / artifact) kee
 
 ## Wave 0: foundation (2 sessions, parallel)
 
-| Id | Session | Owns |
-|---|---|---|
-| `shell` | Electron shell + host bridge | `electron/**`, `src/host/**`, `package.json`, `vite.config.ts`, `index.html` |
+| Id       | Session                                                        | Owns                                                                                         |
+| -------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `shell`  | Electron shell + host bridge                                   | `electron/**`, `src/host/**`, `package.json`, `vite.config.ts`, `index.html`                 |
 | `slices` | Store slices + pane tab registry + pane shell (§1 Panel shell) | `src/store/**`, `src/store.tsx` (removed), `src/pane/**`, `src/SidePane.tsx`, `src/model.ts` |
 
 ## Wave 1: features (8 sessions, parallel)
 
-| Id | Session | Checklist | Owns |
-|---|---|---|---|
-| `browser` | Real browser tab | §1 Browser | `src/pane/BrowserTab.tsx`, `src/Browser.tsx`, `electron/ipc/browser.ts`, `src/host/*/browser.ts` |
-| `term` | Terminal + ports + dev-server runner | §1 Terminal, Ports and previews | `src/pane/TerminalTab.tsx`, `src/pane/PortsTab.tsx`, `electron/ipc/{pty,ports}.ts`, `src/host/*/{pty,ports}.ts` |
-| `git` | Changes tab + worktree manager | §1 Diffs, §6 Worktree manager | `src/pane/ChangesTab.tsx`, `electron/ipc/git.ts`, `src/host/*/git.ts` |
-| `files` | File tree + editor + previews | §1 File preview / editor | `src/pane/FilesTab.tsx`, `electron/ipc/fs.ts`, `src/host/*/fs.ts` |
-| `sim` | iOS simulator tab | §1 iOS simulator | `src/pane/SimulatorTab.tsx`, `electron/ipc/sim.ts`, `src/host/*/sim.ts` |
-| `layout` | Splits + drag to pin + pinned tabs | §2, §3 Splits, Pinned tabs | `src/layout/**`, `src/store/layout.ts`, `src/Sidebar.tsx`, `src/reorder.ts`, `src/App.tsx` |
-| `goals` | Goal editing + drift guard | §4 open items, §5 | `src/store/threads.ts`, `src/drift.ts`, `src/Composer.tsx`, `src/SummaryPanel.tsx`, `src/GoalTimeline.tsx` |
-| `viz` | Chat visualizations | §7 | `src/ChatView.tsx`, `src/viz/**` |
+| Id        | Session                              | Checklist                       | Owns                                                                                                            |
+| --------- | ------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `browser` | Real browser tab                     | §1 Browser                      | `src/pane/BrowserTab.tsx`, `src/Browser.tsx`, `electron/ipc/browser.ts`, `src/host/*/browser.ts`                |
+| `term`    | Terminal + ports + dev-server runner | §1 Terminal, Ports and previews | `src/pane/TerminalTab.tsx`, `src/pane/PortsTab.tsx`, `electron/ipc/{pty,ports}.ts`, `src/host/*/{pty,ports}.ts` |
+| `git`     | Changes tab + worktree manager       | §1 Diffs, §6 Worktree manager   | `src/pane/ChangesTab.tsx`, `electron/ipc/git.ts`, `src/host/*/git.ts`                                           |
+| `files`   | File tree + editor + previews        | §1 File preview / editor        | `src/pane/FilesTab.tsx`, `electron/ipc/fs.ts`, `src/host/*/fs.ts`                                               |
+| `sim`     | iOS simulator tab                    | §1 iOS simulator                | `src/pane/SimulatorTab.tsx`, `electron/ipc/sim.ts`, `src/host/*/sim.ts`                                         |
+| `layout`  | Splits + drag to pin + pinned tabs   | §2, §3 Splits, Pinned tabs      | `src/layout/**`, `src/store/layout.ts`, `src/Sidebar.tsx`, `src/reorder.ts`, `src/App.tsx`                      |
+| `goals`   | Goal editing + drift guard           | §4 open items, §5               | `src/store/threads.ts`, `src/drift.ts`, `src/Composer.tsx`, `src/SummaryPanel.tsx`, `src/GoalTimeline.tsx`      |
+| `viz`     | Chat visualizations                  | §7                              | `src/ChatView.tsx`, `src/viz/**`                                                                                |
 
 ## Wave 2: built on wave 1 (5 sessions, parallel)
 
-| Id | Session | Needs | Checklist |
-|---|---|---|---|
-| `stage` | Pinned pager + Cmd ↑ overview + multi-window | `layout`, `shell` | §3 Pinned pager, Decided |
-| `sidechat` | Side chat tab | `slices`, `viz` | §1 Side chat |
-| `rewind` | Checkpoints / rewind, thread forking, agent handoff | `git`, `goals` | §6 3, 5, 7 |
-| `review` | Review inbox + Cmd K actions | `git`, `layout` | §6 6, 8 |
-| `notify` | Notifications center + cost / usage | `shell`, `goals` | §6 1, 2 |
+| Id         | Session                                             | Needs             | Checklist                |
+| ---------- | --------------------------------------------------- | ----------------- | ------------------------ |
+| `stage`    | Pinned pager + Cmd ↑ overview + multi-window        | `layout`, `shell` | §3 Pinned pager, Decided |
+| `sidechat` | Side chat tab                                       | `slices`, `viz`   | §1 Side chat             |
+| `rewind`   | Checkpoints / rewind, thread forking, agent handoff | `git`, `goals`    | §6 3, 5, 7               |
+| `review`   | Review inbox + Cmd K actions                        | `git`, `layout`   | §6 6, 8                  |
+| `notify`   | Notifications center + cost / usage                 | `shell`, `goals`  | §6 1, 2                  |
 
 ## Wave 3: needs a real agent runtime or a server
 

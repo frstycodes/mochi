@@ -38,7 +38,9 @@ import { usage as webUsage } from './web/usage.ts';
 
 export type { HostBridge, Namespace } from './types/index.ts';
 
-type Registry = { [K in Namespace]: { web: HostBridge[K]; desktop: () => HostBridge[K] } };
+type Registry = {
+  [K in Namespace]: { web: HostBridge[K]; desktop: () => HostBridge[K] };
+};
 
 // Desktop impls are getters so the web build never touches window.harnessHost.
 // Annotated, not `satisfies`: `pick` needs the mapped type to correlate `registry[ns]` with `HostBridge[K]`.
@@ -65,7 +67,8 @@ export const registry: Registry = {
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
 
-const pick = <K extends Namespace>(ns: K): HostBridge[K] => (isDesktop ? registry[ns].desktop() : registry[ns].web);
+const pick = <K extends Namespace>(ns: K): HostBridge[K] =>
+  isDesktop ? registry[ns].desktop() : registry[ns].web;
 
 export const host = {
   isDesktop,

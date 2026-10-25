@@ -14,19 +14,28 @@ import type { Action, State } from '../store/index.tsx';
 import type { ToolEnv } from './tools.ts';
 
 /** the app side of a Mochi tool run: toasts, OS notifications, the browser pages and host. */
-export function toolEnv(getState: () => State, dispatch: (action: Action) => void): ToolEnv {
+export function toolEnv(
+  getState: () => State,
+  dispatch: (action: Action) => void,
+): ToolEnv {
   return {
     getState,
     dispatch,
     prefs: { get: getPrefs, set: setPrefs },
-    toast: (text, onUndo) => toast(text, { ...(onUndo && { action: { label: 'Undo', onClick: onUndo } }) }),
+    toast: (text, onUndo) =>
+      toast(text, {
+        ...(onUndo && { action: { label: 'Undo', onClick: onUndo } }),
+      }),
     notify: (title, body) => {
       toast(title, { description: body });
       host.notify.show({ title, body }).catch(() => undefined);
     },
     openSettingsChat: (spaceId, prompt) => {
       saveDraft(settingsChatDraftKey(spaceId), { text: prompt, files: [] });
-      toast('Drafted in Settings › Ask Mochi', { description: prompt.slice(0, 120), action: { label: 'Open', onClick: () => openSettings('chat') } });
+      toast('Drafted in Settings › Ask Mochi', {
+        description: prompt.slice(0, 120),
+        action: { label: 'Open', onClick: () => openSettings('chat') },
+      });
     },
     removeWorktree: async (threadId) => {
       const path = worktreePath(threadId);
@@ -34,11 +43,21 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
       await host.git.removeWorktree(path);
       setWorktreePath(threadId, null);
     },
-    pages: { get: getPage, update: updatePage, open: (key, url, spaceId) => void openPage(key, normalizeUrl(url), spaceId) },
+    pages: {
+      get: getPage,
+      update: updatePage,
+      open: (key, url, spaceId) =>
+        void openPage(key, normalizeUrl(url), spaceId),
+    },
     browser: host.browser,
     cwdOf: threadCwd,
-    models: (provider, spaceId) => host.agent.models(provider, spaceId).catch(() => []),
-    profiles: { list: getProfiles, update: updateProfile, remove: (id) => void removeProfile(id) },
+    models: (provider, spaceId) =>
+      host.agent.models(provider, spaceId).catch(() => []),
+    profiles: {
+      list: getProfiles,
+      update: updateProfile,
+      remove: (id) => void removeProfile(id),
+    },
     theme: storedTheme,
     settings: host.settings,
     themes: host.themes,

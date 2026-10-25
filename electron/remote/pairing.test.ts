@@ -4,7 +4,17 @@ import sodium from 'libsodium-wrappers';
 import { queuedReader, type RawLink } from '@mochi/core/remote/link';
 import { DEFAULT_SCOPES } from '../../src/host/types/remote.ts';
 import type { DeviceKeys } from './crypto/keys.ts';
-import { deviceId, pairingCode, PairingRefused, secureAsDevice, secureAsMachine, THIS_KIND, type MachineSide, type Origin, type PairedDevice } from './pairing.ts';
+import {
+  deviceId,
+  pairingCode,
+  PairingRefused,
+  secureAsDevice,
+  secureAsMachine,
+  THIS_KIND,
+  type MachineSide,
+  type Origin,
+  type PairedDevice,
+} from './pairing.ts';
 
 await sodium.ready;
 
@@ -17,11 +27,21 @@ function pipe(tap?: (bytes: Uint8Array, toMachine: boolean) => Uint8Array) {
     const reader = queuedReader();
     const closes: ((code: number, reason: string) => void)[] = [];
     let isOpen = true;
-    const end = { reader, closes, isOpen: () => isOpen, shut: (code: number, reason: string) => isOpen && ((isOpen = false), closes.forEach((c) => c(code, reason))) };
+    const end = {
+      reader,
+      closes,
+      isOpen: () => isOpen,
+      shut: (code: number, reason: string) =>
+        isOpen && ((isOpen = false), closes.forEach((c) => c(code, reason))),
+    };
     return end;
   }
   const link = (self: number): RawLink => ({
-    send: (bytes) => ends[self].isOpen() && queueMicrotask(() => ends[1 - self].reader.deliver(tap ? tap(bytes, self === 0) : bytes)),
+    send: (bytes) =>
+      ends[self].isOpen() &&
+      queueMicrotask(() =>
+        ends[1 - self].reader.deliver(tap ? tap(bytes, self === 0) : bytes),
+      ),
     close: (code, reason) => ends.forEach((e) => e.shut(code, reason)),
     onMessage: ends[self].reader.set,
     onClose: (listener) => void ends[self].closes.push(listener),
@@ -30,7 +50,11 @@ function pipe(tap?: (bytes: Uint8Array, toMachine: boolean) => Uint8Array) {
   return { device: link(0), machine: link(1) };
 }
 
-function machineSide(keys: DeviceKeys, answer: boolean, known: PairedDevice[] = []) {
+function machineSide(
+  keys: DeviceKeys,
+  answer: boolean,
+  known: PairedDevice[] = [],
+) {
   const asked: { name: string; code: string }[] = [];
   const added: PairedDevice[] = [];
   const side: MachineSide = {
@@ -47,9 +71,18 @@ function machineSide(keys: DeviceKeys, answer: boolean, known: PairedDevice[] = 
   return { side, asked, added };
 }
 
-async function pairOver(origin: Origin, machine: ReturnType<typeof machineSide>, machineKeys: DeviceKeys, device: DeviceKeys, expectedMachineKey = machineKeys.publicKey) {
+async function pairOver(
+  origin: Origin,
+  machine: ReturnType<typeof machineSide>,
+  machineKeys: DeviceKeys,
+  device: DeviceKeys,
+  expectedMachineKey = machineKeys.publicKey,
+) {
   const ends = pipe();
-  const [machineResult, deviceResult] = await Promise.allSettled([secureAsMachine(ends.machine, origin, machine.side), secureAsDevice(ends.device, device, expectedMachineKey, 'Laptop')]);
+  const [machineResult, deviceResult] = await Promise.allSettled([
+    secureAsMachine(ends.machine, origin, machine.side),
+    secureAsDevice(ends.device, device, expectedMachineKey, 'Laptop'),
+  ]);
   return { machineResult, deviceResult };
 }
 
@@ -57,19 +90,41 @@ test('a new device through the relay is asked about on the machine with the code
   const machineKeys = keypair();
   const device = keypair();
   const machine = machineSide(machineKeys, true);
-  const { machineResult, deviceResult } = await pairOver('relay', machine, machineKeys, device);
+  const { machineResult, deviceResult } = await pairOver(
+    'relay',
+    machine,
+    machineKeys,
+    device,
+  );
   assert.equal(machineResult.status, 'fulfilled');
   assert.equal(deviceResult.status, 'fulfilled');
-  assert.deepEqual(machine.asked, [{ name: 'Laptop', code: pairingCode(machineKeys.publicKey, device.publicKey) }]);
+  assert.deepEqual(machine.asked, [
+    {
+      name: 'Laptop',
+      code: pairingCode(machineKeys.publicKey, device.publicKey),
+    },
+  ]);
   assert.match(machine.asked[0].code, /^\d{3} \d{3}$/);
   assert.equal(machine.added[0].id, deviceId(device.publicKey));
 
   const secured = machineResult.status === 'fulfilled' && machineResult.value;
   assert.ok(secured && 'link' in secured);
-  assert.deepEqual(secured.device, { deviceId: deviceId(device.publicKey), name: 'Laptop', kind: THIS_KIND, scopes: DEFAULT_SCOPES });
-  assert.equal(machine.added[0].kind, THIS_KIND, 'the device names its kind, for its icon');
-  const deviceLink = deviceResult.status === 'fulfilled' ? deviceResult.value : assert.fail();
-  const heard = new Promise<string>((resolve) => secured.link.onMessage(resolve));
+  assert.deepEqual(secured.device, {
+    deviceId: deviceId(device.publicKey),
+    name: 'Laptop',
+    kind: THIS_KIND,
+    scopes: DEFAULT_SCOPES,
+  });
+  assert.equal(
+    machine.added[0].kind,
+    THIS_KIND,
+    'the device names its kind, for its icon',
+  );
+  const deviceLink =
+    deviceResult.status === 'fulfilled' ? deviceResult.value : assert.fail();
+  const heard = new Promise<string>((resolve) =>
+    secured.link.onMessage(resolve),
+  );
   deviceLink.send('{"type":"hello"}');
   assert.equal(await heard, '{"type":"hello"}');
 });
@@ -78,30 +133,69 @@ test('a device returning on its own after being removed is refused through the r
   const machineKeys = keypair();
   const machine = machineSide(machineKeys, true);
   const ends = pipe();
-  const [machineResult, deviceResult] = await Promise.allSettled([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, keypair(), machineKeys.publicKey, 'Laptop', true)]);
+  const [machineResult, deviceResult] = await Promise.allSettled([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(
+      ends.device,
+      keypair(),
+      machineKeys.publicKey,
+      'Laptop',
+      true,
+    ),
+  ]);
   assert.deepEqual(machine.asked, []);
-  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'That computer doesn’t trust this one; join again' });
-  assert.ok(deviceResult.status === 'rejected' && deviceResult.reason instanceof PairingRefused);
+  assert.deepEqual(
+    machineResult.status === 'fulfilled' && machineResult.value,
+    { refusal: 'That computer doesn’t trust this one; join again' },
+  );
+  assert.ok(
+    deviceResult.status === 'rejected' &&
+      deviceResult.reason instanceof PairingRefused,
+  );
 });
 
 test('a device another computer let join is found by fetching the records, and connects with no prompt', async () => {
   const machineKeys = keypair();
   const device = keypair();
   const machine = machineSide(machineKeys, false);
-  machine.side.refresh = async () => void machine.added.push({ id: deviceId(device.publicKey), name: 'Laptop', publicKey: '', scopes: DEFAULT_SCOPES, pairedAt: 1 });
+  machine.side.refresh = async () =>
+    void machine.added.push({
+      id: deviceId(device.publicKey),
+      name: 'Laptop',
+      publicKey: '',
+      scopes: DEFAULT_SCOPES,
+      pairedAt: 1,
+    });
   const ends = pipe();
-  const [machineResult, deviceResult] = await Promise.allSettled([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop', true)]);
+  const [machineResult, deviceResult] = await Promise.allSettled([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop', true),
+  ]);
   assert.equal(deviceResult.status, 'fulfilled');
-  assert.ok(machineResult.status === 'fulfilled' && 'link' in machineResult.value);
+  assert.ok(
+    machineResult.status === 'fulfilled' && 'link' in machineResult.value,
+  );
   assert.deepEqual(machine.asked, []);
 });
 
 test('No on the machine refuses the device and trusts nothing', async () => {
   const machineKeys = keypair();
   const machine = machineSide(machineKeys, false);
-  const { machineResult, deviceResult } = await pairOver('relay', machine, machineKeys, keypair());
-  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'That computer didn’t allow this one' });
-  assert.equal(deviceResult.status === 'rejected' && (deviceResult.reason as Error).message, 'That computer didn’t allow this one');
+  const { machineResult, deviceResult } = await pairOver(
+    'relay',
+    machine,
+    machineKeys,
+    keypair(),
+  );
+  assert.deepEqual(
+    machineResult.status === 'fulfilled' && machineResult.value,
+    { refusal: 'That computer didn’t allow this one' },
+  );
+  assert.equal(
+    deviceResult.status === 'rejected' &&
+      (deviceResult.reason as Error).message,
+    'That computer didn’t allow this one',
+  );
   assert.deepEqual(machine.added, []);
 });
 
@@ -110,15 +204,32 @@ test('an unknown device on the LAN is refused without asking; a paired one conne
   const device = keypair();
   const stranger = machineSide(machineKeys, true);
   const refused = await pairOver('lan', stranger, machineKeys, device);
-  assert.equal(refused.deviceResult.status === 'rejected' && (refused.deviceResult.reason as Error).message, 'Join your computers through your Mochi account first');
+  assert.equal(
+    refused.deviceResult.status === 'rejected' &&
+      (refused.deviceResult.reason as Error).message,
+    'Join your computers through your Mochi account first',
+  );
   assert.deepEqual(stranger.asked, []);
 
-  const known = machineSide(machineKeys, false, [{ id: deviceId(device.publicKey), name: 'Laptop', publicKey: '', scopes: ['read'], pairedAt: 1 }]);
+  const known = machineSide(machineKeys, false, [
+    {
+      id: deviceId(device.publicKey),
+      name: 'Laptop',
+      publicKey: '',
+      scopes: ['read'],
+      pairedAt: 1,
+    },
+  ]);
   const paired = await pairOver('lan', known, machineKeys, device);
   assert.equal(paired.deviceResult.status, 'fulfilled');
   assert.deepEqual(known.asked, []);
-  const secured = paired.machineResult.status === 'fulfilled' && paired.machineResult.value;
-  assert.deepEqual(secured && 'device' in secured && secured.device.scopes, ['read'], 'the scopes this machine gave it');
+  const secured =
+    paired.machineResult.status === 'fulfilled' && paired.machineResult.value;
+  assert.deepEqual(
+    secured && 'device' in secured && secured.device.scopes,
+    ['read'],
+    'the scopes this machine gave it',
+  );
 });
 
 test('a relay that swaps the machine’s key fails the handshake, and the codes on the two screens differ', async () => {
@@ -126,9 +237,22 @@ test('a relay that swaps the machine’s key fails the handshake, and the codes 
   const impostor = keypair();
   const device = keypair();
   const machine = machineSide(machineKeys, true);
-  const { deviceResult } = await pairOver('relay', machine, machineKeys, device, impostor.publicKey);
-  assert.equal(deviceResult.status === 'rejected' && (deviceResult.reason as Error).message, 'That computer’s key doesn’t match; pair again from its current listing');
-  assert.notEqual(pairingCode(impostor.publicKey, device.publicKey), machine.asked[0].code);
+  const { deviceResult } = await pairOver(
+    'relay',
+    machine,
+    machineKeys,
+    device,
+    impostor.publicKey,
+  );
+  assert.equal(
+    deviceResult.status === 'rejected' &&
+      (deviceResult.reason as Error).message,
+    'That computer’s key doesn’t match; pair again from its current listing',
+  );
+  assert.notEqual(
+    pairingCode(impostor.publicKey, device.publicKey),
+    machine.asked[0].code,
+  );
 });
 
 test('a pairing request naming one key but signed with another is refused before anyone is asked', async () => {
@@ -139,11 +263,28 @@ test('a pairing request naming one key but signed with another is refused before
   // The attacker's handshake, with the victim's public key swapped into the request.
   const ends = pipe((bytes, toMachine) => {
     if (!toMachine) return bytes;
-    const frame = JSON.parse(sodium.to_string(bytes)) as Record<string, unknown>;
-    return sodium.from_string(JSON.stringify({ ...frame, publicKey: sodium.to_base64(victim.publicKey, sodium.base64_variants.ORIGINAL) }));
+    const frame = JSON.parse(sodium.to_string(bytes)) as Record<
+      string,
+      unknown
+    >;
+    return sodium.from_string(
+      JSON.stringify({
+        ...frame,
+        publicKey: sodium.to_base64(
+          victim.publicKey,
+          sodium.base64_variants.ORIGINAL,
+        ),
+      }),
+    );
   });
-  const [machineResult] = await Promise.allSettled([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, attacker, machineKeys.publicKey, 'Laptop')]);
-  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'The pairing request wasn’t signed by the key it names' });
+  const [machineResult] = await Promise.allSettled([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(ends.device, attacker, machineKeys.publicKey, 'Laptop'),
+  ]);
+  assert.deepEqual(
+    machineResult.status === 'fulfilled' && machineResult.value,
+    { refusal: 'The pairing request wasn’t signed by the key it names' },
+  );
   assert.deepEqual(machine.asked, []);
 });
 
@@ -151,13 +292,24 @@ test('a tampered frame after pairing ends the connection', async () => {
   const machineKeys = keypair();
   const device = keypair();
   let isPaired = false;
-  const ends = pipe((bytes, toMachine) => (toMachine && isPaired ? bytes.map((b, i) => (i === bytes.length - 1 ? b ^ 1 : b)) : bytes));
+  const ends = pipe((bytes, toMachine) =>
+    toMachine && isPaired
+      ? bytes.map((b, i) => (i === bytes.length - 1 ? b ^ 1 : b))
+      : bytes,
+  );
   const machine = machineSide(machineKeys, true);
-  const [machineResult, deviceResult] = await Promise.all([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop')]);
+  const [machineResult, deviceResult] = await Promise.all([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop'),
+  ]);
   isPaired = true;
   assert.ok('link' in machineResult);
-  const closed = new Promise<void>((resolve) => machineResult.link.onClose(resolve));
-  machineResult.link.onMessage(() => assert.fail('a tampered frame must not be read'));
+  const closed = new Promise<void>((resolve) =>
+    machineResult.link.onClose(resolve),
+  );
+  machineResult.link.onMessage(() =>
+    assert.fail('a tampered frame must not be read'),
+  );
   deviceResult.send('hello');
   await closed;
 });
@@ -168,13 +320,21 @@ test('a message bigger than one relay frame arrives whole, every frame on the wi
   const machine = machineSide(machineKeys, true);
   const sizes: number[] = [];
   const ends = pipe((bytes) => (sizes.push(bytes.length), bytes));
-  const [secured, deviceLink] = await Promise.all([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop')]);
+  const [secured, deviceLink] = await Promise.all([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop'),
+  ]);
   assert.ok('link' in secured);
   // A snapshot-sized frame with multi-byte characters straddling piece boundaries.
-  const snapshot = JSON.stringify({ type: 'snapshot', saved: 'é—🍡'.repeat(400_000) });
+  const snapshot = JSON.stringify({
+    type: 'snapshot',
+    saved: 'é—🍡'.repeat(400_000),
+  });
   const small = '{"type":"action"}';
   const heard: string[] = [];
-  const done = new Promise<void>((resolve) => deviceLink.onMessage((text) => heard.push(text) === 2 && resolve()));
+  const done = new Promise<void>((resolve) =>
+    deviceLink.onMessage((text) => heard.push(text) === 2 && resolve()),
+  );
   sizes.length = 0;
   secured.link.send(snapshot);
   secured.link.send(small);
@@ -182,14 +342,20 @@ test('a message bigger than one relay frame arrives whole, every frame on the wi
   assert.equal(heard[0], snapshot);
   assert.equal(heard[1], small, 'the next message starts fresh');
   assert.ok(sizes.length > 4, `split into ${sizes.length} frames`);
-  assert.ok(sizes.every((n) => n <= 1024 * 1024), `largest frame ${Math.max(...sizes)} bytes`);
+  assert.ok(
+    sizes.every((n) => n <= 1024 * 1024),
+    `largest frame ${Math.max(...sizes)} bytes`,
+  );
 });
 
 test('a peer that keeps sending pieces past 64 MB is cut off', async () => {
   const machineKeys = keypair();
   const machine = machineSide(machineKeys, true);
   const ends = pipe();
-  const [secured, deviceLink] = await Promise.all([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, keypair(), machineKeys.publicKey, 'Laptop')]);
+  const [secured, deviceLink] = await Promise.all([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(ends.device, keypair(), machineKeys.publicKey, 'Laptop'),
+  ]);
   assert.ok('link' in secured);
   const closed = new Promise<void>((resolve) => secured.link.onClose(resolve));
   secured.link.onMessage(() => assert.fail('nothing should arrive'));

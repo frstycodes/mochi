@@ -27,17 +27,26 @@ const MAX_THUMB = 512 * 1024;
 const MAX_IMAGE_CHARS = Math.ceil((5_000_000 * 4) / 3);
 const MAX_IMAGES = 8;
 
-export const Scope = Schema.Literals(['read', 'operate', 'manage', 'code', 'terminal']);
+export const Scope = Schema.Literals([
+  'read',
+  'operate',
+  'manage',
+  'code',
+  'terminal',
+]);
 export type Scope = typeof Scope.Type;
 
 export const DeviceKind = Schema.Literals(['mac', 'windows', 'linux', 'phone']);
 export type DeviceKind = typeof DeviceKind.Type;
 
-const notBlank = Schema.makeFilter((s: string) => !!s.trim() || 'must not be blank');
+const notBlank = Schema.makeFilter(
+  (s: string) => !!s.trim() || 'must not be blank',
+);
 /** `isText`: up to `max` chars with something besides whitespace. */
 const Text = (max: number) => Str(max).check(notBlank);
 /** `isText`, then trimmed: titles, goals and names a device sends. */
-const TrimmedText = (max: number) => Text(max).pipe(Schema.decodeTo(S, SchemaTransformation.trim()));
+const TrimmedText = (max: number) =>
+  Text(max).pipe(Schema.decodeTo(S, SchemaTransformation.trim()));
 const Id = Str(MAX_ID);
 const NonEmptyId = Id.check(Schema.isMinLength(1));
 const Index = Int.check(Schema.isGreaterThanOrEqualTo(0));
@@ -47,37 +56,81 @@ const Size = Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 }));
  * A path inside the thread's folder as this computer lists it: posix separators, nothing absolute, no `..` (`isRelativePath`).
  */
 export const RelativePath = Text(MAX_PATH).check(
-  Schema.makeFilter((p: string) => (!p.includes('\\') && !p.includes('\0') && !/^([a-zA-Z]:|\/)/.test(p) && !p.split('/').includes('..')) || 'must be a path relative to the thread’s folder'),
+  Schema.makeFilter(
+    (p: string) =>
+      (!p.includes('\\') &&
+        !p.includes('\0') &&
+        !/^([a-zA-Z]:|\/)/.test(p) &&
+        !p.split('/').includes('..')) ||
+      'must be a path relative to the thread’s folder',
+  ),
 );
 
-export const ThreadPoint = Schema.Union([Schema.Struct({ kind: Schema.Literal('message'), index: Index }), Schema.Struct({ kind: Schema.Literal('checkpoint'), n: Index })]);
+export const ThreadPoint = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('message'), index: Index }),
+  Schema.Struct({ kind: Schema.Literal('checkpoint'), n: Index }),
+]);
 export type ThreadPoint = typeof ThreadPoint.Type;
 
-const RemoteControls = Schema.Struct({ model: Id, effort: Id, speed: Id, access: Access });
+const RemoteControls = Schema.Struct({
+  model: Id,
+  effort: Id,
+  speed: Id,
+  access: Access,
+});
 
 /** `parseImages`: what the composer attaches. A device never names `original`, a path on this computer: it is dropped. */
-const RemoteImage = Schema.Struct({ mediaType: AgentImage.fields.mediaType, data: Str(MAX_IMAGE_CHARS), thumb: Str(MAX_THUMB) });
+const RemoteImage = Schema.Struct({
+  mediaType: AgentImage.fields.mediaType,
+  data: Str(MAX_IMAGE_CHARS),
+  thumb: Str(MAX_THUMB),
+});
 
 const PROJECT_NAME = /^(?!\.\.?$)[\w.-]+$/;
 const OWNER_REPO = /^[\w.-]+\/(?!\.\.?$)[\w.-]+$/;
 
 /** A device names what to clone, never where; exactly one of `url` (a network git remote) or `github` (`owner/repo`). */
 const RemoteCloneSource = Schema.Record(S, Schema.Unknown)
-  .check(Schema.makeFilter((s) => !('url' in s && 'github' in s) || 'clone source takes url or github, not both'))
+  .check(
+    Schema.makeFilter(
+      (s) =>
+        !('url' in s && 'github' in s) ||
+        'clone source takes url or github, not both',
+    ),
+  )
   .pipe(
     Schema.decodeTo(
       Schema.Union([
-        Schema.Struct({ url: Str(MAX_PATH).check(Schema.makeFilter((url: string) => isCloneUrl(url) || 'must be a network git remote')) }),
-        Schema.Struct({ github: Str(MAX_TITLE).check(Schema.isPattern(OWNER_REPO)) }),
+        Schema.Struct({
+          url: Str(MAX_PATH).check(
+            Schema.makeFilter(
+              (url: string) =>
+                isCloneUrl(url) || 'must be a network git remote',
+            ),
+          ),
+        }),
+        Schema.Struct({
+          github: Str(MAX_TITLE).check(Schema.isPattern(OWNER_REPO)),
+        }),
       ]),
     ),
   );
 
-const ChangeTarget = Schema.Struct({ path: RelativePath, staged: B, untracked: opt(B), patch: opt(Str(MAX_PATCH)) });
+const ChangeTarget = Schema.Struct({
+  path: RelativePath,
+  staged: B,
+  untracked: opt(B),
+  patch: opt(Str(MAX_PATCH)),
+});
 
-const Answers = Schema.Array(Schema.Array(Str(16 * 1024)).check(Schema.isMaxLength(64))).check(Schema.isMaxLength(64));
+const Answers = Schema.Array(
+  Schema.Array(Str(16 * 1024)).check(Schema.isMaxLength(64)),
+).check(Schema.isMaxLength(64));
 
-const command = <const T extends string, F extends Schema.Struct.Fields>(type: T, fields: F) => Schema.Struct({ type: Schema.Literal(type), ...fields });
+const command = <const T extends string, F extends Schema.Struct.Fields>(
+  type: T,
+  fields: F,
+) => Schema.Struct({ type: Schema.Literal(type), ...fields });
 
 /**
  * What a device can ask this computer to do, as the `device.command` RPC's payload. Fields a command doesn't take are
@@ -92,33 +145,82 @@ export const RemoteCommand = Schema.Union([
   command('interrupt', { threadId: Id }),
   command('fork', { threadId: Id, point: ThreadPoint }),
   command('handoff', { threadId: Id, to: Provider }),
-  command('rewind', { threadId: Id, point: ThreadPoint, mode: Schema.Literals(['chat', 'files']) }),
+  command('rewind', {
+    threadId: Id,
+    point: ThreadPoint,
+    mode: Schema.Literals(['chat', 'files']),
+  }),
   command('side-chat', { threadId: Id, text: Text(MAX_TEXT) }),
-  command('seen', { threadId: opt(Id), queueIds: opt(Schema.Array(NonEmptyId).check(Schema.isMaxLength(MAX_SEEN))) }).check(
-    Schema.makeFilter((c) => c.threadId !== undefined || c.queueIds !== undefined || `seen needs threadId, queueIds (up to ${MAX_SEEN} ids) or both`),
+  command('seen', {
+    threadId: opt(Id),
+    queueIds: opt(Schema.Array(NonEmptyId).check(Schema.isMaxLength(MAX_SEEN))),
+  }).check(
+    Schema.makeFilter(
+      (c) =>
+        c.threadId !== undefined ||
+        c.queueIds !== undefined ||
+        `seen needs threadId, queueIds (up to ${MAX_SEEN} ids) or both`,
+    ),
   ),
-  command('create', { title: TrimmedText(MAX_TEXT), provider: Provider, project: Schema.NullOr(Id), controls: opt(RemoteControls), images: opt(Schema.Array(RemoteImage).check(Schema.isMaxLength(MAX_IMAGES))) }),
+  command('create', {
+    title: TrimmedText(MAX_TEXT),
+    provider: Provider,
+    project: Schema.NullOr(Id),
+    controls: opt(RemoteControls),
+    images: opt(
+      Schema.Array(RemoteImage).check(Schema.isMaxLength(MAX_IMAGES)),
+    ),
+  }),
   command('rename', { threadId: Id, title: TrimmedText(MAX_TITLE) }),
   command('edit-goal', { threadId: Id, goal: TrimmedText(MAX_TEXT) }),
   command('pin', { threadId: Id, isPinned: B, order: opt(Schema.Finite) }),
   command('settle', { threadId: Id, isSettled: B }),
-  command('schedule', { threadId: Id, action: Schema.Literals(['pause', 'resume', 'run', 'remove']) }),
+  command('schedule', {
+    threadId: Id,
+    action: Schema.Literals(['pause', 'resume', 'run', 'remove']),
+  }),
   command('commit', { threadId: Id, message: Text(MAX_TEXT) }),
   command('push', { threadId: Id }),
-  command('open-pr', { threadId: Id, title: TrimmedText(MAX_TITLE), body: Str(MAX_TEXT) }),
+  command('open-pr', {
+    threadId: Id,
+    title: TrimmedText(MAX_TITLE),
+    body: Str(MAX_TEXT),
+  }),
   command('delete', { threadId: Id }),
-  command('add-project', { name: Str(MAX_TITLE).check(Schema.isPattern(PROJECT_NAME)), publish: opt(Schema.Literals(['private', 'public'])) }),
+  command('add-project', {
+    name: Str(MAX_TITLE).check(Schema.isPattern(PROJECT_NAME)),
+    publish: opt(Schema.Literals(['private', 'public'])),
+  }),
   command('clone-project', { source: RemoteCloneSource }),
   command('setting', { key: Text(MAX_ID), value: Str(MAX_TEXT) }),
   command('diff', { threadId: Id, scope: DiffScope }),
   command('checkpoint-diff', { threadId: Id, n: Index }),
-  command('change', { threadId: Id, action: Schema.Literals(['stage', 'unstage', 'revert']), target: ChangeTarget }),
-  command('comment', { threadId: Id, path: RelativePath, side: Schema.Literals(['additions', 'deletions']), line: Index, text: Text(MAX_TEXT) }),
+  command('change', {
+    threadId: Id,
+    action: Schema.Literals(['stage', 'unstage', 'revert']),
+    target: ChangeTarget,
+  }),
+  command('comment', {
+    threadId: Id,
+    path: RelativePath,
+    side: Schema.Literals(['additions', 'deletions']),
+    line: Index,
+    text: Text(MAX_TEXT),
+  }),
   command('files', { threadId: Id }),
   command('read-file', { threadId: Id, path: RelativePath }),
   command('terminal-open', { threadId: Id, cols: Size, rows: Size }),
-  command('terminal-write', { threadId: Id, terminalId: Id, data: Str(MAX_TEXT).check(Schema.isMinLength(1)) }),
-  command('terminal-resize', { threadId: Id, terminalId: Id, cols: Size, rows: Size }),
+  command('terminal-write', {
+    threadId: Id,
+    terminalId: Id,
+    data: Str(MAX_TEXT).check(Schema.isMinLength(1)),
+  }),
+  command('terminal-resize', {
+    threadId: Id,
+    terminalId: Id,
+    cols: Size,
+    rows: Size,
+  }),
   command('terminal-close', { threadId: Id, terminalId: Id }),
 ]);
 export type RemoteCommand = typeof RemoteCommand.Type;
@@ -127,11 +229,18 @@ export const CatalogProject = Schema.Struct({ ref: S, name: S });
 
 export const MachineCatalog = Schema.Struct({
   projects: Schema.Array(CatalogProject),
-  models: Schema.Struct({ claude: opt(Schema.Array(AgentModel)), codex: opt(Schema.Array(AgentModel)) }),
+  models: Schema.Struct({
+    claude: opt(Schema.Array(AgentModel)),
+    codex: opt(Schema.Array(AgentModel)),
+  }),
   defaults: Schema.Struct({ claude: S, codex: S }),
 });
 
-export const TerminalOutput = Schema.Struct({ data: S, next: Schema.Number, exitCode: opt(Schema.Number) });
+export const TerminalOutput = Schema.Struct({
+  data: S,
+  next: Schema.Number,
+  exitCode: opt(Schema.Number),
+});
 
 /**
  * `CommandData[keyof CommandData]`. Nothing on the wire says which command a result answers, so the all-string shapes
@@ -148,13 +257,24 @@ const CommandData = Schema.Union([
   Schema.Struct({ terminalId: S }),
 ]);
 
-const okFields = { isOk: Schema.Literal(true), detail: opt(S), data: opt(CommandData) };
+const okFields = {
+  isOk: Schema.Literal(true),
+  detail: opt(S),
+  data: opt(CommandData),
+};
 const failedFields = { isOk: Schema.Literal(false), error: S };
 
-export const CommandResult = Schema.Union([Schema.Struct(okFields), Schema.Struct(failedFields)]);
+export const CommandResult = Schema.Union([
+  Schema.Struct(okFields),
+  Schema.Struct(failedFields),
+]);
 export type CommandResult = typeof CommandResult.Type;
 
-export const RemoteCommandRequest = Schema.Struct({ id: S, deviceName: S, command: RemoteCommand });
+export const RemoteCommandRequest = Schema.Struct({
+  id: S,
+  deviceName: S,
+  command: RemoteCommand,
+});
 export type RemoteCommandRequest = typeof RemoteCommandRequest.Type;
 
 /** The scope each command needs; Core refuses it on a connection without that scope (`scopeOf` in `capabilities.ts`). */
@@ -201,7 +321,13 @@ export const COMMAND_SCOPES = {
  */
 export const HelloFrame = Schema.Struct({
   type: Schema.Literal('hello'),
-  version: Schema.Number.check(Schema.makeFilter((v: number) => v === PROTOCOL_VERSION || `This machine speaks protocol ${PROTOCOL_VERSION}; update Mochi on both sides`)),
+  version: Schema.Number.check(
+    Schema.makeFilter(
+      (v: number) =>
+        v === PROTOCOL_VERSION ||
+        `This machine speaks protocol ${PROTOCOL_VERSION}; update Mochi on both sides`,
+    ),
+  ),
   /** The device's membership records, unchecked here: `members.ts` parses and weighs them. */
   members: opt(Schema.Unknown),
 });
@@ -220,23 +346,45 @@ export const WelcomeFrame = Schema.Struct({
 });
 export type WelcomeFrame = typeof WelcomeFrame.Type;
 
-export const RefusedFrame = Schema.Struct({ type: Schema.Literal('refused'), reason: S });
+export const RefusedFrame = Schema.Struct({
+  type: Schema.Literal('refused'),
+  reason: S,
+});
 
 /** The sender's membership records changed (a computer joined or was removed). */
-export const MembersFrame = Schema.Struct({ type: Schema.Literal('members'), members: Schema.Unknown });
+export const MembersFrame = Schema.Struct({
+  type: Schema.Literal('members'),
+  members: Schema.Unknown,
+});
 
 /** What the machine says on a link besides Core's RPC frames. */
-export const MachineLinkFrame = Schema.Union([WelcomeFrame, RefusedFrame, MembersFrame]);
+export const MachineLinkFrame = Schema.Union([
+  WelcomeFrame,
+  RefusedFrame,
+  MembersFrame,
+]);
 export type MachineLinkFrame = typeof MachineLinkFrame.Type;
 
 /** A device's frame after its hello: one of Core's RPC client messages, or its membership records. */
-export const DeviceLinkFrame = Schema.Union([Schema.Struct({ _tag: Schema.Literals(['Request', 'Ack', 'Interrupt', 'Ping', 'Eof']) }), MembersFrame]);
+export const DeviceLinkFrame = Schema.Union([
+  Schema.Struct({
+    _tag: Schema.Literals(['Request', 'Ack', 'Interrupt', 'Ping', 'Eof']),
+  }),
+  MembersFrame,
+]);
 
 /**
  * A followed machine's threads as main hands them to the window, one thread file (`persist.ts` `SavedThread`) at a time
  * from that machine's `thread` streams. `null` deletes the thread; `reset` drops them all before a fresh start.
  */
-export const MirrorFrame = Schema.Union([Schema.Struct({ type: Schema.Literal('reset') }), Schema.Struct({ type: Schema.Literal('thread'), threadId: S, saved: Schema.NullOr(Schema.Unknown) })]);
+export const MirrorFrame = Schema.Union([
+  Schema.Struct({ type: Schema.Literal('reset') }),
+  Schema.Struct({
+    type: Schema.Literal('thread'),
+    threadId: S,
+    saved: Schema.NullOr(Schema.Unknown),
+  }),
+]);
 export type MirrorFrame = typeof MirrorFrame.Type;
 
 // Mirrors `isCloneUrl` / `normalizeOrigin` in src/git/origin.ts, which this package can't import.
@@ -244,20 +392,26 @@ const SCHEMES = ['https:', 'http:', 'ssh:', 'git:', 'git+ssh:', 'ssh+git:'];
 const HOST = /^[\w.-]+$/;
 
 function isCloneUrl(url: string) {
-  return !/[\s\0]/.test(url) && !url.startsWith('-') && isNetworkRemote(url.trim());
+  return (
+    !/[\s\0]/.test(url) && !url.startsWith('-') && isNetworkRemote(url.trim())
+  );
 }
 
 function isNetworkRemote(url: string) {
   const remote = splitRemote(url);
   const path = remote?.path.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '');
-  return !!path && !path.split('/').some((part) => !part || part === '.' || part === '..');
+  return (
+    !!path &&
+    !path.split('/').some((part) => !part || part === '.' || part === '..')
+  );
 }
 
 function splitRemote(url: string) {
   if (url.includes('://')) {
     try {
       const parsed = new URL(url);
-      if (!SCHEMES.includes(parsed.protocol) || !HOST.test(parsed.hostname)) return null;
+      if (!SCHEMES.includes(parsed.protocol) || !HOST.test(parsed.hostname))
+        return null;
       return { path: decodeURIComponent(parsed.pathname) };
     } catch {
       return null;

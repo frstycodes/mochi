@@ -12,7 +12,11 @@ export function VisualTab({ thread, tab }: PaneTabProps) {
       <div className="px-3 pb-3">
         <VizThreadProvider value={thread.id}>
           <VisualInPane>
-            <VisualContent language={tab.visual.language} code={tab.visual.code} title={tab.title} />
+            <VisualContent
+              language={tab.visual.language}
+              code={tab.visual.code}
+              title={tab.title}
+            />
           </VisualInPane>
         </VizThreadProvider>
       </div>

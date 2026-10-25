@@ -17,7 +17,11 @@ export interface LibraryIndex {
   connectors?: Record<string, ConnectorSettings>;
 }
 
-export type LibraryItem = LibrarySkill | LibraryServer | LibraryPlugin | LibraryConnector;
+export type LibraryItem =
+  | LibrarySkill
+  | LibraryServer
+  | LibraryPlugin
+  | LibraryConnector;
 
 export interface LibrarySkill extends ItemBase {
   kind: 'skill';
@@ -43,7 +47,10 @@ export interface SkillPlacement {
 }
 
 /** Where an install goes: the Mochi library (loaded per profile) or, like the skills CLI, the agents' own folders. */
-export type SkillDestination = { scope: 'library' } | { scope: 'user'; providers: Provider[] } | { scope: 'project'; providers: Provider[]; project: string };
+export type SkillDestination =
+  | { scope: 'library' }
+  | { scope: 'user'; providers: Provider[] }
+  | { scope: 'project'; providers: Provider[]; project: string };
 
 export interface LibraryServer extends ItemBase {
   kind: 'server';
@@ -163,7 +170,13 @@ export interface PluginReview {
   skills: { name: string; description: string }[];
   agents: { name: string; description: string }[];
   /** `condition` is a handler's own `if` (`Bash(git*commit*)`), narrower than the group's matcher. */
-  hooks: { event: string; matcher: string | null; condition: string | null; type: string; run: string }[];
+  hooks: {
+    event: string;
+    matcher: string | null;
+    condition: string | null;
+    type: string;
+    run: string;
+  }[];
   servers: { name: string; run: string; env: string[] }[];
   remotes: { name: string; url: string }[];
   unsupported: string[];
@@ -199,14 +212,21 @@ export interface SkillsShSkill {
 /** One plugin folder's files by path relative to it, keyed by the plugin's name. */
 export type PluginFolders = Record<string, Record<string, string>>;
 
-export const EMPTY_LIBRARY: LibraryIndex = { items: [], profiles: {}, marketplaces: [] };
+export const EMPTY_LIBRARY: LibraryIndex = {
+  items: [],
+  profiles: {},
+  marketplaces: [],
+};
 
 /** Claude names a plugin's skills `<plugin>:<skill>` (verified with the SDK), so standalone skills read `mochi:<skill>`; no installed plugin may take the name. */
 export const STANDALONE_PLUGIN = 'mochi';
 
 /** The plugin a library skill loads under, so `/` reads `/<owner>:<skill>`: the GitHub owner it came from, else Mochi's own. */
 export function skillPluginName(source: string | null) {
-  const owner = source?.split('/')[0].toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  const owner = source
+    ?.split('/')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-');
   return owner || STANDALONE_PLUGIN;
 }
 
@@ -216,26 +236,64 @@ const OWN_SKILL_LIMITS = { files: 200, bytes: 512 * 1024 };
  * A skill written or uploaded in Mochi, checked before it's stored: a SKILL.md naming it, relative paths inside its folder, at most
  * 200 text files of 512 KB. Throws the reason it can't be added.
  */
-export function ownSkillItem(files: Record<string, string>, id: string, now: number): LibrarySkill {
+export function ownSkillItem(
+  files: Record<string, string>,
+  id: string,
+  now: number,
+): LibrarySkill {
   const md = files['SKILL.md'];
-  if (md === undefined) throw new Error('A skill needs a SKILL.md at the top of its folder');
+  if (md === undefined)
+    throw new Error('A skill needs a SKILL.md at the top of its folder');
   const paths = Object.keys(files);
-  if (paths.length > OWN_SKILL_LIMITS.files) throw new Error(`A skill can hold up to ${OWN_SKILL_LIMITS.files} files`);
-  const bad = paths.find((p) => !p || p.startsWith('/') || p.includes('\\') || p.split('/').some((part) => part === '..' || part === ''));
-  if (bad !== undefined) throw new Error(`${bad || 'A file'} isn't a path inside the skill's folder`);
-  const big = paths.find((p) => new TextEncoder().encode(files[p]).length > OWN_SKILL_LIMITS.bytes);
-  if (big) throw new Error(`${big} is over ${OWN_SKILL_LIMITS.bytes / 1024} KB`);
+  if (paths.length > OWN_SKILL_LIMITS.files)
+    throw new Error(`A skill can hold up to ${OWN_SKILL_LIMITS.files} files`);
+  const bad = paths.find(
+    (p) =>
+      !p ||
+      p.startsWith('/') ||
+      p.includes('\\') ||
+      p.split('/').some((part) => part === '..' || part === ''),
+  );
+  if (bad !== undefined)
+    throw new Error(
+      `${bad || 'A file'} isn't a path inside the skill's folder`,
+    );
+  const big = paths.find(
+    (p) => new TextEncoder().encode(files[p]).length > OWN_SKILL_LIMITS.bytes,
+  );
+  if (big)
+    throw new Error(`${big} is over ${OWN_SKILL_LIMITS.bytes / 1024} KB`);
   const { name, description, body } = parseSkillMd(md, '');
-  if (!/^[a-z0-9]/.test(name)) throw new Error('SKILL.md needs a name: in its frontmatter');
-  if (!body) throw new Error('SKILL.md has no instructions after its frontmatter');
-  return { kind: 'skill', id, name, description, files, targets: ['claude', 'codex'], addedAt: now, source: null, icon: null };
+  if (!/^[a-z0-9]/.test(name))
+    throw new Error('SKILL.md needs a name: in its frontmatter');
+  if (!body)
+    throw new Error('SKILL.md has no instructions after its frontmatter');
+  return {
+    kind: 'skill',
+    id,
+    name,
+    description,
+    files,
+    targets: ['claude', 'codex'],
+    addedAt: now,
+    source: null,
+    icon: null,
+  };
 }
 
 /** Owners whose skills install without a warning over their files; everyone else's are read first. */
 export const TRUSTED_SKILL_OWNERS = ['anthropics', 'openai'];
-export const FEATURED_MARKETPLACES: Marketplace[] = [{ name: 'claude-plugins-official', source: 'anthropics/claude-plugins-official' }];
+export const FEATURED_MARKETPLACES: Marketplace[] = [
+  {
+    name: 'claude-plugins-official',
+    source: 'anthropics/claude-plugins-official',
+  },
+];
 
-export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEntry[] {
+export function libraryEntries(
+  index: LibraryIndex,
+  spaceId: string,
+): LibraryEntry[] {
   const enabled = new Set(index.profiles[spaceId] ?? []);
   return index.items.map((item) => ({
     id: item.id,
@@ -245,9 +303,23 @@ export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEnt
     description: itemDescription(item),
     targets: item.targets,
     isEnabled: enabled.has(item.id),
-    profileIds: Object.keys(index.profiles).filter((space) => index.profiles[space].includes(item.id)),
-    source: item.kind === 'skill' ? item.source : item.kind === 'plugin' ? (item.upload?.file ?? item.marketplace) : item.kind === 'connector' ? item.url : null,
-    icon: item.kind === 'skill' || item.kind === 'plugin' ? item.icon : item.kind === 'connector' ? connectorIcon(item.url) : null,
+    profileIds: Object.keys(index.profiles).filter((space) =>
+      index.profiles[space].includes(item.id),
+    ),
+    source:
+      item.kind === 'skill'
+        ? item.source
+        : item.kind === 'plugin'
+          ? (item.upload?.file ?? item.marketplace)
+          : item.kind === 'connector'
+            ? item.url
+            : null,
+    icon:
+      item.kind === 'skill' || item.kind === 'plugin'
+        ? item.icon
+        : item.kind === 'connector'
+          ? connectorIcon(item.url)
+          : null,
     contents: item.kind === 'plugin' ? pluginContents(item.bundle) : null,
     remotes: item.kind === 'plugin' ? item.bundle.remotes : [],
     unsupported: item.kind === 'plugin' ? item.bundle.unsupported : [],
@@ -265,15 +337,33 @@ export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEnt
  * `<config dir>/skills` and `<project>/.claude/skills`, Codex `~/.agents/skills` and `<project>/.agents/skills`.
  * `claudeDir` is the profile's Claude config folder (`~/.claude` unless the account has its own).
  */
-export function skillPlacementDir(provider: Provider, scope: SkillPlacement['scope'], name: string, { home, claudeDir, project }: { home: string; claudeDir: string; project?: string }) {
-  if (scope === 'project' && !project) throw new Error('A project install needs a project');
-  const root = scope === 'project' ? `${project}/${provider === 'claude' ? '.claude' : '.agents'}` : provider === 'claude' ? claudeDir : `${home}/.agents`;
+export function skillPlacementDir(
+  provider: Provider,
+  scope: SkillPlacement['scope'],
+  name: string,
+  {
+    home,
+    claudeDir,
+    project,
+  }: { home: string; claudeDir: string; project?: string },
+) {
+  if (scope === 'project' && !project)
+    throw new Error('A project install needs a project');
+  const root =
+    scope === 'project'
+      ? `${project}/${provider === 'claude' ? '.claude' : '.agents'}`
+      : provider === 'claude'
+        ? claudeDir
+        : `${home}/.agents`;
   return `${root}/skills/${name}`;
 }
 
 /** Skills installed from GitHub and plugins from a marketplace can follow their source. */
 export function isUpdatable(item: LibraryItem) {
-  return (item.kind === 'skill' && !!item.source) || (item.kind === 'plugin' && !!item.marketplace);
+  return (
+    (item.kind === 'skill' && !!item.source) ||
+    (item.kind === 'plugin' && !!item.marketplace)
+  );
 }
 
 function itemTitle(item: LibraryItem) {
@@ -286,7 +376,9 @@ function itemTitle(item: LibraryItem) {
 export function itemName(item: LibraryItem) {
   if (item.kind === 'skill') return item.name;
   if (item.kind === 'server') return item.def.name;
-  return item.kind === 'plugin' ? item.bundle.name : `${item.key}:${item.alias}`;
+  return item.kind === 'plugin'
+    ? item.bundle.name
+    : `${item.key}:${item.alias}`;
 }
 
 function itemDescription(item: LibraryItem) {
@@ -302,47 +394,106 @@ function pluginContents(bundle: PluginBundle) {
     [bundle.hooks.length, 'hook'],
     [bundle.servers.length, 'server'],
   ] as const;
-  return counts.filter(([n]) => n).map(([n, label]) => `${n} ${label}${n === 1 ? '' : 's'}`).join(' · ') || null;
+  return (
+    counts
+      .filter(([n]) => n)
+      .map(([n, label]) => `${n} ${label}${n === 1 ? '' : 's'}`)
+      .join(' · ') || null
+  );
 }
 
-export function setItemEnabled(index: LibraryIndex, spaceId: string, id: string, isEnabled: boolean): LibraryIndex {
-  if (!index.items.some((item) => item.id === id)) throw new Error('No such library item');
-  const others = (index.profiles[spaceId] ?? []).filter((member) => member !== id);
-  return { ...index, profiles: { ...index.profiles, [spaceId]: isEnabled ? [...others, id] : others } };
+export function setItemEnabled(
+  index: LibraryIndex,
+  spaceId: string,
+  id: string,
+  isEnabled: boolean,
+): LibraryIndex {
+  if (!index.items.some((item) => item.id === id))
+    throw new Error('No such library item');
+  const others = (index.profiles[spaceId] ?? []).filter(
+    (member) => member !== id,
+  );
+  return {
+    ...index,
+    profiles: {
+      ...index.profiles,
+      [spaceId]: isEnabled ? [...others, id] : others,
+    },
+  };
 }
 
 export function removeItem(index: LibraryIndex, id: string): LibraryIndex {
-  const profiles = Object.fromEntries(Object.entries(index.profiles).map(([space, ids]) => [space, ids.filter((member) => member !== id)]));
-  return { ...index, items: index.items.filter((item) => item.id !== id), profiles };
+  const profiles = Object.fromEntries(
+    Object.entries(index.profiles).map(([space, ids]) => [
+      space,
+      ids.filter((member) => member !== id),
+    ]),
+  );
+  return {
+    ...index,
+    items: index.items.filter((item) => item.id !== id),
+    profiles,
+  };
 }
 
 /** The profile's items for one harness: plugin folders for Claude to load, and servers to pass each session as they are. */
-export function profileLayout(index: LibraryIndex, spaceId: string, provider: Provider): { plugins: PluginFolders; servers: McpServerDef[] } {
+export function profileLayout(
+  index: LibraryIndex,
+  spaceId: string,
+  provider: Provider,
+): { plugins: PluginFolders; servers: McpServerDef[] } {
   const enabled = new Set(index.profiles[spaceId] ?? []);
-  const items = index.items.filter((item) => enabled.has(item.id) && item.targets.includes(provider));
+  const items = index.items.filter(
+    (item) => enabled.has(item.id) && item.targets.includes(provider),
+  );
   const skills = items.filter((item) => item.kind === 'skill');
   const plugins = items.filter((item) => item.kind === 'plugin');
-  const servers = items.flatMap((item) => (item.kind === 'server' ? [item.def] : []));
+  const servers = items.flatMap((item) =>
+    item.kind === 'server' ? [item.def] : [],
+  );
   // GAP: Codex has no per-thread skill folder (0.155.1's `skills.config` only toggles skills it found), so its threads get
   // servers only, and only plugin servers that don't run the plugin's own files, which Codex has no folder for.
-  if (provider === 'codex') return { plugins: {}, servers: [...servers, ...plugins.flatMap((p) => p.bundle.servers.filter((s) => !usesPluginRoot(s)).map(stdioDef))] };
-  const folders: PluginFolders = Object.fromEntries(plugins.map((p) => [p.bundle.name, pluginFolder(p.bundle)]));
+  if (provider === 'codex')
+    return {
+      plugins: {},
+      servers: [
+        ...servers,
+        ...plugins.flatMap((p) =>
+          p.bundle.servers.filter((s) => !usesPluginRoot(s)).map(stdioDef),
+        ),
+      ],
+    };
+  const folders: PluginFolders = Object.fromEntries(
+    plugins.map((p) => [p.bundle.name, pluginFolder(p.bundle)]),
+  );
   // An owner that shares an installed plugin's name would replace its folder; those skills stay under Mochi's.
   const byOwner = new Map<string, LibrarySkill[]>();
   for (const skill of skills) {
-    const owner = folders[skillPluginName(skill.source)] ? STANDALONE_PLUGIN : skillPluginName(skill.source);
+    const owner = folders[skillPluginName(skill.source)]
+      ? STANDALONE_PLUGIN
+      : skillPluginName(skill.source);
     byOwner.set(owner, [...(byOwner.get(owner) ?? []), skill]);
   }
-  for (const [name, group] of byOwner) folders[name] = standalonePlugin(name, group);
+  for (const [name, group] of byOwner)
+    folders[name] = standalonePlugin(name, group);
   return { plugins: folders, servers };
 }
 
 /** The profile's signed-in connector accounts on connectors that are on, grouped by the server they're on, in the order they were added. */
-export function profileConnectors(index: LibraryIndex, spaceId: string): Map<string, LibraryConnector[]> {
+export function profileConnectors(
+  index: LibraryIndex,
+  spaceId: string,
+): Map<string, LibraryConnector[]> {
   const enabled = new Set(index.profiles[spaceId] ?? []);
   const groups = new Map<string, LibraryConnector[]>();
   for (const item of index.items) {
-    if (item.kind !== 'connector' || !item.isLinked || !enabled.has(item.id) || index.connectors?.[item.key]?.isOff) continue;
+    if (
+      item.kind !== 'connector' ||
+      !item.isLinked ||
+      !enabled.has(item.id) ||
+      index.connectors?.[item.key]?.isOff
+    )
+      continue;
     groups.set(item.key, [...(groups.get(item.key) ?? []), item]);
   }
   return groups;
@@ -350,32 +501,71 @@ export function profileConnectors(index: LibraryIndex, spaceId: string): Map<str
 
 /** The plugin rebuilt in Claude's layout from its parts, so Claude names, roots and loads it as the plugin it was. */
 function pluginFolder(bundle: PluginBundle) {
-  const manifest = { name: bundle.name, ...(bundle.description && { description: bundle.description }), ...(bundle.version && { version: bundle.version }) };
-  const kept = Object.entries(bundle.files).filter(([path]) => !isAutoLoaded(path));
-  const files: Record<string, string> = { ...Object.fromEntries(kept), '.claude-plugin/plugin.json': `${JSON.stringify(manifest, null, 2)}\n` };
+  const manifest = {
+    name: bundle.name,
+    ...(bundle.description && { description: bundle.description }),
+    ...(bundle.version && { version: bundle.version }),
+  };
+  const kept = Object.entries(bundle.files).filter(
+    ([path]) => !isAutoLoaded(path),
+  );
+  const files: Record<string, string> = {
+    ...Object.fromEntries(kept),
+    '.claude-plugin/plugin.json': `${JSON.stringify(manifest, null, 2)}\n`,
+  };
   for (const skill of bundle.skills) {
-    files[`skills/${skill.name}/SKILL.md`] = renderMarkdown({ name: skill.name, description: skill.description }, skill.body);
-    for (const [path, text] of Object.entries(skill.files)) files[`skills/${skill.name}/${path}`] = text;
+    files[`skills/${skill.name}/SKILL.md`] = renderMarkdown(
+      { name: skill.name, description: skill.description },
+      skill.body,
+    );
+    for (const [path, text] of Object.entries(skill.files))
+      files[`skills/${skill.name}/${path}`] = text;
   }
-  for (const agent of bundle.subagents) files[`agents/${agent.name}.md`] = renderMarkdown({ name: agent.name, description: agent.description, ...agent.fields }, agent.body);
-  if (bundle.hooks.length) files['hooks/hooks.json'] = `${JSON.stringify({ hooks: hookEvents(bundle.hooks) }, null, 2)}\n`;
-  if (bundle.servers.length) files['.mcp.json'] = `${JSON.stringify({ mcpServers: Object.fromEntries(bundle.servers.map(({ name, ...server }) => [name, server])) }, null, 2)}\n`;
+  for (const agent of bundle.subagents)
+    files[`agents/${agent.name}.md`] = renderMarkdown(
+      { name: agent.name, description: agent.description, ...agent.fields },
+      agent.body,
+    );
+  if (bundle.hooks.length)
+    files['hooks/hooks.json'] =
+      `${JSON.stringify({ hooks: hookEvents(bundle.hooks) }, null, 2)}\n`;
+  if (bundle.servers.length)
+    files['.mcp.json'] =
+      `${JSON.stringify({ mcpServers: Object.fromEntries(bundle.servers.map(({ name, ...server }) => [name, server])) }, null, 2)}\n`;
   return files;
 }
 
 // Files Claude would load on its own from a plugin folder: the parts are written back from the bundle instead, and remote
 // servers and unsupported parts must not slip in past connectors.
-const AUTO_LOADED = new Set(['.mcp.json', 'mcp.json', 'hooks/hooks.json', '.lsp.json', '.app.json', 'settings.json']);
-const AUTO_LOADED_FOLDERS = ['.claude-plugin/', '.codex-plugin/', 'output-styles/', 'monitors/', 'themes/'];
+const AUTO_LOADED = new Set([
+  '.mcp.json',
+  'mcp.json',
+  'hooks/hooks.json',
+  '.lsp.json',
+  '.app.json',
+  'settings.json',
+]);
+const AUTO_LOADED_FOLDERS = [
+  '.claude-plugin/',
+  '.codex-plugin/',
+  'output-styles/',
+  'monitors/',
+  'themes/',
+];
 const isAutoLoaded = (path: string) =>
-  AUTO_LOADED.has(path) || AUTO_LOADED_FOLDERS.some((folder) => path.startsWith(folder)) || (/^(agents|commands)\//.test(path) && path.endsWith('.md'));
+  AUTO_LOADED.has(path) ||
+  AUTO_LOADED_FOLDERS.some((folder) => path.startsWith(folder)) ||
+  (/^(agents|commands)\//.test(path) && path.endsWith('.md'));
 
 function hookEvents(hooks: PluginBundle['hooks']) {
   const events: Record<string, { matcher?: string; hooks: unknown[] }[]> = {};
   for (const { event, matcher, handler } of hooks) {
     const groups = (events[event] ??= []);
     let group = groups.find((g) => (g.matcher ?? null) === matcher);
-    if (!group) groups.push((group = { ...(matcher !== null && { matcher }), hooks: [] }));
+    if (!group)
+      groups.push(
+        (group = { ...(matcher !== null && { matcher }), hooks: [] }),
+      );
     group.hooks.push(handler);
   }
   return events;
@@ -383,18 +573,39 @@ function hookEvents(hooks: PluginBundle['hooks']) {
 
 // JSON strings are valid YAML double-quoted scalars, which keeps colons and quotes in values safe.
 function renderMarkdown(frontmatter: Record<string, string>, body: string) {
-  const lines = Object.entries(frontmatter).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
+  const lines = Object.entries(frontmatter).map(
+    ([key, value]) => `${key}: ${JSON.stringify(value)}`,
+  );
   return `---\n${lines.join('\n')}\n---\n\n${body.trim()}\n`;
 }
 
-export const usesPluginRoot = (server: PluginBundle['servers'][number]) => /\$\{(CLAUDE_)?PLUGIN_(ROOT|DATA)\}/.test(JSON.stringify(server));
+export const usesPluginRoot = (server: PluginBundle['servers'][number]) =>
+  /\$\{(CLAUDE_)?PLUGIN_(ROOT|DATA)\}/.test(JSON.stringify(server));
 
-const stdioDef = ({ name, command, args, env }: PluginBundle['servers'][number]): McpServerDef => ({ name, type: 'stdio', command, args, env });
+const stdioDef = ({
+  name,
+  command,
+  args,
+  env,
+}: PluginBundle['servers'][number]): McpServerDef => ({
+  name,
+  type: 'stdio',
+  command,
+  args,
+  env,
+});
 
 function standalonePlugin(name: string, skills: LibrarySkill[]) {
-  const manifest = { name, description: "Skills from this profile's Mochi library" };
-  const files: Record<string, string> = { '.claude-plugin/plugin.json': `${JSON.stringify(manifest, null, 2)}\n` };
-  for (const skill of skills) for (const [path, text] of Object.entries(skill.files)) files[`skills/${skill.name}/${path}`] = text;
+  const manifest = {
+    name,
+    description: "Skills from this profile's Mochi library",
+  };
+  const files: Record<string, string> = {
+    '.claude-plugin/plugin.json': `${JSON.stringify(manifest, null, 2)}\n`,
+  };
+  for (const skill of skills)
+    for (const [path, text] of Object.entries(skill.files))
+      files[`skills/${skill.name}/${path}`] = text;
   return files;
 }
 
@@ -402,7 +613,9 @@ function standalonePlugin(name: string, skills: LibrarySkill[]) {
  * Codex's per-thread `config` overrides for the servers, as dotted keys like the adapter's own (`mcp_servers.mochi.url`).
  * Codex doesn't expand `${VAR}`, so callers pass defs with their variables already filled in.
  */
-export function codexServerConfig(servers: McpServerDef[]): Record<string, unknown> {
+export function codexServerConfig(
+  servers: McpServerDef[],
+): Record<string, unknown> {
   const config: Record<string, unknown> = {};
   for (const def of servers) {
     const head = `mcp_servers.${def.name}`;
@@ -410,22 +623,43 @@ export function codexServerConfig(servers: McpServerDef[]): Record<string, unkno
     if (def.command) config[`${head}.command`] = def.command;
     if (def.args?.length) config[`${head}.args`] = def.args;
     if (def.cwd) config[`${head}.cwd`] = def.cwd;
-    for (const [key, value] of Object.entries(def.env ?? {})) config[`${head}.env.${key}`] = value;
-    for (const [key, value] of Object.entries(def.headers ?? {})) config[`${head}.http_headers.${key}`] = value;
+    for (const [key, value] of Object.entries(def.env ?? {}))
+      config[`${head}.env.${key}`] = value;
+    for (const [key, value] of Object.entries(def.headers ?? {}))
+      config[`${head}.http_headers.${key}`] = value;
   }
   return config;
 }
 
-const ITEM_KINDS: LibraryItem['kind'][] = ['skill', 'server', 'plugin', 'connector'];
+const ITEM_KINDS: LibraryItem['kind'][] = [
+  'skill',
+  'server',
+  'plugin',
+  'connector',
+];
 
 /** The saved index when it has the right shape, else an empty library; items of an unknown kind are dropped. */
 export function parseLibrary(raw: string | null): LibraryIndex {
   try {
     const saved = JSON.parse(raw ?? 'null') as Partial<LibraryIndex> | null;
-    if (!saved || !Array.isArray(saved.items) || typeof saved.profiles !== 'object' || saved.profiles === null) return EMPTY_LIBRARY;
+    if (
+      !saved ||
+      !Array.isArray(saved.items) ||
+      typeof saved.profiles !== 'object' ||
+      saved.profiles === null
+    )
+      return EMPTY_LIBRARY;
     const items = saved.items.filter((item) => ITEM_KINDS.includes(item?.kind));
-    const connectors = typeof saved.connectors === 'object' && saved.connectors !== null ? saved.connectors : {};
-    return { items, profiles: saved.profiles, marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [], connectors };
+    const connectors =
+      typeof saved.connectors === 'object' && saved.connectors !== null
+        ? saved.connectors
+        : {};
+    return {
+      items,
+      profiles: saved.profiles,
+      marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [],
+      connectors,
+    };
   } catch {
     return EMPTY_LIBRARY;
   }

@@ -21,7 +21,10 @@ export function ComposerInbox({ threadId }: { threadId: string }) {
   const receive = useEffectEvent((draft: Draft) => {
     if (draft.threadId !== threadId) return;
     if (draft.files?.length) attachments.add(draft.files);
-    if (draft.text) textInput.setInput(textInput.value ? `${textInput.value}\n\n${draft.text}` : draft.text);
+    if (draft.text)
+      textInput.setInput(
+        textInput.value ? `${textInput.value}\n\n${draft.text}` : draft.text,
+      );
   });
 
   useEffect(() => {

@@ -3,7 +3,11 @@ import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
-import { GOOGLE_WORKSPACE_PORT, GOOGLE_WORKSPACE_URL, isSameServer } from '../../src/library/connectors.ts';
+import {
+  GOOGLE_WORKSPACE_PORT,
+  GOOGLE_WORKSPACE_URL,
+  isSameServer,
+} from '../../src/library/connectors.ts';
 import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
 import { userPath } from '@mochi/core/shellPath';
 import { readSecrets, saveSecrets } from './connectors.ts';
@@ -42,33 +46,64 @@ app.on('will-quit', () => child?.kill());
 async function start() {
   if (await isUp()) return;
   const google = await googleClient();
-  if (!google?.client_secret) throw new Error('Google Workspace needs a Google Cloud client: connect it with your own app.');
+  if (!google?.client_secret)
+    throw new Error(
+      'Google Workspace needs a Google Cloud client: connect it with your own app.',
+    );
   const home = path.join(app.getPath('userData'), 'google-workspace');
   await mkdir(path.join(home, 'logs'), { recursive: true });
-  const log = createWriteStream(path.join(home, 'logs', 'workspace-mcp.log'), { flags: 'a' });
-  child = spawnCommand(uvBinary(), ['tool', 'run', '--python', PYTHON, '--from', PACKAGE, 'workspace-mcp', '--transport', 'streamable-http', '--tools', 'gmail', 'drive', 'calendar'], {
-    env: {
-      PATH: await userPath(),
-      HOME: process.env.HOME,
-      UV_CACHE_DIR: path.join(home, 'uv-cache'),
-      UV_PYTHON_INSTALL_DIR: path.join(home, 'python'),
-      UV_TOOL_DIR: path.join(home, 'uv-tools'),
-      GOOGLE_OAUTH_CLIENT_ID: google.client_id,
-      GOOGLE_OAUTH_CLIENT_SECRET: google.client_secret,
-      MCP_ENABLE_OAUTH21: 'true',
-      WORKSPACE_MCP_HOST: '127.0.0.1',
-      WORKSPACE_MCP_PORT: String(GOOGLE_WORKSPACE_PORT),
-      WORKSPACE_MCP_BRAND_NAME: 'Mochi',
-      WORKSPACE_MCP_CREDENTIALS_DIR: path.join(home, 'credentials'),
-      // Registrations and tokens it issues survive restarts only on disk; the default store is memory.
-      WORKSPACE_MCP_OAUTH_PROXY_STORAGE_BACKEND: 'disk',
-      FASTMCP_HOME: home,
-      FASTMCP_SERVER_AUTH_GOOGLE_JWT_SIGNING_KEY: await signingKey(home),
-    },
+  const log = createWriteStream(path.join(home, 'logs', 'workspace-mcp.log'), {
+    flags: 'a',
   });
+  child = spawnCommand(
+    uvBinary(),
+    [
+      'tool',
+      'run',
+      '--python',
+      PYTHON,
+      '--from',
+      PACKAGE,
+      'workspace-mcp',
+      '--transport',
+      'streamable-http',
+      '--tools',
+      'gmail',
+      'drive',
+      'calendar',
+    ],
+    {
+      env: {
+        PATH: await userPath(),
+        HOME: process.env.HOME,
+        UV_CACHE_DIR: path.join(home, 'uv-cache'),
+        UV_PYTHON_INSTALL_DIR: path.join(home, 'python'),
+        UV_TOOL_DIR: path.join(home, 'uv-tools'),
+        GOOGLE_OAUTH_CLIENT_ID: google.client_id,
+        GOOGLE_OAUTH_CLIENT_SECRET: google.client_secret,
+        MCP_ENABLE_OAUTH21: 'true',
+        WORKSPACE_MCP_HOST: '127.0.0.1',
+        WORKSPACE_MCP_PORT: String(GOOGLE_WORKSPACE_PORT),
+        WORKSPACE_MCP_BRAND_NAME: 'Mochi',
+        WORKSPACE_MCP_CREDENTIALS_DIR: path.join(home, 'credentials'),
+        // Registrations and tokens it issues survive restarts only on disk; the default store is memory.
+        WORKSPACE_MCP_OAUTH_PROXY_STORAGE_BACKEND: 'disk',
+        FASTMCP_HOME: home,
+        FASTMCP_SERVER_AUTH_GOOGLE_JWT_SIGNING_KEY: await signingKey(home),
+      },
+    },
+  );
   child.stdout.pipe(log);
   child.stderr.pipe(log);
-  const exited = new Promise<never>((_, reject) => child!.once('exit', (code) => reject(new Error(`Google Workspace stopped while starting (exit ${code}); see ${path.join(home, 'logs')}`))));
+  const exited = new Promise<never>((_, reject) =>
+    child!.once('exit', (code) =>
+      reject(
+        new Error(
+          `Google Workspace stopped while starting (exit ${code}); see ${path.join(home, 'logs')}`,
+        ),
+      ),
+    ),
+  );
   child.once('exit', () => {
     child = undefined;
     starting = undefined;
@@ -78,7 +113,9 @@ async function start() {
 
 /** A Desktop client from the user's own Google Cloud project, saved once for every Google account; else Mochi's, when the build has one. */
 async function googleClient() {
-  return (await readSecrets(OWN_CLIENT)).clientInformation ?? mochiOAuthApp('google');
+  return (
+    (await readSecrets(OWN_CLIENT)).clientInformation ?? mochiOAuthApp('google')
+  );
 }
 
 export async function hasGoogleClient() {
@@ -90,7 +127,10 @@ export async function hasGoogleClient() {
  * GAP: accounts signed in through the previous client sign in again; a server left running by an earlier Mochi run isn't ours to stop.
  */
 export async function saveGoogleClient(clientId: string, clientSecret: string) {
-  await saveSecrets(OWN_CLIENT, { clientInformation: { client_id: clientId, client_secret: clientSecret }, isOwnClient: true });
+  await saveSecrets(OWN_CLIENT, {
+    clientInformation: { client_id: clientId, client_secret: clientSecret },
+    isOwnClient: true,
+  });
   starting = undefined;
   const running = child;
   if (!running) return;
@@ -103,7 +143,12 @@ const OWN_CLIENT = 'app:google';
 
 /** The packaged app's uv (electron-builder `extraResources`), else the one on the user's PATH in development. */
 function uvBinary() {
-  return app.isPackaged ? path.join(process.resourcesPath, process.platform === 'win32' ? 'uv.exe' : 'uv') : 'uv';
+  return app.isPackaged
+    ? path.join(
+        process.resourcesPath,
+        process.platform === 'win32' ? 'uv.exe' : 'uv',
+      )
+    : 'uv';
 }
 
 /** Per install, so the tokens it issues are only good here; derived from the client secret otherwise, which every copy of Mochi shares. */
@@ -126,6 +171,8 @@ async function waitUntilUp() {
 }
 
 async function isUp() {
-  const res = await fetch(new URL('/.well-known/oauth-authorization-server', GOOGLE_WORKSPACE_URL)).catch(() => undefined);
+  const res = await fetch(
+    new URL('/.well-known/oauth-authorization-server', GOOGLE_WORKSPACE_URL),
+  ).catch(() => undefined);
   return !!res?.ok;
 }

@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Effect, Layer, Schedule } from 'effect';
@@ -27,7 +35,13 @@ export const isHealthy = (file: string) => {
   try {
     const db = new DatabaseSync(file, { readOnly: true });
     try {
-      return (db.prepare('PRAGMA quick_check').get() as { quick_check?: string } | undefined)?.quick_check === 'ok';
+      return (
+        (
+          db.prepare('PRAGMA quick_check').get() as
+            | { quick_check?: string }
+            | undefined
+        )?.quick_check === 'ok'
+      );
     } finally {
       db.close();
     }
@@ -49,8 +63,11 @@ export const backupNow = (filename: string) =>
     rmSync(partial, { force: true });
     yield* sql`VACUUM INTO ${partial}`;
     renameSync(partial, target);
-    for (const old of listBackups(filename).slice(BACKUPS_KEPT)) rmSync(old, { force: true });
-    yield* Effect.logInfo(`Backed up the database to ${target}`).pipe(Effect.annotateLogs({ source: 'core' }));
+    for (const old of listBackups(filename).slice(BACKUPS_KEPT))
+      rmSync(old, { force: true });
+    yield* Effect.logInfo(`Backed up the database to ${target}`).pipe(
+      Effect.annotateLogs({ source: 'core' }),
+    );
     return target;
   });
 
@@ -63,8 +80,14 @@ const isDue = (filename: string) => {
 export const backupSchedule = (filename: string) =>
   Layer.effectDiscard(
     Effect.forkScoped(
-      Effect.suspend(() => (isDue(filename) ? backupNow(filename) : Effect.void)).pipe(
-        Effect.catch((error) => Effect.logWarning(`Backup failed: ${error.message}`).pipe(Effect.annotateLogs({ source: 'core' }))),
+      Effect.suspend(() =>
+        isDue(filename) ? backupNow(filename) : Effect.void,
+      ).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(`Backup failed: ${error.message}`).pipe(
+            Effect.annotateLogs({ source: 'core' }),
+          ),
+        ),
         Effect.repeat(Schedule.spaced('1 day')),
       ),
     ),
@@ -80,13 +103,18 @@ export const restoreIfCorrupt = (filename: string) =>
   Effect.gen(function* () {
     if (!existsSync(filename) || isHealthy(filename)) return;
     const kept = `${filename}.corrupt-${stamp()}`;
-    for (const suffix of ['', '-wal', '-shm']) if (existsSync(filename + suffix)) renameSync(filename + suffix, kept + suffix);
+    for (const suffix of ['', '-wal', '-shm'])
+      if (existsSync(filename + suffix))
+        renameSync(filename + suffix, kept + suffix);
     const good = listBackups(filename).find(isHealthy);
     if (good) copyFileSync(good, filename);
-    const outcome = good ? `restored ${basename(good)}` : 'no healthy backup, starting empty';
-    yield* Effect.logError(`${basename(filename)} failed quick_check; kept as ${basename(kept)}, ${outcome}`).pipe(
-      Effect.annotateLogs({ source: 'core' }),
-    );
+    const outcome = good
+      ? `restored ${basename(good)}`
+      : 'no healthy backup, starting empty';
+    yield* Effect.logError(
+      `${basename(filename)} failed quick_check; kept as ${basename(kept)}, ${outcome}`,
+    ).pipe(Effect.annotateLogs({ source: 'core' }));
   });
 
-export const restoreLayer = (filename: string) => Layer.effectDiscard(restoreIfCorrupt(filename));
+export const restoreLayer = (filename: string) =>
+  Layer.effectDiscard(restoreIfCorrupt(filename));

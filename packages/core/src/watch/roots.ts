@@ -13,39 +13,76 @@ export interface RootChange {
 const UNWATCHED = /(^|\/)node_modules(\/|$)|^\.git\/objects(\/|$)/;
 
 // FSEvents replays the root's own recent creation right after subscribing; only its deletion says anything.
-const isNoise = (change: RootChange) => UNWATCHED.test(change.path) || (change.path === '' && change.type !== 'delete');
+const isNoise = (change: RootChange) =>
+  UNWATCHED.test(change.path) ||
+  (change.path === '' && change.type !== 'delete');
 
 /** One @parcel/watcher subscription per directory while anything holds it, shared by every key on that root. */
 export const makeRoots = Effect.gen(function* () {
   const map = yield* RcMap.make({ lookup: subscribeRoot });
   /** `root`'s changes in batches, held from now on: a read started after this can't miss a change made before its stream runs. */
-  return (root: string) => Effect.map(Effect.flatMap(RcMap.get(map, root), PubSub.subscribe), Stream.fromSubscription);
+  return (root: string) =>
+    Effect.map(
+      Effect.flatMap(RcMap.get(map, root), PubSub.subscribe),
+      Stream.fromSubscription,
+    );
 });
 
 const subscribeRoot = (root: string) =>
   Effect.gen(function* () {
     const changes = yield* PubSub.unbounded<ReadonlyArray<RootChange>>();
-    const ignore = ['**/node_modules', '**/node_modules/**', '.git/objects', ...(yield* gitignoreGlobs(root))];
-    const onEvents = (error: Error | null, events: ReadonlyArray<watcher.Event>) => {
+    const ignore = [
+      '**/node_modules',
+      '**/node_modules/**',
+      '.git/objects',
+      ...(yield* gitignoreGlobs(root)),
+    ];
+    const onEvents = (
+      error: Error | null,
+      events: ReadonlyArray<watcher.Event>,
+    ) => {
       // A deleted root or a lost FSEvents stream reports here; the keys' own reads then fail as values.
-      if (error) return void Effect.runFork(Effect.logWarning(`Watching ${root} failed: ${error.message}`).pipe(Effect.annotateLogs({ source: 'watch' })));
-      const batch = events.map((e) => ({ path: path.relative(root, e.path).split(path.sep).join('/'), type: e.type })).filter((e) => !isNoise(e));
+      if (error)
+        return void Effect.runFork(
+          Effect.logWarning(`Watching ${root} failed: ${error.message}`).pipe(
+            Effect.annotateLogs({ source: 'watch' }),
+          ),
+        );
+      const batch = events
+        .map((e) => ({
+          path: path.relative(root, e.path).split(path.sep).join('/'),
+          type: e.type,
+        }))
+        .filter((e) => !isNoise(e));
       if (batch.length > 0) PubSub.publishUnsafe(changes, batch);
     };
     yield* Effect.acquireRelease(
-      Effect.tryPromise(() => watcher.subscribe(root, onEvents, { ignore })).pipe(
+      Effect.tryPromise(() =>
+        watcher.subscribe(root, onEvents, { ignore }),
+      ).pipe(
         // A root that doesn't exist (yet, or any more) has no changes to report.
-        Effect.tapError((error) => Effect.logWarning(`Can't watch ${root}: ${String(error)}`).pipe(Effect.annotateLogs({ source: 'watch' }))),
+        Effect.tapError((error) =>
+          Effect.logWarning(`Can't watch ${root}: ${String(error)}`).pipe(
+            Effect.annotateLogs({ source: 'watch' }),
+          ),
+        ),
         Effect.option,
       ),
-      (subscription) => (subscription._tag === 'Some' ? Effect.promise(() => subscription.value.unsubscribe().catch(() => {})) : Effect.void),
+      (subscription) =>
+        subscription._tag === 'Some'
+          ? Effect.promise(() =>
+              subscription.value.unsubscribe().catch(() => {}),
+            )
+          : Effect.void,
     );
     return changes;
   });
 
 // ponytail: the root's own .gitignore, plain patterns only (no negation, no nested files); parcel just watches more otherwise.
 const gitignoreGlobs = (root: string) =>
-  Effect.promise(() => readFile(path.join(root, '.gitignore'), 'utf8').catch(() => '')).pipe(Effect.map(globsOf));
+  Effect.promise(() =>
+    readFile(path.join(root, '.gitignore'), 'utf8').catch(() => ''),
+  ).pipe(Effect.map(globsOf));
 
 export function globsOf(gitignore: string) {
   return gitignore

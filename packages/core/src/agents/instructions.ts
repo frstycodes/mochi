@@ -1,9 +1,14 @@
 import type { MochiScope } from '../../../../src/runtime/toolTable.ts';
 
 /** Appended to every main thread's system prompt, Claude and Codex alike; the goals part only while goals are on. A settings chat gets its own. */
-export function mochiInstructions({ isGoalsOff, isSettingsChat }: MochiScope = {}) {
+export function mochiInstructions({
+  isGoalsOff,
+  isSettingsChat,
+}: MochiScope = {}) {
   if (isSettingsChat) return SETTINGS_CHAT_INSTRUCTIONS;
-  return isGoalsOff ? MOCHI_INSTRUCTIONS : `${MOCHI_INSTRUCTIONS}\n\n${GOAL_INSTRUCTIONS}`;
+  return isGoalsOff
+    ? MOCHI_INSTRUCTIONS
+    : `${MOCHI_INSTRUCTIONS}\n\n${GOAL_INSTRUCTIONS}`;
 }
 
 const SETTINGS_CHAT_INSTRUCTIONS = `You are Mochi's settings assistant, in Mochi's Settings. Mochi is a desktop app that runs Claude Code and Codex agents in threads. Here you only help the user read and change Mochi's own settings; you have no files, shell or browser.
@@ -41,11 +46,23 @@ const GOAL_INSTRUCTIONS = `Goals: Mochi shows the user this thread's goal, and M
  * syncs the first three into `~/.claude/skills/synced`, Claude Code bundles `claude-in-chrome`. Off for the model and for /name.
  * Claude Code accepts both the bare name and `plugin:name` as the key (checked against 2.1.296).
  */
-export const CLAUDE_SKILLS_OFF = Object.fromEntries(['built-in-browser', 'chrome-browser', 'computer-use', 'claude-in-chrome'].map((name) => [name, 'off' as const]));
+export const CLAUDE_SKILLS_OFF = Object.fromEntries(
+  [
+    'built-in-browser',
+    'chrome-browser',
+    'computer-use',
+    'claude-in-chrome',
+  ].map((name) => [name, 'off' as const]),
+);
 
 /**
  * Codex's browser and computer-use plugins, from the ChatGPT app's bundle. `unified-computer-use` serves `cua_repl`, which
  * Codex reached for instead of Mochi's browser. The `browser_use` / `in_app_browser` features are requirements gates nothing
  * in the CLI reads (0.163.0), so only the plugin switch removes them; checked with `mcpServerStatus/list` on a thread.
  */
-export const CODEX_BROWSER_PLUGINS_OFF = Object.fromEntries(['browser', 'chrome', 'computer-use', 'unified-computer-use'].map((p) => [`plugins.${p}@openai-bundled.enabled`, false]));
+export const CODEX_BROWSER_PLUGINS_OFF = Object.fromEntries(
+  ['browser', 'chrome', 'computer-use', 'unified-computer-use'].map((p) => [
+    `plugins.${p}@openai-bundled.enabled`,
+    false,
+  ]),
+);

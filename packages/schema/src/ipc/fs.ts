@@ -11,18 +11,39 @@ const SearchId = Str(64);
 export const FileContent = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('text'), text: S, mtimeMs: N }),
   // Structured clone carries the bytes over IPC; a JSON transport needs `Schema.Uint8ArrayFromBase64` here.
-  Schema.Struct({ kind: Schema.Literal('binary'), bytes: Schema.Uint8Array, mtimeMs: N }),
+  Schema.Struct({
+    kind: Schema.Literal('binary'),
+    bytes: Schema.Uint8Array,
+    mtimeMs: N,
+  }),
 ]);
 export type FileContent = typeof FileContent.Type;
 
-export const WriteResult = Schema.Union([Schema.Struct({ status: Schema.Literal('saved'), mtimeMs: N }), Schema.Struct({ status: Schema.Literal('conflict'), text: S, mtimeMs: N })]);
+export const WriteResult = Schema.Union([
+  Schema.Struct({ status: Schema.Literal('saved'), mtimeMs: N }),
+  Schema.Struct({ status: Schema.Literal('conflict'), text: S, mtimeMs: N }),
+]);
 export type WriteResult = typeof WriteResult.Type;
 
-export const SearchOptions = Schema.Struct({ isCaseSensitive: B, isRegex: B, isWholeWord: B });
+export const SearchOptions = Schema.Struct({
+  isCaseSensitive: B,
+  isRegex: B,
+  isWholeWord: B,
+});
 
-export const SearchLine = Schema.Struct({ line: N, text: S, isCut: B, ranges: Schema.Array(Schema.Tuple([N, N])), column: Schema.Tuple([N, N]) });
+export const SearchLine = Schema.Struct({
+  line: N,
+  text: S,
+  isCut: B,
+  ranges: Schema.Array(Schema.Tuple([N, N])),
+  column: Schema.Tuple([N, N]),
+});
 
-export const SearchHits = Schema.Struct({ id: S, path: S, lines: Schema.Array(SearchLine) });
+export const SearchHits = Schema.Struct({
+  id: S,
+  path: S,
+  lines: Schema.Array(SearchLine),
+});
 export type SearchHits = typeof SearchHits.Type;
 
 export const SearchSummary = Schema.Struct({ isTruncated: B });
@@ -37,14 +58,33 @@ export type Editor = typeof Editor.Type;
 export const fsRpc = {
   list: invoke(T([Str()]), Schema.Array(S)),
   read: invoke(T([Str(), Str()]), FileContent),
-  write: invoke(T([Str(), Str(), Str(5 * 1024 * 1024), Schema.Struct({ baseMtimeMs: Schema.Finite, force: Schema.optional(B) })]), WriteResult),
+  write: invoke(
+    T([
+      Str(),
+      Str(),
+      Str(5 * 1024 * 1024),
+      Schema.Struct({ baseMtimeMs: Schema.Finite, force: Schema.optional(B) }),
+    ]),
+    WriteResult,
+  ),
   search: invoke(T([Str(), SearchId, Str(1024), SearchOptions]), SearchSummary),
   cancelSearch: invoke(T([SearchId]), Schema.Void),
   onSearchHits: event(SearchHits),
   editors: invoke(T([]), Schema.Array(Editor)),
-  openIn: invoke(T([Editor, Str(), Str(), o(Int.check(Schema.isGreaterThan(0)))]), Schema.Void),
+  openIn: invoke(
+    T([Editor, Str(), Str(), o(Int.check(Schema.isGreaterThan(0)))]),
+    Schema.Void,
+  ),
   reveal: invoke(T([Str(), Str()]), Schema.Void),
   pickFolder: invoke(T([o(Str())]), Schema.NullOr(S)),
-  folders: invoke(T([Str()]), Schema.NullOr(Schema.Struct({ path: S, names: Schema.Array(S) }))),
-  entries: invoke(T([Str()]), Schema.NullOr(Schema.Struct({ path: S, dirs: Schema.Array(S), files: Schema.Array(S) }))),
+  folders: invoke(
+    T([Str()]),
+    Schema.NullOr(Schema.Struct({ path: S, names: Schema.Array(S) })),
+  ),
+  entries: invoke(
+    T([Str()]),
+    Schema.NullOr(
+      Schema.Struct({ path: S, dirs: Schema.Array(S), files: Schema.Array(S) }),
+    ),
+  ),
 };

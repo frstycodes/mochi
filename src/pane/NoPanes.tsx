@@ -1,6 +1,12 @@
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Button } from '@/components/ui/button';
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { threadCwd } from '@/host/cwd';
 import type { Thread } from '../model';
@@ -25,7 +31,18 @@ export function NoPanes({ thread }: { thread: Thread }) {
             {PINNABLE_KINDS.map((kind) => {
               const { title, icon: Icon } = PANE_TABS[kind];
               return (
-                <Button key={kind} variant="outline" size="sm" onClick={() => dispatch({ type: 'pane-show-tab', threadId: thread.id, kind })}>
+                <Button
+                  key={kind}
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    dispatch({
+                      type: 'pane-show-tab',
+                      threadId: thread.id,
+                      kind,
+                    })
+                  }
+                >
                   <Icon />
                   {title}
                 </Button>
@@ -50,14 +67,28 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
       <h2 className="type-caption text-subtle-foreground">Running</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2">
         {ports.map((p) => (
-          <Item key={`${p.pid}:${p.port}`} asChild variant="muted" size="sm" className="rounded-xl">
-            <button type="button" aria-label={`Preview localhost:${p.port}`} onClick={() => openPort(p.port)}>
+          <Item
+            key={`${p.pid}:${p.port}`}
+            asChild
+            variant="muted"
+            size="sm"
+            className="rounded-xl"
+          >
+            <button
+              type="button"
+              aria-label={`Preview localhost:${p.port}`}
+              onClick={() => openPort(p.port)}
+            >
               <ItemMedia>
                 <PortIcon />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemTitle className="font-normal tabular-nums">localhost:{p.port}</ItemTitle>
-                <ItemDescription className="truncate font-mono">{p.command}</ItemDescription>
+                <ItemTitle className="font-normal tabular-nums">
+                  localhost:{p.port}
+                </ItemTitle>
+                <ItemDescription className="truncate font-mono">
+                  {p.command}
+                </ItemDescription>
               </ItemContent>
             </button>
           </Item>
@@ -78,15 +109,37 @@ function RecentFiles({ thread, cwd }: { thread: Thread; cwd: string }) {
       {files.map(({ path }) => {
         const slash = path.lastIndexOf('/');
         return (
-          <Item key={path} asChild size="sm" className="px-2 hover:bg-accent/60">
-            <button type="button" onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind: 'files', file: { path } })}>
+          <Item
+            key={path}
+            asChild
+            size="sm"
+            className="px-2 hover:bg-accent/60"
+          >
+            <button
+              type="button"
+              onClick={() =>
+                dispatch({
+                  type: 'pane-open-tab',
+                  threadId: thread.id,
+                  kind: 'files',
+                  file: { path },
+                })
+              }
+            >
               <ItemMedia>
-                <FileIcon fileName={path.slice(slash + 1)} autoAssign aria-hidden className="size-4" />
+                <FileIcon
+                  fileName={path.slice(slash + 1)}
+                  autoAssign
+                  aria-hidden
+                  className="size-4"
+                />
               </ItemMedia>
               <ItemContent className="min-w-0">
                 <ItemTitle className="w-full min-w-0 font-normal">
                   <span className="truncate">
-                    <span className="text-subtle-foreground">{path.slice(0, slash + 1)}</span>
+                    <span className="text-subtle-foreground">
+                      {path.slice(0, slash + 1)}
+                    </span>
                     {path.slice(slash + 1)}
                   </span>
                 </ItemTitle>

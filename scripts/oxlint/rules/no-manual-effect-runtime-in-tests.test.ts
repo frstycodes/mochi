@@ -1,16 +1,19 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 71df573f, oxlint-plugin-t3code/rules/no-manual-effect-runtime-in-tests.test.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ../LICENSE-T3. Local edit: Mochi's plugin name and harness.
-import { assert, describe } from "@effect/vitest";
+import { assert, describe } from '@effect/vitest';
 
-import { createOxlintRuleHarness } from "../ruleHarness.ts";
+import { createOxlintRuleHarness } from '../ruleHarness.ts';
 
-const rule = createOxlintRuleHarness("mochi/no-manual-effect-runtime-in-tests", {
-  filename: "fixture.test.ts",
-});
+const rule = createOxlintRuleHarness(
+  'mochi/no-manual-effect-runtime-in-tests',
+  {
+    filename: 'fixture.test.ts',
+  },
+);
 
-describe("mochi/no-manual-effect-runtime-in-tests", () => {
+describe('mochi/no-manual-effect-runtime-in-tests', () => {
   rule.valid(
-    "allows @effect/vitest effect tests",
+    'allows @effect/vitest effect tests',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -20,18 +23,18 @@ describe("mochi/no-manual-effect-runtime-in-tests", () => {
   );
 
   const runtimeMethods = [
-    "runCallback",
-    "runCallbackWith",
-    "runFork",
-    "runForkWith",
-    "runPromise",
-    "runPromiseExit",
-    "runPromiseExitWith",
-    "runPromiseWith",
-    "runSync",
-    "runSyncExit",
-    "runSyncExitWith",
-    "runSyncWith",
+    'runCallback',
+    'runCallbackWith',
+    'runFork',
+    'runForkWith',
+    'runPromise',
+    'runPromiseExit',
+    'runPromiseExitWith',
+    'runPromiseWith',
+    'runSync',
+    'runSyncExit',
+    'runSyncExitWith',
+    'runSyncWith',
   ] as const;
 
   for (const method of runtimeMethods) {
@@ -51,7 +54,7 @@ describe("mochi/no-manual-effect-runtime-in-tests", () => {
   }
 
   rule.invalid(
-    "reports ManagedRuntime.make",
+    'reports ManagedRuntime.make',
     `
       import * as Layer from "effect/Layer";
       import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -63,10 +66,12 @@ describe("mochi/no-manual-effect-runtime-in-tests", () => {
   );
 });
 
-const productionRule = createOxlintRuleHarness("mochi/no-manual-effect-runtime-in-tests");
+const productionRule = createOxlintRuleHarness(
+  'mochi/no-manual-effect-runtime-in-tests',
+);
 
 productionRule.valid(
-  "allows production runtime boundaries",
+  'allows production runtime boundaries',
   `
     import * as Effect from "effect/Effect";
 
@@ -74,14 +79,17 @@ productionRule.valid(
   `,
 );
 
-const legacyRule = createOxlintRuleHarness("mochi/no-manual-effect-runtime-in-tests", {
-  filename: "legacy.test.ts",
-  ruleOptions: [{ maxOccurrences: 2 }],
-});
+const legacyRule = createOxlintRuleHarness(
+  'mochi/no-manual-effect-runtime-in-tests',
+  {
+    filename: 'legacy.test.ts',
+    ruleOptions: [{ maxOccurrences: 2 }],
+  },
+);
 
-describe("mochi/no-manual-effect-runtime-in-tests with maxOccurrences", () => {
+describe('mochi/no-manual-effect-runtime-in-tests with maxOccurrences', () => {
   legacyRule.valid(
-    "allows occurrences up to the ceiling",
+    'allows occurrences up to the ceiling',
     `
       import * as Effect from "effect/Effect";
 
@@ -91,7 +99,7 @@ describe("mochi/no-manual-effect-runtime-in-tests with maxOccurrences", () => {
   );
 
   legacyRule.invalid(
-    "reports occurrences beyond the ceiling",
+    'reports occurrences beyond the ceiling',
     `
       import * as Effect from "effect/Effect";
 
@@ -100,7 +108,10 @@ describe("mochi/no-manual-effect-runtime-in-tests with maxOccurrences", () => {
       test("third", () => Effect.runSync(Effect.void));
     `,
     (output) => {
-      assert.equal(output.match(/no-manual-effect-runtime-in-tests/g)?.length, 1);
+      assert.equal(
+        output.match(/no-manual-effect-runtime-in-tests/g)?.length,
+        1,
+      );
     },
   );
 });

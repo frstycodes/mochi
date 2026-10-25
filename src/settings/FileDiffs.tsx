@@ -18,7 +18,13 @@ export function FileDiffs({ edits }: { edits: FileEdit[] }) {
           newFile={{ name: e.path, contents: e.after }}
           disableWorkerPool
           options={{ diffStyle, disableFileHeader: true, overflow: 'wrap' }}
-          style={{ '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties}
+          style={
+            {
+              '--diffs-font-family': 'var(--font-mono)',
+              '--diffs-font-size': '12px',
+              '--diffs-line-height': '20px',
+            } as React.CSSProperties
+          }
           className="max-h-80 overflow-auto"
         />
       </div>

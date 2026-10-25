@@ -41,7 +41,13 @@ export interface Trigger extends TriggerInput {
   runs: ScheduleRun[];
 }
 
-export type RunStatus = 'running' | 'done' | 'failed' | 'interrupted' | 'limited' | 'skipped';
+export type RunStatus =
+  | 'running'
+  | 'done'
+  | 'failed'
+  | 'interrupted'
+  | 'limited'
+  | 'skipped';
 
 export interface ScheduleRun {
   id: string;

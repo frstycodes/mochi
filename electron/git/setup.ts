@@ -1,6 +1,10 @@
 import { access, constants, cp, readdir, readFile } from 'node:fs/promises';
 import { basename, join, matchesGlob } from 'node:path';
-import type { SetupChoice, SetupStep, WorktreeSetup } from '../../src/host/types/agent.ts';
+import type {
+  SetupChoice,
+  SetupStep,
+  WorktreeSetup,
+} from '../../src/host/types/agent.ts';
 import { killTree, spawnFile, spawnShell } from '../platform.ts';
 import { userPath } from '@mochi/core/shellPath';
 import { runGit } from './run.ts';
@@ -25,15 +29,23 @@ export interface SetupRun {
  * the lockfile with the project's own package manager, then runs the project's setup command. A failed step waits for Retry or
  * Skip setup; an abort stops the running command and ends the setup `cancelled`. Resolves with the final status.
  */
-export async function prepareWorktree(run: SetupRun): Promise<WorktreeSetup['status']> {
+export async function prepareWorktree(
+  run: SetupRun,
+): Promise<WorktreeSetup['status']> {
   const planned = await planSetup(run);
   if (!planned.length) return 'ready';
-  const setup: WorktreeSetup = { status: 'running', startedAt: Date.now(), steps: planned.map(({ step }) => step) };
+  const setup: WorktreeSetup = {
+    status: 'running',
+    startedAt: Date.now(),
+    steps: planned.map(({ step }) => step),
+  };
   const emit = throttle(() => run.emit(structuredClone(setup)));
   const finish = (status: WorktreeSetup['status']) => {
     setup.status = status;
     setup.endedAt = Date.now();
-    for (const s of setup.steps) if (s.status === 'pending' || s.status === 'running') s.status = 'skipped';
+    for (const s of setup.steps)
+      if (s.status === 'pending' || s.status === 'running')
+        s.status = 'skipped';
     emit.now();
     return status;
   };
@@ -41,12 +53,20 @@ export async function prepareWorktree(run: SetupRun): Promise<WorktreeSetup['sta
   for (let i = 0; i < planned.length; i++) {
     const step = setup.steps[i];
     if (run.signal.aborted) return finish('cancelled');
-    Object.assign(step, { status: 'running', startedAt: Date.now(), endedAt: undefined, output: undefined, exitCode: undefined });
-    emit.now();
-    const ok = await planned[i].run(step, emit, run.signal).catch((error: Error) => {
-      step.output = error.message;
-      return false;
+    Object.assign(step, {
+      status: 'running',
+      startedAt: Date.now(),
+      endedAt: undefined,
+      output: undefined,
+      exitCode: undefined,
     });
+    emit.now();
+    const ok = await planned[i]
+      .run(step, emit, run.signal)
+      .catch((error: Error) => {
+        step.output = error.message;
+        return false;
+      });
     step.endedAt = Date.now();
     if (run.signal.aborted) return finish('cancelled');
     if (ok) {
@@ -65,37 +85,93 @@ export async function prepareWorktree(run: SetupRun): Promise<WorktreeSetup['sta
   return finish('ready');
 }
 
-type Planned = { step: SetupStep; run: (step: SetupStep, emit: Throttled, signal: AbortSignal) => Promise<boolean> };
+type Planned = {
+  step: SetupStep;
+  run: (
+    step: SetupStep,
+    emit: Throttled,
+    signal: AbortSignal,
+  ) => Promise<boolean>;
+};
 
-async function planSetup({ root, dir, include, command }: SetupRun): Promise<Planned[]> {
+async function planSetup({
+  root,
+  dir,
+  include,
+  command,
+}: SetupRun): Promise<Planned[]> {
   const steps: Planned[] = [];
-  const files = await includedFiles(root, [...includePatterns(include), ...includePatterns(await readFile(join(root, '.worktreeinclude'), 'utf8').catch(() => ''))]);
+  const files = await includedFiles(root, [
+    ...includePatterns(include),
+    ...includePatterns(
+      await readFile(join(root, '.worktreeinclude'), 'utf8').catch(() => ''),
+    ),
+  ]);
   if (files.length) {
     steps.push({
-      step: { id: 'copy', label: `Copy ${listNames(files)}`, status: 'pending' },
+      step: {
+        id: 'copy',
+        label: `Copy ${listNames(files)}`,
+        status: 'pending',
+      },
       run: async (step) => {
         // A file the agent already made in the worktree is kept.
-        for (const file of files) await cp(join(root, file), join(dir, file), { recursive: true, force: false, errorOnExist: false });
+        for (const file of files)
+          await cp(join(root, file), join(dir, file), {
+            recursive: true,
+            force: false,
+            errorOnExist: false,
+          });
         step.output = files.join('\n');
         return true;
       },
     });
   }
   const install = installCommand(new Set(await listRoot(dir)));
-  if (install) steps.push(commandStep('install', `Install dependencies with ${install.manager}`, install.argv, root, dir));
-  const script = command ?? ((await isFile(join(dir, MOCHI_SETUP_SCRIPT))) ? `bash ${MOCHI_SETUP_SCRIPT}` : undefined);
-  if (script) steps.push(commandStep('script', 'Run setup command', script, root, dir));
+  if (install)
+    steps.push(
+      commandStep(
+        'install',
+        `Install dependencies with ${install.manager}`,
+        install.argv,
+        root,
+        dir,
+      ),
+    );
+  const script =
+    command ??
+    ((await isFile(join(dir, MOCHI_SETUP_SCRIPT)))
+      ? `bash ${MOCHI_SETUP_SCRIPT}`
+      : undefined);
+  if (script)
+    steps.push(commandStep('script', 'Run setup command', script, root, dir));
   return steps;
 }
 
 /** A project's own setup script, run when Settings › Git and worktrees has no command for the project. */
 export const MOCHI_SETUP_SCRIPT = '.mochi/setup.sh';
 
-function commandStep(id: string, label: string, command: string[] | string, root: string, dir: string): Planned {
+function commandStep(
+  id: string,
+  label: string,
+  command: string[] | string,
+  root: string,
+  dir: string,
+): Planned {
   return {
-    step: { id, label, command: typeof command === 'string' ? command : command.join(' '), status: 'pending' },
+    step: {
+      id,
+      label,
+      command: typeof command === 'string' ? command : command.join(' '),
+      status: 'pending',
+    },
     run: async (step, emit, signal) => {
-      const env = { ...process.env, PATH: await userPath(), MOCHI_ROOT_PATH: root, MOCHI_WORKTREE_PATH: dir };
+      const env = {
+        ...process.env,
+        PATH: await userPath(),
+        MOCHI_ROOT_PATH: root,
+        MOCHI_WORKTREE_PATH: dir,
+      };
       const exitCode = await runCommand(command, dir, env, signal, (chunk) => {
         step.output = tail((step.output ?? '') + chunk);
         emit();
@@ -111,17 +187,36 @@ function commandStep(id: string, label: string, command: string[] | string, root
  * says or fails. pnpm links from its global store (`--prefer-offline` skips the registry for what the store holds), so a
  * worktree of a project you've installed before takes seconds.
  */
-export function installCommand(files: ReadonlySet<string>): { manager: string; argv: string[] } | undefined {
-  if (files.has('pnpm-lock.yaml')) return { manager: 'pnpm', argv: ['pnpm', 'install', '--frozen-lockfile', '--prefer-offline'] };
-  if (files.has('bun.lock') || files.has('bun.lockb')) return { manager: 'bun', argv: ['bun', 'install', '--frozen-lockfile'] };
+export function installCommand(
+  files: ReadonlySet<string>,
+): { manager: string; argv: string[] } | undefined {
+  if (files.has('pnpm-lock.yaml'))
+    return {
+      manager: 'pnpm',
+      argv: ['pnpm', 'install', '--frozen-lockfile', '--prefer-offline'],
+    };
+  if (files.has('bun.lock') || files.has('bun.lockb'))
+    return { manager: 'bun', argv: ['bun', 'install', '--frozen-lockfile'] };
   // Yarn 2+ (Berry) has a .yarnrc.yml and spells it --immutable; Yarn 1 doesn't know that flag.
-  if (files.has('yarn.lock')) return { manager: 'yarn', argv: files.has('.yarnrc.yml') ? ['yarn', 'install', '--immutable'] : ['yarn', 'install', '--frozen-lockfile'] };
-  if (files.has('package-lock.json')) return { manager: 'npm', argv: ['npm', 'ci'] };
-  if (files.has('uv.lock')) return { manager: 'uv', argv: ['uv', 'sync', '--frozen'] };
-  if (files.has('poetry.lock')) return { manager: 'Poetry', argv: ['poetry', 'install'] };
-  if (files.has('Gemfile.lock')) return { manager: 'Bundler', argv: ['bundle', 'install'] };
-  if (files.has('go.sum')) return { manager: 'Go', argv: ['go', 'mod', 'download'] };
-  if (files.has('Cargo.lock')) return { manager: 'Cargo', argv: ['cargo', 'fetch', '--locked'] };
+  if (files.has('yarn.lock'))
+    return {
+      manager: 'yarn',
+      argv: files.has('.yarnrc.yml')
+        ? ['yarn', 'install', '--immutable']
+        : ['yarn', 'install', '--frozen-lockfile'],
+    };
+  if (files.has('package-lock.json'))
+    return { manager: 'npm', argv: ['npm', 'ci'] };
+  if (files.has('uv.lock'))
+    return { manager: 'uv', argv: ['uv', 'sync', '--frozen'] };
+  if (files.has('poetry.lock'))
+    return { manager: 'Poetry', argv: ['poetry', 'install'] };
+  if (files.has('Gemfile.lock'))
+    return { manager: 'Bundler', argv: ['bundle', 'install'] };
+  if (files.has('go.sum'))
+    return { manager: 'Go', argv: ['go', 'mod', 'download'] };
+  if (files.has('Cargo.lock'))
+    return { manager: 'Cargo', argv: ['cargo', 'fetch', '--locked'] };
 }
 
 /** Patterns split by commas or lines; blank lines and `#` comments dropped. */
@@ -148,7 +243,9 @@ export function matchesInclude(path: string, patterns: string[]) {
       pattern = pattern.slice(0, -1);
     }
     const isAnchored = pattern.includes('/');
-    const hit = isAnchored ? matchesGlob(clean, pattern.replace(/^\//, '')) : matchesGlob(basename(clean), pattern);
+    const hit = isAnchored
+      ? matchesGlob(clean, pattern.replace(/^\//, ''))
+      : matchesGlob(basename(clean), pattern);
     if (hit) isIncluded = !isNegated;
   }
   return isIncluded;
@@ -158,13 +255,28 @@ export function matchesInclude(path: string, patterns: string[]) {
 // `--directory` lists a wholly ignored folder (node_modules/) as one entry instead of walking it.
 async function includedFiles(root: string, patterns: string[]) {
   if (!patterns.length) return [];
-  const ignored = await runGit(root, ['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory', '--no-empty-directory']).catch(() => '');
-  return ignored.split('\0').filter((p) => p && matchesInclude(p, patterns)).map((p) => p.replace(/\/$/, ''));
+  const ignored = await runGit(root, [
+    'ls-files',
+    '-z',
+    '--others',
+    '--ignored',
+    '--exclude-standard',
+    '--directory',
+    '--no-empty-directory',
+  ]).catch(() => '');
+  return ignored
+    .split('\0')
+    .filter((p) => p && matchesInclude(p, patterns))
+    .map((p) => p.replace(/\/$/, ''));
 }
 
 const listRoot = (dir: string) => readdir(dir).catch(() => []);
 
-const isFile = (path: string) => access(path, constants.R_OK).then(() => true, () => false);
+const isFile = (path: string) =>
+  access(path, constants.R_OK).then(
+    () => true,
+    () => false,
+  );
 
 function listNames(files: string[]) {
   const shown = files.slice(0, 3).join(', ');
@@ -172,17 +284,32 @@ function listNames(files: string[]) {
 }
 
 /** Runs in Core, which stops the whole process tree on an abort (pnpm's lifecycle scripts). A string runs through the shell. */
-function runCommand(command: string[] | string, cwd: string, env: NodeJS.ProcessEnv, signal: AbortSignal, onOutput: (chunk: string) => void) {
+function runCommand(
+  command: string[] | string,
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  signal: AbortSignal,
+  onOutput: (chunk: string) => void,
+) {
   return new Promise<number>((resolve, reject) => {
     const options = { cwd, env };
-    const child = typeof command === 'string' ? spawnShell(command, options) : spawnFile(command[0], command.slice(1), options);
+    const child =
+      typeof command === 'string'
+        ? spawnShell(command, options)
+        : spawnFile(command[0], command.slice(1), options);
     const stop = () => killTree(child);
     signal.addEventListener('abort', stop, { once: true });
     child.stdout?.setEncoding('utf8').on('data', onOutput);
     child.stderr?.setEncoding('utf8').on('data', onOutput);
     child.on('error', (error: NodeJS.ErrnoException) => {
       signal.removeEventListener('abort', stop);
-      reject(error.code === 'ENOENT' ? new Error(`${typeof command === 'string' ? command.split(' ')[0] : command[0]} isn't installed or isn't on your PATH`) : error);
+      reject(
+        error.code === 'ENOENT'
+          ? new Error(
+              `${typeof command === 'string' ? command.split(' ')[0] : command[0]} isn't installed or isn't on your PATH`,
+            )
+          : error,
+      );
     });
     child.on('close', (code) => {
       signal.removeEventListener('abort', stop);
@@ -192,9 +319,17 @@ function runCommand(command: string[] | string, cwd: string, env: NodeJS.Process
 }
 
 const OUTPUT_CHARS = 16_000;
-const tail = (text: string) => (text.length > OUTPUT_CHARS ? text.slice(-OUTPUT_CHARS) : text);
+const tail = (text: string) =>
+  text.length > OUTPUT_CHARS ? text.slice(-OUTPUT_CHARS) : text;
 
-const aborted = (signal: AbortSignal) => new Promise<'abort'>((resolve) => (signal.aborted ? resolve('abort') : signal.addEventListener('abort', () => resolve('abort'), { once: true })));
+const aborted = (signal: AbortSignal) =>
+  new Promise<'abort'>((resolve) =>
+    signal.aborted
+      ? resolve('abort')
+      : signal.addEventListener('abort', () => resolve('abort'), {
+          once: true,
+        }),
+  );
 
 type Throttled = (() => void) & { now: () => void };
 

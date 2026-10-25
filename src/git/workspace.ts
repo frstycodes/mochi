@@ -5,20 +5,34 @@ import type { Repo, Thread } from '../model.ts';
 export type WorkspaceMode = 'worktree' | 'folder';
 
 /** The workspace part of a new thread's repo, as the pickers chose it; unset fields take the defaults (`create` in the store). */
-export type WorkspaceDraft = Pick<Repo, 'base' | 'isExisting' | 'autoBranch'> & { mode: WorkspaceMode; branch?: string };
+export type WorkspaceDraft = Pick<
+  Repo,
+  'base' | 'isExisting' | 'autoBranch'
+> & { mode: WorkspaceMode; branch?: string };
 
-export const workspaceMode = (repo: Repo): WorkspaceMode => repo.mode ?? 'worktree';
+export const workspaceMode = (repo: Repo): WorkspaceMode =>
+  repo.mode ?? 'worktree';
 
 /** How main sets up the thread's folder on a first start or a scheduled run. */
 export function startWorkspace(repo: Repo | null): StartWorkspace | undefined {
   if (!repo) return;
-  return { mode: workspaceMode(repo), branch: repo.branch, ...(repo.base && { base: repo.base }), ...(repo.isExisting && { isExisting: true }) };
+  return {
+    mode: workspaceMode(repo),
+    branch: repo.branch,
+    ...(repo.base && { base: repo.base }),
+    ...(repo.isExisting && { isExisting: true }),
+  };
 }
 
 /** The repo as its checkout really is: the branch it has (or a detached HEAD's commit), in its own worktree when `isWorktree`. */
 export function withHead(repo: Repo, head: Head, isWorktree: boolean): Repo {
   const { mode, isDetached: _, ...rest } = repo;
-  return { ...rest, branch: head.branch, ...(head.isDetached && { isDetached: true }), ...(!isWorktree && mode && { mode }) };
+  return {
+    ...rest,
+    branch: head.branch,
+    ...(head.isDetached && { isDetached: true }),
+    ...(!isWorktree && mode && { mode }),
+  };
 }
 
 /** The branch, or "detached at <commit>": a commit is never passed off as a branch name. */
@@ -27,9 +41,14 @@ export function branchText(repo: Repo) {
 }
 
 /** The repo fields a draft sets: a folder thread never has a base, a checked-out branch never needs one. */
-export function repoWorkspace(draft: WorkspaceDraft): Pick<Repo, 'mode' | 'base' | 'isExisting'> {
-  if (draft.mode === 'folder') return { mode: 'folder', ...(draft.isExisting && { isExisting: true }) };
-  return draft.isExisting ? { isExisting: true } : { ...(draft.base && { base: draft.base }) };
+export function repoWorkspace(
+  draft: WorkspaceDraft,
+): Pick<Repo, 'mode' | 'base' | 'isExisting'> {
+  if (draft.mode === 'folder')
+    return { mode: 'folder', ...(draft.isExisting && { isExisting: true }) };
+  return draft.isExisting
+    ? { isExisting: true }
+    : { ...(draft.base && { base: draft.base }) };
 }
 
 const MAX_SLUG_CHARS = 40;
@@ -39,7 +58,8 @@ const TEMP_HEX = /^[0-9a-f]{8}$/;
 export function tempBranch(prefix: string, seed: string) {
   // FNV-1a over a seed unique to the thread: a clash is 1 in 4 billion, and createWorktree refuses one.
   let hash = 0x811c9dc5;
-  for (let i = 0; i < seed.length; i++) hash = Math.imul(hash ^ seed.charCodeAt(i), 0x01000193);
+  for (let i = 0; i < seed.length; i++)
+    hash = Math.imul(hash ^ seed.charCodeAt(i), 0x01000193);
   return `${prefix}${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
@@ -48,7 +68,11 @@ export function tempBranch(prefix: string, seed: string) {
  * against `taken` ("Fix login bug" → `mochi/fix-login-bug`, then `mochi/fix-login-bug-2`). Null when `temp` isn't a temp name
  * or the title has no letters to slug.
  */
-export function branchFromTitle(temp: string, title: string, taken: ReadonlySet<string>) {
+export function branchFromTitle(
+  temp: string,
+  title: string,
+  taken: ReadonlySet<string>,
+) {
   const prefix = temp.slice(0, -8);
   if (!TEMP_HEX.test(temp.slice(-8))) return null;
   const slug = title

@@ -7,7 +7,12 @@ import { socketLink, type Link, type RawLink } from '@mochi/core/remote/link';
 import type { DeviceGrant } from '@mochi/core/remote/token';
 import { tunnel } from '@mochi/core/remote/tunnel';
 import type { ConnectedDevice } from '../../src/host/types/remote.ts';
-import { THIS_KIND, type AuthenticatedDevice, type Origin, type Secured } from './pairing.ts';
+import {
+  THIS_KIND,
+  type AuthenticatedDevice,
+  type Origin,
+  type Secured,
+} from './pairing.ts';
 
 export interface RemoteServerOptions {
   hosts: string[];
@@ -41,7 +46,9 @@ export interface RemoteServer {
 
 const HELLO_TIMEOUT_MS = 10_000;
 const MAX_FRAME_BYTES = 1024 * 1024;
-const decodeHello = Schema.decodeUnknownExit(Schema.fromJsonString(Relay.HelloFrame));
+const decodeHello = Schema.decodeUnknownExit(
+  Schema.fromJsonString(Relay.HelloFrame),
+);
 
 interface Connection {
   socket: Link;
@@ -53,31 +60,58 @@ interface Connection {
  * A WebSocket server on each of `hosts`. No secret travels in the URL: the first frames pair and encrypt. Once a device
  * said hello, its link is a tunnel to Core's own RPC socket.
  */
-export async function startRemoteServer(options: RemoteServerOptions): Promise<RemoteServer> {
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
+export async function startRemoteServer(
+  options: RemoteServerOptions,
+): Promise<RemoteServer> {
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_FRAME_BYTES,
+  });
   const connections = new Set<Connection>();
-  const servers = await Promise.all(options.hosts.map((host) => listen(host, options.port, wss)));
-  const addresses = servers.map((s) => formatAddress(s.address() as AddressInfo));
+  const servers = await Promise.all(
+    options.hosts.map((host) => listen(host, options.port, wss)),
+  );
+  const addresses = servers.map((s) =>
+    formatAddress(s.address() as AddressInfo),
+  );
   // Loopback would reach the device's own computer.
-  const reachable = addresses.filter((a) => !a.startsWith('127.') && !a.startsWith('[::1]'));
+  const reachable = addresses.filter(
+    (a) => !a.startsWith('127.') && !a.startsWith('[::1]'),
+  );
   wss.on('connection', (socket) => void accept(socketLink(socket), 'lan'));
 
   async function accept(raw: RawLink, origin: Origin) {
-    const secured = await options.secure(raw, origin).catch((error: unknown) => ({ refusal: `Couldn’t pair: ${String(error)}` }));
+    const secured = await options
+      .secure(raw, origin)
+      .catch((error: unknown) => ({
+        refusal: `Couldn’t pair: ${String(error)}`,
+      }));
     if ('refusal' in secured) return raw.close(4401, 'Refused');
     const { link: socket, device } = secured;
     const text = await firstMessage(socket);
     if (text === null) return;
     const hello = decodeHello(text);
     if (hello._tag === 'Failure') {
-      const reason = String(hello.cause).includes('protocol') ? `This machine speaks protocol ${Relay.PROTOCOL_VERSION}; update Mochi on both sides` : 'The first frame must be hello';
+      const reason = String(hello.cause).includes('protocol')
+        ? `This machine speaks protocol ${Relay.PROTOCOL_VERSION}; update Mochi on both sides`
+        : 'The first frame must be hello';
       options.onRejected(device.name, `${reason}: ${text.slice(0, 200)}`);
       return refuse(socket, reason);
     }
-    if (hello.value.members !== undefined) options.onMembers?.(hello.value.members);
-    const core = await options.coreFor({ id: device.deviceId, name: device.name, scopes: device.scopes });
+    if (hello.value.members !== undefined)
+      options.onMembers?.(hello.value.members);
+    const core = await options.coreFor({
+      id: device.deviceId,
+      name: device.name,
+      scopes: device.scopes,
+    });
     if (!socket.isOpen()) return;
-    tunnel(socket, { ...core, onMembers: options.onMembers, onMalformed: (frame) => options.onRejected(device.name, `Malformed frame: ${frame}`) });
+    tunnel(socket, {
+      ...core,
+      onMembers: options.onMembers,
+      onMalformed: (frame) =>
+        options.onRejected(device.name, `Malformed frame: ${frame}`),
+    });
     const connection = { socket, device, connectedAt: Date.now() };
     connections.add(connection);
     socket.onClose(() => {
@@ -85,22 +119,44 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
       options.onDevicesChange?.();
     });
     options.onDevicesChange?.();
-    send(socket, { type: 'welcome', version: Relay.PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), machineKind: THIS_KIND, scopes: device.scopes, addresses: reachable, ...(options.members && { members: options.members() }) });
+    send(socket, {
+      type: 'welcome',
+      version: Relay.PROTOCOL_VERSION,
+      deviceId: device.deviceId,
+      machineName: options.machineName(),
+      machineKind: THIS_KIND,
+      scopes: device.scopes,
+      addresses: reachable,
+      ...(options.members && { members: options.members() }),
+    });
   }
 
   return {
     addresses,
-    devices: () => [...connections].map(({ device, connectedAt }) => ({ id: device.deviceId, name: device.name, kind: device.kind, scopes: device.scopes, connectedAt })),
+    devices: () =>
+      [...connections].map(({ device, connectedAt }) => ({
+        id: device.deviceId,
+        name: device.name,
+        kind: device.kind,
+        scopes: device.scopes,
+        connectedAt,
+      })),
     attach: (raw) => void accept(raw, 'relay'),
     disconnect(deviceId) {
-      for (const { socket, device } of connections) if (device.deviceId === deviceId) socket.close(4401, 'Removed or changed on this computer');
+      for (const { socket, device } of connections)
+        if (device.deviceId === deviceId)
+          socket.close(4401, 'Removed or changed on this computer');
     },
     publishMembers(members) {
-      for (const { socket } of connections) send(socket, { type: 'members', members });
+      for (const { socket } of connections)
+        send(socket, { type: 'members', members });
     },
     async close() {
-      for (const { socket } of connections) socket.close(1001, 'Remote access turned off');
-      await Promise.all(servers.map((s) => new Promise((resolve) => s.close(resolve))));
+      for (const { socket } of connections)
+        socket.close(1001, 'Remote access turned off');
+      await Promise.all(
+        servers.map((s) => new Promise((resolve) => s.close(resolve))),
+      );
       wss.close();
     },
   };
@@ -125,8 +181,16 @@ function firstMessage(socket: Link) {
 }
 
 function listen(host: string, port: number, wss: WebSocketServer) {
-  const server = createServer((_request, response) => response.writeHead(426, { 'content-type': 'text/plain' }).end('WebSocket only'));
-  server.on('upgrade', (request, socket, head) => wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request)));
+  const server = createServer((_request, response) =>
+    response
+      .writeHead(426, { 'content-type': 'text/plain' })
+      .end('WebSocket only'),
+  );
+  server.on('upgrade', (request, socket, head) =>
+    wss.handleUpgrade(request, socket, head, (ws) =>
+      wss.emit('connection', ws, request),
+    ),
+  );
   return new Promise<Server>((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => resolve(server));
@@ -142,4 +206,5 @@ function send(socket: Link, frame: Relay.MachineLinkFrame) {
   if (socket.isOpen()) socket.send(JSON.stringify(frame));
 }
 
-const formatAddress = ({ address, port, family }: AddressInfo) => (family === 'IPv6' ? `[${address}]:${port}` : `${address}:${port}`);
+const formatAddress = ({ address, port, family }: AddressInfo) =>
+  family === 'IPv6' ? `[${address}]:${port}` : `${address}:${port}`;

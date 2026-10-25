@@ -10,7 +10,10 @@
     @slot;
   }
   @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+    &:where(
+      :root:not([data-theme='light']),
+      :root:not([data-theme='light']) *
+    ) {
       @slot;
     }
   }
@@ -106,11 +109,19 @@
 
   --scrim: oklch(0.99 0.002 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.64);
-  --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
-  --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.2 0.02 285 / 0.08), 0 4px 10px -2px oklch(0.2 0.02 285 / 0.08), 0 16px 40px -8px oklch(0.2 0.02 285 / 0.22);
-  --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
+  --elev-popover:
+    0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
+  --elev-overlay:
+    0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.2 0.02 285 / 0.08),
+    0 4px 10px -2px oklch(0.2 0.02 285 / 0.08),
+    0 16px 40px -8px oklch(0.2 0.02 285 / 0.22);
+  --elev-lift:
+    0 24px 56px -12px oklch(0.2 0.02 285 / 0.22),
+    0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-  --elev-kbd: inset 0 -1px 0 oklch(0.25 0.02 285 / 0.16), inset 0 0 0 0.5px oklch(0.25 0.02 285 / 0.08);
+  --elev-kbd:
+    inset 0 -1px 0 oklch(0.25 0.02 285 / 0.16),
+    inset 0 0 0 0.5px oklch(0.25 0.02 285 / 0.08);
   --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
@@ -155,11 +166,19 @@
     --chart-axis: oklch(0.95 0.01 285 / 0.16);
     --scrim: oklch(0.12 0.006 285 / 0.72);
     --skeleton-highlight: oklch(1 0 285 / 0.04);
-    --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
-    --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
-    --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+    --elev-popover:
+      0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+    --elev-overlay:
+      0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4),
+      0 6px 14px -4px oklch(0.05 0.01 285 / 0.4),
+      0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
+    --elev-lift:
+      0 28px 64px -12px oklch(0.05 0.01 285 / 0.7),
+      0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-    --elev-kbd: inset 0 1px 0 oklch(1 0 0 / 0.07), inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
+    --elev-kbd:
+      inset 0 1px 0 oklch(1 0 0 / 0.07),
+      inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
     --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
@@ -203,11 +222,19 @@
   --chart-axis: oklch(0.95 0.01 285 / 0.16);
   --scrim: oklch(0.12 0.006 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.04);
-  --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
-  --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
-  --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+  --elev-popover:
+    0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+  --elev-overlay:
+    0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4),
+    0 6px 14px -4px oklch(0.05 0.01 285 / 0.4),
+    0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
+  --elev-lift:
+    0 28px 64px -12px oklch(0.05 0.01 285 / 0.7),
+    0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-  --elev-kbd: inset 0 1px 0 oklch(1 0 0 / 0.07), inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
+  --elev-kbd:
+    inset 0 1px 0 oklch(1 0 0 / 0.07),
+    inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
   --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
@@ -277,7 +304,39 @@
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   /* Spring, damping 0.6 / response 0.28s: over animate-pop's 0.96 → 1 it peaks ~0.4% past full size and settles by 300ms. */
-  --ease-pop: linear(0, 0.023, 0.083, 0.17, 0.273, 0.383, 0.494, 0.602, 0.701, 0.79, 0.868, 0.933, 0.985, 1.026, 1.056, 1.076, 1.089, 1.094, 1.094, 1.09, 1.083, 1.074, 1.064, 1.053, 1.043, 1.033, 1.024, 1.016, 1.009, 1.004, 1);
+  --ease-pop: linear(
+    0,
+    0.023,
+    0.083,
+    0.17,
+    0.273,
+    0.383,
+    0.494,
+    0.602,
+    0.701,
+    0.79,
+    0.868,
+    0.933,
+    0.985,
+    1.026,
+    1.056,
+    1.076,
+    1.089,
+    1.094,
+    1.094,
+    1.09,
+    1.083,
+    1.074,
+    1.064,
+    1.053,
+    1.043,
+    1.033,
+    1.024,
+    1.016,
+    1.009,
+    1.004,
+    1
+  );
 }
 
 @theme {
@@ -346,7 +405,8 @@
 
 /* Big figures (usage totals): the system face, heavier than Inter reads at display sizes. */
 @utility figure {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
@@ -381,15 +441,38 @@
     margin: 0;
     overflow: hidden;
   }
-  :root[data-window-drag] :is(.app-drag, [data-drag-strip] ~ *) :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
-  :root[data-window-drag] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
+  :root[data-window-drag]
+    :is(.app-drag, [data-drag-strip] ~ *)
+    :is(
+      button,
+      a,
+      input,
+      textarea,
+      select,
+      [role='button'],
+      [role='tab'],
+      [role='tablist'],
+      [role='separator'],
+      [contenteditable]
+    ),
+  :root[data-window-drag]
+    :is(
+      [data-radix-popper-content-wrapper],
+      [role='dialog'],
+      [role='alertdialog'],
+      [role='menu']
+    ) {
     @apply app-no-drag;
   }
 }
 
 /* Windows' caption buttons (`useCaptionInset`) cover the top-right corner; unlayered so it beats the header's own `px-*`. The env() pair is the strip left of them; the fallback is three 46px buttons. */
 :root[data-captions] [data-under-captions] {
-  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px / var(--app-zoom, 1))) + 0.5rem);
+  padding-right: calc(
+    100vw - env(titlebar-area-x, 0px) -
+      env(titlebar-area-width, calc(100vw - 138px / var(--app-zoom, 1))) +
+      0.5rem
+  );
 }
 
 /* The macOS traffic lights (`useCaptionInset`) cover the top-left corner: 9px past them, matching `LIGHTS_RESERVE`, less where the header already starts. */
@@ -536,10 +619,12 @@
 }
 /* Squircle like the rest of the app (the corner scale keeps it as round as the fallback), sized for a 20px control. */
 [data-pane-header] [data-slot='toggle-group-item']:first-child {
-  border-radius: calc(5px * var(--corner-scale)) 0 0 calc(5px * var(--corner-scale));
+  border-radius: calc(5px * var(--corner-scale)) 0 0
+    calc(5px * var(--corner-scale));
 }
 [data-pane-header] [data-slot='toggle-group-item']:last-child {
-  border-radius: 0 calc(5px * var(--corner-scale)) calc(5px * var(--corner-scale)) 0;
+  border-radius: 0 calc(5px * var(--corner-scale))
+    calc(5px * var(--corner-scale)) 0;
 }
 [data-pane-header] [data-slot='toggle-group-item'] svg,
 [data-pane-header] button[data-size^='icon'] svg {
@@ -549,10 +634,24 @@
 
 /* A caption lying on a frame: eased stops, so the fade has no visible edge. Over an image the scrim is fixed black, so white text holds in both themes. */
 .caption-fade {
-  background: linear-gradient(to top, var(--color-muted) 0%, var(--color-muted) 28%, color-mix(in oklab, var(--color-muted) 72%, transparent) 52%, color-mix(in oklab, var(--color-muted) 30%, transparent) 76%, transparent);
+  background: linear-gradient(
+    to top,
+    var(--color-muted) 0%,
+    var(--color-muted) 28%,
+    color-mix(in oklab, var(--color-muted) 72%, transparent) 52%,
+    color-mix(in oklab, var(--color-muted) 30%, transparent) 76%,
+    transparent
+  );
 }
 .caption-scrim {
-  background: linear-gradient(to top, rgb(0 0 0 / 0.62) 0%, rgb(0 0 0 / 0.45) 30%, rgb(0 0 0 / 0.2) 62%, rgb(0 0 0 / 0.06) 84%, transparent);
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 0.62) 0%,
+    rgb(0 0 0 / 0.45) 30%,
+    rgb(0 0 0 / 0.2) 62%,
+    rgb(0 0 0 / 0.06) 84%,
+    transparent
+  );
 }
 
 /* A generated image arriving: it opens out from where the light last pooled (--land-x/y) as its blur clears. Reduced motion keeps a fade. */
@@ -574,7 +673,11 @@
   }
 }
 .animate-image-land {
-  mask-image: radial-gradient(circle at var(--land-x, 50%) var(--land-y, 50%), black var(--land-r), transparent calc(var(--land-r) + 25%));
+  mask-image: radial-gradient(
+    circle at var(--land-x, 50%) var(--land-y, 50%),
+    black var(--land-r),
+    transparent calc(var(--land-r) + 25%)
+  );
   animation: image-land 900ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -595,7 +698,13 @@
   }
 }
 .skeleton-sheen {
-  background: linear-gradient(120deg, transparent 40%, var(--skeleton-highlight), transparent 60%) var(--color-muted) 0 0 / 200% 100% fixed;
+  background: linear-gradient(
+      120deg,
+      transparent 40%,
+      var(--skeleton-highlight),
+      transparent 60%
+    )
+    var(--color-muted) 0 0 / 200% 100% fixed;
   animation: skeleton-sheen 2s -1s infinite linear;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -622,13 +731,25 @@
   transition: backdrop-filter 150ms;
 }
 .pip-scrim > :nth-child(1) {
-  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, black 50%, transparent);
+  mask-image: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    black 50%,
+    transparent
+  );
 }
 .pip-scrim > :nth-child(2) {
-  mask-image: radial-gradient(ellipse 48% 48% at 50% 50%, black 60%, transparent);
+  mask-image: radial-gradient(
+    ellipse 48% 48% at 50% 50%,
+    black 60%,
+    transparent
+  );
 }
 .pip-scrim > :nth-child(3) {
-  mask-image: radial-gradient(ellipse 42% 43% at 50% 50%, black 75%, transparent);
+  mask-image: radial-gradient(
+    ellipse 42% 43% at 50% 50%,
+    black 75%,
+    transparent
+  );
 }
 :hover > .pip-scrim > :nth-child(1),
 :focus-within > .pip-scrim > :nth-child(1) {
@@ -649,7 +770,8 @@
   scrollbar-color: transparent transparent;
 }
 [data-scrolling] {
-  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent)
+    transparent;
 }
 
 /* Fades an edge only while there is more content past it. A scroller that doesn't overflow has an inactive timeline, so both fades stay 0. */
@@ -683,9 +805,13 @@
       transparent
     );
     /* Shorthand first: `animation` resets animation-timeline. */
-    animation: scroll-fade-top linear both, scroll-fade-bottom linear both;
+    animation:
+      scroll-fade-top linear both,
+      scroll-fade-bottom linear both;
     animation-timeline: scroll(self), scroll(self);
-    animation-range: 0 1.5rem, calc(100% - 1.5rem) 100%;
+    animation-range:
+      0 1.5rem,
+      calc(100% - 1.5rem) 100%;
   }
 }
 
@@ -766,27 +892,40 @@
   transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-  :root:not([data-reduce-motion='off']) .pane-layout-animating :is(.pane-card, .pane-chat) {
+  :root:not([data-reduce-motion='off'])
+    .pane-layout-animating
+    :is(.pane-card, .pane-chat) {
     transition: none;
   }
 }
-:root[data-reduce-motion='on'] .pane-layout-animating :is(.pane-card, .pane-chat) {
+:root[data-reduce-motion='on']
+  .pane-layout-animating
+  :is(.pane-card, .pane-chat) {
   transition: none;
 }
 
 /* Settings › Appearance › Animations: each one runs only while its id is a word in `data-animations` on <html>. */
-:root:not([data-animations~='sidebar-toggle']) :is([data-slot='sidebar-gap'], [data-slot='sidebar-container']),
+:root:not([data-animations~='sidebar-toggle'])
+  :is([data-slot='sidebar-gap'], [data-slot='sidebar-container']),
 :root:not([data-animations~='sidebar-peek']) [data-sidebar-peek],
-:root:not([data-animations~='pane-slide']) .pane-layout-animating[data-motion='slide'] :is(.pane-card, .pane-chat),
-:root:not([data-animations~='pane-layout']) .pane-layout-animating:not([data-motion='slide']) :is(.pane-card, .pane-chat) {
+:root:not([data-animations~='pane-slide'])
+  .pane-layout-animating[data-motion='slide']
+  :is(.pane-card, .pane-chat),
+:root:not([data-animations~='pane-layout'])
+  .pane-layout-animating:not([data-motion='slide'])
+  :is(.pane-card, .pane-chat) {
   transition: none;
 }
-:root:not([data-animations~='pane-slide']) .pane-card-entering[data-motion='slide'],
-:root:not([data-animations~='pane-pop']) .pane-card-entering:not([data-motion='slide']) {
+:root:not([data-animations~='pane-slide'])
+  .pane-card-entering[data-motion='slide'],
+:root:not([data-animations~='pane-pop'])
+  .pane-card-entering:not([data-motion='slide']) {
   animation: none;
 }
-:root:not([data-animations~='pane-slide']) .pane-card-leaving[data-motion='slide'],
-:root:not([data-animations~='pane-pop']) .pane-card-leaving:not([data-motion='slide']) {
+:root:not([data-animations~='pane-slide'])
+  .pane-card-leaving[data-motion='slide'],
+:root:not([data-animations~='pane-pop'])
+  .pane-card-leaving:not([data-motion='slide']) {
   display: none;
 }
 
@@ -812,12 +951,28 @@
   }
 }
 @keyframes tooltip-in {
-  from { opacity: 0; filter: blur(3px); transform: scale(0.98); }
-  to { opacity: 1; filter: blur(0); transform: scale(1); }
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
 }
 @keyframes tooltip-out {
-  from { opacity: 1; filter: blur(0); transform: scale(1); }
-  to { opacity: 0; filter: blur(3px); transform: scale(0.98); }
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    filter: blur(3px);
+    transform: scale(0.98);
+  }
 }
 
 /* Menus, popovers, selects and hover cards (Radix `data-state` or Base UI `data-open`/`data-closed`): scale and fade in from the trigger,
@@ -850,16 +1005,26 @@
   }
 }
 @keyframes pop-scale {
-  from { transform: scale(0.96); }
+  from {
+    transform: scale(0.96);
+  }
 }
 @keyframes pop-out {
-  to { opacity: 0; filter: blur(4px); transform: scale(0.96); }
+  to {
+    opacity: 0;
+    filter: blur(4px);
+    transform: scale(0.96);
+  }
 }
 @keyframes pop-fade-in {
-  from { opacity: 0; }
+  from {
+    opacity: 0;
+  }
 }
 @keyframes pop-fade-out {
-  to { opacity: 0; }
+  to {
+    opacity: 0;
+  }
 }
 
 /* ```diff fences in chat; src/chat/diffCodePlugin.ts tags each line's marker token. Tints keep the background's

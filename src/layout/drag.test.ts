@@ -4,8 +4,22 @@ import { middleHalf } from './drag.ts';
 
 // A 40px-tall row at y 100–140, x 0–200: its middle half is y 110–130.
 const hit = (x: number, y: number) => {
-  const droppable = { id: 'row', element: { getBoundingClientRect: () => ({ left: 0, right: 200, top: 100, bottom: 140, height: 40 }) } };
-  return middleHalf({ droppable, dragOperation: { position: { current: { x, y } } } } as unknown as Parameters<typeof middleHalf>[0]);
+  const droppable = {
+    id: 'row',
+    element: {
+      getBoundingClientRect: () => ({
+        left: 0,
+        right: 200,
+        top: 100,
+        bottom: 140,
+        height: 40,
+      }),
+    },
+  };
+  return middleHalf({
+    droppable,
+    dragOperation: { position: { current: { x, y } } },
+  } as unknown as Parameters<typeof middleHalf>[0]);
 };
 
 test('nests only over the middle half of a row', () => {

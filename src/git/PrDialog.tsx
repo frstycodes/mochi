@@ -1,6 +1,13 @@
 import { useEffect, useEffectEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -15,15 +22,38 @@ import { useDraft } from '../utility/useDraft';
  * The pull request before it opens: title and description start as the thread's title and goal, are replaced by a draft
  * from the branch's changes when one arrives, and stay yours to edit. Fields you already changed are never replaced.
  */
-export function PrDialog({ thread, cwd, diff, githubUser, onCreate, onClose }: { thread: Thread; cwd: string; diff: GitDiff; githubUser?: string; onCreate: (pr: { title: string; body: string }) => Promise<void>; onClose: () => void }) {
-  const [title, setTitle] = useState<{ text: string; isEdited?: boolean }>({ text: thread.title });
-  const [body, setBody] = useState<{ text: string; isEdited?: boolean }>({ text: thread.goal });
+export function PrDialog({
+  thread,
+  cwd,
+  diff,
+  githubUser,
+  onCreate,
+  onClose,
+}: {
+  thread: Thread;
+  cwd: string;
+  diff: GitDiff;
+  githubUser?: string;
+  onCreate: (pr: { title: string; body: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState<{ text: string; isEdited?: boolean }>({
+    text: thread.title,
+  });
+  const [body, setBody] = useState<{ text: string; isEdited?: boolean }>({
+    text: thread.goal,
+  });
   const { draft, isDrafting } = useDraft('pr', thread.spaceId);
   const base = diff.base.replace(/^origin\//, '');
 
   const draftPr = useEffectEvent(() => {
-    const branchFiles = host.git.diff(cwd, 'branch', diff.base).then((d) => d.files, () => diff.files);
-    return draft(branchFiles.then((files) => prPrompt(thread.title, thread.goal, files)));
+    const branchFiles = host.git.diff(cwd, 'branch', diff.base).then(
+      (d) => d.files,
+      () => diff.files,
+    );
+    return draft(
+      branchFiles.then((files) => prPrompt(thread.title, thread.goal, files)),
+    );
   });
   useEffect(() => {
     let isCurrent = true;
@@ -50,17 +80,32 @@ export function PrDialog({ thread, cwd, diff, githubUser, onCreate, onClose }: {
           <DialogTitle>Open a pull request</DialogTitle>
           <DialogDescription>
             From {diff.branch} into {base}
-            {githubUser ? `, opened as ${githubUser}` : ''}. GitHub notifies the repository's watchers.
+            {githubUser ? `, opened as ${githubUser}` : ''}. GitHub notifies the
+            repository's watchers.
           </DialogDescription>
         </DialogHeader>
         <Field>
           <FieldLabel htmlFor="pr-title">Title</FieldLabel>
-          <Input id="pr-title" value={title.text} onChange={(e) => setTitle({ text: e.target.value, isEdited: true })} />
+          <Input
+            id="pr-title"
+            value={title.text}
+            onChange={(e) => setTitle({ text: e.target.value, isEdited: true })}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="pr-body">Description</FieldLabel>
-          <Textarea id="pr-body" value={body.text} onChange={(e) => setBody({ text: e.target.value, isEdited: true })} rows={10} className="max-h-80 type-meta" />
-          {isDrafting && <Shimmer className="type-caption">Drafting from the branch's changes…</Shimmer>}
+          <Textarea
+            id="pr-body"
+            value={body.text}
+            onChange={(e) => setBody({ text: e.target.value, isEdited: true })}
+            rows={10}
+            className="max-h-80 type-meta"
+          />
+          {isDrafting && (
+            <Shimmer className="type-caption">
+              Drafting from the branch's changes…
+            </Shimmer>
+          )}
         </Field>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

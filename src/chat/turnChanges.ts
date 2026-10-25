@@ -28,7 +28,8 @@ export interface TurnChanges {
 export function turnChanges(activity: ActivityEntry[]): TurnChanges[] {
   const turns: TurnChanges[] = [];
   let turn = emptyTurn(-1);
-  const close = (end: number) => (turn.files.length > 0 || turn.ranCommands) && turns.push({ ...turn, end });
+  const close = (end: number) =>
+    (turn.files.length > 0 || turn.ranCommands) && turns.push({ ...turn, end });
   activity.forEach((entry, i) => {
     if (isYourMessage(entry)) {
       close(i - 1);
@@ -38,7 +39,10 @@ export function turnChanges(activity: ActivityEntry[]): TurnChanges[] {
     if (isCommand(entry)) turn.ranCommands = true;
     for (const edit of fileEdits(entry)) {
       let file = turn.files.find((f) => f.path === edit.path);
-      if (!file) turn.files.push((file = { path: edit.path, added: 0, removed: 0, patches: [] }));
+      if (!file)
+        turn.files.push(
+          (file = { path: edit.path, added: 0, removed: 0, patches: [] }),
+        );
       file.added += edit.added;
       file.removed += edit.removed;
       if (edit.patch) file.patches.push(edit.patch);
@@ -59,37 +63,59 @@ export function openTurn(activity: ActivityEntry[]) {
 /** Whether the open turn could have changed files: an Edit or Write, or any shell command (`sed -i`, `git commit`) the work log can't diff. */
 export function mayHaveEdited(activity: ActivityEntry[]) {
   const start = activity.findLastIndex(isYourMessage);
-  return activity.slice(start + 1).some((e) => isNativeCall(e, ['Edit', 'Write', 'Run']));
+  return activity
+    .slice(start + 1)
+    .some((e) => isNativeCall(e, ['Edit', 'Write', 'Run']));
 }
 
 /** Files of `turn` a later turn edited again: undoing `turn` puts them back to before it, so those later edits go too. */
 export function editedLater(turns: TurnChanges[], turn: TurnChanges) {
-  const later = new Set(turns.filter((t) => t.start > turn.start).flatMap((t) => t.files.map((f) => f.path)));
+  const later = new Set(
+    turns
+      .filter((t) => t.start > turn.start)
+      .flatMap((t) => t.files.map((f) => f.path)),
+  );
   return turn.files.map((f) => f.path).filter((path) => later.has(path));
 }
 
 /** Whether the turn's file changes are currently undone: the latest undo or redo logged for it says. */
 export function isTurnUndone(activity: ActivityEntry[], start: number) {
-  return activity.findLast((e) => e.turnUndo?.start === start)?.turnUndo?.isUndone ?? false;
+  return (
+    activity.findLast((e) => e.turnUndo?.start === start)?.turnUndo?.isUndone ??
+    false
+  );
 }
 
 /** A unified diff split per file (`@pierre/diffs`' PatchDiff throws on more than one); sections without a hunk (an empty file created) are dropped. */
 export function patchSections(patch: string) {
   const sections = rawFilePatches(patch);
   if (!sections.length) return /^@@/m.test(patch) ? [patch] : [];
-  return sections.filter((section) => parsePatchFiles(section).some(({ files }) => files.some((file) => file.hunks.length)));
+  return sections.filter((section) =>
+    parsePatchFiles(section).some(({ files }) =>
+      files.some((file) => file.hunks.length),
+    ),
+  );
 }
 
-const isYourMessage = (e: ActivityEntry) => e.who === 'you' && e.kind === 'message';
+const isYourMessage = (e: ActivityEntry) =>
+  e.who === 'you' && e.kind === 'message';
 
 function emptyTurn(start: number): TurnChanges {
-  return { start, end: start, files: [], added: 0, removed: 0, ranCommands: false };
+  return {
+    start,
+    end: start,
+    files: [],
+    added: 0,
+    removed: 0,
+    ranCommands: false,
+  };
 }
 
 const isCommand = (e: ActivityEntry) => isNativeCall(e, ['Run']);
 
 /** One of the agent's own tool calls (not a skill or an MCP tool) whose verb is among `verbs`. */
-const isNativeCall = (e: ActivityEntry, verbs: string[]) => e.kind === 'tool' && !e.skill && !e.mcp && verbs.includes(toolCall(e).verb);
+const isNativeCall = (e: ActivityEntry, verbs: string[]) =>
+  e.kind === 'tool' && !e.skill && !e.mcp && verbs.includes(toolCall(e).verb);
 
 /** One edit call as per-file changes: a patch spanning several files (Codex's file changes) splits at its `diff --git` headers. */
 function fileEdits(entry: ActivityEntry) {
@@ -108,7 +134,10 @@ function fileEdits(entry: ActivityEntry) {
     ];
   return sections.map(({ path: header, added, removed, patch }) => {
     // Claude's patches name the file by its base name only; the call's target has its path.
-    const path = call.target === header || call.target.endsWith(`/${header}`) ? call.target : header;
+    const path =
+      call.target === header || call.target.endsWith(`/${header}`)
+        ? call.target
+        : header;
     return { path, added, removed, patch };
   });
 }

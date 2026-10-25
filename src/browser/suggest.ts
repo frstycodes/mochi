@@ -10,21 +10,33 @@ export interface Candidate {
 }
 
 const LIMIT = 6;
-const KIND_BONUS = { tab: 15, server: 10, history: 0 } satisfies Record<Candidate['kind'], number>;
+const KIND_BONUS = { tab: 15, server: 10, history: 0 } satisfies Record<
+  Candidate['kind'],
+  number
+>;
 
 /**
  * Candidates matching `query`, best first, one per URL. The URL's start beats a word in the title beats anywhere in either;
  * open tabs and dev servers beat history, recent history beats old, and shorter URLs win ties so a site's root completes
  * before its deep pages. An empty query lists open tabs, then servers, then recent history.
  */
-export function rankSuggestions(query: string, candidates: Candidate[], limit = LIMIT) {
+export function rankSuggestions(
+  query: string,
+  candidates: Candidate[],
+  limit = LIMIT,
+) {
   const q = query.trim().toLowerCase();
   const scored = candidates.flatMap((c, i) => {
     const score = matchScore(q, c);
     if (score === null) return [];
     // Recency only counts within history, which arrives most recent first.
     const recency = c.kind === 'history' ? Math.max(0, 5 - i * 0.1) : 0;
-    return [{ c, score: score + KIND_BONUS[c.kind] + recency - bare(c.url).length * 0.1 }];
+    return [
+      {
+        c,
+        score: score + KIND_BONUS[c.kind] + recency - bare(c.url).length * 0.1,
+      },
+    ];
   });
   scored.sort((a, b) => b.score - a.score);
   const seen = new Set<string>();
@@ -58,7 +70,11 @@ function matchScore(q: string, c: Candidate) {
 export function inlineCompletion(typed: string, url: string) {
   if (!typed || /\s/.test(typed)) return null;
   const shown = bare(url);
-  if (!shown.toLowerCase().startsWith(typed.toLowerCase()) || shown.length === typed.length) return null;
+  if (
+    !shown.toLowerCase().startsWith(typed.toLowerCase()) ||
+    shown.length === typed.length
+  )
+    return null;
   return shown.slice(typed.length);
 }
 

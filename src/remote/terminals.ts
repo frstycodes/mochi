@@ -23,7 +23,12 @@ const early = new Map<string, string>();
 let spawning = 0;
 let isWired = false;
 
-export async function openShell(threadId: string, cwd: string, cols: number, rows: number) {
+export async function openShell(
+  threadId: string,
+  cwd: string,
+  cols: number,
+  rows: number,
+) {
   wire();
   spawning++;
   try {
@@ -32,7 +37,10 @@ export async function openShell(threadId: string, cwd: string, cols: number, row
     // Until Core knows the shell, its output collects in `early`; requests go out in order, so the feed below precedes later output.
     await core('terminal.open', { terminalId: id, threadId });
     const printed = early.get(id);
-    if (printed) void core('terminal.feed', { terminalId: id, data: printed }).catch(() => {});
+    if (printed)
+      void core('terminal.feed', { terminalId: id, data: printed }).catch(
+        () => {},
+      );
     shells.set(id, { threadId, touchedAt: Date.now() });
     if (shells.size > MAX_SHELLS) closeShell(shells.keys().next().value!);
     return id;
@@ -56,7 +64,12 @@ export const SWEEP_MS = IDLE_MS / 2;
 export async function closeIdleShells(now: number) {
   for (const [id, shell] of shells) {
     if (now - shell.touchedAt <= IDLE_MS) continue;
-    if ((await core('terminal.watched', { terminalId: id }).catch(() => false)) === true) shell.touchedAt = now;
+    if (
+      (await core('terminal.watched', { terminalId: id }).catch(
+        () => false,
+      )) === true
+    )
+      shell.touchedAt = now;
     else closeShell(id);
   }
 }
@@ -67,25 +80,41 @@ export function closeShell(id: string) {
   void host.pty.kill(id).catch(() => {});
 }
 
-type Call = { 'terminal.open': { terminalId: string; threadId: string }; 'terminal.feed': { terminalId: string; data: string }; 'terminal.exit': { terminalId: string; exitCode: number }; 'terminal.close': { terminalId: string }; 'terminal.watched': { terminalId: string } };
+type Call = {
+  'terminal.open': { terminalId: string; threadId: string };
+  'terminal.feed': { terminalId: string; data: string };
+  'terminal.exit': { terminalId: string; exitCode: number };
+  'terminal.close': { terminalId: string };
+  'terminal.watched': { terminalId: string };
+};
 
 /** Core's side of a shell, over the window's own connection so output reaches it in the order the pty printed it. An object so tests can stand in for Core. */
 export const terminalCore = {
   async call<K extends keyof Call>(tag: K, payload: Call[K]) {
     const client = await coreClient();
-    return Effect.runPromise((client[tag] as (payload: Call[K]) => Effect.Effect<unknown, unknown>)(payload));
+    return Effect.runPromise(
+      (client[tag] as (payload: Call[K]) => Effect.Effect<unknown, unknown>)(
+        payload,
+      ),
+    );
   },
 };
-const core = <K extends keyof Call>(tag: K, payload: Call[K]) => terminalCore.call(tag, payload);
+const core = <K extends keyof Call>(tag: K, payload: Call[K]) =>
+  terminalCore.call(tag, payload);
 
 function wire() {
   if (isWired) return;
   isWired = true;
   host.pty.onData(({ id, data }) => {
-    if (shells.has(id)) return void core('terminal.feed', { terminalId: id, data }).catch(() => {});
-    if (spawning > 0) early.set(id, ((early.get(id) ?? '') + data).slice(-EARLY_MAX));
+    if (shells.has(id))
+      return void core('terminal.feed', { terminalId: id, data }).catch(
+        () => {},
+      );
+    if (spawning > 0)
+      early.set(id, ((early.get(id) ?? '') + data).slice(-EARLY_MAX));
   });
   host.pty.onExit(({ id, exitCode }) => {
-    if (shells.has(id)) void core('terminal.exit', { terminalId: id, exitCode }).catch(() => {});
+    if (shells.has(id))
+      void core('terminal.exit', { terminalId: id, exitCode }).catch(() => {});
   });
 }

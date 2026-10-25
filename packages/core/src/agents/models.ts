@@ -14,9 +14,17 @@ const modelsKey = (accountId: string) => `models:${accountId}`;
 const logins = new Map<string, string>();
 
 /** The models `provider` offers the profile's account; throws when the harness can't list them, so the picker hides it. */
-export async function models(codex: CodexAdapter, provider: Provider, spaceId: string): Promise<AgentModel[]> {
+export async function models(
+  codex: CodexAdapter,
+  provider: Provider,
+  spaceId: string,
+): Promise<AgentModel[]> {
   const { account } = await accountFor(spaceId, provider);
-  return cached(modelsKey(account.id), MODELS_TTL, () => (provider === 'claude' ? claudeSupportedModels(spaceId).then(claudeModels) : codex.models(spaceId)));
+  return cached(modelsKey(account.id), MODELS_TTL, () =>
+    provider === 'claude'
+      ? claudeSupportedModels(spaceId).then(claudeModels)
+      : codex.models(spaceId),
+  );
 }
 
 /** Detection saw this account's login: a different one than before (signed in, out, or into another plan) drops its list. */

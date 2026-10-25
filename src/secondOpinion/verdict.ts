@@ -72,21 +72,36 @@ const MAX_FINDINGS = 50;
  */
 export function parseVerdict(answer: unknown): Verdict {
   const value = typeof answer === 'string' ? extractJson(answer) : answer;
-  if (typeof value !== 'object' || value === null) throw new Error('The reviewer did not answer with a verdict');
+  if (typeof value !== 'object' || value === null)
+    throw new Error('The reviewer did not answer with a verdict');
   const v = value as Record<string, unknown>;
-  if (!VERDICTS.includes(v.verdict as VerdictKind)) throw new Error(`Unknown verdict "${String(v.verdict)}"`);
-  if (typeof v.summary !== 'string' || !v.summary.trim()) throw new Error('The verdict has no summary');
-  const findings = Array.isArray(v.findings) ? v.findings.slice(0, MAX_FINDINGS).flatMap(parseFinding) : [];
-  return { verdict: v.verdict as VerdictKind, summary: v.summary.trim(), findings };
+  if (!VERDICTS.includes(v.verdict as VerdictKind))
+    throw new Error(`Unknown verdict "${String(v.verdict)}"`);
+  if (typeof v.summary !== 'string' || !v.summary.trim())
+    throw new Error('The verdict has no summary');
+  const findings = Array.isArray(v.findings)
+    ? v.findings.slice(0, MAX_FINDINGS).flatMap(parseFinding)
+    : [];
+  return {
+    verdict: v.verdict as VerdictKind,
+    summary: v.summary.trim(),
+    findings,
+  };
 }
 
 function parseFinding(raw: unknown): Finding[] {
   if (typeof raw !== 'object' || raw === null) return [];
   const f = raw as Record<string, unknown>;
   if (typeof f.text !== 'string' || !f.text.trim()) return [];
-  const severity = SEVERITIES.includes(f.severity as Severity) ? (f.severity as Severity) : 'medium';
-  const file = typeof f.file === 'string' ? f.file.trim().replace(/^(?:a|b)\//, '') : '';
-  const line = typeof f.line === 'number' && Number.isInteger(f.line) && f.line > 0 ? f.line : undefined;
+  const severity = SEVERITIES.includes(f.severity as Severity)
+    ? (f.severity as Severity)
+    : 'medium';
+  const file =
+    typeof f.file === 'string' ? f.file.trim().replace(/^(?:a|b)\//, '') : '';
+  const line =
+    typeof f.line === 'number' && Number.isInteger(f.line) && f.line > 0
+      ? f.line
+      : undefined;
   return [{ file, ...(line && { line }), severity, text: f.text.trim() }];
 }
 
@@ -102,18 +117,29 @@ function extractJson(text: string): unknown {
 }
 
 /** The review prompt: goal, open criteria and the diff against base, cut at `maxChars` with a note saying so. */
-export function reviewPrompt(thread: Pick<Thread, 'title' | 'goal' | 'criteria'>, diff: Pick<GitDiff, 'base' | 'branch' | 'files'>, maxChars = MAX_DIFF_CHARS) {
-  const patch = diff.files.map((f) => (f.binary ? `Binary file ${f.path} changed\n` : f.patch)).join('\n');
+export function reviewPrompt(
+  thread: Pick<Thread, 'title' | 'goal' | 'criteria'>,
+  diff: Pick<GitDiff, 'base' | 'branch' | 'files'>,
+  maxChars = MAX_DIFF_CHARS,
+) {
+  const patch = diff.files
+    .map((f) => (f.binary ? `Binary file ${f.path} changed\n` : f.patch))
+    .join('\n');
   const isTruncated = patch.length > maxChars;
   const shown = isTruncated ? patch.slice(0, maxChars) : patch;
-  const criteria = (thread.criteria ?? []).map((c) => `- [${isMet(c) ? 'x' : ' '}] ${c.text}${c.command ? ` (checked by \`${c.command}\`)` : ''}`);
+  const criteria = (thread.criteria ?? []).map(
+    (c) =>
+      `- [${isMet(c) ? 'x' : ' '}] ${c.text}${c.command ? ` (checked by \`${c.command}\`)` : ''}`,
+  );
   const prompt = [
-    'You are giving a second opinion on another coding agent\'s work. You are read-only: do not edit files or run commands that change anything.',
+    "You are giving a second opinion on another coding agent's work. You are read-only: do not edit files or run commands that change anything.",
     `Thread: ${thread.title}`,
     `Goal: ${thread.goal}`,
     criteria.length ? `Done when:\n${criteria.join('\n')}` : '',
     `Diff of ${diff.branch} against ${diff.base} (${diff.files.length} files):`,
-    isTruncated ? `NOTE: the diff is truncated to its first ${maxChars} characters; read the remaining files in the working tree if they matter.` : '',
+    isTruncated
+      ? `NOTE: the diff is truncated to its first ${maxChars} characters; read the remaining files in the working tree if they matter.`
+      : '',
     `\`\`\`diff\n${shown || '(no changes)'}\n\`\`\``,
     'Review for correctness bugs, risky changes and missed goal criteria; answer with a verdict.',
     'Answer with only a JSON object: {"verdict": "approve" | "concerns" | "block", "summary": "<two sentences at most>", "findings": [{"file": "<repo-relative path>", "line": <number or null>, "severity": "high" | "medium" | "low", "text": "<what is wrong and why>"}]}. Use "block" only for bugs that must be fixed before merging.',
@@ -122,17 +148,28 @@ export function reviewPrompt(thread: Pick<Thread, 'title' | 'goal' | 'criteria'>
 }
 
 /** The findings as a message to the thread's own agent. */
-export function findingsMessage(provider: Provider, verdict: Verdict, isAgentAsked?: boolean) {
+export function findingsMessage(
+  provider: Provider,
+  verdict: Verdict,
+  isAgentAsked?: boolean,
+) {
   const name = provider === 'claude' ? 'Claude' : 'Codex';
-  const items = verdict.findings.map((f) => `- [${f.severity}] ${f.file ? `\`${f.file}${f.line ? `:${f.line}` : ''}\` ` : ''}${f.text}`);
+  const items = verdict.findings.map(
+    (f) =>
+      `- [${f.severity}] ${f.file ? `\`${f.file}${f.line ? `:${f.line}` : ''}\` ` : ''}${f.text}`,
+  );
   const head = `${isAgentAsked ? '[Second opinion you asked for] ' : ''}${name} reviewed the diff (verdict: ${verdict.verdict}): ${verdict.summary}`;
   const close = !isAgentAsked
     ? 'Please address these, or tell me why not.'
     : items.length
       ? 'This is the reviewer, not the user. Weigh each finding: fix the ones that hold, and say in your reply which you set aside and why.'
       : 'This is the reviewer, not the user. Nothing to change; carry on.';
-  return [head, items.length ? `Findings:\n${items.join('\n')}` : '', close].filter(Boolean).join('\n\n');
+  return [head, items.length ? `Findings:\n${items.join('\n')}` : '', close]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
-export const otherProvider = (provider: Provider): Provider => (provider === 'claude' ? 'codex' : 'claude');
-export const providerName = (provider: Provider) => (provider === 'claude' ? 'Claude' : 'Codex');
+export const otherProvider = (provider: Provider): Provider =>
+  provider === 'claude' ? 'codex' : 'claude';
+export const providerName = (provider: Provider) =>
+  provider === 'claude' ? 'Claude' : 'Codex';

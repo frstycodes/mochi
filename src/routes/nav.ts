@@ -4,19 +4,42 @@ import { isTyping } from '../keys';
 import { isCommand, listenKeydown } from '../keymap';
 import { setLibraryScope } from '../library/libraryScope';
 import type { SectionId } from '../settings/sections';
-import { isReviewLocation, remoteRouteOf, replayThreadOf, settingsRouteOf, type RemoteThreadRoute } from './locations';
+import {
+  isReviewLocation,
+  remoteRouteOf,
+  replayThreadOf,
+  settingsRouteOf,
+  type RemoteThreadRoute,
+} from './locations';
 import { getRouter } from './router';
 
 let nonce = 0;
 
 /** Opens the settings page (⌘, / Ctrl+,, the palette, the profile menu); `settingId` scrolls to that row and flashes it. Inside settings it replaces, so Back leaves them in one step. */
 export function openSettings(section: SectionId = 'chat', settingId?: string) {
-  void getRouter().navigate({ to: '/settings/$section', params: { section }, search: { setting: settingId }, state: nextNonce(), replace: isSettingsOpen() });
+  void getRouter().navigate({
+    to: '/settings/$section',
+    params: { section },
+    search: { setting: settingId },
+    state: nextNonce(),
+    replace: isSettingsOpen(),
+  });
 }
 
 /** One item's own page inside a section, like Settings › Connectors › Linear; Back or Esc return to the section. `replace` for a redirect, which Back must not re-trigger. */
-export function openSubpage(section: SectionId, subpage: string, settingId?: string, replace = false) {
-  void getRouter().navigate({ to: '/settings/$section', params: { section }, search: { setting: settingId, subpage }, state: nextNonce(), replace });
+export function openSubpage(
+  section: SectionId,
+  subpage: string,
+  settingId?: string,
+  replace = false,
+) {
+  void getRouter().navigate({
+    to: '/settings/$section',
+    params: { section },
+    search: { setting: settingId, subpage },
+    state: nextNonce(),
+    replace,
+  });
 }
 
 /** A thread's skills or MCP servers: the thread context panel opens Skills or Connectors scoped to the thread's profile. */
@@ -32,7 +55,11 @@ export function openReplay(threadId: string) {
 
 /** Another computer's thread over the app, like a replay. Between two remote threads it replaces, so Back leaves them. */
 export function openRemoteThread({ machineId, threadId }: RemoteThreadRoute) {
-  void getRouter().navigate({ to: '/remote/$machineId/$threadId', params: { machineId, threadId }, replace: !!remoteRouteOf(getRouter().state.location) });
+  void getRouter().navigate({
+    to: '/remote/$machineId/$threadId',
+    params: { machineId, threadId },
+    replace: !!remoteRouteOf(getRouter().state.location),
+  });
 }
 
 export function openReview() {
@@ -69,7 +96,12 @@ export function useEscapeBack() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isCommand(e, 'dismiss') || e.defaultPrevented) return;
-      if (document.querySelector('[data-radix-popper-content-wrapper], [role=dialog], [role=alertdialog]')) return;
+      if (
+        document.querySelector(
+          '[data-radix-popper-content-wrapper], [role=dialog], [role=alertdialog]',
+        )
+      )
+        return;
       if (isTyping(e.target)) return void (e.target as HTMLElement).blur();
       goBack();
     };
@@ -101,7 +133,10 @@ export function useIsReviewOpen() {
 }
 
 /** A tab that follows deep links: `tabFor` names the tab a setting id lives on, or undefined when the id doesn't say. */
-export function useLinkedTab<T extends string>(tabFor: (settingId: string) => T | undefined, fallback: T) {
+export function useLinkedTab<T extends string>(
+  tabFor: (settingId: string) => T | undefined,
+  fallback: T,
+) {
   const route = useSettingsRoute();
   const linked = () => (route?.settingId ? tabFor(route.settingId) : undefined);
   const [tab, setTab] = useState<T>(() => linked() ?? fallback);

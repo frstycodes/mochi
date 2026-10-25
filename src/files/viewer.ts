@@ -8,7 +8,13 @@ import { useVizThreadId } from '../viz/WidgetVisual';
 
 /** A file in the thread's folder (chat paths, work log rows) or one the user attached in the composer. */
 export type ViewerFile =
-  | { source: 'workspace'; threadId: string; root: string; path: string; line?: number }
+  | {
+      source: 'workspace';
+      threadId: string;
+      root: string;
+      path: string;
+      line?: number;
+    }
   | { source: 'attachment'; name: string; url: string; mediaType?: string };
 
 export interface FileRequest {
@@ -36,8 +42,18 @@ export function useThreadFiles(): ThreadFiles | null {
 /** Every `[data-file-link]` in the same `[data-file-scope]` (one message, one work log) is one set, in reading order. */
 export function openFromScope(el: HTMLElement, base: ThreadFiles) {
   const scope = el.closest('[data-file-scope]') ?? document;
-  const links = [...new Set([...scope.querySelectorAll<HTMLElement>('[data-file-link]')].map((e) => e.dataset.fileLink!))];
-  const files = links.map((link): ViewerFile => ({ source: 'workspace', ...base, ...fileLink(link) }));
+  const links = [
+    ...new Set(
+      [...scope.querySelectorAll<HTMLElement>('[data-file-link]')].map(
+        (e) => e.dataset.fileLink!,
+      ),
+    ),
+  ];
+  const files = links.map((link): ViewerFile => ({
+    source: 'workspace',
+    ...base,
+    ...fileLink(link),
+  }));
   openFiles({ files, index: Math.max(0, links.indexOf(el.dataset.fileLink!)) });
 }
 
@@ -55,6 +71,7 @@ export async function loadViewerFile(file: ViewerFile): Promise<FileContent> {
   if (!res.ok) throw new Error(`Could not read ${file.name}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   // ponytail: a NUL in the first 8 KB means binary, git's heuristic; UTF-16 text reads as binary.
-  if (bytes.subarray(0, 8000).includes(0)) return { kind: 'binary', bytes, mtimeMs: 0 };
+  if (bytes.subarray(0, 8000).includes(0))
+    return { kind: 'binary', bytes, mtimeMs: 0 };
   return { kind: 'text', text: new TextDecoder().decode(bytes), mtimeMs: 0 };
 }

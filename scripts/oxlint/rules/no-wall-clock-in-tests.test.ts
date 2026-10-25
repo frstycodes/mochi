@@ -1,16 +1,16 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 71df573f, oxlint-plugin-t3code/rules/no-wall-clock-in-tests.test.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ../LICENSE-T3. Local edit: Mochi's plugin name and harness.
-import { assert, describe } from "@effect/vitest";
+import { assert, describe } from '@effect/vitest';
 
-import { createOxlintRuleHarness } from "../ruleHarness.ts";
+import { createOxlintRuleHarness } from '../ruleHarness.ts';
 
-const rule = createOxlintRuleHarness("mochi/no-wall-clock-in-tests", {
-  filename: "fixture.test.ts",
+const rule = createOxlintRuleHarness('mochi/no-wall-clock-in-tests', {
+  filename: 'fixture.test.ts',
 });
 
-describe("mochi/no-wall-clock-in-tests", () => {
+describe('mochi/no-wall-clock-in-tests', () => {
   rule.valid(
-    "ignores a computed member with a variable key",
+    'ignores a computed member with a variable key',
     `
       import { it } from "vitest";
       it("parses", () => {
@@ -22,7 +22,7 @@ describe("mochi/no-wall-clock-in-tests", () => {
   );
 
   rule.valid(
-    "allows fixed dates and readings that seed mocks",
+    'allows fixed dates and readings that seed mocks',
     `
       import { vi } from "vitest";
 
@@ -37,7 +37,7 @@ describe("mochi/no-wall-clock-in-tests", () => {
   );
 
   rule.invalid(
-    "reports elapsed-time measurement",
+    'reports elapsed-time measurement',
     `
       const startedAt = performance.now();
       const elapsed = performance.now() - startedAt;
@@ -50,21 +50,21 @@ describe("mochi/no-wall-clock-in-tests", () => {
   );
 
   rule.invalid(
-    "reports Date.now fixtures",
+    'reports Date.now fixtures',
     `
       export const session = { expiresAt: Date.now() + 60_000 };
     `,
   );
 
   rule.invalid(
-    "reports new Date() with no arguments",
+    'reports new Date() with no arguments',
     `
       export const createdAt = new Date().toISOString();
     `,
   );
 
   rule.invalid(
-    "reports process.hrtime and process.hrtime.bigint",
+    'reports process.hrtime and process.hrtime.bigint',
     `
       export const a = process.hrtime();
       export const b = process.hrtime.bigint();
@@ -86,10 +86,10 @@ describe("mochi/no-wall-clock-in-tests", () => {
   );
 });
 
-const productionRule = createOxlintRuleHarness("mochi/no-wall-clock-in-tests");
+const productionRule = createOxlintRuleHarness('mochi/no-wall-clock-in-tests');
 
 productionRule.valid(
-  "ignores non-test files",
+  'ignores non-test files',
   `
     export const now = Date.now();
   `,

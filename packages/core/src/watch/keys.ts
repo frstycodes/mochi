@@ -12,7 +12,11 @@ export const WatchKey = Schema.Union([
   /** Paths (relative, `/`-separated) changed under the root, in batches; nothing is read. */
   Schema.TaggedStruct('changes', { root: Path }),
   /** The worktree's diff, re-read only when its `git status` fingerprint changed. */
-  Schema.TaggedStruct('gitDiff', { cwd: Path, scope: Git.DiffScope, base: Schema.optional(Schema.String.check(Schema.isMaxLength(255))) }),
+  Schema.TaggedStruct('gitDiff', {
+    cwd: Path,
+    scope: Git.DiffScope,
+    base: Schema.optional(Schema.String.check(Schema.isMaxLength(255))),
+  }),
   /** Dev servers listening under `cwd`, from one app-wide `lsof` shared by every subscriber. */
   Schema.TaggedStruct('ports', { cwd: Path }),
   Schema.TaggedStruct('sim', {}),
@@ -35,5 +39,9 @@ export const StaleKind = Schema.Literals(['git', 'files', 'ports', 'sim']);
 export type StaleKind = typeof StaleKind.Type;
 
 /** Main's report of what the user can see. Hidden or on battery stretches intervals; asleep stops every read until it wakes. */
-export const Gate = Schema.Struct({ isVisible: Schema.Boolean, isAsleep: Schema.Boolean, isOnBattery: Schema.Boolean });
+export const Gate = Schema.Struct({
+  isVisible: Schema.Boolean,
+  isAsleep: Schema.Boolean,
+  isOnBattery: Schema.Boolean,
+});
 export type Gate = typeof Gate.Type;

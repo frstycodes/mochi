@@ -6,7 +6,10 @@ import type { ConnectorId } from './connectors.ts';
  * secret from the page itself (`connect_account`'s `secretRef`), so it never reaches the agent. One-time per service
  * (Slack: per workspace).
  */
-export function ownAppSetup(id: ConnectorId, redirectUrl: string): OwnAppSetup | undefined {
+export function ownAppSetup(
+  id: ConnectorId,
+  redirectUrl: string,
+): OwnAppSetup | undefined {
   if (id === 'slack') return slackSetup(redirectUrl);
   if (id === 'google-workspace') return GOOGLE_SETUP;
 }
@@ -19,16 +22,45 @@ export interface OwnAppSetup {
 
 // Slack's MCP tools, by the scopes they need (docs.slack.dev/ai/mcp-server); all user scopes, so it acts as the user.
 const SLACK_USER_SCOPES = [
-  'canvases:read', 'canvases:write', 'channels:history', 'channels:read', 'chat:write', 'files:read', 'groups:history', 'groups:read', 'im:history', 'im:read',
-  'mpim:history', 'mpim:read', 'reactions:read', 'reactions:write', 'search:read.files', 'search:read.private', 'search:read.public', 'search:read.users', 'users:read', 'users:read.email',
+  'canvases:read',
+  'canvases:write',
+  'channels:history',
+  'channels:read',
+  'chat:write',
+  'files:read',
+  'groups:history',
+  'groups:read',
+  'im:history',
+  'im:read',
+  'mpim:history',
+  'mpim:read',
+  'reactions:read',
+  'reactions:write',
+  'search:read.files',
+  'search:read.private',
+  'search:read.public',
+  'search:read.users',
+  'users:read',
+  'users:read.email',
 ];
 
 /** Mochi's Slack app, as a manifest: user scopes, the relay redirect, and Slack's MCP server on for it. */
 export function slackManifest(redirectUrl: string) {
   return {
-    display_information: { name: 'Mochi', description: 'Lets your Mochi agents use Slack as you.' },
-    oauth_config: { redirect_urls: [redirectUrl], scopes: { user: SLACK_USER_SCOPES } },
-    settings: { org_deploy_enabled: false, socket_mode_enabled: false, token_rotation_enabled: false, is_mcp_enabled: true },
+    display_information: {
+      name: 'Mochi',
+      description: 'Lets your Mochi agents use Slack as you.',
+    },
+    oauth_config: {
+      redirect_urls: [redirectUrl],
+      scopes: { user: SLACK_USER_SCOPES },
+    },
+    settings: {
+      org_deploy_enabled: false,
+      socket_mode_enabled: false,
+      token_rotation_enabled: false,
+      is_mcp_enabled: true,
+    },
   };
 }
 
@@ -43,7 +75,7 @@ function slackSetup(redirectUrl: string): OwnAppSetup {
     steps: [
       'run_setup with connector "slack": Mochi generates an app configuration token in your tab and keeps it. Follow its next: ask the user which workspace if it asks, sign-in included.',
       'connect_account with connector "slack", an account name (the workspace\'s, lowercased) and fromSetup: true: Mochi creates the app with its MCP server on and opens the sign-in page. Click Allow there, then list_connectors until it isSignedIn.',
-      'If a run step fails and you can\'t fix it with update_setup_step: on openUrl click Generate Token, pick the workspace, Generate, snapshot, and connect_account with configTokenRef (the Access Token\'s Copy button).',
+      "If a run step fails and you can't fix it with update_setup_step: on openUrl click Generate Token, pick the workspace, Generate, snapshot, and connect_account with configTokenRef (the Access Token's Copy button).",
       `If Slack refuses the app (connect_account says so): browser_open ${slackManifestUrl(redirectUrl)} (Create app from manifest, Mochi filled in), pick the workspace, Next, Create; then Settings › Basic Information › App Credentials: read the Client ID, and connect_account with the Client ID and secretRef (the Client Secret or its Copy button).`,
     ],
   };

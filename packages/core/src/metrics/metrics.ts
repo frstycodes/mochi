@@ -22,38 +22,61 @@ export class Metrics extends Context.Service<Metrics>()('mochi/core/Metrics', {
     const logged: { at: number; threadId: string }[] = [];
 
     // Pruned on read: the windows are small and the page is the only reader.
-    yield* Stream.runForEach(run.spawns, (binary) => Effect.sync(() => spawned.push({ at: Date.now(), binary: binary.split('/').pop()! }))).pipe(Effect.forkScoped);
-    yield* Stream.runForEach(store.events, (event) => Effect.sync(() => event.threadId && logged.push({ at: Date.now(), threadId: event.threadId }))).pipe(Effect.forkScoped);
+    yield* Stream.runForEach(run.spawns, (binary) =>
+      Effect.sync(() =>
+        spawned.push({ at: Date.now(), binary: binary.split('/').pop()! }),
+      ),
+    ).pipe(Effect.forkScoped);
+    yield* Stream.runForEach(store.events, (event) =>
+      Effect.sync(
+        () =>
+          event.threadId &&
+          logged.push({ at: Date.now(), threadId: event.threadId }),
+      ),
+    ).pipe(Effect.forkScoped);
 
-    const processes = capabilities.call({ capability: 'metrics', method: 'processes', args: [] }).pipe(
-      Effect.map((value) => value as ReadonlyArray<Contract.ProcessMetric>),
-      // No window has registered yet, or main is restarting: the page shows Core's side alone.
-      Effect.orElseSucceed(() => [] as ReadonlyArray<Contract.ProcessMetric>),
-    );
+    const processes = capabilities
+      .call({ capability: 'metrics', method: 'processes', args: [] })
+      .pipe(
+        Effect.map((value) => value as ReadonlyArray<Contract.ProcessMetric>),
+        // No window has registered yet, or main is restarting: the page shows Core's side alone.
+        Effect.orElseSucceed(() => [] as ReadonlyArray<Contract.ProcessMetric>),
+      );
 
     const sample = Effect.gen(function* () {
       const at = yield* Clock.currentTimeMillis;
       drop(spawned, at - SPAWN_WINDOW_MS);
       drop(logged, at - EVENT_WINDOW_MS);
-      const watches = (yield* watch.subscriptions).map(({ key, subscribers, intervalMs }) => ({
-        kind: key._tag,
-        target: 'root' in key ? key.root : 'cwd' in key ? key.cwd : null,
-        subscribers,
-        intervalMs,
-      }));
+      const watches = (yield* watch.subscriptions).map(
+        ({ key, subscribers, intervalMs }) => ({
+          kind: key._tag,
+          target: 'root' in key ? key.root : 'cwd' in key ? key.cwd : null,
+          subscribers,
+          intervalMs,
+        }),
+      );
       return {
         at,
         processes: yield* processes,
-        spawns: [...countBy(spawned, (s) => s.binary)].map(([binary, perMinute]) => ({ binary, perMinute })).sort((a, b) => b.perMinute - a.perMinute),
+        spawns: [...countBy(spawned, (s) => s.binary)]
+          .map(([binary, perMinute]) => ({ binary, perMinute }))
+          .sort((a, b) => b.perMinute - a.perMinute),
         watches,
-        events: [...countBy(logged, (e) => e.threadId)].map(([threadId, count]) => ({ threadId, perSecond: count / (EVENT_WINDOW_MS / 1000) })).sort((a, b) => b.perSecond - a.perSecond),
+        events: [...countBy(logged, (e) => e.threadId)]
+          .map(([threadId, count]) => ({
+            threadId,
+            perSecond: count / (EVENT_WINDOW_MS / 1000),
+          }))
+          .sort((a, b) => b.perSecond - a.perSecond),
         spans: recentSpans(),
         logFile: process.env.MOCHI_LOG_FILE ?? null,
       } satisfies MetricsSnapshot;
     });
 
     /** A sample now, then one a second. */
-    const stream = Stream.fromEffect(sample).pipe(Stream.repeat(Schedule.spaced(SAMPLE_MS)));
+    const stream = Stream.fromEffect(sample).pipe(
+      Stream.repeat(Schedule.spaced(SAMPLE_MS)),
+    );
     return { sample, stream };
   }),
 }) {
@@ -67,6 +90,7 @@ function drop(items: { at: number }[], before: number) {
 
 function countBy<A>(items: ReadonlyArray<A>, key: (item: A) => string) {
   const counts = new Map<string, number>();
-  for (const item of items) counts.set(key(item), (counts.get(key(item)) ?? 0) + 1);
+  for (const item of items)
+    counts.set(key(item), (counts.get(key(item)) ?? 0) + 1);
   return counts;
 }

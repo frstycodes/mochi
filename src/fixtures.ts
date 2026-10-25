@@ -105,9 +105,18 @@ export const RUNS: Record<string, RunResult> = {
     ms: 94_200,
     lines: [
       { tone: 'dim', text: 'Running 6 tests using 3 workers' },
-      { tone: 'pass', text: '  ✓ checkout.spec.ts:14 › pays with a saved card (12.1s)' },
-      { tone: 'fail', text: '  ✘ checkout.spec.ts:14 › pays with a saved card (15.0s)' },
-      { tone: 'fail', text: '    Error: expect(locator).toHaveText("Payment received")' },
+      {
+        tone: 'pass',
+        text: '  ✓ checkout.spec.ts:14 › pays with a saved card (12.1s)',
+      },
+      {
+        tone: 'fail',
+        text: '  ✘ checkout.spec.ts:14 › pays with a saved card (15.0s)',
+      },
+      {
+        tone: 'fail',
+        text: '    Error: expect(locator).toHaveText("Payment received")',
+      },
       { tone: 'dim', text: '    Received: "Processing payment…"' },
       { tone: 'plain', text: '' },
       { tone: 'fail', text: '  1 failed' },

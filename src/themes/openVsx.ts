@@ -1,5 +1,10 @@
 import { parseJsonc } from './jsonc.ts';
-import { kindOf, marketplaceThemeId, type ColorTheme, type ThemeKind } from './model.ts';
+import {
+  kindOf,
+  marketplaceThemeId,
+  type ColorTheme,
+  type ThemeKind,
+} from './model.ts';
 import { extractThemes, LIMITS } from './vsix.ts';
 import type { Inflate } from './zip.ts';
 
@@ -30,61 +35,128 @@ const VERSION = /^[\w.+-]{1,64}$/;
 
 /** An extension reference from the renderer, checked before it becomes part of a URL. */
 export function checkRef(namespace: unknown, name: unknown, version?: unknown) {
-  if (typeof namespace !== 'string' || !SEGMENT.test(namespace)) throw new TypeError('namespace is not an Open VSX namespace');
-  if (typeof name !== 'string' || !SEGMENT.test(name)) throw new TypeError('name is not an Open VSX extension name');
-  if (version !== undefined && (typeof version !== 'string' || !VERSION.test(version))) throw new TypeError('version is not a version');
+  if (typeof namespace !== 'string' || !SEGMENT.test(namespace))
+    throw new TypeError('namespace is not an Open VSX namespace');
+  if (typeof name !== 'string' || !SEGMENT.test(name))
+    throw new TypeError('name is not an Open VSX extension name');
+  if (
+    version !== undefined &&
+    (typeof version !== 'string' || !VERSION.test(version))
+  )
+    throw new TypeError('version is not a version');
   return { namespace, name, version: version as string };
 }
 
 /** Open VSX search and package reads, shared by the main process and the web build; only inflating differs. */
 export function createMarketplace(inflate: Inflate) {
-
   return {
     /** The Themes category, most downloaded first, keeping only extensions whose package.json contributes color themes. */
     async search(query: string, offset: number): Promise<SearchResult> {
-      const params = new URLSearchParams({ category: 'Themes', size: String(PAGE_SIZE), offset: String(offset), sortBy: 'downloadCount', sortOrder: 'desc' });
+      const params = new URLSearchParams({
+        category: 'Themes',
+        size: String(PAGE_SIZE),
+        offset: String(offset),
+        sortBy: 'downloadCount',
+        sortOrder: 'desc',
+      });
       if (query.trim()) params.set('query', query.trim().slice(0, 128));
-      const result = (await fetchJson(`${API}/-/search?${params}`)) as { totalSize?: number; extensions?: Record<string, unknown>[] };
-      const hits = (result.extensions ?? []).filter((e) => typeof e.namespace === 'string' && typeof e.name === 'string' && typeof e.version === 'string');
-      const extensions = await Promise.all(hits.map((hit) => withThemes(hit).catch(() => null)));
-      return { total: result.totalSize ?? 0, extensions: extensions.filter((e) => !!e?.themes.length) as MarketplaceExtension[] };
+      const result = (await fetchJson(`${API}/-/search?${params}`)) as {
+        totalSize?: number;
+        extensions?: Record<string, unknown>[];
+      };
+      const hits = (result.extensions ?? []).filter(
+        (e) =>
+          typeof e.namespace === 'string' &&
+          typeof e.name === 'string' &&
+          typeof e.version === 'string',
+      );
+      const extensions = await Promise.all(
+        hits.map((hit) => withThemes(hit).catch(() => null)),
+      );
+      return {
+        total: result.totalSize ?? 0,
+        extensions: extensions.filter(
+          (e) => !!e?.themes.length,
+        ) as MarketplaceExtension[],
+      };
     },
 
     /** Every color theme in one version's .vsix, downloaded and read but not stored. The renderer caches it by query key. */
-    inspect(namespace: string, name: string, version: string, displayName = name): Promise<ColorTheme[]> {
+    inspect(
+      namespace: string,
+      name: string,
+      version: string,
+      displayName = name,
+    ): Promise<ColorTheme[]> {
       return download(namespace, name, version).then(async (bytes) =>
         (await extractThemes(bytes, inflate)).map(({ label, kind, theme }) => ({
-          id: marketplaceThemeId(namespace, name, label), label, kind,
-          source: { kind: 'marketplace' as const, namespace, name, version, displayName, publisher: namespace }, theme,
+          id: marketplaceThemeId(namespace, name, label),
+          label,
+          kind,
+          source: {
+            kind: 'marketplace' as const,
+            namespace,
+            name,
+            version,
+            displayName,
+            publisher: namespace,
+          },
+          theme,
         })),
       );
     },
   };
 }
 
-async function withThemes(hit: Record<string, unknown>): Promise<MarketplaceExtension> {
-  const { namespace, name, version } = checkRef(hit.namespace, hit.name, hit.version);
-  const manifest = parseJsonc(await fetchText(`${API}/${namespace}/${name}/${version}/file/package.json`, LIMITS.fileBytes)) as { contributes?: { themes?: unknown } };
+async function withThemes(
+  hit: Record<string, unknown>,
+): Promise<MarketplaceExtension> {
+  const { namespace, name, version } = checkRef(
+    hit.namespace,
+    hit.name,
+    hit.version,
+  );
+  const manifest = parseJsonc(
+    await fetchText(
+      `${API}/${namespace}/${name}/${version}/file/package.json`,
+      LIMITS.fileBytes,
+    ),
+  ) as { contributes?: { themes?: unknown } };
   const contributed = manifest?.contributes?.themes;
   const themes = Array.isArray(contributed)
-    ? contributed.filter((t) => t && typeof t.path === 'string').map((t) => ({ label: typeof t.label === 'string' ? t.label : name, kind: kindOf(t.uiTheme) }))
+    ? contributed
+        .filter((t) => t && typeof t.path === 'string')
+        .map((t) => ({
+          label: typeof t.label === 'string' ? t.label : name,
+          kind: kindOf(t.uiTheme),
+        }))
     : [];
   const files = (hit.files ?? {}) as Record<string, unknown>;
   return {
     namespace,
     name,
     version,
-    displayName: typeof hit.displayName === 'string' && hit.displayName ? hit.displayName : name,
+    displayName:
+      typeof hit.displayName === 'string' && hit.displayName
+        ? hit.displayName
+        : name,
     description: typeof hit.description === 'string' ? hit.description : '',
-    downloadCount: typeof hit.downloadCount === 'number' ? hit.downloadCount : 0,
-    iconUrl: typeof files.icon === 'string' && isAllowed(files.icon) ? files.icon : undefined,
+    downloadCount:
+      typeof hit.downloadCount === 'number' ? hit.downloadCount : 0,
+    iconUrl:
+      typeof files.icon === 'string' && isAllowed(files.icon)
+        ? files.icon
+        : undefined,
     themes,
   };
 }
 
 export function download(namespace: string, name: string, version: string) {
   checkRef(namespace, name, version);
-  return fetchBytes(`${API}/${namespace}/${name}/${version}/file/${namespace}.${name}-${version}.vsix`, LIMITS.packageBytes);
+  return fetchBytes(
+    `${API}/${namespace}/${name}/${version}/file/${namespace}.${name}-${version}.vsix`,
+    LIMITS.packageBytes,
+  );
 }
 
 async function fetchJson(url: string) {
@@ -97,10 +169,17 @@ async function fetchText(url: string, maxBytes: number) {
 
 /** GETs `url` (following redirects only to Open VSX's own hosts), refusing bodies past `maxBytes`. */
 async function fetchBytes(url: string, maxBytes: number) {
-  const response = await fetch(url, { headers: { Accept: 'application/json, application/octet-stream' } });
-  if (!isAllowed(response.url || url)) throw new Error(`Open VSX redirected to ${new URL(response.url).host}`);
-  if (!response.ok) throw new Error(`Open VSX answered ${response.status} for ${new URL(url).pathname}`);
-  if (Number(response.headers.get('content-length')) > maxBytes) throw new Error(`The download is larger than ${maxBytes} bytes`);
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json, application/octet-stream' },
+  });
+  if (!isAllowed(response.url || url))
+    throw new Error(`Open VSX redirected to ${new URL(response.url).host}`);
+  if (!response.ok)
+    throw new Error(
+      `Open VSX answered ${response.status} for ${new URL(url).pathname}`,
+    );
+  if (Number(response.headers.get('content-length')) > maxBytes)
+    throw new Error(`The download is larger than ${maxBytes} bytes`);
   if (!response.body) return new Uint8Array(await response.arrayBuffer());
   return readCapped(response.body, maxBytes);
 }
@@ -115,7 +194,10 @@ function isAllowed(url: string) {
 }
 
 /** Reads a byte stream whole, throwing once it passes `maxBytes`. */
-export async function readCapped(stream: ReadableStream<Uint8Array>, maxBytes: number) {
+export async function readCapped(
+  stream: ReadableStream<Uint8Array>,
+  maxBytes: number,
+) {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -131,6 +213,7 @@ export async function readCapped(stream: ReadableStream<Uint8Array>, maxBytes: n
   }
   const out = new Uint8Array(size);
   let at = 0;
-  for (const chunk of chunks) out.set(chunk, (at += chunk.length) - chunk.length);
+  for (const chunk of chunks)
+    out.set(chunk, (at += chunk.length) - chunk.length);
   return out;
 }

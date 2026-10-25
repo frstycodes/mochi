@@ -18,6 +18,11 @@ export function daysBetween(first: string, last: string): string[] {
 /** "Mon, Oct 13" for a day, "Week of Oct 13" for a week's Monday. */
 export function periodName(key: string, isWeekly: boolean) {
   const d = new Date(`${key}T12:00:00`);
-  if (isWeekly) return `Week of ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (isWeekly)
+    return `Week of ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  return d.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }

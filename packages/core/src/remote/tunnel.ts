@@ -3,7 +3,9 @@ import WebSocket from 'ws';
 import { Capabilities, Relay } from '@mochi/schema';
 import type { Link } from './link.ts';
 
-const decodeDeviceFrame = Schema.decodeUnknownOption(Schema.fromJsonString(Relay.DeviceLinkFrame));
+const decodeDeviceFrame = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Relay.DeviceLinkFrame),
+);
 
 export interface TunnelOptions {
   /** Core's socket address, without a token (`coreUrl` minus its fragment). */
@@ -20,7 +22,10 @@ export interface TunnelOptions {
  * speaks Core's own RPC, so there is no protocol here to keep in step with Core's.
  */
 export function tunnel(link: Link, options: TunnelOptions) {
-  const core = new WebSocket(options.url, Capabilities.subprotocolsFor(options.token));
+  const core = new WebSocket(
+    options.url,
+    Capabilities.subprotocolsFor(options.token),
+  );
   const held: string[] = [];
   link.onMessage((text) => {
     const frame = decodeDeviceFrame(text);
@@ -36,8 +41,13 @@ export function tunnel(link: Link, options: TunnelOptions) {
   core.on('open', () => {
     for (const text of held.splice(0)) core.send(text);
   });
-  core.on('message', (data: Buffer) => link.isOpen() && link.send(data.toString('utf8')));
+  core.on(
+    'message',
+    (data: Buffer) => link.isOpen() && link.send(data.toString('utf8')),
+  );
   // Every failure also closes the socket; the close is what's acted on.
   core.on('error', () => {});
-  core.on('close', () => link.close(1011, 'This computer’s Core closed the connection'));
+  core.on('close', () =>
+    link.close(1011, 'This computer’s Core closed the connection'),
+  );
 }

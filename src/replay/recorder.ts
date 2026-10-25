@@ -21,7 +21,10 @@ export function recordAction(state: State, action: Action) {
   const captured = linesFor(state, action, Date.now(), (id) => started.has(id));
   if (!captured || capped.has(captured.threadId)) return;
   started.add(captured.threadId);
-  pending.set(captured.threadId, [...(pending.get(captured.threadId) ?? []), ...captured.lines]);
+  pending.set(captured.threadId, [
+    ...(pending.get(captured.threadId) ?? []),
+    ...captured.lines,
+  ]);
   timer ??= setTimeout(flushReplays, FLUSH_MS);
 }
 
@@ -44,7 +47,9 @@ function forget(threadIds: string[]) {
     pending.delete(id);
     started.delete(id);
   }
-  host.data.clearReplays(threadIds).catch((error: unknown) => console.error('Removing replays failed', error));
+  host.data
+    .clearReplays(threadIds)
+    .catch((error: unknown) => console.error('Removing replays failed', error));
 }
 
 /** Clearing every recording in Settings: the next action of each thread writes a new base. */
@@ -54,4 +59,5 @@ export function forgetAllReplays() {
   capped.clear();
 }
 
-if (typeof window !== 'undefined') window.addEventListener('beforeunload', () => void flushReplays());
+if (typeof window !== 'undefined')
+  window.addEventListener('beforeunload', () => void flushReplays());

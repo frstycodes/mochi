@@ -1,8 +1,28 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { toast } from '@/toast/store';
-import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from '@/icons';
-import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
+import {
+  ArrowUp,
+  ClipboardList,
+  Hand,
+  Paperclip,
+  ShieldAlert,
+  ShieldCheck,
+  Stop,
+} from '@/icons';
+import {
+  Attachment,
+  AttachmentInfo,
+  AttachmentPreview,
+  AttachmentRemove,
+  Attachments,
+} from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import { openPhotos } from './photo/photos';
@@ -23,11 +43,25 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input';
 import { AutoHeight } from '@/components/ui/auto-height';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { MetaChip } from './MetaChip';
 import type { Provider, Repo } from './model';
-import { EffortPicker, ModelPicker, SpeedPicker, useModels, useNewThreadDefaults } from './ModelControls';
+import {
+  EffortPicker,
+  ModelPicker,
+  SpeedPicker,
+  useModels,
+  useNewThreadDefaults,
+} from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
@@ -35,13 +69,21 @@ import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import type { SlashItem } from './chat/slash';
 import { ComposerEditor } from './chat/ComposerEditor';
 import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
-import { IMAGE_ERRORS, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES } from './chat/images';
+import {
+  IMAGE_ERRORS,
+  IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_IMAGES,
+} from './chat/images';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
 // Each new thread page takes a fresh id, so nothing mounted later animates from a composer that already docked.
 const handoffs = new Map<string, string>();
 let nextHandoff = 0;
-export const HANDOFF_TRANSITION = { duration: 0.35, ease: [0.32, 0.72, 0, 1] } as const;
+export const HANDOFF_TRANSITION = {
+  duration: 0.35,
+  ease: [0.32, 0.72, 0, 1],
+} as const;
 
 export function newComposerLayoutId(leafId: string) {
   return `composer-${leafId}-${nextHandoff++}`;
@@ -62,19 +104,44 @@ export function useComposerHandoff(leafId: string) {
   useEffect(() => {
     handoffs.delete(leafId);
   }, [leafId]);
-  return { isHandoff: !!layoutId, layout: { layoutId: reduce ? undefined : layoutId, layoutCrossfade: false, transition: HANDOFF_TRANSITION } };
+  return {
+    isHandoff: !!layoutId,
+    layout: {
+      layoutId: reduce ? undefined : layoutId,
+      layoutCrossfade: false,
+      transition: HANDOFF_TRANSITION,
+    },
+  };
 }
 
 /** The glass card. Holds an optional tray above a ComposerInput; `isStatic` skips the height animation. */
-export function ComposerCard({ className, children, isStatic, ...props }: ComponentProps<'div'> & { isStatic?: boolean }) {
+export function ComposerCard({
+  className,
+  children,
+  isStatic,
+  ...props
+}: ComponentProps<'div'> & { isStatic?: boolean }) {
   return (
-    <div className={cn('surface-glass-focus overflow-hidden rounded-2xl border shadow-composer transition-[border-color] has-[.cm-focused]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
-      {isStatic ? children : <AutoHeight className="justify-end">{children}</AutoHeight>}
+    <div
+      className={cn(
+        'surface-glass-focus overflow-hidden rounded-2xl border shadow-composer transition-[border-color] has-[.cm-focused]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent',
+        className,
+      )}
+      {...props}
+    >
+      {isStatic ? (
+        children
+      ) : (
+        <AutoHeight className="justify-end">{children}</AutoHeight>
+      )}
     </div>
   );
 }
 
-type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> & {
+type ComposerInputProps = Omit<
+  ComponentProps<typeof ComposerEditor>,
+  'items'
+> & {
   controls: ThreadControls;
   provider: Provider;
   /** Keeps the model list to `provider`. */
@@ -85,7 +152,9 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   /** `/` commands and skills a token in the text can resolve to. */
   slashItems: SlashItem[];
   /** Return `false` to hold the message: the text stays in the input. */
-  onSend: (message: PromptInputMessage) => void | boolean | Promise<void | boolean>;
+  onSend: (
+    message: PromptInputMessage,
+  ) => void | boolean | Promise<void | boolean>;
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
@@ -97,7 +166,22 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, isModelOnly, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
+export function ComposerInput({
+  controls,
+  provider,
+  isLocked,
+  isModelOnly,
+  onControlsChange,
+  slashItems,
+  onSend,
+  onStop,
+  submitLabel = 'Send',
+  meter,
+  draftKey,
+  draftExtra,
+  className,
+  ...editorProps
+}: ComposerInputProps) {
   const catalog = useModels(useSpace().id);
   const model = optionFor(catalog[provider], controls.model, provider);
   const defaults = useNewThreadDefaults(catalog, model);
@@ -108,15 +192,30 @@ export function ComposerInput({ controls, provider, isLocked, isModelOnly, onCon
     hold(result);
   };
   return (
-    <PromptInput multiple globalDrop accept={IMAGE_TYPES.join(',')} maxFileSize={MAX_IMAGE_BYTES} maxFiles={MAX_IMAGES} onError={(e) => toast.error(IMAGE_ERRORS[e.code])} onSubmit={send}>
+    <PromptInput
+      multiple
+      globalDrop
+      accept={IMAGE_TYPES.join(',')}
+      maxFileSize={MAX_IMAGE_BYTES}
+      maxFiles={MAX_IMAGES}
+      onError={(e) => toast.error(IMAGE_ERRORS[e.code])}
+      onSubmit={send}
+    >
       <ComposerAttachments />
       <PromptInputBody>
-        <ComposerEditor items={slashItems} className={cn('type-prose max-md:text-base', className)} {...editorProps} />
+        <ComposerEditor
+          items={slashItems}
+          className={cn('type-prose max-md:text-base', className)}
+          {...editorProps}
+        />
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>
           <PromptInputActionMenu>
-            <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
+            <PromptInputActionMenuTrigger
+              tooltip="Attach"
+              className="rounded-full"
+            >
               <Paperclip className="size-4" />
             </PromptInputActionMenuTrigger>
             <PromptInputActionMenuContent>
@@ -124,18 +223,46 @@ export function ComposerInput({ controls, provider, isLocked, isModelOnly, onCon
               <PromptInputActionAddScreenshot />
             </PromptInputActionMenuContent>
           </PromptInputActionMenu>
-          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} defaults={defaults.model} />
-          {!isModelOnly && <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />}
-          {!isModelOnly && <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />}
+          <ModelPicker
+            value={controls.model}
+            provider={provider}
+            isLocked={isLocked}
+            onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)}
+            defaults={defaults.model}
+          />
+          {!isModelOnly && (
+            <EffortPicker
+              model={model}
+              value={controls.effort}
+              onChange={(effort) => onControlsChange({ ...controls, effort })}
+              defaults={defaults.effort}
+            />
+          )}
+          {!isModelOnly && (
+            <SpeedPicker
+              model={model}
+              value={controls.speed}
+              onChange={(speed) => onControlsChange({ ...controls, speed })}
+              defaults={defaults.speed}
+            />
+          )}
         </PromptInputTools>
         <PromptInputTools>
           {meter}
           {onStop ? (
-            <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent" className="rounded-full">
+            <PromptInputSubmit
+              status="streaming"
+              onStop={onStop}
+              aria-label="Stop the agent"
+              className="rounded-full"
+            >
               <Stop className="size-4" />
             </PromptInputSubmit>
           ) : (
-            <PromptInputSubmit aria-label={submitLabel} className="rounded-full">
+            <PromptInputSubmit
+              aria-label={submitLabel}
+              className="rounded-full"
+            >
               <ArrowUp className="size-4" />
             </PromptInputSubmit>
           )}
@@ -168,7 +295,14 @@ function useComposerDraft(key: string, extra: unknown) {
     const saved = getDraft(key);
     if (saved) {
       textInput.setInput(saved.text);
-      attachments.add(saved.files.map((f) => new File([f.blob], f.filename ?? 'Attachment', { type: f.mediaType })));
+      attachments.add(
+        saved.files.map(
+          (f) =>
+            new File([f.blob], f.filename ?? 'Attachment', {
+              type: f.mediaType,
+            }),
+        ),
+      );
     }
     setIsRestored(true);
   }, [key, textInput, attachments]);
@@ -176,14 +310,27 @@ function useComposerDraft(key: string, extra: unknown) {
   useEffect(() => {
     if (!isRestored) return;
     const n = ++seq.current;
-    const blobOf = (url: string) => blobs.current.get(url) ?? blobs.current.set(url, fetch(url).then((r) => r.blob())).get(url)!;
+    const blobOf = (url: string) =>
+      blobs.current.get(url) ??
+      blobs.current
+        .set(
+          url,
+          fetch(url).then((r) => r.blob()),
+        )
+        .get(url)!;
     Promise.all(files.map((f) => blobOf(f.url)))
       .then((list) => {
         if (n !== seq.current) return;
-        const kept: DraftFile[] = files.map((f, i) => ({ filename: f.filename, mediaType: f.mediaType, blob: list[i] }));
+        const kept: DraftFile[] = files.map((f, i) => ({
+          filename: f.filename,
+          mediaType: f.mediaType,
+          blob: list[i],
+        }));
         saveDraft(key, { text, files: kept, extra });
       })
-      .catch((error: unknown) => console.error('Reading an attachment for the draft failed', error));
+      .catch((error: unknown) =>
+        console.error('Reading an attachment for the draft failed', error),
+      );
   }, [isRestored, key, text, files, extra]);
 
   return {
@@ -205,8 +352,20 @@ function ComposerAttachments() {
         <Attachments variant="grid" className="ml-0">
           {images.map((f, i) => (
             // Unclipped so the remove button can stick out of the corner; the preview clips itself.
-            <Attachment key={f.id} data={f} onRemove={() => remove(f.id)} className="size-16 overflow-visible rounded-lg border">
-              <button type="button" aria-label={`View ${f.filename ?? 'image'}`} onClick={() => openPhotos({ photos: images.map(toPhoto), index: i })} className="size-full cursor-zoom-in overflow-hidden rounded-lg">
+            <Attachment
+              key={f.id}
+              data={f}
+              onRemove={() => remove(f.id)}
+              className="size-16 overflow-visible rounded-lg border"
+            >
+              <button
+                type="button"
+                aria-label={`View ${f.filename ?? 'image'}`}
+                onClick={() =>
+                  openPhotos({ photos: images.map(toPhoto), index: i })
+                }
+                className="size-full cursor-zoom-in overflow-hidden rounded-lg"
+              >
                 <AttachmentPreview />
               </button>
               <AttachmentRemove className="-top-1.5 -right-1.5 size-5 bg-popover shadow-popover backdrop-blur-none group-focus-within:opacity-100 hover:bg-popover" />
@@ -218,7 +377,14 @@ function ComposerAttachments() {
         <Attachments variant="inline">
           {others.map((f, i) => (
             <Attachment key={f.id} data={f} onRemove={() => remove(f.id)}>
-              <button type="button" aria-label={`View ${f.filename ?? 'file'}`} onClick={() => openFiles({ files: others.map(toViewerFile), index: i })} className="flex min-w-0 cursor-pointer items-center gap-1.5">
+              <button
+                type="button"
+                aria-label={`View ${f.filename ?? 'file'}`}
+                onClick={() =>
+                  openFiles({ files: others.map(toViewerFile), index: i })
+                }
+                className="flex min-w-0 cursor-pointer items-center gap-1.5"
+              >
                 <AttachmentPreview />
                 <AttachmentInfo className="type-caption" />
               </button>
@@ -231,8 +397,20 @@ function ComposerAttachments() {
   );
 }
 
-const toPhoto = (f: { url?: string; filename?: string }) => ({ src: f.url ?? '', name: f.filename ?? 'Image' });
-const toViewerFile = (f: { url?: string; filename?: string; mediaType?: string }): ViewerFile => ({ source: 'attachment', name: f.filename ?? 'File', url: f.url ?? '', mediaType: f.mediaType });
+const toPhoto = (f: { url?: string; filename?: string }) => ({
+  src: f.url ?? '',
+  name: f.filename ?? 'Image',
+});
+const toViewerFile = (f: {
+  url?: string;
+  filename?: string;
+  mediaType?: string;
+}): ViewerFile => ({
+  source: 'attachment',
+  name: f.filename ?? 'File',
+  url: f.url ?? '',
+  mediaType: f.mediaType,
+});
 
 /** One line under the card for where and how the agent runs, wrapping on a phone. The gradient fades the transcript scrolling under it. */
 export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
@@ -251,11 +429,28 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
  * The harness's own modes with what each does there. Full access is warning-coloured wherever it shows, and the first pick
  * per thread asks for a second click inside the menu.
  */
-export function PermissionsMenu({ threadId, provider, value, onChange }: { threadId: string; provider: Provider; value: Access; onChange: (access: Access) => void }) {
+export function PermissionsMenu({
+  threadId,
+  provider,
+  value,
+  onChange,
+}: {
+  threadId: string;
+  provider: Provider;
+  value: Access;
+  onChange: (access: Access) => void;
+}) {
   const [isArmed, setIsArmed] = useState(false);
   const access = accessFor(provider, value);
-  const modes = Object.entries(PERMISSIONS[provider]) as [Access, { hint: string }][];
-  const needsConfirm = (mode: Access) => mode === 'Full access' && access !== mode && !fullAccessConfirmed.has(threadId) && !isArmed;
+  const modes = Object.entries(PERMISSIONS[provider]) as [
+    Access,
+    { hint: string },
+  ][];
+  const needsConfirm = (mode: Access) =>
+    mode === 'Full access' &&
+    access !== mode &&
+    !fullAccessConfirmed.has(threadId) &&
+    !isArmed;
   const choose = (mode: Access) => {
     if (needsConfirm(mode)) return setIsArmed(true);
     if (mode === 'Full access') fullAccessConfirmed.add(threadId);
@@ -264,7 +459,13 @@ export function PermissionsMenu({ threadId, provider, value, onChange }: { threa
   return (
     <DropdownMenu onOpenChange={(open) => !open && setIsArmed(false)}>
       <DropdownMenuTrigger asChild>
-        <MetaChip className={cn(access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:bg-warning/12 dark:hover:bg-warning/20')} aria-label={`Permissions: ${access}`}>
+        <MetaChip
+          className={cn(
+            access === 'Full access' &&
+              'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:bg-warning/12 dark:hover:bg-warning/20',
+          )}
+          aria-label={`Permissions: ${access}`}
+        >
           <AccessIcon access={access} />
           {access}
         </MetaChip>
@@ -272,16 +473,36 @@ export function PermissionsMenu({ threadId, provider, value, onChange }: { threa
       <DropdownMenuContent align="start" className="w-76">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Permissions</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={access} onValueChange={(v) => choose(v as Access)}>
+          <DropdownMenuRadioGroup
+            value={access}
+            onValueChange={(v) => choose(v as Access)}
+          >
             {modes.map(([mode, { hint }]) => {
               const isFull = mode === 'Full access';
               return (
                 // Radix changes the value whether or not onSelect is prevented; preventing only keeps the menu open for the confirm.
-                <DropdownMenuRadioItem key={mode} value={mode} onSelect={(e) => needsConfirm(mode) && e.preventDefault()} className={cn('items-start py-1.5', isFull && 'text-warning focus:**:text-warning')}>
+                <DropdownMenuRadioItem
+                  key={mode}
+                  value={mode}
+                  onSelect={(e) => needsConfirm(mode) && e.preventDefault()}
+                  className={cn(
+                    'items-start py-1.5',
+                    isFull && 'text-warning focus:**:text-warning',
+                  )}
+                >
                   <AccessIcon access={mode} className="mt-0.5" />
                   <span className="flex min-w-0 flex-col">
                     {mode}
-                    <span className={cn('type-caption text-muted-foreground', isFull && isArmed && 'text-warning')}>{isFull && isArmed ? 'Choose again to turn on: nothing will ask before it runs' : hint}</span>
+                    <span
+                      className={cn(
+                        'type-caption text-muted-foreground',
+                        isFull && isArmed && 'text-warning',
+                      )}
+                    >
+                      {isFull && isArmed
+                        ? 'Choose again to turn on: nothing will ask before it runs'
+                        : hint}
+                    </span>
                   </span>
                 </DropdownMenuRadioItem>
               );
@@ -296,9 +517,20 @@ export function PermissionsMenu({ threadId, provider, value, onChange }: { threa
 // ponytail: kept in memory, so a reload asks once more per thread; persist it if that grates.
 const fullAccessConfirmed = new Set<string>();
 
-const ACCESS_ICONS = { Manual: Hand, Auto: ShieldCheck, 'Full access': ShieldAlert, Plan: ClipboardList } satisfies Record<Access, unknown>;
+const ACCESS_ICONS = {
+  Manual: Hand,
+  Auto: ShieldCheck,
+  'Full access': ShieldAlert,
+  Plan: ClipboardList,
+} satisfies Record<Access, unknown>;
 
-function AccessIcon({ access, className }: { access: Access; className?: string }) {
+function AccessIcon({
+  access,
+  className,
+}: {
+  access: Access;
+  className?: string;
+}) {
   const Icon = ACCESS_ICONS[access];
   return <Icon aria-hidden className={className} />;
 }

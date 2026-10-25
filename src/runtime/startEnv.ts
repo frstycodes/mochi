@@ -12,10 +12,19 @@ export interface StartEnv {
   threadCwd: (thread: Pick<Thread, 'id' | 'repo' | 'live'>) => string | null;
   projectRoot: (repo: Repo) => string | null;
   worktreePath: (threadId: string) => string | undefined;
-  agentOptions: (controls: ThreadControls, provider: Provider, spaceId: string) => Partial<AgentStartOptions>;
+  agentOptions: (
+    controls: ThreadControls,
+    provider: Provider,
+    spaceId: string,
+  ) => Partial<AgentStartOptions>;
 }
 
-let env: StartEnv = { threadCwd: threadRoot, projectRoot: (repo) => repo.path ?? null, worktreePath: () => undefined, agentOptions: () => ({}) };
+let env: StartEnv = {
+  threadCwd: threadRoot,
+  projectRoot: (repo) => repo.path ?? null,
+  worktreePath: () => undefined,
+  agentOptions: () => ({}),
+};
 
 export const startEnv = () => env;
 

@@ -1,6 +1,12 @@
 // Stands in for bare `shiki` (aliased in vite.config.ts). The full bundle ships every grammar, which the
 // single-file artifact inlines (about 7 MB); @pierre/diffs only needs these. Add a language here when a diff needs it.
-import { createBundledHighlighter, createSingletonShorthands, type BundledLanguageInfo, type DynamicImportLanguageRegistration, type DynamicImportThemeRegistration } from 'shiki/core';
+import {
+  createBundledHighlighter,
+  createSingletonShorthands,
+  type BundledLanguageInfo,
+  type DynamicImportLanguageRegistration,
+  type DynamicImportThemeRegistration,
+} from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
 export * from 'shiki/core';
@@ -26,5 +32,17 @@ export const bundledLanguages = {
 export const bundledLanguagesInfo: BundledLanguageInfo[] = [];
 export const bundledThemes: Record<string, DynamicImportThemeRegistration> = {};
 
-export const createHighlighter = createBundledHighlighter({ langs: bundledLanguages, themes: bundledThemes, engine: () => createJavaScriptRegexEngine() });
-export const { codeToHtml, codeToHast, codeToTokens, codeToTokensBase, codeToTokensWithThemes, getSingletonHighlighter, getLastGrammarState } = createSingletonShorthands(createHighlighter);
+export const createHighlighter = createBundledHighlighter({
+  langs: bundledLanguages,
+  themes: bundledThemes,
+  engine: () => createJavaScriptRegexEngine(),
+});
+export const {
+  codeToHtml,
+  codeToHast,
+  codeToTokens,
+  codeToTokensBase,
+  codeToTokensWithThemes,
+  getSingletonHighlighter,
+  getLastGrammarState,
+} = createSingletonShorthands(createHighlighter);

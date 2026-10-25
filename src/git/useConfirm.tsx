@@ -20,15 +20,21 @@ export interface ConfirmRequest {
 
 /** `await confirm({...})` resolves true only when the user picks the confirm action; render `dialog` once. */
 export function useConfirm() {
-  const [request, setRequest] = useState<(ConfirmRequest & { resolve: (ok: boolean) => void }) | null>(null);
-  const confirm = (r: ConfirmRequest) => new Promise<boolean>((resolve) => setRequest({ ...r, resolve }));
+  const [request, setRequest] = useState<
+    (ConfirmRequest & { resolve: (ok: boolean) => void }) | null
+  >(null);
+  const confirm = (r: ConfirmRequest) =>
+    new Promise<boolean>((resolve) => setRequest({ ...r, resolve }));
   const settle = (ok: boolean) => {
     request?.resolve(ok);
     setRequest(null);
   };
 
   const dialog = (
-    <AlertDialog open={!!request} onOpenChange={(open) => !open && settle(false)}>
+    <AlertDialog
+      open={!!request}
+      onOpenChange={(open) => !open && settle(false)}
+    >
       {!!request && (
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -39,7 +45,10 @@ export function useConfirm() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{request.cancel}</AlertDialogCancel>
-            <AlertDialogAction variant={request.isDestructive ? 'destructive' : 'default'} onClick={() => settle(true)}>
+            <AlertDialogAction
+              variant={request.isDestructive ? 'destructive' : 'default'}
+              onClick={() => settle(true)}
+            >
               {request.confirm}
             </AlertDialogAction>
           </AlertDialogFooter>

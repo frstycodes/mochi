@@ -12,7 +12,13 @@ export function useAutoArchive() {
   const { state, dispatch } = useHarness();
   useEffect(() => {
     for (const thread of state.threads.filter(isArchiveDue)) {
-      for (const pr of thread.prs.filter((p) => p.autoArchive)) dispatch({ type: 'auto-archive-set', threadId: thread.id, pr: pr.number, isOn: false });
+      for (const pr of thread.prs.filter((p) => p.autoArchive))
+        dispatch({
+          type: 'auto-archive-set',
+          threadId: thread.id,
+          pr: pr.number,
+          isOn: false,
+        });
       toggleSettle([thread], dispatch);
     }
   }, [state.threads, dispatch]);

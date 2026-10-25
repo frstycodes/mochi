@@ -16,18 +16,42 @@ test('normalizeOrigin gives https, ssh and scp-style remotes of one repo the sam
     'git://github.com/Foo/Bar.git',
   ])
     assert.equal(normalizeOrigin(url), 'github.com/Foo/Bar', url);
-  assert.equal(normalizeOrigin('git@gitlab.example.com:group/sub/repo.git'), 'gitlab.example.com/group/sub/repo', 'nested groups');
-  assert.equal(normalizeOrigin('https://bitbucket.org/team/repo.git'), 'bitbucket.org/team/repo');
+  assert.equal(
+    normalizeOrigin('git@gitlab.example.com:group/sub/repo.git'),
+    'gitlab.example.com/group/sub/repo',
+    'nested groups',
+  );
+  assert.equal(
+    normalizeOrigin('https://bitbucket.org/team/repo.git'),
+    'bitbucket.org/team/repo',
+  );
 });
 
 test('normalizeOrigin refuses what is not a network remote', () => {
-  for (const url of ['', '/Users/me/dev/repo', 'C:\\dev\\repo', 'C:/dev/repo', 'file:///tmp/repo', 'ext::sh -c touch% /tmp/x', 'https://github.com/', 'ftp://host/repo'])
+  for (const url of [
+    '',
+    '/Users/me/dev/repo',
+    'C:\\dev\\repo',
+    'C:/dev/repo',
+    'file:///tmp/repo',
+    'ext::sh -c touch% /tmp/x',
+    'https://github.com/',
+    'ftp://host/repo',
+  ])
     assert.equal(normalizeOrigin(url), null, url);
 });
 
 test('isCloneUrl refuses options, whitespace and helper transports', () => {
   assert.ok(isCloneUrl('https://github.com/Foo/Bar.git'));
   assert.ok(isCloneUrl('git@github.com:Foo/Bar.git'));
-  for (const url of ['--upload-pack=touch /tmp/x', '-uhttps://github.com/a/b', 'https://github.com/a/b c', 'ext::sh', 'not a url', 'owner/repo']) assert.equal(isCloneUrl(url), false, url);
+  for (const url of [
+    '--upload-pack=touch /tmp/x',
+    '-uhttps://github.com/a/b',
+    'https://github.com/a/b c',
+    'ext::sh',
+    'not a url',
+    'owner/repo',
+  ])
+    assert.equal(isCloneUrl(url), false, url);
   assert.equal(repoName('github.com/Foo/Bar'), 'Bar');
 });

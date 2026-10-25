@@ -11,22 +11,36 @@ export function PrStack({ thread }: { thread: Thread }) {
   if (prs.length === 0) return null;
   const shown = prs.slice(0, MAX_SHOWN);
   const hidden = prs.length - shown.length;
-  const title = PLURAL.select(prs.length) === 'one' ? '1 pull request' : `${prs.length} pull requests`;
+  const title =
+    PLURAL.select(prs.length) === 'one'
+      ? '1 pull request'
+      : `${prs.length} pull requests`;
   return (
     <RefListHoverCard items={prs} title={title} side="bottom" align="end">
-      <span role="list" tabIndex={0} data-nested-preview aria-label={`${title}: ${prs.map((p) => `${p.label} ${refDescription('pr', p.state)}`).join(', ')}`} className={MARK}>
+      <span
+        role="list"
+        tabIndex={0}
+        data-nested-preview
+        aria-label={`${title}: ${prs.map((p) => `${p.label} ${refDescription('pr', p.state)}`).join(', ')}`}
+        className={MARK}
+      >
         {shown.map((item) => (
           <span key={item.label} role="listitem" className="flex">
             {/* `!`: the sidebar button sizes every svg inside it to 16px. */}
             <RefIcon item={item} className="size-3!" />
           </span>
         ))}
-        {hidden > 0 && <span className="tabular type-caption text-muted-foreground">+{hidden}</span>}
+        {hidden > 0 && (
+          <span className="tabular type-caption text-muted-foreground">
+            +{hidden}
+          </span>
+        )}
       </span>
     </RefListHoverCard>
   );
 }
 
-const MARK = 'flex shrink-0 cursor-default items-center gap-1 rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring';
+const MARK =
+  'flex shrink-0 cursor-default items-center gap-1 rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring';
 
 const PLURAL = new Intl.PluralRules('en');

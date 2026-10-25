@@ -32,18 +32,43 @@ export function usePrSwitches(thread: Thread, item: ThreadPr): PrSwitch[] {
       () => githubRef && refreshRef(githubRef, scope, { isAutoMerge: isOn }),
       (error: Error) => {
         if (githubRef) patchRef(githubRef, { isAutoMerge: !isOn });
-        toast.error(isOn ? 'Couldn’t turn on Merge when ready' : 'Couldn’t turn off Merge when ready', { description: error.message });
+        toast.error(
+          isOn
+            ? 'Couldn’t turn on Merge when ready'
+            : 'Couldn’t turn off Merge when ready',
+          { description: error.message },
+        );
       },
     );
   };
-  const autofix: PrSwitch = { id: 'autofix', label: 'Auto-fix', hint: 'Fixes CI and conflicts, weighs reviews', isOn: !!pr.autofixSince, set: (isOn) => setAutofix(dispatch, thread, pr, isOn) };
-  const merge: PrSwitch = { id: 'merge', label: 'Merge when ready', hint: 'Merges once checks and reviews pass', isOn: state.isAutoMerge, set: setMerge };
+  const autofix: PrSwitch = {
+    id: 'autofix',
+    label: 'Auto-fix',
+    hint: 'Fixes CI and conflicts, weighs reviews',
+    isOn: !!pr.autofixSince,
+    set: (isOn) => setAutofix(dispatch, thread, pr, isOn),
+  };
+  const merge: PrSwitch = {
+    id: 'merge',
+    label: 'Merge when ready',
+    hint: 'Merges once checks and reviews pass',
+    isOn: state.isAutoMerge,
+    set: setMerge,
+  };
   const archive: PrSwitch = {
     id: 'archive',
     label: 'Auto-archive on merge or close',
     hint: 'Once every PR is done and the agent is idle',
     isOn: !!pr.autoArchive,
-    set: (isOn) => dispatch({ type: 'auto-archive-set', threadId: thread.id, pr: pr.number, isOn }),
+    set: (isOn) =>
+      dispatch({
+        type: 'auto-archive-set',
+        threadId: thread.id,
+        pr: pr.number,
+        isOn,
+      }),
   };
-  return state.status === 'open' ? [autofix, merge, archive] : [autofix, archive];
+  return state.status === 'open'
+    ? [autofix, merge, archive]
+    : [autofix, archive];
 }

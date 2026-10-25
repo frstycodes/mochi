@@ -12,8 +12,18 @@ export interface ThemesHost {
   list(): Promise<ColorTheme[]>;
   search(query: string, offset: number): Promise<SearchResult>;
   /** A version's themes, downloaded and read for preview without installing. */
-  inspect(namespace: string, name: string, version: string, displayName: string): Promise<ColorTheme[]>;
-  install(namespace: string, name: string, version: string, displayName: string): Promise<ColorTheme[]>;
+  inspect(
+    namespace: string,
+    name: string,
+    version: string,
+    displayName: string,
+  ): Promise<ColorTheme[]>;
+  install(
+    namespace: string,
+    name: string,
+    version: string,
+    displayName: string,
+  ): Promise<ColorTheme[]>;
   uninstall(namespace: string, name: string): Promise<void>;
   /** The OS file picker for a .json/.jsonc theme, `include`s resolved next to it; null when dismissed. */
   importFile(): Promise<ColorTheme | null>;

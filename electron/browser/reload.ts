@@ -1,11 +1,29 @@
 import { watchFromMain } from '../fs/watchClient.ts';
 
 // Build output, caches and VCS data change on every build; a reload for them would loop with the dev server's own writes.
-const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'dist-electron', 'build', 'out', 'coverage', '.next', '.nuxt', '.svelte-kit', '.turbo', '.cache', '.vite', '.parcel-cache', '.output', 'target']);
+const IGNORED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'dist-electron',
+  'build',
+  'out',
+  'coverage',
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  '.turbo',
+  '.cache',
+  '.vite',
+  '.parcel-cache',
+  '.output',
+  'target',
+]);
 // Editor swap and backup files, macOS metadata.
 const IGNORED_FILE = /(^\.DS_Store$|~$|\.sw[a-p]$|^\.#|^#.*#$|\.tmp$)/;
 // What dev servers print when they hot-swapped or reloaded the page themselves (Vite, webpack, Next's Fast Refresh, Parcel).
-const HMR_LOG = /\[vite\] (hot updated|page reload|css hot updated)|\[HMR\]|\[Fast Refresh\]|\[parcel\] .*(updated|reload)/i;
+const HMR_LOG =
+  /\[vite\] (hot updated|page reload|css hot updated)|\[HMR\]|\[Fast Refresh\]|\[parcel\] .*(updated|reload)/i;
 
 export const DEBOUNCE_MS = 250;
 // How long a dev server gets to hot-reload a change before Mochi reloads the page itself.
@@ -16,7 +34,10 @@ const SCROLL_FRESH_MS = 10_000;
 /** `rel` is relative to the watched root, in the platform's separators. */
 export function isIgnored(rel: string) {
   const parts = rel.split(/[\\/]/).filter(Boolean);
-  return parts.some((p) => IGNORED_DIRS.has(p)) || IGNORED_FILE.test(parts.at(-1) ?? '');
+  return (
+    parts.some((p) => IGNORED_DIRS.has(p)) ||
+    IGNORED_FILE.test(parts.at(-1) ?? '')
+  );
 }
 
 export const isHmrLog = (message: string) => HMR_LOG.test(message);
@@ -33,15 +54,26 @@ export function debounce(fn: () => void, ms: number) {
 }
 
 /** Changed paths under `root`, `/`-separated, until the returned stop function runs. */
-export type FollowChanges = (root: string, onPaths: (paths: ReadonlyArray<string>) => void) => () => void;
+export type FollowChanges = (
+  root: string,
+  onPaths: (paths: ReadonlyArray<string>) => void,
+) => () => void;
 
-const followCore: FollowChanges = (root, onPaths) => watchFromMain({ _tag: 'changes', root }, (value) => value._tag === 'changes' && onPaths(value.paths));
+const followCore: FollowChanges = (root, onPaths) =>
+  watchFromMain(
+    { _tag: 'changes', root },
+    (value) => value._tag === 'changes' && onPaths(value.paths),
+  );
 
 /**
  * Changes under `root` from Core's shared watch on it, debounced, ignoring build and VCS dirs. `onChange` gets the time of the
  * burst's first write, so a dev server that reacted inside the debounce still counts as having handled it. Returns the stop function.
  */
-export function watchTree(root: string, onChange: (since: number) => void, follow = followCore) {
+export function watchTree(
+  root: string,
+  onChange: (since: number) => void,
+  follow = followCore,
+) {
   let since = 0;
   const fire = debounce(() => {
     onChange(since);
@@ -75,7 +107,12 @@ export class ScrollMemory {
     const k = key(url);
     const found = this.#byUrl.get(k);
     this.#byUrl.delete(k);
-    if (!found || now - found.at > SCROLL_FRESH_MS || (found.x === 0 && found.y === 0)) return null;
+    if (
+      !found ||
+      now - found.at > SCROLL_FRESH_MS ||
+      (found.x === 0 && found.y === 0)
+    )
+      return null;
     return { x: found.x, y: found.y };
   }
 }
@@ -84,7 +121,8 @@ function key(url: string) {
   return url.split('#')[0];
 }
 
-export const READ_SCROLL_SCRIPT = '({ x: Math.round(scrollX), y: Math.round(scrollY) })';
+export const READ_SCROLL_SCRIPT =
+  '({ x: Math.round(scrollX), y: Math.round(scrollY) })';
 
 /** Retries until the page is tall enough: an SPA renders its content a few frames after the load event. */
 export const restoreScrollScript = ({ x, y }: ScrollPos) =>

@@ -15,9 +15,11 @@ const MAX_DELAY_MS = 60_000;
 /** A wake nobody signalled: covers an effect whose retry timer died with a Core restart. */
 const IDLE_MS = 30_000;
 
-export const retryDelay = (attempt: number) => Math.min(1000 * 2 ** (attempt - 1), MAX_DELAY_MS);
+export const retryDelay = (attempt: number) =>
+  Math.min(1000 * 2 ** (attempt - 1), MAX_DELAY_MS);
 
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const messageOf = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
 
 /** `skipped`: the executor found the command no longer due. It is dropped, so its rule can emit it again once it is. */
 export type Outcome = 'skipped' | void;
@@ -28,27 +30,59 @@ export type Outcome = 'skipped' | void;
  * `MAX_ATTEMPTS` times unless it is `Unavailable`. Effects a Core restart left running are claimed again (the store resets
  * them at startup), so an executor must tolerate a rerun.
  */
-export const outboxWorker = (store: Store['Service'], execute: (effect: OutboxEffect) => Effect.Effect<Outcome, unknown>, forget: (commandId: string) => void = () => {}) =>
+export const outboxWorker = (
+  store: Store['Service'],
+  execute: (effect: OutboxEffect) => Effect.Effect<Outcome, unknown>,
+  forget: (commandId: string) => void = () => {},
+) =>
   Effect.gen(function* () {
     const scope = yield* Scope.Scope;
     const signal = yield* Queue.sliding<void>(1);
     const wake = Effect.sync(() => void Queue.offerUnsafe(signal, undefined));
-    const wakeAt = (at: number) => Effect.asVoid(Effect.forkIn(Effect.andThen(Effect.sleep(Math.max(0, at - Date.now())), wake), scope));
+    const wakeAt = (at: number) =>
+      Effect.asVoid(
+        Effect.forkIn(
+          Effect.andThen(Effect.sleep(Math.max(0, at - Date.now())), wake),
+          scope,
+        ),
+      );
 
     const settle = (effect: OutboxEffect) =>
       execute(effect).pipe(
         Effect.matchEffect({
-          onSuccess: (outcome) => (outcome === 'skipped' ? Effect.andThen(store.release(effect.id), Effect.sync(() => forget(effect.commandId))) : store.complete(effect.id)),
+          onSuccess: (outcome) =>
+            outcome === 'skipped'
+              ? Effect.andThen(
+                  store.release(effect.id),
+                  Effect.sync(() => forget(effect.commandId)),
+                )
+              : store.complete(effect.id),
           onFailure: (error) => {
-            const isRetried = error instanceof Unavailable || effect.attempt < MAX_ATTEMPTS;
-            if (!isRetried) return Effect.andThen(Effect.logWarning(`Reactor ${effect.type} gave up: ${messageOf(error)}`), store.fail(effect.id, messageOf(error)));
+            const isRetried =
+              error instanceof Unavailable || effect.attempt < MAX_ATTEMPTS;
+            if (!isRetried)
+              return Effect.andThen(
+                Effect.logWarning(
+                  `Reactor ${effect.type} gave up: ${messageOf(error)}`,
+                ),
+                store.fail(effect.id, messageOf(error)),
+              );
             const at = Date.now() + retryDelay(effect.attempt);
-            return Effect.andThen(store.fail(effect.id, messageOf(error), new Date(at).toISOString()), wakeAt(at));
+            return Effect.andThen(
+              store.fail(
+                effect.id,
+                messageOf(error),
+                new Date(at).toISOString(),
+              ),
+              wakeAt(at),
+            );
           },
         }),
         Effect.annotateLogs({ source: 'reactor' }),
         // A store write that failed leaves the row running; the next start claims it again.
-        Effect.catchCause((cause) => Effect.logError('Reactor outbox write failed', cause)),
+        Effect.catchCause((cause) =>
+          Effect.logError('Reactor outbox write failed', cause),
+        ),
       );
 
     const drain = Effect.gen(function* () {
@@ -61,8 +95,12 @@ export const outboxWorker = (store: Store['Service'], execute: (effect: OutboxEf
 
     yield* Effect.forkIn(
       drain.pipe(
-        Effect.catchCause((cause) => Effect.logError('Reactor outbox claim failed', cause)),
-        Effect.andThen(Effect.raceFirst(Queue.take(signal), Effect.sleep(IDLE_MS))),
+        Effect.catchCause((cause) =>
+          Effect.logError('Reactor outbox claim failed', cause),
+        ),
+        Effect.andThen(
+          Effect.raceFirst(Queue.take(signal), Effect.sleep(IDLE_MS)),
+        ),
         Effect.forever,
       ),
       scope,

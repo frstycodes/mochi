@@ -18,12 +18,16 @@ export function endRename() {
 
 /** Where this thread is being renamed, if it is. */
 export function useRenameSurface(threadId: string) {
-  return useSyncExternalStore(subscribe, () => (renaming?.threadId === threadId ? renaming.surface : undefined));
+  return useSyncExternalStore(subscribe, () =>
+    renaming?.threadId === threadId ? renaming.surface : undefined,
+  );
 }
 
 /** The thread being renamed in the dialog. */
 export function useDialogRename() {
-  return useSyncExternalStore(subscribe, () => (renaming?.surface === 'dialog' ? renaming.threadId : undefined));
+  return useSyncExternalStore(subscribe, () =>
+    renaming?.surface === 'dialog' ? renaming.threadId : undefined,
+  );
 }
 
 /**

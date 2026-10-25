@@ -15,7 +15,8 @@ export interface Rates {
 export type PriceBook = (model: string) => Rates | null;
 
 /** LiteLLM's public table, the one ccusage prices with: kept current by its maintainers as models launch or change price. */
-export const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
+export const LITELLM_URL =
+  'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -28,16 +29,23 @@ let loaded: { book: PriceBook; at: number } | null = null;
 export async function priceBook(cacheFile: string): Promise<PriceBook> {
   if (loaded && Date.now() - loaded.at < MAX_AGE_MS) return loaded.book;
   const saved = await readFile(cacheFile, 'utf8')
-    .then((text) => JSON.parse(text) as { fetchedAt: number; table: LiteLlmTable })
+    .then(
+      (text) => JSON.parse(text) as { fetchedAt: number; table: LiteLlmTable },
+    )
     .catch(() => null);
   let table = saved?.table ?? null;
   if (!saved || Date.now() - saved.fetchedAt > MAX_AGE_MS) {
-    const fresh = await fetch(LITELLM_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+    const fresh = await fetch(LITELLM_URL, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
       .then((res) => (res.ok ? (res.json() as Promise<LiteLlmTable>) : null))
       .catch(() => null);
     if (fresh) {
       table = fresh;
-      await writeFile(cacheFile, JSON.stringify({ fetchedAt: Date.now(), table: fresh })).catch(() => {});
+      await writeFile(
+        cacheFile,
+        JSON.stringify({ fetchedAt: Date.now(), table: fresh }),
+      ).catch(() => {});
     }
   }
   const fromTable = table ? liteLlmBook(table) : () => null;
@@ -54,8 +62,14 @@ export function liteLlmBook(table: LiteLlmTable): PriceBook {
   return (model) => {
     if (cache.has(model)) return cache.get(model)!;
     const bare = model.replace(/^\[[^\]]*\]\s*/, '');
-    const ids = [bare, bare.replace(/-\d{8}$/, '')].flatMap((id) => [id, `anthropic/${id}`, `openai/${id}`]);
-    const entry = ids.map((id) => table[id]).find((e) => e && typeof e.input_cost_per_token === 'number');
+    const ids = [bare, bare.replace(/-\d{8}$/, '')].flatMap((id) => [
+      id,
+      `anthropic/${id}`,
+      `openai/${id}`,
+    ]);
+    const entry = ids
+      .map((id) => table[id])
+      .find((e) => e && typeof e.input_cost_per_token === 'number');
     const rates = entry ? ratesFrom(entry) : null;
     cache.set(model, rates);
     return rates;
@@ -63,22 +77,46 @@ export function liteLlmBook(table: LiteLlmTable): PriceBook {
 }
 
 function ratesFrom(e: Record<string, unknown>): Rates {
-  const num = (key: string) => (typeof e[key] === 'number' ? (e[key] as number) : undefined);
+  const num = (key: string) =>
+    typeof e[key] === 'number' ? (e[key] as number) : undefined;
   const base = (suffix: string, fallback?: Omit<Rates, 'tiers'>) => {
     const input = num(`input_cost_per_token${suffix}`) ?? fallback?.input ?? 0;
-    const write5m = num(`cache_creation_input_token_cost${suffix}`) ?? fallback?.cacheWrite5m ?? input;
+    const write5m =
+      num(`cache_creation_input_token_cost${suffix}`) ??
+      fallback?.cacheWrite5m ??
+      input;
     return {
       input,
       output: num(`output_cost_per_token${suffix}`) ?? fallback?.output ?? 0,
       // GAP: a model with no cache-read price is charged its input rate for them; Claude and GPT models all list one.
-      cacheRead: num(`cache_read_input_token_cost${suffix}`) ?? fallback?.cacheRead ?? input,
+      cacheRead:
+        num(`cache_read_input_token_cost${suffix}`) ??
+        fallback?.cacheRead ??
+        input,
       cacheWrite5m: write5m,
-      cacheWrite1h: num(`cache_creation_input_token_cost_above_1hr${suffix}`) ?? fallback?.cacheWrite1h ?? write5m,
+      cacheWrite1h:
+        num(`cache_creation_input_token_cost_above_1hr${suffix}`) ??
+        fallback?.cacheWrite1h ??
+        write5m,
     };
   };
   const flat = base('');
-  const thresholds = [...new Set(Object.keys(e).flatMap((k) => /^input_cost_per_token_above_(\d+)k_tokens$/.exec(k)?.[1] ?? []))].map(Number).sort((a, b) => a - b);
-  return { ...flat, tiers: thresholds.map((k) => ({ above: k * 1000, ...base(`_above_${k}k_tokens`, flat) })) };
+  const thresholds = [
+    ...new Set(
+      Object.keys(e).flatMap(
+        (k) => /^input_cost_per_token_above_(\d+)k_tokens$/.exec(k)?.[1] ?? [],
+      ),
+    ),
+  ]
+    .map(Number)
+    .sort((a, b) => a - b);
+  return {
+    ...flat,
+    tiers: thresholds.map((k) => ({
+      above: k * 1000,
+      ...base(`_above_${k}k_tokens`, flat),
+    })),
+  };
 }
 
 /**
@@ -92,7 +130,8 @@ export function responseCost(r: UsageRecord, rates: Rates): CostParts {
     input: r.input * p.input,
     output: r.output * p.output,
     cacheRead: r.cacheRead * p.cacheRead,
-    cacheWrite: r.cacheWrite5m * p.cacheWrite5m + r.cacheWrite1h * p.cacheWrite1h,
+    cacheWrite:
+      r.cacheWrite5m * p.cacheWrite5m + r.cacheWrite1h * p.cacheWrite1h,
   };
 }
 
@@ -103,7 +142,13 @@ export function uncachedCost(r: UsageRecord, rates: Rates) {
   return prompt * p.input + r.output * p.output;
 }
 
-const perMillion = (input: number, output: number, cacheRead: number, cacheWrite5m = input * 1.25, cacheWrite1h = input * 2): Rates => ({
+const perMillion = (
+  input: number,
+  output: number,
+  cacheRead: number,
+  cacheWrite5m = input * 1.25,
+  cacheWrite1h = input * 2,
+): Rates => ({
   input: input / 1e6,
   output: output / 1e6,
   cacheRead: cacheRead / 1e6,

@@ -7,9 +7,13 @@ export const queryClient = new QueryClient({
   },
 });
 
-if (typeof window !== 'undefined') focusManager.setEventListener((onFocus) => {
-  const focus = () => onFocus(document.visibilityState !== 'hidden');
-  window.addEventListener('focus', focus);
-  window.addEventListener('visibilitychange', focus);
-  return () => { window.removeEventListener('focus', focus); window.removeEventListener('visibilitychange', focus); };
-});
+if (typeof window !== 'undefined')
+  focusManager.setEventListener((onFocus) => {
+    const focus = () => onFocus(document.visibilityState !== 'hidden');
+    window.addEventListener('focus', focus);
+    window.addEventListener('visibilitychange', focus);
+    return () => {
+      window.removeEventListener('focus', focus);
+      window.removeEventListener('visibilitychange', focus);
+    };
+  });

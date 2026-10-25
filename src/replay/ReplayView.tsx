@@ -1,12 +1,43 @@
 import { listenKeydown, commandOf, type CommandId } from '../keymap';
-import { memo, useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
+import {
+  memo,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronDownSmall, Rewind10, FileText, Share, Forward10, Pause, Play, SkipForwardAlt, SkipBack, VideoPlay, X } from '@/icons';
+import {
+  ChevronDownSmall,
+  Rewind10,
+  FileText,
+  Share,
+  Forward10,
+  Pause,
+  Play,
+  SkipForwardAlt,
+  SkipBack,
+  VideoPlay,
+  X,
+} from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
@@ -15,7 +46,11 @@ import { cn } from '@/lib/utils';
 import { ChatView } from '../ChatView';
 import { FilePath } from '../files/FileView';
 import type { DiffFile } from '../host/types/git';
-import { PreviewContext, SplitContext, type SplitInfo } from '../layout/SplitContext';
+import {
+  PreviewContext,
+  SplitContext,
+  type SplitInfo,
+} from '../layout/SplitContext';
 import type { Thread } from '../model';
 import { isTyping } from '../keys';
 import { BoundShortcut } from '../Shortcut';
@@ -25,10 +60,24 @@ import { summarize } from '../summary';
 import { TooltipIconButton } from '../ui';
 import { DiffStat, DiffView, Expand } from '../WorkLog';
 import type { ReplayExport } from './export';
-import { exportedCheckpoints, liveCheckpoints, loadRecording, shareReplay, type CheckpointSource } from './load';
+import {
+  exportedCheckpoints,
+  liveCheckpoints,
+  loadRecording,
+  shareReplay,
+  type CheckpointSource,
+} from './load';
 import { goBack, useEscapeBack, useReplayRoute } from '../routes/nav';
 import type { Recording } from './record';
-import { createReplayer, markers, replayedThread, stepsBy, timeline, type Marker, type MarkerKind } from './rebuild';
+import {
+  createReplayer,
+  markers,
+  replayedThread,
+  stepsBy,
+  timeline,
+  type Marker,
+  type MarkerKind,
+} from './rebuild';
 
 /** The replay page over the app: the thread's recording rebuilt step by step in a scratch store, read-only. */
 export function ReplayView() {
@@ -38,10 +87,23 @@ export function ReplayView() {
   const recording = useRecording(thread);
   useEscapeBack();
   const onExport = thread ? () => void shareReplay(state, thread) : undefined;
-  const header = <ReplayHeader title={thread?.title ?? 'Thread'} onExport={recording ? onExport : undefined} onClose={goBack} />;
+  const header = (
+    <ReplayHeader
+      title={thread?.title ?? 'Thread'}
+      onExport={recording ? onExport : undefined}
+      onClose={goBack}
+    />
+  );
   if (recording === undefined) return <ReplayLoading header={header} />;
   if (!recording || !thread) return <NothingRecorded header={header} />;
-  return <ReplayPlayer key={thread.id} recording={recording} checkpoints={liveCheckpoints(state, thread)} header={header} />;
+  return (
+    <ReplayPlayer
+      key={thread.id}
+      recording={recording}
+      checkpoints={liveCheckpoints(state, thread)}
+      header={header}
+    />
+  );
 }
 
 /** An exported page: the same player over the inlined recording, with no app around it. */
@@ -50,13 +112,20 @@ export function ReplayPage({ payload }: { payload: ReplayExport }) {
   const checkpoints = exportedCheckpoints(payload.checkpoints);
   return (
     <div className="h-svh">
-      <ReplayPlayer recording={payload.recording} checkpoints={checkpoints} header={<ReplayHeader title={title} />} />
+      <ReplayPlayer
+        recording={payload.recording}
+        checkpoints={checkpoints}
+        header={<ReplayHeader title={title} />}
+      />
     </div>
   );
 }
 
 function useRecording(thread: Thread | undefined) {
-  const [loaded, setLoaded] = useState<{ id: string; recording: Recording | null } | null>(null);
+  const [loaded, setLoaded] = useState<{
+    id: string;
+    recording: Recording | null;
+  } | null>(null);
   const id = thread?.id;
   const currentThread = useEffectEvent(() => thread!);
   useEffect(() => {
@@ -75,28 +144,54 @@ function useRecording(thread: Thread | undefined) {
   return loaded?.id === id ? loaded.recording : undefined;
 }
 
-function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: () => void; onClose?: () => void }) {
+function ReplayHeader({
+  title,
+  onExport,
+  onClose,
+}: {
+  title: string;
+  onExport?: () => void;
+  onClose?: () => void;
+}) {
   const hasSidebar = !!useOptionalSidebar();
   const content = (
     <>
-      <VideoPlay aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+      <VideoPlay
+        aria-hidden
+        className="size-4 shrink-0 text-muted-foreground"
+      />
       <span className="type-meta font-medium">Replay</span>
-      <span className="min-w-0 truncate type-meta text-muted-foreground">{title}</span>
+      <span className="min-w-0 truncate type-meta text-muted-foreground">
+        {title}
+      </span>
       <span className="flex-1" />
       {!!onExport && (
-        <Button variant="outline" size="sm" className="rounded-full" onClick={onExport}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full"
+          onClick={onExport}
+        >
           <Share data-icon="inline-start" />
           <span className="max-sm:sr-only">Export replay</span>
         </Button>
       )}
       {!!onClose && (
-        <TooltipIconButton label="Close replay" hint={<BoundShortcut command="dismiss" />} onClick={onClose}>
+        <TooltipIconButton
+          label="Close replay"
+          hint={<BoundShortcut command="dismiss" />}
+          onClick={onClose}
+        >
           <X />
         </TooltipIconButton>
       )}
     </>
   );
-  return hasSidebar ? <TitleBar>{content}</TitleBar> : <header className={TITLE_BAR}>{content}</header>;
+  return hasSidebar ? (
+    <TitleBar>{content}</TitleBar>
+  ) : (
+    <header className={TITLE_BAR}>{content}</header>
+  );
 }
 
 /** The exported page has no sidebar around it. */
@@ -112,10 +207,25 @@ function useOptionalSidebar() {
 const SPEEDS = [1, 2, 4, 8] as const;
 type Speed = (typeof SPEEDS)[number];
 
-const SPLIT: SplitInfo = { leafId: 'replay', isFocused: true, isMulti: false, isZoomed: false, isFirst: false, isWide: true };
+const SPLIT: SplitInfo = {
+  leafId: 'replay',
+  isFocused: true,
+  isMulti: false,
+  isZoomed: false,
+  isFirst: false,
+  isWide: true,
+};
 const NO_DISPATCH = () => {};
 
-function ReplayPlayer({ recording, checkpoints, header }: { recording: Recording; checkpoints: CheckpointSource; header: ReactNode }) {
+function ReplayPlayer({
+  recording,
+  checkpoints,
+  header,
+}: {
+  recording: Recording;
+  checkpoints: CheckpointSource;
+  header: ReactNode;
+}) {
   const playback = usePlayback(recording);
   const stateAt = createReplayer(recording);
   const scratch = stateAt(playback.n);
@@ -129,17 +239,44 @@ function ReplayPlayer({ recording, checkpoints, header }: { recording: Recording
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!!thread && <ReplayTranscript state={scratch} thread={thread} />}
         </div>
-        <aside aria-label="Files at this point" className="mb-3 hidden min-h-0 flex-col rounded-xl border bg-card md:flex">
-          {!!thread && <ReplayFiles source={checkpoints} thread={thread} now={scratch.now} />}
+        <aside
+          aria-label="Files at this point"
+          className="mb-3 hidden min-h-0 flex-col rounded-xl border bg-card md:flex"
+        >
+          {!!thread && (
+            <ReplayFiles
+              source={checkpoints}
+              thread={thread}
+              now={scratch.now}
+            />
+          )}
         </aside>
       </div>
-      <Transport playback={playback} isCapped={recording.isCapped} files={!!thread && <ReplayFiles source={checkpoints} thread={thread} now={scratch.now} />} />
+      <Transport
+        playback={playback}
+        isCapped={recording.isCapped}
+        files={
+          !!thread && (
+            <ReplayFiles
+              source={checkpoints}
+              thread={thread}
+              now={scratch.now}
+            />
+          )
+        }
+      />
     </div>
   );
 }
 
 /** The real chat view on the scratch store: changing only when a step lands, never on a playhead frame. */
-const ReplayTranscript = memo(function ReplayTranscript({ state, thread }: { state: State; thread: Thread }) {
+const ReplayTranscript = memo(function ReplayTranscript({
+  state,
+  thread,
+}: {
+  state: State;
+  thread: Thread;
+}) {
   return (
     <StoreScope state={state} dispatch={NO_DISPATCH}>
       <SplitContext.Provider value={SPLIT}>
@@ -202,7 +339,8 @@ function usePlayback(recording: Recording): Playback {
   }, [isPlaying, speed, total, setClock]);
 
   const seek = (ms: number) => setClock(Math.max(0, Math.min(total, ms)));
-  const seekStep = (to: number) => setClock(to <= 0 ? 0 : (times[Math.min(to, times.length) - 1] ?? 0));
+  const seekStep = (to: number) =>
+    setClock(to <= 0 ? 0 : (times[Math.min(to, times.length) - 1] ?? 0));
   return {
     clock,
     total,
@@ -234,7 +372,8 @@ function useReplayKeys(playback: Playback) {
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.defaultPrevented || isTyping(e.target)) return;
     const { toggle, seek, seekStep, clock, total, n, marks } = playback;
-    const marker = (by: 1 | -1) => (by > 0 ? marks.find((m) => m.n > n) : marks.findLast((m) => m.n < n));
+    const marker = (by: 1 | -1) =>
+      by > 0 ? marks.find((m) => m.n > n) : marks.findLast((m) => m.n < n);
     const actions: Record<string, () => void> = {
       'replay-toggle': toggle,
       'replay-toggle-k': toggle,
@@ -257,37 +396,101 @@ function useReplayKeys(playback: Playback) {
   useEffect(() => listenKeydown((e) => onKey(e)), []);
 }
 
-function Transport({ playback, isCapped, files }: { playback: Playback; isCapped: boolean; files: ReactNode }) {
-  const { clock, total, n, times, isPlaying, speed, skipIdle, toggle, seek, seekStep, setSpeed, setSkipIdle } = playback;
+function Transport({
+  playback,
+  isCapped,
+  files,
+}: {
+  playback: Playback;
+  isCapped: boolean;
+  files: ReactNode;
+}) {
+  const {
+    clock,
+    total,
+    n,
+    times,
+    isPlaying,
+    speed,
+    skipIdle,
+    toggle,
+    seek,
+    seekStep,
+    setSpeed,
+    setSkipIdle,
+  } = playback;
   return (
     <div className="flex shrink-0 flex-col gap-1.5 px-3 pt-1 pb-3">
       <Timeline playback={playback} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-0.5">
-          <TooltipIconButton label="Previous event" hint={<><BoundShortcut command="replay-previous" /> event, <BoundShortcut command="replay-marker-previous" /> marker</>} disabled={n === 0} onClick={() => seekStep(n - 1)}>
+          <TooltipIconButton
+            label="Previous event"
+            hint={
+              <>
+                <BoundShortcut command="replay-previous" /> event,{' '}
+                <BoundShortcut command="replay-marker-previous" /> marker
+              </>
+            }
+            disabled={n === 0}
+            onClick={() => seekStep(n - 1)}
+          >
             <SkipBack />
           </TooltipIconButton>
-          <Button size="icon" className="rounded-full" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
+          <Button
+            size="icon"
+            className="rounded-full"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            onClick={toggle}
+          >
             {isPlaying ? <Pause filled /> : <Play filled />}
           </Button>
-          <TooltipIconButton label="Next event" hint={<><BoundShortcut command="replay-next" /> event, <BoundShortcut command="replay-marker-next" /> marker</>} disabled={n >= times.length} onClick={() => seekStep(n + 1)}>
+          <TooltipIconButton
+            label="Next event"
+            hint={
+              <>
+                <BoundShortcut command="replay-next" /> event,{' '}
+                <BoundShortcut command="replay-marker-next" /> marker
+              </>
+            }
+            disabled={n >= times.length}
+            onClick={() => seekStep(n + 1)}
+          >
             <SkipForwardAlt />
           </TooltipIconButton>
-          <TooltipIconButton label="Back 10 seconds" hint={<BoundShortcut command="replay-back" />} className="max-sm:hidden" onClick={() => seek(clock - 10_000)}>
+          <TooltipIconButton
+            label="Back 10 seconds"
+            hint={<BoundShortcut command="replay-back" />}
+            className="max-sm:hidden"
+            onClick={() => seek(clock - 10_000)}
+          >
             <Rewind10 />
           </TooltipIconButton>
-          <TooltipIconButton label="Forward 10 seconds" hint={<BoundShortcut command="replay-forward" />} className="max-sm:hidden" onClick={() => seek(clock + 10_000)}>
+          <TooltipIconButton
+            label="Forward 10 seconds"
+            hint={<BoundShortcut command="replay-forward" />}
+            className="max-sm:hidden"
+            onClick={() => seek(clock + 10_000)}
+          >
             <Forward10 />
           </TooltipIconButton>
         </div>
         <span className="tabular type-meta text-muted-foreground">
-          <span className="text-foreground">{duration(clock)}</span> / {duration(total)}
+          <span className="text-foreground">{duration(clock)}</span> /{' '}
+          {duration(total)}
         </span>
         <span className="tabular type-caption text-subtle-foreground max-sm:hidden">
           Event {n} of {times.length}
         </span>
         <span className="flex-1" />
-        <ToggleGroup type="single" size="sm" variant="outline" aria-label="Playback speed" value={String(speed)} onValueChange={(v) => v && setSpeed(Number(v) as Speed)}>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          aria-label="Playback speed"
+          value={String(speed)}
+          onValueChange={(v) => v && setSpeed(Number(v) as Speed)}
+        >
           {SPEEDS.map((s) => (
             <ToggleGroupItem key={s} value={String(s)} className="tabular">
               {s}×
@@ -295,7 +498,12 @@ function Transport({ playback, isCapped, files }: { playback: Playback; isCapped
           ))}
         </ToggleGroup>
         <div className="flex items-center gap-2">
-          <Switch id="replay-skip-idle" size="sm" checked={skipIdle} onCheckedChange={setSkipIdle} />
+          <Switch
+            id="replay-skip-idle"
+            size="sm"
+            checked={skipIdle}
+            onCheckedChange={setSkipIdle}
+          />
           <Label htmlFor="replay-skip-idle" className="type-meta font-normal">
             Skip idle gaps
           </Label>
@@ -305,11 +513,16 @@ function Transport({ playback, isCapped, files }: { playback: Playback; isCapped
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 type-caption text-subtle-foreground max-md:hidden">
         <Legend />
         <span className="flex-1" />
-        {isCapped && <span>Recording stopped at its size cap; the replay ends there</span>}
+        {isCapped && (
+          <span>Recording stopped at its size cap; the replay ends there</span>
+        )}
         <span className="flex items-center gap-1.5">
           <BoundShortcut command="replay-toggle" /> play
-          <BoundShortcut command="replay-previous" /><BoundShortcut command="replay-next" /> step
-          <BoundShortcut command="replay-back" /><BoundShortcut command="replay-toggle-k" /><BoundShortcut command="replay-forward" /> seek
+          <BoundShortcut command="replay-previous" />
+          <BoundShortcut command="replay-next" /> step
+          <BoundShortcut command="replay-back" />
+          <BoundShortcut command="replay-toggle-k" />
+          <BoundShortcut command="replay-forward" /> seek
         </span>
       </div>
     </div>
@@ -332,7 +545,10 @@ function Legend() {
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {MARKER_ORDER.map((kind) => (
         <span key={kind} className="flex items-center gap-1.5">
-          <span aria-hidden className={cn('w-0.5 rounded-full', MARKER_STYLE[kind].className)} />
+          <span
+            aria-hidden
+            className={cn('w-0.5 rounded-full', MARKER_STYLE[kind].className)}
+          />
           {MARKER_STYLE[kind].label}
         </span>
       ))}
@@ -344,24 +560,38 @@ function Legend() {
 function Timeline({ playback }: { playback: Playback }) {
   const { clock, total, times, marks, seek } = playback;
   const track = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<{ x: number; width: number; ms: number; marker?: Marker } | null>(null);
+  const [hover, setHover] = useState<{
+    x: number;
+    width: number;
+    ms: number;
+    marker?: Marker;
+  } | null>(null);
   const at = (marker: Marker) => times[marker.n - 1] ?? 0;
   const pct = (ms: number) => (total ? (ms / total) * 100 : 0);
-  const sorted = [...marks].sort((a, b) => MARKER_ORDER.indexOf(a.kind) - MARKER_ORDER.indexOf(b.kind));
+  const sorted = [...marks].sort(
+    (a, b) => MARKER_ORDER.indexOf(a.kind) - MARKER_ORDER.indexOf(b.kind),
+  );
 
   const msAt = (clientX: number) => {
     const rect = track.current!.getBoundingClientRect();
-    return (Math.max(0, Math.min(rect.width, clientX - rect.left)) / rect.width) * total;
+    return (
+      (Math.max(0, Math.min(rect.width, clientX - rect.left)) / rect.width) *
+      total
+    );
   };
   const onPointer = (e: React.PointerEvent) => {
     const rect = track.current!.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const near = marks.reduce<Marker | undefined>((best, m) => {
       const dx = Math.abs((pct(at(m)) / 100) * rect.width - x);
-      return dx <= 6 && (!best || dx < Math.abs((pct(at(best)) / 100) * rect.width - x)) ? m : best;
+      return dx <= 6 &&
+        (!best || dx < Math.abs((pct(at(best)) / 100) * rect.width - x))
+        ? m
+        : best;
     }, undefined);
     setHover({ x, width: rect.width, ms: msAt(e.clientX), marker: near });
-    if (e.buttons === 1) seek(near && e.type === 'pointerdown' ? at(near) : msAt(e.clientX));
+    if (e.buttons === 1)
+      seek(near && e.type === 'pointerdown' ? at(near) : msAt(e.clientX));
   };
 
   return (
@@ -383,19 +613,43 @@ function Timeline({ playback }: { playback: Playback }) {
       onPointerLeave={() => setHover(null)}
     >
       <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" />
-      <div className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full bg-foreground/35" style={{ width: `${pct(clock)}%` }} />
+      <div
+        className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full bg-foreground/35"
+        style={{ width: `${pct(clock)}%` }}
+      />
       {sorted.map((m, i) => (
-        <span key={i} aria-hidden className={cn('pointer-events-none absolute top-1/2 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full', MARKER_STYLE[m.kind].className)} style={{ left: `${pct(at(m))}%` }} />
+        <span
+          key={i}
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute top-1/2 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full',
+            MARKER_STYLE[m.kind].className,
+          )}
+          style={{ left: `${pct(at(m))}%` }}
+        />
       ))}
-      <span aria-hidden className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-[0_0_0_2px_var(--background)]" style={{ left: `${pct(clock)}%` }} />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-[0_0_0_2px_var(--background)]"
+        style={{ left: `${pct(clock)}%` }}
+      />
       {!!hover && (
         <span
           aria-hidden
           className="pointer-events-none absolute bottom-full z-10 mb-1 flex max-w-64 -translate-x-1/2 items-center gap-1.5 rounded-md bg-popover px-2 py-1 type-caption text-popover-foreground shadow-popover"
           style={{ left: Math.max(60, Math.min(hover.x, hover.width - 60)) }}
         >
-          {!!hover.marker && <span className={cn('h-2.5 w-0.5 shrink-0 rounded-full', MARKER_STYLE[hover.marker.kind].className)} />}
-          <span className="truncate">{hover.marker ? hover.marker.label : duration(hover.ms)}</span>
+          {!!hover.marker && (
+            <span
+              className={cn(
+                'h-2.5 w-0.5 shrink-0 rounded-full',
+                MARKER_STYLE[hover.marker.kind].className,
+              )}
+            />
+          )}
+          <span className="truncate">
+            {hover.marker ? hover.marker.label : duration(hover.ms)}
+          </span>
         </span>
       )}
     </div>
@@ -425,20 +679,37 @@ function FilesSheet({ children }: { children: ReactNode }) {
  * The diff as the nearest checkpoint at or before this point saved it; before any checkpoint (or with none saved), the
  * files the agent had touched so far, from its tool calls.
  */
-function ReplayFiles({ source, thread, now }: { source: CheckpointSource; thread: Thread; now: number }) {
+function ReplayFiles({
+  source,
+  thread,
+  now,
+}: {
+  source: CheckpointSource;
+  thread: Thread;
+  now: number;
+}) {
   const index = source.list.findLastIndex((c) => c.at <= now);
   const files = useCheckpointFiles(source, index);
-  const touched = summarize(thread.activity.filter((a) => a.at <= now)).files.map((f) => f.path);
+  const touched = summarize(
+    thread.activity.filter((a) => a.at <= now),
+  ).files.map((f) => f.path);
   const checkpoint = source.list[index];
-  const caption = checkpoint ? `As saved at “${checkpoint.label}”` : 'No checkpoint saved by this point';
+  const caption = checkpoint
+    ? `As saved at “${checkpoint.label}”`
+    : 'No checkpoint saved by this point';
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-0.5 px-3.5 pt-3 pb-2 max-md:hidden">
         <h2 className="type-meta font-medium">Files at this point</h2>
         <p className="type-caption text-muted-foreground">{caption}</p>
       </div>
-      <p className="px-3.5 pb-2 type-caption text-muted-foreground md:hidden">{caption}</p>
-      <ScrollArea type="scroll" className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
+      <p className="px-3.5 pb-2 type-caption text-muted-foreground md:hidden">
+        {caption}
+      </p>
+      <ScrollArea
+        type="scroll"
+        className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block"
+      >
         <div className="flex flex-col gap-0.5 px-1.5 pb-2">
           {files === undefined && checkpoint ? (
             <FileRowsSkeleton />
@@ -447,7 +718,9 @@ function ReplayFiles({ source, thread, now }: { source: CheckpointSource; thread
           ) : touched.length ? (
             touched.map((path) => <TouchedRow key={path} path={path} />)
           ) : (
-            <p className="px-2 py-1.5 type-meta text-muted-foreground">No files touched yet</p>
+            <p className="px-2 py-1.5 type-meta text-muted-foreground">
+              No files touched yet
+            </p>
           )}
         </div>
       </ScrollArea>
@@ -456,11 +729,14 @@ function ReplayFiles({ source, thread, now }: { source: CheckpointSource; thread
 }
 
 function useCheckpointFiles(source: CheckpointSource, index: number) {
-  const [cache, setCache] = useState(() => new Map<number, DiffFile[] | null>());
+  const [cache, setCache] = useState(
+    () => new Map<number, DiffFile[] | null>(),
+  );
   const isCached = cache.has(index);
   useEffect(() => {
     if (index < 0 || isCached) return;
-    const store = (files: DiffFile[] | null) => setCache((all) => new Map(all).set(index, files));
+    const store = (files: DiffFile[] | null) =>
+      setCache((all) => new Map(all).set(index, files));
     source.files(index).then(store, () => store(null));
   }, [source, index, isCached]);
   if (index < 0) return null;
@@ -471,15 +747,37 @@ function DiffFileRow({ file }: { file: DiffFile }) {
   const [isOpen, setOpen] = useState(false);
   return (
     <div className="flex flex-col">
-      <button type="button" aria-expanded={isOpen} className="flex h-7 items-center gap-2 rounded-md px-2 text-left hover:bg-accent/60" onClick={() => setOpen((o) => !o)}>
-        <FileIcon fileName={file.path.split('/').pop() ?? file.path} autoAssign aria-hidden className="size-4 shrink-0" />
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        className="flex h-7 items-center gap-2 rounded-md px-2 text-left hover:bg-accent/60"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <FileIcon
+          fileName={file.path.split('/').pop() ?? file.path}
+          autoAssign
+          aria-hidden
+          className="size-4 shrink-0"
+        />
         <FilePath path={file.path} />
         <span className="flex-1" />
         <DiffStat added={file.added} removed={file.removed} />
-        <ChevronDownSmall aria-hidden className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', isOpen && 'rotate-180')} />
+        <ChevronDownSmall
+          aria-hidden
+          className={cn(
+            'size-3.5 shrink-0 text-muted-foreground transition-transform duration-150',
+            isOpen && 'rotate-180',
+          )}
+        />
       </button>
       <Expand isOpen={isOpen}>
-        <div className="px-1 pt-1 pb-2">{file.binary ? <p className="px-1 type-meta text-muted-foreground">Binary file</p> : <DiffView patch={file.patch} />}</div>
+        <div className="px-1 pt-1 pb-2">
+          {file.binary ? (
+            <p className="px-1 type-meta text-muted-foreground">Binary file</p>
+          ) : (
+            <DiffView patch={file.patch} />
+          )}
+        </div>
       </Expand>
     </div>
   );
@@ -488,7 +786,12 @@ function DiffFileRow({ file }: { file: DiffFile }) {
 function TouchedRow({ path }: { path: string }) {
   return (
     <div className="flex h-7 items-center gap-2 px-2">
-      <FileIcon fileName={path.split('/').pop() ?? path} autoAssign aria-hidden className="size-4 shrink-0" />
+      <FileIcon
+        fileName={path.split('/').pop() ?? path}
+        autoAssign
+        aria-hidden
+        className="size-4 shrink-0"
+      />
       <FilePath path={path} />
     </div>
   );
@@ -530,7 +833,10 @@ function NothingRecorded({ header }: { header: ReactNode }) {
             <VideoPlay />
           </EmptyMedia>
           <EmptyTitle>Nothing recorded yet</EmptyTitle>
-          <EmptyDescription>Threads record what their agent does from the next message on, while Settings › Data and storage › Record threads for replay is on.</EmptyDescription>
+          <EmptyDescription>
+            Threads record what their agent does from the next message on, while
+            Settings › Data and storage › Record threads for replay is on.
+          </EmptyDescription>
         </EmptyHeader>
       </Empty>
     </div>

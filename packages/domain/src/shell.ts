@@ -31,7 +31,9 @@ export interface LoggedEvent {
   readonly commandId?: string | null;
 }
 
-export type ShellItem = { readonly _tag: 'snapshot'; readonly shell: Shell } | { readonly _tag: 'event'; readonly event: LoggedEvent };
+export type ShellItem =
+  | { readonly _tag: 'snapshot'; readonly shell: Shell }
+  | { readonly _tag: 'event'; readonly event: LoggedEvent };
 
 export const emptyShell: Shell = { sequence: 0, threads: [], projects: [] };
 
@@ -40,7 +42,8 @@ export const emptyShell: Shell = { sequence: 0, threads: [], projects: [] };
  * still advances the sequence, so an older client keeps its place against a newer Core.
  */
 export function projectShell(shell: Shell, item: ShellItem): Shell {
-  if (item._tag === 'snapshot') return item.shell.sequence >= shell.sequence ? item.shell : shell;
+  if (item._tag === 'snapshot')
+    return item.shell.sequence >= shell.sequence ? item.shell : shell;
   const { event } = item;
   if (event.sequence <= shell.sequence) return shell;
   const next = { ...shell, sequence: event.sequence };
@@ -48,12 +51,25 @@ export function projectShell(shell: Shell, item: ShellItem): Shell {
     case 'thread.saved': {
       const summary = event.payload as ThreadSummary;
       const at = shell.threads.findIndex((t) => t.id === summary.id);
-      return { ...next, threads: at === -1 ? [...shell.threads, summary] : shell.threads.map((t, i) => (i === at ? summary : t)) };
+      return {
+        ...next,
+        threads:
+          at === -1
+            ? [...shell.threads, summary]
+            : shell.threads.map((t, i) => (i === at ? summary : t)),
+      };
     }
     case 'thread.deleted':
-      return { ...next, threads: shell.threads.filter((t) => t.id !== event.threadId) };
+      return {
+        ...next,
+        threads: shell.threads.filter((t) => t.id !== event.threadId),
+      };
     case 'projects.saved':
-      return { ...next, projects: (event.payload as { projects: ReadonlyArray<ProjectSummary> }).projects };
+      return {
+        ...next,
+        projects: (event.payload as { projects: ReadonlyArray<ProjectSummary> })
+          .projects,
+      };
     default:
       return next;
   }
@@ -61,13 +77,35 @@ export function projectShell(shell: Shell, item: ShellItem): Shell {
 
 /** The fields a thread list shows, read tolerantly from a saved thread (`SavedThread` in src/store/saved.ts). */
 export function summarizeThread(id: string, saved: unknown): ThreadSummary {
-  const thread = (saved as { thread?: Record<string, unknown> } | null)?.thread ?? {};
+  const thread =
+    (saved as { thread?: Record<string, unknown> } | null)?.thread ?? {};
   const text = (value: unknown) => (typeof value === 'string' ? value : null);
-  return { id, title: text(thread.title), status: text(thread.status), project: text(thread.project) };
+  return {
+    id,
+    title: text(thread.title),
+    status: text(thread.status),
+    project: text(thread.project),
+  };
 }
 
 /** Every profile's projects from main's registry document (`projects.json`'s shape). */
 export function summarizeProjects(registry: unknown): ProjectSummary[] {
-  const spaces = (registry as { spaces?: Record<string, { projects?: ReadonlyArray<{ id: string; name: string; path: string }> }> } | null)?.spaces ?? {};
-  return Object.entries(spaces).flatMap(([space, { projects = [] }]) => projects.map(({ id, name, path }) => ({ id, name, path, space })));
+  const spaces =
+    (
+      registry as {
+        spaces?: Record<
+          string,
+          {
+            projects?: ReadonlyArray<{
+              id: string;
+              name: string;
+              path: string;
+            }>;
+          }
+        >;
+      } | null
+    )?.spaces ?? {};
+  return Object.entries(spaces).flatMap(([space, { projects = [] }]) =>
+    projects.map(({ id, name, path }) => ({ id, name, path, space })),
+  );
 }

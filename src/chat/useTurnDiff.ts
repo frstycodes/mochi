@@ -18,8 +18,20 @@ export function useTurnDiff(thread: Thread, turn: TurnChanges): TurnChanges {
   const isLatest = turn.end === thread.activity.length - 1;
   // GAP: the latest turn diffs against the worktree, so your own edits after it ended count as its until you send again.
   const to = isLatest ? undefined : turnCheckpoint(list, turn.end + 1)?.ref;
-  const diffQuery = useQuery(turnDiffQuery(cwd, from, to, isLatest ? thread.activity.length : undefined));
+  const diffQuery = useQuery(
+    turnDiffQuery(cwd, from, to, isLatest ? thread.activity.length : undefined),
+  );
   if (!diffQuery.data) return turn;
-  const files = diffQuery.data.map((f) => ({ path: f.path, added: f.added, removed: f.removed, patches: f.patch ? [f.patch] : [] }));
-  return { ...turn, files, added: files.reduce((n, f) => n + f.added, 0), removed: files.reduce((n, f) => n + f.removed, 0) };
+  const files = diffQuery.data.map((f) => ({
+    path: f.path,
+    added: f.added,
+    removed: f.removed,
+    patches: f.patch ? [f.patch] : [],
+  }));
+  return {
+    ...turn,
+    files,
+    added: files.reduce((n, f) => n + f.added, 0),
+    removed: files.reduce((n, f) => n + f.removed, 0),
+  };
 }

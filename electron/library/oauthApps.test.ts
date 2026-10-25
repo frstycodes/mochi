@@ -6,7 +6,10 @@ test("Mochi's own OAuth apps come from the build, overridable per provider by en
   const baked = mochiOAuthApp('slack');
   process.env.MOCHI_OAUTH_SLACK_CLIENT_ID = 'slack-id';
   process.env.MOCHI_OAUTH_SLACK_CLIENT_SECRET = 'slack-secret';
-  assert.deepEqual(mochiOAuthApp('slack'), { client_id: 'slack-id', client_secret: 'slack-secret' });
+  assert.deepEqual(mochiOAuthApp('slack'), {
+    client_id: 'slack-id',
+    client_secret: 'slack-secret',
+  });
   process.env.MOCHI_OAUTH_SLACK_CLIENT_SECRET = '';
   assert.deepEqual(mochiOAuthApp('slack'), { client_id: 'slack-id' });
   assert.ok(mochiOAuthProviders().includes('slack'));

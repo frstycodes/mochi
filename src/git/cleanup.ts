@@ -7,7 +7,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * wall-clock ms): `settledAt` is on the app clock, which stops while Mochi is closed. Returns the next `seen` too, holding only
  * threads still settled with a worktree.
  */
-export function dueForCleanup(threads: Pick<Thread, 'id' | 'status'>[], paths: Record<string, string>, seen: Record<string, number>, now: number, days: number) {
+export function dueForCleanup(
+  threads: Pick<Thread, 'id' | 'status'>[],
+  paths: Record<string, string>,
+  seen: Record<string, number>,
+  now: number,
+  days: number,
+) {
   const next: Record<string, number> = {};
   const due: { threadId: string; path: string }[] = [];
   for (const t of threads) {

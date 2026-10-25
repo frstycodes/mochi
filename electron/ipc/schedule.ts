@@ -1,4 +1,7 @@
-import type { ScheduleHost, TriggerInput } from '../../src/host/types/schedule.ts';
+import type {
+  ScheduleHost,
+  TriggerInput,
+} from '../../src/host/types/schedule.ts';
 import { parseCron } from '../../src/schedule/cron.ts';
 import { scheduler } from '../schedule/scheduler.ts';
 import type { Handlers } from './handlers.ts';
@@ -27,6 +30,10 @@ export const schedule = {
 function triggerInput(input: TriggerInput): TriggerInput {
   if (input.when.kind === 'cron') parseCron(input.when.cron);
   // startAgent checks the folder and options again when a run starts; only these fields are kept.
-  const { provider, spaceId, cwd, workspace, model, effort, permissionMode } = input.start;
-  return { ...input, start: { provider, spaceId, cwd, workspace, model, effort, permissionMode } };
+  const { provider, spaceId, cwd, workspace, model, effort, permissionMode } =
+    input.start;
+  return {
+    ...input,
+    start: { provider, spaceId, cwd, workspace, model, effort, permissionMode },
+  };
 }

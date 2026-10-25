@@ -61,13 +61,20 @@ const RECORDED = [
   'card-record',
 ] as const satisfies readonly Action['type'][];
 
-export type RecordedAction = Extract<Action, { type: (typeof RECORDED)[number] }>;
+export type RecordedAction = Extract<
+  Action,
+  { type: (typeof RECORDED)[number] }
+>;
 
 /** The thread an action changes, when it's one a replay rebuilds from. Demo threads (no `live`) run on the tick and aren't recorded. */
-export function recordedThread(state: State, action: Action): Thread | undefined {
+export function recordedThread(
+  state: State,
+  action: Action,
+): Thread | undefined {
   if (!(RECORDED as readonly string[]).includes(action.type)) return;
   const id = threadIdOf(state, action as RecordedAction);
-  const thread = id === undefined ? undefined : state.threads.find((t) => t.id === id);
+  const thread =
+    id === undefined ? undefined : state.threads.find((t) => t.id === id);
   return thread?.live ? thread : undefined;
 }
 
@@ -86,12 +93,34 @@ function threadIdOf(state: State, action: RecordedAction): string | undefined {
 }
 
 /** What an action adds to its thread's recording, given the store just before it; a thread's first line is its base. */
-export function linesFor(state: State, action: Action, t: number, isStarted: (threadId: string) => boolean): { threadId: string; lines: ReplayLine[] } | null {
+export function linesFor(
+  state: State,
+  action: Action,
+  t: number,
+  isStarted: (threadId: string) => boolean,
+): { threadId: string; lines: ReplayLine[] } | null {
   const thread = recordedThread(state, action);
   if (!thread) return null;
-  const step: ReplayStep = { t, now: state.now, action: action as RecordedAction };
+  const step: ReplayStep = {
+    t,
+    now: state.now,
+    action: action as RecordedAction,
+  };
   if (isStarted(thread.id)) return { threadId: thread.id, lines: [step] };
-  return { threadId: thread.id, lines: [{ t, now: state.now, base: { thread, queue: state.queue.filter((q) => q.threadId === thread.id) } }, step] };
+  return {
+    threadId: thread.id,
+    lines: [
+      {
+        t,
+        now: state.now,
+        base: {
+          thread,
+          queue: state.queue.filter((q) => q.threadId === thread.id),
+        },
+      },
+      step,
+    ],
+  };
 }
 
 /**
@@ -103,11 +132,29 @@ export function compact<T extends ReplayLine>(lines: T[]): T[] {
   const out: T[] = [];
   for (const line of lines) {
     const last = out.at(-1);
-    const event = 'action' in line && line.action.type === 'agent' ? line.action.event : undefined;
-    const lastAction = last && 'action' in last && last.action.type === 'agent' ? last.action : undefined;
+    const event =
+      'action' in line && line.action.type === 'agent'
+        ? line.action.event
+        : undefined;
+    const lastAction =
+      last && 'action' in last && last.action.type === 'agent'
+        ? last.action
+        : undefined;
     const lastEvent = lastAction?.event;
-    if (lastAction && event?.type === 'message' && event.isDelta && lastEvent?.type === 'message' && lastEvent.threadId === event.threadId) {
-      out[out.length - 1] = { ...last, action: { ...lastAction, event: { ...lastEvent, text: lastEvent.text + event.text } } } as T;
+    if (
+      lastAction &&
+      event?.type === 'message' &&
+      event.isDelta &&
+      lastEvent?.type === 'message' &&
+      lastEvent.threadId === event.threadId
+    ) {
+      out[out.length - 1] = {
+        ...last,
+        action: {
+          ...lastAction,
+          event: { ...lastEvent, text: lastEvent.text + event.text },
+        },
+      } as T;
       continue;
     }
     out.push(line);
@@ -136,8 +183,20 @@ export function parseRecording(text: string | null): Recording | null {
   }
   const [base, ...rest] = lines;
   if (!base || !('base' in base)) return null;
-  const steps = rest.map((l): ReplayStep => ('base' in l ? { t: l.t, now: l.now, action: { type: 'restore', snapshot: { threads: [l.base.thread], queue: l.base.queue } } } : (l as ReplayStep)));
+  const steps = rest.map((l): ReplayStep =>
+    'base' in l
+      ? {
+          t: l.t,
+          now: l.now,
+          action: {
+            type: 'restore',
+            snapshot: { threads: [l.base.thread], queue: l.base.queue },
+          },
+        }
+      : (l as ReplayStep),
+  );
   return { base, steps: compact(steps), isCapped };
 }
 
-export const toLines = (lines: ReplayLine[]) => lines.map((l) => `${JSON.stringify(l)}\n`).join('');
+export const toLines = (lines: ReplayLine[]) =>
+  lines.map((l) => `${JSON.stringify(l)}\n`).join('');

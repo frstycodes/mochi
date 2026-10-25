@@ -1,8 +1,23 @@
-import { useContext, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import {
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { Danger } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import type { Thread } from '@/model';
@@ -34,27 +49,94 @@ const PEEK_MS = 400;
 const UNCOVER_HOLD_MS = 150;
 
 /** The page itself: a native view placed over this box on desktop, an iframe (or the demo page) on the web. */
-export function PageSurface({ thread, pageId, page, isDriving, className }: { thread: Thread; pageId: string; page: Page; isDriving: boolean; className?: string }) {
+export function PageSurface({
+  thread,
+  pageId,
+  page,
+  isDriving,
+  className,
+}: {
+  thread: Thread;
+  pageId: string;
+  page: Page;
+  isDriving: boolean;
+  className?: string;
+}) {
   const frameRef = useRef<HTMLDivElement>(null);
   const size = useSize(frameRef);
   const device = deviceSize(page);
-  const fit = device && size.w > 0 ? fitDevice({ width: size.w, height: size.h }, device, page.isRotated) : null;
+  const fit =
+    device && size.w > 0
+      ? fitDevice({ width: size.w, height: size.h }, device, page.isRotated)
+      : null;
   const standInRef = useNativeView(frameRef, page, device);
   useEmulation(page, fit);
-  useEffect(() => void ensureView(pageId, thread.spaceId), [pageId, thread.spaceId]);
+  useEffect(
+    () => void ensureView(pageId, thread.spaceId),
+    [pageId, thread.spaceId],
+  );
   useEffect(() => {
-    if (size.w > 0 && size.h > 0) rememberViewport(pageId, { width: size.w, height: size.h });
+    if (size.w > 0 && size.h > 0)
+      rememberViewport(pageId, { width: size.w, height: size.h });
   }, [pageId, size.w, size.h]);
 
   return (
-    <div ref={frameRef} className={cn('relative h-full overflow-hidden bg-background', isDriving && 'ring-2 ring-foreground/25 ring-inset', !!device && 'bg-muted/40', className)}>
-      {page.error && <PageError error={page.error} onRetry={() => page.hostId && host.browser.command(page.hostId, 'reload')} />}
-      {host.isDesktop && <img ref={standInRef} alt="" aria-hidden hidden draggable={false} className="pointer-events-none absolute select-none" />}
-      {!!page.menu && <PageMenu thread={thread} pageId={pageId} page={page} menu={page.menu} at={{ x: (fit?.x ?? 0) + page.menu.x, y: (fit?.y ?? 0) + page.menu.y }} />}
+    <div
+      ref={frameRef}
+      className={cn(
+        'relative h-full overflow-hidden bg-background',
+        isDriving && 'ring-2 ring-foreground/25 ring-inset',
+        !!device && 'bg-muted/40',
+        className,
+      )}
+    >
+      {page.error && (
+        <PageError
+          error={page.error}
+          onRetry={() =>
+            page.hostId && host.browser.command(page.hostId, 'reload')
+          }
+        />
+      )}
+      {host.isDesktop && (
+        <img
+          ref={standInRef}
+          alt=""
+          aria-hidden
+          hidden
+          draggable={false}
+          className="pointer-events-none absolute select-none"
+        />
+      )}
+      {!!page.menu && (
+        <PageMenu
+          thread={thread}
+          pageId={pageId}
+          page={page}
+          menu={page.menu}
+          at={{
+            x: (fit?.x ?? 0) + page.menu.x,
+            y: (fit?.y ?? 0) + page.menu.y,
+          }}
+        />
+      )}
       {!host.isDesktop && size.w > 0 && (
         <div
-          className={cn('absolute origin-top-left overflow-hidden', fit && 'shadow-popover')}
-          style={fit ? { left: fit.x, top: fit.y, width: fit.cssWidth, height: fit.cssHeight, transform: `scale(${fit.scale})` } : { inset: 0 }}
+          className={cn(
+            'absolute origin-top-left overflow-hidden',
+            fit && 'shadow-popover',
+          )}
+          style={
+            fit
+              ? {
+                  left: fit.x,
+                  top: fit.y,
+                  width: fit.cssWidth,
+                  height: fit.cssHeight,
+                  transform: `scale(${fit.scale})`,
+                }
+              : { inset: 0 }
+          }
         >
           {isDemoUrl(page.url) ? (
             <DemoPage
@@ -94,7 +176,9 @@ function PageError({ error, onRetry }: { error: string; onRetry: () => void }) {
           <Danger />
         </EmptyMedia>
         <EmptyTitle>Can't reach this page</EmptyTitle>
-        <EmptyDescription className="font-mono break-all">{error}</EmptyDescription>
+        <EmptyDescription className="font-mono break-all">
+          {error}
+        </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button size="sm" variant="outline" onClick={onRetry}>
@@ -119,7 +203,11 @@ export function deviceSize(page: Page) {
  * hides only once the first snapshot is decoded, so the page never goes blank. Overlays elsewhere leave the view alone.
  * Returns the ref for the stand-in `<img>`, which this hook positions and fills directly, without React renders.
  */
-function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, device: { width: number; height: number } | null) {
+function useNativeView(
+  frameRef: RefObject<HTMLDivElement | null>,
+  page: Page,
+  device: { width: number; height: number } | null,
+) {
   const params = useEffectEvent(() => ({ page, device }));
   const standInRef = useRef<HTMLImageElement>(null);
   const isPreview = useContext(PreviewContext);
@@ -129,7 +217,8 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
     if (!id) return;
     // An inert copy of this surface (the sidebar peek's thumbnail) would pull the one native view onto itself, then hide it on
     // unmount while the real surface's deduped loop never resends: it gets a still snapshot instead and never drives the view.
-    if (frameRef.current?.closest('[inert]')) return showSnapshot(id, standInRef);
+    if (frameRef.current?.closest('[inert]'))
+      return showSnapshot(id, standInRef);
     let last = '';
     let frame = 0;
     let isCovered = false;
@@ -163,7 +252,10 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
       isStanding = false;
       generation++;
       clearTimeout(timer);
-      timer = setTimeout(() => standInRef.current && (standInRef.current.hidden = true), UNCOVER_HOLD_MS);
+      timer = setTimeout(
+        () => standInRef.current && (standInRef.current.hidden = true),
+        UNCOVER_HOLD_MS,
+      );
     };
 
     const tick = () => {
@@ -172,12 +264,41 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
       if (!el) return;
       const { page, device } = params();
       const r = el.getBoundingClientRect();
-      const fit = device ? fitDevice({ width: r.width, height: r.height }, device, page.isRotated) : null;
-      const placed = !!page.error || r.width < 1 || r.height < 1 ? null : fit ? { x: r.x + fit.x, y: r.y + fit.y, width: fit.width, height: fit.height, radius: 0 } : { x: r.x, y: r.y, width: r.width, height: r.height, radius: roundRadius(el) };
+      const fit = device
+        ? fitDevice(
+            { width: r.width, height: r.height },
+            device,
+            page.isRotated,
+          )
+        : null;
+      const placed =
+        !!page.error || r.width < 1 || r.height < 1
+          ? null
+          : fit
+            ? {
+                x: r.x + fit.x,
+                y: r.y + fit.y,
+                width: fit.width,
+                height: fit.height,
+                radius: 0,
+              }
+            : {
+                x: r.x,
+                y: r.y,
+                width: r.width,
+                height: r.height,
+                radius: roundRadius(el),
+              };
       const isOverlaid = !!placed && isCoveredAt(el, placed);
       if (isOverlaid !== isCovered) (isOverlaid ? cover : uncover)();
       const img = standInRef.current;
-      if (img && placed) Object.assign(img.style, { left: `${placed.x - r.x}px`, top: `${placed.y - r.y}px`, width: `${placed.width}px`, height: `${placed.height}px` });
+      if (img && placed)
+        Object.assign(img.style, {
+          left: `${placed.x - r.x}px`,
+          top: `${placed.y - r.y}px`,
+          width: `${placed.width}px`,
+          height: `${placed.height}px`,
+        });
       const bounds = isStanding ? null : placed;
       const zoom = page.zoom;
       // ⌘+ / ⌘− can leave the CSS rect unchanged while main's conversion to window DIPs changes; the ratio forces a resend.
@@ -199,14 +320,22 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
   return standInRef;
 }
 
-function showSnapshot(id: string, standInRef: RefObject<HTMLImageElement | null>) {
+function showSnapshot(
+  id: string,
+  standInRef: RefObject<HTMLImageElement | null>,
+) {
   let isLive = true;
   void host.browser
     .peek(id)
     .then((src) => {
       const img = standInRef.current;
       if (!isLive || !img) return;
-      Object.assign(img.style, { left: '0px', top: '0px', width: '100%', height: '100%' });
+      Object.assign(img.style, {
+        left: '0px',
+        top: '0px',
+        width: '100%',
+        height: '100%',
+      });
       img.src = src;
       img.hidden = false;
     })
@@ -225,11 +354,21 @@ function useEmulation(page: Page, fit: ReturnType<typeof fitDevice> | null) {
 }
 
 /** An open overlay, outside this frame, whose box intersects `r` (viewport px). */
-function isCoveredAt(el: HTMLElement, r: { x: number; y: number; width: number; height: number }) {
+function isCoveredAt(
+  el: HTMLElement,
+  r: { x: number; y: number; width: number; height: number },
+) {
   return [...document.querySelectorAll(OVERLAYS)].some((overlay) => {
     if (overlay.contains(el)) return false;
     const o = overlay.getBoundingClientRect();
-    return o.width > 0 && o.height > 0 && o.left < r.x + r.width && o.right > r.x && o.top < r.y + r.height && o.bottom > r.y;
+    return (
+      o.width > 0 &&
+      o.height > 0 &&
+      o.left < r.x + r.width &&
+      o.right > r.x &&
+      o.top < r.y + r.height &&
+      o.bottom > r.y
+    );
   });
 }
 
@@ -239,7 +378,11 @@ export function useSize(ref: RefObject<HTMLElement | null>) {
     const el = ref.current;
     if (!el) return;
     // flushSync: a plain setState renders after the next paint, so layout sized from this (the chat beside the panes) showed one frame at the old width.
-    const ro = new ResizeObserver(([e]) => flushSync(() => setSize({ w: e.contentRect.width, h: e.contentRect.height })));
+    const ro = new ResizeObserver(([e]) =>
+      flushSync(() =>
+        setSize({ w: e.contentRect.width, h: e.contentRect.height }),
+      ),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);
@@ -249,6 +392,8 @@ export function useSize(ref: RefObject<HTMLElement | null>) {
 /** The frame's CSS radius as a round corner: native views can't draw squircles, and a squircle at the scaled radius looks like a round one at radius / --corner-scale. */
 function roundRadius(el: HTMLElement) {
   const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
-  const scale = CSS.supports('corner-shape', 'squircle') ? parseFloat(getComputedStyle(el).getPropertyValue('--corner-scale')) || 1 : 1;
+  const scale = CSS.supports('corner-shape', 'squircle')
+    ? parseFloat(getComputedStyle(el).getPropertyValue('--corner-scale')) || 1
+    : 1;
   return radius / scale;
 }

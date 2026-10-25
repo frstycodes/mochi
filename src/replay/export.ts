@@ -16,12 +16,14 @@ export interface ExportedCheckpoint {
   files: DiffFile[];
 }
 
-
 /** Every string in the export goes through `redactSecrets`, so a token a tool printed (or you pasted) never leaves the machine. */
 export function redactExport<T>(value: T): T {
   if (typeof value === 'string') return redactSecrets(value) as T;
   if (Array.isArray(value)) return value.map(redactExport) as T;
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactExport(v)])) as T;
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, redactExport(v)]),
+    ) as T;
   return value;
 }
 

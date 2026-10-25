@@ -8,7 +8,14 @@ import { Run } from '../run.ts';
 import { Store } from '../store/store.ts';
 import { UtilityQueue } from '../utility/queue.ts';
 import { reloadAgentConfig, useAgentConfig } from './config.ts';
-import { BUSY_CHANNEL, busyThreads, emitAgentEvent, onPush, useEventLog, type Push } from './events.ts';
+import {
+  BUSY_CHANNEL,
+  busyThreads,
+  emitAgentEvent,
+  onPush,
+  useEventLog,
+  type Push,
+} from './events.ts';
 import { disposeAgents, useAgentServices } from './handlers.ts';
 import { useLimitDocs } from './limits.ts';
 import { useMain } from './main.ts';
@@ -42,9 +49,19 @@ export const layerAgents = (userData: string | undefined) =>
         setDataDir(userData);
         setImageDir(path.join(userData, 'images'));
       }
-      settingsDoc = yield* store.getDoc('settings', 'agent').pipe(Effect.orElseSucceed(() => undefined));
-      const call = (capability: 'main' | 'secureStorage', method: string, args: ReadonlyArray<unknown>) =>
-        Effect.runPromise(capabilities.call({ capability, method, args }).pipe(Effect.catch((message) => Effect.die(new Error(message)))));
+      settingsDoc = yield* store
+        .getDoc('settings', 'agent')
+        .pipe(Effect.orElseSucceed(() => undefined));
+      const call = (
+        capability: 'main' | 'secureStorage',
+        method: string,
+        args: ReadonlyArray<unknown>,
+      ) =>
+        Effect.runPromise(
+          capabilities
+            .call({ capability, method, args })
+            .pipe(Effect.catch((message) => Effect.die(new Error(message)))),
+        );
       useAgentConfig({
         read: () => settingsDoc,
         write: async () => {
@@ -52,22 +69,40 @@ export const layerAgents = (userData: string | undefined) =>
         },
         keychain: {
           isAvailable: async () => true,
-          encrypt: (text) => call('secureStorage', 'encrypt', [text]) as Promise<string>,
-          decrypt: (base64) => call('secureStorage', 'decrypt', [base64]) as Promise<string>,
+          encrypt: (text) =>
+            call('secureStorage', 'encrypt', [text]) as Promise<string>,
+          decrypt: (base64) =>
+            call('secureStorage', 'decrypt', [base64]) as Promise<string>,
         },
       });
       // The call crosses as JSON: an `undefined` field is dropped and an `undefined` argument arrives as null.
-      useMain((method, args) => call('main', method, JSON.parse(JSON.stringify(args)) as ReadonlyArray<unknown>));
+      useMain((method, args) =>
+        call(
+          'main',
+          method,
+          JSON.parse(JSON.stringify(args)) as ReadonlyArray<unknown>,
+        ),
+      );
       useCoreClient(Promise.resolve(clientFromRun(run)));
       // In emit order: each append waits for the one before, so the log's sequence follows the agents' own.
       let appending: Promise<unknown> = Promise.resolve();
       useEventLog((event) => {
-        const append = store.append({ type: `agent.${event.type}`, threadId: event.threadId, payload: event, eventId: `agent-${event.seq}` });
-        appending = appending.then(() => Effect.runPromise(append)).catch((error: unknown) => console.error(`Logging agent.${event.type} failed`, error));
+        const append = store.append({
+          type: `agent.${event.type}`,
+          threadId: event.threadId,
+          payload: event,
+          eventId: `agent-${event.seq}`,
+        });
+        appending = appending
+          .then(() => Effect.runPromise(append))
+          .catch((error: unknown) =>
+            console.error(`Logging agent.${event.type} failed`, error),
+          );
       });
       useLimitDocs({
         list: () => Effect.runPromise(store.listDocs('limits')),
-        set: (accountId, limits) => Effect.runPromise(store.setDoc('limits', accountId, limits)),
+        set: (accountId, limits) =>
+          Effect.runPromise(store.setDoc('limits', accountId, limits)),
       });
       useAgentServices({ turns, queue });
       yield* Effect.addFinalizer(() => Effect.sync(disposeAgents));
@@ -81,12 +116,22 @@ export const agentRpcHandlers = {
       Effect.acquireRelease(
         Effect.sync(() => {
           // A fresh subscriber (main after a reconnect) learns which threads are working before anything else.
-          Queue.offerUnsafe(queue, { channel: BUSY_CHANNEL, payload: busyThreads() });
+          Queue.offerUnsafe(queue, {
+            channel: BUSY_CHANNEL,
+            payload: busyThreads(),
+          });
           return onPush((item) => Queue.offerUnsafe(queue, item));
         }),
         (off) => Effect.sync(off),
       ),
     ),
-  agentEmit: ({ event }: { event: unknown }) => Effect.sync(() => emitAgentEvent(event as AgentEvent)),
-  agentNoteLogin: ({ accountId, login }: { accountId: string; login: unknown }) => Effect.sync(() => noteLogin(accountId, login as AgentLogin)),
+  agentEmit: ({ event }: { event: unknown }) =>
+    Effect.sync(() => emitAgentEvent(event as AgentEvent)),
+  agentNoteLogin: ({
+    accountId,
+    login,
+  }: {
+    accountId: string;
+    login: unknown;
+  }) => Effect.sync(() => noteLogin(accountId, login as AgentLogin)),
 };

@@ -1,10 +1,23 @@
 import { useState, type ReactNode } from 'react';
-import { Check, CopyStack, Info, Refresh, CheckBadge, WarningAlt } from '@/icons';
+import {
+  Check,
+  CopyStack,
+  Info,
+  Refresh,
+  CheckBadge,
+  WarningAlt,
+} from '@/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -18,9 +31,24 @@ import type { InstallState } from './AgentSettings';
  * One titled section of a settings page: its heading (with an `action` on the right, such as tabs), what it holds, and a
  * caveat as a footnote. `id` makes the whole section a deep-link target.
  */
-export function SettingsSection({ id, title, action, footer, children }: { id?: string; title?: ReactNode; action?: ReactNode; footer?: ReactNode; children: ReactNode }) {
+export function SettingsSection({
+  id,
+  title,
+  action,
+  footer,
+  children,
+}: {
+  id?: string;
+  title?: ReactNode;
+  action?: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <section data-setting-id={id} className="flex flex-col gap-2.5 rounded-xl transition-colors duration-700 data-flash:bg-accent/60">
+    <section
+      data-setting-id={id}
+      className="flex flex-col gap-2.5 rounded-xl transition-colors duration-700 data-flash:bg-accent/60"
+    >
       {(!!title || !!action) && (
         <div className="flex min-h-7 items-center justify-between gap-3 px-1">
           {!!title && <h2 className="type-title">{title}</h2>}
@@ -28,13 +56,18 @@ export function SettingsSection({ id, title, action, footer, children }: { id?: 
         </div>
       )}
       {children}
-      {!!footer && <p className="px-1 type-caption text-muted-foreground">{footer}</p>}
+      {!!footer && (
+        <p className="px-1 type-caption text-muted-foreground">{footer}</p>
+      )}
     </section>
   );
 }
 
 /** A section whose rows sit on one card surface, split by inset hairlines. */
-export function SettingsGroup({ children, ...section }: React.ComponentProps<typeof SettingsSection>) {
+export function SettingsGroup({
+  children,
+  ...section
+}: React.ComponentProps<typeof SettingsSection>) {
   return (
     <SettingsSection {...section}>
       <SettingsCard>{children}</SettingsCard>
@@ -50,12 +83,28 @@ export function SettingsCard({ children }: { children: ReactNode }) {
  * One row: label (and a short secondary line) on the left, control on the right, wrapping under on narrow screens.
  * `id` is the deep-link target and names the control `setting-<id>` for the label; `children` expand under the row.
  */
-export function SettingsRow({ id, label, description, control, children, className, ...props }: { id?: string; label: ReactNode; description?: ReactNode; control?: ReactNode } & Omit<React.ComponentProps<'div'>, 'id'>) {
+export function SettingsRow({
+  id,
+  label,
+  description,
+  control,
+  children,
+  className,
+  ...props
+}: {
+  id?: string;
+  label: ReactNode;
+  description?: ReactNode;
+  control?: ReactNode;
+} & Omit<React.ComponentProps<'div'>, 'id'>) {
   return (
     <div
       data-setting-id={id}
       {...props}
-      className={cn("relative flex flex-col gap-2.5 px-4 py-3 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent", className)}
+      className={cn(
+        'relative flex flex-col gap-2.5 px-4 py-3 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent',
+        className,
+      )}
     >
       <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 *:not-first:shrink-0">
         <div className="flex min-w-40 flex-1 flex-col gap-0.5">
@@ -66,7 +115,9 @@ export function SettingsRow({ id, label, description, control, children, classNa
           ) : (
             <div className="type-body">{label}</div>
           )}
-          {!!description && <div className="type-meta text-muted-foreground">{description}</div>}
+          {!!description && (
+            <div className="type-meta text-muted-foreground">{description}</div>
+          )}
         </div>
         {control}
       </div>
@@ -88,30 +139,65 @@ export function LoginBadge({ install }: { install: InstallState | undefined }) {
         Checking
       </Badge>
     );
-  if (!install.path) return <StatusBadge tone="warning">Not installed</StatusBadge>;
-  if (install.login.state === 'logged-out') return <StatusBadge tone="warning">Signed out</StatusBadge>;
-  if (install.login.state === 'unknown') return <StatusBadge tone="warning">Couldn't check</StatusBadge>;
+  if (!install.path)
+    return <StatusBadge tone="warning">Not installed</StatusBadge>;
+  if (install.login.state === 'logged-out')
+    return <StatusBadge tone="warning">Signed out</StatusBadge>;
+  if (install.login.state === 'unknown')
+    return <StatusBadge tone="warning">Couldn't check</StatusBadge>;
   const { method, plan } = install.login;
-  return <StatusBadge tone="success">{plan ? `${plan} plan · ${method}` : method}</StatusBadge>;
+  return (
+    <StatusBadge tone="success">
+      {plan ? `${plan} plan · ${method}` : method}
+    </StatusBadge>
+  );
 }
 
-function StatusBadge({ tone, children }: { tone: 'success' | 'warning'; children: ReactNode }) {
+function StatusBadge({
+  tone,
+  children,
+}: {
+  tone: 'success' | 'warning';
+  children: ReactNode;
+}) {
   const Icon = tone === 'success' ? CheckBadge : WarningAlt;
   return (
     <Badge variant="outline">
-      <Icon data-icon="inline-start" className={tone === 'success' ? 'text-success' : 'text-warning'} />
+      <Icon
+        data-icon="inline-start"
+        className={tone === 'success' ? 'text-success' : 'text-warning'}
+      />
       {children}
     </Badge>
   );
 }
 
 /** What to run in the user's own terminal when an account is signed out or its status couldn't be read. Never a login form. */
-export function SignInSteps({ install, command, onCheck }: { install: InstallState | undefined; command: string; onCheck: () => void }) {
-  if (!install || install === 'checking' || !install.path || install.login.state === 'logged-in') return null;
-  const reason = install.login.state === 'unknown' ? install.login.reason : undefined;
+export function SignInSteps({
+  install,
+  command,
+  onCheck,
+}: {
+  install: InstallState | undefined;
+  command: string;
+  onCheck: () => void;
+}) {
+  if (
+    !install ||
+    install === 'checking' ||
+    !install.path ||
+    install.login.state === 'logged-in'
+  )
+    return null;
+  const reason =
+    install.login.state === 'unknown' ? install.login.reason : undefined;
   return (
     <div className="flex flex-col items-start gap-2 type-meta text-muted-foreground">
-      <p>{reason ? `Couldn't read the login: ${reason}` : 'Sign in from a terminal, in the tool itself, then check again.'}</p>
+      <p>
+        {reason
+          ? `Couldn't read the login: ${reason}`
+          : 'Sign in from a terminal, in the tool itself, then check again.'}
+      </p>
       <CommandLine command={command} />
       <Button variant="outline" size="sm" onClick={onCheck}>
         <Refresh data-icon="inline-start" />
@@ -130,24 +216,43 @@ export function CommandLine({ command }: { command: string }) {
     });
   return (
     <div className="flex w-full items-center gap-1 rounded-lg bg-muted py-0.5 pr-0.5 pl-2.5">
-      <code className="min-w-0 flex-1 truncate font-mono type-meta text-foreground" title={command}>
+      <code
+        className="min-w-0 flex-1 truncate font-mono type-meta text-foreground"
+        title={command}
+      >
         {command}
       </code>
-      <TooltipIconButton label={isCopied ? 'Copied' : 'Copy command'} hint="Paste it into a terminal" onClick={copy}>
-        <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <CopyStack />}</IconSwap>
+      <TooltipIconButton
+        label={isCopied ? 'Copied' : 'Copy command'}
+        hint="Paste it into a terminal"
+        onClick={copy}
+      >
+        <IconSwap id={isCopied ? 'copied' : 'copy'}>
+          {isCopied ? <Check /> : <CopyStack />}
+        </IconSwap>
       </TooltipIconButton>
     </div>
   );
 }
 
 /** Text input that saves on blur or Enter, so typing a path doesn't re-run detection per keystroke. */
-export function CommitInput({ value, onCommit, className, ...props }: { value: string; onCommit: (value: string) => void } & Omit<React.ComponentProps<typeof Input>, 'value' | 'defaultValue' | 'onBlur'>) {
+export function CommitInput({
+  value,
+  onCommit,
+  className,
+  ...props
+}: { value: string; onCommit: (value: string) => void } & Omit<
+  React.ComponentProps<typeof Input>,
+  'value' | 'defaultValue' | 'onBlur'
+>) {
   return (
     <Input
       key={value}
       defaultValue={value}
       spellCheck={false}
-      onBlur={(e) => e.target.value.trim() !== value && onCommit(e.target.value.trim())}
+      onBlur={(e) =>
+        e.target.value.trim() !== value && onCommit(e.target.value.trim())
+      }
       onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
       className={cn('w-full sm:w-60', className)}
       {...props}
@@ -156,15 +261,34 @@ export function CommitInput({ value, onCommit, className, ...props }: { value: s
 }
 
 /** A folder path: typed (saved on blur or Enter) or picked with the OS folder picker, which only the desktop app can open. */
-export function FolderInput({ id, value, placeholder, onCommit }: { id: string; value: string; placeholder: string; onCommit: (path: string) => void }) {
+export function FolderInput({
+  id,
+  value,
+  placeholder,
+  onCommit,
+}: {
+  id: string;
+  value: string;
+  placeholder: string;
+  onCommit: (path: string) => void;
+}) {
   const browse = () =>
     host.fs.pickFolder(value || placeholder).then(
       (path) => path && onCommit(path),
-      (error: Error) => toast.error('Could not open the folder picker', { description: error.message }),
+      (error: Error) =>
+        toast.error('Could not open the folder picker', {
+          description: error.message,
+        }),
     );
   return (
     <div className="flex w-full items-center gap-2 sm:w-auto">
-      <CommitInput id={settingControlId(id)} value={value} placeholder={placeholder} onCommit={onCommit} className="flex-1 font-mono placeholder:font-mono sm:w-60 sm:flex-none" />
+      <CommitInput
+        id={settingControlId(id)}
+        value={value}
+        placeholder={placeholder}
+        onCommit={onCommit}
+        className="flex-1 font-mono placeholder:font-mono sm:w-60 sm:flex-none"
+      />
       {host.isDesktop && (
         <Button variant="outline" size="sm" onClick={() => void browse()}>
           Browse
@@ -175,7 +299,13 @@ export function FolderInput({ id, value, placeholder, onCommit }: { id: string; 
 }
 
 /** Rows the main process reads; the web build says why they're missing instead. `what` is a sentence naming what needs the desktop app. */
-export function DesktopOnly({ what, children }: { what: ReactNode; children: ReactNode }) {
+export function DesktopOnly({
+  what,
+  children,
+}: {
+  what: ReactNode;
+  children: ReactNode;
+}) {
   return host.isDesktop ? children : <DesktopOnlyNotice what={what} />;
 }
 
@@ -184,7 +314,10 @@ export function DesktopOnlyNotice({ what }: { what: ReactNode }) {
     <Alert>
       <Info />
       <AlertTitle>Needs the desktop app</AlertTitle>
-      <AlertDescription>{what} Here, threads run on the demo agents, so everything else keeps working.</AlertDescription>
+      <AlertDescription>
+        {what} Here, threads run on the demo agents, so everything else keeps
+        working.
+      </AlertDescription>
     </Alert>
   );
 }
@@ -197,10 +330,27 @@ export function SettingsSelect<T extends string>({
   onChange,
   className,
   ...props
-}: { id?: string; value: T; options: readonly { value: T; label: string; className?: string }[]; onChange: (value: T) => void; className?: string; 'aria-label'?: string; disabled?: boolean }) {
+}: {
+  id?: string;
+  value: T;
+  options: readonly { value: T; label: string; className?: string }[];
+  onChange: (value: T) => void;
+  className?: string;
+  'aria-label'?: string;
+  disabled?: boolean;
+}) {
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as T)} disabled={props.disabled}>
-      <SelectTrigger id={id && settingControlId(id)} aria-label={props['aria-label']} size="sm" className={cn('w-44', className)}>
+    <Select
+      value={value}
+      onValueChange={(v) => onChange(v as T)}
+      disabled={props.disabled}
+    >
+      <SelectTrigger
+        id={id && settingControlId(id)}
+        aria-label={props['aria-label']}
+        size="sm"
+        className={cn('w-44', className)}
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent align="end">
@@ -215,9 +365,34 @@ export function SettingsSelect<T extends string>({
 }
 
 /** One of a few named values, as separate bordered toggles; the row's label names the group. */
-export function SettingsChoice<T extends string>({ id, value, options, onChange, ...props }: { id: string; value: T; options: readonly { value: T; label: string; icon?: ReactNode; className?: string }[]; onChange: (value: T) => void; 'aria-label'?: string }) {
+export function SettingsChoice<T extends string>({
+  id,
+  value,
+  options,
+  onChange,
+  ...props
+}: {
+  id: string;
+  value: T;
+  options: readonly {
+    value: T;
+    label: string;
+    icon?: ReactNode;
+    className?: string;
+  }[];
+  onChange: (value: T) => void;
+  'aria-label'?: string;
+}) {
   return (
-    <ToggleGroup id={settingControlId(id)} aria-label={props['aria-label']} type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as T)}>
+    <ToggleGroup
+      id={settingControlId(id)}
+      aria-label={props['aria-label']}
+      type="single"
+      size="sm"
+      variant="outline"
+      value={value}
+      onValueChange={(v) => v && onChange(v as T)}
+    >
       {options.map((o) => (
         <ToggleGroupItem key={o.value} value={o.value} className={o.className}>
           {o.icon}
@@ -229,7 +404,21 @@ export function SettingsChoice<T extends string>({ id, value, options, onChange,
 }
 
 /** A whole number that saves on blur or Enter, clamped to its range. */
-export function NumberInput({ id, value, min, max, step, onCommit }: { id: string; value: number; min: number; max: number; step: number; onCommit: (value: number) => void }) {
+export function NumberInput({
+  id,
+  value,
+  min,
+  max,
+  step,
+  onCommit,
+}: {
+  id: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onCommit: (value: number) => void;
+}) {
   const commit = (raw: string) => {
     const next = Math.min(max, Math.max(min, Math.round(Number(raw) || value)));
     if (next !== value) onCommit(next);
@@ -252,10 +441,29 @@ export function NumberInput({ id, value, min, max, step, onCommit }: { id: strin
 }
 
 /** A list row's 32px image (a package's icon from its marketplace); `fallback` (else a muted tile) when it has none or it fails to load. */
-export function ListIcon({ url, fallback }: { url?: string | null; fallback?: ReactNode }) {
+export function ListIcon({
+  url,
+  fallback,
+}: {
+  url?: string | null;
+  fallback?: ReactNode;
+}) {
   const [isBroken, setBroken] = useState(false);
-  if (!url || isBroken) return fallback ?? <span aria-hidden className="size-8 shrink-0 rounded-lg bg-muted" />;
-  return <img src={url} alt="" loading="lazy" onError={() => setBroken(true)} className="size-8 shrink-0 rounded-lg object-contain" />;
+  if (!url || isBroken)
+    return (
+      fallback ?? (
+        <span aria-hidden className="size-8 shrink-0 rounded-lg bg-muted" />
+      )
+    );
+  return (
+    <img
+      src={url}
+      alt=""
+      loading="lazy"
+      onError={() => setBroken(true)}
+      className="size-8 shrink-0 rounded-lg object-contain"
+    />
+  );
 }
 
 const SKELETON_WIDTHS = ['w-40', 'w-28', 'w-48', 'w-32'];
@@ -267,7 +475,9 @@ export function SkeletonRows({ count }: { count: number }) {
       label={
         <span className="flex items-center gap-2.5">
           <Skeleton className="size-8 rounded-lg" />
-          <Skeleton className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`} />
+          <Skeleton
+            className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`}
+          />
         </span>
       }
     />

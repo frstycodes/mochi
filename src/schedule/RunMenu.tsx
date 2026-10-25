@@ -1,6 +1,10 @@
 import { Clock } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { SettingsChoice } from '../settings/parts';
 import { describeTrigger } from './describe';
 import { DEFAULT_FORM, toWhen, type ScheduleForm } from './form';
@@ -23,20 +27,52 @@ const MODES = [
 ] satisfies { value: RunMode; label: string }[];
 
 /** The new-thread composer's meta row entry: a clock opening the compact schedule editor. */
-export function RunMenu({ value, onChange }: { value: RunChoice; onChange: (value: RunChoice) => void }) {
+export function RunMenu({
+  value,
+  onChange,
+}: {
+  value: RunChoice;
+  onChange: (value: RunChoice) => void;
+}) {
   const label = runLabel(value);
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="xs" className="min-w-0 text-subtle-foreground hover:text-foreground" aria-label={`Schedule: ${label}`}>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="min-w-0 text-subtle-foreground hover:text-foreground"
+          aria-label={`Schedule: ${label}`}
+        >
           <Clock />
           <span className="truncate max-sm:hidden">{label}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" collisionPadding={16} className="flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-4">
-        <SettingsChoice id="new-thread-run" aria-label="Run" value={value.mode} options={MODES} onChange={(mode) => onChange({ ...value, mode })} />
-        {value.mode === 'background' && <p className="type-meta text-muted-foreground">Starts now without opening the thread. You'll find it in the sidebar, and in the Queue when it needs you.</p>}
-        {value.mode === 'trigger' && <ScheduleFields id="new-thread-schedule" form={value.form} onChange={(form) => onChange({ ...value, form })} />}
+      <PopoverContent
+        align="start"
+        collisionPadding={16}
+        className="flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-4"
+      >
+        <SettingsChoice
+          id="new-thread-run"
+          aria-label="Run"
+          value={value.mode}
+          options={MODES}
+          onChange={(mode) => onChange({ ...value, mode })}
+        />
+        {value.mode === 'background' && (
+          <p className="type-meta text-muted-foreground">
+            Starts now without opening the thread. You'll find it in the
+            sidebar, and in the Queue when it needs you.
+          </p>
+        )}
+        {value.mode === 'trigger' && (
+          <ScheduleFields
+            id="new-thread-schedule"
+            form={value.form}
+            onChange={(form) => onChange({ ...value, form })}
+          />
+        )}
       </PopoverContent>
     </Popover>
   );

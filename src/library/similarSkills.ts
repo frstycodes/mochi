@@ -8,12 +8,20 @@ export interface SimilarSkill {
 }
 
 /** The native skills (every account's, deduplicated by harness and name) whose names resemble `name`. */
-export function similarNativeSkills(name: string, accounts: NativeAccount[] | undefined): SimilarSkill[] {
+export function similarNativeSkills(
+  name: string,
+  accounts: NativeAccount[] | undefined,
+): SimilarSkill[] {
   const seen = new Set<string>();
   return (accounts ?? []).flatMap(({ account, items }) =>
     items.flatMap((item) => {
       const key = `${account.provider}:${item.name}`;
-      if (item.kind !== 'skill' || seen.has(key) || !isSimilarName(name, item.name)) return [];
+      if (
+        item.kind !== 'skill' ||
+        seen.has(key) ||
+        !isSimilarName(name, item.name)
+      )
+        return [];
       seen.add(key);
       return [{ name: item.name, provider: account.provider }];
     }),
@@ -21,7 +29,17 @@ export function similarNativeSkills(name: string, accounts: NativeAccount[] | un
 }
 
 // Words that say nothing about what a skill does, so "ui-skill" and "ui" read as the same.
-const FILLER = new Set(['skill', 'skills', 'agent', 'claude', 'codex', 'the', 'a', 'and', 'for']);
+const FILLER = new Set([
+  'skill',
+  'skills',
+  'agent',
+  'claude',
+  'codex',
+  'the',
+  'a',
+  'and',
+  'for',
+]);
 
 const words = (name: string) =>
   name
@@ -34,7 +52,9 @@ const words = (name: string) =>
  * "animate-expo"). A name-only heuristic: two skills with different names that do the same thing aren't caught.
  */
 export function isSimilarName(a: string, b: string) {
-  const [short, long] = [words(a), words(b)].sort((x, y) => x.length - y.length);
+  const [short, long] = [words(a), words(b)].sort(
+    (x, y) => x.length - y.length,
+  );
   if (!short.length) return false;
   if (short.join('-') === long.join('-')) return true;
   // One short word ("ui", "git") inside a longer name is too weak a signal on its own.

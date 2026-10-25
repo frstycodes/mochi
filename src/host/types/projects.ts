@@ -39,9 +39,21 @@ export interface ProjectsHost {
   /** An existing folder; one already listed comes back as it is. */
   addFolder(spaceId: string, path: string): Promise<Project>;
   /** Into `parentDir/<repo>`, refused if that exists. Progress lines arrive through `onProgress` under `opId`. */
-  clone(spaceId: string, source: CloneSource, options: { parentDir: string; opId: string; githubUser?: string }): Promise<Project>;
+  clone(
+    spaceId: string,
+    source: CloneSource,
+    options: { parentDir: string; opId: string; githubUser?: string },
+  ): Promise<Project>;
   /** `git init` in `parentDir/<name>`; `publish` also creates the GitHub repository through gh and sets it as origin. */
-  create(spaceId: string, name: string, options: { parentDir: string; publish?: 'private' | 'public'; githubUser?: string }): Promise<Project>;
+  create(
+    spaceId: string,
+    name: string,
+    options: {
+      parentDir: string;
+      publish?: 'private' | 'public';
+      githubUser?: string;
+    },
+  ): Promise<Project>;
   rename(spaceId: string, id: string, name: string): Promise<void>;
   /** From the list only; the folder stays on disk. */
   remove(spaceId: string, id: string): Promise<void>;
@@ -51,7 +63,9 @@ export interface ProjectsHost {
   setIcon(spaceId: string, id: string, icon: string): Promise<Project>;
   githubRepos(githubUser?: string): Promise<GithubRepo[]>;
   onChange(listener: (spaceId: string) => void): () => void;
-  onProgress(listener: (progress: { opId: string; line: string }) => void): () => void;
+  onProgress(
+    listener: (progress: { opId: string; line: string }) => void,
+  ): () => void;
 }
 
 export const projectsMethods = {

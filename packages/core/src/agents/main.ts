@@ -1,5 +1,8 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AgentToolCall, AgentToolResult } from '../../../../src/host/types/agent.ts';
+import type {
+  AgentToolCall,
+  AgentToolResult,
+} from '../../../../src/host/types/agent.ts';
 import type { McpServerDef } from '../../../../src/settings/agentConfig.ts';
 import type { ToolRules } from '../../../../src/library/connectorTools.ts';
 import type { Provider } from '../../../../src/model.ts';
@@ -11,7 +14,11 @@ import type { MochiScope } from '../../../../src/runtime/toolTable.ts';
  * Main serves these in electron/agents/events.ts.
  */
 export interface MainForAgents {
-  mochiTool(thread: string, name: string, args: Record<string, unknown>): Promise<CallToolResult>;
+  mochiTool(
+    thread: string,
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<CallToolResult>;
   /** `null`: the window that asked is unknown (main picks its main window). */
   pendingToolCalls(windowId: number | null): Promise<AgentToolCall[]>;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
@@ -37,4 +44,9 @@ let call: Call = async (method) => {
 /** Set once by the agents layer: a capability call to main. */
 export const useMain = (next: Call) => void (call = next);
 
-export const main = new Proxy({} as MainForAgents, { get: (_target, method: string) => (...args: unknown[]) => call(method, args) });
+export const main = new Proxy({} as MainForAgents, {
+  get:
+    (_target, method: string) =>
+    (...args: unknown[]) =>
+      call(method, args),
+});

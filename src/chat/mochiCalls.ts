@@ -1,5 +1,9 @@
 import type { ActivityEntry } from '../model.ts';
-import { isTurnTool, MOCHI_SERVER, type ToolName } from '../runtime/toolTable.ts';
+import {
+  isTurnTool,
+  MOCHI_SERVER,
+  type ToolName,
+} from '../runtime/toolTable.ts';
 
 /**
  * Each Mochi tool in words, like Claude's own tools: while it runs, then in its work-group row. What it changed is the
@@ -16,7 +20,10 @@ export const MOCHI_CALLS = {
   reorder_threads: ['Reordering the sidebar', 'Reordered the sidebar'],
   watch_thread: ['Watching a thread', 'Watched a thread'],
   create_thread: ['Starting a new thread', 'Started a new thread'],
-  dismiss_thread_proposal: ['Withdrawing a thread suggestion', 'Withdrew a thread suggestion'],
+  dismiss_thread_proposal: [
+    'Withdrawing a thread suggestion',
+    'Withdrew a thread suggestion',
+  ],
   send_to_thread: ['Messaging a thread', 'Messaged a thread'],
   delete_thread: ['Asking to delete a thread', 'Asked to delete a thread'],
   get_goal: ['Reading the goal', 'Read the goal'],
@@ -27,7 +34,10 @@ export const MOCHI_CALLS = {
   settle_goal: ['Settling the goal', 'Settled the goal'],
   update_plan: ['Updating the plan', 'Updated the plan'],
   delegate_task: ['Delegating a task', 'Delegated a task'],
-  ask_second_opinion: ['Asking for a second opinion', 'Asked for a second opinion'],
+  ask_second_opinion: [
+    'Asking for a second opinion',
+    'Asked for a second opinion',
+  ],
   browser_tabs: ['Looking at the browser tabs', 'Looked at the browser tabs'],
   browser_open: ['Opening a page', 'Opened a page'],
   browser_snapshot: ['Reading the page', 'Read the page'],
@@ -48,7 +58,10 @@ export const MOCHI_CALLS = {
   browser_reload: ['Reloading the page', 'Reloaded the page'],
   browser_dialog: ['Answering a page dialog', 'Answered a page dialog'],
   browser_set_device: ['Changing the device size', 'Changed the device size'],
-  browser_handoff: ['Waiting on you in the browser', 'Waited on you in the browser'],
+  browser_handoff: [
+    'Waiting on you in the browser',
+    'Waited on you in the browser',
+  ],
   browser_batch: ['Running browser steps', 'Ran browser steps'],
   open_pane_tab: ['Opening a side pane tab', 'Opened a side pane tab'],
   split_with: ['Opening a split', 'Opened a split'],
@@ -57,7 +70,10 @@ export const MOCHI_CALLS = {
   open_changes: ['Opening the changes', 'Opened the changes'],
   ask_side_chat: ['Asking the side chat', 'Asked the side chat'],
   notify_user: ['Notifying you', 'Notified you'],
-  open_settings_chat: ['Handing this to the settings chat', 'Drafted in the settings chat'],
+  open_settings_chat: [
+    'Handing this to the settings chat',
+    'Drafted in the settings chat',
+  ],
   get_settings: ['Reading your settings', 'Read your settings'],
   update_settings: ['Suggesting setting changes', 'Suggested setting changes'],
   get_keybindings: ['Reading your shortcuts', 'Read your shortcuts'],
@@ -65,21 +81,34 @@ export const MOCHI_CALLS = {
   list_profiles: ['Looking at your profiles', 'Looked at your profiles'],
   add_mcp_server: ['Suggesting an MCP server', 'Suggested an MCP server'],
   list_connectors: ['Looking at your connectors', 'Looked at your connectors'],
-  connect_account: ['Suggesting a connector account', 'Suggested a connector account'],
+  connect_account: [
+    'Suggesting a connector account',
+    'Suggested a connector account',
+  ],
   run_setup: ['Running a setup', 'Ran a setup'],
   update_setup_step: ['Fixing a setup step', 'Fixed a setup step'],
-  remove_mcp_server: ['Asking to remove an MCP server', 'Asked to remove an MCP server'],
+  remove_mcp_server: [
+    'Asking to remove an MCP server',
+    'Asked to remove an MCP server',
+  ],
   remove_profile: ['Asking to remove a profile', 'Asked to remove a profile'],
 } satisfies Record<ToolName, [live: string, done: string]>;
 
 /** A Mochi call whose result has its own surface (the plan list, the end-of-turn card), so it gets no work-log row or live title. */
-export const isTurnCall = (entry: Pick<ActivityEntry, 'mcp'>) => entry.mcp?.server === MOCHI_SERVER && isTurnTool(entry.mcp.tool);
+export const isTurnCall = (entry: Pick<ActivityEntry, 'mcp'>) =>
+  entry.mcp?.server === MOCHI_SERVER && isTurnTool(entry.mcp.tool);
 
 /** A call's target (`mochi: rename_thread`) is Mochi's own. */
-export const isMochiTarget = (target: string) => target.startsWith(`${MOCHI_SERVER}: `);
+export const isMochiTarget = (target: string) =>
+  target.startsWith(`${MOCHI_SERVER}: `);
 
 /** A Mochi call's words; undefined for another server's call, or a tool this build doesn't know (an older or newer Mochi's log). */
-export function mochiCall(call: { verb: string; target: string }): [live: string, done: string] | undefined {
+export function mochiCall(call: {
+  verb: string;
+  target: string;
+}): [live: string, done: string] | undefined {
   if (call.verb !== 'Mcp' || !isMochiTarget(call.target)) return undefined;
-  return (MOCHI_CALLS as Record<string, [string, string]>)[call.target.slice(MOCHI_SERVER.length + 2)];
+  return (MOCHI_CALLS as Record<string, [string, string]>)[
+    call.target.slice(MOCHI_SERVER.length + 2)
+  ];
 }

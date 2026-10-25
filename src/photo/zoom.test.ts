@@ -15,8 +15,14 @@ test('zooming keeps the point under the cursor still', () => {
 });
 
 test('zoom stops at fit and at the maximum', () => {
-  assert.deepEqual(zoomAt({ scale: 1.5, x: 40, y: 10 }, 0.1, { x: 0, y: 0 }, fitted, viewport), FIT);
-  assert.equal(zoomAt(FIT, 100, { x: 0, y: 0 }, fitted, viewport).scale, MAX_SCALE);
+  assert.deepEqual(
+    zoomAt({ scale: 1.5, x: 40, y: 10 }, 0.1, { x: 0, y: 0 }, fitted, viewport),
+    FIT,
+  );
+  assert.equal(
+    zoomAt(FIT, 100, { x: 0, y: 0 }, fitted, viewport).scale,
+    MAX_SCALE,
+  );
 });
 
 test('panning stops at the image edges and keeps a narrow axis centred', () => {
@@ -28,11 +34,15 @@ test('panning stops at the image edges and keeps a narrow axis centred', () => {
 
 test('a click closes only outside the image and only when it did not end a pan', () => {
   const image = { left: 100, top: 50, right: 900, bottom: 650 };
-  const click = (x: number, y: number, press = { x, y }) => isBackdropClick({ x, y }, press, image);
+  const click = (x: number, y: number, press = { x, y }) =>
+    isBackdropClick({ x, y }, press, image);
   assert.equal(click(50, 300), true);
   assert.equal(click(500, 20), true);
   assert.equal(click(500, 300), false);
   assert.equal(click(100, 50), false);
   assert.equal(click(50, 300, { x: 60, y: 300 }), false);
-  assert.equal(isBackdropClick({ x: 500, y: 300 }, { x: 500, y: 300 }, undefined), true);
+  assert.equal(
+    isBackdropClick({ x: 500, y: 300 }, { x: 500, y: 300 }, undefined),
+    true,
+  );
 });

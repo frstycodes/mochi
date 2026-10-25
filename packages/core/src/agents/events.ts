@@ -22,13 +22,17 @@ const kept = new Map<string, SeqEvent[]>();
 const MAX_KEPT = 500;
 
 /** Set once by the agents layer: appends each event to Core's log. */
-export const useEventLog = (append: (event: SeqEvent) => void) => void (log = append);
+export const useEventLog = (append: (event: SeqEvent) => void) =>
+  void (log = append);
 
 /** Every thread agent event goes through here: logged, then Core's own taps, then main relays it to the windows. */
 export function emitAgentEvent(event: AgentEvent) {
-  if (event.type === 'turn-end' || event.type === 'limit') markIdle(event.threadId);
+  if (event.type === 'turn-end' || event.type === 'limit')
+    markIdle(event.threadId);
   // As JSON from here on (log, replay, push): adapters leave optional fields undefined, which the socket's encoder refuses.
-  const numbered = JSON.parse(JSON.stringify({ ...event, seq: ++seq })) as SeqEvent;
+  const numbered = JSON.parse(
+    JSON.stringify({ ...event, seq: ++seq }),
+  ) as SeqEvent;
   remember(numbered);
   log(numbered);
   for (const tap of taps) tap(event);
@@ -50,7 +54,8 @@ export function onPush(listener: (push: Push) => void) {
 }
 
 /** The thread's events after `after`, for a window that reloaded while its agent ran. */
-export const eventsSince = (threadId: string, after: number) => (kept.get(threadId) ?? []).filter((e) => e.seq > after);
+export const eventsSince = (threadId: string, after: number) =>
+  (kept.get(threadId) ?? []).filter((e) => e.seq > after);
 
 /** The agent process is gone: nothing left to replay. */
 export const forgetEvents = (threadId: string) => void kept.delete(threadId);

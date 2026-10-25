@@ -89,7 +89,8 @@ export const AGENT_CONTROLS = ['read', 'changes', 'everything'] as const;
 export type AgentControl = (typeof AGENT_CONTROLS)[number];
 
 /** Adds `id` to a starred list (models, themes) or takes it out. */
-export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
+export const toggleStar = (starred: string[], id: string) =>
+  starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id];
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
@@ -102,7 +103,15 @@ export const DEFAULT_PREFS: Prefs = {
   idleChecks: 'edited',
   proposedGoals: 'ask',
   idleAlerts: ['gaps', 'needs-you', 'stalled'],
-  alertKinds: ['needs-you', 'done', 'failed', 'limit', 'ci', 'pr-review', 'run'],
+  alertKinds: [
+    'needs-you',
+    'done',
+    'failed',
+    'limit',
+    'ci',
+    'pr-review',
+    'run',
+  ],
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],

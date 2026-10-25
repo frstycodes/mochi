@@ -42,24 +42,25 @@ Same anatomy as a library row: a 40px icon tile (the letter for native items wit
 - **Meta line**: `<Kind> · <where>`. Examples: `Skill · ~/.claude/skills/ui`, `Skill · Project · latitude-api · .claude/skills/deploy`, `MCP server · ~/.claude.json · http · mcp.figma.com`, `Plugin · ponytail@ponytail · 6 skills, 2 hooks`.
 - **Profiles button** (native items, which are on by default, so it names where the item is off):
 
-  | State | Label | Icons |
-  |---|---|---|
-  | On in every profile on its account | On | none |
-  | Off in one | Off in Personal | that profile's icon |
-  | Off in several | Off in 2 profiles | up to 3 icons |
-  | Off in all of them | Off in Mochi | the icons |
+  | State                              | Label             | Icons               |
+  | ---------------------------------- | ----------------- | ------------------- |
+  | On in every profile on its account | On                | none                |
+  | Off in one                         | Off in Personal   | that profile's icon |
+  | Off in several                     | Off in 2 profiles | up to 3 icons       |
+  | Off in all of them                 | Off in Mochi      | the icons           |
 
   The menu is titled "Load in these Mochi profiles", with one checkbox per profile and other accounts disabled ("other account"). It stays open while you tick. Its footer reads: "Off in Mochi only. Still on in Claude Code. Applies to new threads."
+
 - **Status line per state** (one line at most; none when the item is simply on):
 
-  | State | Look | Copy |
-  |---|---|---|
-  | On | — | — |
-  | Off in the current profile | icon and name at 60% | Off in Mochi for Personal. Still on in Claude Code. |
-  | Can't be switched off | lock icon, muted; the button is disabled ("Always on") with the reason in its tooltip | Always on in Mochi: Claude Code loads it in every session |
-  | New | `New` badge after the name | New in Claude Code. On, because Personal loads new items. / New in Claude Code. Off, because Personal loads only what you add. |
-  | Broken | warning colour, warning icon | Couldn't load: <the harness's own error, verbatim> |
-  | On another account | — | the section footer says it once: "Personal runs on another Claude Code account, so none of these load there." |
+  | State                      | Look                                                                                  | Copy                                                                                                                           |
+  | -------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+  | On                         | —                                                                                     | —                                                                                                                              |
+  | Off in the current profile | icon and name at 60%                                                                  | Off in Mochi for Personal. Still on in Claude Code.                                                                            |
+  | Can't be switched off      | lock icon, muted; the button is disabled ("Always on") with the reason in its tooltip | Always on in Mochi: Claude Code loads it in every session                                                                      |
+  | New                        | `New` badge after the name                                                            | New in Claude Code. On, because Personal loads new items. / New in Claude Code. Off, because Personal loads only what you add. |
+  | Broken                     | warning colour, warning icon                                                          | Couldn't load: <the harness's own error, verbatim>                                                                             |
+  | On another account         | —                                                                                     | the section footer says it once: "Personal runs on another Claude Code account, so none of these load there."                  |
 
 - The New badge clears the next time the page is opened after it was first shown.
 - **⋯ menu**: Show in Finder, View source (Mochi's file viewer), Copy path. Login connectors get "Manage on claude.ai" instead. There is never a Remove or Update.
@@ -67,13 +68,14 @@ Same anatomy as a library row: a 40px icon tile (the letter for native items wit
 
 ## Locked reasons (copy)
 
-| Item | Tooltip |
-|---|---|
-| One Claude hook | Claude Code runs every hook in its settings. Mochi can turn off all hooks for a profile, or the plugin a hook came from, but not one hook. |
-| One Codex subagent | Codex has no switch for one subagent. Mochi can turn off all Codex subagents for a profile. |
-| One claude.ai connector (until verified) | Comes with your Claude.ai login. Mochi can turn off all Claude.ai connectors for a profile, not one yet. |
+| Item                                     | Tooltip                                                                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| One Claude hook                          | Claude Code runs every hook in its settings. Mochi can turn off all hooks for a profile, or the plugin a hook came from, but not one hook. |
+| One Codex subagent                       | Codex has no switch for one subagent. Mochi can turn off all Codex subagents for a profile.                                                |
+| One claude.ai connector (until verified) | Comes with your Claude.ai login. Mochi can turn off all Claude.ai connectors for a profile, not one yet.                                   |
 
 Group switches in Settings › Profiles. Each is on by default, with label and description:
+
 - Hooks from Claude Code: "Claude Code can't skip one hook, so this turns off every hook in Mochi threads, plugins' included."
 - Claude.ai connectors from Claude Code: "The connectors your Claude.ai login brings, like Gmail and Google Calendar."
 - Subagents from Codex: "Codex can't skip one subagent, so this turns off all of them in Mochi threads."
@@ -142,38 +144,38 @@ Labels: RUN = verified by a run; SRC = verified by reading the SDK, CLI strings 
 
 ### Claude (Agent SDK options; `settings` = flag-layer settings)
 
-| Item | Mechanism | Status | Effect |
-|---|---|---|---|
-| User or project skill | `settings.skillOverrides: { "<name>": "off" }` | RUN | Removed from context; a call is refused |
-| Plugin skill | `skills: [every name but this one]` (allowlist, built from `initializationResult()`) | RUN | Removed; `skillOverrides` ignores plugin skills (RUN) |
-| Skill | `disallowedTools` / `permissions.deny` `Skill(name)` | RUN | Call refused only; still listed |
-| Plugin | `settings.enabledPlugins: { "p@mkt": false }` | RUN | Its skills, agents, server and hooks all leave |
-| Subagent (user, project or plugin) | `disallowedTools: ["Agent(name)"]` (plugin: `Agent(p:name)`) | RUN | Removed from context; call refused |
-| One hook | — | NO | Flag-layer `hooks` merge with the user's; settings have no per-hook key |
-| All hooks | `settings.disableAllHooks: true` | RUN | None run |
-| MCP server (user, local, project or plugin) | `settings.deniedMcpServers: [{ serverName }]` (plugin: `plugin:<p>:<srv>`) | RUN | Not connected, not in context |
-| Project `.mcp.json` server | `settings.disabledMcpjsonServers: [name]` | RUN | Not connected |
-| MCP server | `disallowedTools: ["mcp__<server>"]` | RUN | Out of context, but still connects |
-| MCP server | `strictMcpConfig` + re-passing kept servers | RUN | Works but heavy: Mochi would copy every kept server |
-| All claude.ai connectors | `settings.disableClaudeAiConnectors: true` or env `ENABLE_CLAUDEAI_MCP_SERVERS=false` | RUN | Not fetched; `mcpServerStatus()` lists none |
-| One claude.ai connector | `deniedMcpServers: [{ serverName: "claude.ai <Name>" }]` | RUN | Not connected; absent from `mcpServerStatus()` (real account, 2026-10-21, SDK 0.3.296) |
-| Ruled out | `toggleMcpServer` | RUN | Writes `projects[cwd].disabledMcpServers` into `.claude.json` |
-| Ruled out | `settingSources` | RUN | Drops whole layers (`user` drops all plugins too) |
+| Item                                        | Mechanism                                                                             | Status | Effect                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------- |
+| User or project skill                       | `settings.skillOverrides: { "<name>": "off" }`                                        | RUN    | Removed from context; a call is refused                                                |
+| Plugin skill                                | `skills: [every name but this one]` (allowlist, built from `initializationResult()`)  | RUN    | Removed; `skillOverrides` ignores plugin skills (RUN)                                  |
+| Skill                                       | `disallowedTools` / `permissions.deny` `Skill(name)`                                  | RUN    | Call refused only; still listed                                                        |
+| Plugin                                      | `settings.enabledPlugins: { "p@mkt": false }`                                         | RUN    | Its skills, agents, server and hooks all leave                                         |
+| Subagent (user, project or plugin)          | `disallowedTools: ["Agent(name)"]` (plugin: `Agent(p:name)`)                          | RUN    | Removed from context; call refused                                                     |
+| One hook                                    | —                                                                                     | NO     | Flag-layer `hooks` merge with the user's; settings have no per-hook key                |
+| All hooks                                   | `settings.disableAllHooks: true`                                                      | RUN    | None run                                                                               |
+| MCP server (user, local, project or plugin) | `settings.deniedMcpServers: [{ serverName }]` (plugin: `plugin:<p>:<srv>`)            | RUN    | Not connected, not in context                                                          |
+| Project `.mcp.json` server                  | `settings.disabledMcpjsonServers: [name]`                                             | RUN    | Not connected                                                                          |
+| MCP server                                  | `disallowedTools: ["mcp__<server>"]`                                                  | RUN    | Out of context, but still connects                                                     |
+| MCP server                                  | `strictMcpConfig` + re-passing kept servers                                           | RUN    | Works but heavy: Mochi would copy every kept server                                    |
+| All claude.ai connectors                    | `settings.disableClaudeAiConnectors: true` or env `ENABLE_CLAUDEAI_MCP_SERVERS=false` | RUN    | Not fetched; `mcpServerStatus()` lists none                                            |
+| One claude.ai connector                     | `deniedMcpServers: [{ serverName: "claude.ai <Name>" }]`                              | RUN    | Not connected; absent from `mcpServerStatus()` (real account, 2026-10-21, SDK 0.3.296) |
+| Ruled out                                   | `toggleMcpServer`                                                                     | RUN    | Writes `projects[cwd].disabledMcpServers` into `.claude.json`                          |
+| Ruled out                                   | `settingSources`                                                                      | RUN    | Drops whole layers (`user` drops all plugins too)                                      |
 
 ### Codex (`thread/start` `config`)
 
-| Item | Mechanism | Status | Effect |
-|---|---|---|---|
-| Skill (CODEX_HOME, `~/.agents`, repo, plugin) | `skills.config: [{ name, enabled: false }]` or `{ path, enabled: false }`; plugin skill name `p:skill` | RUN | Removed from context (`skills/list` doesn't change per thread) |
-| MCP server in config.toml | `mcp_servers.<key>.enabled = false` | RUN | Removed |
-| A plugin's server | `plugins.<p@mkt>.mcp_servers.<srv>.enabled = false` | RUN | Removed; `mcp_servers.<srv>` fails `thread/start` |
-| Plugin | `plugins.<p@mkt>.enabled = false` | RUN | Its skills and servers removed |
-| One hook | `hooks.state.<key from hooks/list>.enabled = false` (nested, the key has dots) | RUN | Doesn't run; process-level `-c` had no effect |
-| All hooks | `features.hooks = false` | RUN | None run |
-| One subagent role | — | NO | Roles have no `enabled` field |
-| All subagents | `features.multi_agent = false` | RUN | Agent tools and roles removed |
-| One ChatGPT app | `apps.<id>.enabled = false` | SRC, NV | Needs a ChatGPT login |
-| All ChatGPT apps | `features.apps = false` | SRC, NV | |
+| Item                                          | Mechanism                                                                                              | Status  | Effect                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------- | -------------------------------------------------------------- |
+| Skill (CODEX_HOME, `~/.agents`, repo, plugin) | `skills.config: [{ name, enabled: false }]` or `{ path, enabled: false }`; plugin skill name `p:skill` | RUN     | Removed from context (`skills/list` doesn't change per thread) |
+| MCP server in config.toml                     | `mcp_servers.<key>.enabled = false`                                                                    | RUN     | Removed                                                        |
+| A plugin's server                             | `plugins.<p@mkt>.mcp_servers.<srv>.enabled = false`                                                    | RUN     | Removed; `mcp_servers.<srv>` fails `thread/start`              |
+| Plugin                                        | `plugins.<p@mkt>.enabled = false`                                                                      | RUN     | Its skills and servers removed                                 |
+| One hook                                      | `hooks.state.<key from hooks/list>.enabled = false` (nested, the key has dots)                         | RUN     | Doesn't run; process-level `-c` had no effect                  |
+| All hooks                                     | `features.hooks = false`                                                                               | RUN     | None run                                                       |
+| One subagent role                             | —                                                                                                      | NO      | Roles have no `enabled` field                                  |
+| All subagents                                 | `features.multi_agent = false`                                                                         | RUN     | Agent tools and roles removed                                  |
+| One ChatGPT app                               | `apps.<id>.enabled = false`                                                                            | SRC, NV | Needs a ChatGPT login                                          |
+| All ChatGPT apps                              | `features.apps = false`                                                                                | SRC, NV |                                                                |
 
 0.163.0 lists `plugin_hooks` as removed, so Codex plugins carry no hooks. The reproduction scripts (`run.mjs`, `cxrun.mjs`, mock APIs) were kept in the session's scratchpad, not in the repo.
 

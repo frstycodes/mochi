@@ -2,13 +2,23 @@ import { app } from 'electron';
 import { runCommand } from '@mochi/core/runClient';
 import type { SimHost, SimLogLine } from '../../src/host/types/sim.ts';
 import { buildAndRun } from '../sim/build.ts';
-import { screenshot, startRecording, stopAllRecordings, stopRecording } from '../sim/capture.ts';
+import {
+  screenshot,
+  startRecording,
+  stopAllRecordings,
+  stopRecording,
+} from '../sim/capture.ts';
 import { command, startStream, stopAll, stopStream } from '../sim/helper.ts';
 import * as check from '../sim/parse.ts';
 import type { Handlers } from './handlers.ts';
 
 const SIMCTL_TIMEOUT_MS = 60_000;
-const simctl = async (...args: string[]) => (await runCommand('xcrun', ['simctl', ...args], { timeout: SIMCTL_TIMEOUT_MS })).stdout.trim();
+const simctl = async (...args: string[]) =>
+  (
+    await runCommand('xcrun', ['simctl', ...args], {
+      timeout: SIMCTL_TIMEOUT_MS,
+    })
+  ).stdout.trim();
 
 app.on('will-quit', () => {
   stopAll();
@@ -16,7 +26,8 @@ app.on('will-quit', () => {
 });
 
 export const sim = {
-  list: async () => check.parseSimctlList(await simctl('list', '-j', 'devices')),
+  list: async () =>
+    check.parseSimctlList(await simctl('list', '-j', 'devices')),
   boot: async (_sender, id) => {
     await simctl('boot', check.udid(id));
   },
@@ -25,13 +36,22 @@ export const sim = {
   },
   stream: (sender, id) => startStream(check.udid(id), sender),
   stopStream: async (sender, id) => stopStream(check.udid(id), sender),
-  touch: async (_sender, id, phase, x, y) => command(check.udid(id), { t: 'touch', phase: check.touchPhase(phase), x: check.unit(x, 'x'), y: check.unit(y, 'y') }),
-  button: async (_sender, id, button) => command(check.udid(id), { t: 'button', name: check.button(button) }),
-  key: async (_sender, id, usage) => press(check.udid(id), check.hidUsage(usage), false),
+  touch: async (_sender, id, phase, x, y) =>
+    command(check.udid(id), {
+      t: 'touch',
+      phase: check.touchPhase(phase),
+      x: check.unit(x, 'x'),
+      y: check.unit(y, 'y'),
+    }),
+  button: async (_sender, id, button) =>
+    command(check.udid(id), { t: 'button', name: check.button(button) }),
+  key: async (_sender, id, usage) =>
+    press(check.udid(id), check.hidUsage(usage), false),
   type: async (_sender, id, text) => {
     const device = check.udid(id);
     const keys = check.textToKeys(text);
-    if (keys) return keys.forEach(({ usage, shift }) => press(device, usage, shift));
+    if (keys)
+      return keys.forEach(({ usage, shift }) => press(device, usage, shift));
     // No key for some character (emoji, accents): paste it through the device pasteboard instead.
     await pbcopy(device, text);
     command(device, { t: 'key', usage: 227, down: true });
@@ -57,7 +77,12 @@ export const sim = {
     }
   },
   setContentSize: async (_sender, id, value) => {
-    await simctl('ui', check.udid(id), 'content_size', check.contentSize(value));
+    await simctl(
+      'ui',
+      check.udid(id),
+      'content_size',
+      check.contentSize(value),
+    );
   },
   screenshot: async (_sender, id) => screenshot(check.udid(id)),
   startRecording: async (_sender, id) => startRecording(check.udid(id)),
@@ -65,7 +90,11 @@ export const sim = {
   buildAndRun: async (sender, id, cwd) => {
     const device = check.udid(id);
     return buildAndRun(device, cwd, (text) => {
-      if (!sender.isDestroyed()) sender.send('sim:onBuildLog', { udid: device, text } satisfies SimLogLine);
+      if (!sender.isDestroyed())
+        sender.send('sim:onBuildLog', {
+          udid: device,
+          text,
+        } satisfies SimLogLine);
     });
   },
 } satisfies Handlers<SimHost>;
@@ -78,5 +107,8 @@ function press(udid: string, usage: number, shift: boolean) {
 }
 
 function pbcopy(udid: string, text: string) {
-  return runCommand('xcrun', ['simctl', 'pbcopy', udid], { input: text, timeout: SIMCTL_TIMEOUT_MS }).then(() => {});
+  return runCommand('xcrun', ['simctl', 'pbcopy', udid], {
+    input: text,
+    timeout: SIMCTL_TIMEOUT_MS,
+  }).then(() => {});
 }

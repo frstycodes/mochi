@@ -1,20 +1,20 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 71df573f, oxlint-plugin-t3code/rules/no-real-time-wait-in-tests.test.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ../LICENSE-T3. Local edit: Mochi's plugin name and harness.
-import { assert, describe } from "@effect/vitest";
+import { assert, describe } from '@effect/vitest';
 
-import { createOxlintRuleHarness } from "../ruleHarness.ts";
+import { createOxlintRuleHarness } from '../ruleHarness.ts';
 
-const rule = createOxlintRuleHarness("mochi/no-real-time-wait-in-tests", {
-  filename: "fixture.test.ts",
+const rule = createOxlintRuleHarness('mochi/no-real-time-wait-in-tests', {
+  filename: 'fixture.test.ts',
 });
 
 const REAL_CLOCK = /Real-clock wait in a test/;
 const UNDRIVEN = /never fire without `TestClock.adjust`/;
 const MIXED = /they never meet/;
 
-describe("mochi/no-real-time-wait-in-tests", () => {
+describe('mochi/no-real-time-wait-in-tests', () => {
   rule.valid(
-    "allows TestClock-driven sleeps and timeout safety nets",
+    'allows TestClock-driven sleeps and timeout safety nets',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -33,7 +33,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.valid(
-    "ignores sleeps inside strings and child-process script templates",
+    'ignores sleeps inside strings and child-process script templates',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -48,7 +48,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.valid(
-    "ignores shared helpers in files that drive the TestClock",
+    'ignores shared helpers in files that drive the TestClock',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -64,7 +64,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.valid(
-    "ignores bare setTimeout callbacks outside promise executors",
+    'ignores bare setTimeout callbacks outside promise executors',
     `
       import { it } from "vitest";
 
@@ -76,7 +76,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports Effect.sleep under it.live",
+    'reports Effect.sleep under it.live',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -89,7 +89,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports retry schedules under curried testers",
+    'reports retry schedules under curried testers',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -105,7 +105,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports Effect.delay under plain it",
+    'reports Effect.delay under plain it',
     `
       import { it } from "vitest";
       import * as Effect from "effect/Effect";
@@ -120,7 +120,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports it.effect inside an excludeTestServices layer as a real-clock wait",
+    'reports it.effect inside an excludeTestServices layer as a real-clock wait',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -139,7 +139,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports it.effect sleeps in files that never adjust the TestClock",
+    'reports it.effect sleeps in files that never adjust the TestClock',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -152,7 +152,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports polling helpers even when the file drives the TestClock",
+    'reports polling helpers even when the file drives the TestClock',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -174,7 +174,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports promise-wrapped setTimeout in vitest tests",
+    'reports promise-wrapped setTimeout in vitest tests',
     `
       import { it } from "vitest";
 
@@ -189,7 +189,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports promise-wrapped setTimeout under it.effect as a mixed clock",
+    'reports promise-wrapped setTimeout under it.effect as a mixed clock',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -205,7 +205,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports TestClock sleeps when TestClock.adjust appears only in a comment",
+    'reports TestClock sleeps when TestClock.adjust appears only in a comment',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -220,7 +220,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports timers hidden in module-level helpers",
+    'reports timers hidden in module-level helpers',
     `
       import { setTimeout as delay } from "node:timers/promises";
       import { it } from "vitest";
@@ -240,7 +240,7 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 
   rule.invalid(
-    "reports awaited timers/promises sleeps",
+    'reports awaited timers/promises sleeps',
     `
       import * as NodeTimers from "node:timers/promises";
       import { setTimeout as sleep } from "node:timers/promises";
@@ -257,10 +257,12 @@ describe("mochi/no-real-time-wait-in-tests", () => {
   );
 });
 
-const productionRule = createOxlintRuleHarness("mochi/no-real-time-wait-in-tests");
+const productionRule = createOxlintRuleHarness(
+  'mochi/no-real-time-wait-in-tests',
+);
 
 productionRule.valid(
-  "ignores non-test files",
+  'ignores non-test files',
   `
     import * as Effect from "effect/Effect";
 

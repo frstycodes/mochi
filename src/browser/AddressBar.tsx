@@ -1,10 +1,20 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useDebounced } from '../hooks/useDebounced';
-import { useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react';
 import { ArrowUpRight, Globe, Monitor, SearchAlt } from '@/icons';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover';
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import type { Thread } from '@/model';
@@ -12,22 +22,48 @@ import { usePrefs } from '../settings/prefs';
 import { useHarness, useDispatch } from '../store';
 import { usePorts } from '../terminal/ports';
 import { TooltipIconButton } from '../ui';
-import { historyTitle, pageKey, updatePage, useAddressHistory, type Page } from './pages';
+import {
+  historyTitle,
+  pageKey,
+  updatePage,
+  useAddressHistory,
+  type Page,
+} from './pages';
 import { openExternally, openInLabel } from './systemBrowser';
-import { bare, inlineCompletion, rankSuggestions, type Candidate } from './suggest';
+import {
+  bare,
+  inlineCompletion,
+  rankSuggestions,
+  type Candidate,
+} from './suggest';
 import { displayUrl, normalizeUrl, SEARCH_ENGINES } from './url';
 import { queryKeys } from '../queryKeys';
 
 const SUGGEST_DEBOUNCE_MS = 120;
 const NONE: string[] = [];
 
-type Row = { value: string; url: string; label: string; detail: string; icon: 'site' | 'server' | 'search' | 'go'; tabId?: string };
+type Row = {
+  value: string;
+  url: string;
+  label: string;
+  detail: string;
+  icon: 'site' | 'server' | 'search' | 'go';
+  tabId?: string;
+};
 
 /**
  * The address field with suggestions under it: what you typed (go or search), open tabs, the thread's dev servers, history and
  * the search engine's suggestions; arrows move, Enter opens, the top URL match completes inline (→ or End accepts it).
  */
-export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
+export function AddressBar({
+  thread,
+  pageId,
+  page,
+}: {
+  thread: Thread;
+  pageId: string;
+  page: Page;
+}) {
   const dispatch = useDispatch();
   const inputRef = useRef<HTMLInputElement>(null);
   const anchorRef = useRef<HTMLFormElement>(null);
@@ -49,7 +85,11 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
   }
 
   useLayoutEffect(() => {
-    if (completion && typed) inputRef.current?.setSelectionRange(typed.length, typed.length + completion.length);
+    if (completion && typed)
+      inputRef.current?.setSelectionRange(
+        typed.length,
+        typed.length + completion.length,
+      );
   }, [typed, completion]);
 
   const finish = () => {
@@ -58,7 +98,12 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
     inputRef.current?.blur();
   };
   const open = (row: Row) => {
-    if (row.tabId) dispatch({ type: 'pane-select-tab', threadId: thread.id, tabId: row.tabId });
+    if (row.tabId)
+      dispatch({
+        type: 'pane-select-tab',
+        threadId: thread.id,
+        tabId: row.tabId,
+      });
     else {
       updatePage(pageId, { url: row.url, error: null });
       if (page.hostId) void host.browser.navigate(page.hostId, row.url);
@@ -69,14 +114,24 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
     const value = e.target.value;
     setTyped(value);
     // Deleting never completes again, or Backspace could never remove the completed part.
-    const isDelete = (e.nativeEvent as InputEvent).inputType?.startsWith('delete');
-    const match = isDelete ? undefined : rankSuggestions(value, candidates).find((c) => inlineCompletion(value, c.url));
+    const isDelete = (e.nativeEvent as InputEvent).inputType?.startsWith(
+      'delete',
+    );
+    const match = isDelete
+      ? undefined
+      : rankSuggestions(value, candidates).find((c) =>
+          inlineCompletion(value, c.url),
+        );
     setCompletion(match ? inlineCompletion(value, match.url)! : '');
   };
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     // cmdk takes Home and End for the list; in a text field they move the caret.
     if (e.key === 'Home' || e.key === 'End') e.stopPropagation();
-    if ((e.key === 'ArrowRight' || e.key === 'End') && completion && typed !== null) {
+    if (
+      (e.key === 'ArrowRight' || e.key === 'End') &&
+      completion &&
+      typed !== null
+    ) {
       setTyped(typed + completion);
       setCompletion('');
     }
@@ -88,9 +143,20 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
 
   return (
     <Popover open={isOpen} onOpenChange={(next) => !next && finish()}>
-      <Command shouldFilter={false} loop vimBindings={false} value={selected} onValueChange={setSelected} className="mx-1 size-auto min-w-0 flex-1 overflow-visible rounded-none! bg-transparent p-0">
+      <Command
+        shouldFilter={false}
+        loop
+        vimBindings={false}
+        value={selected}
+        onValueChange={setSelected}
+        className="mx-1 size-auto min-w-0 flex-1 overflow-visible rounded-none! bg-transparent p-0"
+      >
         <PopoverAnchor asChild>
-          <form ref={anchorRef} onSubmit={(e) => e.preventDefault()} className="group/address relative">
+          <form
+            ref={anchorRef}
+            onSubmit={(e) => e.preventDefault()}
+            className="group/address relative"
+          >
             <Input
               ref={inputRef}
               aria-label="Address"
@@ -110,25 +176,44 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
               onKeyDown={onKeyDown}
               className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
             />
-            {typed === null && /^https?:/i.test(page.url) && <OpenExternalButton url={page.url} />}
+            {typed === null && /^https?:/i.test(page.url) && (
+              <OpenExternalButton url={page.url} />
+            )}
           </form>
         </PopoverAnchor>
         <PopoverContent
           align="start"
           sideOffset={6}
           onOpenAutoFocus={(e) => e.preventDefault()}
-          onInteractOutside={(e) => anchorRef.current?.contains(e.target as Node) && e.preventDefault()}
+          onInteractOutside={(e) =>
+            anchorRef.current?.contains(e.target as Node) && e.preventDefault()
+          }
           // Keeps focus in the field, so a click on a row lands before the field's blur closes the list.
           onMouseDown={(e) => e.preventDefault()}
           className="w-(--radix-popover-trigger-width) min-w-72 p-1"
         >
           <CommandList>
             {rows.map((row) => (
-              <CommandItem key={row.value} value={row.value} onSelect={() => open(row)} className="gap-2.5 rounded-[calc(var(--radius-xl)-var(--spacing)*var(--corner-scale))]">
+              <CommandItem
+                key={row.value}
+                value={row.value}
+                onSelect={() => open(row)}
+                className="gap-2.5 rounded-[calc(var(--radius-xl)-var(--spacing)*var(--corner-scale))]"
+              >
                 <RowIcon row={row} />
-                <span className="min-w-0 truncate text-foreground">{row.label}</span>
-                {!!row.detail && <span className="min-w-0 shrink-[2] truncate type-caption text-muted-foreground">{row.detail}</span>}
-                {!!row.tabId && <span className="ml-auto shrink-0 type-caption text-muted-foreground">Switch to tab</span>}
+                <span className="min-w-0 truncate text-foreground">
+                  {row.label}
+                </span>
+                {!!row.detail && (
+                  <span className="min-w-0 shrink-[2] truncate type-caption text-muted-foreground">
+                    {row.detail}
+                  </span>
+                )}
+                {!!row.tabId && (
+                  <span className="ml-auto shrink-0 type-caption text-muted-foreground">
+                    Switch to tab
+                  </span>
+                )}
               </CommandItem>
             ))}
           </CommandList>
@@ -145,9 +230,29 @@ function useCandidates(thread: Thread, pageId: string): Candidate[] {
   const { ports } = usePorts(thread.id, threadCwd(thread) ?? null);
   const tabs = state.panes.find((p) => p.threadId === thread.id)?.tabs;
   return [
-    ...(tabs ?? []).filter((t) => t.kind === 'browser' && !!t.url && pageKey(thread.id, t.id) !== pageId).map((t) => ({ kind: 'tab' as const, url: t.url!, title: t.title ?? '', tabId: t.id })),
-    ...(ports ?? []).map((p) => ({ kind: 'server' as const, url: `http://localhost:${p.port}`, title: p.command })),
-    ...history.map((url) => ({ kind: 'history' as const, url, title: historyTitle(url) })),
+    ...(tabs ?? [])
+      .filter(
+        (t) =>
+          t.kind === 'browser' &&
+          !!t.url &&
+          pageKey(thread.id, t.id) !== pageId,
+      )
+      .map((t) => ({
+        kind: 'tab' as const,
+        url: t.url!,
+        title: t.title ?? '',
+        tabId: t.id,
+      })),
+    ...(ports ?? []).map((p) => ({
+      kind: 'server' as const,
+      url: `http://localhost:${p.port}`,
+      title: p.command,
+    })),
+    ...history.map((url) => ({
+      kind: 'history' as const,
+      url,
+      title: historyTitle(url),
+    })),
   ];
 }
 
@@ -155,27 +260,68 @@ function useCandidates(thread: Thread, pageId: string): Candidate[] {
 function useSearchSuggestions(query: string) {
   const { searchEngine } = usePrefs();
   const settled = useDebounced(query, SUGGEST_DEBOUNCE_MS);
-  const suggestionsQuery = useQuery({ queryKey: queryKeys.browser.suggestions(searchEngine, settled), queryFn: async () => ({ query: settled, list: await host.browser.suggest(searchEngine, settled) }), enabled: !!settled.trim() && !/^[a-z]+:\/\//i.test(settled), placeholderData: keepPreviousData });
+  const suggestionsQuery = useQuery({
+    queryKey: queryKeys.browser.suggestions(searchEngine, settled),
+    queryFn: async () => ({
+      query: settled,
+      list: await host.browser.suggest(searchEngine, settled),
+    }),
+    enabled: !!settled.trim() && !/^[a-z]+:\/\//i.test(settled),
+    placeholderData: keepPreviousData,
+  });
   const result = suggestionsQuery.data;
   return result && query && query.startsWith(result.query) ? result.list : NONE;
 }
 
-function useRows(query: string, completion: string, candidates: Candidate[], remote: string[]) {
+function useRows(
+  query: string,
+  completion: string,
+  candidates: Candidate[],
+  remote: string[],
+) {
   const { searchEngine } = usePrefs();
   const engine = SEARCH_ENGINES[searchEngine];
   const ranked = rankSuggestions(query, candidates);
   // With an inline completion the completed page is the top row, so Enter opens what the field shows.
-  const completed = completion ? ranked.find((c) => bare(c.url).toLowerCase() === (query + completion).toLowerCase()) : undefined;
+  const completed = completion
+    ? ranked.find(
+        (c) => bare(c.url).toLowerCase() === (query + completion).toLowerCase(),
+      )
+    : undefined;
   const target = query && normalizeUrl(query, searchEngine);
   const isSearch = !!target && target.startsWith(engine.url);
-  const typedRow: Row[] = !query || completed ? [] : [{ value: `go:${target}`, url: target, label: isSearch ? query : displayUrl(target), detail: isSearch ? `Search ${engine.name}` : '', icon: isSearch ? 'search' : 'go' }];
-  const pages = (completed ? [completed, ...ranked.filter((c) => c !== completed)] : ranked).map(
-    (c): Row => ({ value: `${c.kind}:${c.url}`, url: c.url, label: c.kind === 'server' ? bare(c.url) : c.title || bare(c.url), detail: c.kind === 'server' ? c.title : c.title ? bare(c.url) : '', icon: c.kind === 'server' ? 'server' : 'site', tabId: c.tabId }),
-  );
+  const typedRow: Row[] =
+    !query || completed
+      ? []
+      : [
+          {
+            value: `go:${target}`,
+            url: target,
+            label: isSearch ? query : displayUrl(target),
+            detail: isSearch ? `Search ${engine.name}` : '',
+            icon: isSearch ? 'search' : 'go',
+          },
+        ];
+  const pages = (
+    completed ? [completed, ...ranked.filter((c) => c !== completed)] : ranked
+  ).map((c): Row => ({
+    value: `${c.kind}:${c.url}`,
+    url: c.url,
+    label: c.kind === 'server' ? bare(c.url) : c.title || bare(c.url),
+    detail: c.kind === 'server' ? c.title : c.title ? bare(c.url) : '',
+    icon: c.kind === 'server' ? 'server' : 'site',
+    tabId: c.tabId,
+  }));
   const searches = remote
     .filter((s) => s.toLowerCase() !== query.toLowerCase())
     .slice(0, 4)
-    .map((s): Row => ({ value: `search:${s}`, url: engine.url + encodeURIComponent(s), label: s, detail: '', icon: 'search' }));
+    .map((s): Row => ({
+      value: `search:${s}`,
+      url: engine.url + encodeURIComponent(s),
+      label: s,
+      detail: '',
+      icon: 'search',
+    }));
   return [...typedRow, ...pages, ...searches];
 }
 
@@ -195,9 +341,11 @@ function OpenExternalButton({ url }: { url: string }) {
 }
 
 function RowIcon({ row }: { row: Row }) {
-  if (row.icon === 'search') return <SearchAlt className="text-muted-foreground" />;
+  if (row.icon === 'search')
+    return <SearchAlt className="text-muted-foreground" />;
   if (row.icon === 'go') return <Globe className="text-muted-foreground" />;
-  if (row.icon === 'server' || isLocal(row.url)) return <Monitor className="text-muted-foreground" />;
+  if (row.icon === 'server' || isLocal(row.url))
+    return <Monitor className="text-muted-foreground" />;
   return <SiteIcon url={row.url} />;
 }
 
@@ -206,7 +354,16 @@ function SiteIcon({ url }: { url: string }) {
   const [hasFailed, setFailed] = useState(false);
   const origin = originOf(url);
   if (!origin || hasFailed) return <Globe className="text-muted-foreground" />;
-  return <img src={`${origin}/favicon.ico`} alt="" aria-hidden referrerPolicy="no-referrer" onError={() => setFailed(true)} className="size-4 shrink-0 rounded-xs" />;
+  return (
+    <img
+      src={`${origin}/favicon.ico`}
+      alt=""
+      aria-hidden
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="size-4 shrink-0 rounded-xs"
+    />
+  );
 }
 
 function originOf(url: string) {
@@ -218,5 +375,7 @@ function originOf(url: string) {
 }
 
 function isLocal(url: string) {
-  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|[\w.-]+\.(localhost|test))(:\d+)?(\/|$)/i.test(url);
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|[\w.-]+\.(localhost|test))(:\d+)?(\/|$)/i.test(
+    url,
+  );
 }

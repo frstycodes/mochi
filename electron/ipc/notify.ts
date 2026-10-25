@@ -41,7 +41,11 @@ export const notify = {
     }
   },
   async addressed(_sender, addressed) {
-    closeAddressed({ threadId: addressed.threadId, isViewed: addressed.isViewed === true, isActedOn: addressed.isActedOn === true });
+    closeAddressed({
+      threadId: addressed.threadId,
+      isViewed: addressed.isViewed === true,
+      isActedOn: addressed.isActedOn === true,
+    });
   },
   async watch(_sender, config) {
     watch.set(config);

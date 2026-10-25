@@ -21,7 +21,8 @@ export function useCheckpointFiles() {
         inFlight.current.add(key);
         host.git.checkpoint(cwd, threadId, c.n).then(
           (ref) => dispatch({ type: 'checkpoint-ref', threadId, n: c.n, ref }),
-          () => dispatch({ type: 'checkpoint-ref', threadId, n: c.n, ref: null }),
+          () =>
+            dispatch({ type: 'checkpoint-ref', threadId, n: c.n, ref: null }),
         );
       }
     }
@@ -34,7 +35,12 @@ export function useCheckpointFiles() {
       const was = wasWorking.current.get(t.id);
       wasWorking.current.set(t.id, isWorking);
       const cwd = paths[t.id];
-      if (was && !isWorking && cwd) host.git.checkpoint(cwd, t.id, 'turn').catch((error) => console.warn('Could not save the turn checkpoint', error));
+      if (was && !isWorking && cwd)
+        host.git
+          .checkpoint(cwd, t.id, 'turn')
+          .catch((error) =>
+            console.warn('Could not save the turn checkpoint', error),
+          );
     }
   }, [state.threads, paths]);
 }

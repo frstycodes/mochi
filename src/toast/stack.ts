@@ -31,22 +31,46 @@ export function stackSlots(toasts: Toast[], heights: Record<string, number>) {
 
 /** The opened toast takes the front; every other one counts as past the visible three, so it fades and its timer waits. */
 export function openSlots(toasts: Toast[], openId: string) {
-  const byId = Object.fromEntries(toasts.map((t) => [t.id, t.id === openId ? { index: 0, y: 0 } : { index: VISIBLE, y: 0 }]));
+  const byId = Object.fromEntries(
+    toasts.map((t) => [
+      t.id,
+      t.id === openId ? { index: 0, y: 0 } : { index: VISIBLE, y: 0 },
+    ]),
+  );
   return { byId, total: 0 };
 }
 
 /** Sonner's positions: in from above, then a peek or a fanned-out offset; leaving, each slot exits its own way. */
-export function itemTransform({ slot, isExpanded, isMounted, isLeaving }: { slot: Slot; isExpanded: boolean; isMounted: boolean; isLeaving: boolean }) {
+export function itemTransform({
+  slot,
+  isExpanded,
+  isMounted,
+  isLeaving,
+}: {
+  slot: Slot;
+  isExpanded: boolean;
+  isMounted: boolean;
+  isLeaving: boolean;
+}) {
   if (!isMounted) return 'translateY(-100%)';
   const isFront = slot.index === 0;
   if (isLeaving && isFront) return 'translateY(-100%)';
-  if (isLeaving && isExpanded) return `translateY(${slot.y}px) translateY(-100%)`;
+  if (isLeaving && isExpanded)
+    return `translateY(${slot.y}px) translateY(-100%)`;
   if (isLeaving) return 'translateY(40%)';
   if (isExpanded) return `translateY(${slot.y}px)`;
   return `translateY(${slot.index * GAP}px) scale(${1 - slot.index * SCALE_STEP})`;
 }
 
-type SizeState = { isFront: boolean; isExpanded: boolean; isMounted: boolean; isMorphing: boolean; canOpen: boolean; height: number; frontHeight: number };
+type SizeState = {
+  isFront: boolean;
+  isExpanded: boolean;
+  isMounted: boolean;
+  isMorphing: boolean;
+  canOpen: boolean;
+  height: number;
+  frontHeight: number;
+};
 
 /**
  * Sonner's heights: the front toast of a folded stack sizes itself (`undefined`, auto), the ones behind take the front's height,
@@ -54,7 +78,15 @@ type SizeState = { isFront: boolean; isExpanded: boolean; isMounted: boolean; is
  * A toast that can open into a widget always has an explicit height: opening swaps its content in the same frame, so from auto
  * the morph would start at the widget's height and run backwards first.
  */
-export function itemHeight({ isFront, isExpanded, isMounted, isMorphing, canOpen, height, frontHeight }: SizeState) {
+export function itemHeight({
+  isFront,
+  isExpanded,
+  isMounted,
+  isMorphing,
+  canOpen,
+  height,
+  frontHeight,
+}: SizeState) {
   if (isMorphing) return height;
   if (!isExpanded && !isFront) return frontHeight;
   if (isExpanded && isMounted) return height;
@@ -70,7 +102,17 @@ const MORPH_EASE = 'var(--ease-drawer)';
  * drawer curve both ways, so closing doesn't switch curves mid-morph. The blur in and out runs with the fade. A toast leaving from
  * behind a folded stack drops away on Sonner's longer transform and shorter fade.
  */
-export function motionTiming({ isLeaving, isFront, isExpanded, isMorphing }: { isLeaving: boolean; isFront: boolean; isExpanded: boolean; isMorphing: boolean }) {
+export function motionTiming({
+  isLeaving,
+  isFront,
+  isExpanded,
+  isMorphing,
+}: {
+  isLeaving: boolean;
+  isFront: boolean;
+  isExpanded: boolean;
+  isMorphing: boolean;
+}) {
   const isDropping = isLeaving && !isFront && !isExpanded;
   const move = slowmo(isDropping ? 500 : STACK_MS);
   const fade = slowmo(isDropping ? 200 : STACK_MS);
@@ -78,6 +120,14 @@ export function motionTiming({ isLeaving, isFront, isExpanded, isMorphing }: { i
   const sizeEase = isMorphing ? MORPH_EASE : STACK_EASE;
   return {
     transitionDuration: [move, fade, fade, size, size, size, size].join(', '),
-    transitionTimingFunction: [STACK_EASE, STACK_EASE, STACK_EASE, sizeEase, sizeEase, sizeEase, sizeEase].join(', '),
+    transitionTimingFunction: [
+      STACK_EASE,
+      STACK_EASE,
+      STACK_EASE,
+      sizeEase,
+      sizeEase,
+      sizeEase,
+      sizeEase,
+    ].join(', '),
   };
 }

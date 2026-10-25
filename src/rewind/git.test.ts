@@ -1,12 +1,28 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'vite-plus/test';
-import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../../electron/git/checkpoints.ts';
+import {
+  applyFiles,
+  changedPaths,
+  checkpointRef,
+  resolveCommit,
+  restore,
+  restorePaths,
+  snapshot,
+  snapshotCommit,
+} from '../../electron/git/checkpoints.ts';
 
-const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+const git = (cwd: string, ...args: string[]) =>
+  execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
 function scratchRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'harness-rewind-'));
@@ -33,7 +49,10 @@ test('snapshot saves tracked and untracked files without touching HEAD, index or
     const commit = await snapshot(dir, checkpointRef('t1', 0), 'cp');
     assert.equal(git(dir, 'rev-parse', 'HEAD'), head);
     assert.equal(git(dir, 'status', '--porcelain'), status);
-    assert.equal(await resolveCommit(dir, 'refs/harness/checkpoints/t1/0'), commit);
+    assert.equal(
+      await resolveCommit(dir, 'refs/harness/checkpoints/t1/0'),
+      commit,
+    );
 
     // The agent moves on: commits, edits, adds and deletes files.
     git(dir, 'commit', '-qam', 'later');
@@ -43,12 +62,26 @@ test('snapshot saves tracked and untracked files without touching HEAD, index or
     writeFileSync(join(dir, 'ignored.txt'), 'keep me\n');
 
     await restore(dir, commit);
-    assert.equal(git(dir, 'rev-parse', 'HEAD'), head, 'branch back at the checkpoint’s parent');
+    assert.equal(
+      git(dir, 'rev-parse', 'HEAD'),
+      head,
+      'branch back at the checkpoint’s parent',
+    );
     assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), 'two\n');
     assert.equal(readFileSync(join(dir, 'new.txt'), 'utf8'), 'untracked\n');
-    assert.ok(!existsSync(join(dir, 'later.txt')), 'files from after the checkpoint are gone');
-    assert.ok(existsSync(join(dir, 'ignored.txt')), 'ignored files are left alone');
-    assert.equal(git(dir, 'diff', '--cached', '--name-only'), '', 'changes come back unstaged');
+    assert.ok(
+      !existsSync(join(dir, 'later.txt')),
+      'files from after the checkpoint are gone',
+    );
+    assert.ok(
+      existsSync(join(dir, 'ignored.txt')),
+      'ignored files are left alone',
+    );
+    assert.equal(
+      git(dir, 'diff', '--cached', '--name-only'),
+      '',
+      'changes come back unstaged',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -63,7 +96,11 @@ test('a fork worktree starts from the checkpoint’s files', async () => {
     git(dir, 'worktree', 'add', '-q', '-b', 'fork', fork, `${commit}^`);
     await applyFiles(fork, commit);
     assert.equal(readFileSync(join(fork, 'a.txt'), 'utf8'), 'two\n');
-    assert.equal(git(dir, 'branch', '--show-current'), 'main', 'the source branch is untouched');
+    assert.equal(
+      git(dir, 'branch', '--show-current'),
+      'main',
+      'the source branch is untouched',
+    );
   } finally {
     rmSync(fork, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
@@ -79,15 +116,42 @@ test('checkpointRef rejects names that could escape the refs/harness namespace',
 test('a rewind preview lists the files a checkpoint changes back, and tells the agent’s changes from later ones', async () => {
   const dir = scratchRepo();
   try {
-    assert.equal(await resolveCommit(dir, checkpointRef('t1', 'turn')), '', 'a missing checkpoint resolves empty instead of throwing');
-    const before = await snapshot(dir, checkpointRef('t1', 0), 'before message');
+    assert.equal(
+      await resolveCommit(dir, checkpointRef('t1', 'turn')),
+      '',
+      'a missing checkpoint resolves empty instead of throwing',
+    );
+    const before = await snapshot(
+      dir,
+      checkpointRef('t1', 0),
+      'before message',
+    );
     writeFileSync(join(dir, 'a.txt'), 'agent edit\n');
     writeFileSync(join(dir, 'b.txt'), 'agent new file\n');
     await snapshot(dir, checkpointRef('t1', 'turn'), 'turn end');
-    assert.deepEqual(await changedPaths(dir, before, await snapshotCommit(dir, 'now')), ['a.txt', 'b.txt']);
-    assert.deepEqual(await changedPaths(dir, await resolveCommit(dir, checkpointRef('t1', 'turn')), await snapshotCommit(dir, 'now')), [], 'nothing changed since the turn');
+    assert.deepEqual(
+      await changedPaths(dir, before, await snapshotCommit(dir, 'now')),
+      ['a.txt', 'b.txt'],
+    );
+    assert.deepEqual(
+      await changedPaths(
+        dir,
+        await resolveCommit(dir, checkpointRef('t1', 'turn')),
+        await snapshotCommit(dir, 'now'),
+      ),
+      [],
+      'nothing changed since the turn',
+    );
     writeFileSync(join(dir, 'c.txt'), 'yours\n');
-    assert.deepEqual(await changedPaths(dir, await resolveCommit(dir, checkpointRef('t1', 'turn')), await snapshotCommit(dir, 'now')), ['c.txt'], 'your file reads as an outside change');
+    assert.deepEqual(
+      await changedPaths(
+        dir,
+        await resolveCommit(dir, checkpointRef('t1', 'turn')),
+        await snapshotCommit(dir, 'now'),
+      ),
+      ['c.txt'],
+      'your file reads as an outside change',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -98,7 +162,11 @@ test("undoing a turn puts back only that turn's files: edits revert, files it cr
   try {
     writeFileSync(join(dir, 'b.txt'), 'b before\n');
     writeFileSync(join(dir, '[id].txt'), 'route before\n');
-    const before = await snapshot(dir, checkpointRef('t1', 2), 'before message');
+    const before = await snapshot(
+      dir,
+      checkpointRef('t1', 2),
+      'before message',
+    );
     const head = git(dir, 'rev-parse', 'HEAD');
     // The turn edits a.txt, creates new.txt; you edit b.txt meanwhile.
     writeFileSync(join(dir, 'a.txt'), 'agent edit\n');
@@ -106,12 +174,31 @@ test("undoing a turn puts back only that turn's files: edits revert, files it cr
     writeFileSync(join(dir, '[id].txt'), 'agent route\n');
     writeFileSync(join(dir, 'b.txt'), 'yours\n');
     await restorePaths(dir, before, ['a.txt', 'new.txt', '[id].txt']);
-    assert.equal(readFileSync(join(dir, '[id].txt'), 'utf8'), 'route before\n', 'a path is a name, not a glob');
+    assert.equal(
+      readFileSync(join(dir, '[id].txt'), 'utf8'),
+      'route before\n',
+      'a path is a name, not a glob',
+    );
     assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), 'one\n');
-    assert.ok(!existsSync(join(dir, 'new.txt')), 'a file the turn created is deleted');
-    assert.equal(readFileSync(join(dir, 'b.txt'), 'utf8'), 'yours\n', 'files outside the turn are untouched');
-    assert.equal(git(dir, 'rev-parse', 'HEAD'), head, 'the branch stays where it is');
-    assert.equal(git(dir, 'diff', '--cached', '--name-only'), '', 'nothing is left staged');
+    assert.ok(
+      !existsSync(join(dir, 'new.txt')),
+      'a file the turn created is deleted',
+    );
+    assert.equal(
+      readFileSync(join(dir, 'b.txt'), 'utf8'),
+      'yours\n',
+      'files outside the turn are untouched',
+    );
+    assert.equal(
+      git(dir, 'rev-parse', 'HEAD'),
+      head,
+      'the branch stays where it is',
+    );
+    assert.equal(
+      git(dir, 'diff', '--cached', '--name-only'),
+      '',
+      'nothing is left staged',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

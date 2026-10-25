@@ -10,10 +10,18 @@ export function NextRunBadge({ threadId }: { threadId: string }) {
   const now = useNow(60_000);
   if (!trigger) return null;
   const next = triggerNextRun(trigger, now);
-  const label = trigger.isPaused ? 'Paused' : next ? shortRunTime(next, now) : 'PR';
+  const label = trigger.isPaused
+    ? 'Paused'
+    : next
+      ? shortRunTime(next, now)
+      : 'PR';
   const what = describeTrigger(trigger.when);
   return (
-    <span className="flex shrink-0 items-center gap-0.5 tabular" aria-label={`Scheduled: ${what}, ${trigger.isPaused ? 'paused' : next ? `next run ${label}` : 'waits for a pull request'}`} title={what}>
+    <span
+      className="flex shrink-0 items-center gap-0.5 tabular"
+      aria-label={`Scheduled: ${what}, ${trigger.isPaused ? 'paused' : next ? `next run ${label}` : 'waits for a pull request'}`}
+      title={what}
+    >
       <Clock aria-hidden className="size-3" />
       {label}
     </span>

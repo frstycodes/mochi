@@ -28,11 +28,28 @@ export function useWorktreeManager() {
       known.current.add(thread.id);
       const fork = state.forks[thread.id];
       const root = thread.repo && projectRoot(thread.repo);
-      if (!thread.repo || !root || (thread.repo.mode === 'folder' && !fork) || (thread.live && !fork) || worktreePath(thread.id) || (!host.isDesktop && !fork)) continue;
-      const created = fork ? forkWorktree(state.threads, thread, fork) : host.git.addWorktree(root, thread.id, thread.repo.branch, { base: thread.repo.base, isExisting: thread.repo.isExisting });
+      if (
+        !thread.repo ||
+        !root ||
+        (thread.repo.mode === 'folder' && !fork) ||
+        (thread.live && !fork) ||
+        worktreePath(thread.id) ||
+        (!host.isDesktop && !fork)
+      )
+        continue;
+      const created = fork
+        ? forkWorktree(state.threads, thread, fork)
+        : host.git.addWorktree(root, thread.id, thread.repo.branch, {
+            base: thread.repo.base,
+            isExisting: thread.repo.isExisting,
+          });
       created
         .then((path) => setWorktreePath(thread.id, path))
-        .catch((error: Error) => toast.error(`Could not create a worktree for "${thread.title}"`, { description: error.message }));
+        .catch((error: Error) =>
+          toast.error(`Could not create a worktree for "${thread.title}"`, {
+            description: error.message,
+          }),
+        );
     }
   }, [state.threads, state.forks]);
 }
@@ -43,24 +60,40 @@ export function useCheckoutRecovery() {
   const threads = useRef(state.threads);
   useEffect(() => {
     if (!host.isDesktop) return;
-    void recoverCheckouts(threads.current, worktreePath, host.git).then((found) => {
-      for (const { threadId, head, worktree } of found) {
-        if (worktree) setWorktreePath(threadId, worktree);
-        dispatch({ type: 'repo-head', threadId, head, ...(worktree && { worktree }) });
-      }
-    });
+    void recoverCheckouts(threads.current, worktreePath, host.git).then(
+      (found) => {
+        for (const { threadId, head, worktree } of found) {
+          if (worktree) setWorktreePath(threadId, worktree);
+          dispatch({
+            type: 'repo-head',
+            threadId,
+            head,
+            ...(worktree && { worktree }),
+          });
+        }
+      },
+    );
   }, [dispatch]);
 }
 
 function forkWorktree(threads: Thread[], thread: Thread, fork: Fork) {
   const parent = threads.find((t) => t.id === fork.parentId);
   const cwd = parent && threadCwd(parent);
-  if (!cwd) return Promise.reject(new Error('The thread it was forked from has no folder'));
-  const from = fork.checkpoint === undefined ? undefined : { threadId: fork.parentId, n: fork.checkpoint };
+  if (!cwd)
+    return Promise.reject(
+      new Error('The thread it was forked from has no folder'),
+    );
+  const from =
+    fork.checkpoint === undefined
+      ? undefined
+      : { threadId: fork.parentId, n: fork.checkpoint };
   return host.git.forkWorktree(cwd, thread.id, thread.repo!.branch, from);
 }
 
-const seenSlice = persistedSlice<Record<string, number>>('mochi.worktrees.settled', {});
+const seenSlice = persistedSlice<Record<string, number>>(
+  'mochi.worktrees.settled',
+  {},
+);
 const CLEANUP_MS = 60 * 60 * 1000;
 
 /** Removes worktrees of threads settled longer than Settings › Git and worktrees says, on launch and hourly. Git refuses a dirty one, which stays. */
@@ -81,7 +114,17 @@ export function useWorktreeCleanup() {
 }
 
 async function cleanUp(threads: Thread[], days: number) {
-  const { due, seen } = dueForCleanup(threads, Object.fromEntries(threads.flatMap((t) => (worktreePath(t.id) ? [[t.id, worktreePath(t.id)!]] : []))), seenSlice.getState().value, Date.now(), days);
+  const { due, seen } = dueForCleanup(
+    threads,
+    Object.fromEntries(
+      threads.flatMap((t) =>
+        worktreePath(t.id) ? [[t.id, worktreePath(t.id)!]] : [],
+      ),
+    ),
+    seenSlice.getState().value,
+    Date.now(),
+    days,
+  );
   for (const { threadId, path } of due) {
     try {
       await host.git.removeWorktree(path);

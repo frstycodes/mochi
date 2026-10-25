@@ -6,7 +6,10 @@ const opt = Schema.optional;
 export const Provider = Schema.Literals(['claude', 'codex']);
 export type Provider = typeof Provider.Type;
 
-export const ThreadRef = Schema.Struct({ threadId: opt(Schema.String), title: Schema.String });
+export const ThreadRef = Schema.Struct({
+  threadId: opt(Schema.String),
+  title: Schema.String,
+});
 export type ThreadRef = typeof ThreadRef.Type;
 
 export const GeneratedImage = Schema.Struct({
@@ -18,30 +21,58 @@ export const GeneratedImage = Schema.Struct({
 });
 export type GeneratedImage = typeof GeneratedImage.Type;
 
-export const McpCall = Schema.Struct({ server: Schema.String, tool: Schema.String, account: opt(Schema.String) });
+export const McpCall = Schema.Struct({
+  server: Schema.String,
+  tool: Schema.String,
+  account: opt(Schema.String),
+});
 export type McpCall = typeof McpCall.Type;
 
 export const McpWidgetResult = Schema.Struct({
-  content: Schema.Array(Schema.Struct({ type: Schema.Literal('text'), text: Schema.String })),
+  content: Schema.Array(
+    Schema.Struct({ type: Schema.Literal('text'), text: Schema.String }),
+  ),
   structuredContent: opt(JsonObject),
 });
 export type McpWidgetResult = typeof McpWidgetResult.Type;
 
-export const McpWidget = Schema.Struct({ server: Schema.String, uri: Schema.String, input: JsonObject, result: McpWidgetResult });
+export const McpWidget = Schema.Struct({
+  server: Schema.String,
+  uri: Schema.String,
+  input: JsonObject,
+  result: McpWidgetResult,
+});
 export type McpWidget = typeof McpWidget.Type;
 
-export const McpWidgetResource = Schema.Struct({ html: Schema.String, meta: opt(JsonObject) });
+export const McpWidgetResource = Schema.Struct({
+  html: Schema.String,
+  meta: opt(JsonObject),
+});
 export type McpWidgetResource = typeof McpWidgetResource.Type;
 
-export const WebLink = Schema.Struct({ url: Schema.String, title: opt(Schema.String) });
+export const WebLink = Schema.Struct({
+  url: Schema.String,
+  title: opt(Schema.String),
+});
 export type WebLink = typeof WebLink.Type;
 
-export const AgentCommand = Schema.Struct({ name: Schema.String, description: Schema.String, argumentHint: opt(Schema.String), path: opt(Schema.String) });
+export const AgentCommand = Schema.Struct({
+  name: Schema.String,
+  description: Schema.String,
+  argumentHint: opt(Schema.String),
+  path: opt(Schema.String),
+});
 export type AgentCommand = typeof AgentCommand.Type;
 
 export const McpServer = Schema.Struct({
   name: Schema.String,
-  status: Schema.Literals(['connected', 'pending', 'needs-auth', 'failed', 'disabled']),
+  status: Schema.Literals([
+    'connected',
+    'pending',
+    'needs-auth',
+    'failed',
+    'disabled',
+  ]),
   toolCount: opt(Schema.Number),
   url: opt(Schema.String),
 });
@@ -56,16 +87,29 @@ export const AgentInfo = Schema.Struct({
   tools: opt(Schema.Array(Schema.String)),
   mcpServers: opt(Schema.Array(McpServer)),
   skills: opt(Schema.Array(Schema.String)),
-  plugins: opt(Schema.Array(Schema.Struct({ name: Schema.String, version: opt(Schema.String) }))),
+  plugins: opt(
+    Schema.Array(
+      Schema.Struct({ name: Schema.String, version: opt(Schema.String) }),
+    ),
+  ),
   slashCommands: opt(Schema.Array(Schema.String)),
   commands: opt(Schema.Array(AgentCommand)),
 });
 export type AgentInfo = typeof AgentInfo.Type;
 
-export const SubagentStatus = Schema.Literals(['running', 'done', 'failed', 'stopped']);
+export const SubagentStatus = Schema.Literals([
+  'running',
+  'done',
+  'failed',
+  'stopped',
+]);
 export type SubagentStatus = typeof SubagentStatus.Type;
 
-export const BackgroundTaskKind = Schema.Literals(['shell', 'workflow', 'monitor']);
+export const BackgroundTaskKind = Schema.Literals([
+  'shell',
+  'workflow',
+  'monitor',
+]);
 export type BackgroundTaskKind = typeof BackgroundTaskKind.Type;
 
 export const SetupStep = Schema.Struct({
@@ -81,23 +125,45 @@ export const SetupStep = Schema.Struct({
 export type SetupStep = typeof SetupStep.Type;
 
 export const WorktreeSetup = Schema.Struct({
-  status: Schema.Literals(['running', 'failed', 'ready', 'skipped', 'cancelled']),
+  status: Schema.Literals([
+    'running',
+    'failed',
+    'ready',
+    'skipped',
+    'cancelled',
+  ]),
   startedAt: Schema.Number,
   endedAt: opt(Schema.Number),
   steps: Schema.Array(SetupStep),
 });
 export type WorktreeSetup = typeof WorktreeSetup.Type;
 
-export const AgentQuestion = Schema.Struct({ text: Schema.String, options: Schema.Array(Schema.String), multiSelect: Schema.Boolean });
+export const AgentQuestion = Schema.Struct({
+  text: Schema.String,
+  options: Schema.Array(Schema.String),
+  multiSelect: Schema.Boolean,
+});
 export type AgentQuestion = typeof AgentQuestion.Type;
 
 // Claude rejects images over 5 MB; base64 runs 4/3 of that.
 const MAX_IMAGE_CHARS = 6_900_000;
 
-export const AgentImage = Schema.Struct({ mediaType: Schema.Literals(['image/jpeg', 'image/png', 'image/gif', 'image/webp']), data: Str(MAX_IMAGE_CHARS) });
+export const AgentImage = Schema.Struct({
+  mediaType: Schema.Literals([
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+  ]),
+  data: Str(MAX_IMAGE_CHARS),
+});
 export type AgentImage = typeof AgentImage.Type;
 
-export const SentImage = Schema.Struct({ ...AgentImage.fields, thumb: Schema.String, original: opt(Schema.String) });
+export const SentImage = Schema.Struct({
+  ...AgentImage.fields,
+  thumb: Schema.String,
+  original: opt(Schema.String),
+});
 export type SentImage = typeof SentImage.Type;
 
 export const PullRequest = Schema.Struct({
@@ -110,10 +176,31 @@ export const PullRequest = Schema.Struct({
 });
 export type PullRequest = typeof PullRequest.Type;
 
-export const PaneTabKind = Schema.Literals(['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual', 'artifacts', 'pr']);
+export const PaneTabKind = Schema.Literals([
+  'browser',
+  'changes',
+  'terminal',
+  'files',
+  'simulator',
+  'ports',
+  'sidechat',
+  'agents',
+  'visual',
+  'artifacts',
+  'pr',
+]);
 export type PaneTabKind = typeof PaneTabKind.Type;
 
-export const SpaceIconName = Schema.Literals(['work', 'home', 'layers', 'code', 'book', 'rocket', 'coffee', 'star']);
+export const SpaceIconName = Schema.Literals([
+  'work',
+  'home',
+  'layers',
+  'code',
+  'book',
+  'rocket',
+  'coffee',
+  'star',
+]);
 export type SpaceIconName = typeof SpaceIconName.Type;
 
 /** A profile, before `v` (`src/model.ts` `Space`); `stored.ts` versions it as a row. */
@@ -124,7 +211,12 @@ export const Space = Schema.Struct({
   plans: Schema.Struct({ claude: Schema.String, codex: Schema.String }),
   github: Schema.String,
   nativeOff: opt(Schema.Array(Schema.String)),
-  nativeNew: opt(Schema.Struct({ claude: opt(Schema.Literals(['on', 'off'])), codex: opt(Schema.Literals(['on', 'off'])) })),
+  nativeNew: opt(
+    Schema.Struct({
+      claude: opt(Schema.Literals(['on', 'off'])),
+      codex: opt(Schema.Literals(['on', 'off'])),
+    }),
+  ),
 });
 export type Space = typeof Space.Type;
 
@@ -140,13 +232,25 @@ export const McpServerDef = Schema.Struct({
 });
 export type McpServerDef = typeof McpServerDef.Type;
 
-export const FileEdit = Schema.Struct({ path: Schema.String, before: Schema.String, after: Schema.String });
+export const FileEdit = Schema.Struct({
+  path: Schema.String,
+  before: Schema.String,
+  after: Schema.String,
+});
 export type FileEdit = typeof FileEdit.Type;
 
-export const Access = Schema.Literals(['Manual', 'Auto', 'Full access', 'Plan']);
+export const Access = Schema.Literals([
+  'Manual',
+  'Auto',
+  'Full access',
+  'Plan',
+]);
 export type Access = typeof Access.Type;
 
-const RENAMED_ACCESS: Record<string, Access> = { 'Ask first': 'Manual', 'Auto edit': 'Auto' };
+const RENAMED_ACCESS: Record<string, Access> = {
+  'Ask first': 'Manual',
+  'Auto edit': 'Auto',
+};
 
 /**
  * Access as threads and prefs stored it (`accessOf`): the names before the rename read as today's, and an unknown value as
@@ -155,7 +259,12 @@ const RENAMED_ACCESS: Record<string, Access> = { 'Ask first': 'Manual', 'Auto ed
 export const StoredAccess = Schema.Unknown.pipe(
   Schema.decodeTo(
     Access,
-    SchemaTransformation.transform<Access, unknown>({ decode: (value) => RENAMED_ACCESS[String(value)] ?? (Access.literals.find((a) => a === value) || 'Auto'), encode: (access) => access }),
+    SchemaTransformation.transform<Access, unknown>({
+      decode: (value) =>
+        RENAMED_ACCESS[String(value)] ??
+        (Access.literals.find((a) => a === value) || 'Auto'),
+      encode: (access) => access,
+    }),
   ),
 );
 
@@ -168,35 +277,118 @@ export const ThreadControls = Schema.Struct({
 });
 export type ThreadControls = typeof ThreadControls.Type;
 
-export const AutofixTarget = Schema.Struct({ threadId: Schema.String, title: Schema.String, pr: Schema.Number, cwd: Schema.String, githubUser: opt(Schema.String), since: Schema.Number });
+export const AutofixTarget = Schema.Struct({
+  threadId: Schema.String,
+  title: Schema.String,
+  pr: Schema.Number,
+  cwd: Schema.String,
+  githubUser: opt(Schema.String),
+  since: Schema.Number,
+});
 export type AutofixTarget = typeof AutofixTarget.Type;
 
-export const AutofixCheck = Schema.Struct({ name: Schema.String, state: Schema.Literals(['pass', 'fail', 'pending', 'skip']), link: opt(Schema.String) });
+export const AutofixCheck = Schema.Struct({
+  name: Schema.String,
+  state: Schema.Literals(['pass', 'fail', 'pending', 'skip']),
+  link: opt(Schema.String),
+});
 export type AutofixCheck = typeof AutofixCheck.Type;
 
-export const AutofixComment = Schema.Struct({ id: Schema.String, author: Schema.String, body: Schema.String, url: opt(Schema.String), where: opt(Schema.String) });
+export const AutofixComment = Schema.Struct({
+  id: Schema.String,
+  author: Schema.String,
+  body: Schema.String,
+  url: opt(Schema.String),
+  where: opt(Schema.String),
+});
 export type AutofixComment = typeof AutofixComment.Type;
 
 export const StopReason = Schema.Literals(['merged', 'closed', 'cap']);
 
 export const AutofixEvent = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal('enabled'), pr: Schema.Number, url: opt(Schema.String) }),
-  Schema.Struct({ kind: Schema.Literal('ci'), pr: Schema.Number, url: Schema.String, head: Schema.String, failed: Schema.Array(AutofixCheck), attempt: Schema.Number, logs: opt(Schema.Array(Schema.Struct({ name: Schema.String, text: Schema.String }))) }),
-  Schema.Struct({ kind: Schema.Literal('conflict'), pr: Schema.Number, url: Schema.String, head: Schema.String }),
-  Schema.Struct({ kind: Schema.Literal('review'), pr: Schema.Number, url: Schema.String, comments: Schema.Array(AutofixComment) }),
-  Schema.Struct({ kind: Schema.Literal('stopped'), pr: Schema.Number, url: Schema.String, reason: StopReason, failed: opt(Schema.Array(AutofixCheck)) }),
+  Schema.Struct({
+    kind: Schema.Literal('enabled'),
+    pr: Schema.Number,
+    url: opt(Schema.String),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('ci'),
+    pr: Schema.Number,
+    url: Schema.String,
+    head: Schema.String,
+    failed: Schema.Array(AutofixCheck),
+    attempt: Schema.Number,
+    logs: opt(
+      Schema.Array(Schema.Struct({ name: Schema.String, text: Schema.String })),
+    ),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('conflict'),
+    pr: Schema.Number,
+    url: Schema.String,
+    head: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('review'),
+    pr: Schema.Number,
+    url: Schema.String,
+    comments: Schema.Array(AutofixComment),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('stopped'),
+    pr: Schema.Number,
+    url: Schema.String,
+    reason: StopReason,
+    failed: opt(Schema.Array(AutofixCheck)),
+  }),
 ]);
 export type AutofixEvent = typeof AutofixEvent.Type;
-const AutofixKind = Schema.Literals(['enabled', 'ci', 'conflict', 'review', 'stopped']);
+const AutofixKind = Schema.Literals([
+  'enabled',
+  'ci',
+  'conflict',
+  'review',
+  'stopped',
+]);
 
-export const FileMention = Schema.Struct({ kind: Schema.Literal('file'), id: Schema.String, title: Schema.String, path: Schema.String, isDir: Schema.Boolean });
+export const FileMention = Schema.Struct({
+  kind: Schema.Literal('file'),
+  id: Schema.String,
+  title: Schema.String,
+  path: Schema.String,
+  isDir: Schema.Boolean,
+});
 
 export const Mention = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal('thread'), id: Schema.String, title: Schema.String }),
-  Schema.Struct({ kind: Schema.Literal('window'), id: Schema.String, title: Schema.String, icon: opt(Schema.String), image: AgentImage }),
-  Schema.Struct({ kind: Schema.Literal('skill'), id: Schema.String, title: Schema.String, description: Schema.String }),
-  Schema.Struct({ kind: Schema.Literal('mcp'), id: Schema.String, title: Schema.String, toolCount: opt(Schema.Number) }),
-  Schema.Struct({ kind: Schema.Literal('plugin'), id: Schema.String, title: Schema.String }),
+  Schema.Struct({
+    kind: Schema.Literal('thread'),
+    id: Schema.String,
+    title: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('window'),
+    id: Schema.String,
+    title: Schema.String,
+    icon: opt(Schema.String),
+    image: AgentImage,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('skill'),
+    id: Schema.String,
+    title: Schema.String,
+    description: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('mcp'),
+    id: Schema.String,
+    title: Schema.String,
+    toolCount: opt(Schema.Number),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('plugin'),
+    id: Schema.String,
+    title: Schema.String,
+  }),
   FileMention,
 ]);
 export type Mention = typeof Mention.Type;
@@ -213,7 +405,14 @@ export type WorkspaceDraft = typeof WorkspaceDraft.Type;
 export const Verdict = Schema.Struct({
   verdict: Schema.Literals(['approve', 'concerns', 'block']),
   summary: Schema.String,
-  findings: Schema.Array(Schema.Struct({ file: Schema.String, line: opt(Schema.Number), severity: Schema.Literals(['high', 'medium', 'low']), text: Schema.String })),
+  findings: Schema.Array(
+    Schema.Struct({
+      file: Schema.String,
+      line: opt(Schema.Number),
+      severity: Schema.Literals(['high', 'medium', 'low']),
+      text: Schema.String,
+    }),
+  ),
 });
 export type Verdict = typeof Verdict.Type;
 
@@ -233,7 +432,13 @@ export const Review = Schema.Struct({
 });
 export type Review = typeof Review.Type;
 
-export const VizLanguage = Schema.Literals(['chart', 'svg', 'html', 'harness-metro', 'harness-diff']);
+export const VizLanguage = Schema.Literals([
+  'chart',
+  'svg',
+  'html',
+  'harness-metro',
+  'harness-diff',
+]);
 export type VizLanguage = typeof VizLanguage.Type;
 
 export const PaneLayout = Schema.Struct({
@@ -248,7 +453,13 @@ export type PaneLayout = typeof PaneLayout.Type;
 
 const Author = Schema.Literals(['claude', 'codex', 'you', 'harness']);
 
-const StepStatus = Schema.Literals(['done', 'running', 'ready', 'blocked', 'dropped']);
+const StepStatus = Schema.Literals([
+  'done',
+  'running',
+  'ready',
+  'blocked',
+  'dropped',
+]);
 
 export const Step = Schema.Struct({
   id: Schema.String,
@@ -271,12 +482,25 @@ export const Criterion = Schema.Struct({
   id: Schema.String,
   text: Schema.String,
   command: opt(Schema.String),
-  claim: opt(Schema.Struct({ evidence: Schema.String, at: Schema.Number, by: Provider })),
-  check: opt(Schema.Struct({ status: Schema.Literals(['running', 'passed', 'failed']), at: Schema.Number, ms: opt(Schema.Number), output: opt(Schema.String) })),
+  claim: opt(
+    Schema.Struct({ evidence: Schema.String, at: Schema.Number, by: Provider }),
+  ),
+  check: opt(
+    Schema.Struct({
+      status: Schema.Literals(['running', 'passed', 'failed']),
+      at: Schema.Number,
+      ms: opt(Schema.Number),
+      output: opt(Schema.String),
+    }),
+  ),
 });
 export type Criterion = typeof Criterion.Type;
 
-export const NextOption = Schema.Struct({ label: Schema.String, reply: Schema.String, isDraft: opt(Schema.Boolean) });
+export const NextOption = Schema.Struct({
+  label: Schema.String,
+  reply: Schema.String,
+  isDraft: opt(Schema.Boolean),
+});
 
 export const TurnReport = Schema.Struct({
   at: Schema.Number,
@@ -292,7 +516,9 @@ export const TurnReport = Schema.Struct({
 });
 export type TurnReport = typeof TurnReport.Type;
 
-const GoalCriteria = Schema.Array(Schema.Struct({ text: Schema.String, command: opt(Schema.String) }));
+const GoalCriteria = Schema.Array(
+  Schema.Struct({ text: Schema.String, command: opt(Schema.String) }),
+);
 
 export const GoalProposal = Schema.Struct({
   goal: Schema.String,
@@ -309,17 +535,37 @@ export const IdleCheck = Schema.Struct({
   turn: opt(Schema.Number),
   uncommitted: opt(Schema.Number),
   isGathering: opt(Schema.Boolean),
-  audit: opt(Schema.Struct({ question: opt(Schema.String), unverified: Schema.Array(Schema.Struct({ text: Schema.String, quote: Schema.String })) })),
+  audit: opt(
+    Schema.Struct({
+      question: opt(Schema.String),
+      unverified: Schema.Array(
+        Schema.Struct({ text: Schema.String, quote: Schema.String }),
+      ),
+    }),
+  ),
   accepted: Schema.Array(Schema.String),
   isConfirmed: opt(Schema.Boolean),
   isMoveAnswered: opt(Schema.Boolean),
 });
 
-export const Similar = Schema.Struct({ threadId: Schema.String, relation: Schema.Literals(['same', 'related']) });
+export const Similar = Schema.Struct({
+  threadId: Schema.String,
+  relation: Schema.Literals(['same', 'related']),
+});
 
-export const Revision = Schema.Struct({ n: Schema.Number, at: Schema.Number, label: Schema.String, by: Author, diff: opt(Schema.Array(Schema.String)) });
+export const Revision = Schema.Struct({
+  n: Schema.Number,
+  at: Schema.Number,
+  label: Schema.String,
+  by: Author,
+  diff: opt(Schema.Array(Schema.String)),
+});
 
-export const SubThreadLink = Schema.Struct({ threadId: Schema.String, criterionId: opt(Schema.String), handedBackAt: opt(Schema.Number) });
+export const SubThreadLink = Schema.Struct({
+  threadId: Schema.String,
+  criterionId: opt(Schema.String),
+  handedBackAt: opt(Schema.Number),
+});
 export type SubThreadLink = typeof SubThreadLink.Type;
 
 export const ThreadProposal = Schema.Struct({
@@ -330,7 +576,14 @@ export const ThreadProposal = Schema.Struct({
   state: Schema.Literals(['pending', 'started', 'dismissed', 'here']),
   reason: opt(Schema.String),
   threadId: opt(Schema.String),
-  create: Schema.Struct({ provider: Provider, project: Schema.NullOr(Schema.String), workspace: opt(WorkspaceDraft), controls: opt(ThreadControls), isLive: Schema.Boolean, parent: opt(SubThreadLink) }),
+  create: Schema.Struct({
+    provider: Provider,
+    project: Schema.NullOr(Schema.String),
+    workspace: opt(WorkspaceDraft),
+    controls: opt(ThreadControls),
+    isLive: Schema.Boolean,
+    parent: opt(SubThreadLink),
+  }),
 });
 
 export const Handoff = Schema.Struct({
@@ -359,7 +612,13 @@ export const ActivityEntry = Schema.Struct({
   who: Author,
   kind: Schema.Literals(['message', 'tool', 'event', 'reasoning', 'subagent']),
   text: Schema.String,
-  simplified: opt(Schema.Struct({ text: Schema.String, rulesKey: Schema.String, isShown: Schema.Boolean })),
+  simplified: opt(
+    Schema.Struct({
+      text: Schema.String,
+      rulesKey: Schema.String,
+      isShown: Schema.Boolean,
+    }),
+  ),
   detail: opt(Schema.String),
   seconds: opt(Schema.Number),
   drift: opt(Schema.Literals(['on-goal', 'scope-add', 'off-goal'])),
@@ -379,15 +638,37 @@ export const ActivityEntry = Schema.Struct({
   mcp: opt(McpCall),
   wasQueued: opt(Schema.Boolean),
   isSeen: opt(Schema.Literal(true)),
-  secondOpinion: opt(Schema.Struct({ reviewId: Schema.String, provider: Provider })),
+  secondOpinion: opt(
+    Schema.Struct({ reviewId: Schema.String, provider: Provider }),
+  ),
   images: opt(Schema.Array(Schema.String)),
   generated: opt(GeneratedImage),
   widget: opt(McpWidget),
-  turnUndo: opt(Schema.Struct({ start: Schema.Number, isUndone: Schema.Boolean })),
-  nextMove: opt(Schema.Struct({ summary: opt(Schema.String), question: Schema.String, answer: opt(Schema.String) })),
+  turnUndo: opt(
+    Schema.Struct({ start: Schema.Number, isUndone: Schema.Boolean }),
+  ),
+  nextMove: opt(
+    Schema.Struct({
+      summary: opt(Schema.String),
+      question: Schema.String,
+      answer: opt(Schema.String),
+    }),
+  ),
   from: opt(ThreadRef),
-  autofix: opt(Schema.Struct({ kind: AutofixKind, pr: Schema.Number, title: Schema.String })),
-  subThread: opt(Schema.Struct({ threadId: Schema.String, title: Schema.String, text: Schema.String })),
+  autofix: opt(
+    Schema.Struct({
+      kind: AutofixKind,
+      pr: Schema.Number,
+      title: Schema.String,
+    }),
+  ),
+  subThread: opt(
+    Schema.Struct({
+      threadId: Schema.String,
+      title: Schema.String,
+      text: Schema.String,
+    }),
+  ),
   sent: opt(Schema.Struct({ ...ThreadRef.fields, text: Schema.String })),
   compaction: opt(Compaction),
   handoff: opt(Handoff),
@@ -428,7 +709,16 @@ export const Subagent = Schema.Struct({
   tokens: Schema.Number,
   activity: opt(Schema.String),
   steps: Schema.Array(
-    Schema.Struct({ id: Schema.String, text: Schema.String, isDone: Schema.Boolean, description: opt(Schema.String), files: opt(Schema.Array(Schema.String)), exitCode: opt(Schema.Number), output: opt(Schema.String), patch: opt(Schema.String) }),
+    Schema.Struct({
+      id: Schema.String,
+      text: Schema.String,
+      isDone: Schema.Boolean,
+      description: opt(Schema.String),
+      files: opt(Schema.Array(Schema.String)),
+      exitCode: opt(Schema.Number),
+      output: opt(Schema.String),
+      patch: opt(Schema.String),
+    }),
   ),
   message: opt(Schema.String),
   result: opt(Schema.String),
@@ -457,12 +747,24 @@ export const LiveRun = Schema.Struct({
   turnEnd: opt(Schema.Literals(['done', 'interrupted', 'failed'])),
   starting: opt(Provider),
   cwd: opt(Schema.String),
-  limit: opt(Schema.Struct({ resetsAt: opt(Schema.String), label: opt(Schema.String), isTurnHeld: opt(Schema.Boolean), autoResume: opt(Schema.Boolean) })),
+  limit: opt(
+    Schema.Struct({
+      resetsAt: opt(Schema.String),
+      label: opt(Schema.String),
+      isTurnHeld: opt(Schema.Boolean),
+      autoResume: opt(Schema.Boolean),
+    }),
+  ),
   isDetached: opt(Schema.Boolean),
   eventSeq: opt(Schema.Number),
   isOnApiKey: opt(Schema.Boolean),
   notes: opt(Schema.Array(Schema.String)),
-  restart: opt(Schema.Union([Schema.Struct({ forkAt: Schema.String }), Schema.Struct({ seed: Schema.String })])),
+  restart: opt(
+    Schema.Union([
+      Schema.Struct({ forkAt: Schema.String }),
+      Schema.Struct({ seed: Schema.String }),
+    ]),
+  ),
 });
 
 export const Repo = Schema.Struct({
@@ -491,7 +793,12 @@ export const Thread = Schema.Struct({
   isGoalOff: opt(Schema.Boolean),
   report: opt(TurnReport),
   idle: opt(IdleCheck),
-  turn: opt(Schema.Struct({ start: Schema.Number, isAgentDriven: opt(Schema.Literal(true)) })),
+  turn: opt(
+    Schema.Struct({
+      start: Schema.Number,
+      isAgentDriven: opt(Schema.Literal(true)),
+    }),
+  ),
   proposal: opt(GoalProposal),
   providers: Schema.Array(Provider),
   status: Schema.Literals(['running', 'needs-you', 'review', 'settled']),
@@ -501,13 +808,33 @@ export const Thread = Schema.Struct({
   revisions: Schema.Array(Revision),
   activity: Schema.Array(ActivityEntry),
   prs: Schema.Array(PullRequest),
-  sources: Schema.Array(Schema.Struct({ kind: Schema.Literals(['link', 'mcp', 'file']), label: Schema.String })),
+  sources: Schema.Array(
+    Schema.Struct({
+      kind: Schema.Literals(['link', 'mcp', 'file']),
+      label: Schema.String,
+    }),
+  ),
   context: Schema.Struct({ used: Schema.Number, max: Schema.Number }),
   orbitSlot: opt(Schema.Number),
   pinOrder: opt(Schema.Number),
   settledAt: opt(Schema.Number),
-  drift: opt(Schema.Struct({ isMuted: Schema.Boolean, keeps: opt(Schema.Number) })),
-  session: opt(Schema.Struct({ provider: Provider, id: Schema.String, usage: opt(Schema.Struct({ input: Schema.Number, output: Schema.Number, cached: opt(Schema.Number), costUsd: opt(Schema.Number) })) })),
+  drift: opt(
+    Schema.Struct({ isMuted: Schema.Boolean, keeps: opt(Schema.Number) }),
+  ),
+  session: opt(
+    Schema.Struct({
+      provider: Provider,
+      id: Schema.String,
+      usage: opt(
+        Schema.Struct({
+          input: Schema.Number,
+          output: Schema.Number,
+          cached: opt(Schema.Number),
+          costUsd: opt(Schema.Number),
+        }),
+      ),
+    }),
+  ),
   controls: opt(ThreadControls),
   agent: opt(AgentInfo),
   live: opt(LiveRun),
@@ -516,7 +843,9 @@ export const Thread = Schema.Struct({
   subagents: opt(Schema.Array(Subagent)),
   backgroundTasks: opt(Schema.Array(BackgroundTask)),
   queued: opt(Schema.Array(QueuedMessage)),
-  queuePause: opt(Schema.Literals(['failed', 'interrupted', 'limit', 'restart'])),
+  queuePause: opt(
+    Schema.Literals(['failed', 'interrupted', 'limit', 'restart']),
+  ),
   steering: opt(Schema.Array(PendingSteer)),
   isInterruptedToSend: opt(Schema.Literal(true)),
   isSettingsChat: opt(Schema.Literal(true)),
@@ -526,7 +855,9 @@ export type Thread = typeof Thread.Type;
 
 export const ToolWidget = Schema.Struct({
   callId: Schema.String,
-  options: opt(Schema.Array(Schema.Struct({ id: Schema.String, label: Schema.String }))),
+  options: opt(
+    Schema.Array(Schema.Struct({ id: Schema.String, label: Schema.String })),
+  ),
   pick: opt(Schema.Literal('one')),
   isDestructive: opt(Schema.Boolean),
   isHandoff: opt(Schema.Boolean),
@@ -537,12 +868,32 @@ export const ToolWidget = Schema.Struct({
 export const SettingsSuggestion = Schema.Struct({
   by: Author,
   reason: opt(Schema.String),
-  changes: Schema.Array(Schema.Struct({ key: Schema.String, value: Schema.String, profileId: opt(Schema.String) })),
-  addServer: opt(Schema.Struct({ profileId: Schema.String, provider: Provider, server: McpServerDef })),
+  changes: Schema.Array(
+    Schema.Struct({
+      key: Schema.String,
+      value: Schema.String,
+      profileId: opt(Schema.String),
+    }),
+  ),
+  addServer: opt(
+    Schema.Struct({
+      profileId: Schema.String,
+      provider: Provider,
+      server: McpServerDef,
+    }),
+  ),
   before: Schema.Record(Schema.String, Schema.String),
 });
 
-export const QueueKind = Schema.Literals(['approval', 'question', 'review', 'ci', 'collision', 'setting', 'run']);
+export const QueueKind = Schema.Literals([
+  'approval',
+  'question',
+  'review',
+  'ci',
+  'collision',
+  'setting',
+  'run',
+]);
 
 export const QueueItem = Schema.Struct({
   id: Schema.String,
@@ -553,11 +904,24 @@ export const QueueItem = Schema.Struct({
   code: opt(Schema.String),
   blocks: Schema.Struct({ steps: Schema.Number, threads: Schema.Number }),
   questions: opt(Schema.Array(AgentQuestion)),
-  collision: opt(Schema.Struct({ otherThreadId: Schema.String, files: Schema.Array(Schema.String) })),
+  collision: opt(
+    Schema.Struct({
+      otherThreadId: Schema.String,
+      files: Schema.Array(Schema.String),
+    }),
+  ),
   requestId: opt(Schema.String),
   tool: opt(ToolWidget),
   settings: opt(SettingsSuggestion),
-  ci: opt(Schema.Struct({ pr: Schema.Number, url: Schema.String, check: opt(Schema.Struct({ name: Schema.String, link: opt(Schema.String) })) })),
+  ci: opt(
+    Schema.Struct({
+      pr: Schema.Number,
+      url: Schema.String,
+      check: opt(
+        Schema.Struct({ name: Schema.String, link: opt(Schema.String) }),
+      ),
+    }),
+  ),
   createdAt: Schema.Number,
   isSeen: opt(Schema.Boolean),
 });

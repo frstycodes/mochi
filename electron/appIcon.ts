@@ -1,7 +1,10 @@
 import { app, BrowserWindow, nativeImage, type NativeImage } from 'electron';
 import path from 'node:path';
 import { APP_ICONS, type AppIcon } from '../src/settings/settingOptions.ts';
-import { agentSettings, onAgentSettingsChange } from '@mochi/core/agents/config';
+import {
+  agentSettings,
+  onAgentSettingsChange,
+} from '@mochi/core/agents/config';
 import { setTrayImage } from './tray.ts';
 
 /**
@@ -17,13 +20,23 @@ export function startAppIcon() {
     current = appIcon;
     apply(appIcon);
   });
-  app.on('browser-window-created', (_event, win) => process.platform !== 'darwin' && win.setIcon(appIconImage(current)));
+  app.on(
+    'browser-window-created',
+    (_event, win) =>
+      process.platform !== 'darwin' && win.setIcon(appIconImage(current)),
+  );
 }
 
-export function appIconImage(icon: AppIcon = agentSettings().appIcon): NativeImage {
+export function appIconImage(
+  icon: AppIcon = agentSettings().appIcon,
+): NativeImage {
   // A saved icon that has since been removed falls back to the default.
   const name = APP_ICONS.some((i) => i.value === icon) ? icon : 'graphite';
-  return nativeImage.createFromPath(app.isPackaged ? path.join(process.resourcesPath, 'icons', `${name}.png`) : path.join(import.meta.dirname, '../build/icons', `${name}.png`));
+  return nativeImage.createFromPath(
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'icons', `${name}.png`)
+      : path.join(import.meta.dirname, '../build/icons', `${name}.png`),
+  );
 }
 
 function apply(icon: AppIcon) {

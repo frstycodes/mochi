@@ -19,7 +19,12 @@ export const layerSpans = Layer.effect(Tracer.Tracer)(
           end(endTime, exit);
           // The page's own sampling (its `capabilities` round trip) would fill the list.
           if (span.name.startsWith('capabilities.')) return;
-          recent.unshift({ name: span.name, durationMs: Number(endTime - options.startTime) / 1e6, endedAt: Date.now(), isOk: exit._tag === 'Success' });
+          recent.unshift({
+            name: span.name,
+            durationMs: Number(endTime - options.startTime) / 1e6,
+            endedAt: Date.now(),
+            isOk: exit._tag === 'Success',
+          });
           recent.length = Math.min(recent.length, KEPT);
         };
         return span;

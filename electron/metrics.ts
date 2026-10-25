@@ -12,7 +12,9 @@ export function processMetrics(): Capabilities.ProcessMetric[] {
       cpuPercent: process.cpu.percentCPUUsage,
       cpuSeconds: process.cpu.cumulativeCPUUsage ?? 0,
       workingSetKb: process.memory.workingSetSize,
-      ...(process.memory.privateBytes === undefined ? {} : { privateKb: process.memory.privateBytes }),
+      ...(process.memory.privateBytes === undefined
+        ? {}
+        : { privateKb: process.memory.privateBytes }),
     };
   });
 }

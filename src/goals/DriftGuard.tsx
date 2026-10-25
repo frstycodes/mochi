@@ -24,13 +24,29 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const setPending = (next: null) => setDriftPending(thread.id, next);
   const [branchFrom, setBranchFrom] = useRememberedBranchFrom();
 
-  const tag = (text: string, drift: DriftKind, reason: string) => dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift, reason });
+  const tag = (text: string, drift: DriftKind, reason: string) =>
+    dispatch({
+      type: 'drift-verdict',
+      threadId: thread.id,
+      text,
+      drift,
+      reason,
+    });
 
   /** Always sends: the suggestion never holds a message back. */
-  const submit = (message: QueuedMessage, extra?: Parameters<typeof sendMessage>[4]) => {
+  const submit = (
+    message: QueuedMessage,
+    extra?: Parameters<typeof sendMessage>[4],
+  ) => {
     // The newest thread: the composer may hold one a few streamed tokens old (`useWithoutStreamedText`).
     const state = getState();
-    sendMessage(dispatch, state, state.threads.find((t) => t.id === thread.id) ?? thread, message, extra);
+    sendMessage(
+      dispatch,
+      state,
+      state.threads.find((t) => t.id === thread.id) ?? thread,
+      message,
+      extra,
+    );
     onSent?.();
   };
 
@@ -58,23 +74,42 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     const before = snapshot(getState());
     const isGoalDone = isDone(thread);
     // GAP: undo restores the store, but the interrupted turn stays interrupted.
-    if (thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
-    dispatch({ type: 'drift-new-thread', threadId: thread.id, prompt: pending.text, branchFrom });
+    if (thread.live?.isWorking)
+      dispatch({ type: 'interrupt', threadId: thread.id });
+    dispatch({
+      type: 'drift-new-thread',
+      threadId: thread.id,
+      prompt: pending.text,
+      branchFrom,
+    });
     setPending(null);
-    toast(isGoalDone ? `Archived "${thread.title}" and started a new thread` : 'Started a new thread', {
-      duration: UNDO_MS,
-      description: isGoalDone ? 'Its goal was done.' : undefined,
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          dispatch({ type: 'restore', snapshot: before });
-          dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
+    toast(
+      isGoalDone
+        ? `Archived "${thread.title}" and started a new thread`
+        : 'Started a new thread',
+      {
+        duration: UNDO_MS,
+        description: isGoalDone ? 'Its goal was done.' : undefined,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            dispatch({ type: 'restore', snapshot: before });
+            dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
+          },
         },
       },
-    });
+    );
   };
 
-  return { pending, branchFrom, setBranchFrom, submit, keepHere, addToGoal, newThread };
+  return {
+    pending,
+    branchFrom,
+    setBranchFrom,
+    submit,
+    keepHere,
+    addToGoal,
+    newThread,
+  };
 }
 
 export type DriftGuard = ReturnType<typeof useDriftGuard>;
@@ -89,20 +124,36 @@ const UNDO_MS = 8000;
 /** The card's choice is Settings › Goals and checks's "Off-goal work branches from", so it sticks across threads. */
 function useRememberedBranchFrom() {
   const { branchFrom } = usePrefs();
-  return [branchFrom, (next: BranchFrom) => setPrefs({ branchFrom: next })] as const;
+  return [
+    branchFrom,
+    (next: BranchFrom) => setPrefs({ branchFrom: next }),
+  ] as const;
 }
 
 /**
  * A quiet suggestion above the composer for a message that already went out. It never takes focus or keys from the
  * composer; once you Tab into it, 1 2 3 pick the buttons in order and Esc keeps the message here.
  */
-export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread }) {
+export function DriftCard({
+  guard,
+  thread,
+}: {
+  guard: DriftGuard;
+  thread: Thread;
+}) {
   const { pending } = guard;
   const titleId = useId();
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (isMod(e) || isNav(e) || e.altKey) return;
-    const run = ({ 1: guard.newThread, 2: guard.keepHere, ...(hasGoal(thread) && { 3: guard.addToGoal }), Escape: guard.keepHere } as Record<string, () => void>)[e.key];
+    const run = (
+      {
+        1: guard.newThread,
+        2: guard.keepHere,
+        ...(hasGoal(thread) && { 3: guard.addToGoal }),
+        Escape: guard.keepHere,
+      } as Record<string, () => void>
+    )[e.key];
     if (!run) return;
     e.preventDefault();
     run();
@@ -121,35 +172,66 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
           className="group mb-2 flex flex-col gap-2 rounded-xl bg-popover p-3 shadow-popover"
         >
           <div className="flex items-start gap-2" role="status">
-            <Compass aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <Compass
+              aria-hidden
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            />
             <div className="flex min-w-0 flex-col gap-0.5">
               <p id={titleId} className="type-body">
-                “{pending.text}” sounds like a separate task from <em className="font-medium not-italic">{thread.title}</em>.
+                “{pending.text}” sounds like a separate task from{' '}
+                <em className="font-medium not-italic">{thread.title}</em>.
               </p>
               <p className="type-caption text-subtle-foreground">
                 {pending.verdict.reason}
-                {isDone(thread) && '. The goal is done, so a new thread settles this one first.'}
+                {isDone(thread) &&
+                  '. The goal is done, so a new thread settles this one first.'}
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={guard.newThread} aria-keyshortcuts="1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={guard.newThread}
+              aria-keyshortcuts="1"
+            >
               Move to new thread
               <CardShortcut keys={['1']} />
             </Button>
-            <Button variant="ghost" size="sm" onClick={guard.keepHere} aria-keyshortcuts="2 Escape">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={guard.keepHere}
+              aria-keyshortcuts="2 Escape"
+            >
               Keep here
               <CardShortcut keys={['2']} />
             </Button>
             {hasGoal(thread) && (
-              <Button variant="ghost" size="sm" onClick={guard.addToGoal} aria-keyshortcuts="3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={guard.addToGoal}
+                aria-keyshortcuts="3"
+              >
                 Add to goal…
                 <CardShortcut keys={['3']} />
               </Button>
             )}
             {!!thread.repo && (
-              <ToggleGroup type="single" size="sm" variant="outline" value={guard.branchFrom} onValueChange={(v) => v && guard.setBranchFrom(v as BranchFrom)} aria-label="New thread branches from" className="ml-auto">
-                <ToggleGroupItem value="current" className="max-w-40 type-caption">
+              <ToggleGroup
+                type="single"
+                size="sm"
+                variant="outline"
+                value={guard.branchFrom}
+                onValueChange={(v) => v && guard.setBranchFrom(v as BranchFrom)}
+                aria-label="New thread branches from"
+                className="ml-auto"
+              >
+                <ToggleGroupItem
+                  value="current"
+                  className="max-w-40 type-caption"
+                >
                   <span className="truncate">from {thread.repo.branch}</span>
                 </ToggleGroupItem>
                 <ToggleGroupItem value="base" className="type-caption">
@@ -166,5 +248,10 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
 
 /** Key caps only while focus is in the card, the only time the keys work. */
 function CardShortcut({ keys }: { keys: string[] }) {
-  return <Shortcut keys={keys} className="-mr-1 hidden group-focus-within:inline-flex" />;
+  return (
+    <Shortcut
+      keys={keys}
+      className="-mr-1 hidden group-focus-within:inline-flex"
+    />
+  );
 }

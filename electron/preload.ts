@@ -14,7 +14,8 @@ const bridge = Object.fromEntries(
           return [
             method,
             (listener: (payload: unknown) => void) => {
-              const forward = (_event: unknown, payload: unknown) => listener(payload);
+              const forward = (_event: unknown, payload: unknown) =>
+                listener(payload);
               ipcRenderer.on(channel, forward);
               return () => void ipcRenderer.off(channel, forward);
             },
@@ -26,4 +27,6 @@ const bridge = Object.fromEntries(
 
 contextBridge.exposeInMainWorld('harnessHost', bridge);
 // Main sends Core's socket URL (token included) only to trusted pages, after each load.
-ipcRenderer.on('core:url', (_event, url: string) => window.postMessage({ channel: 'core:url', url }, '*'));
+ipcRenderer.on('core:url', (_event, url: string) =>
+  window.postMessage({ channel: 'core:url', url }, '*'),
+);

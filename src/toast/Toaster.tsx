@@ -15,7 +15,19 @@ import { ChevronDownSmall, ChevronUpSmall } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ToastIdContext } from './context';
-import { GAP, itemHeight, itemTransform, motionTiming, MORPH_MS, openSlots, slowmo, STACK_MS, stackSlots, VISIBLE, type Slot } from './stack';
+import {
+  GAP,
+  itemHeight,
+  itemTransform,
+  motionTiming,
+  MORPH_MS,
+  openSlots,
+  slowmo,
+  STACK_MS,
+  stackSlots,
+  VISIBLE,
+  type Slot,
+} from './stack';
 import { dismiss, getToasts, subscribe, type Toast } from './store';
 import { ToastRow, ToastSummary } from './ToastContent';
 
@@ -60,27 +72,42 @@ export function Toaster() {
   useCloseOnOutsidePointer(listRef, !!open, collapse);
   if (openId && !open) setOpenId(null);
 
-  const isExpanded = !open && !isHeldFolded && (isHovered || isInteracting || hasFocus);
+  const isExpanded =
+    !open && !isHeldFolded && (isHovered || isInteracting || hasFocus);
   const slots = open ? openSlots(toasts, open.id) : stackSlots(toasts, heights);
   // As in Sonner, the front height is the newest one registered: a toast registers once it has mounted, so for its first frame the
   // ones behind keep the old front's height, then animate to the new one instead of snapping to it.
   const front = open ?? live.find((t) => t.id in heights);
   const frontHeight = (front && heights[front.id]) ?? 0;
-  const height = open ? frontHeight : isExpanded ? slots.total : frontHeight + Math.min(live.length - 1, VISIBLE - 1) * GAP;
+  const height = open
+    ? frontHeight
+    : isExpanded
+      ? slots.total
+      : frontHeight + Math.min(live.length - 1, VISIBLE - 1) * GAP;
 
   const closeFromKeyboard = (id: string) => {
     dismiss(id);
     const next = live.find((t) => t.id !== id);
-    const nextButton = next && listRef.current?.querySelector<HTMLElement>(`[data-toast-id="${CSS.escape(next.id)}"] [data-toast-close]`);
+    const nextButton =
+      next &&
+      listRef.current?.querySelector<HTMLElement>(
+        `[data-toast-id="${CSS.escape(next.id)}"] [data-toast-close]`,
+      );
     (nextButton ?? returnFocus.current)?.focus();
   };
 
   return (
-    <section aria-label="Notifications" className="pointer-events-none fixed inset-x-0 top-13 z-[500] flex justify-center px-4 app-no-drag">
+    <section
+      aria-label="Notifications"
+      className="pointer-events-none fixed inset-x-0 top-13 z-[500] flex justify-center px-4 app-no-drag"
+    >
       <ol
         ref={listRef}
         aria-live="polite"
-        className={cn('@container relative w-full max-w-[356px]', !isEmpty && 'pointer-events-auto')}
+        className={cn(
+          '@container relative w-full max-w-[356px]',
+          !isEmpty && 'pointer-events-auto',
+        )}
         style={{ height: Math.max(height, 0) }}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
@@ -94,10 +121,13 @@ export function Toaster() {
         // Capture: Escape's own collapse runs after this in the toast and holds the stack again.
         onKeyDownCapture={() => isHeldFolded && setHeldFolded(false)}
         onFocus={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget)) returnFocus.current = e.relatedTarget as HTMLElement | null;
+          if (!e.currentTarget.contains(e.relatedTarget))
+            returnFocus.current = e.relatedTarget as HTMLElement | null;
           setHasFocus(true);
         }}
-        onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setHasFocus(false)}
+        onBlur={(e) =>
+          !e.currentTarget.contains(e.relatedTarget) && setHasFocus(false)
+        }
       >
         {toasts.map((t) => (
           <ToastItem
@@ -135,7 +165,19 @@ type ToastItemProps = {
   onKeyboardClose: () => void;
 };
 
-function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPaused, onHeight, onOpen, onCollapse, onKeyboardClose }: ToastItemProps) {
+function ToastItem({
+  toast,
+  slot,
+  frontHeight,
+  height,
+  isExpanded,
+  isOpen,
+  isPaused,
+  onHeight,
+  onOpen,
+  onCollapse,
+  onKeyboardClose,
+}: ToastItemProps) {
   const liRef = useRef<HTMLLIElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
@@ -161,8 +203,16 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
   }
   useEffect(() => {
     if (!isClosing) return;
-    const slowdown = Number(getComputedStyle(document.documentElement).getPropertyValue('--toast-slowmo')) || 1;
-    const timer = window.setTimeout(() => setClosing(false), MORPH_MS * slowdown);
+    const slowdown =
+      Number(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--toast-slowmo',
+        ),
+      ) || 1;
+    const timer = window.setTimeout(
+      () => setClosing(false),
+      MORPH_MS * slowdown,
+    );
     return () => window.clearTimeout(timer);
   }, [isClosing]);
   const isMorphing = isOpen || isClosing;
@@ -171,12 +221,19 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
   const wasOpen = useRef(isOpen);
   useEffect(() => {
     const li = liRef.current;
-    const isFocusLost = !document.activeElement || document.activeElement === document.body || !!li?.contains(document.activeElement);
+    const isFocusLost =
+      !document.activeElement ||
+      document.activeElement === document.body ||
+      !!li?.contains(document.activeElement);
     if (isOpen) widgetRef.current?.focus({ preventScroll: true });
     // After the render, not in the handler: until then the opener sits in an inert region and can't take focus.
-    else if (refocusOpener.current) openerRef.current?.focus({ preventScroll: true });
+    else if (refocusOpener.current)
+      openerRef.current?.focus({ preventScroll: true });
     // Turned into an outcome from inside the widget: focus the outcome's first control (its Undo) rather than the page.
-    else if (wasOpen.current && isFocusLost) li?.querySelector<HTMLElement>('button:not([inert] *)')?.focus({ preventScroll: true });
+    else if (wasOpen.current && isFocusLost)
+      li?.querySelector<HTMLElement>('button:not([inert] *)')?.focus({
+        preventScroll: true,
+      });
     refocusOpener.current = false;
     wasOpen.current = isOpen;
   }, [isOpen]);
@@ -185,7 +242,12 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
   const isHidden = slot.index >= VISIBLE;
   const isCollapsedBehind = !isExpanded && !isFront;
   const isTimed = Number.isFinite(toast.duration);
-  const transform = itemTransform({ slot, isExpanded, isMounted, isLeaving: toast.isLeaving });
+  const transform = itemTransform({
+    slot,
+    isExpanded,
+    isMounted,
+    isLeaving: toast.isLeaving,
+  });
 
   const collapse = () => {
     refocusOpener.current = true;
@@ -211,16 +273,44 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
     (!isMounted || toast.isLeaving) && 'blur-[6px]',
     isHidden && 'pointer-events-none',
   );
-  const sizeState = { isFront, isExpanded, isMounted, isMorphing, canOpen: !!widget, height, frontHeight };
-  const size = { height: itemHeight(sizeState) || undefined, ...(isOpen && { left: OPEN_INSET, right: OPEN_INSET }) };
-  const motionStyle = { transform, ...size, ...motionTiming({ isLeaving: toast.isLeaving, isFront, isExpanded, isMorphing }) };
+  const sizeState = {
+    isFront,
+    isExpanded,
+    isMounted,
+    isMorphing,
+    canOpen: !!widget,
+    height,
+    frontHeight,
+  };
+  const size = {
+    height: itemHeight(sizeState) || undefined,
+    ...(isOpen && { left: OPEN_INSET, right: OPEN_INSET }),
+  };
+  const motionStyle = {
+    transform,
+    ...size,
+    ...motionTiming({
+      isLeaving: toast.isLeaving,
+      isFront,
+      isExpanded,
+      isMorphing,
+    }),
+  };
 
   const summary = <ToastSummary toast={toast} />;
 
   return (
     <>
       {/* The drop shadow lives in a layer under every card, so an expanded stack never shades its neighbours. */}
-      <li aria-hidden className={cn(motionClass, 'pointer-events-none shadow-[var(--elev-lift)]', isOpen && 'rounded-2xl')} style={motionStyle} />
+      <li
+        aria-hidden
+        className={cn(
+          motionClass,
+          'pointer-events-none shadow-[var(--elev-lift)]',
+          isOpen && 'rounded-2xl',
+        )}
+        style={motionStyle}
+      />
       <li
         ref={liRef}
         data-toast-id={toast.id}
@@ -239,9 +329,22 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
         )}
         style={{ ...motionStyle, zIndex: 1 + VISIBLE - slot.index }}
       >
-        <div ref={contentRef} style={{ transitionDuration: slowmo(STACK_MS) }} className={cn('relative transition-opacity ease-[ease]', isCollapsedBehind && 'opacity-0')}>
+        <div
+          ref={contentRef}
+          style={{ transitionDuration: slowmo(STACK_MS) }}
+          className={cn(
+            'relative transition-opacity ease-[ease]',
+            isCollapsedBehind && 'opacity-0',
+          )}
+        >
           <Face isActive={!isOpen} width={SUMMARY_WIDTH} timing={SUMMARY_FADE}>
-            <ToastRow toast={toast} onAction={runAction} onClose={(e) => (e.detail === 0 ? onKeyboardClose() : dismiss(toast.id))}>
+            <ToastRow
+              toast={toast}
+              onAction={runAction}
+              onClose={(e) =>
+                e.detail === 0 ? onKeyboardClose() : dismiss(toast.id)
+              }
+            >
               {toast.expand ? (
                 <button
                   ref={openerRef}
@@ -251,7 +354,10 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
                   onClick={onOpen}
                 >
                   {summary}
-                  <ChevronDownSmall aria-hidden className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+                  <ChevronDownSmall
+                    aria-hidden
+                    className="mt-1 size-3.5 shrink-0 text-muted-foreground"
+                  />
                 </button>
               ) : (
                 summary
@@ -291,32 +397,75 @@ type FadeTiming = { delay: number; duration: number };
  * widget is there from the start, revealed by the growing card. Collapsing, the toast text starts blurring in as the card starts
  * shrinking and resolves with it, while the widget, clipped by the card, holds a beat before fading.
  */
-const SUMMARY_FADE = { in: { delay: 0, duration: 400 }, out: { delay: 0, duration: 160 } } satisfies Record<'in' | 'out', FadeTiming>;
-const WIDGET_FADE = { in: { delay: 0, duration: 200 }, out: { delay: 130, duration: 270 } } satisfies Record<'in' | 'out', FadeTiming>;
+const SUMMARY_FADE = {
+  in: { delay: 0, duration: 400 },
+  out: { delay: 0, duration: 160 },
+} satisfies Record<'in' | 'out', FadeTiming>;
+const WIDGET_FADE = {
+  in: { delay: 0, duration: 200 },
+  out: { delay: 130, duration: 270 },
+} satisfies Record<'in' | 'out', FadeTiming>;
 
 /**
  * One face of the card, at its own fixed width and centred, so the card morphs around it without reflowing it, like the Dynamic
  * Island. The active face is in flow and sets the card's height; the other lies over it, out of flow, and fades out.
  */
-function Face({ isActive, width, timing, children }: { isActive: boolean; width: string; timing: Record<'in' | 'out', FadeTiming>; children: ReactNode }) {
+function Face({
+  isActive,
+  width,
+  timing,
+  children,
+}: {
+  isActive: boolean;
+  width: string;
+  timing: Record<'in' | 'out', FadeTiming>;
+  children: ReactNode;
+}) {
   const { delay, duration } = isActive ? timing.in : timing.out;
   return (
     <div
       inert={!isActive}
-      style={{ width, transitionDuration: slowmo(duration), transitionDelay: slowmo(delay) }}
-      className={cn('left-1/2 -translate-x-1/2 transition-[opacity,filter]', isActive ? 'relative' : 'pointer-events-none absolute top-0 opacity-0 blur-[6px]')}
+      style={{
+        width,
+        transitionDuration: slowmo(duration),
+        transitionDelay: slowmo(delay),
+      }}
+      className={cn(
+        'left-1/2 -translate-x-1/2 transition-[opacity,filter]',
+        isActive
+          ? 'relative'
+          : 'pointer-events-none absolute top-0 opacity-0 blur-[6px]',
+      )}
     >
       {children}
     </div>
   );
 }
 
-function ToastWidget({ ref, onCollapse, children }: { ref: RefObject<HTMLDivElement | null>; onCollapse: () => void; children: ReactNode }) {
+function ToastWidget({
+  ref,
+  onCollapse,
+  children,
+}: {
+  ref: RefObject<HTMLDivElement | null>;
+  onCollapse: () => void;
+  children: ReactNode;
+}) {
   // Grows to the viewport (52px top offset + 16px gutter) and scrolls only past that.
   return (
-    <div ref={ref} tabIndex={-1} className="max-h-[calc(100dvh-68px)] cursor-auto overflow-y-auto p-1.5 outline-none select-text">
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className="max-h-[calc(100dvh-68px)] cursor-auto overflow-y-auto p-1.5 outline-none select-text"
+    >
       <div className="sticky top-0 z-10 flex h-0 justify-end">
-        <Button variant="ghost" size="icon-xs" aria-label="Collapse" className="mt-2 mr-2 text-muted-foreground" onClick={onCollapse}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Collapse"
+          className="mt-2 mr-2 text-muted-foreground"
+          onClick={onCollapse}
+        >
           <ChevronUpSmall />
         </Button>
       </div>
@@ -325,7 +474,11 @@ function ToastWidget({ ref, onCollapse, children }: { ref: RefObject<HTMLDivElem
   );
 }
 
-function withHeight(heights: Record<string, number>, id: string, height: number | null) {
+function withHeight(
+  heights: Record<string, number>,
+  id: string,
+  height: number | null,
+) {
   if (height === null) {
     const { [id]: _, ...rest } = heights;
     return rest;
@@ -333,7 +486,11 @@ function withHeight(heights: Record<string, number>, id: string, height: number 
   return heights[id] === height ? heights : { ...heights, [id]: height };
 }
 
-function useMeasure(ref: RefObject<HTMLElement | null>, onHeight: (height: number | null) => void, isActive: boolean) {
+function useMeasure(
+  ref: RefObject<HTMLElement | null>,
+  onHeight: (height: number | null) => void,
+  isActive: boolean,
+) {
   const report = useEffectEvent(onHeight);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -352,7 +509,11 @@ function useMeasure(ref: RefObject<HTMLElement | null>, onHeight: (height: numbe
 /** Popovers a widget opens portal out of the stack, so a click in one isn't a click outside. */
 const PORTALED = '[data-radix-popper-content-wrapper], [data-slot$="-content"]';
 
-function useCloseOnOutsidePointer(listRef: RefObject<HTMLElement | null>, isActive: boolean, onClose: () => void) {
+function useCloseOnOutsidePointer(
+  listRef: RefObject<HTMLElement | null>,
+  isActive: boolean,
+  onClose: () => void,
+) {
   const close = useEffectEvent(onClose);
   useEffect(() => {
     if (!isActive) return;
@@ -383,12 +544,17 @@ function useIsWindowActive() {
 }
 
 /** Alt+T jumps to the newest toast's first control, so an Undo is reachable without tabbing through the app. */
-function useFocusHotkey(listRef: RefObject<HTMLOListElement | null>, isActive: boolean) {
+function useFocusHotkey(
+  listRef: RefObject<HTMLOListElement | null>,
+  isActive: boolean,
+) {
   useEffect(() => {
     if (!isActive) return;
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (!isCommand(e, 'toast-focus')) return;
-      const target = listRef.current?.querySelector<HTMLElement>('li:not([inert]) button:not([inert] *)');
+      const target = listRef.current?.querySelector<HTMLElement>(
+        'li:not([inert]) button:not([inert] *)',
+      );
       if (!target) return;
       e.preventDefault();
       target.focus();

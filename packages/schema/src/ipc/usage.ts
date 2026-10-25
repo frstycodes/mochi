@@ -16,7 +16,12 @@ export const UsageQuery = Schema.Struct({
 });
 export type UsageQuery = typeof UsageQuery.Type;
 
-export const CostParts = Schema.Struct({ input: N, output: N, cacheRead: N, cacheWrite: N });
+export const CostParts = Schema.Struct({
+  input: N,
+  output: N,
+  cacheRead: N,
+  cacheWrite: N,
+});
 export type CostParts = typeof CostParts.Type;
 
 export const TokenBucket = Schema.Struct({
@@ -34,13 +39,29 @@ export const TokenBucket = Schema.Struct({
 });
 export type TokenBucket = typeof TokenBucket.Type;
 
-export const UsageSession = Schema.Struct({ harness: Provider, root: S, id: S });
+export const UsageSession = Schema.Struct({
+  harness: Provider,
+  root: S,
+  id: S,
+});
 export type UsageSession = typeof UsageSession.Type;
 
-export const CommitStat = Schema.Struct({ repo: S, at: N, added: N, removed: N, isMerge: Schema.Boolean });
+export const CommitStat = Schema.Struct({
+  repo: S,
+  at: N,
+  added: N,
+  removed: N,
+  isMerge: Schema.Boolean,
+});
 export type CommitStat = typeof CommitStat.Type;
 
-export const PrStat = Schema.Struct({ repo: S, number: N, state: Schema.Literals(['OPEN', 'MERGED', 'CLOSED']), createdAt: N, mergedAt: Schema.NullOr(N) });
+export const PrStat = Schema.Struct({
+  repo: S,
+  number: N,
+  state: Schema.Literals(['OPEN', 'MERGED', 'CLOSED']),
+  createdAt: N,
+  mergedAt: Schema.NullOr(N),
+});
 export type PrStat = typeof PrStat.Type;
 
 export const UsageReport = Schema.Struct({

@@ -11,8 +11,17 @@ export const schedule: ScheduleHost = {
   },
   async set(input) {
     const old = triggers.find((t) => t.threadId === input.threadId);
-    const trigger = { ...input, isPaused: old?.isPaused ?? false, createdAt: old?.createdAt ?? Date.now(), checkedAt: Date.now(), runs: old?.runs ?? [] };
-    triggers = [...triggers.filter((t) => t.threadId !== input.threadId), trigger];
+    const trigger = {
+      ...input,
+      isPaused: old?.isPaused ?? false,
+      createdAt: old?.createdAt ?? Date.now(),
+      checkedAt: Date.now(),
+      runs: old?.runs ?? [],
+    };
+    triggers = [
+      ...triggers.filter((t) => t.threadId !== input.threadId),
+      trigger,
+    ];
     changed();
   },
   async remove(threadId) {
@@ -20,7 +29,9 @@ export const schedule: ScheduleHost = {
     changed();
   },
   async setPaused(threadId, isPaused) {
-    triggers = triggers.map((t) => (t.threadId === threadId ? { ...t, isPaused } : t));
+    triggers = triggers.map((t) =>
+      t.threadId === threadId ? { ...t, isPaused } : t,
+    );
     changed();
   },
   async runNow() {

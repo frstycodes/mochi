@@ -5,10 +5,19 @@ import { currentPr } from '@mochi/core/github/nodes';
 import type { BranchPrs } from '@mochi/core/github/schema';
 import { mainCoreClient } from '@mochi/core/host';
 import type { AgentEvent } from '../../src/host/types/agent.ts';
-import type { ThreadAddressed, WatchConfig } from '../../src/host/types/notify.ts';
+import type {
+  ThreadAddressed,
+  WatchConfig,
+} from '../../src/host/types/notify.ts';
 import { isAddressed, isQuiet } from '../../src/notify/model.ts';
 import { resetLabel } from '../../src/usage/limits.ts';
-import { ciTitle, ciTransition, coalesce, type CiSeen, type OsNotice } from '../../src/notify/watch.ts';
+import {
+  ciTitle,
+  ciTransition,
+  coalesce,
+  type CiSeen,
+  type OsNotice,
+} from '../../src/notify/watch.ts';
 import { onAgentEvent, resolveRequest } from '../agents/events.ts';
 
 import { deliver } from '../schedule/scheduler.ts';
@@ -20,7 +29,15 @@ import { createWindow, mainWindow } from '../window.ts';
  * The renderer sends `config` on every change; main only alerts while no Mochi window is in front (the renderer toasts then).
  */
 // ponytail: config and CI baselines are in memory; a relaunch re-baselines CI silently. Persist them if a restart mid-run must still report.
-let config: WatchConfig = { threads: [], autofix: [], kinds: [], quiet: { isOn: false, start: 22, end: 8 }, muted: [], needsYou: [], dockBadge: true };
+let config: WatchConfig = {
+  threads: [],
+  autofix: [],
+  kinds: [],
+  quiet: { isOn: false, start: 22, end: 8 },
+  muted: [],
+  needsYou: [],
+  dockBadge: true,
+};
 /** Thread id → approvals and questions waiting on you that main saw arrive, for the badge between renderer syncs. */
 const requests = new Map<string, Set<string>>();
 let needsYou = new Set<string>();
@@ -61,7 +78,10 @@ function onEvent(event: AgentEvent) {
   trackRequests(event);
   const thread = config.threads.find((t) => t.id === event.threadId);
   if (!thread) return;
-  const isLimitEnd = event.type === 'turn-end' && event.status === 'failed' && limited.has(event.threadId);
+  const isLimitEnd =
+    event.type === 'turn-end' &&
+    event.status === 'failed' &&
+    limited.has(event.threadId);
   if (event.type === 'limit') limited.add(event.threadId);
   else if (event.type === 'turn-end') limited.delete(event.threadId);
   const notice = isLimitEnd ? null : noticeFor(event, thread.title);
@@ -70,19 +90,45 @@ function onEvent(event: AgentEvent) {
 
 function noticeFor(event: AgentEvent, title: string): OsNotice | null {
   const base = { threadId: event.threadId, title };
-  if (event.type === 'approval') return { ...base, kind: 'needs-you', body: `Wants to ${event.title.charAt(0).toLowerCase()}${event.title.slice(1)}`, requestId: event.requestId };
-  if (event.type === 'question') return { ...base, kind: 'needs-you', body: event.questions[0]?.text ?? 'Has a question for you' };
+  if (event.type === 'approval')
+    return {
+      ...base,
+      kind: 'needs-you',
+      body: `Wants to ${event.title.charAt(0).toLowerCase()}${event.title.slice(1)}`,
+      requestId: event.requestId,
+    };
+  if (event.type === 'question')
+    return {
+      ...base,
+      kind: 'needs-you',
+      body: event.questions[0]?.text ?? 'Has a question for you',
+    };
   if (event.type === 'limit') {
     const reset = event.resetsAt ? ` at ${resetLabel(event.resetsAt)}` : '';
-    return { ...base, kind: 'limit', body: `Hit the ${event.label ? `${event.label.toLowerCase()} ` : ''}usage limit; ${event.isTurnHeld ? `continues after the reset${reset}` : `stopped until the reset${reset}`}` };
+    return {
+      ...base,
+      kind: 'limit',
+      body: `Hit the ${event.label ? `${event.label.toLowerCase()} ` : ''}usage limit; ${event.isTurnHeld ? `continues after the reset${reset}` : `stopped until the reset${reset}`}`,
+    };
   }
   if (event.type !== 'turn-end' || event.status === 'interrupted') return null;
-  return event.status === 'done' ? { ...base, kind: 'done', body: 'Turn finished, ready for review' } : { ...base, kind: 'failed', body: event.error ?? 'The agent stopped with an error' };
+  return event.status === 'done'
+    ? { ...base, kind: 'done', body: 'Turn finished, ready for review' }
+    : {
+        ...base,
+        kind: 'failed',
+        body: event.error ?? 'The agent stopped with an error',
+      };
 }
 
 /** Closes a thread's notifications that what you did in Mochi settled; a summary spans threads, so it stays. */
 export function closeAddressed({ threadId, ...signal }: ThreadAddressed) {
-  closeWhere((n) => n.threadId === threadId && n.kind !== 'summary' && isAddressed({ kind: n.kind }, signal));
+  closeWhere(
+    (n) =>
+      n.threadId === threadId &&
+      n.kind !== 'summary' &&
+      isAddressed({ kind: n.kind }, signal),
+  );
 }
 
 function closeWhere(isDone: (notice: OsNotice) => boolean) {
@@ -95,14 +141,19 @@ function closeWhere(isDone: (notice: OsNotice) => boolean) {
 
 function trackRequests(event: AgentEvent) {
   const open = requests.get(event.threadId) ?? new Set<string>();
-  if (event.type === 'approval' || event.type === 'question') open.add(event.requestId);
+  if (event.type === 'approval' || event.type === 'question')
+    open.add(event.requestId);
   else if (event.type === 'resolved') {
     open.delete(event.requestId);
     // Answered in a window or on another device: its Approve/Deny would now answer nothing.
     closeWhere((n) => n.requestId === event.requestId);
   }
   // A turn's end or limit withdraws whatever it was still asking.
-  else if (event.type === 'turn-end' || (event.type === 'limit' && !event.isTurnHeld)) open.clear();
+  else if (
+    event.type === 'turn-end' ||
+    (event.type === 'limit' && !event.isTurnHeld)
+  )
+    open.clear();
   else return;
   requests.set(event.threadId, open);
   if (open.size) needsYou.add(event.threadId);
@@ -115,7 +166,13 @@ function badge() {
 }
 
 function alert(notice: OsNotice) {
-  if (BrowserWindow.getFocusedWindow() || !config.kinds.includes(notice.kind) || config.muted.includes(notice.threadId) || isQuiet(config.quiet, new Date())) return;
+  if (
+    BrowserWindow.getFocusedWindow() ||
+    !config.kinds.includes(notice.kind) ||
+    config.muted.includes(notice.threadId) ||
+    isQuiet(config.quiet, new Date())
+  )
+    return;
   burst.push(notice);
   burstTimer ??= setTimeout(() => {
     burstTimer = undefined;
@@ -128,7 +185,11 @@ function alert(notice: OsNotice) {
 function show(notice: OsNotice) {
   // macOS shows the first action as a button and the rest under it only in the Alerts style (System Settings › Notifications).
   const actions = notice.requestId ? ['Approve', 'Deny'] : ['Open'];
-  const n = new Notification({ title: notice.title, body: notice.body, actions: actions.map((text) => ({ type: 'button' as const, text })) });
+  const n = new Notification({
+    title: notice.title,
+    body: notice.body,
+    actions: actions.map((text) => ({ type: 'button' as const, text })),
+  });
   live.set(n, notice);
   n.on('close', () => live.delete(n));
   n.on('click', () => {
@@ -147,9 +208,17 @@ function show(notice: OsNotice) {
 /** Same as answering the Queue card; the `resolved` event takes the card away in every window, or waits for the next one. */
 async function answer(threadId: string, requestId: string, isAllowed: boolean) {
   try {
-    await resolveRequest(threadId, requestId, isAllowed ? { kind: 'allow' } : { kind: 'deny', message: 'Denied from a notification' });
+    await resolveRequest(
+      threadId,
+      requestId,
+      isAllowed
+        ? { kind: 'allow' }
+        : { kind: 'deny', message: 'Denied from a notification' },
+    );
   } catch (error) {
-    console.warn(`Answering ${requestId} from a notification failed: ${(error as Error).message}`);
+    console.warn(
+      `Answering ${requestId} from a notification failed: ${(error as Error).message}`,
+    );
     open(threadId);
   }
 }
@@ -172,14 +241,25 @@ type CiWatch = { threadId: string; cwd: string; githubUser?: string };
 
 // Core polls each repository once for every surface: fast for a while after a push, backing off to every 10 minutes.
 const ciStreams = keyedStreams(
-  ({ cwd, githubUser }: CiWatch) => Stream.unwrap(Effect.map(Effect.promise(mainCoreClient), (client) => client['github.pr']({ cwd, githubUser }))),
+  ({ cwd, githubUser }: CiWatch) =>
+    Stream.unwrap(
+      Effect.map(Effect.promise(mainCoreClient), (client) =>
+        client['github.pr']({ cwd, githubUser }),
+      ),
+    ),
   ({ threadId }, prs) => onPrs(threadId, prs),
-  ({ threadId }, error) => console.warn(`CI watch for ${threadId} failed: ${error instanceof Error ? error.message : String(error)}`),
+  ({ threadId }, error) =>
+    console.warn(
+      `CI watch for ${threadId} failed: ${error instanceof Error ? error.message : String(error)}`,
+    ),
 );
 
 function syncCi() {
-  const watched = config.threads.flatMap((t) => (t.cwd ? [{ threadId: t.id, cwd: t.cwd, githubUser: t.githubUser }] : []));
-  for (const id of ci.keys()) if (!watched.some((w) => w.threadId === id)) ci.delete(id);
+  const watched = config.threads.flatMap((t) =>
+    t.cwd ? [{ threadId: t.id, cwd: t.cwd, githubUser: t.githubUser }] : [],
+  );
+  for (const id of ci.keys())
+    if (!watched.some((w) => w.threadId === id)) ci.delete(id);
   ciStreams(watched);
 }
 
