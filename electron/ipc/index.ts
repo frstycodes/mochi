@@ -1,4 +1,5 @@
-import { safeStorage, webContents } from 'electron';
+import { webContents } from 'electron';
+import { open, seal } from '../secrets';
 import { Schema } from 'effect';
 import { Capabilities, definitionOf, Relay } from '@mochi/schema';
 import type { CapabilityHandler } from '@mochi/core/hostClient';
@@ -58,10 +59,8 @@ type Handler = (
 ) => Promise<unknown>;
 
 const secureStorage = {
-  encrypt: async (text: string) =>
-    safeStorage.encryptString(text).toString('base64'),
-  decrypt: async (base64: string) =>
-    safeStorage.decryptString(Buffer.from(base64, 'base64')),
+  encrypt: async (text: string) => seal(text),
+  decrypt: async (base64: string) => open(base64),
 };
 
 /**

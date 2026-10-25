@@ -1,4 +1,5 @@
-import { app, BrowserWindow, safeStorage, webContents } from 'electron';
+import { app, BrowserWindow, webContents } from 'electron';
+import { canStore, open, seal } from '../secrets';
 import { Cause, Effect, Schedule, Stream } from 'effect';
 import type {
   AgentDecision,
@@ -44,13 +45,9 @@ useAgentConfig({
   read: () => cachedDoc('settings', 'agent'),
   write: (value) => writeDoc('settings', 'agent', value),
   keychain: {
-    isAvailable: async () => safeStorage.isEncryptionAvailable(),
-    encrypt: async (text) => safeStorage.encryptString(text).toString('base64'),
-    decrypt: async (base64) => {
-      if (!safeStorage.isEncryptionAvailable())
-        throw new Error('The OS keychain is not available');
-      return safeStorage.decryptString(Buffer.from(base64, 'base64'));
-    },
+    isAvailable: async () => canStore(),
+    encrypt: async (text) => seal(text),
+    decrypt: async (base64) => open(base64),
   },
 });
 

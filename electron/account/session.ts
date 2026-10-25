@@ -1,4 +1,5 @@
-import { app, safeStorage, shell } from 'electron';
+import { app, shell } from 'electron';
+import { canStore, open, seal } from '../secrets';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
@@ -48,7 +49,7 @@ const EXPIRY_MARGIN_MS = 60_000;
 let pending: { cancel: () => void } | null = null;
 
 export function current(): MochiAccount {
-  const isPersistent = canPersist();
+  const isPersistent = canStore();
   if (!ISSUER || !CLIENT_ID) return { status: 'unconfigured', isPersistent };
   if (pending) return { status: 'signing-in', isPersistent };
   const signedIn = session();
@@ -237,19 +238,12 @@ const broadcast = () => {
 const storeFile = () => join(app.getPath('userData'), 'account.json');
 
 /** Linux with no secret service falls back to a hardcoded key (`basic_text`): nothing is written then, the session lives in memory. */
-const canPersist = () =>
-  safeStorage.isEncryptionAvailable() &&
-  (process.platform !== 'linux' ||
-    safeStorage.getSelectedStorageBackend() !== 'basic_text');
-
 function load(): Session {
   try {
     const stored = JSON.parse(readFileSync(storeFile(), 'utf8')) as Stored;
     if (typeof stored?.user?.id !== 'string') return null;
     const refreshToken =
-      stored.refreshToken && canPersist()
-        ? safeStorage.decryptString(Buffer.from(stored.refreshToken, 'base64'))
-        : undefined;
+      stored.refreshToken && canStore() ? open(stored.refreshToken) : undefined;
     return { user: stored.user, refreshToken };
   } catch {
     return null;
@@ -257,12 +251,10 @@ function load(): Session {
 }
 
 function save({ user, refreshToken }: NonNullable<Session>) {
-  if (!canPersist()) return;
+  if (!canStore()) return;
   const stored: Stored = {
     user,
-    refreshToken:
-      refreshToken &&
-      safeStorage.encryptString(refreshToken).toString('base64'),
+    refreshToken: refreshToken && seal(refreshToken),
   };
   writeFileSync(storeFile(), JSON.stringify(stored), { mode: 0o600 });
 }

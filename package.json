@@ -142,6 +142,15 @@
       "node_modules/@parcel/watcher-*/**"
     ],
     "afterPack": "scripts/after-pack.mjs",
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "onlyLoadAppFromAsar": true,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "enableCookieEncryption": true,
+      "resetAdHocDarwinSignature": true
+    },
     "npmRebuild": false,
     "asarUnpack": [
       "node_modules/node-pty/prebuilds/**",
