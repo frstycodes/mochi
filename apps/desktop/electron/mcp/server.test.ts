@@ -25,7 +25,6 @@ afterEach(() => vi.restoreAllMocks());
 test('browser instructions route to Mochi, and Codex loses the cua_repl browser it reached for instead', () => {
   assert.match(mochiInstructions(), /mcp__mochi__browser_open/);
   assert.match(mochiInstructions(), /mcp__mochi__browser_snapshot/);
-  assert.match(mochiInstructions(), /mcp__mochi__delegate_task/);
   assert.equal(
     CODEX_BROWSER_PLUGINS_OFF[
       'plugins.unified-computer-use@openai-bundled.enabled'

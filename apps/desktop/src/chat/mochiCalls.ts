@@ -33,7 +33,7 @@ export const MOCHI_CALLS = {
   get_report: ['Reading the progress report', 'Read the progress report'],
   settle_goal: ['Settling the goal', 'Settled the goal'],
   update_plan: ['Updating the plan', 'Updated the plan'],
-  delegate_task: ['Delegating a task', 'Delegated a task'],
+  start_subagent: ['Starting a subagent', 'Started a subagent'],
   ask_second_opinion: [
     'Asking for a second opinion',
     'Asked for a second opinion',

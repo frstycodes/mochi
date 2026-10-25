@@ -1204,7 +1204,7 @@ const AGENT_SPECS = {
       return { result: `Plan shown (${items.length} steps).` };
     },
   },
-  delegate_task: {
+  start_subagent: {
     run: ({ state, caller, args, dispatch }) => {
       if (!caller.live)
         throw new Error('Delegated tasks run only in a live desktop thread.');

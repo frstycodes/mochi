@@ -137,9 +137,9 @@ export const TOOL_GUIDE = {
     description:
       'Show its plan under its latest message and tick steps off as it works.',
   },
-  delegate_task: {
+  start_subagent: {
     group: 'Delegated tasks',
-    label: 'Delegate tasks',
+    label: 'Start subagents',
     description:
       'Hand a task to the other provider (or a model its own subagents lack), in the same worktree or a fresh one, on this profile’s account. Its report comes back to the agent when it finishes.',
   },

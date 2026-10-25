@@ -565,7 +565,7 @@ export interface SentImage extends AgentImage {
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
 
-/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a task delegated to another provider (`delegate_task`). */
+/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a task delegated to another provider (`start_subagent`). */
 export interface Subagent {
   id: string;
   /** `mochi`: a delegated task Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
