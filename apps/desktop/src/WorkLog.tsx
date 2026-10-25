@@ -283,7 +283,10 @@ export function CallRow({
             />
           </span>
         ) : isRunning ? (
-          <Shimmer as="span" className="min-w-0 flex-1 truncate">
+          <Shimmer
+            as="span"
+            className="pointer-events-none min-w-0 flex-1 truncate"
+          >
             {description}
           </Shimmer>
         ) : (
