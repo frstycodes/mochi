@@ -1,31 +1,31 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 
 /** Where the title is edited: in the thread's sidebar row when the rename started there, else a dialog (⌘K, the thread header's menu). */
 export type RenameSurface = 'row' | 'dialog';
 
-let renaming: { threadId: string; surface: RenameSurface } | null = null;
-const listeners = new Set<() => void>();
+const renameStore = createStore<{
+  renaming: { threadId: string; surface: RenameSurface } | null;
+}>(() => ({ renaming: null }));
 
 export function startRename(threadId: string, surface: RenameSurface) {
-  renaming = { threadId, surface };
-  listeners.forEach((l) => l());
+  renameStore.setState({ renaming: { threadId, surface } });
 }
 
 export function endRename() {
-  renaming = null;
-  listeners.forEach((l) => l());
+  renameStore.setState({ renaming: null });
 }
 
 /** Where this thread is being renamed, if it is. */
 export function useRenameSurface(threadId: string) {
-  return useSyncExternalStore(subscribe, () =>
+  return useStore(renameStore, ({ renaming }) =>
     renaming?.threadId === threadId ? renaming.surface : undefined,
   );
 }
 
 /** The thread being renamed in the dialog. */
 export function useDialogRename() {
-  return useSyncExternalStore(subscribe, () =>
+  return useStore(renameStore, ({ renaming }) =>
     renaming?.surface === 'dialog' ? renaming.threadId : undefined,
   );
 }
@@ -37,9 +37,4 @@ export function useDialogRename() {
 export function titleToSave(startedFrom: string, text: string) {
   const title = text.trim();
   return title && title !== startedFrom ? title : undefined;
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
 }

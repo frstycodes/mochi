@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import type { ActivityEntry, Thread } from '../model.ts';
 import { parseTool } from '../summary.ts';
 
@@ -40,15 +41,15 @@ export function recentFiles(
 }
 
 // GAP: in memory only, so files opened in a Files tab drop off the empty pane's list after a reload; the work log's files stay.
-const opened = new Map<string, RecentFile[]>();
-const listeners = new Set<() => void>();
+const openedStore = createStore<Record<string, RecentFile[]>>(() => ({}));
 
 export function noteOpened(threadId: string, path: string) {
-  opened.set(threadId, [
-    { path, at: Date.now() },
-    ...(opened.get(threadId) ?? []).filter((f) => f.path !== path),
-  ]);
-  listeners.forEach((l) => l());
+  openedStore.setState((all) => ({
+    [threadId]: [
+      { path, at: Date.now() },
+      ...(all[threadId] ?? []).filter((f) => f.path !== path),
+    ],
+  }));
 }
 
 export function useRecentFiles(thread: Thread, root: string) {
@@ -57,11 +58,5 @@ export function useRecentFiles(thread: Thread, root: string) {
 }
 
 function useOpenedFiles(threadId: string) {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => void listeners.delete(l);
-    },
-    () => opened.get(threadId) ?? EMPTY,
-  );
+  return useStore(openedStore, (all) => all[threadId] ?? EMPTY);
 }
