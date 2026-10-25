@@ -15,7 +15,18 @@ export default defineConfig(({ mode }) => ({
   base: './',
   run: {
     tasks: {
-      test: 'vp test run',
+      test: {
+        command: 'vp test run',
+        // pnpm rewrites .modules.yaml on install and coverage writes ./coverage; neither is a test input.
+        cache: {
+          input: [
+            { auto: true },
+            '!node_modules/.modules.yaml',
+            '!node_modules/.vite/**',
+            '!coverage/**',
+          ],
+        },
+      },
       typecheck: {
         command:
           'tsc -b && tsc -p packages/domain && tsc -p packages/core && tsc -p electron && tsc -p infra/relay',
