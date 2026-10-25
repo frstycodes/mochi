@@ -1,4 +1,6 @@
-import { Data, Effect, Fiber } from 'effect';
+import { Config, Data, Effect, Fiber, Schema } from 'effect';
+import { HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http';
+import { NodeHttpClient } from '@effect/platform-node';
 import WebSocket from 'ws';
 import { RelayWire, type Remote } from '@mochi/schema';
 import {
@@ -11,20 +13,20 @@ import {
 } from './link.ts';
 import { reconnect } from './reconnect.ts';
 
-const { decodeRelayToMachine, HEARTBEAT, splitChannel, withChannel } =
-  RelayWire;
+const {
+  decodeRelayToMachine,
+  HEARTBEAT,
+  RelayMachine,
+  splitChannel,
+  withChannel,
+} = RelayWire;
 
 /** Mochi's hosted relay (`infra/relay`); `MOCHI_RELAY_URL` points dev runs and self-hosters at another. */
-export const RELAY_URL =
-  process.env.MOCHI_RELAY_URL ??
-  'https://mochi-relay.sandeshpandey.workers.dev';
-
-export interface RelayMachine {
-  id: string;
-  name: string;
-  publicKey: string;
-  isOnline: boolean;
-}
+export const RELAY_URL = Effect.runSync(
+  Config.String('MOCHI_RELAY_URL').pipe(
+    Config.withDefault('https://mochi-relay.sandeshpandey.workers.dev'),
+  ),
+);
 
 export interface MachineConnection {
   close(): void;
@@ -201,41 +203,70 @@ export function openDeviceChannel(
   });
 }
 
-export async function listMachines(token: string): Promise<RelayMachine[]> {
-  const response = await fetch(url('/v1/machines'), {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error(`The relay answered ${response.status}`);
-  return (await response.json()) as RelayMachine[];
-}
+export const listMachines = (token: string) =>
+  relayHttp(
+    token,
+    HttpClientRequest.get(url('/v1/machines')),
+    HttpClientResponse.schemaBodyJson(Schema.Array(RelayMachine)),
+  );
 
 /** The account's signed membership records; `members.ts` decides which to believe. */
-export async function listMembers(token: string): Promise<unknown> {
-  const response = await fetch(url('/v1/members'), {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error(`The relay answered ${response.status}`);
-  return response.json();
-}
-
-export async function publishMembers(token: string, records: unknown[]) {
-  const response = await fetch(url('/v1/members'), {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(records),
-  });
-  if (!response.ok) throw new Error(`The relay answered ${response.status}`);
-}
-
-export async function forgetMachineAtRelay(token: string, machineId: string) {
-  const response = await fetch(
-    url(`/v1/machines/${encodeURIComponent(machineId)}`),
-    { method: 'DELETE', headers: { authorization: `Bearer ${token}` } },
+export const listMembers = (token: string) =>
+  relayHttp(
+    token,
+    HttpClientRequest.get(url('/v1/members')),
+    (response) => response.json,
   );
-  if (!response.ok) throw new Error(`The relay answered ${response.status}`);
+
+export const publishMembers = (token: string, records: unknown[]) =>
+  relayHttp(
+    token,
+    HttpClientRequest.post(url('/v1/members')).pipe(
+      HttpClientRequest.bodyJsonUnsafe(records),
+    ),
+    () => Effect.void,
+  );
+
+export const forgetMachineAtRelay = (token: string, machineId: string) =>
+  relayHttp(
+    token,
+    HttpClientRequest.delete(
+      url(`/v1/machines/${encodeURIComponent(machineId)}`),
+    ),
+    () => Effect.void,
+  );
+
+const RELAY_TIMEOUT = '15 seconds';
+
+/** The relay's HTTP API, for main: a status outside 2xx rejects with `RelayRefused`, a body of the wrong shape with a `SchemaError`. */
+const relayHttp = <A, E>(
+  token: string,
+  request: HttpClientRequest.HttpClientRequest,
+  body: (
+    response: HttpClientResponse.HttpClientResponse,
+  ) => Effect.Effect<A, E>,
+) =>
+  HttpClient.HttpClient.pipe(
+    Effect.flatMap((client) =>
+      HttpClient.filterStatusOk(client).execute(
+        HttpClientRequest.bearerToken(request, token),
+      ),
+    ),
+    Effect.catchReason('HttpClientError', 'StatusCodeError', (reason) =>
+      Effect.fail(new RelayRefused({ status: reason.response.status })),
+    ),
+    Effect.flatMap(body),
+    Effect.timeout(RELAY_TIMEOUT),
+    Effect.provide(NodeHttpClient.layerUndici),
+    Effect.runPromise,
+  );
+
+export class RelayRefused extends Data.TaggedError('RelayRefused')<{
+  status: number;
+}> {
+  override get message() {
+    return `The relay answered ${this.status}`;
+  }
 }
 
 /** One device's channel on the machine's socket, as a `RawLink`. */

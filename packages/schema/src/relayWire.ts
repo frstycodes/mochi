@@ -70,6 +70,15 @@ export const RelayToMachine = Schema.Union([
 ]);
 export type RelayToMachine = typeof RelayToMachine.Type;
 
+/** One computer on the account, as `GET /v1/machines` lists it. */
+export const RelayMachine = Schema.Struct({
+  id: RelayId,
+  name: Schema.String,
+  publicKey: PublicKey,
+  isOnline: Schema.Boolean,
+});
+export type RelayMachine = typeof RelayMachine.Type;
+
 const machineFrame = Schema.decodeUnknownOption(
   Schema.fromJsonString(MachineFrame),
 );
