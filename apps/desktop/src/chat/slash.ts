@@ -86,6 +86,19 @@ export function configuredCommands(
   };
 }
 
+/**
+ * The harness's built-in commands from `known` (another thread's live list) ahead of `commands` read from disk, which never
+ * carries them; a built-in takes the name from a custom command, as `/name` runs the built-in.
+ */
+export function withBuiltins(
+  commands: AgentCommand[],
+  known: readonly AgentCommand[] = [],
+) {
+  const builtins = known.filter((c) => c.builtin);
+  const taken = new Set(builtins.map((c) => c.name));
+  return [...builtins, ...commands.filter((c) => !taken.has(c.name))];
+}
+
 /** `/side why redis?` → `{ command, arg: 'why redis?' }`; plain text or a command Mochi doesn't own → null. */
 export function parseSlash(text: string) {
   const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim());

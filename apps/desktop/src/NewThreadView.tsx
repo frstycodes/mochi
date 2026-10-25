@@ -327,7 +327,7 @@ function NewThread() {
                     inlineMentions={mention.inlineMentions}
                     {...menuProps}
                     onKeyDown={(e, view) => {
-                      mention.editorProps.onKeyDown(e, view);
+                      mention.editorProps.onKeyDown(e);
                       if (!e.defaultPrevented)
                         slash.editorProps.onKeyDown(e, view);
                       if (e.defaultPrevented || e.key !== 'Escape' || hasDraft)

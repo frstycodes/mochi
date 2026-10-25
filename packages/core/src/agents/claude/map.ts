@@ -868,14 +868,19 @@ export function infoFromInit(init: SDKSystemMessage): AgentInfo {
   };
 }
 
-/** `supportedCommands()` and `commands_changed`: the skills and custom, plugin and MCP commands, not Claude Code's own. */
+/**
+ * `supportedCommands()` and `commands_changed`: Claude Code's own commands, the skills, and custom, plugin and MCP commands. Where a
+ * built-in shares a name with another row, `/name` runs the built-in, so only it is kept.
+ */
 export function commandsFrom(list: SlashCommand[]): AgentCommand[] {
+  const builtins = new Set(list.flatMap((c) => (c.builtin ? [c.name] : [])));
   return list
-    .filter((c) => !c.builtin)
+    .filter((c) => c.builtin || !builtins.has(c.name))
     .map((c) => ({
       name: c.name,
       description: c.description,
       ...(c.argumentHint && { argumentHint: c.argumentHint }),
+      ...(c.builtin && { builtin: true }),
     }));
 }
 

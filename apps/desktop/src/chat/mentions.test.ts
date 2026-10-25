@@ -50,6 +50,19 @@ test('@ query is the last word after an @, never an email', () => {
   assert.equal(withoutQuery('look at @Saf'), 'look at ');
 });
 
+test('a title with spaces matches its words typed run together', () => {
+  const windows = [{ id: 'window:1', title: 'Greeting the user' }];
+  assert.deepEqual(
+    mentionOptions('greetingtheUSER', [other], windows, 'x').map((o) => o.kind),
+    ['window'],
+  );
+  assert.deepEqual(
+    mentionOptions('loginredirect', [other], [], 'x').map((o) => o.kind),
+    [],
+    'quotes are not spaces',
+  );
+});
+
 test('options list other threads, then windows, by title', () => {
   const windows = [{ id: 'window:1', title: 'Safari — Docs' }];
   assert.deepEqual(

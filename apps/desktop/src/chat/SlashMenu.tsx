@@ -5,15 +5,22 @@ import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';
-import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
+import type {
+  AgentCommand,
+  AgentInfo,
+  McpServer,
+  Provider,
+  Thread,
+} from '../model';
 import { offItems } from '../library/nativeOverrides';
 import { useProfiles } from '../profiles';
 import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { isAbsolutePath } from '../projects';
+import { useHarnessSelector } from '../store';
 import type { Caret } from './ComposerEditor';
 import { CaretMenu, forwardKey } from './CaretMenu';
-import { SkillFallback } from './MentionMenu';
+import { ItemMeta, SkillFallback } from './MentionMenu';
 import { SkillMark } from './McpIcon';
 import {
   bySlashGroup,
@@ -23,6 +30,7 @@ import {
   slashItems,
   slashMatches,
   slashQueryAt,
+  withBuiltins,
   type SlashItem,
 } from './slash';
 import { queryKeys } from '../queryKeys';
@@ -40,7 +48,6 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   return (
     <CaretMenu
       isOpen={menu.isOpen}
-      editor={menu.editor}
       listRef={menu.listRef}
       listId={menu.listId}
       label="Commands and skills"
@@ -69,15 +76,13 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
                 {item.description}
               </span>
               {item.disabledReason ? (
-                <span className="ml-auto shrink-0 type-caption text-subtle-foreground">
-                  {item.disabledReason}
-                </span>
+                <ItemMeta>{item.disabledReason}</ItemMeta>
               ) : (
                 menu.isMidText &&
                 !item.isSkill && (
-                  <span className="ml-auto shrink-0 type-caption text-warning">
+                  <ItemMeta className="text-warning group-data-selected/command-item:text-warning">
                     Runs only at the start of a message
-                  </span>
+                  </ItemMeta>
                 )
               )}
             </CommandItem>
@@ -178,7 +183,6 @@ export function useSlashMenu(items: SlashItem[]) {
     activeKey: matches[index] && itemKey(matches[index]),
     setActiveKey,
     dismiss: () => setDismissedAt(text),
-    editor,
     listRef,
     isOpen,
     isMidText: !!range && range.start > 0,
@@ -313,10 +317,18 @@ function useAgentCommands(
     projectRoot,
     !agent?.commands,
   );
+  const known = useHarnessSelector((s) =>
+    agent?.commands ? undefined : liveCommands(s.threads, provider),
+  );
   return agent?.commands
     ? { commands: agent.commands, skills: agent.skills }
-    : configured;
+    : { ...configured, commands: withBuiltins(configured.commands, known) };
 }
+
+// GAP: until a thread on `provider` has reported its live list, the built-ins stay out.
+const liveCommands = (threads: Thread[], provider: Provider) =>
+  threads.find((t) => t.providers[0] === provider && t.agent?.commands)?.agent
+    ?.commands;
 
 /** Leaves out what the Skills tab turned off for the profile, as the session will once it starts. */
 function useConfiguredCommands(
