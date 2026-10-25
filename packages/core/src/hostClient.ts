@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit, Schedule, Stream } from 'effect';
+import { asJsonValue } from '@mochi/domain';
 import { Capabilities } from '@mochi/schema';
 import type { CoreClient } from './client.ts';
 
@@ -45,7 +46,8 @@ export const serveCapabilities = (
     Stream.runForEach((call) =>
       Effect.promise(() =>
         handle(call).then(
-          (value) => ({ value }),
+          // The reply crosses as JSON: an unset optional (a tool result's `isError`) would fail it and leave Core waiting.
+          (value) => ({ value: asJsonValue(value) }),
           (error: unknown) => ({ error: messageOf(error) }),
         ),
       ).pipe(
