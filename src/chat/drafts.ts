@@ -63,7 +63,15 @@ export function clearDraft(key: string) {
   schedule(key);
 }
 
-/** Drops the drafts of threads that no longer exist. */
+/** Drops the drafts of every thread not in `threadIds` (deleted here, in another window, or while no window was open). */
+export function pruneDrafts(threadIds: ReadonlySet<string>) {
+  const prefix = threadDraftKey('');
+  // Deleting from a Map while iterating it is safe.
+  for (const key of drafts.keys())
+    if (key.startsWith(prefix) && !threadIds.has(key.slice(prefix.length)))
+      clearDraft(key);
+}
+
 export function flushDrafts() {
   for (const key of timers.keys()) {
     clearTimeout(timers.get(key));

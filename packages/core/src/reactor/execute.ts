@@ -1,5 +1,4 @@
 import { Effect, Layer } from 'effect';
-import { Capabilities as Contract } from '@mochi/schema';
 import {
   compactFocus,
   compactInstructions,
@@ -17,51 +16,51 @@ import type { Action, State } from '../../../../src/store/types.ts';
 import { hasTempBranch } from '../../../../src/utility/titles.ts';
 import { parseTitle } from '../../../../src/utility/prompts.ts';
 import { agent, utilityCall } from '../agents/handlers.ts';
-import { Capabilities, DISCONNECTED, hostHandlers } from '../hostServer.ts';
+import { GitHub } from '../github/service.ts';
+import { Capabilities, hostHandlers } from '../hostServer.ts';
 import { Commands } from '../store/commands.ts';
 import { Projection } from '../store/projection.ts';
 import type { OutboxEffect } from '../store/store.ts';
 import { PRIORITY, UtilityQueue } from '../utility/queue.ts';
-import type { ReactorCommand, WindowCommand } from './commands.ts';
+import type { ReactorCommand } from './commands.ts';
+import {
+  autoSimplify,
+  gatherIdle,
+  refreshPrs,
+  type HostWork,
+} from './hostWork.ts';
 import { runReactor } from './reactor.ts';
-import { Unavailable, type Outcome } from './worker.ts';
+import type { Outcome } from './worker.ts';
 
-/** Capabilities' failures when no window serves `reactor`: retried until one does. One that left mid-call already went to the next. */
-const isUnserved = (error: unknown) =>
-  error instanceof Contract.CapabilityUnavailable || error === DISCONNECTED;
-
-/**
- * The reactor with its executors. Core applies what is a store action to its own log, with the agent calls it means
- * (`Commands`), starts included, and runs the utility model in its queue. A window does only what needs its host or
- * storage: any window serving `reactor`, the latest first (`Capabilities`).
- */
 export const layerReactor = Layer.effectDiscard(
   Effect.gen(function* () {
     const capabilities = yield* Capabilities;
     const queue = yield* UtilityQueue;
     const commands = yield* Commands;
     const projection = yield* Projection;
+    const github = yield* GitHub;
     const host = hostHandlers(capabilities, undefined) as Record<
       string,
       (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>
     >;
-
-    const toWindow = (command: WindowCommand) =>
-      capabilities
-        .call({ capability: 'reactor', method: 'run', args: [command] })
-        .pipe(
-          Effect.timeout('30 seconds'),
-          Effect.mapError((error) =>
-            isUnserved(error)
-              ? new Unavailable(
-                  error instanceof Error ? error.message : String(error),
-                )
-              : error,
-          ),
-          Effect.map((value): Outcome =>
-            value === 'skipped' ? 'skipped' : undefined,
-          ),
-        );
+    const current = Effect.map(
+      projection.current,
+      ({ domain }) => domain as unknown as State,
+    );
+    const work: HostWork = {
+      apply: (action) => commands.apply(action),
+      host: (tag, args) => host[tag]!(args),
+      utility: (thread, task, prompt) =>
+        queue.submit({
+          thread: thread.id,
+          kind: task,
+          priority: PRIORITY[task],
+          promptChars: prompt.length,
+          run: utilityCall(task, thread.spaceId, prompt),
+        }),
+      github,
+      current,
+    };
 
     const apply = (
       command: ReactorCommand,
@@ -186,8 +185,12 @@ export const layerReactor = Layer.effectDiscard(
               ? yield* applyTitle(command.key, threadId, title)
               : undefined;
           }
-          default:
-            return yield* toWindow(command);
+          case 'idle.gather':
+            return yield* gatherIdle(work, state, thread);
+          case 'simplify.auto':
+            return yield* autoSimplify(work, state, thread);
+          case 'pr.refresh':
+            return yield* refreshPrs(work, state, thread);
         }
       });
 

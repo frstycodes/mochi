@@ -123,7 +123,7 @@ export function createReplica(
       state = state ? merged(state, saved) : initial(saved);
       const context = decodeContext(item.context);
       isContextSet = !!context;
-      if (context) state = { ...state, context: context as ProjectionContext };
+      if (context) state = { ...state, context };
       sequence = item.sequence;
       store ??= createStore<State>()(() => state!);
       flush();
@@ -247,15 +247,20 @@ const ContextSchema = Schema.Struct({
     idleChecks: Schema.Literals(['edited', 'always', 'off']),
     simplifyAuto: Schema.Boolean,
     simplifyAutoWords: Schema.Number,
+    // Joined the context after the rest: a context Core saved before then has none.
+    simplifyLength: Schema.optional(Schema.Literals(['short', 'detailed'])),
+    simplifyNeedsFirst: Schema.optional(Schema.Boolean),
+    simplifyRules: Schema.optional(Schema.String),
     whileWorking: Schema.Literals(['queue', 'steer']),
   }),
   pins: Schema.Record(Schema.String, Schema.Array(Pin)),
   profiles: Schema.optional(Schema.Array(Model.Space)),
 });
 const decodeContextOption = Schema.decodeUnknownOption(ContextSchema);
+// The prefs Core doesn't hold yet stay unset: the first window to sync migrates its own (`migratedContext`).
 const decodeContext = (value: unknown) => {
   const decoded = decodeContextOption(value);
-  return decoded._tag === 'Some' ? decoded.value : null;
+  return decoded._tag === 'Some' ? (decoded.value as ProjectionContext) : null;
 };
 
 // A few streamed tokens per commit instead of one a frame; the stream still reads as fluid. A timer, unlike an animation frame, also runs in a hidden window.

@@ -7,6 +7,7 @@ import {
   getDraft,
   loadDrafts,
   newThreadDraftKey,
+  pruneDrafts,
   saveDraft,
   threadDraftKey,
   type Draft,
@@ -83,5 +84,21 @@ test('an emptied composer drops its draft, attachments past the cap are not kept
   assert.deepEqual(
     [...disk.keys()].sort(),
     [key, threadDraftKey('kept')].sort(),
+  );
+});
+
+test('pruning drops the drafts of threads that are gone, and only thread drafts', async () => {
+  const { disk, store } = memoryStore([
+    [threadDraftKey('kept'), { text: 'a', files: [] }],
+    [threadDraftKey('gone'), { text: 'b', files: [] }],
+    [newThreadDraftKey('personal'), { text: 'c', files: [] }],
+  ]);
+  await loadDrafts(store);
+  pruneDrafts(new Set(['kept']));
+  flushDrafts();
+  await Promise.resolve();
+  assert.deepEqual(
+    [...disk.keys()],
+    [threadDraftKey('kept'), newThreadDraftKey('personal')],
   );
 });

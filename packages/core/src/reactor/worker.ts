@@ -4,11 +4,6 @@ import type { OutboxEffect, Store } from '../store/store.ts';
 // Pattern from T3 Code's `EffectWorker.ts` (pingdotgg/t3code @ 5ffe045): claim due rows, run each, record the outcome, sleep
 // until woken. Nothing copied.
 
-/** A failure that says nothing about the command, only that its executor can't run now (no window serves `reactor`): retried without limit. */
-export class Unavailable extends Error {
-  override readonly name = 'Unavailable';
-}
-
 const BATCH = 16;
 const MAX_ATTEMPTS = 5;
 const MAX_DELAY_MS = 60_000;
@@ -27,7 +22,7 @@ export type Outcome = 'skipped' | void;
 /**
  * Runs the outbox in the caller's scope: each claimed effect in its own fiber, so a slow one (a model call) holds back no
  * other. Success completes it; a skip releases it (`forget` hears its key); a failure is retried with backoff,
- * `MAX_ATTEMPTS` times unless it is `Unavailable`. Effects a Core restart left running are claimed again (the store resets
+ * `MAX_ATTEMPTS` times. Effects a Core restart left running are claimed again (the store resets
  * them at startup), so an executor must tolerate a rerun.
  */
 export const outboxWorker = (
@@ -58,9 +53,7 @@ export const outboxWorker = (
                 )
               : store.complete(effect.id),
           onFailure: (error) => {
-            const isRetried =
-              error instanceof Unavailable || effect.attempt < MAX_ATTEMPTS;
-            if (!isRetried)
+            if (effect.attempt >= MAX_ATTEMPTS)
               return Effect.andThen(
                 Effect.logWarning(
                   `Reactor ${effect.type} gave up: ${messageOf(error)}`,

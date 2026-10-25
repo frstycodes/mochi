@@ -158,16 +158,6 @@ export const prSync: Rule = (event) => {
   ];
 };
 
-/** A deleted thread's drafts go with it. */
-export const draftsPrune: Rule = (_event, before, after) =>
-  before.threads
-    .filter((t) => !after.threads.some((a) => a.id === t.id))
-    .map((t) => ({
-      type: 'drafts.prune',
-      key: `drafts:${t.id}`,
-      threadId: t.id,
-    }));
-
 /** Rules over the whole state, run after each fold that changed it. */
 export const STATE_RULES: ReadonlyArray<Rule> = [
   queueRunner,
@@ -176,7 +166,6 @@ export const STATE_RULES: ReadonlyArray<Rule> = [
   limitResumes,
   autoTitles,
   compactInstructions,
-  draftsPrune,
 ];
 
 /** Rules by the event type they react to. */
