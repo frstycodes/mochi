@@ -5,6 +5,7 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import electron from 'vite-plugin-electron/simple';
+import { COMPLEX_FILES } from './scripts/oxlint/complexity-burndown.ts';
 import { csp } from './scripts/csp.ts';
 
 // Copied from shadcn and AI Elements and kept as published, so an update diffs cleanly.
@@ -17,14 +18,20 @@ export default defineConfig(({ mode }) => ({
   check: { fmt: false },
   lint: {
     plugins: ['eslint', 'typescript', 'unicorn', 'oxc', 'react'],
-    jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }, './scripts/oxlint/index.ts'],
+    jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }, './scripts/oxlint/index.ts', 'eslint-plugin-sonarjs'],
     rules: { 'vite-plus/prefer-vite-plus-imports': 'error', 'eslint/preserve-caught-error': 'error' },
     overrides: [
       {
         files: ['**/*.{ts,tsx}'],
         excludeFiles: VENDORED,
-        rules: { 'mochi/require-suppression-reason': 'error', 'mochi/no-low-value-comments': 'error' },
+        rules: {
+          'mochi/require-suppression-reason': 'error',
+          'mochi/no-low-value-comments': 'error',
+          // SonarSource's default limit.
+          'sonarjs/cognitive-complexity': ['error', 15],
+        },
       },
+      { files: COMPLEX_FILES, rules: { 'sonarjs/cognitive-complexity': ['warn', 15] } },
       {
         files: ['src/**', 'electron/**', 'packages/*/src/**', 'infra/*/src/**'],
         excludeFiles: [...VENDORED, '**/*.test.ts'],

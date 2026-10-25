@@ -119,6 +119,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "electron": "44.7.0",
     "electron-builder": "26.15.3",
+    "eslint-plugin-sonarjs": "^4.2.2",
     "tailwindcss": "^4.3.3",
     "typescript": "npm:@tsc-rs/typescript@0.8.0",
     "vite": "catalog:",
