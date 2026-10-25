@@ -73,6 +73,23 @@ it.live('four diff subscribers on one worktree share one git status and one diff
   }),
 );
 
+it.effect('an hour with nothing changed reads git once, when the subscriber arrives', () =>
+  Effect.gen(function* () {
+    const dir = tempDir();
+    const { calls, deps } = yield* fakeDeps(dir);
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const { watch } = yield* makeWatch(deps);
+        const sub = yield* subscribe(watch, { _tag: 'gitDiff', cwd: dir, scope: 'branch' });
+        yield* sub.next;
+        yield* TestClock.adjust('1 hour');
+        assert.deepEqual({ status: calls.status, diff: calls.diff }, { status: 1, diff: 1 });
+        assert.equal(sub.values.length, 1);
+      }),
+    ).pipe(removed(dir));
+  }),
+);
+
 it.live('no git read while nothing changes; a change re-reads status but not an unchanged diff; asleep reads nothing until it wakes', () =>
   Effect.gen(function* () {
     const dir = tempDir();
