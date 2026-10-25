@@ -1,5 +1,8 @@
 import type { QueueItem, Thread } from '../model.ts';
-import type { NotificationsAction, NotificationsState } from '../notify/slice.ts';
+import type {
+  NotificationsAction,
+  NotificationsState,
+} from '../notify/slice.ts';
 import type { ToolUndo } from '../runtime/undo.ts';
 import type { ScheduleAction } from '../schedule/slice.ts';
 import type { ReviewAction } from '../secondOpinion/slice.ts';
@@ -15,5 +18,22 @@ export interface Snapshot {
   queue: QueueItem[];
 }
 
-export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState;
-export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | ReviewAction | NotificationsAction | ScheduleAction | { type: 'reset' } | { type: 'tool-undo'; undo: ToolUndo };
+export type State = ThreadsState &
+  QueueState &
+  PanesState &
+  LayoutState &
+  UiState &
+  SideChatState &
+  NotificationsState;
+export type Action =
+  | ThreadsAction
+  | QueueAction
+  | PanesAction
+  | LayoutAction
+  | UiAction
+  | SideChatAction
+  | ReviewAction
+  | NotificationsAction
+  | ScheduleAction
+  | { type: 'reset' }
+  | { type: 'tool-undo'; undo: ToolUndo };

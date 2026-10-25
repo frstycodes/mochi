@@ -16,19 +16,61 @@ import { layerReactor } from './execute.ts';
 import { runReactor } from './reactor.ts';
 import type { Outcome } from './worker.ts';
 
-const layerStore = (dir: string) => Projection.layer(undefined).pipe(Layer.provideMerge(Store.layer(join(dir, 'mochi.db'))), Layer.orDie);
+const layerStore = (dir: string) =>
+  Projection.layer(undefined).pipe(
+    Layer.provideMerge(Store.layer(join(dir, 'mochi.db'))),
+    Layer.orDie,
+  );
 
-const withCore = <A>(dir: string, execute: (effect: OutboxEffect) => Effect.Effect<Outcome, unknown>, body: Effect.Effect<A, unknown, Store>, onForget?: (key: string) => void) =>
-  Effect.scoped(Effect.andThen(runReactor(execute, onForget), body).pipe(Effect.provide(layerStore(dir))));
+const withCore = <A>(
+  dir: string,
+  execute: (effect: OutboxEffect) => Effect.Effect<Outcome, unknown>,
+  body: Effect.Effect<A, unknown, Store>,
+  onForget?: (key: string) => void,
+) =>
+  Effect.scoped(
+    Effect.andThen(runReactor(execute, onForget), body).pipe(
+      Effect.provide(layerStore(dir)),
+    ),
+  );
 
-const command = (store: Store['Service'], action: Action, threadId: string | null = null) => store.append({ type: COMMAND_TYPE, threadId, payload: action });
-const create: Action = { type: 'create', spaceId: 's', title: 'Ship it', provider: 'claude', project: null, isLive: true };
-const queued: Action = { type: 'queued-add', threadId: 'new-1', message: { id: 'm1', draft: 'next', mentions: [], isCommand: false, typedSkills: [] } };
+const command = (
+  store: Store['Service'],
+  action: Action,
+  threadId: string | null = null,
+) => store.append({ type: COMMAND_TYPE, threadId, payload: action });
+const create: Action = {
+  type: 'create',
+  spaceId: 's',
+  title: 'Ship it',
+  provider: 'claude',
+  project: null,
+  isLive: true,
+};
+const queued: Action = {
+  type: 'queued-add',
+  threadId: 'new-1',
+  message: {
+    id: 'm1',
+    draft: 'next',
+    mentions: [],
+    isCommand: false,
+    typedSkills: [],
+  },
+};
 const turnEnd = (store: Store['Service']) =>
-  store.append({ type: 'agent.turn-end', threadId: 'new-1', payload: { threadId: 'new-1', type: 'turn-end', status: 'done' } });
+  store.append({
+    type: 'agent.turn-end',
+    threadId: 'new-1',
+    payload: { threadId: 'new-1', type: 'turn-end', status: 'done' },
+  });
 
 /** A live thread with a message queued behind its turn, then the turn's end: the queue runner's rule asks to send it. */
-const queueBehindTurn = (store: Store['Service']) => Effect.all([command(store, create), command(store, queued, 'new-1'), turnEnd(store)], { discard: true });
+const queueBehindTurn = (store: Store['Service']) =>
+  Effect.all(
+    [command(store, create), command(store, queued, 'new-1'), turnEnd(store)],
+    { discard: true },
+  );
 
 it.effect('a command emitted before a Core restart runs after it, once', () =>
   Effect.gen(function* () {
@@ -38,7 +80,10 @@ it.effect('a command emitted before a Core restart runs after it, once', () =>
     // Core takes the command and dies mid-run.
     yield* withCore(
       dir,
-      (effect) => (effect.type === 'queue.send' ? Effect.andThen(Deferred.succeed(taken, effect.type), Effect.never) : Effect.void),
+      (effect) =>
+        effect.type === 'queue.send'
+          ? Effect.andThen(Deferred.succeed(taken, effect.type), Effect.never)
+          : Effect.void,
       Effect.gen(function* () {
         yield* queueBehindTurn(yield* Store);
         assert.equal(yield* Deferred.await(taken), 'queue.send');
@@ -49,74 +94,125 @@ it.effect('a command emitted before a Core restart runs after it, once', () =>
     const executed = yield* Queue.unbounded<string>();
     yield* withCore(
       dir,
-      (effect) => Effect.andThen(Effect.sync(() => runs.push(effect.commandId)), Queue.offer(executed, effect.commandId)).pipe(Effect.asVoid),
+      (effect) =>
+        Effect.andThen(
+          Effect.sync(() => runs.push(effect.commandId)),
+          Queue.offer(executed, effect.commandId),
+        ).pipe(Effect.asVoid),
       Effect.gen(function* () {
         const store = yield* Store;
         yield* Queue.take(executed);
         // Due again on the next fold: the rule emits the same key, which the outbox already holds.
-        yield* command(store, { type: 'rename', threadId: 'new-1', title: 'Renamed' }, 'new-1');
+        yield* command(
+          store,
+          { type: 'rename', threadId: 'new-1', title: 'Renamed' },
+          'new-1',
+        );
         // Folded after the rename, so a second run of its command would be claimed no later than this turn end's idle record.
         const { sequence } = yield* turnEnd(store);
-        yield* Stream.fromQueue(executed).pipe(Stream.takeUntil((key) => key === `idle:${sequence}`), Stream.runDrain);
+        yield* Stream.fromQueue(executed).pipe(
+          Stream.takeUntil((key) => key === `idle:${sequence}`),
+          Stream.runDrain,
+        );
       }),
     );
-    assert.ok(runs.filter((key) => key === 'queue:m1').length === 1, `ran ${runs.join(', ')}`);
+    assert.ok(
+      runs.filter((key) => key === 'queue:m1').length === 1,
+      `ran ${runs.join(', ')}`,
+    );
   }),
 );
 
-it.effect('a command the executor skips is forgotten: the next fold that shows it due enqueues it again', () =>
-  Effect.gen(function* () {
-    const outcomes: Array<'skipped' | undefined> = ['skipped', undefined];
-    const runs: string[] = [];
-    const forgotten = yield* Deferred.make<void>();
-    const done = yield* Deferred.make<void>();
-    yield* withCore(
-      mkdtempSync(join(tmpdir(), 'mochi-reactor-')),
-      (effect) =>
-        effect.type !== 'queue.send'
-          ? Effect.void
-          : Effect.sync(() => {
-              runs.push(effect.commandId);
-              return outcomes.shift();
-            }).pipe(Effect.tap(() => (outcomes.length ? Effect.void : Deferred.succeed(done, undefined)))),
-      Effect.gen(function* () {
-        const store = yield* Store;
-        yield* queueBehindTurn(store);
-        yield* Deferred.await(forgotten);
-        yield* command(store, { type: 'rename', threadId: 'new-1', title: 'Renamed' }, 'new-1');
-        yield* Deferred.await(done);
-      }),
-      () => Deferred.doneUnsafe(forgotten, Effect.void),
-    );
-    assert.deepEqual(runs, ['queue:m1', 'queue:m1']);
-  }),
+it.effect(
+  'a command the executor skips is forgotten: the next fold that shows it due enqueues it again',
+  () =>
+    Effect.gen(function* () {
+      const outcomes: Array<'skipped' | undefined> = ['skipped', undefined];
+      const runs: string[] = [];
+      const forgotten = yield* Deferred.make<void>();
+      const done = yield* Deferred.make<void>();
+      yield* withCore(
+        mkdtempSync(join(tmpdir(), 'mochi-reactor-')),
+        (effect) =>
+          effect.type !== 'queue.send'
+            ? Effect.void
+            : Effect.sync(() => {
+                runs.push(effect.commandId);
+                return outcomes.shift();
+              }).pipe(
+                Effect.tap(() =>
+                  outcomes.length
+                    ? Effect.void
+                    : Deferred.succeed(done, undefined),
+                ),
+              ),
+        Effect.gen(function* () {
+          const store = yield* Store;
+          yield* queueBehindTurn(store);
+          yield* Deferred.await(forgotten);
+          yield* command(
+            store,
+            { type: 'rename', threadId: 'new-1', title: 'Renamed' },
+            'new-1',
+          );
+          yield* Deferred.await(done);
+        }),
+        () => Deferred.doneUnsafe(forgotten, Effect.void),
+      );
+      assert.deepEqual(runs, ['queue:m1', 'queue:m1']);
+    }),
 );
 
-it.effect('a queued message goes out with no window open: Core sends it to the agent itself', () =>
-  Effect.gen(function* () {
-    const calls: AgentCall[] = [];
-    const sent = yield* Deferred.make<void>();
-    const agents = Layer.succeed(AgentCaller, {
-      call: (call) => Effect.andThen(Effect.sync(() => calls.push(call)), call.method === 'send' ? Deferred.succeed(sent, undefined) : Effect.void),
-      resolve: () => Effect.void,
-    });
-    const layer = layerReactor.pipe(
-      Layer.provideMerge(Commands.layer.pipe(Layer.provide(agents))),
-      Layer.provideMerge(layerStore(mkdtempSync(join(tmpdir(), 'mochi-reactor-')))),
-      // No window serves anything.
-      Layer.provideMerge(Layer.mergeAll(Capabilities.layer, UtilityQueue.layer)),
-    );
-    const thread = yield* Effect.gen(function* () {
-      const projection = yield* Projection;
-      const sendFolded = yield* Effect.forkChild(projection.folded.pipe(Stream.filter(({ event }) => event.commandId === 'queue:m1:send'), Stream.runHead), { startImmediately: true });
-      yield* queueBehindTurn(yield* Store);
-      yield* Deferred.await(sent);
-      yield* Fiber.join(sendFolded);
-      return (yield* projection.current).domain.threads.find((t) => t.id === 'new-1')!;
-    }).pipe(Effect.provide(layer));
-    const sends = calls.filter((c): c is Extract<AgentCall, { method: 'send' }> => c.method === 'send');
-    assert.deepEqual(sends.map((c) => [c.threadId, c.text]), [['new-1', 'next']]);
-    assert.deepEqual(thread.queued, [], 'the message left the queue');
-    assert.equal(thread.activity.at(-1)?.text, 'next');
-  }),
+it.effect(
+  'a queued message goes out with no window open: Core sends it to the agent itself',
+  () =>
+    Effect.gen(function* () {
+      const calls: AgentCall[] = [];
+      const sent = yield* Deferred.make<void>();
+      const agents = Layer.succeed(AgentCaller, {
+        call: (call) =>
+          Effect.andThen(
+            Effect.sync(() => calls.push(call)),
+            call.method === 'send'
+              ? Deferred.succeed(sent, undefined)
+              : Effect.void,
+          ),
+        resolve: () => Effect.void,
+      });
+      const layer = layerReactor.pipe(
+        Layer.provideMerge(Commands.layer.pipe(Layer.provide(agents))),
+        Layer.provideMerge(
+          layerStore(mkdtempSync(join(tmpdir(), 'mochi-reactor-'))),
+        ),
+        // No window serves anything.
+        Layer.provideMerge(
+          Layer.mergeAll(Capabilities.layer, UtilityQueue.layer),
+        ),
+      );
+      const thread = yield* Effect.gen(function* () {
+        const projection = yield* Projection;
+        const sendFolded = yield* Effect.forkChild(
+          projection.folded.pipe(
+            Stream.filter(({ event }) => event.commandId === 'queue:m1:send'),
+            Stream.runHead,
+          ),
+          { startImmediately: true },
+        );
+        yield* queueBehindTurn(yield* Store);
+        yield* Deferred.await(sent);
+        yield* Fiber.join(sendFolded);
+        return (yield* projection.current).domain.threads.find(
+          (t) => t.id === 'new-1',
+        )!;
+      }).pipe(Effect.provide(layer));
+      const sends = calls.filter(
+        (c): c is Extract<AgentCall, { method: 'send' }> => c.method === 'send',
+      );
+      assert.deepEqual(
+        sends.map((c) => [c.threadId, c.text]),
+        [['new-1', 'next']],
+      );
+      assert.deepEqual(thread.queued, [], 'the message left the queue');
+      assert.equal(thread.activity.at(-1)?.text, 'next');
+    }),
 );

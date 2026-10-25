@@ -16,8 +16,14 @@ export const PtySpawnOptions = Schema.Struct({
 });
 export type PtySpawnOptions = typeof PtySpawnOptions.Type;
 
-export const PtyData = Schema.Struct({ id: Schema.String, data: Schema.String });
-export const PtyExit = Schema.Struct({ id: Schema.String, exitCode: Schema.Number });
+export const PtyData = Schema.Struct({
+  id: Schema.String,
+  data: Schema.String,
+});
+export const PtyExit = Schema.Struct({
+  id: Schema.String,
+  exitCode: Schema.Number,
+});
 
 /** `PtyHost` (`src/host/types/pty.ts`). Main still checks the cwd is a folder and the session is the sender's. */
 export const ptyRpc = {

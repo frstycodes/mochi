@@ -7,13 +7,19 @@ export function normalizeOrigin(url: string): string | null {
   const remote = splitRemote(url.trim());
   if (!remote) return null;
   const path = remote.path.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '');
-  if (!path || path.split('/').some((part) => !part || part === '.' || part === '..')) return null;
+  if (
+    !path ||
+    path.split('/').some((part) => !part || part === '.' || part === '..')
+  )
+    return null;
   return `${remote.host.toLowerCase()}/${path}`;
 }
 
 /** A URL Mochi will hand to `git clone`: a network remote, nothing git could read as an option or a helper command. */
 export function isCloneUrl(url: string) {
-  return !/[\s\0]/.test(url) && !url.startsWith('-') && normalizeOrigin(url) !== null;
+  return (
+    !/[\s\0]/.test(url) && !url.startsWith('-') && normalizeOrigin(url) !== null
+  );
 }
 
 /** The folder a clone of `origin` lands in: its last path part. */
@@ -28,8 +34,12 @@ function splitRemote(url: string) {
   if (url.includes('://')) {
     try {
       const parsed = new URL(url);
-      if (!SCHEMES.includes(parsed.protocol) || !HOST.test(parsed.hostname)) return null;
-      return { host: parsed.hostname, path: decodeURIComponent(parsed.pathname) };
+      if (!SCHEMES.includes(parsed.protocol) || !HOST.test(parsed.hostname))
+        return null;
+      return {
+        host: parsed.hostname,
+        path: decodeURIComponent(parsed.pathname),
+      };
     } catch {
       return null;
     }

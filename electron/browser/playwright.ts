@@ -21,7 +21,10 @@ const IDLE_MS = 60_000;
 const CLOSE_TIMEOUT_MS = 3000;
 // Playwright's settings outlive it on the shared debugger; left on, new frames would wait for a debugger that's gone.
 const RESETS = [
-  ['Target.setAutoAttach', { autoAttach: false, waitForDebuggerOnStart: false, flatten: true }],
+  [
+    'Target.setAutoAttach',
+    { autoAttach: false, waitForDebuggerOnStart: false, flatten: true },
+  ],
   ['Emulation.setFocusEmulationEnabled', { enabled: false }],
   ['Network.disable', {}],
   ['Runtime.disable', {}],
@@ -53,11 +56,14 @@ export function dropPage(entry: Automated) {
   entry.automation = null;
   clearTimeout(automation.idle);
   automation.relay?.close();
-  automation.connection.then(({ browser }) => withTimeout(browser.close(), CLOSE_TIMEOUT_MS)).catch(() => {});
+  automation.connection
+    .then(({ browser }) => withTimeout(browser.close(), CLOSE_TIMEOUT_MS))
+    .catch(() => {});
   // A view whose page closed itself has no webContents left.
   const wc = entry.view.webContents as WebContents | undefined;
   if (!wc || wc.isDestroyed() || !wc.debugger.isAttached()) return;
-  for (const [method, params] of RESETS) wc.debugger.sendCommand(method, params).catch(() => {});
+  for (const [method, params] of RESETS)
+    wc.debugger.sendCommand(method, params).catch(() => {});
 }
 
 function connect(entry: Automated): Automation {
@@ -74,7 +80,8 @@ async function open(entry: Automated, automation: Automation) {
   const dbg = await debuggerFor(wc);
   forwardEvents(entry, wc);
   const relay = await serveRelay({
-    send: (method, params, sessionId) => dbg.sendCommand(method, params, sessionId),
+    send: (method, params, sessionId) =>
+      dbg.sendCommand(method, params, sessionId),
     targetId: () => targetIdOf(wc),
     url: () => wc.getURL(),
     title: () => wc.getTitle(),
@@ -86,8 +93,14 @@ async function open(entry: Automated, automation: Automation) {
   }
   automation.relay = relay;
   // noDefaults keeps Playwright off Mochi's media emulation, so focus emulation (hidden windows still take input) is set here.
-  await dbg.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
-  const browser = await chromium.connectOverCDP(relay.endpoint, { timeout: CONNECT_TIMEOUT_MS, isLocal: true, noDefaults: true });
+  await dbg.sendCommand('Emulation.setFocusEmulationEnabled', {
+    enabled: true,
+  });
+  const browser = await chromium.connectOverCDP(relay.endpoint, {
+    timeout: CONNECT_TIMEOUT_MS,
+    isLocal: true,
+    noDefaults: true,
+  });
   const page = browser.contexts()[0]?.pages()[0];
   if (!page) throw new Error('Playwright found no page in this tab');
   page.on('dialog', LEAVE_OPEN);
@@ -97,14 +110,18 @@ async function open(entry: Automated, automation: Automation) {
 function forwardEvents(entry: Automated, wc: WebContents) {
   if (forwarding.has(wc)) return;
   forwarding.add(wc);
-  wc.debugger.on('message', (_event, method, params, sessionId) => entry.automation?.relay?.event(method, params, sessionId));
+  wc.debugger.on('message', (_event, method, params, sessionId) =>
+    entry.automation?.relay?.event(method, params, sessionId),
+  );
 }
 
 // Stable across renderer swaps and a crash plus reload.
 function targetIdOf(wc: WebContents) {
   const cached = targetIds.get(wc);
   if (cached) return cached;
-  const id = wc.debugger.sendCommand('Target.getTargetInfo').then((r: { targetInfo: { targetId: string } }) => r.targetInfo.targetId);
+  const id = wc.debugger
+    .sendCommand('Target.getTargetInfo')
+    .then((r: { targetInfo: { targetId: string } }) => r.targetInfo.targetId);
   id.catch(() => targetIds.delete(wc));
   targetIds.set(wc, id);
   return id;

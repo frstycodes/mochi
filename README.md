@@ -36,14 +36,14 @@ pnpm dev
 
 ## Scripts
 
-| Command | Does |
-|---|---|
-| `pnpm dev` | Web build on Vite |
-| `pnpm electron:dev` | Desktop app with hot reload |
-| `pnpm electron:build` | Unsigned macOS `.app` in `release/` |
-| `pnpm typecheck` | Renderer, Electron main, Core and relay, with tsc-rs and its Effect diagnostics |
-| `pnpm test` | Vitest over every `*.test.ts`; `pnpm test --changed <ref>` runs only the tests a diff reaches |
-| `pnpm artifact` | Single-file HTML build in `artifact/` |
+| Command               | Does                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| `pnpm dev`            | Web build on Vite                                                                             |
+| `pnpm electron:dev`   | Desktop app with hot reload                                                                   |
+| `pnpm electron:build` | Unsigned macOS `.app` in `release/`                                                           |
+| `pnpm typecheck`      | Renderer, Electron main, Core and relay, with tsc-rs and its Effect diagnostics               |
+| `pnpm test`           | Vitest over every `*.test.ts`; `pnpm test --changed <ref>` runs only the tests a diff reaches |
+| `pnpm artifact`       | Single-file HTML build in `artifact/`                                                         |
 
 ## Layout
 

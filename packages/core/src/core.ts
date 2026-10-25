@@ -27,7 +27,19 @@ const program = Effect.logInfo('Core started').pipe(
 
 // Spans always reach the developer page; with MOCHI_OTLP_URL set (an OpenTelemetry collector's base URL) they are exported too.
 const exporter = process.env.MOCHI_OTLP_URL
-  ? Otlp.layerJson({ baseUrl: process.env.MOCHI_OTLP_URL, resource: { serviceName: 'mochi-core' } }).pipe(Layer.provide(NodeHttpClient.layerUndici))
+  ? Otlp.layerJson({
+      baseUrl: process.env.MOCHI_OTLP_URL,
+      resource: { serviceName: 'mochi-core' },
+    }).pipe(Layer.provide(NodeHttpClient.layerUndici))
   : Layer.empty;
 
-NodeRuntime.runMain(program.pipe(Effect.provide(Layer.mergeAll(layerSpans.pipe(Layer.provide(exporter)), layerLog(env('MOCHI_LOG_FILE'))))));
+NodeRuntime.runMain(
+  program.pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        layerSpans.pipe(Layer.provide(exporter)),
+        layerLog(env('MOCHI_LOG_FILE')),
+      ),
+    ),
+  ),
+);

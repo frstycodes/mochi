@@ -1,16 +1,16 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 71df573f, oxlint-plugin-t3code/rules/no-polling-loop-in-tests.test.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ../LICENSE-T3. Local edit: Mochi's plugin name and harness.
-import { assert, describe } from "@effect/vitest";
+import { assert, describe } from '@effect/vitest';
 
-import { createOxlintRuleHarness } from "../ruleHarness.ts";
+import { createOxlintRuleHarness } from '../ruleHarness.ts';
 
-const rule = createOxlintRuleHarness("mochi/no-polling-loop-in-tests", {
-  filename: "fixture.test.ts",
+const rule = createOxlintRuleHarness('mochi/no-polling-loop-in-tests', {
+  filename: 'fixture.test.ts',
 });
 
-describe("mochi/no-polling-loop-in-tests", () => {
+describe('mochi/no-polling-loop-in-tests', () => {
   rule.valid(
-    "allows a fixed-count flush followed by unrelated error handling",
+    'allows a fixed-count flush followed by unrelated error handling',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -24,7 +24,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.valid(
-    "allows a fixed-N flush with a literal bound",
+    'allows a fixed-N flush with a literal bound',
     `
       import * as Effect from "effect/Effect";
 
@@ -35,7 +35,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.valid(
-    "allows a fixed-N while flush with a counter bound",
+    'allows a fixed-N while flush with a counter bound',
     `
       import * as Effect from "effect/Effect";
 
@@ -50,7 +50,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.valid(
-    "allows a fixed-N do-while flush against a named bound",
+    'allows a fixed-N do-while flush against a named bound',
     `
       import * as Effect from "effect/Effect";
 
@@ -66,7 +66,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.valid(
-    "allows a loop that takes from a queue",
+    'allows a loop that takes from a queue',
     `
       import * as Effect from "effect/Effect";
       import * as Queue from "effect/Queue";
@@ -82,7 +82,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.valid(
-    "ignores waits inside nested callbacks",
+    'ignores waits inside nested callbacks',
     `
       import * as Effect from "effect/Effect";
 
@@ -99,7 +99,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports a budgeted yieldNow poll that dies after the loop",
+    'reports a budgeted yieldNow poll that dies after the loop',
     `
       import * as Effect from "effect/Effect";
 
@@ -118,7 +118,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports a while loop spinning on a predicate",
+    'reports a while loop spinning on a predicate',
     `
       import * as Effect from "effect/Effect";
 
@@ -130,7 +130,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports a while loop bounded by a length predicate",
+    'reports a while loop bounded by a length predicate',
     `
       import * as Effect from "effect/Effect";
 
@@ -142,7 +142,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports a comparison against an identifier the loop never advances",
+    'reports a comparison against an identifier the loop never advances',
     `
       import * as Effect from "effect/Effect";
 
@@ -158,7 +158,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports a for loop bounded by a length predicate",
+    'reports a for loop bounded by a length predicate',
     `
       import * as Effect from "effect/Effect";
 
@@ -170,7 +170,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports a sleep poll with a counter bound and an early return",
+    'reports a sleep poll with a counter bound and an early return',
     `
       import * as Effect from "effect/Effect";
 
@@ -185,7 +185,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports a microtask poll keyed on the loop condition",
+    'reports a microtask poll keyed on the loop condition',
     `
       import * as Effect from "effect/Effect";
 
@@ -198,7 +198,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports an awaited setTimeout poll",
+    'reports an awaited setTimeout poll',
     `
       export const waitFor = async (done: () => boolean) => {
         do {
@@ -209,7 +209,7 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 
   rule.invalid(
-    "reports an awaited Promise.resolve poll that breaks",
+    'reports an awaited Promise.resolve poll that breaks',
     `
       export const waitFor = async (done: () => boolean) => {
         while (true) {
@@ -221,10 +221,12 @@ describe("mochi/no-polling-loop-in-tests", () => {
   );
 });
 
-const productionRule = createOxlintRuleHarness("mochi/no-polling-loop-in-tests");
+const productionRule = createOxlintRuleHarness(
+  'mochi/no-polling-loop-in-tests',
+);
 
 productionRule.valid(
-  "ignores non-test files",
+  'ignores non-test files',
   `
     export const waitFor = async (done: () => boolean) => {
       while (!done()) await Promise.resolve();

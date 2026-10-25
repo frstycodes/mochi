@@ -26,8 +26,17 @@ class FakeDebugger extends EventEmitter {
     return this.lastReply;
   }
   private reply(method: string) {
-    if (method === 'Runtime.evaluate') return { result: { value: this.scroll } };
-    if (method === 'Page.getLayoutMetrics') return { cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 } };
+    if (method === 'Runtime.evaluate')
+      return { result: { value: this.scroll } };
+    if (method === 'Page.getLayoutMetrics')
+      return {
+        cssVisualViewport: {
+          pageX: 0,
+          pageY: 0,
+          clientWidth: 800,
+          clientHeight: 600,
+        },
+      };
     if (method === 'Page.captureScreenshot') return { data: this.frame };
     return {};
   }
@@ -41,7 +50,10 @@ class FakePage extends EventEmitter {
   loadURL = async () => {};
   setWindowOpenHandler() {}
   close() {}
-  async executeJavaScriptInIsolatedWorld(_world: number, [{ code }]: { code: string }[]) {
+  async executeJavaScriptInIsolatedWorld(
+    _world: number,
+    [{ code }]: { code: string }[],
+  ) {
     this.restored.push(code);
   }
 }
@@ -55,7 +67,13 @@ const fake = (() => {
     getBounds: () => ({ x: 0, y: 0, width: 800, height: 600 }),
     contentView: { addChildView() {}, removeChildView() {} },
   });
-  const owner = { id: 1, frames: 0, isDestroyed: () => false, getZoomFactor: () => 1, send: () => owner.frames++ };
+  const owner = {
+    id: 1,
+    frames: 0,
+    isDestroyed: () => false,
+    getZoomFactor: () => 1,
+    send: () => owner.frames++,
+  };
   return { win, owner, page: null as FakePage | null };
 })();
 
@@ -64,7 +82,13 @@ async function openView() {
     app: { getPath: () => '/tmp' },
     BrowserWindow: { fromWebContents: () => fake.win },
     screen: { getDisplayMatching: () => ({ scaleFactor: 1 }) },
-    session: { fromPartition: () => ({ on() {}, setPermissionRequestHandler() {}, setPermissionCheckHandler() {} }) },
+    session: {
+      fromPartition: () => ({
+        on() {},
+        setPermissionRequestHandler() {},
+        setPermissionCheckHandler() {},
+      }),
+    },
     WebContentsView: class {
       webContents = fake.page;
       setVisible() {}
@@ -75,36 +99,67 @@ async function openView() {
   onTestFinished(() => vi.doUnmock('electron'));
   const views = await import('./views.ts');
   const page = (fake.page = new FakePage());
-  const { id } = views.createView(fake.owner as never, 'http://localhost:5173/', 'space');
+  const { id } = views.createView(
+    fake.owner as never,
+    'http://localhost:5173/',
+    'space',
+  );
   onTestFinished(() => views.destroyView(fake.owner as never, id));
   return { views, id, page };
 }
 
 test('auto-reload reads the outgoing page as a navigation starts and restores it on load', async () => {
   const { views, id, page } = await openView();
-  views.setAutoReload(fake.owner as never, id, mkdtempSync(join(tmpdir(), 'views-')));
-  page.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true });
-  page.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false });
-  assert.equal(page.debugger.calls.filter((m) => m === 'Runtime.evaluate').length, 0, 'same-document and subframe navigations read nothing');
+  views.setAutoReload(
+    fake.owner as never,
+    id,
+    mkdtempSync(join(tmpdir(), 'views-')),
+  );
+  page.emit('did-start-navigation', {
+    isMainFrame: true,
+    isSameDocument: true,
+  });
+  page.emit('did-start-navigation', {
+    isMainFrame: false,
+    isSameDocument: false,
+  });
+  assert.equal(
+    page.debugger.calls.filter((m) => m === 'Runtime.evaluate').length,
+    0,
+    'same-document and subframe navigations read nothing',
+  );
 
-  page.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false });
+  page.emit('did-start-navigation', {
+    isMainFrame: true,
+    isSameDocument: false,
+  });
   await page.debugger.lastReply;
   page.emit('did-finish-load');
   assert.deepEqual(page.restored, [restoreScrollScript({ x: 0, y: 1500 })]);
 
   views.setAutoReload(fake.owner as never, id, null);
-  page.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false });
-  assert.equal(page.debugger.calls.filter((m) => m === 'Runtime.evaluate').length, 1, 'stopped auto-reload reads nothing');
+  page.emit('did-start-navigation', {
+    isMainFrame: true,
+    isSameDocument: false,
+  });
+  assert.equal(
+    page.debugger.calls.filter((m) => m === 'Runtime.evaluate').length,
+    1,
+    'stopped auto-reload reads nothing',
+  );
 });
 
 test('the mirror backs off while frames repeat, sends only changes, and stops while the window is hidden', async () => {
   const { views, id, page } = await openView();
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  const captures = () => page.debugger.calls.filter((m) => m === 'Page.captureScreenshot').length;
+  const captures = () =>
+    page.debugger.calls.filter((m) => m === 'Page.captureScreenshot').length;
   // A capture ends by scheduling the next one, so the next setTimeout marks the capture as done.
   const fakeSetTimeout = globalThis.setTimeout;
   let onScheduled = () => {};
-  vi.spyOn(globalThis, 'setTimeout').mockImplementation(((...args: Parameters<typeof setTimeout>) => {
+  vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+    ...args: Parameters<typeof setTimeout>
+  ) => {
     const timer = fakeSetTimeout(...args);
     onScheduled();
     return timer;
@@ -115,7 +170,9 @@ test('the mirror backs off while frames repeat, sends only changes, and stops wh
     await scheduled;
   };
   const tick = (ms: number) => captured(() => vi.advanceTimersByTime(ms));
-  await captured(() => views.setViewMirror(fake.owner as never, id, { width: 800, height: 600 }));
+  await captured(() =>
+    views.setViewMirror(fake.owner as never, id, { width: 800, height: 600 }),
+  );
   assert.equal(fake.owner.frames, 1);
 
   for (const ms of [100, 200, 400, 800, 800]) await tick(ms);

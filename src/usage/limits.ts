@@ -10,44 +10,110 @@ const CLAUDE_WINDOWS = {
 } as const satisfies Record<string, string>;
 
 type ClaudeWindowId = keyof typeof CLAUDE_WINDOWS;
-const isClaudeWindow = (id: string | undefined): id is ClaudeWindowId => !!id && id in CLAUDE_WINDOWS;
+const isClaudeWindow = (id: string | undefined): id is ClaudeWindowId =>
+  !!id && id in CLAUDE_WINDOWS;
 
 /** Claude's `rate_limit_event.rate_limit_info`: one window per event, `utilization` 0–1 (the CLI reads it from the `-utilization` header and shows ×100), `resetsAt` unix seconds. */
-export function claudeEventWindow(info: { status: string; rateLimitType?: string; utilization?: number; resetsAt?: number }): LimitWindow | null {
+export function claudeEventWindow(info: {
+  status: string;
+  rateLimitType?: string;
+  utilization?: number;
+  resetsAt?: number;
+}): LimitWindow | null {
   if (!isClaudeWindow(info.rateLimitType)) return null;
-  const usedPct = info.utilization !== undefined ? info.utilization * 100 : info.status === 'rejected' ? 100 : null;
+  const usedPct =
+    info.utilization !== undefined
+      ? info.utilization * 100
+      : info.status === 'rejected'
+        ? 100
+        : null;
   if (usedPct === null) return null;
-  return { id: info.rateLimitType, label: CLAUDE_WINDOWS[info.rateLimitType], usedPct: clampPct(usedPct), ...(info.resetsAt !== undefined && { resetsAt: unixToIso(info.resetsAt) }) };
+  return {
+    id: info.rateLimitType,
+    label: CLAUDE_WINDOWS[info.rateLimitType],
+    usedPct: clampPct(usedPct),
+    ...(info.resetsAt !== undefined && { resetsAt: unixToIso(info.resetsAt) }),
+  };
 }
 
-type ClaudeUsageWindow = { utilization: number | null; resets_at: string | null } | null | undefined;
+type ClaudeUsageWindow =
+  | { utilization: number | null; resets_at: string | null }
+  | null
+  | undefined;
 
 /**
  * The SDK's `get_usage` read (`rate_limits`, utilization 0–100, ISO resets), the full set at once. Model-specific weekly
  * windows arrive as `model_scoped` (a real Max account listed "Fable" there, `weekly_scoped` in its `limits`, with
  * `seven_day_opus` / `seven_day_sonnet` null).
  */
-export function claudeUsageWindows(limits: Record<string, unknown> | null): LimitWindow[] {
+export function claudeUsageWindows(
+  limits: Record<string, unknown> | null,
+): LimitWindow[] {
   if (!limits) return [];
-  const named = Object.keys(CLAUDE_WINDOWS).flatMap((id) => usageWindow(id, CLAUDE_WINDOWS[id as ClaudeWindowId], limits[id] as ClaudeUsageWindow));
-  const scoped = Array.isArray(limits.model_scoped) ? (limits.model_scoped as ({ display_name: string } & NonNullable<ClaudeUsageWindow>)[]) : [];
-  const models = scoped.flatMap((w) => usageWindow(`model:${w.display_name}`, `Weekly · ${w.display_name}`, w));
-  return [...named, ...models.filter((m) => !named.some((n) => n.label === m.label))];
+  const named = Object.keys(CLAUDE_WINDOWS).flatMap((id) =>
+    usageWindow(
+      id,
+      CLAUDE_WINDOWS[id as ClaudeWindowId],
+      limits[id] as ClaudeUsageWindow,
+    ),
+  );
+  const scoped = Array.isArray(limits.model_scoped)
+    ? (limits.model_scoped as ({
+        display_name: string;
+      } & NonNullable<ClaudeUsageWindow>)[])
+    : [];
+  const models = scoped.flatMap((w) =>
+    usageWindow(`model:${w.display_name}`, `Weekly · ${w.display_name}`, w),
+  );
+  return [
+    ...named,
+    ...models.filter((m) => !named.some((n) => n.label === m.label)),
+  ];
 }
 
-function usageWindow(id: string, label: string, w: ClaudeUsageWindow): LimitWindow[] {
+function usageWindow(
+  id: string,
+  label: string,
+  w: ClaudeUsageWindow,
+): LimitWindow[] {
   if (!w || w.utilization === null) return [];
-  return [{ id, label, usedPct: clampPct(w.utilization), ...(w.resets_at && { resetsAt: w.resets_at }) }];
+  return [
+    {
+      id,
+      label,
+      usedPct: clampPct(w.utilization),
+      ...(w.resets_at && { resetsAt: w.resets_at }),
+    },
+  ];
 }
 
-type CodexWindow = { usedPercent: number; windowDurationMins: number | null; resetsAt: number | null } | null | undefined;
+type CodexWindow =
+  | {
+      usedPercent: number;
+      windowDurationMins: number | null;
+      resetsAt: number | null;
+    }
+  | null
+  | undefined;
 
 /** Codex's `RateLimitSnapshot` (`account/rateLimits/read` / `updated`): primary and secondary, labelled by their real length, so a plan with only a weekly window shows only that. */
-export function codexWindows(snapshot: { primary?: CodexWindow; secondary?: CodexWindow } | null | undefined): LimitWindow[] {
+export function codexWindows(
+  snapshot:
+    | { primary?: CodexWindow; secondary?: CodexWindow }
+    | null
+    | undefined,
+): LimitWindow[] {
   return (['primary', 'secondary'] as const).flatMap((id) => {
     const w = snapshot?.[id];
     if (!w || typeof w.usedPercent !== 'number') return [];
-    return [{ id, label: durationLabel(w.windowDurationMins), usedPct: clampPct(w.usedPercent), ...(w.resetsAt !== null && { resetsAt: unixToIso(w.resetsAt) }) }];
+    return [
+      {
+        id,
+        label: durationLabel(w.windowDurationMins),
+        usedPct: clampPct(w.usedPercent),
+        ...(w.resetsAt !== null && { resetsAt: unixToIso(w.resetsAt) }),
+      },
+    ];
   });
 }
 
@@ -66,13 +132,24 @@ export function mergeWindows(known: LimitWindow[], incoming: LimitWindow[]) {
   return [...byId.values()].sort((a, b) => order(a) - order(b));
 }
 
-const ORDER = ['five_hour', 'primary', 'secondary', 'seven_day', 'seven_day_opus', 'seven_day_sonnet'];
+const ORDER = [
+  'five_hour',
+  'primary',
+  'secondary',
+  'seven_day',
+  'seven_day_opus',
+  'seven_day_sonnet',
+];
 // Model windows (`model:<name>`) sort after the named ones.
-const order = (w: LimitWindow) => (ORDER.includes(w.id) ? ORDER.indexOf(w.id) : ORDER.length);
+const order = (w: LimitWindow) =>
+  ORDER.includes(w.id) ? ORDER.indexOf(w.id) : ORDER.length;
 
 /** The most-used window, the one that binds first. */
 export function hottest(windows: LimitWindow[]) {
-  return windows.reduce<LimitWindow | undefined>((top, w) => (!top || w.usedPct > top.usedPct ? w : top), undefined);
+  return windows.reduce<LimitWindow | undefined>(
+    (top, w) => (!top || w.usedPct > top.usedPct ? w : top),
+    undefined,
+  );
 }
 
 export type Tone = 'normal' | 'warning' | 'destructive';
@@ -84,7 +161,11 @@ export function toneFor(share: number): Tone {
   return 'normal';
 }
 
-export const TONE_COLORS = { normal: 'var(--muted-foreground)', warning: 'var(--warning)', destructive: 'var(--destructive)' } satisfies Record<Tone, string>;
+export const TONE_COLORS = {
+  normal: 'var(--muted-foreground)',
+  warning: 'var(--warning)',
+  destructive: 'var(--destructive)',
+} satisfies Record<Tone, string>;
 
 /** "2h 14m", "3d 4h", "45m"; "now" once past. */
 export function untilLabel(ms: number) {
@@ -102,8 +183,14 @@ export function untilLabel(ms: number) {
 export function resetLabel(at: string, nowMs = Date.now()) {
   const date = new Date(at);
   const isSoon = date.getTime() - nowMs < 86_400_000;
-  return date.toLocaleString([], isSoon ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleString(
+    [],
+    isSoon
+      ? { hour: 'numeric', minute: '2-digit' }
+      : { weekday: 'short', hour: 'numeric', minute: '2-digit' },
+  );
 }
 
 const clampPct = (pct: number) => Math.min(100, Math.max(0, pct));
-const unixToIso = (value: number) => new Date(value < 1e12 ? value * 1000 : value).toISOString();
+const unixToIso = (value: number) =>
+  new Date(value < 1e12 ? value * 1000 : value).toISOString();

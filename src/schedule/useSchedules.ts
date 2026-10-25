@@ -12,7 +12,11 @@ function load() {
   if (isLoaded) return;
   isLoaded = true;
   host.schedule.onChange((next) => set(next));
-  host.schedule.list().then(set, (error: unknown) => console.error('Loading schedules failed', error));
+  host.schedule
+    .list()
+    .then(set, (error: unknown) =>
+      console.error('Loading schedules failed', error),
+    );
 }
 
 function set(next: Trigger[]) {

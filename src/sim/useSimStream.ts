@@ -25,7 +25,9 @@ export function useSimStream(udid: string | null) {
     let current: string | null = null;
     const off = host.sim.onFrame((frame) => {
       if (frame.udid !== udid || !isLive) return;
-      const next = URL.createObjectURL(new Blob([frame.data as Uint8Array<ArrayBuffer>], { type: frame.mime }));
+      const next = URL.createObjectURL(
+        new Blob([frame.data as Uint8Array<ArrayBuffer>], { type: frame.mime }),
+      );
       if (current) URL.revokeObjectURL(current);
       current = next;
       setState((s) => ({ ...s, frameUrl: next }));

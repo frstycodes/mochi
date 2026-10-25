@@ -14,7 +14,10 @@ export function useSeen(target: Target, when: 'open-and-leave' | 'leave') {
   const { threadId } = target;
   const markRead = useEffectEvent((opened: typeof threadId) => {
     const state = getState();
-    const marked = { type: 'seen' as const, ...(opened ? { threadId: opened } : target) };
+    const marked = {
+      type: 'seen' as const,
+      ...(opened ? { threadId: opened } : target),
+    };
     if (markSeen(state, marked) !== state) dispatch(marked);
   });
   useEffect(() => {
@@ -26,7 +29,10 @@ export function useSeen(target: Target, when: 'open-and-leave' | 'leave') {
 }
 
 /** `useSeen` for a spot that sits under `RemoteScope` without a component of its own. */
-export function Seen({ when, ...target }: Target & { when: 'open-and-leave' | 'leave' }) {
+export function Seen({
+  when,
+  ...target
+}: Target & { when: 'open-and-leave' | 'leave' }) {
   useSeen(target, when);
   return null;
 }

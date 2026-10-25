@@ -5,9 +5,18 @@ import type * as Si from '../../packages/schema/src/ipc/sim.ts';
 import type * as Th from '../../packages/schema/src/ipc/themes.ts';
 import type * as U from '../../packages/schema/src/ipc/usage.ts';
 import type * as W from '../../packages/schema/src/ipc/windows.ts';
-import type { ProjectsHost, CloneSource, Project } from '../host/types/projects.ts';
+import type {
+  ProjectsHost,
+  CloneSource,
+  Project,
+} from '../host/types/projects.ts';
 import type { RemoteHost, RemoteStatus } from '../host/types/remote.ts';
-import type { ScheduleEvent, ScheduleHost, Trigger, TriggerInput } from '../host/types/schedule.ts';
+import type {
+  ScheduleEvent,
+  ScheduleHost,
+  Trigger,
+  TriggerInput,
+} from '../host/types/schedule.ts';
 import type { SimHost } from '../host/types/sim.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import type { UsageHost, UsageReport } from '../host/types/usage.ts';

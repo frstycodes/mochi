@@ -29,37 +29,61 @@ export const CLOSE = {
 } as const;
 
 /** Ids are the clients' own (a machine's install id, a device's key id): short, URL-safe, never secret. */
-export const RelayId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/));
+export const RelayId = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/),
+);
 export const isId = Schema.is(RelayId);
 
-const Channel = Int.check(Schema.isBetween({ minimum: 0, maximum: 0xffffffff }));
+const Channel = Int.check(
+  Schema.isBetween({ minimum: 0, maximum: 0xffffffff }),
+);
 const Name = Str(64)
   .check(Schema.makeFilter((s: string) => !!s.trim() || 'must not be blank'))
   .pipe(Schema.decodeTo(Schema.String, SchemaTransformation.trim()));
-const PublicKey = Schema.String.check(Schema.makeFilter((s: string) => base64Length(s) === ED25519_PUBLIC_KEY_BYTES || 'must be an Ed25519 public key, base64'));
+const PublicKey = Schema.String.check(
+  Schema.makeFilter(
+    (s: string) =>
+      base64Length(s) === ED25519_PUBLIC_KEY_BYTES ||
+      'must be an Ed25519 public key, base64',
+  ),
+);
 
 export const MachineFrame = Schema.Union([
-  Schema.Struct({ type: Schema.Literal('register'), name: Name, publicKey: PublicKey }),
+  Schema.Struct({
+    type: Schema.Literal('register'),
+    name: Name,
+    publicKey: PublicKey,
+  }),
   Schema.Struct({ type: Schema.Literal('close'), channel: Channel }),
 ]);
 export type MachineFrame = typeof MachineFrame.Type;
 
 /** `members`: the account's signed membership records changed; fetch them again (`GET /v1/members`). */
 export const RelayToMachine = Schema.Union([
-  Schema.Struct({ type: Schema.Literal('open'), channel: Channel, deviceId: RelayId }),
+  Schema.Struct({
+    type: Schema.Literal('open'),
+    channel: Channel,
+    deviceId: RelayId,
+  }),
   Schema.Struct({ type: Schema.Literal('close'), channel: Channel }),
   Schema.Struct({ type: Schema.Literal('members') }),
 ]);
 export type RelayToMachine = typeof RelayToMachine.Type;
 
-const machineFrame = Schema.decodeUnknownOption(Schema.fromJsonString(MachineFrame));
-const relayToMachine = Schema.decodeUnknownOption(Schema.fromJsonString(RelayToMachine));
+const machineFrame = Schema.decodeUnknownOption(
+  Schema.fromJsonString(MachineFrame),
+);
+const relayToMachine = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RelayToMachine),
+);
 
 /** A machine's text frame on the relay, or `undefined` when it isn't one. */
-export const decodeMachineFrame = (raw: string) => Option.getOrUndefined(machineFrame(raw));
+export const decodeMachineFrame = (raw: string) =>
+  Option.getOrUndefined(machineFrame(raw));
 
 /** The relay's text frame on the machine, or `undefined` when it isn't one. */
-export const decodeRelayToMachine = (raw: string) => Option.getOrUndefined(relayToMachine(raw));
+export const decodeRelayToMachine = (raw: string) =>
+  Option.getOrUndefined(relayToMachine(raw));
 
 export function withChannel(channel: number, bytes: Uint8Array): Uint8Array {
   const framed = new Uint8Array(CHANNEL_BYTES + bytes.length);
@@ -68,9 +92,14 @@ export function withChannel(channel: number, bytes: Uint8Array): Uint8Array {
   return framed;
 }
 
-export function splitChannel(framed: Uint8Array): { channel: number; bytes: Uint8Array } | null {
+export function splitChannel(
+  framed: Uint8Array,
+): { channel: number; bytes: Uint8Array } | null {
   if (framed.length < CHANNEL_BYTES) return null;
-  return { channel: new DataView(framed.buffer, framed.byteOffset).getUint32(0), bytes: framed.subarray(CHANNEL_BYTES) };
+  return {
+    channel: new DataView(framed.buffer, framed.byteOffset).getUint32(0),
+    bytes: framed.subarray(CHANNEL_BYTES),
+  };
 }
 
 function base64Length(text: string): number {

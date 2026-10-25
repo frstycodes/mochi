@@ -11,8 +11,12 @@ export const GITHUB_COM = 'github.com';
 
 export function parseGithubAccount(value: string): GithubAccountRef | null {
   if (!value) return null;
-  const [host, login] = value.includes('/') ? value.split('/', 2) : [GITHUB_COM, value];
-  return /^[\w.-]+$/.test(host) && /^[\w-]+$/.test(login) ? { host, login } : null;
+  const [host, login] = value.includes('/')
+    ? value.split('/', 2)
+    : [GITHUB_COM, value];
+  return /^[\w.-]+$/.test(host) && /^[\w-]+$/.test(login)
+    ? { host, login }
+    : null;
 }
 
 export function formatGithubAccount({ host, login }: GithubAccountRef) {
@@ -20,8 +24,18 @@ export function formatGithubAccount({ host, login }: GithubAccountRef) {
 }
 
 /** A git remote URL (scp-style SSH, ssh://, https://) → its host and `owner/repo` path; null for anything else (local paths, file://). */
-export function parseRemote(url: string): { host: string; path: string } | null {
-  const match = url.trim().match(/^(?:ssh:\/\/)?[\w.-]+@([\w.-]+)(?::\d+)?[:/](.+?)(?:\.git)?\/?$/) ?? url.trim().match(/^https?:\/\/(?:[^@/]+@)?([\w.-]+)(?::\d+)?\/(.+?)(?:\.git)?\/?$/);
+export function parseRemote(
+  url: string,
+): { host: string; path: string } | null {
+  const match =
+    url
+      .trim()
+      .match(
+        /^(?:ssh:\/\/)?[\w.-]+@([\w.-]+)(?::\d+)?[:/](.+?)(?:\.git)?\/?$/,
+      ) ??
+    url
+      .trim()
+      .match(/^https?:\/\/(?:[^@/]+@)?([\w.-]+)(?::\d+)?\/(.+?)(?:\.git)?\/?$/);
   if (!match || !/^[\w.-]+\/[\w.-]+$/.test(match[2])) return null;
   return { host: match[1].toLowerCase(), path: match[2] };
 }

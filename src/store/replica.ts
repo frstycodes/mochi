@@ -1,6 +1,15 @@
 import { Schema } from 'effect';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { actionOf, COMMAND_TYPE, DOMAIN_KEYS, domainOf, project, type Domain, type LoggedEvent, type ReplicaItem } from '@mochi/domain';
+import {
+  actionOf,
+  COMMAND_TYPE,
+  DOMAIN_KEYS,
+  domainOf,
+  project,
+  type Domain,
+  type LoggedEvent,
+  type ReplicaItem,
+} from '@mochi/domain';
 import type { ProjectionContext } from './context.ts';
 import { reducer } from './root.ts';
 import { savedFrom, toSaved, type Saved } from './saved.ts';
@@ -9,9 +18,17 @@ import type { Action, State } from './types.ts';
 /** Where a window's store reads the projection from and sends its commands: Core (`coreLog`), or the page itself (web). */
 export interface ReplicaLog {
   /** Items after `afterSequence` (a snapshot when the log can't replay them), then live ones, until `onEnd`. Returns a stop. */
-  follow(afterSequence: number, onItem: (item: ReplicaItem) => void, onEnd: (error?: unknown) => void): () => void;
+  follow(
+    afterSequence: number,
+    onItem: (item: ReplicaItem) => void,
+    onEnd: (error?: unknown) => void,
+  ): () => void;
   /** Resolves once logged; a resend with the same id is logged once. */
-  append(command: { commandId: string; threadId: string | null; action: Action }): Promise<unknown>;
+  append(command: {
+    commandId: string;
+    threadId: string | null;
+    action: Action;
+  }): Promise<unknown>;
 }
 
 export interface Replica {
@@ -40,7 +57,11 @@ const RESUME_MS = 1000;
  * Core's order when it comes back: until then, events from Core fold beneath the window's pending commands, which replay on
  * top (`rebase`). Streamed items reach subscribers once a frame; your own actions at once. Resolves on the first item.
  */
-export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) => State, schedule = nextFrame): Promise<Replica> {
+export function createReplica(
+  log: ReplicaLog,
+  initial: (saved: Saved | null) => State,
+  schedule = nextFrame,
+): Promise<Replica> {
   const origin = crypto.randomUUID();
   let count = 0;
   let state: State | undefined;
@@ -63,7 +84,8 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
   };
   const defer = () => (cancelFrame ??= schedule(flush));
 
-  const rebase = (base: Domain) => pending.reduce((d, p) => project(d, p.action), base);
+  const rebase = (base: Domain) =>
+    pending.reduce((d, p) => project(d, p.action), base);
 
   const onEvent = (event: LoggedEvent) => {
     const action = actionOf(event);
@@ -93,7 +115,10 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
       pending = [];
       confirmed = null;
       const saved = item.saved === null ? null : savedFrom(item.saved);
-      if (item.saved !== null && !saved) console.error('Core sent a snapshot this version can’t read; keeping what this window holds');
+      if (item.saved !== null && !saved)
+        console.error(
+          'Core sent a snapshot this version can’t read; keeping what this window holds',
+        );
       state = state ? merged(state, saved) : initial(saved);
       const context = decodeContext(item.context);
       isContextSet = !!context;
@@ -119,19 +144,30 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
       dispatch: (action, next = reducer(state!, action)) => {
         const before = state!;
         state = next;
-        if (DOMAIN_KEYS.some((k) => before[k] !== next[k]) && action.type !== 'reset') {
+        if (
+          DOMAIN_KEYS.some((k) => before[k] !== next[k]) &&
+          action.type !== 'reset'
+        ) {
           if (!pending.length) confirmed = domainOf(before);
           const id = `${origin}:${++count}`;
           pending.push({ id, action });
-          const threadId = 'threadId' in action && typeof action.threadId === 'string' ? action.threadId : null;
+          const threadId =
+            'threadId' in action && typeof action.threadId === 'string'
+              ? action.threadId
+              : null;
           sending = sending.then(() =>
-            log.append({ commandId: id, threadId, action }).catch((error: unknown) => {
-              console.error('Sending a command to Core failed; it is dropped', error);
-              pending = pending.filter((p) => p.id !== id);
-              if (confirmed) state = { ...state!, ...rebase(confirmed) };
-              if (!pending.length) confirmed = null;
-              flush();
-            }),
+            log
+              .append({ commandId: id, threadId, action })
+              .catch((error: unknown) => {
+                console.error(
+                  'Sending a command to Core failed; it is dropped',
+                  error,
+                );
+                pending = pending.filter((p) => p.id !== id);
+                if (confirmed) state = { ...state!, ...rebase(confirmed) };
+                if (!pending.length) confirmed = null;
+                flush();
+              }),
           );
         }
         flush();
@@ -155,7 +191,11 @@ export function createReplica(log: ReplicaLog, initial: (saved: Saved | null) =>
         (item) => onItem(item, () => resolve(replica)),
         (error) => {
           if (isStopped) return;
-          if (error) console.error('The store’s stream from Core ended; following it again', error);
+          if (error)
+            console.error(
+              'The store’s stream from Core ended; following it again',
+              error,
+            );
           setTimeout(follow, RESUME_MS);
         },
       );
@@ -171,20 +211,30 @@ function merged(state: State, saved: Saved | null): State {
   const ids = new Set(mine.threads.map((t) => t.id));
   const local = state.threads.filter((t) => !ids.has(t.id));
   const localIds = new Set(local.map((t) => t.id));
-  const pick = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => localIds.has(id)));
+  const pick = <T>(record: Record<string, T>) =>
+    Object.fromEntries(
+      Object.entries(record).filter(([id]) => localIds.has(id)),
+    );
   return {
     ...state,
     now: Math.max(state.now, saved.now),
     seq: saved.seq,
     threads: [...local, ...saved.threads],
-    queue: [...state.queue.filter((q) => localIds.has(q.threadId)), ...saved.queue],
+    queue: [
+      ...state.queue.filter((q) => localIds.has(q.threadId)),
+      ...saved.queue,
+    ],
     checkpoints: { ...pick(state.checkpoints), ...saved.checkpoints },
     checkpointSeq: saved.checkpointSeq,
     forks: { ...pick(state.forks), ...saved.forks },
   };
 }
 
-const Pin = Schema.Struct({ id: Schema.String, index: Schema.Number, text: Schema.String });
+const Pin = Schema.Struct({
+  id: Schema.String,
+  index: Schema.Number,
+  text: Schema.String,
+});
 const ContextSchema = Schema.Struct({
   prefs: Schema.Struct({
     goals: Schema.Boolean,

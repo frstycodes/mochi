@@ -4,10 +4,16 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Option, Schema, SchemaTransformation } from 'effect';
-import type { CatalogPlugin, MarketplaceCatalog } from '../../src/library/library.ts';
+import type {
+  CatalogPlugin,
+  MarketplaceCatalog,
+} from '../../src/library/library.ts';
 import { parsePluginBundle } from '../../src/library/pluginBundle.ts';
 import { isInternalSkill, parseSkillMd } from '../../src/library/skillMd.ts';
-import { findSkillDirs, parseSkillSource } from '../../src/library/skillSource.ts';
+import {
+  findSkillDirs,
+  parseSkillSource,
+} from '../../src/library/skillSource.ts';
 import { readTar } from '../../src/library/tar.ts';
 import { run } from '../git/run.ts';
 
@@ -35,13 +41,22 @@ interface GitHubTarget {
 // The skills CLI's forms (`skillSource.ts`); a marketplace ignores `@skill`.
 export function parseGitHubSource(source: string): GitHubTarget | null {
   const parsed = parseSkillSource(source);
-  return parsed && { owner: parsed.owner, repo: parsed.repo, ref: parsed.ref, path: parsed.path };
+  return (
+    parsed && {
+      owner: parsed.owner,
+      repo: parsed.repo,
+      ref: parsed.ref,
+      path: parsed.path,
+    }
+  );
 }
 
 // Stores the short form agents' own marketplace config expects when there is no sub-path.
 export function normalizeMarketplaceSource(source: string) {
   const target = parseGitHubSource(source);
-  return target && !target.path && target.ref === 'HEAD' ? `${target.owner}/${target.repo}` : source.trim();
+  return target && !target.path && target.ref === 'HEAD'
+    ? `${target.owner}/${target.repo}`
+    : source.trim();
 }
 
 export function fetchMarketplace(source: string) {
@@ -50,35 +65,67 @@ export function fetchMarketplace(source: string) {
 
 async function loadMarketplace(source: string): Promise<MarketplaceCatalog> {
   const { file, format, target } = await loadMarketplaceFile(source);
-  const manifests = format === 'codex' && target ? await fetchCodexManifests(target, file.plugins) : new Map();
+  const manifests =
+    format === 'codex' && target
+      ? await fetchCodexManifests(target, file.plugins)
+      : new Map();
   return toCatalog(file, format, target, manifests);
 }
 
 async function loadMarketplaceFile(source: string) {
-  const target = /^https?:\/\/.+\.json$/i.test(source) ? null : parseGitHubSource(source);
+  const target = /^https?:\/\/.+\.json$/i.test(source)
+    ? null
+    : parseGitHubSource(source);
   for (const { url, format } of marketplaceUrls(source, target)) {
     const response = await fetch(url, { headers: GITHUB_HEADERS });
     if (!response.ok) continue;
-    const file = Schema.decodeUnknownOption(marketplaceSchema)(await response.json().catch(() => null));
-    if (Option.isNone(file)) throw new CatalogError(`${source} has a marketplace.json Mochi can't read`);
+    const file = Schema.decodeUnknownOption(marketplaceSchema)(
+      await response.json().catch(() => null),
+    );
+    if (Option.isNone(file))
+      throw new CatalogError(
+        `${source} has a marketplace.json Mochi can't read`,
+      );
     return { file: file.value, format, target };
   }
   throw new CatalogError(`No marketplace.json found in ${source}`);
 }
 
 // Downloads one plugin and unpacks it into skills, subagents, hooks and servers, whichever agent it was built for.
-export async function fetchPluginBundle(marketplaceSource: string, pluginName: string) {
+export async function fetchPluginBundle(
+  marketplaceSource: string,
+  pluginName: string,
+) {
   const { file, target } = await loadMarketplaceFile(marketplaceSource);
   const entry = file.plugins.find((plugin) => plugin.name === pluginName);
-  if (!entry) throw new CatalogError(`${pluginName} isn't listed in ${marketplaceSource}`);
+  if (!entry)
+    throw new CatalogError(
+      `${pluginName} isn't listed in ${marketplaceSource}`,
+    );
   const pluginTarget = resolvePluginTarget(entry, file, target);
   const scope = pluginTarget.path ? `${pluginTarget.path}/` : '';
-  const { files: repoFiles } = await fetchRepoTextFiles(pluginTarget, (path) => path.startsWith(scope));
-  const files = new Map([...repoFiles].map(([path, content]) => [path.slice(scope.length), content]));
-  if (!files.size) throw new CatalogError(`${pluginName} has no files Mochi can read`);
-  const size = [...files.values()].reduce((total, content) => total + content.length, 0);
-  if (size > MAX_PLUGIN_BYTES) throw new CatalogError(`${pluginName} is larger than the ${MAX_PLUGIN_BYTES / 1_000_000} MB Mochi stores per plugin`);
-  const listing = (await fetchMarketplace(marketplaceSource)).plugins.find((plugin) => plugin.name === pluginName);
+  const { files: repoFiles } = await fetchRepoTextFiles(pluginTarget, (path) =>
+    path.startsWith(scope),
+  );
+  const files = new Map(
+    [...repoFiles].map(([path, content]) => [
+      path.slice(scope.length),
+      content,
+    ]),
+  );
+  if (!files.size)
+    throw new CatalogError(`${pluginName} has no files Mochi can read`);
+  const size = [...files.values()].reduce(
+    (total, content) => total + content.length,
+    0,
+  );
+  if (size > MAX_PLUGIN_BYTES)
+    throw new CatalogError(
+      `${pluginName} is larger than the ${MAX_PLUGIN_BYTES / 1_000_000} MB Mochi stores per plugin`,
+    );
+  const listing = (await fetchMarketplace(marketplaceSource)).plugins.find(
+    (plugin) => plugin.name === pluginName,
+  );
   const bundle = parsePluginBundle(entry.name, files);
   return {
     ...bundle,
@@ -91,33 +138,63 @@ export async function fetchPluginBundle(marketplaceSource: string, pluginName: s
 }
 
 // GAP: npm, archive and command sources need a package registry or a shell; only GitHub-hosted plugins install.
-function resolvePluginTarget(entry: MarketplacePlugin, file: MarketplaceFile, marketplace: GitHubTarget | null): GitHubTarget {
+function resolvePluginTarget(
+  entry: MarketplacePlugin,
+  file: MarketplaceFile,
+  marketplace: GitHubTarget | null,
+): GitHubTarget {
   const source = entry.source ?? entry.name;
   if (typeof source === 'string' || source.source === 'local') {
     const local = typeof source === 'string' ? source : (source.path ?? '');
-    if (!marketplace) throw new CatalogError(`${entry.name} lives beside a marketplace.json URL; Mochi can only follow paths inside a GitHub repository`);
-    const root = file.metadata?.pluginRoot && !local.startsWith('./') ? joinPath(marketplace.path, file.metadata.pluginRoot) : marketplace.path;
+    if (!marketplace)
+      throw new CatalogError(
+        `${entry.name} lives beside a marketplace.json URL; Mochi can only follow paths inside a GitHub repository`,
+      );
+    const root =
+      file.metadata?.pluginRoot && !local.startsWith('./')
+        ? joinPath(marketplace.path, file.metadata.pluginRoot)
+        : marketplace.path;
     return { ...marketplace, path: joinPath(root, local) };
   }
   const repo = source.source === 'github' ? source.repo : source.url;
   const target = repo ? parseGitHubSource(repo) : null;
   if (!target || !['github', 'url', 'git-subdir'].includes(source.source))
-    throw new CatalogError(`${entry.name} installs from a ${source.source} source; Mochi installs plugins hosted on GitHub`);
-  return { ...target, ref: source.sha ?? source.ref ?? target.ref, path: source.path ? joinPath(target.path, source.path) : target.path };
+    throw new CatalogError(
+      `${entry.name} installs from a ${source.source} source; Mochi installs plugins hosted on GitHub`,
+    );
+  return {
+    ...target,
+    ref: source.sha ?? source.ref ?? target.ref,
+    path: source.path ? joinPath(target.path, source.path) : target.path,
+  };
 }
 
 function marketplaceUrls(source: string, target: GitHubTarget | null) {
   if (!target) {
-    if (/^https?:\/\/.+\.json$/i.test(source)) return [{ url: source, format: 'claude' as const }];
-    throw new CatalogError('Only GitHub repositories and marketplace.json URLs can be browsed');
+    if (/^https?:\/\/.+\.json$/i.test(source))
+      return [{ url: source, format: 'claude' as const }];
+    throw new CatalogError(
+      'Only GitHub repositories and marketplace.json URLs can be browsed',
+    );
   }
-  return MARKETPLACE_FILES.map(({ path, format }) => ({ url: rawUrl(target, path), format }));
+  return MARKETPLACE_FILES.map(({ path, format }) => ({
+    url: rawUrl(target, path),
+    format,
+  }));
 }
 
 // A person is a name, or an object with one; either reads as the name.
 const personSchema = Schema.Union([
   Schema.String,
-  Schema.Struct({ name: Schema.String }).pipe(Schema.decodeTo(Schema.String, SchemaTransformation.transform({ decode: (person) => person.name, encode: (name) => ({ name }) }))),
+  Schema.Struct({ name: Schema.String }).pipe(
+    Schema.decodeTo(
+      Schema.String,
+      SchemaTransformation.transform({
+        decode: (person) => person.name,
+        encode: (name) => ({ name }),
+      }),
+    ),
+  ),
 ]);
 
 // `source` is a path inside the marketplace repo, or an object naming another repo (github / url / git-subdir / local).
@@ -137,8 +214,15 @@ const marketplaceSchema = Schema.Struct({
   name: Schema.String,
   description: Schema.optionalKey(Schema.String),
   owner: Schema.optionalKey(personSchema),
-  metadata: Schema.optionalKey(Schema.Struct({ description: Schema.optionalKey(Schema.String), pluginRoot: Schema.optionalKey(Schema.String) })),
-  interface: Schema.optionalKey(Schema.Struct({ displayName: Schema.optionalKey(Schema.String) })),
+  metadata: Schema.optionalKey(
+    Schema.Struct({
+      description: Schema.optionalKey(Schema.String),
+      pluginRoot: Schema.optionalKey(Schema.String),
+    }),
+  ),
+  interface: Schema.optionalKey(
+    Schema.Struct({ displayName: Schema.optionalKey(Schema.String) }),
+  ),
   plugins: Schema.Array(
     Schema.Struct({
       name: Schema.String,
@@ -158,22 +242,30 @@ type MarketplacePlugin = MarketplaceFile['plugins'][number];
 
 // Codex keeps a plugin's display name, blurb and logo in its own .codex-plugin/plugin.json.
 const codexManifestSchema = Schema.Struct({
-  interface: Schema.optionalKey(Schema.Struct({
+  interface: Schema.optionalKey(
+    Schema.Struct({
       displayName: Schema.optionalKey(Schema.String),
       shortDescription: Schema.optionalKey(Schema.String),
       developerName: Schema.optionalKey(Schema.String),
       logo: Schema.optionalKey(Schema.String),
       composerIcon: Schema.optionalKey(Schema.String),
-    })),
+    }),
+  ),
 });
 
 type CodexManifest = { dir: string; manifest: typeof codexManifestSchema.Type };
 
-function toCatalog(marketplace: MarketplaceFile, format: MarketplaceCatalog['format'], target: GitHubTarget | null, manifests: Map<string, CodexManifest>) {
+function toCatalog(
+  marketplace: MarketplaceFile,
+  format: MarketplaceCatalog['format'],
+  target: GitHubTarget | null,
+  manifests: Map<string, CodexManifest>,
+) {
   return {
     name: marketplace.name,
     displayName: marketplace.interface?.displayName ?? marketplace.name,
-    description: marketplace.description ?? marketplace.metadata?.description ?? null,
+    description:
+      marketplace.description ?? marketplace.metadata?.description ?? null,
     owner: marketplace.owner ?? null,
     format,
     plugins: marketplace.plugins.map((plugin): CatalogPlugin => {
@@ -188,7 +280,10 @@ function toCatalog(marketplace: MarketplaceFile, format: MarketplaceCatalog['for
         author: plugin.author ?? ui?.developerName ?? null,
         version: plugin.version ?? null,
         homepage: plugin.homepage ?? null,
-        icon: codex && codexIcon && target ? rawUrl(target, joinPath(codex.dir, codexIcon)) : claudePluginIcon(plugin, marketplace, target),
+        icon:
+          codex && codexIcon && target
+            ? rawUrl(target, joinPath(codex.dir, codexIcon))
+            : claudePluginIcon(plugin, marketplace, target),
       };
     }),
   } satisfies MarketplaceCatalog;
@@ -197,29 +292,51 @@ function toCatalog(marketplace: MarketplaceFile, format: MarketplaceCatalog['for
 // Claude marketplaces carry no icons. A plugin hosted in its vendor's own repo gets that GitHub org's avatar;
 // one kept inside the marketplace repo only does when its author is the marketplace owner, since third-party
 // plugins mirrored there would otherwise wear the host's logo.
-function claudePluginIcon(plugin: MarketplacePlugin, marketplace: MarketplaceFile, target: GitHubTarget | null) {
+function claudePluginIcon(
+  plugin: MarketplacePlugin,
+  marketplace: MarketplaceFile,
+  target: GitHubTarget | null,
+) {
   const source = plugin.source;
   if (typeof source === 'object') {
-    const owner = source.repo?.split('/')[0] ?? source.url?.match(/github\.com[/:]([\w.-]+)\//)?.[1];
+    const owner =
+      source.repo?.split('/')[0] ??
+      source.url?.match(/github\.com[/:]([\w.-]+)\//)?.[1];
     if (owner) return githubAvatar(owner);
   }
   const isLocal = typeof source === 'string' || source?.source === 'local';
-  if (isLocal && target && plugin.author && plugin.author === marketplace.owner) return githubAvatar(target.owner);
+  if (isLocal && target && plugin.author && plugin.author === marketplace.owner)
+    return githubAvatar(target.owner);
   return null;
 }
 
-async function fetchCodexManifests(target: GitHubTarget, plugins: readonly MarketplacePlugin[]) {
+async function fetchCodexManifests(
+  target: GitHubTarget,
+  plugins: readonly MarketplacePlugin[],
+) {
   const dirs = new Map<string, string>();
   for (const plugin of plugins) {
-    const path = typeof plugin.source === 'string' ? plugin.source : plugin.source?.source === 'local' ? plugin.source.path : undefined;
+    const path =
+      typeof plugin.source === 'string'
+        ? plugin.source
+        : plugin.source?.source === 'local'
+          ? plugin.source.path
+          : undefined;
     if (path) dirs.set(joinPath(target.path, path), plugin.name);
   }
-  const wanted = new Set([...dirs.keys()].map((dir) => joinPath(dir, '.codex-plugin/plugin.json')));
-  const { files } = await fetchRepoTextFiles(target, (path) => wanted.has(path));
+  const wanted = new Set(
+    [...dirs.keys()].map((dir) => joinPath(dir, '.codex-plugin/plugin.json')),
+  );
+  const { files } = await fetchRepoTextFiles(target, (path) =>
+    wanted.has(path),
+  );
   const manifests = new Map<string, CodexManifest>();
   for (const [dir, name] of dirs) {
-    const manifest = Schema.decodeUnknownOption(codexManifestSchema)(parseJson(files.get(joinPath(dir, '.codex-plugin/plugin.json'))));
-    if (Option.isSome(manifest)) manifests.set(name, { dir, manifest: manifest.value });
+    const manifest = Schema.decodeUnknownOption(codexManifestSchema)(
+      parseJson(files.get(joinPath(dir, '.codex-plugin/plugin.json'))),
+    );
+    if (Option.isSome(manifest))
+      manifests.set(name, { dir, manifest: manifest.value });
   }
   return manifests;
 }
@@ -234,9 +351,14 @@ export function discoverSkills(source: string, { isFresh = false } = {}) {
 
 async function loadSkills(source: string) {
   const target = parseSkillSource(source);
-  if (!target) throw new CatalogError('Use a GitHub owner/repo, owner/repo@skill, or a github.com URL');
+  if (!target)
+    throw new CatalogError(
+      'Use a GitHub owner/repo, owner/repo@skill, or a github.com URL',
+    );
   const scope = target.path ? `${target.path}/` : '';
-  const { files, commit } = await fetchRepoTextFiles(target, (path) => path.startsWith(scope));
+  const { files, commit } = await fetchRepoTextFiles(target, (path) =>
+    path.startsWith(scope),
+  );
   const seen = new Set<string>();
   const skills = findSkillDirs(files.keys(), target.path).flatMap((dir) => {
     const prefix = dir ? `${dir}/` : '';
@@ -253,65 +375,116 @@ async function loadSkills(source: string) {
       {
         ...meta,
         folderName,
-        files: Object.fromEntries(folder.map(([path, content]) => [path.slice(prefix.length), content])),
-        source: [`${target.owner}/${target.repo}`, dir].filter(Boolean).join('/') + (target.ref === 'HEAD' ? '' : `#${target.ref}`),
+        files: Object.fromEntries(
+          folder.map(([path, content]) => [path.slice(prefix.length), content]),
+        ),
+        source:
+          [`${target.owner}/${target.repo}`, dir].filter(Boolean).join('/') +
+          (target.ref === 'HEAD' ? '' : `#${target.ref}`),
         commit,
         // A skill without its own icon wears its repo owner's avatar, so a catalog reads as who made what.
-        icon: iconPath ? rawUrl(target, joinPath(dir, iconPath)) : githubAvatar(target.owner),
+        icon: iconPath
+          ? rawUrl(target, joinPath(dir, iconPath))
+          : githubAvatar(target.owner),
       },
     ];
   });
   if (!skills.length) throw new CatalogError(`No SKILL.md found in ${source}`);
   if (!target.skill) return skills;
   const wanted = skillSlug(target.skill);
-  const picked = skills.filter((skill) => skill.name === wanted || skillSlug(skill.folderName) === wanted);
-  if (!picked.length) throw new CatalogError(`No skill named ${target.skill} in ${target.owner}/${target.repo}`);
+  const picked = skills.filter(
+    (skill) => skill.name === wanted || skillSlug(skill.folderName) === wanted,
+  );
+  if (!picked.length)
+    throw new CatalogError(
+      `No skill named ${target.skill} in ${target.owner}/${target.repo}`,
+    );
   return picked;
 }
 
 // skills.sh ids and `@skill` filters are slugs of the skill's name or its folder.
-const skillSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+const skillSlug = (name: string) =>
+  name.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
 
 // Codex skills declare `interface.icon_large` / `icon_small` in agents/openai.yaml; the large one is the app-style tile.
 function codexSkillIcon(yaml: string | undefined) {
-  const field = (key: string) => yaml?.match(new RegExp(`^\\s+${key}:\\s*["']?([^"'\\n]+?)["']?\\s*$`, 'm'))?.[1];
+  const field = (key: string) =>
+    yaml?.match(
+      new RegExp(`^\\s+${key}:\\s*["']?([^"'\\n]+?)["']?\\s*$`, 'm'),
+    )?.[1];
   return field('icon_large') ?? field('icon_small') ?? null;
 }
 
 // One codeload request instead of a tree walk: the GitHub API's 60/hour anonymous limit runs out in a page view.
 // The archive is streamed, so only the small text files `keep` accepts are held in memory.
-async function fetchRepoTextFiles(target: GitHubTarget, keep: (path: string) => boolean) {
+async function fetchRepoTextFiles(
+  target: GitHubTarget,
+  keep: (path: string) => boolean,
+) {
   const response = await downloadArchive(target);
   const files = new Map<string, string>();
   let commit: string | null = null;
   const decoder = new TextDecoder();
   // GitHub prefixes every path with "<repo>-<ref>/"
   const repoPath = (path: string) => path.slice(path.indexOf('/') + 1);
-  const accept = (path: string, size: number) => size <= MAX_FILE_BYTES && keep(repoPath(path));
-  for await (const entry of readTar(response.body!.pipeThrough(new DecompressionStream('gzip')), accept, { onComment: (comment) => (commit = comment) })) {
-    if (!entry.body.includes(0)) files.set(repoPath(entry.path), decoder.decode(entry.body));
+  const accept = (path: string, size: number) =>
+    size <= MAX_FILE_BYTES && keep(repoPath(path));
+  for await (const entry of readTar(
+    response.body!.pipeThrough(new DecompressionStream('gzip')),
+    accept,
+    { onComment: (comment) => (commit = comment) },
+  )) {
+    if (!entry.body.includes(0))
+      files.set(repoPath(entry.path), decoder.decode(entry.body));
   }
   return { files, commit };
 }
 
 // Anonymous first; a private (or missing) repo answers 404, and then gh's own login is tried, its token kept in main.
 async function downloadArchive({ owner, repo, ref }: GitHubTarget) {
-  const anonymous = await fetch(`https://codeload.github.com/${owner}/${repo}/tar.gz/${ref}`, { headers: GITHUB_HEADERS });
+  const anonymous = await fetch(
+    `https://codeload.github.com/${owner}/${repo}/tar.gz/${ref}`,
+    { headers: GITHUB_HEADERS },
+  );
   if (anonymous.ok && anonymous.body) return anonymous;
   const token = anonymous.status === 404 ? await ghToken() : null;
-  if (!token) throw new CatalogError(`Couldn't download ${owner}/${repo} (HTTP ${anonymous.status}). Private repositories need gh signed in.`);
-  const signedIn = await fetch(`https://api.github.com/repos/${owner}/${repo}/tarball/${ref}`, { headers: { ...GITHUB_HEADERS, Authorization: `Bearer ${token}` } });
-  if (!signedIn.ok || !signedIn.body) throw new CatalogError(`Couldn't download ${owner}/${repo} with gh's login (HTTP ${signedIn.status})`);
+  if (!token)
+    throw new CatalogError(
+      `Couldn't download ${owner}/${repo} (HTTP ${anonymous.status}). Private repositories need gh signed in.`,
+    );
+  const signedIn = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/tarball/${ref}`,
+    { headers: { ...GITHUB_HEADERS, Authorization: `Bearer ${token}` } },
+  );
+  if (!signedIn.ok || !signedIn.body)
+    throw new CatalogError(
+      `Couldn't download ${owner}/${repo} with gh's login (HTTP ${signedIn.status})`,
+    );
   return signedIn;
 }
 
-const ghToken = () => run('gh', homedir(), ['auth', 'token']).then((out) => out.trim() || null, () => null);
+const ghToken = () =>
+  run('gh', homedir(), ['auth', 'token']).then(
+    (out) => out.trim() || null,
+    () => null,
+  );
 
 // Repos change rarely and a browse downloads a whole archive, so catalogs are kept on disk for an hour. Offline, an
 // older copy is better than nothing, except for an update check (`isFresh`), which must not mistake it for the source.
-export async function cached<T>(key: string, load: () => Promise<T>, isFresh = false): Promise<T> {
-  const file = join(app.getPath('userData'), 'library-cache', `${createHash('sha256').update(key).digest('hex').slice(0, 32)}.json`);
-  const hit = await readFile(file, 'utf8').then((text) => JSON.parse(text) as { at: number; value: T }, () => null);
+export async function cached<T>(
+  key: string,
+  load: () => Promise<T>,
+  isFresh = false,
+): Promise<T> {
+  const file = join(
+    app.getPath('userData'),
+    'library-cache',
+    `${createHash('sha256').update(key).digest('hex').slice(0, 32)}.json`,
+  );
+  const hit = await readFile(file, 'utf8').then(
+    (text) => JSON.parse(text) as { at: number; value: T },
+    () => null,
+  );
   if (hit && !isFresh && Date.now() - hit.at < CATALOG_TTL_MS) return hit.value;
   const value = await load().catch((error: unknown) => {
     if (hit && !isFresh && !(error instanceof CatalogError)) return hit.value;
@@ -332,7 +505,10 @@ function githubAvatar(owner: string) {
 
 // Resolves a relative path ("./assets/logo.png", "../x") against a repo directory.
 function joinPath(dir: string, relative: string) {
-  return new URL(relative, `https://repo.invalid/${dir ? `${dir}/` : ''}`).pathname.slice(1);
+  return new URL(
+    relative,
+    `https://repo.invalid/${dir ? `${dir}/` : ''}`,
+  ).pathname.slice(1);
 }
 
 function parseJson(text: string | undefined) {

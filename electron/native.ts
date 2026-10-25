@@ -15,7 +15,14 @@ const NATIVE_TTL = '365 days';
  */
 export function nativeHelper(name: string, source: string) {
   if (process.platform !== 'darwin') return Promise.resolve(null);
-  return cached(`native:${name}`, NATIVE_TTL, () => (app.isPackaged ? shipped(name) : compiled(name, source)).catch((error) => (console.warn(`Native helper ${name} unavailable`, error), null)));
+  return cached(`native:${name}`, NATIVE_TTL, () =>
+    (app.isPackaged ? shipped(name) : compiled(name, source)).catch(
+      (error) => (
+        console.warn(`Native helper ${name} unavailable`, error),
+        null
+      ),
+    ),
+  );
 }
 
 async function shipped(name: string) {
@@ -31,6 +38,8 @@ async function compiled(name: string, source: string) {
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, `${name}-${hash}.swift`);
   await writeFile(file, source);
-  await runCommand('xcrun', ['swiftc', '-O', file, '-o', binary], { timeout: COMPILE_TIMEOUT_MS });
+  await runCommand('xcrun', ['swiftc', '-O', file, '-o', binary], {
+    timeout: COMPILE_TIMEOUT_MS,
+  });
   return binary;
 }

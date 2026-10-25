@@ -1,16 +1,16 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 71df573f, oxlint-plugin-t3code/rules/no-test-in-loop.test.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ../LICENSE-T3. Local edit: Mochi's plugin name and harness.
-import { assert, describe } from "@effect/vitest";
+import { assert, describe } from '@effect/vitest';
 
-import { createOxlintRuleHarness } from "../ruleHarness.ts";
+import { createOxlintRuleHarness } from '../ruleHarness.ts';
 
-const rule = createOxlintRuleHarness("mochi/no-test-in-loop", {
-  filename: "fixture.test.ts",
+const rule = createOxlintRuleHarness('mochi/no-test-in-loop', {
+  filename: 'fixture.test.ts',
 });
 
-describe("mochi/no-test-in-loop", () => {
+describe('mochi/no-test-in-loop', () => {
   rule.valid(
-    "allows it.each and it.effect.each",
+    'allows it.each and it.effect.each',
     `
       import { it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -21,7 +21,7 @@ describe("mochi/no-test-in-loop", () => {
   );
 
   rule.valid(
-    "allows loops inside a test body",
+    'allows loops inside a test body',
     `
       import { it } from "@effect/vitest";
 
@@ -34,7 +34,7 @@ describe("mochi/no-test-in-loop", () => {
   );
 
   rule.valid(
-    "ignores node:test files, which have no .each",
+    'ignores node:test files, which have no .each',
     `
       import { test } from "node:test";
 
@@ -45,7 +45,7 @@ describe("mochi/no-test-in-loop", () => {
   );
 
   rule.invalid(
-    "reports it inside a for...of loop",
+    'reports it inside a for...of loop',
     `
       import { it } from "@effect/vitest";
 
@@ -59,7 +59,7 @@ describe("mochi/no-test-in-loop", () => {
   );
 
   rule.invalid(
-    "reports it.effect inside a for loop nested in describe",
+    'reports it.effect inside a for loop nested in describe',
     `
       import { describe, it } from "@effect/vitest";
       import * as Effect from "effect/Effect";
@@ -76,7 +76,7 @@ describe("mochi/no-test-in-loop", () => {
   );
 
   rule.invalid(
-    "reports test inside a for...in loop",
+    'reports test inside a for...in loop',
     `
       import { test } from "vitest";
 
@@ -87,7 +87,7 @@ describe("mochi/no-test-in-loop", () => {
   );
 
   rule.invalid(
-    "reports a describe inside a loop once, not the tests inside it",
+    'reports a describe inside a loop once, not the tests inside it',
     `
       import { describe, it } from "vitest";
 
@@ -105,10 +105,10 @@ describe("mochi/no-test-in-loop", () => {
   );
 });
 
-const productionRule = createOxlintRuleHarness("mochi/no-test-in-loop");
+const productionRule = createOxlintRuleHarness('mochi/no-test-in-loop');
 
 productionRule.valid(
-  "ignores non-test files",
+  'ignores non-test files',
   `
     const it = (_name: string) => {};
     for (const value of ["a"]) it(value);

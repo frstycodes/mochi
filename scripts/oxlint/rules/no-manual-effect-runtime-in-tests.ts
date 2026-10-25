@@ -1,39 +1,42 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 71df573f, oxlint-plugin-t3code/rules/no-manual-effect-runtime-in-tests.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ../LICENSE-T3. Local edit: imports from vite-plus/lint/plugins.
-import { defineRule } from "vite-plus/lint/plugins";
-import * as Option from "effect/Option";
+import { defineRule } from 'vite-plus/lint/plugins';
+import * as Option from 'effect/Option';
 
-import { getPropertyName, isIdentifier, unwrapExpression } from "../utils.ts";
+import { getPropertyName, isIdentifier, unwrapExpression } from '../utils.ts';
 
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const EFFECT_RUNTIME_METHODS = new Set([
-  "runCallback",
-  "runCallbackWith",
-  "runFork",
-  "runForkWith",
-  "runPromise",
-  "runPromiseExit",
-  "runPromiseExitWith",
-  "runPromiseWith",
-  "runSync",
-  "runSyncExit",
-  "runSyncExitWith",
-  "runSyncWith",
+  'runCallback',
+  'runCallbackWith',
+  'runFork',
+  'runForkWith',
+  'runPromise',
+  'runPromiseExit',
+  'runPromiseExitWith',
+  'runPromiseWith',
+  'runSync',
+  'runSyncExit',
+  'runSyncExitWith',
+  'runSyncWith',
 ]);
 
 const readMaxOccurrences = (options: ReadonlyArray<unknown>): number => {
   const [first] = options;
-  return typeof first === "object" &&
+  return typeof first === 'object' &&
     first !== null &&
-    "maxOccurrences" in first &&
-    typeof first.maxOccurrences === "number"
+    'maxOccurrences' in first &&
+    typeof first.maxOccurrences === 'number'
     ? first.maxOccurrences
     : 0;
 };
 
 const manualRunnerName = (callee: unknown): Option.Option<string> => {
   const expression = unwrapExpression(callee);
-  if (Option.isNone(expression) || expression.value.type !== "MemberExpression") {
+  if (
+    Option.isNone(expression) ||
+    expression.value.type !== 'MemberExpression'
+  ) {
     return Option.none();
   }
 
@@ -41,12 +44,15 @@ const manualRunnerName = (callee: unknown): Option.Option<string> => {
   const property = getPropertyName(expression.value.property);
   if (Option.isNone(property)) return Option.none();
 
-  if (isIdentifier(object, "Effect") && EFFECT_RUNTIME_METHODS.has(property.value)) {
+  if (
+    isIdentifier(object, 'Effect') &&
+    EFFECT_RUNTIME_METHODS.has(property.value)
+  ) {
     return Option.some(`Effect.${property.value}`);
   }
 
-  if (isIdentifier(object, "ManagedRuntime") && property.value === "make") {
-    return Option.some("ManagedRuntime.make");
+  if (isIdentifier(object, 'ManagedRuntime') && property.value === 'make') {
+    return Option.some('ManagedRuntime.make');
   }
 
   return Option.none();
@@ -54,20 +60,20 @@ const manualRunnerName = (callee: unknown): Option.Option<string> => {
 
 export default defineRule({
   meta: {
-    type: "problem",
+    type: 'problem',
     docs: {
       description:
-        "Disallow manually creating or running Effect runtimes in tests; use @effect/vitest.",
+        'Disallow manually creating or running Effect runtimes in tests; use @effect/vitest.',
     },
     schema: [
       {
-        type: "object",
+        type: 'object',
         properties: {
           maxOccurrences: {
-            type: "integer",
+            type: 'integer',
             minimum: 0,
             description:
-              "Legacy debt ceiling for this file: occurrences beyond this count are reported.",
+              'Legacy debt ceiling for this file: occurrences beyond this count are reported.',
           },
         },
         additionalProperties: false,

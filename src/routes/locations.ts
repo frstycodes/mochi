@@ -19,10 +19,17 @@ export interface PageLocation {
   state: object;
 }
 
-export function settingsRouteOf({ pathname, search, state }: PageLocation): SettingsRoute | null {
+export function settingsRouteOf({
+  pathname,
+  search,
+  state,
+}: PageLocation): SettingsRoute | null {
   const [, root, section] = pathname.split('/');
   if (root !== 'settings' || !section) return null;
-  const { setting, subpage } = search as { setting?: unknown; subpage?: unknown };
+  const { setting, subpage } = search as {
+    setting?: unknown;
+    subpage?: unknown;
+  };
   return {
     section: decodeURIComponent(section) as SectionId,
     settingId: setting == null ? undefined : String(setting),
@@ -36,10 +43,15 @@ export function replayThreadOf({ pathname }: PageLocation) {
   return root === 'replay' && threadId ? decodeURIComponent(threadId) : null;
 }
 
-export function remoteRouteOf({ pathname }: PageLocation): RemoteThreadRoute | null {
+export function remoteRouteOf({
+  pathname,
+}: PageLocation): RemoteThreadRoute | null {
   const [, root, machineId, threadId] = pathname.split('/');
   if (root !== 'remote' || !machineId || !threadId) return null;
-  return { machineId: decodeURIComponent(machineId), threadId: decodeURIComponent(threadId) };
+  return {
+    machineId: decodeURIComponent(machineId),
+    threadId: decodeURIComponent(threadId),
+  };
 }
 
 export function isReviewLocation({ pathname }: PageLocation) {

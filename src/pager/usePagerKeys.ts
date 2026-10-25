@@ -15,14 +15,21 @@ export function usePagerKeys() {
       e.preventDefault();
       return dispatch({ type: 'overview-toggle', isOpen: false });
     }
-    const command = commandOf(e, ['layout-overview', 'pinned-previous', 'pinned-next']);
+    const command = commandOf(e, [
+      'layout-overview',
+      'pinned-previous',
+      'pinned-next',
+    ]);
     if (!command) return;
     if (command === 'layout-overview') {
       if (isEditingText(e.target)) return;
       e.preventDefault();
       return dispatch({ type: 'overview-toggle' });
     }
-    const id = pinnedNeighbour(slotsOf(state), command === 'pinned-previous' ? -1 : 1);
+    const id = pinnedNeighbour(
+      slotsOf(state),
+      command === 'pinned-previous' ? -1 : 1,
+    );
     if (!id) return;
     e.preventDefault();
     dispatch({ type: 'go', view: { kind: 'thread', id } });
@@ -32,6 +39,14 @@ export function usePagerKeys() {
 
 /** Show all sessions' default, mod ↑, moves the caret in a field with text; an empty composer (which holds focus most of the time) lets it through. */
 function isEditingText(target: EventTarget | null) {
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return target.value.length > 0;
-  return target instanceof HTMLElement && target.isContentEditable && !!target.textContent;
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  )
+    return target.value.length > 0;
+  return (
+    target instanceof HTMLElement &&
+    target.isContentEditable &&
+    !!target.textContent
+  );
 }

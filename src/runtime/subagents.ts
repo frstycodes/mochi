@@ -16,7 +16,12 @@ export interface BackgroundStart {
 }
 
 /** Folds a `subagent` event into its thread: a row in `subagents` plus, on start, the activity entry the chat shows it at. */
-export function applySubagent(state: State, thread: Thread, event: AgentSubagentEvent, provider: Provider): State {
+export function applySubagent(
+  state: State,
+  thread: Thread,
+  event: AgentSubagentEvent,
+  provider: Provider,
+): State {
   const now = state.now;
   const existing = thread.subagents?.find((s) => s.id === event.id);
   const update = (fn: (t: Thread) => Thread): State => ({
@@ -56,15 +61,24 @@ export function applySubagent(state: State, thread: Thread, event: AgentSubagent
     ...t,
     subagents: t.subagents!.map((s) => (s.id === event.id ? next : s)),
   }));
-  if (event.phase === 'end' && next.origin === 'mochi') after = reportBack(after, thread.id, next);
+  if (event.phase === 'end' && next.origin === 'mochi')
+    after = reportBack(after, thread.id, next);
   return after;
 }
 
 /** Events from a Mochi background agent's own session, folded into its parent; null when `event` is not from one. */
-export function fromBackground(state: State, event: AgentEvent, apply: (state: State, event: AgentEvent) => State): State | null {
-  const owner = state.threads.find((t) => t.subagents?.some((s) => s.sessionId === event.threadId));
+export function fromBackground(
+  state: State,
+  event: AgentEvent,
+  apply: (state: State, event: AgentEvent) => State,
+): State | null {
+  const owner = state.threads.find((t) =>
+    t.subagents?.some((s) => s.sessionId === event.threadId),
+  );
   if (!owner) return null;
-  const subagent = owner.subagents!.find((s) => s.sessionId === event.threadId)!;
+  const subagent = owner.subagents!.find(
+    (s) => s.sessionId === event.threadId,
+  )!;
   const as = (fields: Omit<AgentSubagentEvent, 'threadId' | 'type' | 'id'>) =>
     apply(state, {
       threadId: owner.id,
@@ -133,7 +147,12 @@ export function fromBackground(state: State, event: AgentEvent, apply: (state: S
       return reportDue(
         as({
           phase: 'end',
-          status: event.status === 'done' ? 'done' : event.status === 'failed' ? 'failed' : 'stopped',
+          status:
+            event.status === 'done'
+              ? 'done'
+              : event.status === 'failed'
+                ? 'failed'
+                : 'stopped',
           ...(event.error && { error: event.error }),
         }),
         owner.id,
@@ -145,7 +164,11 @@ export function fromBackground(state: State, event: AgentEvent, apply: (state: S
 }
 
 /** Adds a Mochi background agent to its thread, running; `agentCalls` starts its session. */
-export function startBackground(state: State, threadId: string, start: BackgroundStart): State {
+export function startBackground(
+  state: State,
+  threadId: string,
+  start: BackgroundStart,
+): State {
   const thread = state.threads.find((t) => t.id === threadId);
   if (!thread) return state;
   const started = applySubagent(
@@ -172,7 +195,9 @@ export function startBackground(state: State, threadId: string, start: Backgroun
     ...started,
     threads: mapThread(started.threads, threadId, (t) => ({
       ...t,
-      subagents: t.subagents?.map((s) => (s.id === start.id ? { ...s, ...fields } : s)),
+      subagents: t.subagents?.map((s) =>
+        s.id === start.id ? { ...s, ...fields } : s,
+      ),
     })),
   };
 }
@@ -192,7 +217,9 @@ export function withNotes(thread: Thread, text: string) {
   const notes = (thread.live?.notes ?? []).filter((n) => !text.includes(n));
   if (!notes.length) return text;
   // A `/command` only runs from the very start of the message.
-  return text.startsWith('/') ? `${text}\n\n${notes.join('\n\n')}` : `${notes.join('\n\n')}\n\n${text}`;
+  return text.startsWith('/')
+    ? `${text}\n\n${notes.join('\n\n')}`
+    : `${notes.join('\n\n')}\n\n${text}`;
 }
 
 /** How a finished agent's report reads to the parent's agent. */
@@ -221,7 +248,8 @@ export const isRunning = (s: Subagent) => s.status === 'running';
 
 /** Background agents still running; foreground subagents end with their turn, so they don't count. */
 export function runningBackground(thread: Thread) {
-  return (thread.subagents ?? []).filter((s) => s.isBackground && isRunning(s)).length;
+  return (thread.subagents ?? []).filter((s) => s.isBackground && isRunning(s))
+    .length;
 }
 
 function patch(s: Subagent, e: AgentSubagentEvent): Subagent {
@@ -235,7 +263,8 @@ function patch(s: Subagent, e: AgentSubagentEvent): Subagent {
   if (e.tokens !== undefined) next.tokens = e.tokens;
   if (e.cwd) next.cwd = e.cwd;
   if (e.error) next.error = e.error;
-  if (e.message) next.message = e.isDelta ? (s.message ?? '') + e.message : e.message;
+  if (e.message)
+    next.message = e.isDelta ? (s.message ?? '') + e.message : e.message;
   if (e.step) next.steps = withStep(s.steps, e.step);
   if (e.phase !== 'end') return next;
   return {
@@ -247,17 +276,29 @@ function patch(s: Subagent, e: AgentSubagentEvent): Subagent {
   };
 }
 
-function withStep(steps: SubagentStep[], step: NonNullable<AgentSubagentEvent['step']>): SubagentStep[] {
+function withStep(
+  steps: SubagentStep[],
+  step: NonNullable<AgentSubagentEvent['step']>,
+): SubagentStep[] {
   const done = {
     ...(step.files && { files: step.files }),
     ...(step.exitCode !== undefined && { exitCode: step.exitCode }),
     ...(step.output !== undefined && { output: step.output }),
     ...(step.patch && { patch: step.patch }),
   };
-  const started = { id: step.id, text: step.text, isDone: false, ...(step.description && { description: step.description }) };
-  if (step.phase === 'start') return steps.some((s) => s.id === step.id) ? steps : [...steps, started];
-  if (!steps.some((s) => s.id === step.id)) return [...steps, { id: step.id, text: step.text, isDone: true, ...done }];
-  return steps.map((s) => (s.id === step.id ? { ...s, text: step.text, isDone: true, ...done } : s));
+  const started = {
+    id: step.id,
+    text: step.text,
+    isDone: false,
+    ...(step.description && { description: step.description }),
+  };
+  if (step.phase === 'start')
+    return steps.some((s) => s.id === step.id) ? steps : [...steps, started];
+  if (!steps.some((s) => s.id === step.id))
+    return [...steps, { id: step.id, text: step.text, isDone: true, ...done }];
+  return steps.map((s) =>
+    s.id === step.id ? { ...s, text: step.text, isDone: true, ...done } : s,
+  );
 }
 
 /** A finished delegated task logs a line in its thread's chat; its report goes to the agent separately (`dueReports`). */
@@ -282,7 +323,9 @@ function reportDue(state: State, threadId: string, before: Subagent): State {
     ...state,
     threads: mapThread(state.threads, threadId, (t) => ({
       ...t,
-      subagents: t.subagents?.map((s) => (s.id === before.id ? { ...s, isReportDue: true } : s)),
+      subagents: t.subagents?.map((s) =>
+        s.id === before.id ? { ...s, isReportDue: true } : s,
+      ),
     })),
   };
 }

@@ -1,8 +1,26 @@
 import type { SettingsHost } from '../../src/host/types/settings.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
-import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '@mochi/core/agents/profileConfig';
-import { copyProfileFolder, profileFolder } from '@mochi/core/agents/profileFolder';
-import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '@mochi/core/agents/config';
+import {
+  applyConfig,
+  previewConfig,
+  readProfileConfig,
+  testMcpServer,
+} from '@mochi/core/agents/profileConfig';
+import {
+  copyProfileFolder,
+  profileFolder,
+} from '@mochi/core/agents/profileFolder';
+import {
+  accountsState,
+  addAccount,
+  agentSettings,
+  apiKeyState,
+  linkAccount,
+  removeAccount,
+  renameAccount,
+  setApiKey,
+  updateAgentSettings,
+} from '@mochi/core/agents/config';
 import { detect, latestVersion, updateHarness } from '../settings/detect.ts';
 import { noteLogin } from '../agents/events.ts';
 import { isNewerVersion } from '../../src/settings/parse.ts';
@@ -27,10 +45,15 @@ export const settings = {
   },
   async updateHarness(_sender, provider) {
     await updateHarness(provider);
-    const account = accountsState().accounts.find((a) => a.provider === provider && !a.configDir)!;
+    const account = accountsState().accounts.find(
+      (a) => a.provider === provider && !a.configDir,
+    )!;
     const install = await detect(account);
     const latest = await latestVersion(provider);
-    if (isNewerVersion(latest, install.version)) throw new Error(`Update finished, but Mochi still finds ${HARNESSES[provider].name} ${install.version ?? 'at an unknown version'} at ${install.path ?? 'the configured path'}. Check that this is the executable your package manager updated.`);
+    if (isNewerVersion(latest, install.version))
+      throw new Error(
+        `Update finished, but Mochi still finds ${HARNESSES[provider].name} ${install.version ?? 'at an unknown version'} at ${install.path ?? 'the configured path'}. Check that this is the executable your package manager updated.`,
+      );
     return install;
   },
   async accounts() {
@@ -51,7 +74,7 @@ export const settings = {
   async apiKey(_sender, provider) {
     return apiKeyState(provider);
   },
-    async setApiKey(_sender, provider, key) {
+  async setApiKey(_sender, provider, key) {
     setApiKey(provider, key);
     return apiKeyState(provider);
   },

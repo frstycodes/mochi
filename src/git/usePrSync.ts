@@ -20,9 +20,18 @@ interface WatchedWorktree {
  * `gh pr` asks Core to read now: the reactor's `pr.refresh` (`refreshThreadPrs`).
  */
 export function usePrSync() {
-  const watched = useHarnessSelector((s) => watchedWorktrees(s.threads), isSameWatched);
+  const watched = useHarnessSelector(
+    (s) => watchedWorktrees(s.threads),
+    isSameWatched,
+  );
   const dispatch = useDispatch();
-  const prs = useQueries({ queries: watched.map((w) => ({ ...branchPrsQuery(w.worktree, w.githubUser), enabled: host.isDesktop })), combine: (results) => results.map((result) => result.data) });
+  const prs = useQueries({
+    queries: watched.map((w) => ({
+      ...branchPrsQuery(w.worktree, w.githubUser),
+      enabled: host.isDesktop,
+    })),
+    combine: (results) => results.map((result) => result.data),
+  });
   useEffect(() => {
     watched.forEach(({ threadId }, i) => {
       const found = prs[i]?.prs.map(toPullRequest);
@@ -34,18 +43,33 @@ export function usePrSync() {
 /** Core reads the thread's branch PRs now and fast while CI runs. */
 export function refreshThreadPrs(threads: Thread[], threadId: string) {
   const w = watchedWorktrees(threads).find((t) => t.threadId === threadId);
-  if (w) refreshGithub({ cwd: w.worktree, githubUser: w.githubUser, isPush: true });
+  if (w)
+    refreshGithub({ cwd: w.worktree, githubUser: w.githubUser, isPush: true });
 }
 
 const isSameWatched = (a: WatchedWorktree[], b: WatchedWorktree[]) =>
-  a.length === b.length && a.every((w, i) => w.threadId === b[i]!.threadId && w.worktree === b[i]!.worktree && w.githubUser === b[i]!.githubUser);
+  a.length === b.length &&
+  a.every(
+    (w, i) =>
+      w.threadId === b[i]!.threadId &&
+      w.worktree === b[i]!.worktree &&
+      w.githubUser === b[i]!.githubUser,
+  );
 
 /** Unsettled live threads in their own worktree. Core reads each worktree's branch, since the agent may have switched from the one the thread was made on. */
 function watchedWorktrees(threads: Thread[]): WatchedWorktree[] {
   const profiles = getProfiles();
   return threads.flatMap((t) => {
     const worktree = worktreePath(t.id);
-    if (!t.live || t.status === 'settled' || !t.repo?.path || !worktree) return [];
-    return [{ threadId: t.id, worktree, githubUser: profiles.find((p) => p.id === t.spaceId)?.github || undefined }];
+    if (!t.live || t.status === 'settled' || !t.repo?.path || !worktree)
+      return [];
+    return [
+      {
+        threadId: t.id,
+        worktree,
+        githubUser:
+          profiles.find((p) => p.id === t.spaceId)?.github || undefined,
+      },
+    ];
   });
 }

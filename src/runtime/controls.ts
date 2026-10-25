@@ -21,7 +21,10 @@ export interface ThreadControls {
 }
 
 /** A saved side chat choice with an old catalog id read as the provider's own. */
-export const sideChatChoice = (choice: ModelChoice): ModelChoice => ({ ...choice, model: modelId(choice.model) });
+export const sideChatChoice = (choice: ModelChoice): ModelChoice => ({
+  ...choice,
+  model: modelId(choice.model),
+});
 
 export const DEFAULT_CONTROLS = {
   claude: { model: '', effort: 'high', speed: '', access: 'Auto' },
@@ -31,5 +34,11 @@ export const DEFAULT_CONTROLS = {
 export function controlsOf(thread: Thread): ThreadControls {
   const controls = thread.controls ?? DEFAULT_CONTROLS[thread.providers[0]];
   // Threads saved before speed existed ran standard.
-  return { ...controls, model: modelId(controls.model), effort: effortId(controls.effort), speed: controls.speed ?? '', access: accessOf(controls.access) };
+  return {
+    ...controls,
+    model: modelId(controls.model),
+    effort: effortId(controls.effort),
+    speed: controls.speed ?? '',
+    access: accessOf(controls.access),
+  };
 }

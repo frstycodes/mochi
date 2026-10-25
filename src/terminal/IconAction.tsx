@@ -1,9 +1,16 @@
 import type { ComponentProps } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 /** A ghost icon button whose `aria-label` doubles as its tooltip. */
-export function IconAction({ 'aria-label': label, ...props }: ComponentProps<typeof Button> & { 'aria-label': string }) {
+export function IconAction({
+  'aria-label': label,
+  ...props
+}: ComponentProps<typeof Button> & { 'aria-label': string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>

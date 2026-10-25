@@ -13,7 +13,10 @@ export function useGlobalKeys(onPalette: () => void) {
       const command = commandOf(e, ['palette', 'go-new', ...SPACES]);
       if (!command) return;
       if (command === 'palette') return (e.preventDefault(), onPalette());
-      if (command === 'go-new') return (e.preventDefault(), dispatch({ type: 'go', view: { kind: 'new' } }));
+      if (command === 'go-new')
+        return (
+          e.preventDefault(), dispatch({ type: 'go', view: { kind: 'new' } })
+        );
       const profile = getProfiles()[SPACES.indexOf(command)];
       if (!profile) return;
       e.preventDefault();

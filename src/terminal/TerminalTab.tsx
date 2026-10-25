@@ -1,15 +1,37 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Plus, AlertTriangle, Lock, Search, SendAlt, Terminal, X } from '@/icons';
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Plus,
+  AlertTriangle,
+  Lock,
+  Search,
+  SendAlt,
+  Terminal,
+  X,
+} from '@/icons';
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import { cn } from '@/lib/utils';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { Thread } from '../model';
 import { AskInSideChat } from '../sidechat/AskInSideChat';
 import { IconAction } from './IconAction';
-import { addShell, closeSession, showSession, type TerminalSession } from './sessions';
+import {
+  addShell,
+  closeSession,
+  showSession,
+  type TerminalSession,
+} from './sessions';
 import { useTerminals } from './useTerminals';
 import { PaneActions, PaneTitle } from '../pane/PaneHeader';
 import { PlannedTab } from '../pane/PlannedTab';
@@ -18,12 +40,31 @@ import { isCommand } from '../keymap';
 
 export default function TerminalTab({ thread, tab }: PaneTabProps) {
   const cwd = threadCwd(thread);
-  if (!cwd) return <PlannedTab icon={Terminal} title="No project folder" description="This chat has no folder, so there is no shell to open." />;
+  if (!cwd)
+    return (
+      <PlannedTab
+        icon={Terminal}
+        title="No project folder"
+        description="This chat has no folder, so there is no shell to open."
+      />
+    );
   return <Terminals thread={thread} tabId={tab.id} cwd={cwd} />;
 }
 
-function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd: string }) {
-  const { key, context, group, sendSelection, askToFix } = useTerminals(thread, tabId, cwd);
+function Terminals({
+  thread,
+  tabId,
+  cwd,
+}: {
+  thread: Thread;
+  tabId: string;
+  cwd: string;
+}) {
+  const { key, context, group, sendSelection, askToFix } = useTerminals(
+    thread,
+    tabId,
+    cwd,
+  );
   const [isSearching, setIsSearching] = useState(false);
   if (!group) return null;
   const focused = group.sessions.find((s) => s.id === group.focused);
@@ -35,7 +76,10 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
   };
 
   return (
-    <div className="@container flex h-full flex-col gap-2 px-2 pb-2" onKeyDown={onKeyDown}>
+    <div
+      className="@container flex h-full flex-col gap-2 px-2 pb-2"
+      onKeyDown={onKeyDown}
+    >
       <PaneTitle>
         <div
           role="tablist"
@@ -60,17 +104,28 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
                   variant="ghost"
                   size="sm"
                   onClick={() => showSession(key, s.id)}
-                  className={cn('hover:bg-transparent', s.kind === 'shell' && 'pr-1')}
+                  className={cn(
+                    'hover:bg-transparent',
+                    s.kind === 'shell' && 'pr-1',
+                  )}
                 >
                   {s.kind !== 'shell' && <Lock aria-hidden />}
                   {s.title}
-                  {!!s.failure && <AlertTriangle className="text-destructive" aria-label="Last command failed" />}
+                  {!!s.failure && (
+                    <AlertTriangle
+                      className="text-destructive"
+                      aria-label="Last command failed"
+                    />
+                  )}
                 </Button>
                 {s.kind === 'shell' && (
                   <IconAction
                     aria-label={`Close ${s.title}`}
                     onClick={() => closeSession(key, s.id)}
-                    className={cn('mr-0.5 size-5 opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100', isSelected && 'opacity-100')}
+                    className={cn(
+                      'mr-0.5 size-5 opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100',
+                      isSelected && 'opacity-100',
+                    )}
                   >
                     <X />
                   </IconAction>
@@ -78,39 +133,73 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
               </span>
             );
           })}
-          <IconAction aria-label="New terminal" className="text-muted-foreground" onClick={() => addShell(key, context)}>
+          <IconAction
+            aria-label="New terminal"
+            className="text-muted-foreground"
+            onClick={() => addShell(key, context)}
+          >
             <Plus />
           </IconAction>
         </div>
       </PaneTitle>
       <PaneActions>
         {!!focused?.selection && (
-          <Button variant="secondary" size="sm" onClick={() => sendSelection(focused)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => sendSelection(focused)}
+          >
             <SendAlt aria-hidden />
             Send to chat
           </Button>
         )}
-        {!!focused?.selection && <AskInSideChat threadId={thread.id} quote={{ source: 'terminal', label: focused.title, text: focused.selection.trim() }} />}
-        <IconAction aria-label="Search output" aria-keyshortcuts="Meta+F" onClick={() => setIsSearching((v) => !v)}>
+        {!!focused?.selection && (
+          <AskInSideChat
+            threadId={thread.id}
+            quote={{
+              source: 'terminal',
+              label: focused.title,
+              text: focused.selection.trim(),
+            }}
+          />
+        )}
+        <IconAction
+          aria-label="Search output"
+          aria-keyshortcuts="Meta+F"
+          onClick={() => setIsSearching((v) => !v)}
+        >
           <Search />
         </IconAction>
       </PaneActions>
-      {isSearching && !!focused && <SearchBar session={focused} onClose={() => setIsSearching(false)} />}
+      {isSearching && !!focused && (
+        <SearchBar session={focused} onClose={() => setIsSearching(false)} />
+      )}
       {!!focused && <TerminalSurface key={focused.id} session={focused} />}
       {/* A failed command reads under the output it came from, where your eye already is. */}
       {!!focused?.failure && (
         <Alert variant="destructive">
           <AlertTriangle />
           <AlertTitle>Exited with {focused.failure.exitCode}</AlertTitle>
-          <AlertDescription className="truncate font-mono">{focused.failure.output.split('\n').findLast(Boolean)}</AlertDescription>
+          <AlertDescription className="truncate font-mono">
+            {focused.failure.output.split('\n').findLast(Boolean)}
+          </AlertDescription>
           <AlertAction>
-            <Button variant="secondary" size="sm" onClick={() => askToFix(focused)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => askToFix(focused)}
+            >
               Ask agent to fix
             </Button>
           </AlertAction>
         </Alert>
       )}
-      {!host.isDesktop && <p className="px-1 type-caption text-subtle-foreground">Web preview: a recorded session. The desktop app runs a real shell here.</p>}
+      {!host.isDesktop && (
+        <p className="px-1 type-caption text-subtle-foreground">
+          Web preview: a recorded session. The desktop app runs a real shell
+          here.
+        </p>
+      )}
     </div>
   );
 }
@@ -121,7 +210,8 @@ function TerminalSurface({ session }: { session: TerminalSession }) {
     const box = boxRef.current!;
     box.append(session.element);
     if (!session.term.element) session.term.open(session.element);
-    const fit = () => box.clientWidth > 0 && box.clientHeight > 0 && session.fit.fit();
+    const fit = () =>
+      box.clientWidth > 0 && box.clientHeight > 0 && session.fit.fit();
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(box);
@@ -131,10 +221,18 @@ function TerminalSurface({ session }: { session: TerminalSession }) {
     };
   }, [session]);
   useEffect(() => session.term.focus(), [session]);
-  return <div ref={boxRef} className="min-h-0 min-w-0 flex-1 overflow-hidden" />;
+  return (
+    <div ref={boxRef} className="min-h-0 min-w-0 flex-1 overflow-hidden" />
+  );
 }
 
-function SearchBar({ session, onClose }: { session: TerminalSession; onClose: () => void }) {
+function SearchBar({
+  session,
+  onClose,
+}: {
+  session: TerminalSession;
+  onClose: () => void;
+}) {
   const [query, setQuery] = useState('');
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {

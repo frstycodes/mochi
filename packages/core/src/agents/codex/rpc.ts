@@ -2,7 +2,12 @@ import type { Readable, Writable } from 'node:stream';
 
 export type RpcId = string | number;
 export type RpcMessage =
-  | { kind: 'response'; id: RpcId; result?: unknown; error?: { code: number; message: string } }
+  | {
+      kind: 'response';
+      id: RpcId;
+      result?: unknown;
+      error?: { code: number; message: string };
+    }
   | { kind: 'request'; id: RpcId; method: string; params: unknown }
   | { kind: 'notification'; method: string; params: unknown };
 
@@ -24,7 +29,14 @@ export class RpcTimeoutError extends Error {}
 export class RpcClient {
   private nextId = 1;
   private buffer = '';
-  private pending = new Map<RpcId, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
+  private pending = new Map<
+    RpcId,
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      timer: NodeJS.Timeout;
+    }
+  >();
 
   private output: Writable;
   private handlers: RpcHandlers;
@@ -36,14 +48,26 @@ export class RpcClient {
     input.on('data', (chunk: string) => this.receive(chunk));
   }
 
-  request<T = unknown>(method: string, params: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  request<T = unknown>(
+    method: string,
+    params: unknown,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+  ): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new RpcTimeoutError(`codex ${method} timed out after ${timeoutMs / 1000}s`));
+        reject(
+          new RpcTimeoutError(
+            `codex ${method} timed out after ${timeoutMs / 1000}s`,
+          ),
+        );
       }, timeoutMs);
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
+      this.pending.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        timer,
+      });
       this.write({ id, method, params });
     });
   }
@@ -88,11 +112,22 @@ export class RpcClient {
 
   private dispatch(line: string) {
     const message = parseMessage(line);
-    if (typeof message === 'string') return this.handlers.onInvalid(message, line.slice(0, 200));
-    if (message.kind === 'notification') return this.handlers.onNotification(message.method, message.params);
-    if (message.kind === 'request') return this.handlers.onRequest(message.id, message.method, message.params);
+    if (typeof message === 'string')
+      return this.handlers.onInvalid(message, line.slice(0, 200));
+    if (message.kind === 'notification')
+      return this.handlers.onNotification(message.method, message.params);
+    if (message.kind === 'request')
+      return this.handlers.onRequest(
+        message.id,
+        message.method,
+        message.params,
+      );
     const waiting = this.pending.get(message.id);
-    if (!waiting) return this.handlers.onInvalid('response to an unknown request', line.slice(0, 200));
+    if (!waiting)
+      return this.handlers.onInvalid(
+        'response to an unknown request',
+        line.slice(0, 200),
+      );
     this.pending.delete(message.id);
     clearTimeout(waiting.timer);
     if (message.error) waiting.reject(new Error(message.error.message));
@@ -108,18 +143,40 @@ export function parseMessage(line: string): RpcMessage | string {
   } catch {
     return 'not JSON';
   }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return 'not an object';
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return 'not an object';
   const m = value as Record<string, unknown>;
-  const hasId = typeof m.id === 'string' || (typeof m.id === 'number' && Number.isInteger(m.id));
+  const hasId =
+    typeof m.id === 'string' ||
+    (typeof m.id === 'number' && Number.isInteger(m.id));
   if (typeof m.method === 'string') {
-    if (m.params !== undefined && (typeof m.params !== 'object' || m.params === null)) return 'params is not an object';
-    return hasId ? { kind: 'request', id: m.id as RpcId, method: m.method, params: m.params ?? {} } : { kind: 'notification', method: m.method, params: m.params ?? {} };
+    if (
+      m.params !== undefined &&
+      (typeof m.params !== 'object' || m.params === null)
+    )
+      return 'params is not an object';
+    return hasId
+      ? {
+          kind: 'request',
+          id: m.id as RpcId,
+          method: m.method,
+          params: m.params ?? {},
+        }
+      : { kind: 'notification', method: m.method, params: m.params ?? {} };
   }
   if (!hasId) return 'no method and no id';
   if ('error' in m) {
     const e = m.error as Record<string, unknown> | null;
-    if (typeof e !== 'object' || e === null || typeof e.message !== 'string') return 'malformed error';
-    return { kind: 'response', id: m.id as RpcId, error: { code: typeof e.code === 'number' ? e.code : 0, message: e.message } };
+    if (typeof e !== 'object' || e === null || typeof e.message !== 'string')
+      return 'malformed error';
+    return {
+      kind: 'response',
+      id: m.id as RpcId,
+      error: {
+        code: typeof e.code === 'number' ? e.code : 0,
+        message: e.message,
+      },
+    };
   }
   if (!('result' in m)) return 'response without result or error';
   return { kind: 'response', id: m.id as RpcId, result: m.result };

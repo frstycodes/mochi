@@ -14,10 +14,14 @@ export const Int = Schema.Number.check(Schema.isInt());
 export const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
 
 /** A `T[]` of at most `max` items. */
-export const ArrayOf = <S extends Schema.Top>(item: S, max: number) => Schema.Array(item).check(Schema.isMaxLength(max));
+export const ArrayOf = <S extends Schema.Top>(item: S, max: number) =>
+  Schema.Array(item).check(Schema.isMaxLength(max));
 
 /** A method's arguments, in order, and what its promise resolves to. */
-export const invoke = <I extends Schema.Top, O extends Schema.Top>(input: I, output: O) => ({ input, output });
+export const invoke = <I extends Schema.Top, O extends Schema.Top>(
+  input: I,
+  output: O,
+) => ({ input, output });
 
 /** A push channel (`on*` methods): what each callback gets. */
 export const event = <E extends Schema.Top>(payload: E) => ({ event: payload });

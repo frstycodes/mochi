@@ -17,10 +17,27 @@ const ReplayThreadId = Str(128).check(Schema.isPattern(/^[\w-]+$/));
 /** `DataHost` (`src/host/types/data.ts`). */
 export const dataRpc = {
   loadReplay: invoke(T([ReplayThreadId]), Schema.NullOr(Schema.String)),
-  appendReplay: invoke(T([ReplayThreadId, Str(MAX_REPLAY_BYTES)]), Schema.Boolean),
-  replayUsage: invoke(T([]), Schema.Struct({ threads: Schema.Number, bytes: Schema.Number })),
-  clearReplays: invoke(T([o(Schema.Array(ReplayThreadId).check(Schema.isMaxLength(10_000)))]), Schema.Void),
-  exportReplay: invoke(T([Str(MAX_CHARS), Str(512)]), Schema.NullOr(Schema.String)),
-  saveImage: invoke(T([AgentImage.fields.mediaType, Str(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4)]), Schema.String),
+  appendReplay: invoke(
+    T([ReplayThreadId, Str(MAX_REPLAY_BYTES)]),
+    Schema.Boolean,
+  ),
+  replayUsage: invoke(
+    T([]),
+    Schema.Struct({ threads: Schema.Number, bytes: Schema.Number }),
+  ),
+  clearReplays: invoke(
+    T([o(Schema.Array(ReplayThreadId).check(Schema.isMaxLength(10_000)))]),
+    Schema.Void,
+  ),
+  exportReplay: invoke(
+    T([Str(MAX_CHARS), Str(512)]),
+    Schema.NullOr(Schema.String),
+  ),
+  saveImage: invoke(
+    T([
+      AgentImage.fields.mediaType,
+      Str(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4),
+    ]),
+    Schema.String,
+  ),
 };
-

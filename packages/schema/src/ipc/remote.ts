@@ -1,6 +1,13 @@
 import { Schema } from 'effect';
 import { event, invoke, Str } from '../checks.ts';
-import { CommandResult, DeviceKind, MirrorFrame, RemoteCommand, RemoteCommandRequest, Scope } from '../relay.ts';
+import {
+  CommandResult,
+  DeviceKind,
+  MirrorFrame,
+  RemoteCommand,
+  RemoteCommandRequest,
+  Scope,
+} from '../relay.ts';
 
 const opt = Schema.optional;
 const S = Schema.String;
@@ -9,8 +16,13 @@ const B = Schema.Boolean;
 const T = Schema.Tuple;
 const Void = Schema.Void;
 
-
-export const RemoteSettings = Schema.Struct({ isEnabled: B, allowsNetwork: B, machineName: S, reachesAnywhere: B, keepsAwake: B });
+export const RemoteSettings = Schema.Struct({
+  isEnabled: B,
+  allowsNetwork: B,
+  machineName: S,
+  reachesAnywhere: B,
+  keepsAwake: B,
+});
 export type RemoteSettings = typeof RemoteSettings.Type;
 
 export const RelayState = Schema.Union([
@@ -21,7 +33,12 @@ export const RelayState = Schema.Union([
 ]);
 export type RelayState = typeof RelayState.Type;
 
-const MachineStatus = Schema.Literals(['connecting', 'online', 'offline', 'refused']);
+const MachineStatus = Schema.Literals([
+  'connecting',
+  'online',
+  'offline',
+  'refused',
+]);
 
 export const FollowedMachine = Schema.Struct({
   id: S,
@@ -35,17 +52,39 @@ export const FollowedMachine = Schema.Struct({
 });
 export type FollowedMachine = typeof FollowedMachine.Type;
 
-export const MemberInfo = Schema.Struct({ id: S, name: S, kind: opt(DeviceKind), scopes: Schema.Array(Scope), addedAt: N, machineStatus: opt(MachineStatus) });
+export const MemberInfo = Schema.Struct({
+  id: S,
+  name: S,
+  kind: opt(DeviceKind),
+  scopes: Schema.Array(Scope),
+  addedAt: N,
+  machineStatus: opt(MachineStatus),
+});
 export type MemberInfo = typeof MemberInfo.Type;
 
-export const OtherMachine = Schema.Struct({ id: S, name: S, isOnline: B, pairingCode: S });
+export const OtherMachine = Schema.Struct({
+  id: S,
+  name: S,
+  isOnline: B,
+  pairingCode: S,
+});
 export type OtherMachine = typeof OtherMachine.Type;
 
-
-export const ApprovalRequest = Schema.Struct({ id: S, name: S, pairingCode: S, expiresAt: N });
+export const ApprovalRequest = Schema.Struct({
+  id: S,
+  name: S,
+  pairingCode: S,
+  expiresAt: N,
+});
 export type ApprovalRequest = typeof ApprovalRequest.Type;
 
-export const ConnectedDevice = Schema.Struct({ id: S, name: S, kind: opt(DeviceKind), scopes: Schema.Array(Scope), connectedAt: N });
+export const ConnectedDevice = Schema.Struct({
+  id: S,
+  name: S,
+  kind: opt(DeviceKind),
+  scopes: Schema.Array(Scope),
+  connectedAt: N,
+});
 export type ConnectedDevice = typeof ConnectedDevice.Type;
 
 export const RemoteStatus = Schema.Struct({
@@ -66,7 +105,18 @@ const MachineId = Str(64);
 
 export const remoteRpc = {
   status: invoke(T([]), RemoteStatus),
-  set: invoke(T([Schema.Struct({ isEnabled: opt(B), allowsNetwork: opt(B), machineName: opt(Str(64)), reachesAnywhere: opt(B), keepsAwake: opt(B) })]), RemoteStatus),
+  set: invoke(
+    T([
+      Schema.Struct({
+        isEnabled: opt(B),
+        allowsNetwork: opt(B),
+        machineName: opt(Str(64)),
+        reachesAnywhere: opt(B),
+        keepsAwake: opt(B),
+      }),
+    ]),
+    RemoteStatus,
+  ),
   onStatus: event(RemoteStatus),
   onCommand: event(RemoteCommandRequest),
   commandResult: invoke(T([Str(128), CommandResult]), Void),
@@ -81,10 +131,32 @@ export const remoteRpc = {
   follow: invoke(T([]), Void),
   onMachineFrame: event(Schema.Struct({ machineId: S, frame: MirrorFrame })),
   /** A followed machine's terminal, pushed as its shell prints (`terminal.output`); `next` is the offset after `data`. */
-  onTerminalOutput: event(Schema.Struct({ machineId: S, terminalId: S, data: S, next: Schema.Number, exitCode: opt(Schema.Number) })),
+  onTerminalOutput: event(
+    Schema.Struct({
+      machineId: S,
+      terminalId: S,
+      data: S,
+      next: Schema.Number,
+      exitCode: opt(Schema.Number),
+    }),
+  ),
   cacheMachine: invoke(T([MachineId, Str(MAX_ACTION_CHARS)]), Void),
-  cachedMachines: invoke(T([]), Schema.Array(Schema.Struct({ machineId: S, saved: S }))),
+  cachedMachines: invoke(
+    T([]),
+    Schema.Array(Schema.Struct({ machineId: S, saved: S })),
+  ),
   command: invoke(T([MachineId, RemoteCommand]), CommandResult),
 };
 
-export { CatalogProject, CommandResult, DeviceKind, MachineCatalog, RemoteCommand, MirrorFrame, RemoteCommandRequest, Scope, TerminalOutput, ThreadPoint } from '../relay.ts';
+export {
+  CatalogProject,
+  CommandResult,
+  DeviceKind,
+  MachineCatalog,
+  RemoteCommand,
+  MirrorFrame,
+  RemoteCommandRequest,
+  Scope,
+  TerminalOutput,
+  ThreadPoint,
+} from '../relay.ts';

@@ -35,17 +35,33 @@ const LAN_TIMEOUT_MS = 2000;
 
 /** A machine's Core as an RPC client, through whichever route pairs first, redialled on the same schedule for every route. */
 export const makeDeviceClient = (options: DeviceOptions) =>
-  Effect.flatMap(Layer.build(layerProtocol(options)), (context) => RpcClient.make(CoreWsRpcs).pipe(Effect.provide(context)));
+  Effect.flatMap(Layer.build(layerProtocol(options)), (context) =>
+    RpcClient.make(CoreWsRpcs).pipe(Effect.provide(context)),
+  );
 
 export type DeviceClient = Effect.Success<ReturnType<typeof makeDeviceClient>>;
 
 const layerProtocol = (options: DeviceOptions) =>
-  RpcClient.layerProtocolSocket({ retryTransientErrors: true, retryPolicy: reconnect }).pipe(
-    Layer.provide(Layer.effect(Socket.Socket, Socket.fromWebSocket(Effect.acquireRelease(open(options), (ws) => Effect.sync(() => ws.close(1000, 'Done')))))),
+  RpcClient.layerProtocolSocket({
+    retryTransientErrors: true,
+    retryPolicy: reconnect,
+  }).pipe(
+    Layer.provide(
+      Layer.effect(
+        Socket.Socket,
+        Socket.fromWebSocket(
+          Effect.acquireRelease(open(options), (ws) =>
+            Effect.sync(() => ws.close(1000, 'Done')),
+          ),
+        ),
+      ),
+    ),
     Layer.provide(RpcSerialization.layerJson),
   );
 
-const decodeMachineFrame = Schema.decodeUnknownOption(Schema.fromJsonString(Relay.MachineLinkFrame));
+const decodeMachineFrame = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Relay.MachineLinkFrame),
+);
 
 /** Pairs over the first route that answers, says hello, and waits for the welcome; then the link is the RPC socket. */
 const open = (options: DeviceOptions) =>
@@ -58,11 +74,15 @@ const open = (options: DeviceOptions) =>
     },
     catch: (cause) => {
       options.onOffline(cause instanceof Error ? cause.message : String(cause));
-      return new Socket.SocketError({ reason: new Socket.SocketOpenError({ kind: 'Unknown', cause }) });
+      return new Socket.SocketError({
+        reason: new Socket.SocketOpenError({ kind: 'Unknown', cause }),
+      });
     },
   });
 
-async function openFirst(options: DeviceOptions): Promise<{ link: Link; route: Route['kind'] }> {
+async function openFirst(
+  options: DeviceOptions,
+): Promise<{ link: Link; route: Route['kind'] }> {
   let error: unknown = new Error('No way to reach it');
   for (const route of options.routes()) {
     let raw: RawLink | undefined;
@@ -83,7 +103,10 @@ async function openFirst(options: DeviceOptions): Promise<{ link: Link; route: R
 
 function hello(link: Link, options: DeviceOptions) {
   return new Promise<Relay.WelcomeFrame>((resolve, reject) => {
-    const timer = setTimeout(() => fail('That computer didn’t answer'), WELCOME_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => fail('That computer didn’t answer'),
+      WELCOME_TIMEOUT_MS,
+    );
     function fail(reason: string) {
       clearTimeout(timer);
       link.close(1000, reason);
@@ -91,27 +114,48 @@ function hello(link: Link, options: DeviceOptions) {
     }
     link.onMessage((text) => {
       const frame = decodeMachineFrame(text);
-      if (frame._tag === 'None') return fail('That computer answered something unexpected');
-      if (frame.value.type === 'members') return options.onMembers?.(frame.value.members);
+      if (frame._tag === 'None')
+        return fail('That computer answered something unexpected');
+      if (frame.value.type === 'members')
+        return options.onMembers?.(frame.value.members);
       clearTimeout(timer);
       if (frame.value.type === 'refused') return fail(frame.value.reason);
       resolve(frame.value);
     });
     link.onClose(() => fail('That computer closed the connection'));
     const members = options.members?.();
-    link.send(JSON.stringify({ type: 'hello', version: Relay.PROTOCOL_VERSION, ...(members !== undefined && { members }) } satisfies Relay.HelloFrame));
+    link.send(
+      JSON.stringify({
+        type: 'hello',
+        version: Relay.PROTOCOL_VERSION,
+        ...(members !== undefined && { members }),
+      } satisfies Relay.HelloFrame),
+    );
   });
 }
 
-type Listener = (event: { data?: string; code?: number; reason?: string }) => void;
+type Listener = (event: {
+  data?: string;
+  code?: number;
+  reason?: string;
+}) => void;
 
 /** The paired link as the WebSocket Effect's socket reads: RPC frames pass through, membership frames go to `onMembers`. */
 function linkSocket(link: Link, options: DeviceOptions): Socket.WebSocketLike {
-  const listeners = { open: new Set<Listener>(), message: new Set<Listener>(), error: new Set<Listener>(), close: new Set<Listener>() };
-  const emit = (type: keyof typeof listeners, event: Parameters<Listener>[0]) => listeners[type].forEach((listener) => listener(event));
+  const listeners = {
+    open: new Set<Listener>(),
+    message: new Set<Listener>(),
+    error: new Set<Listener>(),
+    close: new Set<Listener>(),
+  };
+  const emit = (type: keyof typeof listeners, event: Parameters<Listener>[0]) =>
+    listeners[type].forEach((listener) => listener(event));
   link.onMessage((text) => {
-    const control = text.startsWith('{"type"') ? decodeMachineFrame(text) : undefined;
-    if (control?._tag === 'Some' && control.value.type === 'members') return options.onMembers?.(control.value.members);
+    const control = text.startsWith('{"type"')
+      ? decodeMachineFrame(text)
+      : undefined;
+    if (control?._tag === 'Some' && control.value.type === 'members')
+      return options.onMembers?.(control.value.members);
     emit('message', { data: text });
   });
   link.onClose(() => {
@@ -122,10 +166,15 @@ function linkSocket(link: Link, options: DeviceOptions): Socket.WebSocketLike {
     get readyState() {
       return link.isOpen() ? 1 : 3;
     },
-    addEventListener: (type, listener) => void listeners[type].add(listener as Listener),
-    removeEventListener: (type, listener) => void listeners[type].delete(listener as Listener),
+    addEventListener: (type, listener) =>
+      void listeners[type].add(listener as Listener),
+    removeEventListener: (type, listener) =>
+      void listeners[type].delete(listener as Listener),
     close: (code, reason) => link.close(code ?? 1000, reason ?? ''),
-    send: (data) => link.send(typeof data === 'string' ? data : new TextDecoder().decode(data)),
+    send: (data) =>
+      link.send(
+        typeof data === 'string' ? data : new TextDecoder().decode(data),
+      ),
   };
 }
 

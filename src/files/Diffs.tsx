@@ -1,5 +1,9 @@
 import { lazy, Suspense } from 'react';
-import type { FileProps, MultiFileDiffProps, PatchDiffProps } from '@pierre/diffs/react';
+import type {
+  FileProps,
+  MultiFileDiffProps,
+  PatchDiffProps,
+} from '@pierre/diffs/react';
 
 export function File<A = undefined, C = undefined>(props: FileProps<A, C>) {
   return (
@@ -9,7 +13,9 @@ export function File<A = undefined, C = undefined>(props: FileProps<A, C>) {
   );
 }
 
-export function MultiFileDiff<A = undefined, C = undefined>(props: MultiFileDiffProps<A, C>) {
+export function MultiFileDiff<A = undefined, C = undefined>(
+  props: MultiFileDiffProps<A, C>,
+) {
   return (
     <Suspense>
       <LazyMultiFileDiff {...props} />
@@ -17,7 +23,9 @@ export function MultiFileDiff<A = undefined, C = undefined>(props: MultiFileDiff
   );
 }
 
-export function PatchDiff<A = undefined, C = undefined>(props: PatchDiffProps<A, C>) {
+export function PatchDiff<A = undefined, C = undefined>(
+  props: PatchDiffProps<A, C>,
+) {
   return (
     <Suspense>
       <LazyPatchDiff {...props} />
@@ -25,6 +33,12 @@ export function PatchDiff<A = undefined, C = undefined>(props: PatchDiffProps<A,
   );
 }
 
-const LazyFile = lazy(() => import('./DiffRenderers').then((m) => ({ default: m.File }))) as typeof import('./DiffRenderers').File;
-const LazyMultiFileDiff = lazy(() => import('./DiffRenderers').then((m) => ({ default: m.MultiFileDiff }))) as typeof import('./DiffRenderers').MultiFileDiff;
-const LazyPatchDiff = lazy(() => import('./DiffRenderers').then((m) => ({ default: m.PatchDiff }))) as typeof import('./DiffRenderers').PatchDiff;
+const LazyFile = lazy(() =>
+  import('./DiffRenderers').then((m) => ({ default: m.File })),
+) as typeof import('./DiffRenderers').File;
+const LazyMultiFileDiff = lazy(() =>
+  import('./DiffRenderers').then((m) => ({ default: m.MultiFileDiff })),
+) as typeof import('./DiffRenderers').MultiFileDiff;
+const LazyPatchDiff = lazy(() =>
+  import('./DiffRenderers').then((m) => ({ default: m.PatchDiff })),
+) as typeof import('./DiffRenderers').PatchDiff;

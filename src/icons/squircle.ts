@@ -2,7 +2,13 @@
  * A rectangle with continuous-curvature corners: each corner is one cubic that starts 1.9 × `r` from it with its handles
  * close in, so the curve eases into the straight edge instead of meeting it with a circular arc's jump.
  */
-export function squircle(x: number, y: number, w: number, h: number, r: number) {
+export function squircle(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   const k = Math.min(r * 1.9, w / 2, h / 2);
   const c = k * 0.08;
   const [right, bottom] = [x + w, y + h];

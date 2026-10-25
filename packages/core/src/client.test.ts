@@ -20,7 +20,14 @@ const freePort = () =>
 const startCore = (port: number) =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
-    yield* Layer.buildWithScope(layerCore({ port, tokens: new Map([[TOKEN, Capabilities.allScopes]]), origins: [] }), scope);
+    yield* Layer.buildWithScope(
+      layerCore({
+        port,
+        tokens: new Map([[TOKEN, Capabilities.allScopes]]),
+        origins: [],
+      }),
+      scope,
+    );
     return scope;
   });
 
@@ -43,25 +50,46 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.live('calls made while Core restarts succeed once it is back; a call in flight when it drops is sent again', () =>
-  Effect.gen(function* () {
-    const port = yield* Effect.promise(freePort);
-    const dials = watchDials();
-    const first = yield* startCore(port);
-    const client = yield* makeCoreClient(coreUrl(port, TOKEN));
-    yield* client['docs.set']({ table: 'settings', key: 'agent', value: { model: 'opus' } });
-    // In flight when Core goes: `shell` keeps its socket busy, `docs.get` is mid-call while the server closes.
-    const inFlight = yield* Effect.forkChild(client['docs.get']({ table: 'settings', key: 'agent' }), { startImmediately: true });
-    yield* Scope.close(first, Exit.void);
-    dials.arm();
-    const during = yield* Effect.forkChild(Effect.all([client.ping(), client['docs.set']({ table: 'settings', key: 'agent', value: { model: 'sonnet' } })]));
-    yield* Effect.promise(() => dials.redialFailed);
-    const second = yield* startCore(port);
-    yield* Effect.addFinalizer(() => Scope.close(second, Exit.void));
-    const [pong] = yield* Fiber.join(during);
-    assert.equal(pong, 'pong');
-    // The restarted Core is in memory: the first value is gone, the one sent during the restart landed.
-    yield* Fiber.join(inFlight);
-    assert.deepEqual(yield* client['docs.get']({ table: 'settings', key: 'agent' }), { model: 'sonnet' });
-  }),
+it.live(
+  'calls made while Core restarts succeed once it is back; a call in flight when it drops is sent again',
+  () =>
+    Effect.gen(function* () {
+      const port = yield* Effect.promise(freePort);
+      const dials = watchDials();
+      const first = yield* startCore(port);
+      const client = yield* makeCoreClient(coreUrl(port, TOKEN));
+      yield* client['docs.set']({
+        table: 'settings',
+        key: 'agent',
+        value: { model: 'opus' },
+      });
+      // In flight when Core goes: `shell` keeps its socket busy, `docs.get` is mid-call while the server closes.
+      const inFlight = yield* Effect.forkChild(
+        client['docs.get']({ table: 'settings', key: 'agent' }),
+        { startImmediately: true },
+      );
+      yield* Scope.close(first, Exit.void);
+      dials.arm();
+      const during = yield* Effect.forkChild(
+        Effect.all([
+          client.ping(),
+          client['docs.set']({
+            table: 'settings',
+            key: 'agent',
+            value: { model: 'sonnet' },
+          }),
+        ]),
+      );
+      yield* Effect.promise(() => dials.redialFailed);
+      const second = yield* startCore(port);
+      yield* Effect.addFinalizer(() => Scope.close(second, Exit.void));
+      const [pong] = yield* Fiber.join(during);
+      assert.equal(pong, 'pong');
+      // The restarted Core is in memory: the first value is gone, the one sent during the restart landed.
+      yield* Fiber.join(inFlight);
+      assert.deepEqual(
+        yield* client['docs.get']({ table: 'settings', key: 'agent' }),
+        { model: 'sonnet' },
+      );
+    }),
 );

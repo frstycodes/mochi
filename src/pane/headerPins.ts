@@ -4,7 +4,8 @@ import { useDragSelector } from '../layout/drag.ts';
 import { getPrefs, setPrefs, usePrefs } from '../settings/prefs.ts';
 
 // A visual needs a chat visual to show, so it can't open from a pin.
-const isPinnable = (kind: string): kind is Exclude<PaneTabKind, 'visual'> => kind !== 'visual' && (PANE_TAB_KINDS as readonly string[]).includes(kind);
+const isPinnable = (kind: string): kind is Exclude<PaneTabKind, 'visual'> =>
+  kind !== 'visual' && (PANE_TAB_KINDS as readonly string[]).includes(kind);
 
 export const PINNABLE_KINDS = PANE_TAB_KINDS.filter(isPinnable);
 export type PinnableKind = (typeof PINNABLE_KINDS)[number];
@@ -22,13 +23,20 @@ export function setPinned(kind: PaneTabKind, isPinned: boolean) {
 
 /** The thread header marks itself `data-pin-drop`; a pane released over it gets pinned. */
 export function isOverPinDrop(x: number, y: number) {
-  return document.elementsFromPoint(x, y).some((el) => el.closest('[data-pin-drop]'));
+  return document
+    .elementsFromPoint(x, y)
+    .some((el) => el.closest('[data-pin-drop]'));
 }
 
 /** While a pane is being dragged: whether it's over this header. Selectors, not the whole session: re-rendering the header on every pointer move froze Motion's drag of the pane tab (its pointer stopped updating after the first move). */
 export function usePinDrop(header: RefObject<HTMLElement | null>) {
   const isDragging = useDragSelector((s) => s?.view.kind === 'tab');
-  const isOver = useDragSelector((s) => s?.view.kind === 'tab' && !!header.current && isInside(header.current, s.x, s.y));
+  const isOver = useDragSelector(
+    (s) =>
+      s?.view.kind === 'tab' &&
+      !!header.current &&
+      isInside(header.current, s.x, s.y),
+  );
   return { isDragging, isOver };
 }
 

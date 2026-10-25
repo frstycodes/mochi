@@ -28,12 +28,18 @@ export interface Link {
 /** Text frames are never protocol: they are the relay's heartbeat, so they never reach the reader. */
 export function socketLink(socket: WebSocket): RawLink {
   const reader = queuedReader();
-  socket.on('message', (data, isBinary) => isBinary && reader.deliver(toBytes(data as Buffer)));
+  socket.on(
+    'message',
+    (data, isBinary) => isBinary && reader.deliver(toBytes(data as Buffer)),
+  );
   return {
     send: (bytes) => socket.readyState === socket.OPEN && socket.send(bytes),
     close: (code, reason) => socket.close(code, reason),
     onMessage: reader.set,
-    onClose: (listener) => void socket.on('close', (code, reason) => listener(code, reason.toString())),
+    onClose: (listener) =>
+      void socket.on('close', (code, reason) =>
+        listener(code, reason.toString()),
+      ),
     isOpen: () => socket.readyState === socket.OPEN,
   };
 }
@@ -43,7 +49,8 @@ export function queuedReader() {
   let listener: ((bytes: Uint8Array) => void) | undefined;
   const waiting: Uint8Array[] = [];
   return {
-    deliver: (bytes: Uint8Array) => (listener ? listener(bytes) : void waiting.push(bytes)),
+    deliver: (bytes: Uint8Array) =>
+      listener ? listener(bytes) : void waiting.push(bytes),
     set: (next: ((bytes: Uint8Array) => void) | undefined) => {
       listener = next;
       while (listener && waiting.length) listener(waiting.shift()!);
@@ -53,7 +60,13 @@ export function queuedReader() {
 
 /** ws hands a message over as one Buffer, fragments or an ArrayBuffer depending on `binaryType`. */
 export function toBytes(data: Buffer | ArrayBuffer | Buffer[]): Uint8Array {
-  return new Uint8Array(Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data));
+  return new Uint8Array(
+    Array.isArray(data)
+      ? Buffer.concat(data)
+      : Buffer.isBuffer(data)
+        ? data
+        : Buffer.from(data),
+  );
 }
 
 /** Pings every `HEARTBEAT_MS` and terminates the socket when nothing came back since the last one. */

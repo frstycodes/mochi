@@ -2,9 +2,39 @@ import { existsSync } from 'node:fs';
 import { app, net, shell } from 'electron';
 import type { BrowserHost } from '../../src/host/types/browser.ts';
 import { startCompare, stopCompare } from '../browser/compare.ts';
-import { browserLabel, parseSuggestions, SUGGEST_URLS } from '../browser/external.ts';
+import {
+  browserLabel,
+  parseSuggestions,
+  SUGGEST_URLS,
+} from '../browser/external.ts';
 import { resolveCwd } from '../pty/cwd.ts';
-import { actOnView, answerDialogInView, findInView, menuCommandInView, peekView, stopFindInView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import {
+  actOnView,
+  answerDialogInView,
+  findInView,
+  menuCommandInView,
+  peekView,
+  stopFindInView,
+  scrollView,
+  setAutoReload,
+  evalInView,
+  waitForView,
+  cancelPick,
+  captureView,
+  clearSpaceData,
+  createView,
+  destroyView,
+  emulateView,
+  navigateView,
+  pickElement,
+  runCommand,
+  setDevtools,
+  setViewBounds,
+  setViewMirror,
+  setViewZoom,
+  snapshotView,
+  viewLogs,
+} from '../browser/views.ts';
 import type { Handlers } from './handlers.ts';
 
 const SUGGEST_TIMEOUT_MS = 2500;
@@ -99,12 +129,19 @@ export const browser = {
     shell.showItemInFolder(path);
   },
   async defaultBrowser() {
-    return browserLabel(app.getApplicationNameForProtocol('https://'), app.getName());
+    return browserLabel(
+      app.getApplicationNameForProtocol('https://'),
+      app.getName(),
+    );
   },
   async suggest(_sender, engine, query) {
     const q = query.trim();
     if (!q) return [];
-    const res = await net.fetch(SUGGEST_URLS[engine] + encodeURIComponent(q), { signal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS) }).catch(() => null);
+    const res = await net
+      .fetch(SUGGEST_URLS[engine] + encodeURIComponent(q), {
+        signal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
+      })
+      .catch(() => null);
     return res?.ok ? parseSuggestions(await res.json().catch(() => null)) : [];
   },
 } satisfies Handlers<BrowserHost>;

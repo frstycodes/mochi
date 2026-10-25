@@ -1,6 +1,14 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { CallToolRequestSchema, ListResourcesRequestSchema, ListResourceTemplatesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, type CallToolResult, type Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema,
+  type CallToolResult,
+  type Tool,
+} from '@modelcontextprotocol/sdk/types.js';
 import { ACCOUNT_ARGUMENT } from '../../src/library/connectors.ts';
 
 /**
@@ -9,27 +17,60 @@ import { ACCOUNT_ARGUMENT } from '../../src/library/connectors.ts';
  * names. Resources (MCP App views) are read from the first account, whose tool list this is. No Electron here, so the
  * routing can be tested in node.
  */
-export async function connectorServer(name: string, aliases: string[], clientFor: (alias: string) => Promise<Client>) {
+export async function connectorServer(
+  name: string,
+  aliases: string[],
+  clientFor: (alias: string) => Promise<Client>,
+) {
   const [first] = aliases;
   const upstream = await clientFor(first);
   const isShared = aliases.length > 1;
-  const note = isShared ? `Every tool takes ${ACCOUNT_ARGUMENT}: one of ${aliases.map((a) => `"${a}"`).join(', ')}, the account to act as.` : '';
-  const server = new Server({ name, version: '1.0.0' }, { capabilities: { tools: {}, resources: {} }, instructions: [upstream.getInstructions(), note].filter(Boolean).join('\n\n') || undefined });
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: (await allTools(upstream)).map((tool) => (isShared ? withAccount(tool, aliases) : tool)) }));
+  const note = isShared
+    ? `Every tool takes ${ACCOUNT_ARGUMENT}: one of ${aliases.map((a) => `"${a}"`).join(', ')}, the account to act as.`
+    : '';
+  const server = new Server(
+    { name, version: '1.0.0' },
+    {
+      capabilities: { tools: {}, resources: {} },
+      instructions:
+        [upstream.getInstructions(), note].filter(Boolean).join('\n\n') ||
+        undefined,
+    },
+  );
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: (await allTools(upstream)).map((tool) =>
+      isShared ? withAccount(tool, aliases) : tool,
+    ),
+  }));
   server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
     const { [ACCOUNT_ARGUMENT]: chosen, ...args } = params.arguments ?? {};
     const alias = isShared ? chosen : first;
-    if (typeof alias !== 'string' || !aliases.includes(alias)) return failure(`Pass ${ACCOUNT_ARGUMENT} as one of ${aliases.join(', ')}.`);
+    if (typeof alias !== 'string' || !aliases.includes(alias))
+      return failure(
+        `Pass ${ACCOUNT_ARGUMENT} as one of ${aliases.join(', ')}.`,
+      );
     try {
-      return (await (await clientFor(alias)).callTool({ ...params, arguments: args })) as CallToolResult;
+      return (await (
+        await clientFor(alias)
+      ).callTool({ ...params, arguments: args })) as CallToolResult;
     } catch (error) {
-      return failure(`${alias}: ${error instanceof Error ? error.message : String(error)}`);
+      return failure(
+        `${alias}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   });
   // An upstream without resources answers "method not found"; the session just sees none.
-  server.setRequestHandler(ListResourcesRequestSchema, (request) => upstream.listResources(request.params).catch(() => ({ resources: [] })));
-  server.setRequestHandler(ListResourceTemplatesRequestSchema, (request) => upstream.listResourceTemplates(request.params).catch(() => ({ resourceTemplates: [] })));
-  server.setRequestHandler(ReadResourceRequestSchema, (request) => upstream.readResource(request.params));
+  server.setRequestHandler(ListResourcesRequestSchema, (request) =>
+    upstream.listResources(request.params).catch(() => ({ resources: [] })),
+  );
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, (request) =>
+    upstream
+      .listResourceTemplates(request.params)
+      .catch(() => ({ resourceTemplates: [] })),
+  );
+  server.setRequestHandler(ReadResourceRequestSchema, (request) =>
+    upstream.readResource(request.params),
+  );
   return server;
 }
 
@@ -51,10 +92,20 @@ function withAccount(tool: Tool, aliases: string[]): Tool {
     ...tool,
     inputSchema: {
       ...schema,
-      properties: { ...schema.properties, [ACCOUNT_ARGUMENT]: { type: 'string', enum: aliases, description: 'Which account to act as.' } },
+      properties: {
+        ...schema.properties,
+        [ACCOUNT_ARGUMENT]: {
+          type: 'string',
+          enum: aliases,
+          description: 'Which account to act as.',
+        },
+      },
       required: [...(schema.required ?? []), ACCOUNT_ARGUMENT],
     },
   };
 }
 
-const failure = (text: string): CallToolResult => ({ content: [{ type: 'text', text }], isError: true });
+const failure = (text: string): CallToolResult => ({
+  content: [{ type: 'text', text }],
+  isError: true,
+});

@@ -1,21 +1,44 @@
 import type { PointerEvent, ReactNode } from 'react';
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { SkippedItem } from '../menus/ActionItems';
 import type { Thread } from '../model';
 import { useMessageActions } from './MessageActions';
 
 /** Right-click on a message, or Shift F10 from its action bar: the same actions as the hover bar. Selected text keeps the native menu. */
-export function MessageContextMenu({ thread, index, children }: { thread: Thread; index: number; children: ReactNode }) {
+export function MessageContextMenu({
+  thread,
+  index,
+  children,
+}: {
+  thread: Thread;
+  index: number;
+  children: ReactNode;
+}) {
   const actions = useMessageActions(thread, index);
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild className="select-text" onPointerDown={leaveLongPressToOrbit}>
+      <ContextMenuTrigger
+        asChild
+        className="select-text"
+        onPointerDown={leaveLongPressToOrbit}
+      >
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-52">
         {actions.map((a) =>
           a.disabledReason ? (
-            <SkippedItem key={a.id} menu="context" icon={<a.icon />} title={a.label} reason={a.disabledReason} />
+            <SkippedItem
+              key={a.id}
+              menu="context"
+              icon={<a.icon />}
+              title={a.label}
+              reason={a.disabledReason}
+            />
           ) : (
             <ContextMenuItem key={a.id} onSelect={a.run}>
               <a.icon />

@@ -7,11 +7,26 @@ import { PassThrough } from 'node:stream';
 import { test } from 'vite-plus/test';
 import type { AgentEvent } from '../../../../../src/host/types/agent.ts';
 import { CodexAdapter, imageModel, reply } from './adapter.ts';
-import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
+import {
+  changesPatch,
+  codexModels,
+  codexThreadId,
+  commandsFromSkills,
+  infoFromLists,
+  infoFromStart,
+  mapNotification,
+  mapRequest,
+  requestKey,
+  skillEvents,
+  skillInputs,
+  threadState,
+  updateLimits,
+} from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` output, noisy methods filtered out: 0.155.1 (gpt-6-luna, approval policy `untrusted`), and 0.163.0 for `background*` (approval policy `never`).
-const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}.jsonl`, import.meta.url), 'utf8');
+const fixture = (name: string) =>
+  readFileSync(new URL(`./fixtures/${name}.jsonl`, import.meta.url), 'utf8');
 
 /** Replays a recording through the RPC client in odd-sized chunks, then maps it the way the adapter does. */
 function replay(name: string) {
@@ -21,7 +36,8 @@ function replay(name: string) {
   const events: AgentEvent[] = [];
   const unhandled: string[] = [];
   const rpc = new RpcClient(input, output, {
-    onNotification: (method, params) => events.push(...mapNotification(method, params, s)),
+    onNotification: (method, params) =>
+      events.push(...mapNotification(method, params, s)),
     onRequest: (id, method, params) => {
       const event = mapRequest(method, params, requestKey('default', id), s);
       if (event) events.push(event);
@@ -40,119 +56,381 @@ test('a real turn maps to streamed messages, a plan, a command, an approval and 
   assert.deepEqual(unhandled, []);
 
   const messages = events.filter((e) => e.type === 'message');
-  assert.equal(messages[0].isDelta, false, 'the first delta of an item opens a new entry');
+  assert.equal(
+    messages[0].isDelta,
+    false,
+    'the first delta of an item opens a new entry',
+  );
   assert.ok(messages.slice(1, -1).every((m) => m.isDelta));
-  assert.equal(messages.map((m) => m.text).join(''), 'I’ll record the two-step plan, run the requested `touch` command, then mark both steps complete.done');
-  assert.equal(messages.at(-1)!.isDelta, false, 'the second agent message opens its own entry');
+  assert.equal(
+    messages.map((m) => m.text).join(''),
+    'I’ll record the two-step plan, run the requested `touch` command, then mark both steps complete.done',
+  );
+  assert.equal(
+    messages.at(-1)!.isDelta,
+    false,
+    'the second agent message opens its own entry',
+  );
 
   const plans = events.filter((e) => e.type === 'plan');
-  assert.deepEqual(plans.map((p) => p.items), [
-    [{ title: 'Create b.txt', status: 'running' }, { title: 'Confirm', status: 'pending' }],
-    [{ title: 'Create b.txt', status: 'done' }, { title: 'Confirm', status: 'done' }],
-  ]);
+  assert.deepEqual(
+    plans.map((p) => p.items),
+    [
+      [
+        { title: 'Create b.txt', status: 'running' },
+        { title: 'Confirm', status: 'pending' },
+      ],
+      [
+        { title: 'Create b.txt', status: 'done' },
+        { title: 'Confirm', status: 'done' },
+      ],
+    ],
+  );
 
   const tools = events.filter((e) => e.type === 'tool');
-  assert.deepEqual(tools.map((t) => [t.phase, t.text, t.exitCode]), [['start', 'touch c.txt', undefined], ['end', 'touch c.txt', 0]]);
+  assert.deepEqual(
+    tools.map((t) => [t.phase, t.text, t.exitCode]),
+    [
+      ['start', 'touch c.txt', undefined],
+      ['end', 'touch c.txt', 0],
+    ],
+  );
 
   const approval = events.find((e) => e.type === 'approval')!;
-  assert.deepEqual(approval, { threadId: 'h1', type: 'approval', requestId: 'codex:default:number:0', kind: 'command', title: 'Run a command', detail: 'In /tmp/scratch', code: "/bin/zsh -lc 'touch c.txt'" });
-  assert.deepEqual(events.find((e) => e.type === 'resolved'), { threadId: 'h1', type: 'resolved', requestId: 'codex:default:number:0' });
+  assert.deepEqual(approval, {
+    threadId: 'h1',
+    type: 'approval',
+    requestId: 'codex:default:number:0',
+    kind: 'command',
+    title: 'Run a command',
+    detail: 'In /tmp/scratch',
+    code: "/bin/zsh -lc 'touch c.txt'",
+  });
+  assert.deepEqual(
+    events.find((e) => e.type === 'resolved'),
+    { threadId: 'h1', type: 'resolved', requestId: 'codex:default:number:0' },
+  );
 
   const usage = events.filter((e) => e.type === 'usage');
-  assert.deepEqual(usage.map((u) => [u.inputTokens, u.outputTokens]), [[21292, 164], [42776 - 21292, 209 - 164], [64329 - 42776, 214 - 209]], 'usage carries per-update differences, since the store sums them');
-  assert.deepEqual([usage[0].contextUsed, usage[0].contextMax], [21456, 258400]);
-  assert.ok(usage.every((u) => u.costUsd === undefined), 'Codex reports no spend, so none is made up');
+  assert.deepEqual(
+    usage.map((u) => [u.inputTokens, u.outputTokens]),
+    [
+      [21292, 164],
+      [42776 - 21292, 209 - 164],
+      [64329 - 42776, 214 - 209],
+    ],
+    'usage carries per-update differences, since the store sums them',
+  );
+  assert.deepEqual(
+    [usage[0].contextUsed, usage[0].contextMax],
+    [21456, 258400],
+  );
+  assert.ok(
+    usage.every((u) => u.costUsd === undefined),
+    'Codex reports no spend, so none is made up',
+  );
 
-  assert.deepEqual(events.at(-1), { threadId: 'h1', type: 'turn-end', status: 'done' });
+  assert.deepEqual(events.at(-1), {
+    threadId: 'h1',
+    type: 'turn-end',
+    status: 'done',
+  });
 });
 
 test('a message that never streamed arrives whole from item/completed, once', () => {
   const s = threadState('h1', '/x');
   const item = { type: 'agentMessage', id: 'm1', text: 'hello' };
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'message', text: 'hello', isDelta: false }]);
-  mapNotification('item/agentMessage/delta', { threadId: 't', itemId: 'm2', delta: 'hi' }, s);
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: { ...item, id: 'm2' } }, s), []);
+  assert.deepEqual(
+    mapNotification('item/completed', { threadId: 't', item }, s),
+    [{ threadId: 'h1', type: 'message', text: 'hello', isDelta: false }],
+  );
+  mapNotification(
+    'item/agentMessage/delta',
+    { threadId: 't', itemId: 'm2', delta: 'hi' },
+    s,
+  );
+  assert.deepEqual(
+    mapNotification(
+      'item/completed',
+      { threadId: 't', item: { ...item, id: 'm2' } },
+      s,
+    ),
+    [],
+  );
 });
 
 test('a context compaction item is the compaction starting and ending', () => {
   const s = threadState('h1', '/repo');
   const item = { type: 'contextCompaction', id: 'c1' };
-  assert.deepEqual(mapNotification('item/started', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'compaction', phase: 'start' }]);
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'compaction', phase: 'end' }]);
+  assert.deepEqual(
+    mapNotification('item/started', { threadId: 't', item }, s),
+    [{ threadId: 'h1', type: 'compaction', phase: 'start' }],
+  );
+  assert.deepEqual(
+    mapNotification('item/completed', { threadId: 't', item }, s),
+    [{ threadId: 'h1', type: 'compaction', phase: 'end' }],
+  );
 });
 
 test('a failed turn carries the API message, not its raw JSON body', () => {
   const end = replay('failed').events.at(-1)!;
   assert.equal(end.type, 'turn-end');
   assert.equal(end.type === 'turn-end' && end.status, 'failed');
-  assert.match(end.type === 'turn-end' ? end.error! : '', /^The 'gpt-6\.1-sol' model is not supported/);
+  assert.match(
+    end.type === 'turn-end' ? end.error! : '',
+    /^The 'gpt-6\.1-sol' model is not supported/,
+  );
 });
 
 test('a command hands main what the agent typed to describe on start, not again on end', () => {
   const s = threadState('h1', '/repo');
-  const item = { type: 'commandExecution', id: 'x1', command: "/bin/zsh -lc 'gh pr checks 260 --watch'", commandActions: [{ type: 'unknown', command: 'gh pr checks 260 --watch' }] };
-  assert.deepEqual(mapNotification('item/started', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'tool', id: 'x1', phase: 'start', text: 'gh pr checks 260 --watch', command: 'gh pr checks 260 --watch' }]);
-  const [end] = mapNotification('item/completed', { threadId: 't', item: { ...item, exitCode: 0 } }, s);
+  const item = {
+    type: 'commandExecution',
+    id: 'x1',
+    command: "/bin/zsh -lc 'gh pr checks 260 --watch'",
+    commandActions: [{ type: 'unknown', command: 'gh pr checks 260 --watch' }],
+  };
+  assert.deepEqual(
+    mapNotification('item/started', { threadId: 't', item }, s),
+    [
+      {
+        threadId: 'h1',
+        type: 'tool',
+        id: 'x1',
+        phase: 'start',
+        text: 'gh pr checks 260 --watch',
+        command: 'gh pr checks 260 --watch',
+      },
+    ],
+  );
+  const [end] = mapNotification(
+    'item/completed',
+    { threadId: 't', item: { ...item, exitCode: 0 } },
+    s,
+  );
   assert.equal(end.type === 'tool' && end.command, undefined);
 });
 
 test('file changes report paths relative to the worktree and name them on the approval', () => {
   const s = threadState('h1', '/repo');
-  const item = { type: 'fileChange', id: 'f1', status: 'inProgress', changes: [{ path: '/repo/src/a.ts', kind: { type: 'update' }, diff: '' }, { path: 'b.ts', kind: { type: 'add' }, diff: '' }] };
-  assert.deepEqual(mapNotification('item/started', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'tool', id: 'f1', phase: 'start', text: 'Edit src/a.ts, b.ts' }]);
-  const approval = mapRequest('item/fileChange/requestApproval', { threadId: 't', turnId: 'u', itemId: 'f1' }, 'codex:string:9', s);
-  assert.equal(approval?.type === 'approval' && approval.title, 'Edit src/a.ts, b.ts');
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: { ...item, status: 'completed' } }, s).at(0), {
-    threadId: 'h1',
-    type: 'tool',
+  const item = {
+    type: 'fileChange',
     id: 'f1',
-    phase: 'end',
-    text: 'Edit src/a.ts, b.ts',
-    files: ['src/a.ts', 'b.ts'],
-    patch: ['diff --git a/b.ts b/b.ts', '--- /dev/null', '+++ b/b.ts'].join('\n'),
-  });
+    status: 'inProgress',
+    changes: [
+      { path: '/repo/src/a.ts', kind: { type: 'update' }, diff: '' },
+      { path: 'b.ts', kind: { type: 'add' }, diff: '' },
+    ],
+  };
+  assert.deepEqual(
+    mapNotification('item/started', { threadId: 't', item }, s),
+    [
+      {
+        threadId: 'h1',
+        type: 'tool',
+        id: 'f1',
+        phase: 'start',
+        text: 'Edit src/a.ts, b.ts',
+      },
+    ],
+  );
+  const approval = mapRequest(
+    'item/fileChange/requestApproval',
+    { threadId: 't', turnId: 'u', itemId: 'f1' },
+    'codex:string:9',
+    s,
+  );
+  assert.equal(
+    approval?.type === 'approval' && approval.title,
+    'Edit src/a.ts, b.ts',
+  );
+  assert.deepEqual(
+    mapNotification(
+      'item/completed',
+      { threadId: 't', item: { ...item, status: 'completed' } },
+      s,
+    ).at(0),
+    {
+      threadId: 'h1',
+      type: 'tool',
+      id: 'f1',
+      phase: 'end',
+      text: 'Edit src/a.ts, b.ts',
+      files: ['src/a.ts', 'b.ts'],
+      patch: ['diff --git a/b.ts b/b.ts', '--- /dev/null', '+++ b/b.ts'].join(
+        '\n',
+      ),
+    },
+  );
 });
 
 test('after a resume only the reported request counts, not the whole history', () => {
   const s = threadState('h1', '/x', { isResumed: true });
-  const tokenUsage = { total: { inputTokens: 90_000, cachedInputTokens: 0, outputTokens: 900, totalTokens: 90_900 }, last: { inputTokens: 1000, cachedInputTokens: 0, outputTokens: 10, totalTokens: 1010 }, modelContextWindow: null };
-  const [u] = mapNotification('thread/tokenUsage/updated', { threadId: 't', tokenUsage }, s);
-  assert.deepEqual(u.type === 'usage' && [u.inputTokens, u.outputTokens, u.contextMax], [1000, 10, undefined]);
+  const tokenUsage = {
+    total: {
+      inputTokens: 90_000,
+      cachedInputTokens: 0,
+      outputTokens: 900,
+      totalTokens: 90_900,
+    },
+    last: {
+      inputTokens: 1000,
+      cachedInputTokens: 0,
+      outputTokens: 10,
+      totalTokens: 1010,
+    },
+    modelContextWindow: null,
+  };
+  const [u] = mapNotification(
+    'thread/tokenUsage/updated',
+    { threadId: 't', tokenUsage },
+    s,
+  );
+  assert.deepEqual(
+    u.type === 'usage' && [u.inputTokens, u.outputTokens, u.contextMax],
+    [1000, 10, undefined],
+  );
 });
 
 test('a usage limit pauses the thread with the account-wide reset time, then ends the turn', () => {
   const limits = {};
-  updateLimits(limits, { rateLimits: { primary: { usedPercent: 89, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } });
-  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 } } });
+  updateLimits(limits, {
+    rateLimits: {
+      primary: {
+        usedPercent: 89,
+        windowDurationMins: 300,
+        resetsAt: 1791808455,
+      },
+      secondary: {
+        usedPercent: 40,
+        windowDurationMins: 10080,
+        resetsAt: 1792000000,
+      },
+    },
+  });
+  updateLimits(limits, {
+    rateLimits: {
+      primary: {
+        usedPercent: 100,
+        windowDurationMins: 300,
+        resetsAt: 1791808455,
+      },
+    },
+  });
   updateLimits(limits, { rateLimits: { primary: null, secondary: null } });
   const s = threadState('h1', '/x', { limits });
-  const turn = { id: 'u', status: 'failed', error: { message: 'You hit your usage limit.', codexErrorInfo: 'usageLimitExceeded' } };
-  assert.deepEqual(mapNotification('turn/completed', { threadId: 't', turn }, s), [
-    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z', label: '5-hour' },
-    { threadId: 'h1', type: 'turn-end', status: 'failed', error: 'You hit your usage limit.' },
-  ]);
-  const rate = mapNotification('turn/completed', { threadId: 't', turn: { ...turn, error: { message: 'x', codexErrorInfo: 'rateLimitExceeded' } } }, s);
-  assert.deepEqual(rate.map((e) => e.type), ['limit', 'turn-end']);
-  const other = mapNotification('turn/completed', { threadId: 't', turn: { ...turn, error: { message: 'x', codexErrorInfo: 'serverOverloaded' } } }, s);
-  assert.deepEqual(other.map((e) => e.type), ['turn-end']);
+  const turn = {
+    id: 'u',
+    status: 'failed',
+    error: {
+      message: 'You hit your usage limit.',
+      codexErrorInfo: 'usageLimitExceeded',
+    },
+  };
+  assert.deepEqual(
+    mapNotification('turn/completed', { threadId: 't', turn }, s),
+    [
+      {
+        threadId: 'h1',
+        type: 'limit',
+        resetsAt: '2026-10-12T12:34:15.000Z',
+        label: '5-hour',
+      },
+      {
+        threadId: 'h1',
+        type: 'turn-end',
+        status: 'failed',
+        error: 'You hit your usage limit.',
+      },
+    ],
+  );
+  const rate = mapNotification(
+    'turn/completed',
+    {
+      threadId: 't',
+      turn: {
+        ...turn,
+        error: { message: 'x', codexErrorInfo: 'rateLimitExceeded' },
+      },
+    },
+    s,
+  );
+  assert.deepEqual(
+    rate.map((e) => e.type),
+    ['limit', 'turn-end'],
+  );
+  const other = mapNotification(
+    'turn/completed',
+    {
+      threadId: 't',
+      turn: {
+        ...turn,
+        error: { message: 'x', codexErrorInfo: 'serverOverloaded' },
+      },
+    },
+    s,
+  );
+  assert.deepEqual(
+    other.map((e) => e.type),
+    ['turn-end'],
+  );
 });
 
 test('one app-server per account: threads route to their profile account and never share a server', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, FAKE_CODEX);
   const { events, emit, waitFor } = recordEvents();
-  const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, side: { id: 'work', configDir: path.join(home, 'work') }, home: { id: 'default' } };
-  const codex = new CodexAdapter(emit, async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
+  const accounts: Record<string, { id: string; configDir?: string }> = {
+    work: { id: 'work', configDir: path.join(home, 'work') },
+    side: { id: 'work', configDir: path.join(home, 'work') },
+    home: { id: 'default' },
+  };
+  const codex = new CodexAdapter(
+    emit,
+    async (spaceId) => accounts[spaceId],
+    async () => ({ path: fake, env: process.env }),
+  );
   try {
-    for (const [threadId, spaceId] of [['a', 'work'], ['b', 'side'], ['c', 'home']]) await codex.start(threadId, { provider: 'codex', spaceId, cwd: home, prompt: 'hi' });
+    for (const [threadId, spaceId] of [
+      ['a', 'work'],
+      ['b', 'side'],
+      ['c', 'home'],
+    ])
+      await codex.start(threadId, {
+        provider: 'codex',
+        spaceId,
+        cwd: home,
+        prompt: 'hi',
+      });
     await waitFor((e) => e.type === 'message', 3);
-    const sessions = Object.fromEntries(events.flatMap((e) => (e.type === 'session' ? [[e.threadId, e.sessionId]] : [])));
+    const sessions = Object.fromEntries(
+      events.flatMap((e) =>
+        e.type === 'session' ? [[e.threadId, e.sessionId]] : [],
+      ),
+    );
     const [a, b, c] = ['a', 'b', 'c'].map((t) => JSON.parse(sessions[t]));
-    assert.equal(a.pid, b.pid, 'two profiles sharing an account share its server');
+    assert.equal(
+      a.pid,
+      b.pid,
+      'two profiles sharing an account share its server',
+    );
     assert.notEqual(a.pid, c.pid, 'another account gets its own server');
     assert.deepEqual([a.home, c.home], [path.join(home, 'work'), null]);
-    const ends = events.filter((e) => e.type === 'message').map((e) => [e.threadId, e.type === 'message' && JSON.parse(e.text).thread]);
-    assert.deepEqual(ends, [['a', sessions.a], ['b', sessions.b], ['c', sessions.c]], 'every notification reaches the thread that started it');
+    const ends = events
+      .filter((e) => e.type === 'message')
+      .map((e) => [
+        e.threadId,
+        e.type === 'message' && JSON.parse(e.text).thread,
+      ]);
+    assert.deepEqual(
+      ends,
+      [
+        ['a', sessions.a],
+        ['b', sessions.b],
+        ['c', sessions.c],
+      ],
+      'every notification reaches the thread that started it',
+    );
   } finally {
     codex.dispose();
   }
@@ -162,13 +440,35 @@ test('side chat asks on the profile account, streams once per delta, and says wh
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, FAKE_CODEX);
   const events: AgentEvent[] = [];
-  const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, out: { id: 'out', configDir: path.join(home, 'out') } };
-  const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
+  const accounts: Record<string, { id: string; configDir?: string }> = {
+    work: { id: 'work', configDir: path.join(home, 'work') },
+    out: { id: 'out', configDir: path.join(home, 'out') },
+  };
+  const codex = new CodexAdapter(
+    (e) => events.push(e),
+    async (spaceId) => accounts[spaceId],
+    async () => ({ path: fake, env: process.env }),
+  );
   try {
-    const chunks = await collect(codex.ask('work', 'Thread context', 'User: why?', undefined, new AbortController()));
-    assert.equal(chunks.join(''), 'It reads User: why?', 'item/completed repeats a streamed message; it is not added twice');
+    const chunks = await collect(
+      codex.ask(
+        'work',
+        'Thread context',
+        'User: why?',
+        undefined,
+        new AbortController(),
+      ),
+    );
+    assert.equal(
+      chunks.join(''),
+      'It reads User: why?',
+      'item/completed repeats a streamed message; it is not added twice',
+    );
     assert.deepEqual(events, [], 'an ask never emits thread events');
-    await assert.rejects(collect(codex.ask('out', 'x', 'y', undefined, new AbortController())), /Codex is not logged in for this profile\. Run `CODEX_HOME=.*out codex login`/);
+    await assert.rejects(
+      collect(codex.ask('out', 'x', 'y', undefined, new AbortController())),
+      /Codex is not logged in for this profile\. Run `CODEX_HOME=.*out codex login`/,
+    );
   } finally {
     codex.dispose();
   }
@@ -179,11 +479,23 @@ test('a thread runs at the speed it started with, and a message changes it for i
   const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'tiers.log');
   const { events, emit, waitFor } = recordEvents();
-  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  const codex = new CodexAdapter(
+    emit,
+    async () => ({ id: 'default' }),
+    async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }),
+  );
   // Lets each turn end before the next send.
-  const turnEnds = (count: number) => waitFor((e) => e.type === 'turn-end', count);
+  const turnEnds = (count: number) =>
+    waitFor((e) => e.type === 'turn-end', count);
   try {
-    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority', effort: 'max' });
+    await codex.start('t', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'hi',
+      speed: 'priority',
+      effort: 'max',
+    });
     assert.ok(events.some((e) => e.type === 'info' && e.info.effort === 'max'));
     await turnEnds(1);
     await codex.send('t', 'again');
@@ -192,8 +504,21 @@ test('a thread runs at the speed it started with, and a message changes it for i
     await turnEnds(3);
     await codex.send('t', 'faster', undefined, undefined, 'priority');
     await turnEnds(4);
-    await codex.start('u', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
-    const expected = ['thread/start priority', 'turn/start priority', 'turn/start priority', 'turn/start null', 'turn/start priority', 'thread/start null', 'turn/start null'];
+    await codex.start('u', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'hi',
+    });
+    const expected = [
+      'thread/start priority',
+      'turn/start priority',
+      'turn/start priority',
+      'turn/start null',
+      'turn/start priority',
+      'thread/start null',
+      'turn/start null',
+    ];
     assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), expected);
   } finally {
     codex.dispose();
@@ -205,16 +530,44 @@ test('images go to turn/start as data-URL image inputs ahead of the text, on the
   const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'inputs.log');
   const { emit, waitFor } = recordEvents();
-  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: path.join(home, 'tiers.log'), INPUT_LOG: log } }));
+  const codex = new CodexAdapter(
+    emit,
+    async () => ({ id: 'default' }),
+    async () => ({
+      path: fake,
+      env: {
+        ...process.env,
+        TIER_LOG: path.join(home, 'tiers.log'),
+        INPUT_LOG: log,
+      },
+    }),
+  );
   const png = { mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
   try {
-    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'what is this?', images: [png] });
+    await codex.start('t', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'what is this?',
+      images: [png],
+    });
     await waitFor((e) => e.type === 'turn-end');
-    await codex.send('t', 'and this?', [{ mediaType: 'image/webp', data: 'UklGRg==' }]);
-    const inputs = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    await codex.send('t', 'and this?', [
+      { mediaType: 'image/webp', data: 'UklGRg==' },
+    ]);
+    const inputs = readFileSync(log, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
     assert.deepEqual(inputs, [
-      [{ type: 'image', url: 'data:image/png;base64,iVBORw0KGgo=' }, { type: 'text', text: 'what is this?', text_elements: [] }],
-      [{ type: 'image', url: 'data:image/webp;base64,UklGRg==' }, { type: 'text', text: 'and this?', text_elements: [] }],
+      [
+        { type: 'image', url: 'data:image/png;base64,iVBORw0KGgo=' },
+        { type: 'text', text: 'what is this?', text_elements: [] },
+      ],
+      [
+        { type: 'image', url: 'data:image/webp;base64,UklGRg==' },
+        { type: 'text', text: 'and this?', text_elements: [] },
+      ],
     ]);
   } finally {
     codex.dispose();
@@ -226,16 +579,34 @@ test('an interrupt while Codex has not answered turn/start ends the start at onc
   const fake = fakeCodex(home, STUCK_CODEX);
   const log = path.join(home, 'stuck.log');
   const { events, emit, waitFor } = recordEvents();
-  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STUCK_LOG: log } }));
+  const codex = new CodexAdapter(
+    emit,
+    async () => ({ id: 'default' }),
+    async () => ({ path: fake, env: { ...process.env, STUCK_LOG: log } }),
+  );
   const logged = () => readFileSync(log, 'utf8').trim().split('\n');
-  const fakeSaid = (text: string) => waitFor((e) => e.type === 'message' && e.text === text);
+  const fakeSaid = (text: string) =>
+    waitFor((e) => e.type === 'message' && e.text === text);
   try {
-    const starting = codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
+    const starting = codex.start('t', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'hi',
+    });
     await fakeSaid('turn/start');
     await codex.interrupt('t');
     await starting;
-    assert.ok(!events.some((e) => e.type === 'message' && e.text === 'answered turn/start'), 'neither call waits for the late turn/start answer, let alone an RPC timeout');
-    assert.deepEqual(events.filter((e) => e.type === 'turn-end'), [{ threadId: 't', type: 'turn-end', status: 'interrupted' }]);
+    assert.ok(
+      !events.some(
+        (e) => e.type === 'message' && e.text === 'answered turn/start',
+      ),
+      'neither call waits for the late turn/start answer, let alone an RPC timeout',
+    );
+    assert.deepEqual(
+      events.filter((e) => e.type === 'turn-end'),
+      [{ threadId: 't', type: 'turn-end', status: 'interrupted' }],
+    );
     // The fake answers turn/start only once interrupted: that late turn is stopped.
     await fakeSaid('turn/interrupt late-1');
     assert.deepEqual(logged(), ['turn/start', 'turn/interrupt late-1']);
@@ -304,48 +675,186 @@ process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n'
 
 test('session info comes from thread/start and the MCP, skills and plugin lists', () => {
   const start = JSON.parse(fixture('plan').split('\n')[0]).result;
-  assert.deepEqual(infoFromStart(start), { model: 'gpt-6-luna', cwd: '/tmp/scratch', permissionMode: 'untrusted · workspaceWrite', version: '0.155.1' });
-  const mcp = { data: [{ name: 'docs', runtimeStatus: 'connected', tools: { search: {}, read: {} }, authStatus: 'unsupported' }, { name: 'linear', runtimeStatus: null, tools: {}, authStatus: 'notLoggedIn' }], nextCursor: null };
-  const skills = { data: [{ cwd: '/r', skills: [{ name: 'ui', enabled: true }, { name: 'off', enabled: false }, { name: 'ui', enabled: true }], errors: [] }] };
-  const plugins = { marketplaces: [{ name: 'm', plugins: [{ name: 'gh', installed: true, enabled: true, localVersion: '1.2.0', version: null }, { name: 'other', installed: false, enabled: false }] }] };
+  assert.deepEqual(infoFromStart(start), {
+    model: 'gpt-6-luna',
+    cwd: '/tmp/scratch',
+    permissionMode: 'untrusted · workspaceWrite',
+    version: '0.155.1',
+  });
+  const mcp = {
+    data: [
+      {
+        name: 'docs',
+        runtimeStatus: 'connected',
+        tools: { search: {}, read: {} },
+        authStatus: 'unsupported',
+      },
+      {
+        name: 'linear',
+        runtimeStatus: null,
+        tools: {},
+        authStatus: 'notLoggedIn',
+      },
+    ],
+    nextCursor: null,
+  };
+  const skills = {
+    data: [
+      {
+        cwd: '/r',
+        skills: [
+          { name: 'ui', enabled: true },
+          { name: 'off', enabled: false },
+          { name: 'ui', enabled: true },
+        ],
+        errors: [],
+      },
+    ],
+  };
+  const plugins = {
+    marketplaces: [
+      {
+        name: 'm',
+        plugins: [
+          {
+            name: 'gh',
+            installed: true,
+            enabled: true,
+            localVersion: '1.2.0',
+            version: null,
+          },
+          { name: 'other', installed: false, enabled: false },
+        ],
+      },
+    ],
+  };
   assert.deepEqual(infoFromLists(mcp, skills, plugins), {
-    mcpServers: [{ name: 'docs', status: 'connected', toolCount: 2 }, { name: 'linear', status: 'needs-auth', toolCount: 0 }],
+    mcpServers: [
+      { name: 'docs', status: 'connected', toolCount: 2 },
+      { name: 'linear', status: 'needs-auth', toolCount: 0 },
+    ],
     commands: [{ name: 'ui', description: '' }],
     skills: ['ui'],
     plugins: [{ name: 'gh', version: '1.2.0' }],
   });
   assert.deepEqual(infoFromLists(null, null, null), {});
-  assert.deepEqual(mapNotification('mcpServer/startupStatus/updated', { threadId: 'c1', name: 'docs', status: 'ready', error: null, failureReason: null }, threadState('h1', '/r')), [
-    { threadId: 'h1', type: 'info', info: { mcpServers: [{ name: 'docs', status: 'connected' }] } },
-  ]);
+  assert.deepEqual(
+    mapNotification(
+      'mcpServer/startupStatus/updated',
+      {
+        threadId: 'c1',
+        name: 'docs',
+        status: 'ready',
+        error: null,
+        failureReason: null,
+      },
+      threadState('h1', '/r'),
+    ),
+    [
+      {
+        threadId: 'h1',
+        type: 'info',
+        info: { mcpServers: [{ name: 'docs', status: 'connected' }] },
+      },
+    ],
+  );
 });
 
 test('malformed params map to nothing; foreign server requests are left for an error reply', () => {
   const s = threadState('h1', '/x');
-  for (const params of [null, [], { plan: 'x' }, { item: { type: 'commandExecution' } }, { tokenUsage: { total: {} } }, { turn: { status: 'weird' } }])
-    for (const method of ['turn/plan/updated', 'item/started', 'thread/tokenUsage/updated', 'turn/completed']) assert.deepEqual(mapNotification(method, params, s), []);
-  assert.equal(mapRequest('account/chatgptAuthTokens/refresh', { threadId: 't' }, 'k', s), null);
-  assert.equal(mapRequest('item/permissions/requestApproval', { threadId: 't' }, 'k', s), null);
+  for (const params of [
+    null,
+    [],
+    { plan: 'x' },
+    { item: { type: 'commandExecution' } },
+    { tokenUsage: { total: {} } },
+    { turn: { status: 'weird' } },
+  ])
+    for (const method of [
+      'turn/plan/updated',
+      'item/started',
+      'thread/tokenUsage/updated',
+      'turn/completed',
+    ])
+      assert.deepEqual(mapNotification(method, params, s), []);
+  assert.equal(
+    mapRequest('account/chatgptAuthTokens/refresh', { threadId: 't' }, 'k', s),
+    null,
+  );
+  assert.equal(
+    mapRequest('item/permissions/requestApproval', { threadId: 't' }, 'k', s),
+    null,
+  );
   assert.equal(codexThreadId({ threadId: 7 }), undefined);
 });
 
 test('queue answers become the decisions app-server expects', () => {
-  const command = { method: 'item/commandExecution/requestApproval', questionIds: [] };
+  const command = {
+    method: 'item/commandExecution/requestApproval',
+    questionIds: [],
+  };
   assert.deepEqual(reply(command, { kind: 'allow' }), { decision: 'accept' });
-  assert.deepEqual(reply(command, { kind: 'allow', forSession: true }), { decision: 'acceptForSession' });
+  assert.deepEqual(reply(command, { kind: 'allow', forSession: true }), {
+    decision: 'acceptForSession',
+  });
   assert.deepEqual(reply(command, { kind: 'deny' }), { decision: 'decline' });
-  assert.deepEqual(reply(command, { kind: 'deny', interrupt: true }), { decision: 'cancel' });
-  assert.deepEqual(reply({ method: 'item/tool/requestUserInput', questionIds: ['q1', 'q2'] }, { kind: 'answer', answers: [['Redis', 'my own cache'], []] }), { answers: { q1: { answers: ['Redis', 'my own cache'] } } });
-  const elicitation = { method: 'mcpServer/elicitation/request', questionIds: [] };
-  assert.deepEqual(reply(elicitation, { kind: 'allow' }), { action: 'accept', content: {}, _meta: null });
-  assert.deepEqual(reply(elicitation, { kind: 'deny' }), { action: 'decline', content: null, _meta: null });
+  assert.deepEqual(reply(command, { kind: 'deny', interrupt: true }), {
+    decision: 'cancel',
+  });
+  assert.deepEqual(
+    reply(
+      { method: 'item/tool/requestUserInput', questionIds: ['q1', 'q2'] },
+      { kind: 'answer', answers: [['Redis', 'my own cache'], []] },
+    ),
+    { answers: { q1: { answers: ['Redis', 'my own cache'] } } },
+  );
+  const elicitation = {
+    method: 'mcpServer/elicitation/request',
+    questionIds: [],
+  };
+  assert.deepEqual(reply(elicitation, { kind: 'allow' }), {
+    action: 'accept',
+    content: {},
+    _meta: null,
+  });
+  assert.deepEqual(reply(elicitation, { kind: 'deny' }), {
+    action: 'decline',
+    content: null,
+    _meta: null,
+  });
 });
 
 test('an MCP tool approval becomes a tool approval card', () => {
   const s = threadState('h1', '/x');
-  const params = { threadId: 't', turnId: 'u', serverName: 'mochi', mode: 'form', _meta: null, message: 'Allow create_thread?', requestedSchema: { type: 'object', properties: {} } };
-  assert.deepEqual(mapRequest('mcpServer/elicitation/request', params, 'k', s), { threadId: 'h1', type: 'approval', requestId: 'k', kind: 'tool', title: 'Use mochi tool', detail: 'Allow create_thread?' });
-  assert.equal(mapRequest('mcpServer/elicitation/request', { ...params, mode: 'url' }, 'k', s), null);
+  const params = {
+    threadId: 't',
+    turnId: 'u',
+    serverName: 'mochi',
+    mode: 'form',
+    _meta: null,
+    message: 'Allow create_thread?',
+    requestedSchema: { type: 'object', properties: {} },
+  };
+  assert.deepEqual(
+    mapRequest('mcpServer/elicitation/request', params, 'k', s),
+    {
+      threadId: 'h1',
+      type: 'approval',
+      requestId: 'k',
+      kind: 'tool',
+      title: 'Use mochi tool',
+      detail: 'Allow create_thread?',
+    },
+  );
+  assert.equal(
+    mapRequest(
+      'mcpServer/elicitation/request',
+      { ...params, mode: 'url' },
+      'k',
+      s,
+    ),
+    null,
+  );
 });
 
 test('rpc: line framing, id correlation out of order, errors, timeouts and invalid lines', async () => {
@@ -353,21 +862,42 @@ test('rpc: line framing, id correlation out of order, errors, timeouts and inval
   const output = new PassThrough();
   const invalid: string[] = [];
   const requests: [RpcId, string][] = [];
-  const rpc = new RpcClient(input, output, { onNotification: () => {}, onRequest: (id, method) => requests.push([id, method]), onInvalid: (reason) => invalid.push(reason) });
+  const rpc = new RpcClient(input, output, {
+    onNotification: () => {},
+    onRequest: (id, method) => requests.push([id, method]),
+    onInvalid: (reason) => invalid.push(reason),
+  });
   const a = rpc.request('a', {});
   const b = rpc.request('b', {});
   const c = rpc.request('c', {}, 20);
-  const sent: { id: number; method: string }[] = String(output.read()).trim().split('\n').map((l) => JSON.parse(l));
-  assert.deepEqual(sent.map((m) => [m.id, m.method]), [[1, 'a'], [2, 'b'], [3, 'c']]);
+  const sent: { id: number; method: string }[] = String(output.read())
+    .trim()
+    .split('\n')
+    .map((l) => JSON.parse(l));
+  assert.deepEqual(
+    sent.map((m) => [m.id, m.method]),
+    [
+      [1, 'a'],
+      [2, 'b'],
+      [3, 'c'],
+    ],
+  );
 
   input.write('{"id":2,"result":"B"}\n{"id":1,"res');
-  input.write('ult":"A"}\nnot json\n{"id":99,"result":1}\n{"id":"s1","method":"item/x","params":{}}\n');
+  input.write(
+    'ult":"A"}\nnot json\n{"id":99,"result":1}\n{"id":"s1","method":"item/x","params":{}}\n',
+  );
   input.write('{"id":4,"method":"m","params":5}\n{"foo":1}\n');
   assert.equal(await a, 'A');
   assert.equal(await b, 'B');
   await assert.rejects(c, /timed out/);
   assert.deepEqual(requests, [['s1', 'item/x']]);
-  assert.deepEqual(invalid, ['not JSON', 'response to an unknown request', 'params is not an object', 'no method and no id']);
+  assert.deepEqual(invalid, [
+    'not JSON',
+    'response to an unknown request',
+    'params is not an object',
+    'no method and no id',
+  ]);
 
   const d = rpc.request('d', {});
   input.write('{"id":4,"error":{"code":-32600,"message":"nope"}}\n');
@@ -378,8 +908,17 @@ test('rpc: line framing, id correlation out of order, errors, timeouts and inval
 });
 
 test('parseMessage tells notifications, requests and responses apart', () => {
-  assert.deepEqual(parseMessage('{"method":"initialized"}'), { kind: 'notification', method: 'initialized', params: {} });
-  assert.deepEqual(parseMessage('{"id":0,"method":"x","params":{"a":1}}'), { kind: 'request', id: 0, method: 'x', params: { a: 1 } });
+  assert.deepEqual(parseMessage('{"method":"initialized"}'), {
+    kind: 'notification',
+    method: 'initialized',
+    params: {},
+  });
+  assert.deepEqual(parseMessage('{"id":0,"method":"x","params":{"a":1}}'), {
+    kind: 'request',
+    id: 0,
+    method: 'x',
+    params: { a: 1 },
+  });
   assert.equal(parseMessage('{"id":1.5,"result":1}'), 'no method and no id');
   assert.equal(parseMessage('{"id":1}'), 'response without result or error');
 });
@@ -387,7 +926,11 @@ test('parseMessage tells notifications, requests and responses apart', () => {
 /** Collects a fake's events; `waitFor` resolves with the `count`th match, seen already or still to come. */
 function recordEvents() {
   const events: AgentEvent[] = [];
-  const waiters = new Set<{ match: (e: AgentEvent) => boolean; count: number; resolve: (e: AgentEvent) => void }>();
+  const waiters = new Set<{
+    match: (e: AgentEvent) => boolean;
+    count: number;
+    resolve: (e: AgentEvent) => void;
+  }>();
   const emit = (event: AgentEvent) => {
     events.push(event);
     for (const waiter of waiters) {
@@ -400,7 +943,9 @@ function recordEvents() {
   const waitFor = (match: (e: AgentEvent) => boolean, count = 1) => {
     const seen = events.filter(match);
     if (seen.length >= count) return Promise.resolve(seen[count - 1]);
-    return new Promise<AgentEvent>((resolve) => waiters.add({ match, count, resolve }));
+    return new Promise<AgentEvent>((resolve) =>
+      waiters.add({ match, count, resolve }),
+    );
   };
   return { events, emit, waitFor };
 }
@@ -414,27 +959,157 @@ async function collect<T>(items: AsyncIterable<T>) {
 
 test('webSearch items name the query on completion and carry pages as links', () => {
   const s = threadState('h1', '/repo');
-  const started = { type: 'webSearch', id: 'w1', query: '', action: null, results: null };
-  assert.deepEqual(mapNotification('item/started', { threadId: 't', item: started }, s), [{ threadId: 'h1', type: 'tool', id: 'w1', phase: 'start', text: 'Search the web' }]);
-  const done = { ...started, query: 'token bucket', action: { type: 'search', query: 'token bucket' }, results: [{ type: 'text_result', domain: 'en.wikipedia.org', ref_id: 'turn0search12', snippet: 'A token bucket…', title: 'Token bucket', url: 'https://en.wikipedia.org/wiki/Token_bucket' }, { type: 'image_result' }] };
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: done }, s), [{ threadId: 'h1', type: 'tool', id: 'w1', phase: 'end', text: 'Search token bucket', links: [{ url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket' }] }]);
-  const opened = { type: 'webSearch', id: 'w2', query: '', action: { type: 'openPage', url: 'https://redis.io/docs/' }, results: null };
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: opened }, s), [{ threadId: 'h1', type: 'tool', id: 'w2', phase: 'end', text: 'Fetch https://redis.io/docs/', links: [{ url: 'https://redis.io/docs/' }] }]);
+  const started = {
+    type: 'webSearch',
+    id: 'w1',
+    query: '',
+    action: null,
+    results: null,
+  };
+  assert.deepEqual(
+    mapNotification('item/started', { threadId: 't', item: started }, s),
+    [
+      {
+        threadId: 'h1',
+        type: 'tool',
+        id: 'w1',
+        phase: 'start',
+        text: 'Search the web',
+      },
+    ],
+  );
+  const done = {
+    ...started,
+    query: 'token bucket',
+    action: { type: 'search', query: 'token bucket' },
+    results: [
+      {
+        type: 'text_result',
+        domain: 'en.wikipedia.org',
+        ref_id: 'turn0search12',
+        snippet: 'A token bucket…',
+        title: 'Token bucket',
+        url: 'https://en.wikipedia.org/wiki/Token_bucket',
+      },
+      { type: 'image_result' },
+    ],
+  };
+  assert.deepEqual(
+    mapNotification('item/completed', { threadId: 't', item: done }, s),
+    [
+      {
+        threadId: 'h1',
+        type: 'tool',
+        id: 'w1',
+        phase: 'end',
+        text: 'Search token bucket',
+        links: [
+          {
+            url: 'https://en.wikipedia.org/wiki/Token_bucket',
+            title: 'Token bucket',
+          },
+        ],
+      },
+    ],
+  );
+  const opened = {
+    type: 'webSearch',
+    id: 'w2',
+    query: '',
+    action: { type: 'openPage', url: 'https://redis.io/docs/' },
+    results: null,
+  };
+  assert.deepEqual(
+    mapNotification('item/completed', { threadId: 't', item: opened }, s),
+    [
+      {
+        threadId: 'h1',
+        type: 'tool',
+        id: 'w2',
+        phase: 'end',
+        text: 'Fetch https://redis.io/docs/',
+        links: [{ url: 'https://redis.io/docs/' }],
+      },
+    ],
+  );
 });
 
 test('model/list maps to the picker: real ids, names, default flag, efforts and speed tiers; hidden models stay out', () => {
   // Shape of a real 0.155.1 `model/list` result on a ChatGPT account, trimmed to two models plus a hidden one.
   const result = {
     data: [
-      { id: 'gpt-6-astra', model: 'gpt-6-astra', displayName: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', hidden: false, isDefault: true, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low', description: '' }, { reasoningEffort: 'ultra', description: '' }], additionalSpeedTiers: ['fast'], serviceTiers: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }], defaultServiceTier: null },
-      { id: 'gpt-6-luna', model: 'gpt-6-luna', displayName: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', hidden: false, isDefault: false, defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: '' }] },
-      { id: 'internal', model: 'internal', displayName: 'Internal', description: '', hidden: true, isDefault: false, defaultReasoningEffort: 'low', supportedReasoningEfforts: [] },
+      {
+        id: 'gpt-6-astra',
+        model: 'gpt-6-astra',
+        displayName: 'GPT-6-Astra',
+        description: 'Frontier intelligence for the most demanding work.',
+        hidden: false,
+        isDefault: true,
+        defaultReasoningEffort: 'low',
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: '' },
+          { reasoningEffort: 'ultra', description: '' },
+        ],
+        additionalSpeedTiers: ['fast'],
+        serviceTiers: [
+          {
+            id: 'priority',
+            name: 'Fast',
+            description: '2x speed, increased usage',
+          },
+        ],
+        defaultServiceTier: null,
+      },
+      {
+        id: 'gpt-6-luna',
+        model: 'gpt-6-luna',
+        displayName: 'GPT-6-Luna',
+        description: 'Fast and affordable model for easier tasks.',
+        hidden: false,
+        isDefault: false,
+        defaultReasoningEffort: 'medium',
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'medium', description: '' },
+        ],
+      },
+      {
+        id: 'internal',
+        model: 'internal',
+        displayName: 'Internal',
+        description: '',
+        hidden: true,
+        isDefault: false,
+        defaultReasoningEffort: 'low',
+        supportedReasoningEfforts: [],
+      },
     ],
     nextCursor: null,
   };
   assert.deepEqual(codexModels(result), [
-    { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: ['low', 'ultra'], defaultEffort: 'low', speeds: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }], isDefault: true },
-    { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: ['medium'], defaultEffort: 'medium', speeds: [], isDefault: false },
+    {
+      id: 'gpt-6-astra',
+      name: 'GPT-6-Astra',
+      description: 'Frontier intelligence for the most demanding work.',
+      efforts: ['low', 'ultra'],
+      defaultEffort: 'low',
+      speeds: [
+        {
+          id: 'priority',
+          name: 'Fast',
+          description: '2x speed, increased usage',
+        },
+      ],
+      isDefault: true,
+    },
+    {
+      id: 'gpt-6-luna',
+      name: 'GPT-6-Luna',
+      description: 'Fast and affordable model for easier tasks.',
+      efforts: ['medium'],
+      defaultEffort: 'medium',
+      speeds: [],
+      isDefault: false,
+    },
   ]);
   assert.deepEqual(codexModels(null), []);
 });
@@ -443,24 +1118,80 @@ test('a spawned agent becomes a subagent of its thread with its own steps, resul
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, REPLAY_CODEX);
   const { events, emit, waitFor } = recordEvents();
-  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/subagent.jsonl', import.meta.url)) } }));
+  const codex = new CodexAdapter(
+    emit,
+    async () => ({ id: 'default' }),
+    async () => ({
+      path: fake,
+      env: {
+        ...process.env,
+        FIXTURE: fileURLToPath(
+          new URL('./fixtures/subagent.jsonl', import.meta.url),
+        ),
+      },
+    }),
+  );
   try {
-    await codex.start('h1', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'Spawn one sub-agent' });
+    await codex.start('h1', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'Spawn one sub-agent',
+    });
     await waitFor((e) => e.type === 'turn-end');
     const child = '01a1317e-8947-7c73-866e-ec3ce63a621b';
     const subagent = events.filter((e) => e.type === 'subagent');
-    assert.ok(subagent.every((e) => e.threadId === 'h1' && e.id === child), 'the child reports as a subagent of the thread that spawned it');
-    assert.deepEqual(subagent[0], { threadId: 'h1', type: 'subagent', id: child, phase: 'start', toolId: 'call_03dd2329246e48cbaa23dd501478dcfa', name: 'echo hi', isBackground: true });
-    const steps = subagent.flatMap((e) => (e.step ? [[e.step.phase, e.step.text, e.step.exitCode]] : []));
-    assert.deepEqual(steps, [['start', 'echo hi', undefined], ['end', 'echo hi', 0]]);
-    assert.deepEqual(subagent.flatMap((e) => (e.message ? [e.message] : [])), ['hi']);
+    assert.ok(
+      subagent.every((e) => e.threadId === 'h1' && e.id === child),
+      'the child reports as a subagent of the thread that spawned it',
+    );
+    assert.deepEqual(subagent[0], {
+      threadId: 'h1',
+      type: 'subagent',
+      id: child,
+      phase: 'start',
+      toolId: 'call_03dd2329246e48cbaa23dd501478dcfa',
+      name: 'echo hi',
+      isBackground: true,
+    });
+    const steps = subagent.flatMap((e) =>
+      e.step ? [[e.step.phase, e.step.text, e.step.exitCode]] : [],
+    );
+    assert.deepEqual(steps, [
+      ['start', 'echo hi', undefined],
+      ['end', 'echo hi', 0],
+    ]);
+    assert.deepEqual(
+      subagent.flatMap((e) => (e.message ? [e.message] : [])),
+      ['hi'],
+    );
     assert.equal(subagent.findLast((e) => e.tokens)?.tokens, 42727);
-    assert.deepEqual(subagent.filter((e) => e.phase === 'end').map((e) => e.status), ['done', 'done'], 'both the parent item and the child turn end it; the store keeps the first');
-    const childTools = events.filter((e) => e.type === 'tool' && e.text.includes('echo hi'));
-    assert.deepEqual(childTools, [], "the child's command stays out of the parent's work log");
-    const usage = events.filter((e) => e.type === 'usage' && e.contextUsed === undefined);
-    assert.ok(usage.length >= 1, "the child's spend counts toward the thread without moving its context meter");
-    assert.deepEqual(events.filter((e) => e.type === 'message').map((e) => e.type === 'message' && e.text), ['I’ll spawn one sub-agent and wait for its output.\n', 'done']);
+    assert.deepEqual(
+      subagent.filter((e) => e.phase === 'end').map((e) => e.status),
+      ['done', 'done'],
+      'both the parent item and the child turn end it; the store keeps the first',
+    );
+    const childTools = events.filter(
+      (e) => e.type === 'tool' && e.text.includes('echo hi'),
+    );
+    assert.deepEqual(
+      childTools,
+      [],
+      "the child's command stays out of the parent's work log",
+    );
+    const usage = events.filter(
+      (e) => e.type === 'usage' && e.contextUsed === undefined,
+    );
+    assert.ok(
+      usage.length >= 1,
+      "the child's spend counts toward the thread without moving its context meter",
+    );
+    assert.deepEqual(
+      events
+        .filter((e) => e.type === 'message')
+        .map((e) => e.type === 'message' && e.text),
+      ['I’ll spawn one sub-agent and wait for its output.\n', 'done'],
+    );
   } finally {
     codex.dispose();
   }
@@ -471,27 +1202,73 @@ test('a command still running when the turn ends is a background task that ends 
   const id = 'exec-5d520426-9a8e-4ff3-911c-41db88751dee';
   const tail = events.filter((e) => e.type === 'task' || e.type === 'turn-end');
   assert.deepEqual(tail, [
-    { threadId: 'h1', type: 'task', id, phase: 'start', kind: 'shell', command: "sh -c 'sleep 25; echo finished; exit 3'" },
+    {
+      threadId: 'h1',
+      type: 'task',
+      id,
+      phase: 'start',
+      kind: 'shell',
+      command: "sh -c 'sleep 25; echo finished; exit 3'",
+    },
     { threadId: 'h1', type: 'turn-end', status: 'done' },
-    { threadId: 'h1', type: 'task', id, phase: 'end', status: 'failed', exitCode: 3 },
+    {
+      threadId: 'h1',
+      type: 'task',
+      id,
+      phase: 'end',
+      status: 'failed',
+      exitCode: 3,
+    },
   ]);
-  assert.equal(replay('plan').events.filter((e) => e.type === 'task').length, 0, 'a command that finished inside its turn is no task');
+  assert.equal(
+    replay('plan').events.filter((e) => e.type === 'task').length,
+    0,
+    'a command that finished inside its turn is no task',
+  );
 });
 
 test('stopping a background task terminates its terminal and ends it stopped, not failed (real 0.163.0 trace)', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, STOP_CODEX);
   const { events, emit, waitFor } = recordEvents();
-  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/background-stop.jsonl', import.meta.url)) } }));
+  const codex = new CodexAdapter(
+    emit,
+    async () => ({ id: 'default' }),
+    async () => ({
+      path: fake,
+      env: {
+        ...process.env,
+        FIXTURE: fileURLToPath(
+          new URL('./fixtures/background-stop.jsonl', import.meta.url),
+        ),
+      },
+    }),
+  );
   const id = 'exec-aaec80e8-e146-42a6-babd-b605b1490725';
   const isEnd = (e: AgentEvent) => e.type === 'task' && e.phase === 'end';
   try {
-    await codex.start('h1', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'Start sleep 600 in the background' });
+    await codex.start('h1', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'Start sleep 600 in the background',
+    });
     await waitFor((e) => e.type === 'turn-end');
-    assert.ok(events.some((e) => e.type === 'task' && e.phase === 'start' && e.id === id));
+    assert.ok(
+      events.some(
+        (e) => e.type === 'task' && e.phase === 'start' && e.id === id,
+      ),
+    );
     assert.equal(events.find(isEnd), undefined, 'still running after the turn');
     await codex.stopTask('h1', id);
-    assert.deepEqual(await waitFor(isEnd), { threadId: 'h1', type: 'task', id, phase: 'end', status: 'stopped', exitCode: 137 });
+    assert.deepEqual(await waitFor(isEnd), {
+      threadId: 'h1',
+      type: 'task',
+      id,
+      phase: 'end',
+      status: 'stopped',
+      exitCode: 137,
+    });
   } finally {
     codex.dispose();
   }
@@ -532,12 +1309,38 @@ test('skills/list becomes / commands, and a message opening with one attaches it
       {
         cwd: '/repo',
         skills: [
-          { name: 'fix-lint', description: 'Long description', interface: { shortDescription: 'Fix lint' }, path: '/s/fix-lint/SKILL.md', enabled: true },
-          { name: 'off', description: 'Disabled', path: '/s/off/SKILL.md', enabled: false },
-          { name: 'plain', description: 'Plain one', path: '/s/plain/SKILL.md', enabled: true },
+          {
+            name: 'fix-lint',
+            description: 'Long description',
+            interface: { shortDescription: 'Fix lint' },
+            path: '/s/fix-lint/SKILL.md',
+            enabled: true,
+          },
+          {
+            name: 'off',
+            description: 'Disabled',
+            path: '/s/off/SKILL.md',
+            enabled: false,
+          },
+          {
+            name: 'plain',
+            description: 'Plain one',
+            path: '/s/plain/SKILL.md',
+            enabled: true,
+          },
         ],
       },
-      { cwd: '/other', skills: [{ name: 'plain', description: 'Duplicate', path: '/x/SKILL.md', enabled: true }] },
+      {
+        cwd: '/other',
+        skills: [
+          {
+            name: 'plain',
+            description: 'Duplicate',
+            path: '/x/SKILL.md',
+            enabled: true,
+          },
+        ],
+      },
     ],
   };
   const commands = commandsFromSkills(reply);
@@ -545,48 +1348,109 @@ test('skills/list becomes / commands, and a message opening with one attaches it
     { name: 'fix-lint', description: 'Fix lint', path: '/s/fix-lint/SKILL.md' },
     { name: 'plain', description: 'Plain one', path: '/s/plain/SKILL.md' },
   ]);
-  assert.deepEqual(skillInputs('/fix-lint src/a.ts', [], commands), [{ type: 'skill', name: 'fix-lint', path: '/s/fix-lint/SKILL.md' }]);
+  assert.deepEqual(skillInputs('/fix-lint src/a.ts', [], commands), [
+    { type: 'skill', name: 'fix-lint', path: '/s/fix-lint/SKILL.md' },
+  ]);
   assert.deepEqual(skillInputs('/off', [], commands), []);
   assert.deepEqual(skillInputs('please /plain', [], commands), []);
   assert.deepEqual(
-    skillInputs('/fix-lint a.ts', ['plain', 'fix-lint', 'gone'], commands).map((s) => s.name),
+    skillInputs('/fix-lint a.ts', ['plain', 'fix-lint', 'gone'], commands).map(
+      (s) => s.name,
+    ),
     ['fix-lint', 'plain'],
     'skills picked with @ attach too, once each, unknown ones left out',
   );
   assert.deepEqual(
-    skillEvents('t1', 'turn-1', [{ name: 'plain' }]).map((e) => e.type === 'tool' && [e.phase, e.text, e.skill]),
+    skillEvents('t1', 'turn-1', [{ name: 'plain' }]).map(
+      (e) => e.type === 'tool' && [e.phase, e.text, e.skill],
+    ),
     [
       ['start', 'Skill plain', 'plain'],
       ['end', 'Skill plain', 'plain'],
     ],
   );
-  assert.deepEqual(infoFromLists(null, reply, null).skills, ['fix-lint', 'plain']);
+  assert.deepEqual(infoFromLists(null, reply, null).skills, [
+    'fix-lint',
+    'plain',
+  ]);
   assert.deepEqual(commandsFromSkills(null), []);
 });
 
 test("a completed file change carries one patch with a section per file, so each file's +/− and diff show", () => {
   const changes = [
-    { path: '/repo/src/a.ts', kind: { type: 'update', move_path: null }, diff: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n' },
+    {
+      path: '/repo/src/a.ts',
+      kind: { type: 'update', move_path: null },
+      diff: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n',
+    },
     { path: '/repo/src/new.ts', kind: { type: 'add' }, diff: 'one\ntwo\n' },
     { path: '/repo/gone.ts', kind: { type: 'delete' }, diff: 'bye\n' },
   ];
   const s = threadState('h1', '/repo');
-  const [end] = mapNotification('item/completed', { threadId: 't', item: { type: 'fileChange', id: 'f2', status: 'completed', changes } }, s);
+  const [end] = mapNotification(
+    'item/completed',
+    {
+      threadId: 't',
+      item: { type: 'fileChange', id: 'f2', status: 'completed', changes },
+    },
+    s,
+  );
   assert.equal(
     end.type === 'tool' && end.patch,
     [
-      'diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,2 +1,2 @@', '-old', '+new', ' same',
-      'diff --git a/src/new.ts b/src/new.ts', '--- /dev/null', '+++ b/src/new.ts', '@@ -0,0 +1,2 @@', '+one', '+two',
-      'diff --git a/gone.ts b/gone.ts', '--- a/gone.ts', '+++ /dev/null', '@@ -1,1 +0,0 @@', '-bye',
+      'diff --git a/src/a.ts b/src/a.ts',
+      '--- a/src/a.ts',
+      '+++ b/src/a.ts',
+      '@@ -1,2 +1,2 @@',
+      '-old',
+      '+new',
+      ' same',
+      'diff --git a/src/new.ts b/src/new.ts',
+      '--- /dev/null',
+      '+++ b/src/new.ts',
+      '@@ -0,0 +1,2 @@',
+      '+one',
+      '+two',
+      'diff --git a/gone.ts b/gone.ts',
+      '--- a/gone.ts',
+      '+++ /dev/null',
+      '@@ -1,1 +0,0 @@',
+      '-bye',
     ].join('\n'),
   );
-  assert.equal(changesPatch([{ path: '/repo/x.ts', kind: { type: 'update', move_path: null }, diff: '' }], '/repo'), '', 'an update without hunks adds nothing');
+  assert.equal(
+    changesPatch(
+      [
+        {
+          path: '/repo/x.ts',
+          kind: { type: 'update', move_path: null },
+          diff: '',
+        },
+      ],
+      '/repo',
+    ),
+    '',
+    'an update without hunks adds nothing',
+  );
 });
 
 test("image generation runs on a model the account lists: the cheap one, else its default, never the user's config default", () => {
-  const model = (id: string, isDefault = false) => ({ id, name: id, description: '', efforts: [], speeds: [], isDefault });
-  assert.equal(imageModel([model('gpt-6-astra', true), model('gpt-6-luna')]), 'gpt-6-luna');
-  assert.equal(imageModel([model('gpt-6-nova'), model('gpt-6-astra', true)]), 'gpt-6-astra');
+  const model = (id: string, isDefault = false) => ({
+    id,
+    name: id,
+    description: '',
+    efforts: [],
+    speeds: [],
+    isDefault,
+  });
+  assert.equal(
+    imageModel([model('gpt-6-astra', true), model('gpt-6-luna')]),
+    'gpt-6-luna',
+  );
+  assert.equal(
+    imageModel([model('gpt-6-nova'), model('gpt-6-astra', true)]),
+    'gpt-6-astra',
+  );
   assert.equal(imageModel([model('gpt-6-nova')]), 'gpt-6-nova');
   assert.equal(imageModel([]), null);
 });
@@ -617,18 +1481,61 @@ test('a steer waits in Mochi until the turn finishes a step, can be taken back u
   const fake = fakeCodex(home, STEER_CODEX);
   const log = path.join(home, 'steers.log');
   const { events, emit, waitFor } = recordEvents();
-  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STEER_LOG: log } }));
+  const codex = new CodexAdapter(
+    emit,
+    async () => ({ id: 'default' }),
+    async () => ({ path: fake, env: { ...process.env, STEER_LOG: log } }),
+  );
   try {
-    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'run the tests' });
-    await codex.send('t', 'create a PR', undefined, undefined, undefined, true, 's1');
-    await codex.send('t', 'never mind', undefined, undefined, undefined, true, 's2');
-    assert.equal(existsSync(log), false, 'nothing reaches Codex before the step ends');
+    await codex.start('t', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'run the tests',
+    });
+    await codex.send(
+      't',
+      'create a PR',
+      undefined,
+      undefined,
+      undefined,
+      true,
+      's1',
+    );
+    await codex.send(
+      't',
+      'never mind',
+      undefined,
+      undefined,
+      undefined,
+      true,
+      's2',
+    );
+    assert.equal(
+      existsSync(log),
+      false,
+      'nothing reaches Codex before the step ends',
+    );
     assert.equal(await codex.unsteer('t', 's2'), true);
     await waitFor((e) => e.type === 'steer-read' && e.id === 's1');
-    assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['create a PR s1'], 'the taken-back message never went');
-    const order = events.flatMap((e) => (e.type === 'tool' && e.phase === 'end' ? ['tool end'] : e.type === 'steer-read' ? [`read ${e.id}`] : []));
+    assert.deepEqual(
+      readFileSync(log, 'utf8').trim().split('\n'),
+      ['create a PR s1'],
+      'the taken-back message never went',
+    );
+    const order = events.flatMap((e) =>
+      e.type === 'tool' && e.phase === 'end'
+        ? ['tool end']
+        : e.type === 'steer-read'
+          ? [`read ${e.id}`]
+          : [],
+    );
     assert.deepEqual(order, ['tool end', 'read s1']);
-    assert.equal(await codex.unsteer('t', 's1'), false, 'handed over, it can no longer be taken back');
+    assert.equal(
+      await codex.unsteer('t', 's1'),
+      false,
+      'handed over, it can no longer be taken back',
+    );
   } finally {
     codex.dispose();
   }

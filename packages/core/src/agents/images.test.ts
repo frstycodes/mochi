@@ -16,10 +16,17 @@ test('the sweep deletes only old images no saved text names', async () => {
     utimesSync(join(dir, f), past, past);
   }
   utimesSync(join(dir, name('d')), new Date(T0), new Date(T0));
-  const threads = JSON.stringify({ images: [join(dir, name('a')).replaceAll('/', '\\\\')] });
+  const threads = JSON.stringify({
+    images: [join(dir, name('a')).replaceAll('/', '\\\\')],
+  });
   const replay = `{"path":"${join(dir, name('b'))}"}\n`;
 
   const deleted = await sweepImages(dir, [threads, replay], T0 - 1000);
   assert.deepEqual(deleted, [name('c')]);
-  assert.deepEqual(readdirSync(dir).sort(), [name('a'), name('b'), name('d'), 'notes.txt']);
+  assert.deepEqual(readdirSync(dir).sort(), [
+    name('a'),
+    name('b'),
+    name('d'),
+    'notes.txt',
+  ]);
 });

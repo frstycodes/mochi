@@ -6,7 +6,13 @@ import type { Manifest } from './manifest.ts';
 import type { CloneSource, Project } from './projects.ts';
 
 /** What a paired device may do on this machine (DEVICES.md › Devices and what they can do). */
-export const SCOPES = ['read', 'operate', 'manage', 'code', 'terminal'] as const;
+export const SCOPES = [
+  'read',
+  'operate',
+  'manage',
+  'code',
+  'terminal',
+] as const;
 
 export type Scope = (typeof SCOPES)[number];
 
@@ -31,7 +37,11 @@ export interface RemoteSettings {
   keepsAwake: boolean;
 }
 
-export type RelayState = { status: 'off' } | { status: 'connecting' } | { status: 'connected' } | { status: 'error'; error: string };
+export type RelayState =
+  | { status: 'off' }
+  | { status: 'connecting' }
+  | { status: 'connected' }
+  | { status: 'error'; error: string };
 
 /** Another computer among yours (DEVICES.md › Pairing), with what it may do on this one. */
 export interface MemberInfo {
@@ -74,7 +84,9 @@ export interface FollowedMachine {
 }
 
 /** A followed machine's threads, one thread file (`SavedThread`, src/store/saved.ts) at a time; `null` deletes it. */
-export type MirrorFrame = { type: 'reset' } | { type: 'thread'; threadId: string; saved: unknown };
+export type MirrorFrame =
+  | { type: 'reset' }
+  | { type: 'thread'; threadId: string; saved: unknown };
 
 /** "Allow <name>?" on this computer's screen. */
 export interface ApprovalRequest {
@@ -131,7 +143,12 @@ export type RemoteCommand =
   | { type: 'fork'; threadId: string; point: ThreadPoint }
   | { type: 'handoff'; threadId: string; to: Provider }
   /** `chat`, or `files` too (`RewindMode`). */
-  | { type: 'rewind'; threadId: string; point: ThreadPoint; mode: 'chat' | 'files' }
+  | {
+      type: 'rewind';
+      threadId: string;
+      point: ThreadPoint;
+      mode: 'chat' | 'files';
+    }
   /** Asked in the thread's side chat on this computer; the answer streams in like any store change. */
   | { type: 'side-chat'; threadId: string; text: string }
   /** Opened on the device: the thread (with its asks) and Queue cards read here too, and on every other device. */
@@ -152,7 +169,11 @@ export type RemoteCommand =
   /** `order`: where the pin sorts among all your computers' pins (`pinAt`); unset pins it last. */
   | { type: 'pin'; threadId: string; isPinned: boolean; order?: number }
   | { type: 'settle'; threadId: string; isSettled: boolean }
-  | { type: 'schedule'; threadId: string; action: 'pause' | 'resume' | 'run' | 'remove' }
+  | {
+      type: 'schedule';
+      threadId: string;
+      action: 'pause' | 'resume' | 'run' | 'remove';
+    }
   | { type: 'commit'; threadId: string; message: string }
   /** Visible to others: the device asks its user first, as the machine's ship bar does. */
   | { type: 'push'; threadId: string }
@@ -168,19 +189,44 @@ export type RemoteCommand =
   // code
   | { type: 'diff'; threadId: string; scope: DiffScope }
   | { type: 'checkpoint-diff'; threadId: string; n: number }
-  | { type: 'change'; threadId: string; action: 'stage' | 'unstage' | 'revert'; target: ChangeTarget }
+  | {
+      type: 'change';
+      threadId: string;
+      action: 'stage' | 'unstage' | 'revert';
+      target: ChangeTarget;
+    }
   /** A review note on a diff line, sent to the thread as the Changes tab sends it. */
-  | { type: 'comment'; threadId: string; path: string; side: 'additions' | 'deletions'; line: number; text: string }
+  | {
+      type: 'comment';
+      threadId: string;
+      path: string;
+      side: 'additions' | 'deletions';
+      line: number;
+      text: string;
+    }
   | { type: 'files'; threadId: string }
   | { type: 'read-file'; threadId: string; path: string }
   // terminal: a shell this computer opens in the thread's folder for the device, separate from its own terminal tabs
   | { type: 'terminal-open'; threadId: string; cols: number; rows: number }
-  | { type: 'terminal-write'; threadId: string; terminalId: string; data: string }
-  | { type: 'terminal-resize'; threadId: string; terminalId: string; cols: number; rows: number }
+  | {
+      type: 'terminal-write';
+      threadId: string;
+      terminalId: string;
+      data: string;
+    }
+  | {
+      type: 'terminal-resize';
+      threadId: string;
+      terminalId: string;
+      cols: number;
+      rows: number;
+    }
   /** Output from offset `after` on; the device polls with the `next` it got. */
   | { type: 'terminal-close'; threadId: string; terminalId: string };
 
-export type ThreadPoint = { kind: 'message'; index: number } | { kind: 'checkpoint'; n: number };
+export type ThreadPoint =
+  | { kind: 'message'; index: number }
+  | { kind: 'checkpoint'; n: number };
 
 /** What a command answers with, by type; the others answer with nothing beyond `isOk`. */
 export interface CommandData {
@@ -225,7 +271,11 @@ export interface TerminalChunk extends TerminalOutput {
 }
 
 export type CommandResult =
-  | { isOk: true; /** A short outcome a device can show: a commit's sha, a PR's URL. */ detail?: string; data?: CommandData[keyof CommandData] }
+  | {
+      isOk: true;
+      /** A short outcome a device can show: a commit's sha, a PR's URL. */ detail?: string;
+      data?: CommandData[keyof CommandData];
+    }
   | { isOk: false; error: string };
 
 /** A device's command as the renderer runs it. */
@@ -260,7 +310,9 @@ export interface RemoteHost {
   onMachines(listener: (machines: FollowedMachine[]) => void): () => void;
   /** The main window's mirrors start empty: every followed machine starts over, each thread from its snapshot. */
   follow(): Promise<void>;
-  onMachineFrame(listener: (message: { machineId: string; frame: MirrorFrame }) => void): () => void;
+  onMachineFrame(
+    listener: (message: { machineId: string; frame: MirrorFrame }) => void,
+  ): () => void;
   /** Output of a terminal opened on a followed machine (`terminal-open`), pushed as it prints; the last chunk of an exited shell has `exitCode`. */
   onTerminalOutput(listener: (message: TerminalChunk) => void): () => void;
   /** Keeps a followed machine's store (`toSaved` JSON) encrypted on this computer, for launch and offline reading. */

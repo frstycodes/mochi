@@ -19,11 +19,26 @@ test('a streamed reply stays inside its render and script budget', async () => {
   const app = await launch(userData);
   try {
     const page = await app.firstWindow();
-    await app.context().addInitScript({ path: path.join(import.meta.dirname, 'render-hook.js') });
+    await app.context().addInitScript({
+      path: path.join(import.meta.dirname, 'render-hook.js'),
+    });
     // Main hands each page Core's socket URL; the stream below goes into Core's log as an agent's would.
-    await app.context().addInitScript(() => window.addEventListener('message', (e) => e.data?.channel === 'core:url' && (window.__coreUrl = e.data.url)));
+    await app
+      .context()
+      .addInitScript(() =>
+        window.addEventListener(
+          'message',
+          (e) =>
+            e.data?.channel === 'core:url' && (window.__coreUrl = e.data.url),
+        ),
+      );
     // Fixture threads, so the run needs no saved data.
-    await page.evaluate(() => localStorage.setItem('mochi.prefs.v1', JSON.stringify({ demoData: true })));
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'mochi.prefs.v1',
+        JSON.stringify({ demoData: true }),
+      ),
+    );
     await page.reload();
     const row = page.locator('[data-thread-row]').first();
     const threadId = await row.getAttribute('data-thread-row');
@@ -34,27 +49,45 @@ test('a streamed reply stays inside its render and script budget', async () => {
     await cdp.send('Performance.enable');
     const scriptSeconds = async () => {
       const { metrics } = await cdp.send('Performance.getMetrics');
-      const value = (name: string) => metrics.find((m) => m.name === name)!.value;
+      const value = (name: string) =>
+        metrics.find((m) => m.name === name)!.value;
       return { script: value('ScriptDuration'), at: value('Timestamp') };
     };
 
-    await page.evaluate(() => Object.assign(window.__perf, { renders: 0, commits: 0, isCounting: true }));
+    await page.evaluate(() =>
+      Object.assign(window.__perf, {
+        renders: 0,
+        commits: 0,
+        isCounting: true,
+      }),
+    );
     const before = await scriptSeconds();
-    const events = await streamIntoCore(await page.evaluate(() => window.__coreUrl!), threadId!);
+    const events = await streamIntoCore(
+      await page.evaluate(() => window.__coreUrl!),
+      threadId!,
+    );
     const after = await scriptSeconds();
-    const { renders, commits } = await page.evaluate(() => ({ ...window.__perf, isCounting: false }));
+    const { renders, commits } = await page.evaluate(() => ({
+      ...window.__perf,
+      isCounting: false,
+    }));
 
     const measured = {
       events,
       rendersPerEvent: renders / events,
       commitsPerEvent: commits / events,
-      scriptMsPerSec: (1000 * (after.script - before.script)) / (after.at - before.at),
+      scriptMsPerSec:
+        (1000 * (after.script - before.script)) / (after.at - before.at),
     };
     console.log(JSON.stringify(measured));
     await expect(page.getByText(`word${events - 1} and`)).toBeVisible();
     expect(renders, 'the render hook saw no commits').toBeGreaterThan(0);
-    expect.soft(measured.rendersPerEvent, 'renders per event').toBeLessThanOrEqual(MAX_RENDERS_PER_EVENT);
-    expect.soft(measured.scriptMsPerSec, 'renderer script ms/s').toBeLessThanOrEqual(MAX_SCRIPT_MS_PER_SEC);
+    expect
+      .soft(measured.rendersPerEvent, 'renders per event')
+      .toBeLessThanOrEqual(MAX_RENDERS_PER_EVENT);
+    expect
+      .soft(measured.scriptMsPerSec, 'renderer script ms/s')
+      .toBeLessThanOrEqual(MAX_SCRIPT_MS_PER_SEC);
   } finally {
     await app.close();
     rmSync(userData, { recursive: true, force: true });
@@ -65,7 +98,12 @@ function launch(userData: string) {
   return electron.launch({
     cwd: ROOT,
     // A window CI never focuses must keep its frames and timers, or the stream batches differently than on a desk.
-    args: ['.', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'],
+    args: [
+      '.',
+      '--disable-renderer-backgrounding',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+    ],
     env: { ...process.env, MOCHI_USER_DATA: userData },
   });
 }
@@ -74,7 +112,13 @@ function launch(userData: string) {
 async function streamIntoCore(url: string, threadId: string) {
   const { client, close } = await connectCore(url);
   const send = (event: { text: string; isDelta: boolean }) =>
-    Effect.runPromise(client['events.append']({ type: 'agent.message', threadId, payload: { threadId, type: 'message', ...event } }));
+    Effect.runPromise(
+      client['events.append']({
+        type: 'agent.message',
+        threadId,
+        payload: { threadId, type: 'message', ...event },
+      }),
+    );
   await send({ text: '\n\nSynthetic stream: ', isDelta: false });
   const count = EVENTS_PER_SEC * SECONDS;
   const sent: Promise<unknown>[] = [];

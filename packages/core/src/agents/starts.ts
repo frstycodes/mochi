@@ -24,7 +24,8 @@ export class Starts {
     this.pending.set(threadId, entry);
     return {
       signal: entry.abort.signal,
-      choose: () => new Promise<SetupChoice>((resolve) => (entry.answer = resolve)),
+      choose: () =>
+        new Promise<SetupChoice>((resolve) => (entry.answer = resolve)),
       keepsTitle: () => !!entry.keepsTitle,
       end: () => {
         if (this.pending.get(threadId) === entry) this.pending.delete(threadId);

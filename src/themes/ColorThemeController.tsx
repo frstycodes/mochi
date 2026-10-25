@@ -18,16 +18,22 @@ export function ColorThemeController() {
   const { theme: appearance } = useTheme();
 
   useEffect(() => {
-    if (APPEARANCES.includes(appearance as Appearance)) void host.windows.setAppearance(appearance as Appearance);
+    if (APPEARANCES.includes(appearance as Appearance))
+      void host.windows.setAppearance(appearance as Appearance);
   }, [appearance]);
 
-  useQuery({ queryKey: queryKeys.themes.installed(), queryFn: readThemes, staleTime: 0 });
+  useQuery({
+    queryKey: queryKeys.themes.installed(),
+    queryFn: readThemes,
+    staleTime: 0,
+  });
 
   useLayoutEffect(() => {
     const root = document.documentElement;
     const restore = pauseTransitions();
     for (const name of applied.current) root.style.removeProperty(name);
-    for (const [name, value] of Object.entries(tokens)) root.style.setProperty(name, value);
+    for (const [name, value] of Object.entries(tokens))
+      root.style.setProperty(name, value);
     applied.current = Object.keys(tokens);
     // next-themes writes these too, but only when Light / Dark / System changes; a preview can flip the mode under it.
     root.setAttribute('data-theme', mode);

@@ -1,13 +1,36 @@
 import assert from 'node:assert/strict';
 import { afterEach, test, vi } from 'vite-plus/test';
 import { devTarget } from '../../src/terminal/lsof.ts';
-import { debounce, DEBOUNCE_MS, isHmrLog, isIgnored, ScrollMemory, watchTree } from './reload.ts';
+import {
+  debounce,
+  DEBOUNCE_MS,
+  isHmrLog,
+  isIgnored,
+  ScrollMemory,
+  watchTree,
+} from './reload.ts';
 
 afterEach(() => vi.useRealTimers());
 
 test('isIgnored skips build, cache and VCS dirs and editor temp files, nothing else', () => {
-  for (const rel of ['node_modules/react/index.js', '.git/index', 'dist/assets/app.js', 'web/.next/cache/x', 'src/.DS_Store', 'src/App.tsx~', 'src/.App.tsx.swp', 'node_modules\\react\\index.js']) assert.ok(isIgnored(rel), rel);
-  for (const rel of ['src/App.tsx', 'index.html', 'public/build-info.json', 'src/distance.ts']) assert.ok(!isIgnored(rel), rel);
+  for (const rel of [
+    'node_modules/react/index.js',
+    '.git/index',
+    'dist/assets/app.js',
+    'web/.next/cache/x',
+    'src/.DS_Store',
+    'src/App.tsx~',
+    'src/.App.tsx.swp',
+    'node_modules\\react\\index.js',
+  ])
+    assert.ok(isIgnored(rel), rel);
+  for (const rel of [
+    'src/App.tsx',
+    'index.html',
+    'public/build-info.json',
+    'src/distance.ts',
+  ])
+    assert.ok(!isIgnored(rel), rel);
 });
 
 test('debounce runs once after the burst settles', () => {
@@ -28,11 +51,18 @@ test('debounce runs once after the burst settles', () => {
 });
 
 test('watchTree reports one change per burst, with its start, and ignores node_modules', () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], now: 1000 });
+  vi.useFakeTimers({
+    toFake: ['setTimeout', 'clearTimeout', 'Date'],
+    now: 1000,
+  });
   const seen: number[] = [];
   let emit: (paths: ReadonlyArray<string>) => void = () => {};
   let isStopped = false;
-  const stop = watchTree('/repo', (since) => seen.push(since), (_root, onPaths) => ((emit = onPaths), () => (isStopped = true)));
+  const stop = watchTree(
+    '/repo',
+    (since) => seen.push(since),
+    (_root, onPaths) => ((emit = onPaths), () => (isStopped = true)),
+  );
   emit(['node_modules/dep/index.js']);
   vi.advanceTimersByTime(DEBOUNCE_MS + 1);
   assert.equal(seen.length, 0);
@@ -57,7 +87,10 @@ test('ScrollMemory restores per URL once, while fresh, ignoring the hash', () =>
   const memory = new ScrollMemory();
   memory.remember('http://localhost:5173/a#x', { x: 0, y: 400 }, 1000);
   memory.remember('http://localhost:5173/b', { x: 0, y: 900 }, 1000);
-  assert.deepEqual(memory.take('http://localhost:5173/a', 2000), { x: 0, y: 400 });
+  assert.deepEqual(memory.take('http://localhost:5173/a', 2000), {
+    x: 0,
+    y: 400,
+  });
   assert.equal(memory.take('http://localhost:5173/a', 2000), null);
   assert.equal(memory.take('http://localhost:5173/b', 20_000), null);
   memory.remember('http://localhost:5173/c', { x: 0, y: 0 }, 1000);
@@ -65,8 +98,22 @@ test('ScrollMemory restores per URL once, while fresh, ignoring the hash', () =>
 });
 
 test('devTarget prefers the dev script, then start, then other scripts, then launch.json', () => {
-  const t = (name: string, source: 'package.json' | 'launch.json' = 'package.json') => ({ name, command: name, source });
-  assert.equal(devTarget([t('web', 'launch.json'), t('electron:dev'), t('start'), t('dev')])?.name, 'dev');
-  assert.equal(devTarget([t('web', 'launch.json'), t('electron:dev')])?.name, 'electron:dev');
+  const t = (
+    name: string,
+    source: 'package.json' | 'launch.json' = 'package.json',
+  ) => ({ name, command: name, source });
+  assert.equal(
+    devTarget([
+      t('web', 'launch.json'),
+      t('electron:dev'),
+      t('start'),
+      t('dev'),
+    ])?.name,
+    'dev',
+  );
+  assert.equal(
+    devTarget([t('web', 'launch.json'), t('electron:dev')])?.name,
+    'electron:dev',
+  );
   assert.equal(devTarget([]), null);
 });

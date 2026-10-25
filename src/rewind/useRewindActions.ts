@@ -7,7 +7,11 @@ import { setPrefs } from '../settings/prefs.ts';
 import { useDispatch, useGetState } from '../store/index.tsx';
 import { sendToComposer } from '../browser/composer.tsx';
 import { prunePins, restorePrunedPins } from '../chat/pins.ts';
-import { checkpointPhrase, rewindBlockedReason, type RewindMode } from './checkpoints.ts';
+import {
+  checkpointPhrase,
+  rewindBlockedReason,
+  type RewindMode,
+} from './checkpoints.ts';
 import { rewindThread, type RewindTarget } from './run.ts';
 
 export type { RewindTarget };
@@ -28,9 +32,12 @@ export function useRewindActions() {
     if (!saved || blocked(saved.threadId)) return;
     const cwd = worktreePath(saved.threadId);
     try {
-      if (saved.hasFiles && cwd) await host.git.restoreCheckpoint(cwd, saved.threadId, 'undo');
+      if (saved.hasFiles && cwd)
+        await host.git.restoreCheckpoint(cwd, saved.threadId, 'undo');
     } catch (error) {
-      toast.error('Could not undo the rewind', { description: gitError(error) });
+      toast.error('Could not undo the rewind', {
+        description: gitError(error),
+      });
       return;
     }
     dispatch({ type: 'rewind-undo' });
@@ -39,26 +46,56 @@ export function useRewindActions() {
   };
 
   /** Rewinding to one of your messages puts it back in the composer. */
-  const rewind = async (thread: Thread, target: RewindTarget, mode: RewindMode) => {
-    const done = await rewindThread(getState(), dispatch, thread.id, target, mode);
+  const rewind = async (
+    thread: Thread,
+    target: RewindTarget,
+    mode: RewindMode,
+  ) => {
+    const done = await rewindThread(
+      getState(),
+      dispatch,
+      thread.id,
+      target,
+      mode,
+    );
     if (!done) return;
-    if ('error' in done) return void toast.error(done.error, done.description ? { description: done.description } : undefined);
+    if ('error' in done)
+      return void toast.error(
+        done.error,
+        done.description ? { description: done.description } : undefined,
+      );
     setPrefs({ rewindMode: mode });
     const action = { label: 'Undo', onClick: () => void undo() };
     if (target.kind === 'checkpoint')
-      return void toast.success(`Rewound "${thread.title}" to ${checkpointPhrase(done.checkpoint)}`, { description: modeNote(mode), action });
+      return void toast.success(
+        `Rewound "${thread.title}" to ${checkpointPhrase(done.checkpoint)}`,
+        { description: modeNote(mode), action },
+      );
     prunePins(thread.id, target.index);
     const isYours = done.entry!.who === 'you';
-    if (isYours) sendToComposer({ threadId: thread.id, text: done.entry!.text });
-    toast.success(isYours ? 'Rewound to before your message' : 'Rewound to before this message', {
-      description: [modeNote(mode), isYours && 'It is back in the composer to edit and send again.'].filter(Boolean).join(' '),
-      action,
-    });
+    if (isYours)
+      sendToComposer({ threadId: thread.id, text: done.entry!.text });
+    toast.success(
+      isYours
+        ? 'Rewound to before your message'
+        : 'Rewound to before this message',
+      {
+        description: [
+          modeNote(mode),
+          isYours && 'It is back in the composer to edit and send again.',
+        ]
+          .filter(Boolean)
+          .join(' '),
+        action,
+      },
+    );
   };
 
   return { rewind, undo };
 }
 
 function modeNote(mode: RewindMode) {
-  return mode === 'files' ? 'Chat and files went back.' : 'Chat went back, files stayed.';
+  return mode === 'files'
+    ? 'Chat and files went back.'
+    : 'Chat went back, files stayed.';
 }

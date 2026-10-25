@@ -20,7 +20,7 @@ export const usage = {
     const { since } = query;
     const account = githubAccount(query.githubUser);
     const errors: string[] = [];
-    const settle = <T,>(work: Promise<T[]>, failure: string) =>
+    const settle = <T>(work: Promise<T[]>, failure: string) =>
       work.catch((error: Error) => {
         errors.push(`${failure}: ${error.message.split('\n')[0]}`);
         return [] as T[];
@@ -29,18 +29,38 @@ export const usage = {
     const [claude, codex, commits, prs] = await Promise.all([
       settle(claudeRecords(homes('claude'), roots, since), 'Claude Code logs'),
       settle(codexRecords(homes('codex'), roots, since), 'Codex logs'),
-      Promise.all(repos.map((repo) => settle(commitStats(repo, since), `Commits in ${repo}`))).then((r) => r.flat()),
-      Promise.all(repos.map((repo) => settle(prStats(repo, since, account), `Pull requests in ${repo}`))).then((r) => r.flat()),
+      Promise.all(
+        repos.map((repo) =>
+          settle(commitStats(repo, since), `Commits in ${repo}`),
+        ),
+      ).then((r) => r.flat()),
+      Promise.all(
+        repos.map((repo) =>
+          settle(prStats(repo, since, account), `Pull requests in ${repo}`),
+        ),
+      ).then((r) => r.flat()),
     ]);
-    const price = await priceBook(join(app.getPath('userData'), 'model-prices.json'));
-    return { ...summarize([...claude, ...codex], roots, since, price), commits, prs, errors } satisfies UsageReport;
+    const price = await priceBook(
+      join(app.getPath('userData'), 'model-prices.json'),
+    );
+    return {
+      ...summarize([...claude, ...codex], roots, since, price),
+      commits,
+      prs,
+      errors,
+    } satisfies UsageReport;
   },
 } satisfies Handlers<UsageHost>;
 
 /** Every config folder the harness logs into: the default one and each profile account's own. */
 function homes(provider: Provider) {
-  const fallback = join(homedir(), HARNESSES[provider].defaultFolder.replace(/^~\//, ''));
-  const own = accountsState().accounts.filter((a) => a.provider === provider).map((a) => a.configDir ?? fallback);
+  const fallback = join(
+    homedir(),
+    HARNESSES[provider].defaultFolder.replace(/^~\//, ''),
+  );
+  const own = accountsState()
+    .accounts.filter((a) => a.provider === provider)
+    .map((a) => a.configDir ?? fallback);
   return [...new Set([fallback, ...own])];
 }
 

@@ -27,17 +27,27 @@ const REFRESH_MS = 1000;
 export function useThreadSnapshots(ids: string[]) {
   const { state } = useHarness();
   const latest = useLatest(state);
-  const snapshotsQueries = useQueries({ queries: ids.map((id) => ({
-    queryKey: queryKeys.stage.threadSnapshot(id),
-    queryFn: () => { const thread = latest.current.threads.find((t) => t.id === id); return thread ? snapshotOf(thread, latest.current) : null; },
-    staleTime: REFRESH_MS, refetchInterval: REFRESH_MS,
-  })) });
-  return snapshotsQueries.flatMap((result) => result.data ? [result.data] : []);
+  const snapshotsQueries = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.stage.threadSnapshot(id),
+      queryFn: () => {
+        const thread = latest.current.threads.find((t) => t.id === id);
+        return thread ? snapshotOf(thread, latest.current) : null;
+      },
+      staleTime: REFRESH_MS,
+      refetchInterval: REFRESH_MS,
+    })),
+  });
+  return snapshotsQueries.flatMap((result) =>
+    result.data ? [result.data] : [],
+  );
 }
 
 function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
   const last = thread.activity.findLast((a) => a.kind === 'message');
-  const tab = state.panes.find((p) => p.threadId === thread.id)?.tabs.find((t) => t.kind === 'browser');
+  const tab = state.panes
+    .find((p) => p.threadId === thread.id)
+    ?.tabs.find((t) => t.kind === 'browser');
   const { met, total } = goalProgress(thread);
   return {
     id: thread.id,
@@ -46,10 +56,12 @@ function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
     status: thread.status,
     met,
     total,
-    nowStep: threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title),
+    nowStep: threadDetail(
+      thread,
+      state.queue.find((q) => q.threadId === thread.id)?.title,
+    ),
     isWorking: isWorking(thread),
     lastMessage: last ? { who: last.who, text: last.text } : null,
     preview: tab ? { tabId: tab.id, url: tab.url ?? '' } : null,
   };
 }
-

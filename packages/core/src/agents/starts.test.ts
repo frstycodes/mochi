@@ -27,7 +27,11 @@ test('interrupt aborts the setup; Retry / Skip answer only a waiting step', asyn
   assert.equal(starts.abort('t1'), true);
   assert.equal(start.signal.aborted, true);
   start.end();
-  assert.equal(starts.abort('t1'), false, 'no setup left to stop: the interrupt goes to the agent');
+  assert.equal(
+    starts.abort('t1'),
+    false,
+    'no setup left to stop: the interrupt goes to the agent',
+  );
 });
 
 test('a second start of the same thread stops the first one', () => {
@@ -36,7 +40,11 @@ test('a second start of the same thread stops the first one', () => {
   const second = starts.begin('t1');
   assert.equal(first.signal.aborted, true);
   first.end();
-  assert.equal(starts.isStarting('t1'), true, "the first start's end leaves the second in place");
+  assert.equal(
+    starts.isStarting('t1'),
+    true,
+    "the first start's end leaves the second in place",
+  );
   second.end();
   assert.equal(starts.isStarting('t1'), false);
 });

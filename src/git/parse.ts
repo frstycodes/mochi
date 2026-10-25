@@ -1,17 +1,32 @@
 import { parsePatchFiles, type FileDiffMetadata } from '@pierre/diffs';
-import type { DiffFile, GhAccount, GitFileStatus, Worktree } from '../host/types/git.ts';
+import type {
+  DiffFile,
+  GhAccount,
+  GitFileStatus,
+  Worktree,
+} from '../host/types/git.ts';
 
 /** Splits `git diff` output into files and self-contained hunk patches. */
 export function parseDiff(text: string, staged: boolean): DiffFile[] {
-  return rawFilePatches(text).flatMap((patch) => parsePatchFiles(patch).flatMap(({ files }) => files.map((file) => diffFile(file, patch, staged))));
+  return rawFilePatches(text).flatMap((patch) =>
+    parsePatchFiles(patch).flatMap(({ files }) =>
+      files.map((file) => diffFile(file, patch, staged)),
+    ),
+  );
 }
 
 // The library exposes parsed content, but staging/discard must retain the original patch bytes.
 export function rawFilePatches(text: string) {
-  return text.split(/^(?=diff --git )/m).filter((chunk) => chunk.startsWith('diff --git '));
+  return text
+    .split(/^(?=diff --git )/m)
+    .filter((chunk) => chunk.startsWith('diff --git '));
 }
 
-function diffFile(file: FileDiffMetadata, chunk: string, staged: boolean): DiffFile {
+function diffFile(
+  file: FileDiffMetadata,
+  chunk: string,
+  staged: boolean,
+): DiffFile {
   const patch = chunk.endsWith('\n') ? chunk : `${chunk}\n`;
   const offsets: number[] = [];
   let from = 0;
@@ -23,15 +38,26 @@ function diffFile(file: FileDiffMetadata, chunk: string, staged: boolean): DiffF
   const header = patch.slice(0, offsets[0] ?? patch.length);
   const hunks = file.hunks.map((hunk, index) => ({
     header: hunk.hunkSpecs!.replace(/\r?\n$/, ''),
-    patch: header + patch.slice(offsets[index], offsets[index + 1] ?? patch.length),
+    patch:
+      header + patch.slice(offsets[index], offsets[index + 1] ?? patch.length),
     added: hunk.additionLines,
     removed: hunk.deletionLines,
   }));
-  const isRenamed = file.type === 'rename-pure' || file.type === 'rename-changed' || /^rename from /m.test(header);
+  const isRenamed =
+    file.type === 'rename-pure' ||
+    file.type === 'rename-changed' ||
+    /^rename from /m.test(header);
   return {
     path: file.name,
     oldPath: isRenamed ? file.prevName : undefined,
-    kind: file.type === 'new' ? 'added' : file.type === 'deleted' ? 'deleted' : isRenamed ? 'renamed' : 'modified',
+    kind:
+      file.type === 'new'
+        ? 'added'
+        : file.type === 'deleted'
+          ? 'deleted'
+          : isRenamed
+            ? 'renamed'
+            : 'modified',
     staged,
     binary: /^(Binary files |GIT binary patch)/m.test(header),
     added: hunks.reduce((count, hunk) => count + hunk.added, 0),
@@ -69,7 +95,8 @@ export function parseWorktrees(text: string): Worktree[] {
     .map((block) => block.split('\n').filter(Boolean))
     .filter((lines) => lines[0]?.startsWith('worktree '))
     .map((lines) => {
-      const value = (key: string) => lines.find((l) => l.startsWith(`${key} `))?.slice(key.length + 1);
+      const value = (key: string) =>
+        lines.find((l) => l.startsWith(`${key} `))?.slice(key.length + 1);
       return {
         path: value('worktree')!,
         head: value('HEAD') ?? '',
@@ -86,11 +113,19 @@ export function parseGhAuthStatus(text: string): GhAccount[] {
   const accounts: GhAccount[] = [];
   let current: GhAccount | null = null;
   for (const line of text.split('\n')) {
-    const login = line.match(/^\s*(✓ Logged in|X Failed to log in) to (\S+) account (\S+)/);
+    const login = line.match(
+      /^\s*(✓ Logged in|X Failed to log in) to (\S+) account (\S+)/,
+    );
     if (login) {
-      current = { host: login[2], login: login[3], isActive: false, isValid: login[1].startsWith('✓') };
+      current = {
+        host: login[2],
+        login: login[3],
+        isActive: false,
+        isValid: login[1].startsWith('✓'),
+      };
       accounts.push(current);
-    } else if (current && /^\s*- Active account: true/.test(line)) current.isActive = true;
+    } else if (current && /^\s*- Active account: true/.test(line))
+      current.isActive = true;
   }
   return accounts;
 }

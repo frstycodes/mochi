@@ -1,14 +1,17 @@
-import * as React from "react"
+import * as React from 'react';
 
-const MOBILE_BREAKPOINT = 768
-const QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`
+const MOBILE_BREAKPOINT = 768;
+const QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 
 export function useIsMobile() {
-  return React.useSyncExternalStore(subscribe, () => window.matchMedia(QUERY).matches)
+  return React.useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(QUERY).matches,
+  );
 }
 
 function subscribe(onChange: () => void) {
-  const mql = window.matchMedia(QUERY)
-  mql.addEventListener("change", onChange)
-  return () => mql.removeEventListener("change", onChange)
+  const mql = window.matchMedia(QUERY);
+  mql.addEventListener('change', onChange);
+  return () => mql.removeEventListener('change', onChange);
 }

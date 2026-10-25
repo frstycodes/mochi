@@ -19,20 +19,29 @@ export interface Mirror {
  * Builds a store from the thread files alone, through the store's own initial state, so nothing runs: no agent, schedule
  * or file on this computer moves. A file that isn't a `Persist.SavedThread` leaves the mirror as it was.
  */
-export function applyFrame(mirror: Mirror | undefined, frame: MirrorFrame): Mirror {
+export function applyFrame(
+  mirror: Mirror | undefined,
+  frame: MirrorFrame,
+): Mirror {
   if (frame.type === 'reset') return mirrorOf({});
   const { [frame.threadId]: _replaced, ...rest } = mirror?.threads ?? {};
   if (frame.saved === null) return mirrorOf(rest);
   const saved = savedThreadFrom(frame.saved);
-  return saved ? mirrorOf({ ...rest, [frame.threadId]: saved }) : (mirror ?? mirrorOf({}));
+  return saved
+    ? mirrorOf({ ...rest, [frame.threadId]: saved })
+    : (mirror ?? mirrorOf({}));
 }
 
 /** A mirror as `useMachines` cached it: each thread file decoded, one that won't decode left out. */
 export function cachedMirror(threads: Record<string, unknown>): Mirror {
-  return mirrorOf(Object.fromEntries(Object.entries(threads).flatMap(([id, file]) => {
-    const saved = savedThreadFrom(file);
-    return saved ? [[id, saved]] : [];
-  })));
+  return mirrorOf(
+    Object.fromEntries(
+      Object.entries(threads).flatMap(([id, file]) => {
+        const saved = savedThreadFrom(file);
+        return saved ? [[id, saved]] : [];
+      }),
+    ),
+  );
 }
 
 /**
@@ -41,20 +50,44 @@ export function cachedMirror(threads: Record<string, unknown>): Mirror {
  */
 export function mirrorOf(threads: Record<string, MirroredThread>): Mirror {
   const files = Object.values(threads);
-  const checkpoints = Object.fromEntries(files.flatMap((f) => (f.checkpoints ? [[f.thread.id, f.checkpoints]] : [])));
-  const forks = Object.fromEntries(files.flatMap((f) => (f.fork ? [[f.thread.id, f.fork]] : [])));
-  const state = mirrorState({ version: 1, now: 0, seq: 0, threads: files.map((f) => f.thread), queue: [], checkpoints, checkpointSeq: 0, forks });
+  const checkpoints = Object.fromEntries(
+    files.flatMap((f) => (f.checkpoints ? [[f.thread.id, f.checkpoints]] : [])),
+  );
+  const forks = Object.fromEntries(
+    files.flatMap((f) => (f.fork ? [[f.thread.id, f.fork]] : [])),
+  );
+  const state = mirrorState({
+    version: 1,
+    now: 0,
+    seq: 0,
+    threads: files.map((f) => f.thread),
+    queue: [],
+    checkpoints,
+    checkpointSeq: 0,
+    forks,
+  });
   return { threads, state };
 }
 
 /** What a device can answer on that machine: its agents' questions and approvals, most blocking first. */
 export function remoteDecisions(state: State) {
-  return rankQueue(state.queue.filter((q) => (q.kind === 'approval' || q.kind === 'question') && !q.tool));
+  return rankQueue(
+    state.queue.filter(
+      (q) => (q.kind === 'approval' || q.kind === 'question') && !q.tool,
+    ),
+  );
 }
 
 /** A machine's threads for its sidebar group, latest activity first: active ones, and settled ones folded below. Its pins show in Pinned. */
 export function remoteThreads(state: State) {
-  const pinned = new Set(pinnedThreads(state.threads, state.spaceId).map((t) => t.id));
-  const threads = state.threads.filter((t) => !pinned.has(t.id) && isListed(t)).sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
-  return { active: threads.filter((t) => t.status !== 'settled'), settled: threads.filter((t) => t.status === 'settled') };
+  const pinned = new Set(
+    pinnedThreads(state.threads, state.spaceId).map((t) => t.id),
+  );
+  const threads = state.threads
+    .filter((t) => !pinned.has(t.id) && isListed(t))
+    .sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
+  return {
+    active: threads.filter((t) => t.status !== 'settled'),
+    settled: threads.filter((t) => t.status === 'settled'),
+  };
 }

@@ -16,6 +16,7 @@ export function markAnswered(queueId: string, by: string) {
 }
 
 /** An answer given in this window. */
-export const markOwnAnswer = (queueId: string) => markAnswered(queueId, machineName);
+export const markOwnAnswer = (queueId: string) =>
+  markAnswered(queueId, machineName);
 
 export const answeredBy = (queueId: string) => answers.get(queueId);

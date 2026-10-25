@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
-  "packageManager": "pnpm@10.24.0",
   "scripts": {
     "dev": "vp dev",
     "build": "tsc -b && vp build",
@@ -55,8 +54,8 @@
     "@streamdown/code": "^2.0.0",
     "@streamdown/math": "^1.0.3",
     "@streamdown/mermaid": "^1.0.3",
-    "@tanstack/react-router": "^1.170.45",
     "@tanstack/react-query": "^5.104.5",
+    "@tanstack/react-router": "^1.170.45",
     "@tanstack/react-virtual": "^3.14.18",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
@@ -101,8 +100,8 @@
     "uuid": "^14.0.3",
     "vaul": "^1.1.2",
     "ws": "^8.22.0",
-    "zustand": "^5.0.16",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@babel/core": "^8.0.7",
@@ -128,6 +127,7 @@
     "vite-plugin-singlefile": "^2.3.3",
     "vite-plus": "catalog:"
   },
+  "packageManager": "pnpm@10.24.0",
   "build": {
     "appId": "dev.mochi.app",
     "productName": "Mochi",
@@ -164,7 +164,9 @@
         {
           "from": "build/icons",
           "to": "icons",
-          "filter": ["*.png"]
+          "filter": [
+            "*.png"
+          ]
         },
         {
           "from": "build/native/uv",
@@ -179,7 +181,9 @@
         {
           "from": "build/icons",
           "to": "icons",
-          "filter": ["*.png"]
+          "filter": [
+            "*.png"
+          ]
         }
       ]
     },
@@ -191,7 +195,9 @@
         {
           "from": "build/icons",
           "to": "icons",
-          "filter": ["*.png"]
+          "filter": [
+            "*.png"
+          ]
         },
         {
           "from": "build/native/uv",

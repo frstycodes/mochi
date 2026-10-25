@@ -4,7 +4,13 @@ import { isTurnCall } from './mochiCalls.ts';
 import type { TurnChanges } from './turnChanges.ts';
 
 export type ChatRow =
-  | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
+  | {
+      kind: 'message';
+      key: string;
+      entry: ActivityEntry;
+      index: number;
+      showAuthor: boolean;
+    }
   | { kind: 'event'; key: string; entry: ActivityEntry }
   | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
   /** Plan changes logged back to back (`planChange`): one line, opening to each. */
@@ -26,16 +32,37 @@ export type ChatRow =
  * group, plus the events logged while the agent was mid-work (approvals, their answers, goal changes). Events before a
  * group's first work (drift tags on your message) or after prose stay rows of their own.
  */
-export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], changes: TurnChanges[] = []): ChatRow[] {
+export function chatRows(
+  activity: ActivityEntry[],
+  reviews: Review[] = [],
+  changes: TurnChanges[] = [],
+): ChatRow[] {
   const rows: ChatRow[] = [];
   let turn: Extract<ChatRow, { kind: 'work' }> | undefined;
   let isMidWork = false;
   // A second opinion the agent asked for renders where its verdict went to the agent, in place of that message.
-  const delivered = new Set(activity.flatMap((e) => (e.secondOpinion ? [e.secondOpinion.reviewId] : [])));
-  const pushReview = (review: Review) => rows.push({ kind: 'review', key: review.id, review });
-  const pushReviews = (at: number) => reviews.filter((r) => !delivered.has(r.id) && (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach(pushReview);
+  const delivered = new Set(
+    activity.flatMap((e) =>
+      e.secondOpinion ? [e.secondOpinion.reviewId] : [],
+    ),
+  );
+  const pushReview = (review: Review) =>
+    rows.push({ kind: 'review', key: review.id, review });
+  const pushReviews = (at: number) =>
+    reviews
+      .filter(
+        (r) =>
+          !delivered.has(r.id) &&
+          (at < activity.length ? r.afterIndex === at : r.afterIndex >= at),
+      )
+      .forEach(pushReview);
 
-  const pushChanges = (at: number) => changes.filter((t) => t.end === at - 1).forEach((turn) => rows.push({ kind: 'changes', key: `changes-${turn.start}`, turn }));
+  const pushChanges = (at: number) =>
+    changes
+      .filter((t) => t.end === at - 1)
+      .forEach((turn) =>
+        rows.push({ kind: 'changes', key: `changes-${turn.start}`, turn }),
+      );
 
   activity.forEach((entry, i) => {
     pushChanges(i);
@@ -50,7 +77,10 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
     if (entry.kind === 'tool' || entry.kind === 'reasoning') {
       isMidWork = true;
       if (turn) turn.entries.push(entry);
-      else rows.push((turn = { kind: 'work', key, who: entry.who, entries: [entry] }));
+      else
+        rows.push(
+          (turn = { kind: 'work', key, who: entry.who, entries: [entry] }),
+        );
       if (!entry.widget) return;
       // The call stays in its group; its view stays in view after it, and the turn goes on in a new group.
       turn = undefined;
@@ -64,7 +94,14 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       return rows.push({ kind: 'subagent', key, entries: [entry] });
     }
     if (entry.kind === 'event') {
-      const isWidget = !!entry.card || !!entry.isLimit || !!entry.compaction || !!entry.handoff || !!entry.nextMove || !!entry.subThread || !!entry.proposals;
+      const isWidget =
+        !!entry.card ||
+        !!entry.isLimit ||
+        !!entry.compaction ||
+        !!entry.handoff ||
+        !!entry.nextMove ||
+        !!entry.subThread ||
+        !!entry.proposals;
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
       // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread's result, thread cards) stay in view: the turn continues in a new accordion after one.
       if (isWidget) turn = undefined;
@@ -76,13 +113,29 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
     turn = undefined;
     isMidWork = false;
     if (entry.secondOpinion) {
-      const review = reviews.find((r) => r.id === entry.secondOpinion!.reviewId);
+      const review = reviews.find(
+        (r) => r.id === entry.secondOpinion!.reviewId,
+      );
       return review && pushReview(review);
     }
-    if (entry.from || entry.autofix) return rows.push({ kind: 'thread-message', key, entry, index: i });
-    const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
-    const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
-    rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
+    if (entry.from || entry.autofix)
+      return rows.push({ kind: 'thread-message', key, entry, index: i });
+    const previous = rows.findLast(
+      (r) => r.kind === 'work' || r.kind === 'message',
+    );
+    const previousWho =
+      previous?.kind === 'work'
+        ? previous.who
+        : previous?.kind === 'message'
+          ? previous.entry.who
+          : undefined;
+    rows.push({
+      kind: 'message',
+      key,
+      entry,
+      index: i,
+      showAuthor: previousWho !== entry.who,
+    });
   });
   pushChanges(activity.length);
   pushReviews(activity.length);
@@ -90,13 +143,24 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
 }
 
 // Matches the lines `src/runtime/apply.ts` logs when the agent's plan changes; parsed, so history logged before this reads the same.
-const PLAN_EVENT = /^(?:Plan: \w+ (?:added "(?<added>.*)"|found (?<found>\d+) more steps)|\w+ dropped "(?<dropped>.*)")$/s;
+const PLAN_EVENT =
+  /^(?:Plan: \w+ (?:added "(?<added>.*)"|found (?<found>\d+) more steps)|\w+ dropped "(?<dropped>.*)")$/s;
 
 /** How many steps a plan-change event added and dropped; undefined for any other entry. */
 function planChange(entry: ActivityEntry) {
-  const groups = entry.kind === 'event' && entry.who === 'harness' ? PLAN_EVENT.exec(entry.text)?.groups : undefined;
+  const groups =
+    entry.kind === 'event' && entry.who === 'harness'
+      ? PLAN_EVENT.exec(entry.text)?.groups
+      : undefined;
   if (!groups) return;
-  return { added: groups.found ? Number(groups.found) : groups.added === undefined ? 0 : 1, dropped: groups.dropped === undefined ? 0 : 1 };
+  return {
+    added: groups.found
+      ? Number(groups.found)
+      : groups.added === undefined
+        ? 0
+        : 1,
+    dropped: groups.dropped === undefined ? 0 : 1,
+  };
 }
 
 /** "Plan updated: dropped 5 steps, added 3 steps" for a run of plan changes. */
@@ -111,7 +175,11 @@ export function planSummary(entries: ActivityEntry[]) {
 /** The work row a running thread is still writing: the newest one, unless anyone has spoken since. */
 export function liveWorkIndex(rows: ChatRow[]) {
   const i = rows.findLastIndex((r) => r.kind === 'work');
-  return rows.slice(i + 1).some((r) => r.kind === 'message' || r.kind === 'thread-message') ? -1 : i;
+  return rows
+    .slice(i + 1)
+    .some((r) => r.kind === 'message' || r.kind === 'thread-message')
+    ? -1
+    : i;
 }
 
 /**
@@ -122,7 +190,8 @@ export function finalReplies(rows: ChatRow[], isWorking: boolean): Set<number> {
   const finals = new Set<number>();
   let candidate = -1;
   rows.forEach((row, i) => {
-    if (row.kind === 'work' || row.kind === 'subagent' || row.kind === 'image') return void (candidate = -1);
+    if (row.kind === 'work' || row.kind === 'subagent' || row.kind === 'image')
+      return void (candidate = -1);
     if (row.kind !== 'message' && row.kind !== 'thread-message') return;
     if (row.entry.who === 'you') {
       if (candidate >= 0) finals.add(candidate);

@@ -20,12 +20,18 @@ test('mod-click starts from the open thread, adds and removes, keeps list order 
   const one = toggleSelected(order, { ids: [], anchor: 'c' }, 'a');
   assert.deepEqual(one, { ids: ['a', 'c'], anchor: 'a' });
   assert.deepEqual(toggleSelected(order, one, 'c').ids, ['a']);
-  assert.deepEqual(toggleSelected(order, { ids: [], anchor: undefined }, 'b').ids, ['b']);
+  assert.deepEqual(
+    toggleSelected(order, { ids: [], anchor: undefined }, 'b').ids,
+    ['b'],
+  );
 });
 
 test('shift arrows grow and shrink the range around the anchor and stop at the ends', () => {
   const down = extendSelection(order, { ids: [], anchor: 'b' }, 'b', 1)!;
-  assert.deepEqual(down, { selection: { ids: ['b', 'c'], anchor: 'b' }, focusId: 'c' });
+  assert.deepEqual(down, {
+    selection: { ids: ['b', 'c'], anchor: 'b' },
+    focusId: 'c',
+  });
   const back = extendSelection(order, down.selection, 'c', -1)!;
   assert.deepEqual(back.selection.ids, ['b']);
   const up = extendSelection(order, back.selection, 'b', -1)!;

@@ -101,7 +101,8 @@ const FIXTURE_BRANCHES = [
   ['origin/feat/onboarding-emails', 9],
 ] as const;
 // Same rule as `git check-ref-format --branch` for what people actually type.
-const BAD_REF = /(^[-/.])|([/.]$)|\.\.|\/\/|@\{|[\s~^:?*[\\\x00-\x1f\x7f]|\.lock(\/|$)|^@$/;
+const BAD_REF =
+  /(^[-/.])|([/.]$)|\.\.|\/\/|@\{|[\s~^:?*[\\\x00-\x1f\x7f]|\.lock(\/|$)|^@$/;
 
 export const git: GitHost = {
   async status() {
@@ -118,7 +119,12 @@ export const git: GitHost = {
     const staged = parseDiff(STAGED, scope === 'uncommitted');
     const files = [...staged, ...parseDiff(UNSTAGED, false)];
     // A forked worktree took another approach, so the fork comparison has two different sides to show.
-    if (cwd.includes('/fork-')) return { branch: 'feat/admin-usage-fork', base: 'origin/main', files: [...files.slice(0, 1), ...parseDiff(FORK, false)] };
+    if (cwd.includes('/fork-'))
+      return {
+        branch: 'feat/admin-usage-fork',
+        base: 'origin/main',
+        files: [...files.slice(0, 1), ...parseDiff(FORK, false)],
+      };
     return { branch: 'feat/admin-usage', base: 'origin/main', files };
   },
   async stage() {},
@@ -141,14 +147,22 @@ export const git: GitHost = {
     return { owner: 'frstycodes', repo: 'mochi' };
   },
   async refStates(_cwd, refs) {
-    return Object.fromEntries(refs.flatMap((ref) => (DEMO_REFS[ref.number] ? [[refKey(ref), DEMO_REFS[ref.number]]] : [])));
+    return Object.fromEntries(
+      refs.flatMap((ref) =>
+        DEMO_REFS[ref.number] ? [[refKey(ref), DEMO_REFS[ref.number]]] : [],
+      ),
+    );
   },
   async worktreePrs() {
     return [];
   },
   async setAutoMerge() {},
   async prReview(_cwd, pr) {
-    return { ...DEMO_REVIEW, number: pr, files: [...parseDiff(STAGED, false), ...parseDiff(UNSTAGED, false)] };
+    return {
+      ...DEMO_REVIEW,
+      number: pr,
+      files: [...parseDiff(STAGED, false), ...parseDiff(UNSTAGED, false)],
+    };
   },
   async commentPr() {},
   async replyThread() {},
@@ -174,25 +188,46 @@ export const git: GitHost = {
   },
   async branches(root) {
     // One fixture project has uncommitted changes, so the project folder warning and the switch dialog can be seen.
-    const changes = root.endsWith('latitude') ? { files: 10, added: 59, removed: 38 } : { files: 0, added: 0, removed: 0 };
+    const changes = root.endsWith('latitude')
+      ? { files: 10, added: 59, removed: 38 }
+      : { files: 0, added: 0, removed: 0 };
     const now = Date.now();
     return {
       current: 'main',
       defaultBranch: 'main',
       changes,
-      branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.mochi/worktrees/latitude/adm' : undefined })),
+      branches: FIXTURE_BRANCHES.map(([name, days]) => ({
+        name,
+        isRemote: name.startsWith('origin/'),
+        committedAt: now - days * DAY,
+        worktree:
+          name === 'main'
+            ? root
+            : name === 'feat/admin-usage'
+              ? '~/.mochi/worktrees/latitude/adm'
+              : undefined,
+      })),
     };
   },
   async renameAutoBranch(_cwd, expected, title) {
-    return branchFromTitle(expected, title, new Set(FIXTURE_BRANCHES.map(([b]) => b)));
+    return branchFromTitle(
+      expected,
+      title,
+      new Set(FIXTURE_BRANCHES.map(([b]) => b)),
+    );
   },
   async branchNameError(_root, name) {
     if (!name.trim()) return 'Name the branch';
     if (BAD_REF.test(name)) return `"${name}" isn't a valid branch name`;
-    return FIXTURE_BRANCHES.some(([b]) => b === name) ? `A branch named ${name} already exists` : null;
+    return FIXTURE_BRANCHES.some(([b]) => b === name)
+      ? `A branch named ${name} already exists`
+      : null;
   },
   async switchBranch(_root, branch, { changes }) {
-    if (changes === 'bring' && branch === 'feat/api-rate-limits') throw new Error('error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/limits/schema.ts\nPlease commit your changes or stash them before you switch branches.\nAborting');
+    if (changes === 'bring' && branch === 'feat/api-rate-limits')
+      throw new Error(
+        'error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/limits/schema.ts\nPlease commit your changes or stash them before you switch branches.\nAborting',
+      );
   },
   async addWorktree(_root, threadId) {
     return `~/.mochi/worktrees/demo/${threadId}`;
@@ -213,7 +248,10 @@ export const git: GitHost = {
   async restoreCheckpoint() {},
   async restoreFiles() {},
   async rewindPreview() {
-    return { files: ['src/limits/schema.ts', 'src/gateway/config.ts'], outside: [] };
+    return {
+      files: ['src/limits/schema.ts', 'src/gateway/config.ts'],
+      outside: [],
+    };
   },
   /** Later checkpoints hold more of the fixture's changes, so scrubbing a replay shows the diff growing. */
   async checkpointDiff(cwd, _threadId, n) {
@@ -233,11 +271,31 @@ export const git: GitHost = {
 };
 
 // One of every chip state, by number on any repo; other numbers stay unknown, as without gh.
-const demoRef = (kind: RefState['kind'], status: RefState['status'], number: number, title: string, extra: Partial<RefState> = {}): RefState => ({
-  ...bareState(kind, status, title, `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`),
-  author: { login: 'frstycodes', avatarUrl: 'https://avatars.githubusercontent.com/frstycodes?s=40' },
+const demoRef = (
+  kind: RefState['kind'],
+  status: RefState['status'],
+  number: number,
+  title: string,
+  extra: Partial<RefState> = {},
+): RefState => ({
+  ...bareState(
+    kind,
+    status,
+    title,
+    `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`,
+  ),
+  author: {
+    login: 'frstycodes',
+    avatarUrl: 'https://avatars.githubusercontent.com/frstycodes?s=40',
+  },
   updatedAt: new Date(Date.now() - (number % 9) * 47 * 60_000).toISOString(),
-  ...(kind === 'pr' && { branch: { head: `feat/demo-${number}`, base: 'main' }, diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 }, checks: 'pass', checkCounts: { passed: 5, total: 5 }, review: 'approved' }),
+  ...(kind === 'pr' && {
+    branch: { head: `feat/demo-${number}`, base: 'main' },
+    diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 },
+    checks: 'pass',
+    checkCounts: { passed: 5, total: 5 },
+    review: 'approved',
+  }),
   ...extra,
 });
 
@@ -257,11 +315,26 @@ const DEMO_REVIEW = {
     { name: 'typecheck', state: 'pass' },
     { name: 'unit', state: 'pass' },
     { name: 'e2e', state: 'pending' },
-    { name: 'lint', state: 'fail', link: 'https://github.com/latitude-dev/latitude/actions/runs/1' },
+    {
+      name: 'lint',
+      state: 'fail',
+      link: 'https://github.com/latitude-dev/latitude/actions/runs/1',
+    },
   ],
   comments: [
-    { id: 'c1', author: 'mira', body: 'Looks close. Two things inline, the page size mostly.', at: '2026-10-20T09:12:00Z', verdict: 'changes-requested' },
-    { id: 'c2', author: 'frstycodes', body: 'Thanks, on it.', at: '2026-10-20T10:02:00Z' },
+    {
+      id: 'c1',
+      author: 'mira',
+      body: 'Looks close. Two things inline, the page size mostly.',
+      at: '2026-10-20T09:12:00Z',
+      verdict: 'changes-requested',
+    },
+    {
+      id: 'c2',
+      author: 'frstycodes',
+      body: 'Thanks, on it.',
+      at: '2026-10-20T10:02:00Z',
+    },
   ],
   threads: [
     {
@@ -270,7 +343,14 @@ const DEMO_REVIEW = {
       side: 'additions',
       line: 12,
       isResolved: false,
-      comments: [{ id: 't1', author: 'mira', body: '500 rows is a lot for the admin table. Can we do 100 and let the cursor do the rest?', at: '2026-10-20T09:10:00Z' }],
+      comments: [
+        {
+          id: 't1',
+          author: 'mira',
+          body: '500 rows is a lot for the admin table. Can we do 100 and let the cursor do the rest?',
+          at: '2026-10-20T09:10:00Z',
+        },
+      ],
     },
     {
       id: 'PRRT_demo2',
@@ -279,8 +359,18 @@ const DEMO_REVIEW = {
       line: 5,
       isResolved: true,
       comments: [
-        { id: 't2', author: 'mira', body: 'Was the default range on purpose?', at: '2026-10-20T09:11:00Z' },
-        { id: 't3', author: 'frstycodes', body: 'Yes, matches billing.', at: '2026-10-20T10:01:00Z' },
+        {
+          id: 't2',
+          author: 'mira',
+          body: 'Was the default range on purpose?',
+          at: '2026-10-20T09:11:00Z',
+        },
+        {
+          id: 't3',
+          author: 'frstycodes',
+          body: 'Yes, matches billing.',
+          at: '2026-10-20T10:01:00Z',
+        },
       ],
     },
     {
@@ -289,27 +379,85 @@ const DEMO_REVIEW = {
       side: 'additions',
       line: null,
       isResolved: false,
-      comments: [{ id: 't4', author: 'mira', body: 'This file can go once the new page ships.', at: '2026-10-19T16:40:00Z' }],
+      comments: [
+        {
+          id: 't4',
+          author: 'mira',
+          body: 'This file can go once the new page ships.',
+          at: '2026-10-19T16:40:00Z',
+        },
+      ],
     },
   ],
 } satisfies Omit<PrReview, 'files'>;
 
 const DEMO_REFS: Record<number, RefState> = {
-  45: demoRef('pr', 'open', 45, 'fix(header): restore the side pane and sidebar toggles'),
-  46: demoRef('pr', 'open', 46, 'feat(composer): slash anywhere, @ skills and MCP servers', { hasConflicts: true }),
-  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', { checks: 'fail', checkCounts: { passed: 3, total: 5 } }),
-  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links', { checks: 'pending', checkCounts: { passed: 3, total: 5 }, review: null }),
-  47: demoRef('pr', 'merged', 47, 'fix: replace prototype stubs with working actions'),
+  45: demoRef(
+    'pr',
+    'open',
+    45,
+    'fix(header): restore the side pane and sidebar toggles',
+  ),
+  46: demoRef(
+    'pr',
+    'open',
+    46,
+    'feat(composer): slash anywhere, @ skills and MCP servers',
+    { hasConflicts: true },
+  ),
+  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', {
+    checks: 'fail',
+    checkCounts: { passed: 3, total: 5 },
+  }),
+  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links', {
+    checks: 'pending',
+    checkCounts: { passed: 3, total: 5 },
+    review: null,
+  }),
+  47: demoRef(
+    'pr',
+    'merged',
+    47,
+    'fix: replace prototype stubs with working actions',
+  ),
   30: demoRef('pr', 'closed', 30, 'feat: experimental orbit gestures'),
   7: demoRef('pr', 'closed', 7, 'An early PR that was closed'),
-  50: demoRef('pr', 'open', 50, 'A PR that conflicts with main', { hasConflicts: true }),
+  50: demoRef('pr', 'open', 50, 'A PR that conflicts with main', {
+    hasConflicts: true,
+  }),
   // The Better Auth demo thread's PRs: one of each attention rank, so its sidebar stack overflows.
-  479: demoRef('pr', 'merged', 479, 'Better Auth core', { branch: { head: 'feat/better-auth', base: 'main' } }),
-  482: demoRef('pr', 'open', 482, 'Session backfill + legacy removal', { branch: { head: 'feat/better-auth-backfill', base: 'main' }, checks: 'fail', checkCounts: { passed: 4, total: 6 }, review: 'changes' }),
-  484: demoRef('pr', 'open', 484, 'Keep the latitude.sid cookie name', { branch: { head: 'fix/session-cookie', base: 'feat/better-auth-backfill' }, checks: 'pending', checkCounts: { passed: 3, total: 5 }, review: 'required' }),
-  485: demoRef('pr', 'draft', 485, 'Passkeys on the login page', { branch: { head: 'feat/passkeys', base: 'main' }, checks: null, checkCounts: null, review: null }),
-  487: demoRef('pr', 'open', 487, 'Docs: migrating to Better Auth', { branch: { head: 'docs/better-auth', base: 'main' } }),
-  12: demoRef('issue', 'open', 12, 'Sidebar loses scroll position on space switch'),
+  479: demoRef('pr', 'merged', 479, 'Better Auth core', {
+    branch: { head: 'feat/better-auth', base: 'main' },
+  }),
+  482: demoRef('pr', 'open', 482, 'Session backfill + legacy removal', {
+    branch: { head: 'feat/better-auth-backfill', base: 'main' },
+    checks: 'fail',
+    checkCounts: { passed: 4, total: 6 },
+    review: 'changes',
+  }),
+  484: demoRef('pr', 'open', 484, 'Keep the latitude.sid cookie name', {
+    branch: { head: 'fix/session-cookie', base: 'feat/better-auth-backfill' },
+    checks: 'pending',
+    checkCounts: { passed: 3, total: 5 },
+    review: 'required',
+  }),
+  485: demoRef('pr', 'draft', 485, 'Passkeys on the login page', {
+    branch: { head: 'feat/passkeys', base: 'main' },
+    checks: null,
+    checkCounts: null,
+    review: null,
+  }),
+  487: demoRef('pr', 'open', 487, 'Docs: migrating to Better Auth', {
+    branch: { head: 'docs/better-auth', base: 'main' },
+  }),
+  12: demoRef(
+    'issue',
+    'open',
+    12,
+    'Sidebar loses scroll position on space switch',
+  ),
   9: demoRef('issue', 'closed', 9, 'Composer drops pasted images'),
-  8: demoRef('issue', 'closed', 8, 'Support Windows titlebar', { isNotPlanned: true }),
+  8: demoRef('issue', 'closed', 8, 'Support Windows titlebar', {
+    isNotPlanned: true,
+  }),
 };

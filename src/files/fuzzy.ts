@@ -8,7 +8,10 @@ export function fuzzyFiles(files: string[], query: string, limit = 50) {
 /** Like `fuzzyFiles`, with the matched character indices of each path for highlighting. */
 export function fuzzyMatches(files: string[], query: string, limit = 50) {
   const q = query.toLowerCase().replace(/\s+/g, '');
-  if (!q) return files.slice(0, limit).map((file) => ({ file, score: 0, indices: [] as number[] }));
+  if (!q)
+    return files
+      .slice(0, limit)
+      .map((file) => ({ file, score: 0, indices: [] as number[] }));
   return files
     .flatMap((file) => {
       const match = fuzzyMatch(file, q);
@@ -25,7 +28,8 @@ export function fuzzyMatch(file: string, query: string) {
   const rank = lower.startsWith(q) ? 0 : lower.includes(q) ? 1 : 2;
   const inBase = subsequence(file, q, file.lastIndexOf('/') + 1);
   const anywhere = subsequence(file, q, 0);
-  if (inBase && (!anywhere || inBase.score + 10 >= anywhere.score)) return { score: inBase.score + 10, indices: inBase.indices, rank };
+  if (inBase && (!anywhere || inBase.score + 10 >= anywhere.score))
+    return { score: inBase.score + 10, indices: inBase.indices, rank };
   return anywhere && { ...anywhere, rank };
 }
 
@@ -38,7 +42,12 @@ function subsequence(file: string, q: string, from: number) {
     const at = lower.indexOf(ch, Math.max(from, prev + 1));
     if (at < 0) return null;
     if (at === prev + 1) score += 3;
-    if (at === 0 || BOUNDARY.includes(file[at - 1]) || (file[at] !== lower[at] && file[at - 1] === lower[at - 1])) score += 2;
+    if (
+      at === 0 ||
+      BOUNDARY.includes(file[at - 1]) ||
+      (file[at] !== lower[at] && file[at - 1] === lower[at - 1])
+    )
+      score += 2;
     indices.push(at);
     prev = at;
   }

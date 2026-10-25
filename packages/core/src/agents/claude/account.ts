@@ -6,7 +6,10 @@ export interface ClaudeAccount {
   configDir?: string;
 }
 
-export type AccountFor = (spaceId: string, provider: 'claude') => Promise<ClaudeAccount>;
+export type AccountFor = (
+  spaceId: string,
+  provider: 'claude',
+) => Promise<ClaudeAccount>;
 
 export const accountFor: AccountFor = async (spaceId, provider) => {
   const { account, configDir } = await accountOf(spaceId, provider);

@@ -1,7 +1,16 @@
 import { useStore } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+} from 'react';
 import { replaceAllPins, useAllPins } from '../chat/pins.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
@@ -12,7 +21,13 @@ import { isSameListing } from '../reorder.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
-import { agentCallArgs, agentCalls, resumeAfterLostProcess, unsentTurns, type AgentCall } from '../runtime/live.ts';
+import {
+  agentCallArgs,
+  agentCalls,
+  resumeAfterLostProcess,
+  unsentTurns,
+  type AgentCall,
+} from '../runtime/live.ts';
 // Registers the profile options an agent's start reads (`startEnv`).
 import '../runtime/startOptions.ts';
 import { runTool } from '../runtime/tools.ts';
@@ -61,14 +76,19 @@ let replica: Replica | undefined;
 
 /** This window's store, once Core's first item is in; `src/main.tsx` waits for it before the first render. */
 export async function startStore() {
-  replica ??= await createReplica(host.isDesktop ? coreLog() : pageLog(), (saved) => initialState(saved));
+  replica ??= await createReplica(
+    host.isDesktop ? coreLog() : pageLog(),
+    (saved) => initialState(saved),
+  );
   replica.listen((action) => {
-    if (action.type === 'agent' && action.event.type === 'worktree') setWorktreePath(action.event.threadId, action.event.path);
+    if (action.type === 'agent' && action.event.type === 'worktree')
+      setWorktreePath(action.event.threadId, action.event.path);
   });
 }
 
 function requireReplica() {
-  if (!replica) throw new Error('The store starts before the first render (startStore)');
+  if (!replica)
+    throw new Error('The store starts before the first render (startStore)');
   return replica;
 }
 
@@ -78,7 +98,10 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   const { dispatch } = value;
   const state = useStore(replica.store);
   // Agent events and other windows' commands, as they fold; this window's own are recorded as they are dispatched.
-  useEffect(() => replica.listen((action, before) => recordAction(before, action)), [replica]);
+  useEffect(
+    () => replica.listen((action, before) => recordAction(before, action)),
+    [replica],
+  );
   // The demo's clock runs 60× fast; real threads keep Core's, one tick a minute.
   useEffect(() => {
     if (state.paused || !showsDemoData()) return;
@@ -87,29 +110,50 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [state.paused, dispatch]);
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
-      if (event.type === 'agent') return apply({ type: 'agent', event: event.event, ms: Date.now() });
+      if (event.type === 'agent')
+        return apply({ type: 'agent', event: event.event, ms: Date.now() });
       // Dispatched, not applied: the message it becomes must reach the agent (`agentCalls`).
-      if (event.type === 'autofix') return dispatch({ type: 'autofix', threadId: event.threadId, event: event.event });
-      apply(event.type === 'ci' ? { type: 'ci-result', event } : { type: 'schedule-run', event });
+      if (event.type === 'autofix')
+        return dispatch({
+          type: 'autofix',
+          threadId: event.threadId,
+          event: event.event,
+        });
+      apply(
+        event.type === 'ci'
+          ? { type: 'ci-result', event }
+          : { type: 'schedule-run', event },
+      );
     };
     const off = host.schedule.onEvent(onSchedule);
     // What happened while no window was open: runs and their agent's events, in order.
-    void host.schedule.drain().then((events) => events.forEach(onSchedule), (error: unknown) => console.error('Reading scheduled runs failed', error));
+    void host.schedule.drain().then(
+      (events) => events.forEach(onSchedule),
+      (error: unknown) => console.error('Reading scheduled runs failed', error),
+    );
     return off;
   }, [apply, dispatch]);
   useEffect(() => {
     const onToolCall = (call: AgentToolCall) => {
       const env = toolEnv(replica.getState, dispatch);
-      void (import.meta.env.DEV && call.threadId === '__dev__' ? runDevTool(call, env) : runTool(call, env)).then((result) => host.agent.toolResult(call.id, result));
+      void (
+        import.meta.env.DEV && call.threadId === '__dev__'
+          ? runDevTool(call, env)
+          : runTool(call, env)
+      ).then((result) => host.agent.toolResult(call.id, result));
     };
     const off = host.agent.onToolCall(onToolCall);
     // Asked only once listening, so a call main sends meanwhile arrives once, by one route or the other.
     void host.agent.pendingToolCalls().then(
       (calls) => {
-        dispatch({ type: 'window-loaded', threadIds: [...new Set(calls.map((c) => c.threadId))] });
+        dispatch({
+          type: 'window-loaded',
+          threadIds: [...new Set(calls.map((c) => c.threadId))],
+        });
         calls.forEach(onToolCall);
       },
-      (error: unknown) => console.error('Taking back tool calls after reload failed', error),
+      (error: unknown) =>
+        console.error('Taking back tool calls after reload failed', error),
     );
     return off;
   }, [replica, dispatch]);
@@ -128,18 +172,30 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 /** A torn-off window's store: the same stream as the main window's, the same dispatch, none of the main window's work. */
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { value } = useStoreValue();
-  return <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>;
+  return (
+    <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>
+  );
 }
 
 /**
  * Hands its children a store over state held elsewhere: another computer's threads as its streams last sent them, a replay's
  * step. Readers re-render for what they select, as in the window's own store.
  */
-export function StoreScope({ state, dispatch, children }: { state: State; dispatch: Dispatch<Action>; children: ReactNode }) {
+export function StoreScope({
+  state,
+  dispatch,
+  children,
+}: {
+  state: State;
+  dispatch: Dispatch<Action>;
+  children: ReactNode;
+}) {
   const [store] = useState(() => createStore<State>()(() => state));
   useLayoutEffect(() => store.setState(state, true), [store, state]);
   const value = { store, getState: store.getState, dispatch };
-  return <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>;
+  return (
+    <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>
+  );
 }
 
 function useStoreValue() {
@@ -165,40 +221,86 @@ function storeDispatch(replica: Replica) {
     recordAction(before, action);
     if (action.type === 'answer') markOwnAnswer(action.queueId);
     const answer = resolution(before, action);
-    if (answer) host.agent.resolve(answer.requestId, answer.decision).catch((error: unknown) => apply({ type: 'say', threadId: answer.threadId, entry: undelivered(answer, error) }));
+    if (answer)
+      host.agent
+        .resolve(answer.requestId, answer.decision)
+        .catch((error: unknown) =>
+          apply({
+            type: 'say',
+            threadId: answer.threadId,
+            entry: undelivered(answer, error),
+          }),
+        );
     let after: State | undefined;
     const next = () => (after ??= reducer(before, action));
     const calls = agentCalls(before, action, next);
-    for (const input of scheduleCalls(before, action, next)) host.schedule.set(input).catch((error: unknown) => console.error('Saving the schedule failed', error));
+    for (const input of scheduleCalls(before, action, next))
+      host.schedule
+        .set(input)
+        .catch((error: unknown) =>
+          console.error('Saving the schedule failed', error),
+        );
     // A deleted thread takes its trigger with it.
-    if (action.type === 'delete') for (const id of action.threadIds) host.schedule.remove(id).catch((error: unknown) => console.error('Removing the schedule failed', error));
+    if (action.type === 'delete')
+      for (const id of action.threadIds)
+        host.schedule
+          .remove(id)
+          .catch((error: unknown) =>
+            console.error('Removing the schedule failed', error),
+          );
     replica.dispatch(action, next());
     for (const call of calls) {
       // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
       callAgent(replica, call).catch((error: unknown) => {
-        const thread = call.method === 'send' && isLostProcess(error) ? replica.getState().threads.find((t) => t.id === call.threadId) : undefined;
-        const retry = thread && call.method === 'send' ? resumeAfterLostProcess(thread, call) : [];
+        const thread =
+          call.method === 'send' && isLostProcess(error)
+            ? replica.getState().threads.find((t) => t.id === call.threadId)
+            : undefined;
+        const retry =
+          thread && call.method === 'send'
+            ? resumeAfterLostProcess(thread, call)
+            : [];
         if (retry.length === 0) return apply(failed(call.threadId, error));
         for (const again of retry) {
-          if (again.method === 'start') replica.dispatch({ type: 'agent-starting', threadId: again.threadId, provider: again.options.provider });
-          callAgent(replica, again).catch((e: unknown) => apply(failed(again.threadId, e)));
+          if (again.method === 'start')
+            replica.dispatch({
+              type: 'agent-starting',
+              threadId: again.threadId,
+              provider: again.options.provider,
+            });
+          callAgent(replica, again).catch((e: unknown) =>
+            apply(failed(again.threadId, e)),
+          );
         }
       });
     }
-    for (const threadId of unsentTurns(before, next(), calls)) apply(failed(threadId, new Error('Mochi had no agent to send this to')));
+    for (const threadId of unsentTurns(before, next(), calls))
+      apply(failed(threadId, new Error('Mochi had no agent to send this to')));
     // After the action: a new thread only exists once it has applied.
-    for (const call of calls) if (call.method === 'start') replica.dispatch({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
-    if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
+    for (const call of calls)
+      if (call.method === 'start')
+        replica.dispatch({
+          type: 'agent-starting',
+          threadId: call.threadId,
+          provider: call.options.provider,
+        });
+    if (action.type === 'workspace')
+      void retarget(next().threads.find((t) => t.id === action.threadId));
     const acted = actedOn(action, before.queue);
-    if (acted) host.notify.addressed({ threadId: acted, isActedOn: true }).catch(() => undefined);
+    if (acted)
+      host.notify
+        .addressed({ threadId: acted, isActedOn: true })
+        .catch(() => undefined);
   };
   return { dispatch, apply };
 }
 
 /** What a fold reads from this window, put on the action, so Core and other windows fold it the same way. */
 function withDispatchContext(state: State, action: Action): Action {
-  if (action.type === 'create' && !action.spaceId) return { ...action, spaceId: state.spaceId };
-  if (action.type === 'agent' && action.ms === undefined) return { ...action, ms: Date.now() };
+  if (action.type === 'create' && !action.spaceId)
+    return { ...action, spaceId: state.spaceId };
+  if (action.type === 'agent' && action.ms === undefined)
+    return { ...action, ms: Date.now() };
   return action;
 }
 
@@ -243,7 +345,13 @@ function adoptContext({ prefs, pins }: ProjectionContext) {
 let pending: Promise<unknown> = Promise.resolve();
 
 function callAgent(replica: Replica, call: AgentCall) {
-  const run = () => (host.agent[call.method] as (threadId: string, ...args: unknown[]) => Promise<unknown>)(call.threadId, ...agentCallArgs(call));
+  const run = () =>
+    (
+      host.agent[call.method] as (
+        threadId: string,
+        ...args: unknown[]
+      ) => Promise<unknown>
+    )(call.threadId, ...agentCallArgs(call));
   // After the commands sent so far are logged: the agent's reply folds after the message it answers.
   const next = pending.then(() => replica.sent()).then(run);
   pending = next.catch(() => {});
@@ -255,7 +363,16 @@ function isLostProcess(error: unknown) {
 }
 
 function failed(threadId: string, error: unknown): Action {
-  return { type: 'agent', event: { threadId, type: 'turn-end', status: 'failed', error: error instanceof Error ? error.message : String(error) }, ms: Date.now() };
+  return {
+    type: 'agent',
+    event: {
+      threadId,
+      type: 'turn-end',
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    },
+    ms: Date.now(),
+  };
 }
 
 function useHarnessStore() {
@@ -280,7 +397,10 @@ export function useGetState() {
 }
 
 /** What `select` picks from the state; re-renders only when that changes by `isEqual` (`shallowEqual` for a picked object or list). */
-export function useHarnessSelector<T>(select: (state: State) => T, isEqual: (a: T, b: T) => boolean = Object.is) {
+export function useHarnessSelector<T>(
+  select: (state: State) => T,
+  isEqual: (a: T, b: T) => boolean = Object.is,
+) {
   return useStoreWithEqualityFn(useHarnessStore().store, select, isEqual);
 }
 
@@ -302,18 +422,29 @@ export function useThread(id: string) {
 }
 
 export function useSpaceThreads(spaceId?: string) {
-  return useHarnessSelector((s) => s.threads.filter((t) => t.spaceId === (spaceId ?? s.spaceId) && isListed(t)), shallowEqual);
+  return useHarnessSelector(
+    (s) =>
+      s.threads.filter(
+        (t) => t.spaceId === (spaceId ?? s.spaceId) && isListed(t),
+      ),
+    shallowEqual,
+  );
 }
 
 /** The space's threads to list them (`isSameListing`): stale in what a turn streams, so each row reads its own thread for that. */
 export function useSpaceListing(spaceId: string) {
-  return useHarnessSelector((s) => s.threads.filter((t) => t.spaceId === spaceId && isListed(t)), isSameListing);
+  return useHarnessSelector(
+    (s) => s.threads.filter((t) => t.spaceId === spaceId && isListed(t)),
+    isSameListing,
+  );
 }
 
 export function useSpaceQueue(spaceId?: string) {
   return useHarnessSelector((s) => {
     const id = spaceId ?? s.spaceId;
-    const ids = new Set(s.threads.filter((t) => t.spaceId === id && isListed(t)).map((t) => t.id));
+    const ids = new Set(
+      s.threads.filter((t) => t.spaceId === id && isListed(t)).map((t) => t.id),
+    );
     return rankQueue(s.queue.filter((q) => ids.has(q.threadId)));
   }, shallowEqual);
 }
@@ -325,7 +456,21 @@ export function snapshot(state: State): Snapshot {
 /** A scheduled thread's trigger keeps how main starts it; a new workspace before its first run replaces that. */
 async function retarget(thread: Thread | undefined) {
   if (!thread) return;
-  const trigger = (await host.schedule.list()).find((t) => t.threadId === thread.id);
-  const input = trigger && triggerInput(thread, { when: trigger.when, missed: trigger.missed, name: trigger.name, prompt: trigger.prompt });
-  if (input) await host.schedule.set(input).catch((error: unknown) => console.error('Saving the schedule failed', error));
+  const trigger = (await host.schedule.list()).find(
+    (t) => t.threadId === thread.id,
+  );
+  const input =
+    trigger &&
+    triggerInput(thread, {
+      when: trigger.when,
+      missed: trigger.missed,
+      name: trigger.name,
+      prompt: trigger.prompt,
+    });
+  if (input)
+    await host.schedule
+      .set(input)
+      .catch((error: unknown) =>
+        console.error('Saving the schedule failed', error),
+      );
 }

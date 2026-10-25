@@ -1,4 +1,7 @@
-import { experimental_streamedQuery as streamedQuery, useQuery } from '@tanstack/react-query';
+import {
+  experimental_streamedQuery as streamedQuery,
+  useQuery,
+} from '@tanstack/react-query';
 import { Cause, Effect, Stream } from 'effect';
 import type { CoreClient } from '@mochi/core/client';
 import type { MetricsSnapshot } from '@mochi/core/metrics/schema';
@@ -18,11 +21,17 @@ export function useMetrics() {
     queryKey: queryKeys.developer.metrics(),
     queryFn: streamedQuery<MetricsSnapshot, MetricsSnapshot[]>({
       streamFn: async ({ signal }) => {
-        const aborted = Effect.callback<void>((resume) => signal.addEventListener('abort', () => resume(Effect.void), { once: true }));
+        const aborted = Effect.callback<void>((resume) =>
+          signal.addEventListener('abort', () => resume(Effect.void), {
+            once: true,
+          }),
+        );
         const stream = metricsStream(await coreClient()).pipe(
           Stream.interruptWhen(aborted),
           // A failure or a defect (Core's reply failed to encode) both end the page's stream with a readable message.
-          Stream.catchCause((cause) => Stream.fail(new Error(Cause.pretty(cause)))),
+          Stream.catchCause((cause) =>
+            Stream.fail(new Error(Cause.pretty(cause))),
+          ),
         );
         return Stream.toAsyncIterable(stream);
       },

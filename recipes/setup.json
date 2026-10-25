@@ -1,10 +1,7 @@
 {
   "slack": {
     "version": 2,
-    "domains": [
-      "api.slack.com",
-      "app.slack.com"
-    ],
+    "domains": ["api.slack.com", "app.slack.com"],
     "params": {
       "workspace": {
         "question": "Which Slack workspace should Mochi connect to?"
@@ -114,9 +111,7 @@
   },
   "google-workspace": {
     "version": 4,
-    "domains": [
-      "console.cloud.google.com"
-    ],
+    "domains": ["console.cloud.google.com"],
     "params": {
       "owner": {
         "question": "Which Google account should own your Mochi app? A personal one if your work account can't make Cloud projects."
@@ -132,15 +127,11 @@
       },
       "agree": {
         "question": "Agree to Google's API Services User Data Policy for your Mochi app?",
-        "options": [
-          "I agree"
-        ]
+        "options": ["I agree"]
       },
       "publish": {
         "question": "Publish your Mochi app so Google stops asking you to sign in again every 7 days? It stays unverified, and its consent page links to Mochi on GitHub and its privacy policy.",
-        "options": [
-          "Publish it"
-        ]
+        "options": ["Publish it"]
       }
     },
     "steps": [

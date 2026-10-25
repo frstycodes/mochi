@@ -7,16 +7,30 @@ const T = Schema.Tuple;
 const S = Schema.String;
 const B = Schema.Boolean;
 /** Main refuses longer lists (`list`). */
-const List = <I extends Schema.Top>(item: I) => Schema.Array(item).check(Schema.isMaxLength(10_000));
+const List = <I extends Schema.Top>(item: I) =>
+  Schema.Array(item).check(Schema.isMaxLength(10_000));
 const ThreadId = Str(256);
 const GithubUser = opt(Str(128));
 
-export const Notice = Schema.Struct({ title: Str(200), body: opt(Str(2000)), id: opt(Str(200)) });
+export const Notice = Schema.Struct({
+  title: Str(200),
+  body: opt(Str(2000)),
+  id: opt(Str(200)),
+});
 export type Notice = typeof Notice.Type;
 
-export const WatchedThread = Schema.Struct({ id: ThreadId, title: Str(500), cwd: opt(Str()), githubUser: GithubUser });
+export const WatchedThread = Schema.Struct({
+  id: ThreadId,
+  title: Str(500),
+  cwd: opt(Str()),
+  githubUser: GithubUser,
+});
 
-export const QuietHours = Schema.Struct({ isOn: B, start: Int.check(Schema.isBetween({ minimum: 0, maximum: 23 })), end: Int.check(Schema.isBetween({ minimum: 0, maximum: 23 })) });
+export const QuietHours = Schema.Struct({
+  isOn: B,
+  start: Int.check(Schema.isBetween({ minimum: 0, maximum: 23 })),
+  end: Int.check(Schema.isBetween({ minimum: 0, maximum: 23 })),
+});
 export type QuietHours = typeof QuietHours.Type;
 
 /** `AutofixTarget` with the limits main's `watchConfig` checks. */
@@ -27,7 +41,9 @@ const WatchedAutofix = Schema.Struct({
   pr: Int.check(Schema.isBetween({ minimum: 1, maximum: 1e9 })),
   cwd: Str(),
   githubUser: GithubUser,
-  since: Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
+  since: Int.check(
+    Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  ),
 });
 
 export const WatchConfig = Schema.Struct({
@@ -41,9 +57,17 @@ export const WatchConfig = Schema.Struct({
 });
 export type WatchConfig = typeof WatchConfig.Type;
 
-export const ThreadAddressed = Schema.Struct({ threadId: ThreadId, isViewed: opt(B), isActedOn: opt(B) });
+export const ThreadAddressed = Schema.Struct({
+  threadId: ThreadId,
+  isViewed: opt(B),
+  isActedOn: opt(B),
+});
 
-export const NotifyPermission = Schema.Literals(['granted', 'denied', 'default']);
+export const NotifyPermission = Schema.Literals([
+  'granted',
+  'denied',
+  'default',
+]);
 
 /** `NotifyHost` (`src/host/types/notify.ts`). */
 export const notifyRpc = {

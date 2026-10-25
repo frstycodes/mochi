@@ -11,16 +11,36 @@ import { Expand } from '../WorkLog';
 type Direction = 'from' | 'to';
 
 /** A message another thread's agent sent this one, as a line in the log like a work group: open, it shows the whole message. */
-export function ReceivedMessageRow({ entry, from, index }: { entry: ActivityEntry; from: ThreadRef; index: number }) {
+export function ReceivedMessageRow({
+  entry,
+  from,
+  index,
+}: {
+  entry: ActivityEntry;
+  from: ThreadRef;
+  index: number;
+}) {
   const [isOpen, setOpen] = useState(false);
   const { title } = usePeer(from);
   return (
     <div data-activity-index={index} className="-mx-2 flex flex-col">
       <div className="group/log relative isolate flex h-7 w-fit max-w-full min-w-0 items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground">
-        <button type="button" aria-expanded={isOpen} aria-label={`Message from ${title}`} onClick={() => setOpen((o) => !o)} className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2" />
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          aria-label={`Message from ${title}`}
+          onClick={() => setOpen((o) => !o)}
+          className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2"
+        />
         <ThreadMessageIcon direction="from" />
         <ThreadMessageLine direction="from" peer={from} text={entry.text} />
-        <ChevronRight aria-hidden className={cn('size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none', isOpen && 'rotate-90')} />
+        <ChevronRight
+          aria-hidden
+          className={cn(
+            'size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
+            isOpen && 'rotate-90',
+          )}
+        />
       </div>
       <Expand isOpen={isOpen}>
         <ThreadMessageBody text={entry.text} className="mx-2 mt-1">
@@ -32,7 +52,15 @@ export function ReceivedMessageRow({ entry, from, index }: { entry: ActivityEntr
 }
 
 /** An Auto-fix event Mochi sent the agent, as the same kind of line: "CI failed on #12 · fixing"; open, the whole event. */
-export function AutofixEventRow({ entry, event, index }: { entry: ActivityEntry; event: NonNullable<ActivityEntry['autofix']>; index: number }) {
+export function AutofixEventRow({
+  entry,
+  event,
+  index,
+}: {
+  entry: ActivityEntry;
+  event: NonNullable<ActivityEntry['autofix']>;
+  index: number;
+}) {
   const [isOpen, setOpen] = useState(false);
   return (
     <div data-activity-index={index} className="-mx-2 flex flex-col">
@@ -42,10 +70,25 @@ export function AutofixEventRow({ entry, event, index }: { entry: ActivityEntry;
         onClick={() => setOpen((o) => !o)}
         className="flex h-7 w-fit max-w-full min-w-0 cursor-default items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
       >
-        <MagicStar aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate">{event.kind === 'enabled' ? 'Received a CI event' : event.title}</span>
-        {event.kind === 'enabled' && <span className="min-w-0 truncate text-subtle-foreground">{event.title}</span>}
-        <ChevronRight aria-hidden className={cn('size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none', isOpen && 'rotate-90')} />
+        <MagicStar
+          aria-hidden
+          className="size-4 shrink-0 text-muted-foreground"
+        />
+        <span className="min-w-0 truncate">
+          {event.kind === 'enabled' ? 'Received a CI event' : event.title}
+        </span>
+        {event.kind === 'enabled' && (
+          <span className="min-w-0 truncate text-subtle-foreground">
+            {event.title}
+          </span>
+        )}
+        <ChevronRight
+          aria-hidden
+          className={cn(
+            'size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
+            isOpen && 'rotate-90',
+          )}
+        />
       </button>
       <Expand isOpen={isOpen}>
         <ThreadMessageBody text={entry.text} className="mx-2 mt-1">
@@ -62,22 +105,56 @@ export function ThreadMessageIcon({ direction }: { direction: Direction }) {
 }
 
 /** "Message from <thread>" or "Messaging <thread>", then the message's first line, muted. The thread's name opens it. */
-export function ThreadMessageLine({ direction, peer, text }: { direction: Direction; peer?: ThreadRef; text?: string }) {
+export function ThreadMessageLine({
+  direction,
+  peer,
+  text,
+}: {
+  direction: Direction;
+  peer?: ThreadRef;
+  text?: string;
+}) {
   const preview = oneLine(text);
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span className="shrink-0">{direction === 'from' ? 'Message from' : 'Messaging'}</span>
-      {peer ? <ThreadName peer={peer} /> : <span className="shrink-0">another thread</span>}
-      {!!preview && <span className="min-w-0 truncate text-subtle-foreground">{preview}</span>}
+      <span className="shrink-0">
+        {direction === 'from' ? 'Message from' : 'Messaging'}
+      </span>
+      {peer ? (
+        <ThreadName peer={peer} />
+      ) : (
+        <span className="shrink-0">another thread</span>
+      )}
+      {!!preview && (
+        <span className="min-w-0 truncate text-subtle-foreground">
+          {preview}
+        </span>
+      )}
     </span>
   );
 }
 
 /** The whole message as markdown, with a caption under it (when it came, how it went). */
-export function ThreadMessageBody({ text, className, children }: { text: string; className?: string; children: ReactNode }) {
+export function ThreadMessageBody({
+  text,
+  className,
+  children,
+}: {
+  text: string;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className={cn('flex flex-col gap-2 rounded-xl border px-3 py-2.5', className)}>
-      <MessageResponse isAnimating={false} className="type-prose text-foreground">
+    <div
+      className={cn(
+        'flex flex-col gap-2 rounded-xl border px-3 py-2.5',
+        className,
+      )}
+    >
+      <MessageResponse
+        isAnimating={false}
+        className="type-prose text-foreground"
+      >
         {text}
       </MessageResponse>
       <p className="type-caption text-subtle-foreground">{children}</p>
@@ -86,16 +163,41 @@ export function ThreadMessageBody({ text, className, children }: { text: string;
 }
 
 /** Above the row's own toggle (`z-10`), so the name opens the thread and the rest of the row opens the message. */
-export function ThreadName({ peer, className }: { peer: ThreadRef; className?: string }) {
+export function ThreadName({
+  peer,
+  className,
+}: {
+  peer: ThreadRef;
+  className?: string;
+}) {
   const { state, dispatch } = useHarness();
   const { thread, title } = usePeer(peer);
-  if (!thread) return <span className={cn('max-w-[50%] shrink-0 truncate text-foreground', className)}>{title}</span>;
+  if (!thread)
+    return (
+      <span
+        className={cn(
+          'max-w-[50%] shrink-0 truncate text-foreground',
+          className,
+        )}
+      >
+        {title}
+      </span>
+    );
   const open = () => {
-    if (thread.spaceId !== state.spaceId) dispatch({ type: 'space', id: thread.spaceId });
+    if (thread.spaceId !== state.spaceId)
+      dispatch({ type: 'space', id: thread.spaceId });
     dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
   };
   return (
-    <button type="button" title={`Open “${title}”`} onClick={open} className={cn('relative z-10 max-w-[50%] shrink-0 cursor-pointer truncate text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none', className)}>
+    <button
+      type="button"
+      title={`Open “${title}”`}
+      onClick={open}
+      className={cn(
+        'relative z-10 max-w-[50%] shrink-0 cursor-pointer truncate text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none',
+        className,
+      )}
+    >
       {title}
     </button>
   );
@@ -104,6 +206,8 @@ export function ThreadName({ peer, className }: { peer: ThreadRef; className?: s
 /** The other thread, and its name now or as it was when the message went (renamed, deleted). */
 export function usePeer(peer: ThreadRef) {
   const { state } = useHarness();
-  const thread = peer.threadId ? state.threads.find((t) => t.id === peer.threadId) : undefined;
+  const thread = peer.threadId
+    ? state.threads.find((t) => t.id === peer.threadId)
+    : undefined;
   return { thread, title: thread?.title ?? peer.title };
 }

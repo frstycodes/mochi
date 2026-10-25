@@ -1,5 +1,19 @@
 import type { RemoteHost } from '../../src/host/types/remote.ts';
-import { answerApproval, answerCommand, cachedMachines, cacheMachine, commandMachine, follow, followedMachines, join, otherMachines, remoteStatus, removeMember, setDeviceScopes, setRemote } from '../remote/index.ts';
+import {
+  answerApproval,
+  answerCommand,
+  cachedMachines,
+  cacheMachine,
+  commandMachine,
+  follow,
+  followedMachines,
+  join,
+  otherMachines,
+  remoteStatus,
+  removeMember,
+  setDeviceScopes,
+  setRemote,
+} from '../remote/index.ts';
 import type { Handlers } from './handlers.ts';
 
 export const remote = {
@@ -7,7 +21,12 @@ export const remote = {
     return remoteStatus();
   },
   async set(_sender, patch) {
-    return setRemote({ ...patch, ...(patch.machineName !== undefined && { machineName: patch.machineName.trim() }) });
+    return setRemote({
+      ...patch,
+      ...(patch.machineName !== undefined && {
+        machineName: patch.machineName.trim(),
+      }),
+    });
   },
   async commandResult(sender, id, result) {
     answerCommand(sender, id, result);
@@ -34,5 +53,6 @@ export const remote = {
     follow(sender);
   },
   // Core decoded `command` with the same schema the machine's Core decodes it with, so nothing malformed leaves here.
-  command: async (_sender, machineId, command) => commandMachine(machineId, command),
+  command: async (_sender, machineId, command) =>
+    commandMachine(machineId, command),
 } satisfies Handlers<RemoteHost>;

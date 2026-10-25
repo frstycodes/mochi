@@ -1,5 +1,12 @@
 import { useColorTheme } from '../themes/store';
-import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import { useDispatch } from '../store';
 import { readWidgetMessage } from './fence';
 import { useFrameDocument } from './frameDocument';
@@ -8,7 +15,13 @@ import { useFrameDocument } from './frameDocument';
  * Agent-written SVG or HTML in an opaque-origin iframe: scripts run, but with no access to the app, its storage,
  * cookies or the network (CSP `default-src 'none'`). Theme tokens come in by postMessage; size and `sendPrompt` go out.
  */
-export function WidgetVisual({ source, title }: { source: string; title: string }) {
+export function WidgetVisual({
+  source,
+  title,
+}: {
+  source: string;
+  title: string;
+}) {
   const frame = useRef<HTMLIFrameElement>(null);
   const id = useId();
   const threadId = useVizThreadId();
@@ -18,7 +31,11 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
   const [html] = useState(() => widgetDocument(source, id, scheme));
 
   // The theme goes out on load too, and the widget answers it with its size: sizes posted before this component's listener attached are lost.
-  const postTheme = () => frame.current?.contentWindow?.postMessage({ type: 'harness-theme', vars: themeVars(), scheme }, '*');
+  const postTheme = () =>
+    frame.current?.contentWindow?.postMessage(
+      { type: 'harness-theme', vars: themeVars(), scheme },
+      '*',
+    );
   useEffect(() => {
     // next-themes applies its DOM theme in an effect; read tokens after that write.
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `scheme` and `theme` are the triggers: themeVars() reads the tokens next-themes writes for them
@@ -31,10 +48,17 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
       if (e.source !== frame.current?.contentWindow) return;
       const message = readWidgetMessage(e.data, id);
       if (!message) return;
-      if (message.type === 'size') return setHeight(Math.min(Math.max(message.height, MIN_HEIGHT), MAX_HEIGHT));
+      if (message.type === 'size')
+        return setHeight(
+          Math.min(Math.max(message.height, MIN_HEIGHT), MAX_HEIGHT),
+        );
       // Focus moves into the iframe only when the reader clicks or tabs into it, so a widget can't prompt on load.
       if (document.activeElement !== frame.current) return;
-      dispatch({ type: 'say', threadId, entry: { who: 'you', kind: 'message', text: message.text } });
+      dispatch({
+        type: 'say',
+        threadId,
+        entry: { who: 'you', kind: 'message', text: message.text },
+      });
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -62,18 +86,46 @@ export const VizThreadProvider = VizThreadContext.Provider;
 
 export function useVizThreadId() {
   const id = useContext(VizThreadContext);
-  if (!id) throw new Error('Widgets must render inside <VizThreadProvider>, which names the thread sendPrompt writes to');
+  if (!id)
+    throw new Error(
+      'Widgets must render inside <VizThreadProvider>, which names the thread sendPrompt writes to',
+    );
   return id;
 }
 
-const TOKENS = ['background', 'foreground', 'card', 'card-foreground', 'muted', 'muted-foreground', 'subtle-foreground', 'border', 'primary', 'primary-foreground', 'accent', 'success', 'warning', 'destructive', 'chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-grid', 'chart-axis'];
+const TOKENS = [
+  'background',
+  'foreground',
+  'card',
+  'card-foreground',
+  'muted',
+  'muted-foreground',
+  'subtle-foreground',
+  'border',
+  'primary',
+  'primary-foreground',
+  'accent',
+  'success',
+  'warning',
+  'destructive',
+  'chart-1',
+  'chart-2',
+  'chart-3',
+  'chart-4',
+  'chart-5',
+  'chart-grid',
+  'chart-axis',
+];
 
 function themeVars() {
   const css = getComputedStyle(document.documentElement);
-  return Object.fromEntries(TOKENS.map((t) => [`--${t}`, css.getPropertyValue(`--${t}`).trim()]));
+  return Object.fromEntries(
+    TOKENS.map((t) => [`--${t}`, css.getPropertyValue(`--${t}`).trim()]),
+  );
 }
 
-const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:";
+const CSP =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:";
 
 function widgetDocument(source: string, id: string, scheme: 'light' | 'dark') {
   const root = Object.entries(themeVars())

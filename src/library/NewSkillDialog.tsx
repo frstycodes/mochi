@@ -1,7 +1,19 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/toast/store';
@@ -9,15 +21,31 @@ import { renderSkillMd } from './skillMd';
 import type { Library } from './useLibrary';
 
 /** Write a skill in Mochi: its name, when an agent should reach for it, and its instructions, saved as the skill's SKILL.md. */
-export function WriteSkillDialog({ isOpen, onClose, library }: { isOpen: boolean; onClose: () => void; library: Library }) {
+export function WriteSkillDialog({
+  isOpen,
+  onClose,
+  library,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  library: Library;
+}) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl">{isOpen && <WriteSkillForm library={library} onDone={onClose} />}</DialogContent>
+      <DialogContent className="sm:max-w-xl">
+        {isOpen && <WriteSkillForm library={library} onDone={onClose} />}
+      </DialogContent>
     </Dialog>
   );
 }
 
-function WriteSkillForm({ library, onDone }: { library: Library; onDone: () => void }) {
+function WriteSkillForm({
+  library,
+  onDone,
+}: {
+  library: Library;
+  onDone: () => void;
+}) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [body, setBody] = useState('');
@@ -26,10 +54,15 @@ function WriteSkillForm({ library, onDone }: { library: Library; onDone: () => v
   const canSave = !!slug && !!description.trim() && !!body.trim() && !isSaving;
   const save = async () => {
     setSaving(true);
-    const isAdded = await library.addSkill({ 'SKILL.md': renderSkillMd(slug, description.trim(), body) });
+    const isAdded = await library.addSkill({
+      'SKILL.md': renderSkillMd(slug, description.trim(), body),
+    });
     setSaving(false);
     if (!isAdded) return;
-    toast(`Added ${slug}`, { description: 'On for this profile; Claude Code threads load it from the library.' });
+    toast(`Added ${slug}`, {
+      description:
+        'On for this profile; Claude Code threads load it from the library.',
+    });
     onDone();
   };
   return (
@@ -42,22 +75,50 @@ function WriteSkillForm({ library, onDone }: { library: Library; onDone: () => v
     >
       <DialogHeader>
         <DialogTitle>Write a skill</DialogTitle>
-        <DialogDescription>Saved to your library as a SKILL.md, the format Claude Code and Codex read.</DialogDescription>
+        <DialogDescription>
+          Saved to your library as a SKILL.md, the format Claude Code and Codex
+          read.
+        </DialogDescription>
       </DialogHeader>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="skill-name">Name</FieldLabel>
-          <Input id="skill-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="release-notes" />
-          <FieldDescription>{slug ? `Lowercase with dashes: ${slug}` : 'Lowercase letters, numbers and dashes'}</FieldDescription>
+          <Input
+            id="skill-name"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="release-notes"
+          />
+          <FieldDescription>
+            {slug
+              ? `Lowercase with dashes: ${slug}`
+              : 'Lowercase letters, numbers and dashes'}
+          </FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="skill-description">When to use it</FieldLabel>
-          <Input id="skill-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Use when writing release notes from merged PRs" />
-          <FieldDescription>Agents read this to decide when the skill applies.</FieldDescription>
+          <Input
+            id="skill-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Use when writing release notes from merged PRs"
+          />
+          <FieldDescription>
+            Agents read this to decide when the skill applies.
+          </FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="skill-body">Instructions</FieldLabel>
-          <Textarea id="skill-body" value={body} onChange={(e) => setBody(e.target.value)} placeholder={'# Release notes\n\n1. List the PRs merged since the last tag…'} className="min-h-48 font-mono type-meta" />
+          <Textarea
+            id="skill-body"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={
+              '# Release notes\n\n1. List the PRs merged since the last tag…'
+            }
+            className="min-h-48 font-mono type-meta"
+          />
         </Field>
       </FieldGroup>
       <DialogFooter>
@@ -93,26 +154,55 @@ export function useSkillUpload(library: Library) {
     e.target.value = '';
     if (!picked.length) return;
     const files = await skillFiles(picked);
-    if (!files) return toast.error('Not added', { description: 'Pick a SKILL.md, or a folder with one at its top.' });
-    if (await library.addSkill(files)) toast('Skill added', { description: 'On for this profile.' });
+    if (!files)
+      return toast.error('Not added', {
+        description: 'Pick a SKILL.md, or a folder with one at its top.',
+      });
+    if (await library.addSkill(files))
+      toast('Skill added', { description: 'On for this profile.' });
   };
   const inputs = (
     <>
-      <input ref={fileInput} type="file" accept=".md,text/markdown" hidden onChange={add} />
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".md,text/markdown"
+        hidden
+        onChange={add}
+      />
       {/* `webkitdirectory` isn't in React's input props; every browser Mochi runs in reads it. */}
-      <input ref={folderInput} type="file" hidden onChange={add} {...{ webkitdirectory: '' }} />
+      <input
+        ref={folderInput}
+        type="file"
+        hidden
+        onChange={add}
+        {...{ webkitdirectory: '' }}
+      />
     </>
   );
-  return { inputs, pick: (what: 'file' | 'folder') => (what === 'file' ? fileInput : folderInput).current?.click() };
+  return {
+    inputs,
+    pick: (what: 'file' | 'folder') =>
+      (what === 'file' ? fileInput : folderInput).current?.click(),
+  };
 }
 
 // GAP: binary files in an uploaded folder (images, fonts) are left out; the library holds a skill's text files only.
-async function skillFiles(picked: File[]): Promise<Record<string, string> | null> {
-  if (picked.length === 1 && !picked[0].webkitRelativePath) return { 'SKILL.md': await picked[0].text() };
+async function skillFiles(
+  picked: File[],
+): Promise<Record<string, string> | null> {
+  if (picked.length === 1 && !picked[0].webkitRelativePath)
+    return { 'SKILL.md': await picked[0].text() };
   const entries = await Promise.all(
     picked.map(async (file) => {
       const path = file.webkitRelativePath.split('/').slice(1).join('/');
-      if (!path || path.split('/').some((part) => part.startsWith('.') || part === 'node_modules')) return null;
+      if (
+        !path ||
+        path
+          .split('/')
+          .some((part) => part.startsWith('.') || part === 'node_modules')
+      )
+        return null;
       const text = await file.text();
       return text.includes('\u0000') ? null : ([path, text] as const);
     }),

@@ -6,7 +6,11 @@ import { fileRecords, jsonlFiles, type UsageRecord } from './records.ts';
  * Claude Code's transcripts: `<configDir>/projects/<cwd with every non-alphanumeric as ->/…/*.jsonl`, one line per message.
  * Assistant lines carry the response's `usage`; subagent transcripts sit in the same folders.
  */
-export async function claudeRecords(configDirs: string[], roots: string[], since: number | null): Promise<UsageRecord[]> {
+export async function claudeRecords(
+  configDirs: string[],
+  roots: string[],
+  since: number | null,
+): Promise<UsageRecord[]> {
   const prefixes = roots.map(encodeCwd);
   const dirs = (
     await Promise.all(
@@ -14,12 +18,18 @@ export async function claudeRecords(configDirs: string[], roots: string[], since
         const projects = join(configDir, 'projects');
         const names = await readdir(projects).catch(() => []);
         // The folder name only narrows the search: a prefix also matches a sibling (`app` and `app2`), so the cwd on each line decides.
-        return names.filter((name) => prefixes.some((p) => name.startsWith(p))).map((name) => join(projects, name));
+        return names
+          .filter((name) => prefixes.some((p) => name.startsWith(p)))
+          .map((name) => join(projects, name));
       }),
     )
   ).flat();
-  const files = (await Promise.all(dirs.map((dir) => jsonlFiles(dir, since)))).flat();
-  return (await Promise.all(files.map((f) => fileRecords(f, parseClaudeLog)))).flat();
+  const files = (
+    await Promise.all(dirs.map((dir) => jsonlFiles(dir, since)))
+  ).flat();
+  return (
+    await Promise.all(files.map((f) => fileRecords(f, parseClaudeLog)))
+  ).flat();
 }
 
 export function encodeCwd(path: string) {
@@ -46,10 +56,19 @@ export function parseClaudeLine(line: string): UsageRecord | null {
   const usage = entry.message?.usage;
   const model = entry.message?.model;
   // `<synthetic>` marks messages Claude Code wrote itself (an interrupted turn), never billed.
-  if (!usage || !model || model === '<synthetic>' || !entry.timestamp || !entry.cwd) return null;
+  if (
+    !usage ||
+    !model ||
+    model === '<synthetic>' ||
+    !entry.timestamp ||
+    !entry.cwd
+  )
+    return null;
   const write1h = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
   return {
-    key: entry.message?.id ? `claude\u0000${entry.message.id}\u0000${entry.requestId ?? ''}` : null,
+    key: entry.message?.id
+      ? `claude\u0000${entry.message.id}\u0000${entry.requestId ?? ''}`
+      : null,
     at: Date.parse(entry.timestamp),
     harness: 'claude',
     model,
@@ -76,7 +95,10 @@ interface ClaudeLine {
       output_tokens?: number;
       cache_read_input_tokens?: number;
       cache_creation_input_tokens?: number;
-      cache_creation?: { ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number };
+      cache_creation?: {
+        ephemeral_5m_input_tokens?: number;
+        ephemeral_1h_input_tokens?: number;
+      };
     };
   };
 }

@@ -3,16 +3,25 @@ import { join } from 'node:path';
 import type { ProjectsHost } from '../../src/host/types/projects.ts';
 import { openWindows } from '../agents/events.ts';
 import { githubAccount } from '../git/gh.ts';
-import { cloneProject, githubRepos, initProject, publishProject } from '../projects/add.ts';
+import {
+  cloneProject,
+  githubRepos,
+  initProject,
+  publishProject,
+} from '../projects/add.ts';
 import { projectRegistry } from '../projects/registry.ts';
 import type { Handlers } from './handlers.ts';
 
 let registry: ReturnType<typeof projectRegistry> | undefined;
-const store = () => (registry ??= projectRegistry(join(app.getPath('userData'), 'project-icons')));
+const store = () =>
+  (registry ??= projectRegistry(
+    join(app.getPath('userData'), 'project-icons'),
+  ));
 
 /** Every window lists the registry, so each hears when a profile's list changes. */
 const changed = (spaceId: string) => {
-  for (const win of openWindows()) win.webContents.send('projects:onChange', spaceId);
+  for (const win of openWindows())
+    win.webContents.send('projects:onChange', spaceId);
 };
 
 async function changing<T>(spaceId: string, work: Promise<T>) {
@@ -35,9 +44,15 @@ export const projects = {
   },
   async clone(sender, spaceId, source, options) {
     const { opId } = options;
-    const where = await cloneProject(source, options.parentDir, githubAccount(options.githubUser), (line) => {
-      if (!sender.isDestroyed()) sender.send('projects:onProgress', { opId, line });
-    });
+    const where = await cloneProject(
+      source,
+      options.parentDir,
+      githubAccount(options.githubUser),
+      (line) => {
+        if (!sender.isDestroyed())
+          sender.send('projects:onProgress', { opId, line });
+      },
+    );
     return changing(spaceId, store().add(spaceId, where.path, where.name));
   },
   async create(_sender, spaceId, name, options) {
@@ -48,7 +63,10 @@ export const projects = {
     try {
       await publishProject(path, name, options.publish, account);
     } catch (error) {
-      throw new Error(`Created ${path}, but publishing to GitHub failed: ${(error as Error).message}`, { cause: error });
+      throw new Error(
+        `Created ${path}, but publishing to GitHub failed: ${(error as Error).message}`,
+        { cause: error },
+      );
     }
     return changing(spaceId, store().relocate(spaceId, project.id, path));
   },

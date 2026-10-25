@@ -5,10 +5,16 @@ import { clockFor } from './useNow.ts';
 afterEach(() => vi.useRealTimers());
 
 test('clocks share a timer per granularity, pause while hidden, refresh on return, and stop when unused', () => {
-  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: 1000 });
+  vi.useFakeTimers({
+    toFake: ['Date', 'setInterval', 'clearInterval'],
+    now: 1000,
+  });
   const document = Object.assign(new EventTarget(), { hidden: false });
   const original = Object.getOwnPropertyDescriptor(globalThis, 'document');
-  Object.defineProperty(globalThis, 'document', { configurable: true, value: document });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: document,
+  });
   onTestFinished(() => {
     if (original) Object.defineProperty(globalThis, 'document', original);
     else Reflect.deleteProperty(globalThis, 'document');

@@ -10,15 +10,28 @@ export interface ThreadView {
   readonly events: ReadonlyArray<LoggedEvent>;
 }
 
-export type ThreadItem = { readonly _tag: 'snapshot'; readonly sequence: number; readonly saved: unknown } | { readonly _tag: 'event'; readonly event: LoggedEvent };
+export type ThreadItem =
+  | {
+      readonly _tag: 'snapshot';
+      readonly sequence: number;
+      readonly saved: unknown;
+    }
+  | { readonly _tag: 'event'; readonly event: LoggedEvent };
 
 export const emptyThread: ThreadView = { sequence: 0, saved: null, events: [] };
 
 /** Folds one `thread` stream item; a snapshot drops the events it already contains. */
 export function projectThread(view: ThreadView, item: ThreadItem): ThreadView {
-  if (item._tag === 'snapshot') return item.sequence >= view.sequence ? { sequence: item.sequence, saved: item.saved, events: [] } : view;
+  if (item._tag === 'snapshot')
+    return item.sequence >= view.sequence
+      ? { sequence: item.sequence, saved: item.saved, events: [] }
+      : view;
   if (item.event.sequence <= view.sequence) return view;
-  return { ...view, sequence: item.event.sequence, events: [...view.events, item.event] };
+  return {
+    ...view,
+    sequence: item.event.sequence,
+    events: [...view.events, item.event],
+  };
 }
 
 /** Bounds of a replay; past either, `thread` sends a snapshot instead (T3 Code's limits). */

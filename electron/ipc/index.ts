@@ -28,15 +28,40 @@ import { usage } from './usage.ts';
 import { windows } from './windows.ts';
 
 // `agent` is served by Core (packages/core/src/agents/handlers.ts); main never gets those calls.
-const handlers = { pty, git, fs, ports, sim, browser, notify, windows, settings, data, schedule, themes, remote, account, projects, library, usage } satisfies {
-  [K in Exclude<Namespace, 'agent'>]: Handlers<K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]>;
+const handlers = {
+  pty,
+  git,
+  fs,
+  ports,
+  sim,
+  browser,
+  notify,
+  windows,
+  settings,
+  data,
+  schedule,
+  themes,
+  remote,
+  account,
+  projects,
+  library,
+  usage,
+} satisfies {
+  [K in Exclude<Namespace, 'agent'>]: Handlers<
+    K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]
+  >;
 };
 
-type Handler = (sender: Electron.WebContents, ...args: unknown[]) => Promise<unknown>;
+type Handler = (
+  sender: Electron.WebContents,
+  ...args: unknown[]
+) => Promise<unknown>;
 
 const secureStorage = {
-  encrypt: async (text: string) => safeStorage.encryptString(text).toString('base64'),
-  decrypt: async (base64: string) => safeStorage.decryptString(Buffer.from(base64, 'base64')),
+  encrypt: async (text: string) =>
+    safeStorage.encryptString(text).toString('base64'),
+  decrypt: async (base64: string) =>
+    safeStorage.decryptString(Buffer.from(base64, 'base64')),
 };
 
 /**
@@ -44,24 +69,61 @@ const secureStorage = {
  * decodes it, then hands it here JSON-encoded, with the window's id so the handler gets its sender.
  */
 export const mainCapabilities = {
-  names: ['host', 'notify', 'browserView', 'sim', 'secureStorage', 'remote', 'metrics', 'main'],
+  names: [
+    'host',
+    'notify',
+    'browserView',
+    'sim',
+    'secureStorage',
+    'remote',
+    'metrics',
+    'main',
+  ],
   handle: async ({ capability, method, args, windowId }) => {
-    if (capability === 'main') return (mainForAgents[method as keyof typeof mainForAgents] as (...args: unknown[]) => Promise<unknown>)(...args);
+    if (capability === 'main')
+      return (
+        mainForAgents[method as keyof typeof mainForAgents] as (
+          ...args: unknown[]
+        ) => Promise<unknown>
+      )(...args);
     if (capability === 'remote') {
-      const result = await runDeviceCommand(Schema.decodeUnknownSync(Schema.toCodecJson(Relay.RemoteCommandRequest))(args[0]) as RemoteCommandRequest);
-      return Schema.encodeUnknownSync(Schema.toCodecJson(Relay.CommandResult))(result);
+      const result = await runDeviceCommand(
+        Schema.decodeUnknownSync(
+          Schema.toCodecJson(Relay.RemoteCommandRequest),
+        )(args[0]) as RemoteCommandRequest,
+      );
+      return Schema.encodeUnknownSync(Schema.toCodecJson(Relay.CommandResult))(
+        result,
+      );
     }
-    if (capability === 'metrics') return Schema.encodeUnknownSync(Schema.toCodecJson(Capabilities.metricsMethods.processes.output))(processMetrics());
+    if (capability === 'metrics')
+      return Schema.encodeUnknownSync(
+        Schema.toCodecJson(Capabilities.metricsMethods.processes.output),
+      )(processMetrics());
     if (capability === 'secureStorage') {
-      const { input } = Capabilities.secureStorageMethods[method as keyof typeof secureStorage];
+      const { input } =
+        Capabilities.secureStorageMethods[method as keyof typeof secureStorage];
       const [text] = Schema.decodeUnknownSync(input)(args);
       return secureStorage[method as keyof typeof secureStorage](text);
     }
-    const { input, output } = definitionOf(method) as { input: Schema.Codec<ReadonlyArray<unknown>, unknown>; output: Schema.Codec<unknown, unknown> };
-    const sender = (windowId === undefined ? undefined : webContents.fromId(windowId)) ?? mainWindow()?.webContents;
+    const { input, output } = definitionOf(method) as {
+      input: Schema.Codec<ReadonlyArray<unknown>, unknown>;
+      output: Schema.Codec<unknown, unknown>;
+    };
+    const sender =
+      (windowId === undefined ? undefined : webContents.fromId(windowId)) ??
+      mainWindow()?.webContents;
     if (!sender) throw new Error(`No window to run ${method} for`);
-    const [namespace, name] = method.split('.') as [Exclude<Namespace, 'agent'>, string];
-    const result = await (handlers[namespace] as Record<string, Handler>)[name]!(sender, ...Schema.decodeUnknownSync(Schema.toCodecJson(input))(args));
+    const [namespace, name] = method.split('.') as [
+      Exclude<Namespace, 'agent'>,
+      string,
+    ];
+    const result = await (handlers[namespace] as Record<string, Handler>)[
+      name
+    ]!(sender, ...Schema.decodeUnknownSync(Schema.toCodecJson(input))(args));
     return Schema.encodeUnknownSync(Schema.toCodecJson(output))(result);
   },
-} satisfies { names: ReadonlyArray<Capabilities.CapabilityName>; handle: CapabilityHandler };
+} satisfies {
+  names: ReadonlyArray<Capabilities.CapabilityName>;
+  handle: CapabilityHandler;
+};

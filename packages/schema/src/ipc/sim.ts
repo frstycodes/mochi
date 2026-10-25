@@ -32,24 +32,37 @@ export const SimContentSize = Schema.Literals([
   'accessibility-extra-extra-extra-large',
 ]);
 
-export const SimFrame = Schema.Struct({ udid: S, data: Schema.Uint8Array, mime: Schema.Literals(['image/jpeg', 'image/svg+xml']) });
+export const SimFrame = Schema.Struct({
+  udid: S,
+  data: Schema.Uint8Array,
+  mime: Schema.Literals(['image/jpeg', 'image/svg+xml']),
+});
 export type SimFrame = typeof SimFrame.Type;
 
 export const SimLogLine = Schema.Struct({ udid: S, text: S });
 export type SimLogLine = typeof SimLogLine.Type;
 
 // Args reach execFile (`electron/sim/parse.ts`): each is checked against a closed shape.
-const Udid = S.check(Schema.isPattern(/^[0-9A-F]{8}-(?:[0-9A-F]{4}-){3}[0-9A-F]{12}$/i));
+const Udid = S.check(
+  Schema.isPattern(/^[0-9A-F]{8}-(?:[0-9A-F]{4}-){3}[0-9A-F]{12}$/i),
+);
 const Unit = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 }));
 const HidUsage = Int.check(Schema.isBetween({ minimum: 4, maximum: 231 }));
 /** Any scheme (deep links), but parsed and never option-like. */
-const Url = Str(2048).check(Schema.makeFilter((url) => (!url.startsWith('-') && URL.canParse(url)) || `not a URL: ${url}`));
+const Url = Str(2048).check(
+  Schema.makeFilter(
+    (url) => (!url.startsWith('-') && URL.canParse(url)) || `not a URL: ${url}`,
+  ),
+);
 
 export const simRpc = {
   list: invoke(T([]), Schema.Array(Simulator)),
   boot: invoke(T([Udid]), Void),
   shutdown: invoke(T([Udid]), Void),
-  stream: invoke(T([Udid]), Schema.Struct({ width: Schema.Number, height: Schema.Number })),
+  stream: invoke(
+    T([Udid]),
+    Schema.Struct({ width: Schema.Number, height: Schema.Number }),
+  ),
   stopStream: invoke(T([Udid]), Void),
   onFrame: event(SimFrame),
   touch: invoke(T([Udid, SimTouchPhase, Unit, Unit]), Void),

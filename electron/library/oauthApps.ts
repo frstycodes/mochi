@@ -1,5 +1,8 @@
 import type { OAuthClientInformationMixed } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { OAUTH_PROVIDER_IDS, type OAuthProviderId } from '../../src/library/connectors.ts';
+import {
+  OAUTH_PROVIDER_IDS,
+  type OAuthProviderId,
+} from '../../src/library/connectors.ts';
 
 /**
  * Mochi's own OAuth app per provider whose MCP servers can't register clients (`OAUTH_PROVIDERS`). Each is a native or
@@ -16,9 +19,14 @@ const BAKED = {
   github: { clientId: 'Ov23liprlzoHyVDFz3Ih', clientSecret: '' },
   // None: Slack's MCP server takes only Marketplace-listed apps and a workspace's own, so each user brings an app of their own (LIBRARY.md).
   slack: { clientId: '', clientSecret: '' },
-} satisfies Record<OAuthProviderId | 'google', { clientId: string; clientSecret: string }>;
+} satisfies Record<
+  OAuthProviderId | 'google',
+  { clientId: string; clientSecret: string }
+>;
 
-export function mochiOAuthApp(provider: OAuthProviderId | 'google'): OAuthClientInformationMixed | undefined {
+export function mochiOAuthApp(
+  provider: OAuthProviderId | 'google',
+): OAuthClientInformationMixed | undefined {
   const env = (name: string) => {
     const key = `MOCHI_OAUTH_${provider.toUpperCase()}_${name}`;
     return process.env[key] ?? BUILD_ENV[key];
@@ -26,13 +34,17 @@ export function mochiOAuthApp(provider: OAuthProviderId | 'google'): OAuthClient
   const clientId = env('CLIENT_ID') ?? BAKED[provider].clientId;
   const clientSecret = env('CLIENT_SECRET') ?? BAKED[provider].clientSecret;
   if (!clientId) return undefined;
-  return { client_id: clientId, ...(clientSecret && { client_secret: clientSecret }) };
+  return {
+    client_id: clientId,
+    ...(clientSecret && { client_secret: clientSecret }),
+  };
 }
 
 // Replaced by the Electron build (vite.config.ts); undefined in tests.
 declare const __MOCHI_OAUTH_ENV__: Record<string, string> | undefined;
 
-const BUILD_ENV = typeof __MOCHI_OAUTH_ENV__ === 'undefined' ? {} : __MOCHI_OAUTH_ENV__;
+const BUILD_ENV =
+  typeof __MOCHI_OAUTH_ENV__ === 'undefined' ? {} : __MOCHI_OAUTH_ENV__;
 
 /** The providers Mochi can sign accounts in with by itself. */
 export function mochiOAuthProviders() {

@@ -33,12 +33,22 @@ export function togglePin(threadId: string, index: number, text = '') {
   const list = pins[threadId] ?? [];
   const passage = normalise(text);
   const existing = list.find((p) => p.index === index && p.text === passage);
-  set(threadId, existing ? list.filter((p) => p !== existing) : [...list, { id: `${index}:${Date.now()}`, index, text: passage }].sort((a, b) => a.index - b.index));
+  set(
+    threadId,
+    existing
+      ? list.filter((p) => p !== existing)
+      : [...list, { id: `${index}:${Date.now()}`, index, text: passage }].sort(
+          (a, b) => a.index - b.index,
+        ),
+  );
   return !existing;
 }
 
 export function unpin(threadId: string, id: string) {
-  set(threadId, (pins[threadId] ?? []).filter((p) => p.id !== id));
+  set(
+    threadId,
+    (pins[threadId] ?? []).filter((p) => p.id !== id),
+  );
 }
 
 let pruned: { threadId: string; list: Pin[] } | null = null;

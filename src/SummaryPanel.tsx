@@ -1,5 +1,13 @@
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
-import { isValidElement, useRef, useState, type KeyboardEvent, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import {
+  isValidElement,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type FormEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Reorder, useDragControls } from 'motion/react';
 import {
@@ -21,7 +29,12 @@ import {
   type IconComponent,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,8 +46,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
-import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemMedia,
+  ItemTitle,
+} from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
@@ -42,7 +65,11 @@ import { useGitDiff } from './git/useGit';
 import { DiffIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
-import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
+import {
+  EDITOR_NAMES,
+  openInEditor,
+  useInstalledEditors,
+} from './files/editors';
 import { openFiles } from './files/viewer';
 import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { ThreadName } from './chat/ThreadMessage';
@@ -60,7 +87,14 @@ import { openGoalEditor } from './goals/GoalEditor';
 import { useNextMove } from './goals/NextMove';
 import { useIdleVerdict } from './goals/VerdictChip';
 import { showsVerdictCard } from './goals/report';
-import { SummaryCriteria, SummaryGoal, SummaryGoalHeader, SummaryGoalStatus, SummaryGoalText, SummaryNextMove } from './goals/SummaryGoal';
+import {
+  SummaryCriteria,
+  SummaryGoal,
+  SummaryGoalHeader,
+  SummaryGoalStatus,
+  SummaryGoalText,
+  SummaryNextMove,
+} from './goals/SummaryGoal';
 import { clock, shortElapsed } from './progress';
 import { subThreadsOf } from './reorder';
 import { useDispatch, shallowEqual, useHarnessSelector } from './store';
@@ -68,9 +102,22 @@ import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
 import { OverflowIcon, ProviderMark, TooltipIconButton } from './ui';
-import { isActive, stopTask, taskResult, threadTasks, type TaskRow } from './runtime/tasks';
+import {
+  isActive,
+  stopTask,
+  taskResult,
+  threadTasks,
+  type TaskRow,
+} from './runtime/tasks';
 import { TaskIcon, useElapsed } from './agents/parts';
-import { connectorStatus, fileCount, orderCards, savedOrder, summaryCards, type SummaryCardId } from './summarySections';
+import {
+  connectorStatus,
+  fileCount,
+  orderCards,
+  savedOrder,
+  summaryCards,
+  type SummaryCardId,
+} from './summarySections';
 import { SkillIcon } from './icons/ObjectIcons';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
 import { useLibraryNames } from './library/names';
@@ -80,13 +127,22 @@ import { portUrl } from './terminal/devServer';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { PortIcon } from './pane/PortIcon';
 import { queuedMessage } from './chat/outbox';
-import { artifactsOf, type FileArtifact, type VisualArtifact } from './pane/artifacts';
+import {
+  artifactsOf,
+  type FileArtifact,
+  type VisualArtifact,
+} from './pane/artifacts';
 import { splitPath } from './chat/imageSrc';
 import type { VizLanguage } from './viz/fence';
 import type { ListeningPort } from './host/types/ports';
 
 const LIST_LIMIT = 3;
-const OPEN_BY_DEFAULT: string[] = ['environment', 'sources', 'servers', 'outputs'] satisfies SummaryCardId[];
+const OPEN_BY_DEFAULT: string[] = [
+  'environment',
+  'sources',
+  'servers',
+  'outputs',
+] satisfies SummaryCardId[];
 
 /** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. `isFloating`: cards float over the chat. */
 export function SummaryPanel({
@@ -101,7 +157,11 @@ export function SummaryPanel({
   onPaneOpened?: () => void;
 }) {
   return (
-    <aside aria-label="Thread summary" data-floating={isFloating || undefined} className={cn('group/summary flex min-h-0 flex-col', className)}>
+    <aside
+      aria-label="Thread summary"
+      data-floating={isFloating || undefined}
+      className={cn('group/summary flex min-h-0 flex-col', className)}
+    >
       <ScrollArea type="scroll" className="min-h-0 flex-1">
         <SummaryBody thread={thread} onPaneOpened={onPaneOpened} />
       </ScrollArea>
@@ -109,15 +169,31 @@ export function SummaryPanel({
   );
 }
 
-const CARD = 'rounded-xl border bg-card group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
+const CARD =
+  'rounded-xl border bg-card group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
 
 /** What needs you first, then a card per thing the right side holds, each only once it has something: like Claude's. */
-function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
-  const { summary, cards, ports, launchNames, outputs, open } = useSummary(thread, onPaneOpened);
+function SummaryBody({
+  thread,
+  onPaneOpened,
+}: {
+  thread: Thread;
+  onPaneOpened?: () => void;
+}) {
+  const { summary, cards, ports, launchNames, outputs, open } = useSummary(
+    thread,
+    onPaneOpened,
+  );
   const [order, reorder] = useCardOrder(cards);
   const [openCards, setOpenCards] = useState(OPEN_BY_DEFAULT);
-  const [isChangesOpen, setChangesOpen] = useOpenInThread(CHANGES_CLOSED_KEY, thread.id);
-  const [isTasksOpen, setTasksOpen] = useOpenInThread(TASKS_CLOSED_KEY, thread.id);
+  const [isChangesOpen, setChangesOpen] = useOpenInThread(
+    CHANGES_CLOSED_KEY,
+    thread.id,
+  );
+  const [isTasksOpen, setTasksOpen] = useOpenInThread(
+    TASKS_CLOSED_KEY,
+    thread.id,
+  );
   const onOpenChange = (value: string[]) => {
     setOpenCards(value.filter((id) => id !== 'changes' && id !== 'tasks'));
     setChangesOpen(value.includes('changes'));
@@ -129,7 +205,9 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
     environment: <EnvironmentCard {...props} />,
     sources: <SourcesCard {...props} />,
     connectors: <ConnectorsCard {...props} />,
-    servers: <ServersCard ports={ports} launchNames={launchNames} onOpen={open.port} />,
+    servers: (
+      <ServersCard ports={ports} launchNames={launchNames} onOpen={open.port} />
+    ),
     outputs: <OutputsCard {...outputs} open={open} />,
     changes: <ChangesCard {...props} />,
     tasks: <TasksCard {...props} />,
@@ -139,10 +217,28 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
     <div className="flex flex-col gap-2">
       {hasGoal(thread) && <WaitingMove thread={thread} />}
       <NeedsYou thread={thread} />
-      <Accordion type="multiple" value={[...openCards, ...(isChangesOpen ? ['changes'] : []), ...(isTasksOpen ? ['tasks'] : [])]} onValueChange={onOpenChange} asChild>
-        <Reorder.Group axis="y" values={order} onReorder={reorder} className="flex flex-col gap-2">
+      <Accordion
+        type="multiple"
+        value={[
+          ...openCards,
+          ...(isChangesOpen ? ['changes'] : []),
+          ...(isTasksOpen ? ['tasks'] : []),
+        ]}
+        onValueChange={onOpenChange}
+        asChild
+      >
+        <Reorder.Group
+          axis="y"
+          values={order}
+          onReorder={reorder}
+          className="flex flex-col gap-2"
+        >
           {order.map((id) => (
-            <DraggableCard key={id} id={id} onMove={(step) => reorder(moveCard(order, id, step))}>
+            <DraggableCard
+              key={id}
+              id={id}
+              onMove={(step) => reorder(moveCard(order, id, step))}
+            >
               {id === 'goal' ? (
                 BODIES.goal
               ) : (
@@ -181,7 +277,9 @@ function useOpenInThread(key: string, threadId: string) {
   const isOpen = !closed.includes(threadId);
   const setOpen = (open: boolean) => {
     if (open === isOpen) return;
-    const next = open ? closed.filter((id) => id !== threadId) : [...closed, threadId];
+    const next = open
+      ? closed.filter((id) => id !== threadId)
+      : [...closed, threadId];
     setClosed(next);
     closedSlice(key).setState({ value: next });
   };
@@ -198,10 +296,20 @@ const moveCard = (order: SummaryCardId[], id: SummaryCardId, step: -1 | 1) => {
 };
 
 // The panes' drawer curve and duration, so cards settle like the column they sit in; no bounce.
-const CARD_MOVE = { layout: { duration: 0.26, ease: [0.32, 0.72, 0, 1] } } as const;
+const CARD_MOVE = {
+  layout: { duration: 0.26, ease: [0.32, 0.72, 0, 1] },
+} as const;
 
 /** A card that moves only from its handle, so text in it stays selectable and its rows clickable. Alt+↑/↓ on the handle moves it too. */
-function DraggableCard({ id, onMove, children }: { id: SummaryCardId; onMove: (step: -1 | 1) => void; children: ReactNode }) {
+function DraggableCard({
+  id,
+  onMove,
+  children,
+}: {
+  id: SummaryCardId;
+  onMove: (step: -1 | 1) => void;
+  children: ReactNode;
+}) {
   const controls = useDragControls();
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
@@ -244,7 +352,12 @@ function useSummary(thread: Thread, onPaneOpened?: () => void) {
   const launchNames = useLaunchNames(cwd);
   const outputs = artifactsOf(thread, thread.repo ? null : cwd);
   const outputCount = outputs.files.length + outputs.visuals.length;
-  const cards = summaryCards({ thread, summary, portCount: ports.length, outputCount });
+  const cards = summaryCards({
+    thread,
+    summary,
+    portCount: ports.length,
+    outputCount,
+  });
   return { summary, cards, ports, launchNames, outputs, open };
 }
 
@@ -255,7 +368,8 @@ interface CardProps {
 }
 
 /** The top-right corner holds only read-outs: the drag handle takes their place while the card is hovered or the handle focused. */
-const UNDER_HANDLE = 'transition-opacity duration-150 group-hover/card:opacity-0 group-has-[[data-drag-handle]:focus-visible]/card:opacity-0 pointer-coarse:opacity-0';
+const UNDER_HANDLE =
+  'transition-opacity duration-150 group-hover/card:opacity-0 group-has-[[data-drag-handle]:focus-visible]/card:opacity-0 pointer-coarse:opacity-0';
 
 function CardHeader({ title, meta }: { title: string; meta?: ReactNode }) {
   return (
@@ -263,13 +377,26 @@ function CardHeader({ title, meta }: { title: string; meta?: ReactNode }) {
     // turns instead of the primitive's down/up icon swap.
     <AccordionTrigger className="items-center justify-start gap-1 rounded-xl px-3 py-2.5 hover:no-underline focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 **:data-[slot=accordion-trigger-icon]:ml-0 **:data-[slot=accordion-trigger-icon]:size-3.5 [&>svg:last-child]:hidden! aria-expanded:[&>svg:nth-last-child(2)]:inline! aria-expanded:[&>svg:nth-last-child(2)]:rotate-180 [&>svg]:transition-transform [&>svg]:duration-150 [&>svg]:ease-[cubic-bezier(0.23,1,0.32,1)]">
       <span className="type-meta font-medium">{title}</span>
-      {!!meta && <span className={cn('order-last ml-auto flex min-w-0 items-center gap-2 tabular type-caption font-normal text-subtle-foreground', UNDER_HANDLE)}>{meta}</span>}
+      {!!meta && (
+        <span
+          className={cn(
+            'order-last ml-auto flex min-w-0 items-center gap-2 tabular type-caption font-normal text-subtle-foreground',
+            UNDER_HANDLE,
+          )}
+        >
+          {meta}
+        </span>
+      )}
     </AccordionTrigger>
   );
 }
 
 function CardBody({ children }: { children: ReactNode }) {
-  return <AccordionContent className="flex flex-col gap-0.5 px-1 pb-1.5">{children}</AccordionContent>;
+  return (
+    <AccordionContent className="flex flex-col gap-0.5 px-1 pb-1.5">
+      {children}
+    </AccordionContent>
+  );
 }
 
 /** Pending approval or question; blocked steps say so in the goal block. */
@@ -277,7 +404,10 @@ function NeedsYou({ thread }: { thread: Thread }) {
   // A held limit says so in the chat; the summary doesn't repeat it.
   if (thread.status !== 'needs-you' || thread.live?.limit) return null;
   return (
-    <p role="status" className="flex items-center gap-2.5 rounded-xl border border-warning/40 bg-warning/8 px-3 py-2 type-meta text-warning">
+    <p
+      role="status"
+      className="flex items-center gap-2.5 rounded-xl border border-warning/40 bg-warning/8 px-3 py-2 type-meta text-warning"
+    >
       <span className="size-1.5 shrink-0 rounded-full bg-warning" aria-hidden />
       {currentAction(thread)?.label ?? PHASE_LABELS.wait}
     </p>
@@ -291,14 +421,22 @@ function EnvironmentCard({ thread }: CardProps) {
     <>
       <CardHeader title="Environment" />
       <CardBody>
-        <SummaryRow icon={<DeviceIcon kind={THIS_DEVICE} className="size-4" />} label="This computer" />
+        <SummaryRow
+          icon={<DeviceIcon kind={THIS_DEVICE} className="size-4" />}
+          label="This computer"
+        />
         <SummaryRow
           icon={Folder}
           label={
             repo ? (
               <>
                 {repo.project}
-                {!!repo.path && <span className="text-subtle-foreground"> · {homeShort(parentOf(repo.path))}</span>}
+                {!!repo.path && (
+                  <span className="text-subtle-foreground">
+                    {' '}
+                    · {homeShort(parentOf(repo.path))}
+                  </span>
+                )}
               </>
             ) : (
               'No project folder'
@@ -309,16 +447,44 @@ function EnvironmentCard({ thread }: CardProps) {
         </SummaryRow>
         {!!repo && (
           <SummaryRow
-            icon={<BranchIcon repo={repo} className="size-4 text-muted-foreground" />}
+            icon={
+              <BranchIcon
+                repo={repo}
+                className="size-4 text-muted-foreground"
+              />
+            }
             label={<BranchName repo={repo} title="Copy branch name" />}
-            onClick={repo.isDetached ? undefined : () => copyText(repo.branch, 'Branch name copied')}
+            onClick={
+              repo.isDetached
+                ? undefined
+                : () => copyText(repo.branch, 'Branch name copied')
+            }
           />
         )}
-        {!!agent?.model && <SummaryRow icon={<ProviderMark provider={thread.session?.provider ?? thread.providers[0]} />} label={agent.model} />}
+        {!!agent?.model && (
+          <SummaryRow
+            icon={
+              <ProviderMark
+                provider={thread.session?.provider ?? thread.providers[0]}
+              />
+            }
+            label={agent.model}
+          />
+        )}
         {!!agent?.permissionMode && (
           <SummaryRow
-            icon={fullAccess ? <ShieldAlert className="size-4 text-warning" /> : ShieldCheck}
-            label={<span className={cn(fullAccess && 'text-warning')}>{permissionLabel(agent.permissionMode)}</span>}
+            icon={
+              fullAccess ? (
+                <ShieldAlert className="size-4 text-warning" />
+              ) : (
+                ShieldCheck
+              )
+            }
+            label={
+              <span className={cn(fullAccess && 'text-warning')}>
+                {permissionLabel(agent.permissionMode)}
+              </span>
+            }
           />
         )}
       </CardBody>
@@ -353,7 +519,13 @@ function SourcesCard({ thread, summary, open }: CardProps) {
   );
 }
 
-function SkillRows({ thread, skills }: { thread: Thread; skills: ThreadSummary['skills'] }) {
+function SkillRows({
+  thread,
+  skills,
+}: {
+  thread: Thread;
+  skills: ThreadSummary['skills'];
+}) {
   const names = useLibraryNames();
   return (
     <LimitedList items={skills}>
@@ -361,7 +533,9 @@ function SkillRows({ thread, skills }: { thread: Thread; skills: ThreadSummary['
         <SummaryRow
           key={skill.name}
           icon={<SkillMark skill={skill.name} fallback={<SkillIcon />} />}
-          label={<span title={skill.name}>{names.skill(skill.name).title}</span>}
+          label={
+            <span title={skill.name}>{names.skill(skill.name).title}</span>
+          }
           onClick={() => openProfileConfig(thread.spaceId, 'skills')}
         >
           <span className="tabular type-caption text-subtle-foreground">
@@ -373,10 +547,13 @@ function SkillRows({ thread, skills }: { thread: Thread; skills: ThreadSummary['
   );
 }
 
-const MCP_STATUS_LABELS = { connected: '', pending: 'Connecting', 'needs-auth': 'Needs sign-in', failed: 'Failed', disabled: 'Disabled' } satisfies Record<
-  McpServer['status'],
-  string
->;
+const MCP_STATUS_LABELS = {
+  connected: '',
+  pending: 'Connecting',
+  'needs-auth': 'Needs sign-in',
+  failed: 'Failed',
+  disabled: 'Disabled',
+} satisfies Record<McpServer['status'], string>;
 const MCP_STATUS_CLASSES = {
   connected: '',
   pending: 'text-subtle-foreground',
@@ -392,18 +569,37 @@ function ConnectorsCard({ thread }: CardProps) {
   const manage = () => openProfileConfig(thread.spaceId, 'mcp');
   return (
     <>
-      <CardHeader title="Connectors" meta={<span className={cn(status.needsYou && 'text-warning')}>{status.text}</span>} />
+      <CardHeader
+        title="Connectors"
+        meta={
+          <span className={cn(status.needsYou && 'text-warning')}>
+            {status.text}
+          </span>
+        }
+      />
       <CardBody>
         <LimitedList items={servers}>
           {(server) => (
             <SummaryRow
               key={server.name}
               icon={<McpServerMark server={server.name} url={server.url} />}
-              label={<span title={server.name}>{names.server(server.name).title}</span>}
+              label={
+                <span title={server.name}>
+                  {names.server(server.name).title}
+                </span>
+              }
               onClick={manage}
             >
-              <span className={cn('tabular type-caption', MCP_STATUS_CLASSES[server.status] || 'text-subtle-foreground')}>
-                {MCP_STATUS_LABELS[server.status] || (server.toolCount === undefined ? 'Connected' : `${server.toolCount} tools`)}
+              <span
+                className={cn(
+                  'tabular type-caption',
+                  MCP_STATUS_CLASSES[server.status] || 'text-subtle-foreground',
+                )}
+              >
+                {MCP_STATUS_LABELS[server.status] ||
+                  (server.toolCount === undefined
+                    ? 'Connected'
+                    : `${server.toolCount} tools`)}
               </span>
             </SummaryRow>
           )}
@@ -413,7 +609,15 @@ function ConnectorsCard({ thread }: CardProps) {
   );
 }
 
-function ServersCard({ ports, launchNames, onOpen }: { ports: ListeningPort[]; launchNames: Map<number, string>; onOpen: (port: number) => void }) {
+function ServersCard({
+  ports,
+  launchNames,
+  onOpen,
+}: {
+  ports: ListeningPort[];
+  launchNames: Map<number, string>;
+  onOpen: (port: number) => void;
+}) {
   return (
     <>
       <CardHeader title="Servers" meta={ports.length} />
@@ -422,7 +626,11 @@ function ServersCard({ ports, launchNames, onOpen }: { ports: ListeningPort[]; l
           <SummaryRow
             key={`${p.pid}:${p.port}`}
             icon={<PortIcon />}
-            label={<span title={portUrl(p.port)}>{launchNames.get(p.port) ?? <PortLabel port={p.port} />}</span>}
+            label={
+              <span title={portUrl(p.port)}>
+                {launchNames.get(p.port) ?? <PortLabel port={p.port} />}
+              </span>
+            }
             onClick={() => onOpen(p.port)}
           />
         ))}
@@ -440,10 +648,27 @@ function PortLabel({ port }: { port: number }) {
   );
 }
 
-const VISUAL_ICONS = { chart: Chart, svg: Image, html: Code, 'harness-metro': Route, 'harness-diff': DiffIcon } satisfies Record<VizLanguage, IconComponent>;
+const VISUAL_ICONS = {
+  chart: Chart,
+  svg: Image,
+  html: Code,
+  'harness-metro': Route,
+  'harness-diff': DiffIcon,
+} satisfies Record<VizLanguage, IconComponent>;
 
-function OutputsCard({ files, visuals, open }: { files: FileArtifact[]; visuals: VisualArtifact[]; open: CardProps['open'] }) {
-  const outputs = [...files.map((file) => ({ file })), ...visuals.map((visual) => ({ visual }))];
+function OutputsCard({
+  files,
+  visuals,
+  open,
+}: {
+  files: FileArtifact[];
+  visuals: VisualArtifact[];
+  open: CardProps['open'];
+}) {
+  const outputs = [
+    ...files.map((file) => ({ file })),
+    ...visuals.map((visual) => ({ visual })),
+  ];
   return (
     <>
       <CardHeader title="Outputs" meta={outputs.length} />
@@ -455,14 +680,28 @@ function OutputsCard({ files, visuals, open }: { files: FileArtifact[]; visuals:
               return (
                 <SummaryRow
                   key={output.file.path}
-                  icon={<FileIcon fileName={name} autoAssign aria-hidden className="size-4" />}
+                  icon={
+                    <FileIcon
+                      fileName={name}
+                      autoAssign
+                      aria-hidden
+                      className="size-4"
+                    />
+                  }
                   label={<span title={output.file.path}>{name}</span>}
                   onClick={() => open.output(output.file.path)}
                 />
               );
             }
             const { visual } = output;
-            return <SummaryRow key={`${visual.at}:${i}`} icon={VISUAL_ICONS[visual.language]} label={visual.title} onClick={() => open.visual(visual)} />;
+            return (
+              <SummaryRow
+                key={`${visual.at}:${i}`}
+                icon={VISUAL_ICONS[visual.language]}
+                label={visual.title}
+                onClick={() => open.visual(visual)}
+              />
+            );
           }}
         </LimitedList>
       </CardBody>
@@ -473,14 +712,39 @@ function OutputsCard({ files, visuals, open }: { files: FileArtifact[]; visuals:
 function ChangesCard({ thread, summary, open }: CardProps) {
   const prs = useThreadPrs(thread, thread.prs);
   const cwd = threadCwd(thread);
-  if (!thread.repo || !cwd) return <ChangesBody thread={thread} prs={prs} files={summary.files} open={open} />;
+  if (!thread.repo || !cwd)
+    return (
+      <ChangesBody
+        thread={thread}
+        prs={prs}
+        files={summary.files}
+        open={open}
+      />
+    );
   return <BranchChanges thread={thread} cwd={cwd} prs={prs} open={open} />;
 }
 
 /** The branch against its base, as the Changes pane shows it by default: edits made through shell commands count too. */
-function BranchChanges({ thread, cwd, prs, open }: { thread: Thread; cwd: string; prs: ThreadPr[]; open: CardProps['open'] }) {
+function BranchChanges({
+  thread,
+  cwd,
+  prs,
+  open,
+}: {
+  thread: Thread;
+  cwd: string;
+  prs: ThreadPr[];
+  open: CardProps['open'];
+}) {
   const diffQuery = useGitDiff(cwd, 'branch', thread.repo?.base);
-  return <ChangesBody thread={thread} prs={prs} files={diffQuery.data?.files} open={open} />;
+  return (
+    <ChangesBody
+      thread={thread}
+      prs={prs}
+      files={diffQuery.data?.files}
+      open={open}
+    />
+  );
 }
 
 function ChangesBody({
@@ -503,12 +767,23 @@ function ChangesBody({
       <CardHeader title="Changes" />
       <CardBody>
         {prs.map((item) => (
-          <PullRequestRow key={item.pr.number} thread={thread} item={item} onOpen={open.url} />
+          <PullRequestRow
+            key={item.pr.number}
+            thread={thread}
+            item={item}
+            onOpen={open.url}
+          />
         ))}
         {!!files && prs.length === 0 && (
           <SummaryRow
             icon={DiffIcon}
-            label={hasChanges ? fileCount(files.length) : thread.status === 'settled' ? 'No changes' : 'No changes yet'}
+            label={
+              hasChanges
+                ? fileCount(files.length)
+                : thread.status === 'settled'
+                  ? 'No changes'
+                  : 'No changes yet'
+            }
             onClick={open.changes}
           >
             {hasChanges && <DiffCount added={added} removed={removed} />}
@@ -522,21 +797,45 @@ function ChangesBody({
 }
 
 /** The PRs of the thread's sub-threads, after its own: each sub-thread runs its PR (and its Auto-fix); here they read live, named for it. */
-function SubThreadPrs({ parent, onOpen }: { parent: Thread; onOpen: (url: string) => void }) {
-  return useHarnessSelector((s) => subThreadsOf(s.threads, parent.id), shallowEqual)
+function SubThreadPrs({
+  parent,
+  onOpen,
+}: {
+  parent: Thread;
+  onOpen: (url: string) => void;
+}) {
+  return useHarnessSelector(
+    (s) => subThreadsOf(s.threads, parent.id),
+    shallowEqual,
+  )
     .filter((sub) => sub.prs.length > 0)
     .map((sub) => <SubThreadPrRows key={sub.id} sub={sub} onOpen={onOpen} />);
 }
 
-function SubThreadPrRows({ sub, onOpen }: { sub: Thread; onOpen: (url: string) => void }) {
+function SubThreadPrRows({
+  sub,
+  onOpen,
+}: {
+  sub: Thread;
+  onOpen: (url: string) => void;
+}) {
   const prs = useThreadPrs(sub);
-  return prs.map((item) => <PullRequestRow key={item.pr.number} thread={sub} item={item} onOpen={onOpen} isSubThread />);
+  return prs.map((item) => (
+    <PullRequestRow
+      key={item.pr.number}
+      thread={sub}
+      item={item}
+      onOpen={onOpen}
+      isSubThread
+    />
+  ));
 }
 
 function DiffCount({ added, removed }: { added: number; removed: number }) {
   return (
     <span className="tabular shrink-0 type-caption whitespace-nowrap">
-      <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span>
+      <span className="text-success">+{added}</span>{' '}
+      <span className="text-destructive">−{removed}</span>
     </span>
   );
 }
@@ -549,12 +848,34 @@ function CreatePrRow({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();
   const isQueued = !!thread.queued?.some((m) => m.draft === OPEN_PR_PROMPT);
   const queue = () => {
-    dispatch({ type: 'queued-add', threadId: thread.id, message: queuedMessage(OPEN_PR_PROMPT, { mentions: [], isCommand: false, typedSkills: [] }) });
-    toast('Pull request queued', { description: 'The agent opens it when this turn ends.' });
+    dispatch({
+      type: 'queued-add',
+      threadId: thread.id,
+      message: queuedMessage(OPEN_PR_PROMPT, {
+        mentions: [],
+        isCommand: false,
+        typedSkills: [],
+      }),
+    });
+    toast('Pull request queued', {
+      description: 'The agent opens it when this turn ends.',
+    });
   };
-  if (isQueued) return <SummaryRow icon={<GitPullRequestIcon className="size-4 text-subtle-foreground" />} label={<span className="text-muted-foreground">Pull request queued</span>} />;
+  if (isQueued)
+    return (
+      <SummaryRow
+        icon={<GitPullRequestIcon className="size-4 text-subtle-foreground" />}
+        label={
+          <span className="text-muted-foreground">Pull request queued</span>
+        }
+      />
+    );
   return (
-    <SummaryRow icon={<GitPullRequestIcon className="size-4 text-muted-foreground" />} label="Create pull request" onClick={queue}>
+    <SummaryRow
+      icon={<GitPullRequestIcon className="size-4 text-muted-foreground" />}
+      label="Create pull request"
+      onClick={queue}
+    >
       <Plus className="size-3.5 text-subtle-foreground" aria-hidden />
     </SummaryRow>
   );
@@ -572,19 +893,34 @@ function TasksCard({ thread, open }: CardProps) {
       <CardHeader title="Background tasks" meta={running.length || undefined} />
       <CardBody>
         {running.map((task) => (
-          <SummaryRow key={task.id} icon={<TaskIcon thread={thread} task={task} />} label={task.title} onClick={openTask(task)}>
+          <SummaryRow
+            key={task.id}
+            icon={<TaskIcon thread={thread} task={task} />}
+            label={task.title}
+            onClick={openTask(task)}
+          >
             <TaskAge task={task} />
             <StopTask thread={thread} task={task} />
           </SummaryRow>
         ))}
-        {finished.length > 0 && <FinishedTasks thread={thread} tasks={finished} openTask={openTask} />}
+        {finished.length > 0 && (
+          <FinishedTasks thread={thread} tasks={finished} openTask={openTask} />
+        )}
       </CardBody>
     </>
   );
 }
 
 /** The finished tasks stay out of the card: their row opens them in a popover beside it, each with its outcome and how long it ran. */
-function FinishedTasks({ thread, tasks, openTask }: { thread: Thread; tasks: TaskRow[]; openTask: (task: TaskRow) => () => void }) {
+function FinishedTasks({
+  thread,
+  tasks,
+  openTask,
+}: {
+  thread: Thread;
+  tasks: TaskRow[];
+  openTask: (task: TaskRow) => () => void;
+}) {
   const [isOpen, setOpen] = useState(false);
   const pick = (task: TaskRow) => () => {
     setOpen(false);
@@ -594,13 +930,37 @@ function FinishedTasks({ thread, tasks, openTask }: { thread: Thread; tasks: Tas
     <Popover open={isOpen} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <div>
-          <SummaryRow icon={BackgroundTask} label={`${tasks.length} finished`} onClick={() => setOpen((o) => !o)} />
+          <SummaryRow
+            icon={BackgroundTask}
+            label={`${tasks.length} finished`}
+            onClick={() => setOpen((o) => !o)}
+          />
         </div>
       </PopoverAnchor>
-      <PopoverContent side="left" align="end" sideOffset={12} collisionPadding={16} className="max-h-[min(420px,calc(100vh-32px))] w-72 gap-0 overflow-y-auto p-1">
+      <PopoverContent
+        side="left"
+        align="end"
+        sideOffset={12}
+        collisionPadding={16}
+        className="max-h-[min(420px,calc(100vh-32px))] w-72 gap-0 overflow-y-auto p-1"
+      >
         {tasks.toReversed().map((task) => (
-          <SummaryRow key={task.id} icon={<TaskIcon thread={thread} task={task} />} label={task.title} onClick={pick(task)}>
-            <span className={cn('type-caption', task.status === 'failed' ? 'text-destructive' : 'text-subtle-foreground')}>{taskResult(task)}</span>
+          <SummaryRow
+            key={task.id}
+            icon={<TaskIcon thread={thread} task={task} />}
+            label={task.title}
+            onClick={pick(task)}
+          >
+            <span
+              className={cn(
+                'type-caption',
+                task.status === 'failed'
+                  ? 'text-destructive'
+                  : 'text-subtle-foreground',
+              )}
+            >
+              {taskResult(task)}
+            </span>
             <TaskAge task={task} />
           </SummaryRow>
         ))}
@@ -611,13 +971,23 @@ function FinishedTasks({ thread, tasks, openTask }: { thread: Thread; tasks: Tas
 
 /** How long it has run, ticking while it runs; how long it took once it ended. */
 function TaskAge({ task }: { task: TaskRow }) {
-  return <span className="tabular type-caption text-subtle-foreground">{shortElapsed(useElapsed(task.startedAt, task.endedAt))}</span>;
+  return (
+    <span className="tabular type-caption text-subtle-foreground">
+      {shortElapsed(useElapsed(task.startedAt, task.endedAt))}
+    </span>
+  );
 }
 
 function StopTask({ thread, task }: { thread: Thread; task: TaskRow }) {
   const dispatch = useDispatch();
   return (
-    <TooltipIconButton label="Stop task" hint={`Stops “${task.title}”; its output so far stays`} size="icon-xs" className="text-subtle-foreground hover:text-foreground" onClick={() => dispatch(stopTask(thread.id, task))}>
+    <TooltipIconButton
+      label="Stop task"
+      hint={`Stops “${task.title}”; its output so far stays`}
+      size="icon-xs"
+      className="text-subtle-foreground hover:text-foreground"
+      onClick={() => dispatch(stopTask(thread.id, task))}
+    >
       <Stop filled className="size-3" />
     </TooltipIconButton>
   );
@@ -632,7 +1002,9 @@ function SourceIcon({ thread, source }: { thread: Thread; source: Source }) {
 }
 
 function serverUrl(thread: Thread, server: string) {
-  return thread.agent?.mcpServers?.find((s) => s.name.toLowerCase() === server.toLowerCase())?.url;
+  return thread.agent?.mcpServers?.find(
+    (s) => s.name.toLowerCase() === server.toLowerCase(),
+  )?.url;
 }
 
 function FolderMenu({ thread }: { thread: Thread }) {
@@ -649,7 +1021,10 @@ function FolderMenu({ thread }: { thread: Thread }) {
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>
           {editors.map((editor) => (
-            <DropdownMenuItem key={editor} onSelect={() => openInEditor(editor, root, '')}>
+            <DropdownMenuItem
+              key={editor}
+              onSelect={() => openInEditor(editor, root, '')}
+            >
               Open in {EDITOR_NAMES[editor]}
             </DropdownMenuItem>
           ))}
@@ -667,35 +1042,80 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
     dispatch(action);
     onPaneOpened?.();
   };
-  const url = (address: string) => toPane({ type: 'pane-open-tab', threadId: thread.id, kind: 'browser', url: address });
+  const url = (address: string) =>
+    toPane({
+      type: 'pane-open-tab',
+      threadId: thread.id,
+      kind: 'browser',
+      url: address,
+    });
   const root = threadCwd(thread);
 
   const source = (s: Source): (() => void) | null => {
     if (s.kind === 'link') return () => url(sourceUrl(s.label));
     if (s.kind === 'mcp') return () => openProfileConfig(thread.spaceId, 'mcp');
     if (!root) return null;
-    if (isFolderSource(s)) return () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'files' });
-    return () => openFiles({ files: [{ source: 'workspace', threadId: thread.id, root, path: s.label }], index: 0 });
+    if (isFolderSource(s))
+      return () =>
+        toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'files' });
+    return () =>
+      openFiles({
+        files: [
+          { source: 'workspace', threadId: thread.id, root, path: s.label },
+        ],
+        index: 0,
+      });
   };
 
   const output = (path: string) => {
     const { dir, name } = splitPath(path);
-    openFiles({ files: [{ source: 'workspace', threadId: thread.id, root: dir, path: name }], index: 0 });
+    openFiles({
+      files: [
+        { source: 'workspace', threadId: thread.id, root: dir, path: name },
+      ],
+      index: 0,
+    });
   };
   const visual = (v: VisualArtifact) =>
-    toPane({ type: 'pane-open-tab', threadId: thread.id, kind: 'visual', title: v.title, visual: { language: v.language, code: v.code } });
+    toPane({
+      type: 'pane-open-tab',
+      threadId: thread.id,
+      kind: 'visual',
+      title: v.title,
+      visual: { language: v.language, code: v.code },
+    });
   const port = (p: number) => {
     openers.openPort(p);
     onPaneOpened?.();
   };
 
-  const agent = (subagentId: string) => toPane({ type: 'pane-show-agent', threadId: thread.id, subagentId });
+  const agent = (subagentId: string) =>
+    toPane({ type: 'pane-show-agent', threadId: thread.id, subagentId });
 
-  return { changes: () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }), url, source, output, visual, port, agent };
+  return {
+    changes: () =>
+      toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }),
+    url,
+    source,
+    output,
+    visual,
+    port,
+    agent,
+  };
 }
 
 /** Like Claude's: state icon, title and ⋮ on top; number, diff and checks under the title. Hover previews it, a click opens it. */
-function PullRequestRow({ thread, item, onOpen, isSubThread = false }: { thread: Thread; item: ThreadPr; onOpen: (url: string) => void; isSubThread?: boolean }) {
+function PullRequestRow({
+  thread,
+  item,
+  onOpen,
+  isSubThread = false,
+}: {
+  thread: Thread;
+  item: ThreadPr;
+  onOpen: (url: string) => void;
+  isSubThread?: boolean;
+}) {
   const { state, label } = item;
   return (
     <ThreadPrHoverCard thread={thread} pr={item.pr} side="left" align="start">
@@ -713,27 +1133,54 @@ function PullRequestRow({ thread, item, onOpen, isSubThread = false }: { thread:
               {state.title}
             </button>
           ) : (
-            <span className="min-w-0 flex-1 truncate type-meta">{state.title}</span>
+            <span className="min-w-0 flex-1 truncate type-meta">
+              {state.title}
+            </span>
           )}
           {!!state.url && <PullRequestMenu thread={thread} item={item} />}
         </div>
         <div className="flex min-w-0 items-center gap-2 pl-6.5 tabular type-caption text-subtle-foreground">
           <span className="shrink-0">{label}</span>
-          {isSubThread && <ThreadName peer={{ threadId: thread.id, title: thread.title }} className="max-w-none min-w-0 shrink text-muted-foreground hover:text-foreground" />}
-          {!!state.diff && <DiffCount added={state.diff.added} removed={state.diff.removed} />}
-          {!!state.checkCounts && <CheckCount checks={state.checks} counts={state.checkCounts} />}
+          {isSubThread && (
+            <ThreadName
+              peer={{ threadId: thread.id, title: thread.title }}
+              className="max-w-none min-w-0 shrink text-muted-foreground hover:text-foreground"
+            />
+          )}
+          {!!state.diff && (
+            <DiffCount added={state.diff.added} removed={state.diff.removed} />
+          )}
+          {!!state.checkCounts && (
+            <CheckCount checks={state.checks} counts={state.checkCounts} />
+          )}
         </div>
       </div>
     </ThreadPrHoverCard>
   );
 }
 
-const CHECK_DOT = { pending: 'bg-subtle-foreground', pass: 'bg-success', fail: 'bg-destructive' } satisfies Record<ChecksState, string>;
+const CHECK_DOT = {
+  pending: 'bg-subtle-foreground',
+  pass: 'bg-success',
+  fail: 'bg-destructive',
+} satisfies Record<ChecksState, string>;
 
-function CheckCount({ checks, counts }: { checks: ChecksState | null; counts: { passed: number; total: number } }) {
+function CheckCount({
+  checks,
+  counts,
+}: {
+  checks: ChecksState | null;
+  counts: { passed: number; total: number };
+}) {
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-1.5" aria-label={`${counts.passed} of ${counts.total} checks passed`}>
-      <span aria-hidden className={cn('size-1.5 rounded-full', CHECK_DOT[checks ?? 'pending'])} />
+    <span
+      className="ml-auto flex shrink-0 items-center gap-1.5"
+      aria-label={`${counts.passed} of ${counts.total} checks passed`}
+    >
+      <span
+        aria-hidden
+        className={cn('size-1.5 rounded-full', CHECK_DOT[checks ?? 'pending'])}
+      />
       {counts.passed}/{counts.total}
     </span>
   );
@@ -745,17 +1192,33 @@ function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label={`${item.label} options`} className="relative z-10 -my-1 -mr-1">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`${item.label} options`}
+          className="relative z-10 -my-1 -mr-1"
+        >
           <OverflowIcon vertical />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-auto">
         {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
-        <DropdownMenuItem onSelect={() => window.open(url, '_blank', 'noreferrer')}>Open on GitHub</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => window.open(url, '_blank', 'noreferrer')}
+        >
+          Open on GitHub
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>
+          Copy link
+        </DropdownMenuItem>
         {switches.length > 0 && <DropdownMenuSeparator />}
         {switches.map((s) => (
-          <DropdownMenuCheckboxItem key={s.id} checked={s.isOn} onCheckedChange={s.set} onSelect={(e) => e.preventDefault()}>
+          <DropdownMenuCheckboxItem
+            key={s.id}
+            checked={s.isOn}
+            onCheckedChange={s.set}
+            onSelect={(e) => e.preventDefault()}
+          >
             {s.label}
           </DropdownMenuCheckboxItem>
         ))}
@@ -781,12 +1244,19 @@ function AddSourceRow({ thread }: { thread: Thread }) {
     <Popover open={isOpen} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <div>
-          <SummaryRow icon={Plus} label={<span className="text-muted-foreground">Add a source</span>} onClick={() => setOpen(true)} />
+          <SummaryRow
+            icon={Plus}
+            label={<span className="text-muted-foreground">Add a source</span>}
+            onClick={() => setOpen(true)}
+          />
         </div>
       </PopoverAnchor>
       <PopoverContent align="end" side="left" className="w-72">
         <form onSubmit={submit} className="flex flex-col gap-2">
-          <label htmlFor={`add-source-${thread.id}`} className="type-meta font-medium">
+          <label
+            htmlFor={`add-source-${thread.id}`}
+            className="type-meta font-medium"
+          >
             Add a source
           </label>
           <Input
@@ -826,8 +1296,20 @@ function SummaryRow({
   onClick?: () => void;
   children?: ReactNode;
 }) {
-  const media = <ItemMedia>{isValidElement(Icon) ? Icon : <Icon className="size-4 text-muted-foreground" />}</ItemMedia>;
-  const title = <ItemTitle className="w-full min-w-0 truncate font-normal">{label}</ItemTitle>;
+  const media = (
+    <ItemMedia>
+      {isValidElement(Icon) ? (
+        Icon
+      ) : (
+        <Icon className="size-4 text-muted-foreground" />
+      )}
+    </ItemMedia>
+  );
+  const title = (
+    <ItemTitle className="w-full min-w-0 truncate font-normal">
+      {label}
+    </ItemTitle>
+  );
   if (!onClick)
     return (
       <Item size="xs" className="min-h-8 gap-2.5 px-2 py-1">
@@ -838,7 +1320,10 @@ function SummaryRow({
     );
   // The stretched button keeps trailing actions (a menu) clickable without nesting buttons.
   return (
-    <Item size="xs" className="relative isolate min-h-8 gap-2.5 rounded-lg px-2 py-1 hover:bg-accent/60">
+    <Item
+      size="xs"
+      className="relative isolate min-h-8 gap-2.5 rounded-lg px-2 py-1 hover:bg-accent/60"
+    >
       {media}
       <ItemContent className="min-w-0">
         <button
@@ -849,19 +1334,32 @@ function SummaryRow({
           {title}
         </button>
       </ItemContent>
-      {!!children && <ItemActions className="relative z-10">{children}</ItemActions>}
+      {!!children && (
+        <ItemActions className="relative z-10">{children}</ItemActions>
+      )}
     </Item>
   );
 }
 
-function LimitedList<T>({ items, children }: { items: T[]; children: (item: T, index: number) => ReactNode }) {
+function LimitedList<T>({
+  items,
+  children,
+}: {
+  items: T[];
+  children: (item: T, index: number) => ReactNode;
+}) {
   const [isOpen, setOpen] = useState(false);
   const shown = isOpen ? items : items.slice(0, LIST_LIMIT);
   return (
     <>
       {shown.map(children)}
       {items.length > LIST_LIMIT && (
-        <Button variant="ghost" size="xs" className="ml-1 self-start text-subtle-foreground" onClick={() => setOpen((o) => !o)}>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="ml-1 self-start text-subtle-foreground"
+          onClick={() => setOpen((o) => !o)}
+        >
           {isOpen ? 'Show less' : `Show ${items.length - LIST_LIMIT} more`}
         </Button>
       )}
@@ -886,7 +1384,8 @@ const PERMISSION_LABELS: Record<string, string> = {
   dangerFullAccess: 'full access',
   externalSandbox: 'external sandbox',
 };
-const isFullAccess = (mode?: string) => !!mode && /bypassPermissions|dangerFullAccess/.test(mode);
+const isFullAccess = (mode?: string) =>
+  !!mode && /bypassPermissions|dangerFullAccess/.test(mode);
 const permissionLabel = (mode: string) =>
   mode
     .split(' · ')
@@ -904,7 +1403,12 @@ function GoalSection({ thread }: { thread: Thread }) {
     <Popover open={isOpen} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <SummaryGoal ref={block} className={cn(CARD, 'px-3 py-2.5')}>
-          <SummaryGoalHeader thread={thread} onEdit={() => openGoalEditor(thread.id)} onOpen={() => setOpen((o) => !o)} countClassName={UNDER_HANDLE} />
+          <SummaryGoalHeader
+            thread={thread}
+            onEdit={() => openGoalEditor(thread.id)}
+            onOpen={() => setOpen((o) => !o)}
+            countClassName={UNDER_HANDLE}
+          />
           <SummaryGoalStatus thread={thread} verdict={verdict} step={step} />
           <SummaryGoalText>{thread.goal}</SummaryGoalText>
           <SummaryCriteria thread={thread} />
@@ -917,12 +1421,24 @@ function GoalSection({ thread }: { thread: Thread }) {
         collisionPadding={16}
         onEscapeKeyDown={() => setPinned(false)}
         // The block's own Open button toggles; a click elsewhere in the block (Run check) leaves it open.
-        onInteractOutside={(e) => (isPinned || block.current?.contains(e.target as Node)) && e.preventDefault()}
+        onInteractOutside={(e) =>
+          (isPinned || block.current?.contains(e.target as Node)) &&
+          e.preventDefault()
+        }
         className="surface-float w-[min(440px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
       >
         <div className="mb-3 flex justify-end">
-          <Button variant="ghost" size="sm" onClick={() => setPinned((p) => !p)} aria-pressed={isPinned}>
-            {isPinned ? <PinOff data-icon="inline-start" /> : <Pin data-icon="inline-start" />}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPinned((p) => !p)}
+            aria-pressed={isPinned}
+          >
+            {isPinned ? (
+              <PinOff data-icon="inline-start" />
+            ) : (
+              <Pin data-icon="inline-start" />
+            )}
             {isPinned ? 'Unpin' : 'Keep open'}
           </Button>
         </div>
@@ -936,11 +1452,25 @@ function GoalSection({ thread }: { thread: Thread }) {
 function WaitingMove({ thread }: { thread: Thread }) {
   const next = useNextMove(thread);
   if (!next?.question || !showsVerdictCard(thread)) return null;
-  return <SummaryNextMove question={next.question} onShow={() => showNextMove(thread.id)} />;
+  return (
+    <SummaryNextMove
+      question={next.question}
+      onShow={() => showNextMove(thread.id)}
+    />
+  );
 }
 
 function showNextMove(threadId: string) {
-  const card = document.querySelector<HTMLElement>(`[data-next-move="${CSS.escape(threadId)}"]`);
-  card?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  card?.querySelector<HTMLElement>('button:last-of-type')?.focus({ preventScroll: true });
+  const card = document.querySelector<HTMLElement>(
+    `[data-next-move="${CSS.escape(threadId)}"]`,
+  );
+  card?.scrollIntoView({
+    block: 'center',
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'auto'
+      : 'smooth',
+  });
+  card
+    ?.querySelector<HTMLElement>('button:last-of-type')
+    ?.focus({ preventScroll: true });
 }

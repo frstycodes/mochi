@@ -1,8 +1,18 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { Folder, Search, SidebarLeft } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { FileFinder, type FileTarget } from '@/files/FileFinder';
 import { FileView } from '@/files/FileView';
 import { useFileList } from '@/files/useFiles';
@@ -17,10 +27,25 @@ import { commandOf } from '../keymap';
 export function FilesTab({ thread, tab }: PaneTabProps) {
   const root = threadCwd(thread);
   if (!root) return <NoFolderState />;
-  return <FilesBrowser key={`${tab.id}:${root}`} threadId={thread.id} root={root} initial={tab.file} />;
+  return (
+    <FilesBrowser
+      key={`${tab.id}:${root}`}
+      threadId={thread.id}
+      root={root}
+      initial={tab.file}
+    />
+  );
 }
 
-function FilesBrowser({ threadId, root, initial }: { threadId: string; root: string; initial?: FileTarget }) {
+function FilesBrowser({
+  threadId,
+  root,
+  initial,
+}: {
+  threadId: string;
+  root: string;
+  initial?: FileTarget;
+}) {
   const { files, error } = useFileList(root);
   const [selected, setSelected] = useState<FileTarget | null>(initial ?? null);
   const [isTreeOpen, setIsTreeOpen] = useState(!initial);
@@ -53,7 +78,13 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" variant="ghost" aria-label="Toggle file tree" aria-pressed={isTreeOpen} onClick={() => setIsTreeOpen(!isTreeOpen)}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Toggle file tree"
+            aria-pressed={isTreeOpen}
+            onClick={() => setIsTreeOpen(!isTreeOpen)}
+          >
             <SidebarLeft />
           </Button>
         </TooltipTrigger>
@@ -61,7 +92,12 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" variant="ghost" aria-label="Go to file" onClick={() => focusFinder('name')}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Go to file"
+            onClick={() => focusFinder('name')}
+          >
             <Search />
           </Button>
         </TooltipTrigger>
@@ -69,23 +105,45 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
           Go to file <BoundShortcut command="files-go-to" />
         </TooltipContent>
       </Tooltip>
-      {!!selected && <AskAboutFileRange threadId={threadId} path={selected.path} />}
+      {!!selected && (
+        <AskAboutFileRange threadId={threadId} path={selected.path} />
+      )}
     </>
   );
   return (
     <div className="flex h-full min-h-0" onKeyDown={onKeyDown}>
       {isTreeOpen && (
-        <aside className={cn('flex shrink-0 flex-col', query.startsWith('?') ? 'w-72' : 'w-60')}>
+        <aside
+          className={cn(
+            'flex shrink-0 flex-col',
+            query.startsWith('?') ? 'w-72' : 'w-60',
+          )}
+        >
           {error ? (
             <p className="px-3 pt-11 type-meta text-destructive">{error}</p>
           ) : (
-            <FileFinder root={root} files={files ?? []} selected={selected?.path ?? null} query={query} onQueryChange={setQuery} focusKey={focusKey} onOpen={open} />
+            <FileFinder
+              root={root}
+              files={files ?? []}
+              selected={selected?.path ?? null}
+              query={query}
+              onQueryChange={setQuery}
+              focusKey={focusKey}
+              onOpen={open}
+            />
           )}
         </aside>
       )}
       <div className={cn('min-w-0 flex-1', isTreeOpen && 'bg-background')}>
         {selected ? (
-          <FileView key={`${selected.path}:${selected.line ?? ''}:${selected.column?.join('-') ?? ''}`} root={root} path={selected.path} line={selected.line} column={selected.column} toolbar={toolbar} />
+          <FileView
+            key={`${selected.path}:${selected.line ?? ''}:${selected.column?.join('-') ?? ''}`}
+            root={root}
+            path={selected.path}
+            line={selected.line}
+            column={selected.column}
+            toolbar={toolbar}
+          />
         ) : (
           <NoFileState toolbar={toolbar} />
         )}
@@ -97,12 +155,16 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
 function NoFileState({ toolbar }: { toolbar: React.ReactNode }) {
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-1.5 px-2">{toolbar}</header>
+      <header className="flex h-11 shrink-0 items-center gap-1.5 px-2">
+        {toolbar}
+      </header>
       <Empty className="flex-1">
         <EmptyHeader>
           <EmptyTitle>Pick a file</EmptyTitle>
           <EmptyDescription>
-            Choose one from the tree, press <BoundShortcut command="files-go-to" /> to go to a file or <BoundShortcut command="files-search" /> to search inside files.
+            Choose one from the tree, press{' '}
+            <BoundShortcut command="files-go-to" /> to go to a file or{' '}
+            <BoundShortcut command="files-search" /> to search inside files.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -118,7 +180,9 @@ function NoFolderState() {
           <Folder />
         </EmptyMedia>
         <EmptyTitle>No folder for this thread</EmptyTitle>
-        <EmptyDescription>Threads without a repository have no files to browse.</EmptyDescription>
+        <EmptyDescription>
+          Threads without a repository have no files to browse.
+        </EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

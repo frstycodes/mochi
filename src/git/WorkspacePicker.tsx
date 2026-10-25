@@ -2,11 +2,23 @@ import { useQuery } from '@tanstack/react-query';
 import { useDebounced } from '../hooks/useDebounced';
 import { useId, useState } from 'react';
 import { ChevronDown, Hierarchy2, WarningAlt } from '@/icons';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { host } from '../host';
 import type { Branch, BranchList } from '../host/types/git';
@@ -41,15 +53,50 @@ export interface Workspace {
 }
 
 /** The pickers' state for a new thread in `root` (empty: none, nothing is read); a new branch has a temp name until you type one or its title names it. */
-export function useWorkspace(root: string, draft: WorkspaceDraft, onChange: (draft: WorkspaceDraft) => void, threadId?: string): Workspace {
+export function useWorkspace(
+  root: string,
+  draft: WorkspaceDraft,
+  onChange: (draft: WorkspaceDraft) => void,
+  threadId?: string,
+): Workspace {
   const branches = useBranches(root);
   const { list } = branches;
   const tempBranch = useHarnessSelector(nextTempBranch);
   const isNew = draft.mode === 'worktree' && !draft.isExisting;
-  const branch = isNew ? (draft.branch ?? tempBranch) : draft.isExisting ? draft.branch : (list?.current ?? undefined);
-  const nameError = useBranchNameError(root, isNew && !!list ? branch : undefined);
-  const sharers = useHarnessSelector((s) => s.threads.filter((t) => t.id !== threadId && t.status !== 'settled' && t.repo?.mode === 'folder' && projectRef(t.repo) === root), shallowEqual);
-  return { root, draft, onChange, branches, branch, error: isNew ? nameError : draft.isExisting && !draft.branch ? 'Pick the branch to check out' : null, sharers, isDirty: !!list?.changes.files };
+  const branch = isNew
+    ? (draft.branch ?? tempBranch)
+    : draft.isExisting
+      ? draft.branch
+      : (list?.current ?? undefined);
+  const nameError = useBranchNameError(
+    root,
+    isNew && !!list ? branch : undefined,
+  );
+  const sharers = useHarnessSelector(
+    (s) =>
+      s.threads.filter(
+        (t) =>
+          t.id !== threadId &&
+          t.status !== 'settled' &&
+          t.repo?.mode === 'folder' &&
+          projectRef(t.repo) === root,
+      ),
+    shallowEqual,
+  );
+  return {
+    root,
+    draft,
+    onChange,
+    branches,
+    branch,
+    error: isNew
+      ? nameError
+      : draft.isExisting && !draft.branch
+        ? 'Pick the branch to check out'
+        : null,
+    sharers,
+    isDirty: !!list?.changes.files,
+  };
 }
 
 /** A thread whose folder isn't set up yet (`isUnstarted`) can still change where it works, kept in the store; null once it started. */
@@ -57,16 +104,42 @@ export function useThreadWorkspace(thread: Thread): Workspace | null {
   const dispatch = useDispatch();
   const repo = thread.repo;
   const isOpen = !!repo && isUnstarted(thread);
-  const draft: WorkspaceDraft = { mode: repo?.mode ?? 'worktree', base: repo?.base, isExisting: repo?.isExisting, branch: repo?.branch };
-  const change = (next: WorkspaceDraft) => dispatch({ type: 'workspace', threadId: thread.id, workspace: { ...next, branch: next.branch ?? (next.mode === 'folder' ? (workspace.branches.list?.current ?? undefined) : undefined) } });
-  const workspace = useWorkspace(isOpen ? projectRef(repo)! : '', draft, change, thread.id);
+  const draft: WorkspaceDraft = {
+    mode: repo?.mode ?? 'worktree',
+    base: repo?.base,
+    isExisting: repo?.isExisting,
+    branch: repo?.branch,
+  };
+  const change = (next: WorkspaceDraft) =>
+    dispatch({
+      type: 'workspace',
+      threadId: thread.id,
+      workspace: {
+        ...next,
+        branch:
+          next.branch ??
+          (next.mode === 'folder'
+            ? (workspace.branches.list?.current ?? undefined)
+            : undefined),
+      },
+    });
+  const workspace = useWorkspace(
+    isOpen ? projectRef(repo)! : '',
+    draft,
+    change,
+    thread.id,
+  );
   return isOpen ? workspace : null;
 }
 
 /** The meta row's workspace controls: worktree or project folder, then its branch. */
 export function WorkspaceControls({ workspace }: { workspace: Workspace }) {
   return (
-    <div role="group" aria-label="Branch and worktree" className="flex h-7 items-center rounded-lg bg-foreground/5">
+    <div
+      role="group"
+      aria-label="Branch and worktree"
+      className="flex h-7 items-center rounded-lg bg-foreground/5"
+    >
       {!workspace.branches.error && (
         <>
           <BranchPicker workspace={workspace} />
@@ -83,8 +156,16 @@ function WorktreeCheckbox({ workspace }: { workspace: Workspace }) {
   const { draft, onChange } = workspace;
   const id = useId();
   return (
-    <label htmlFor={id} className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors select-none hover:bg-foreground/5 hover:text-foreground has-data-checked:text-foreground">
-      <Checkbox id={id} checked={draft.mode === 'worktree'} onCheckedChange={(on) => onChange({ mode: on ? 'worktree' : 'folder' })} className="size-3.5 border-current [&_svg]:size-3!" />
+    <label
+      htmlFor={id}
+      className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors select-none hover:bg-foreground/5 hover:text-foreground has-data-checked:text-foreground"
+    >
+      <Checkbox
+        id={id}
+        checked={draft.mode === 'worktree'}
+        onCheckedChange={(on) => onChange({ mode: on ? 'worktree' : 'folder' })}
+        className="size-3.5 border-current [&_svg]:size-3!"
+      />
       worktree
     </label>
   );
@@ -103,9 +184,18 @@ function BranchPicker({ workspace }: { workspace: Workspace }) {
   const label = isNew ? (draft.base ?? list?.defaultBranch) : branch;
   const choose = (b: Branch) => {
     setOpen(false);
-    if (isNew) return onChange({ ...draft, base: b.name === list?.defaultBranch ? undefined : b.name });
-    if (draft.mode === 'folder' && isDirty && b.name !== list?.current) return setSwitchTarget(b);
-    onChange({ ...draft, branch: b.name, isExisting: draft.mode === 'worktree' || b.name !== list?.current });
+    if (isNew)
+      return onChange({
+        ...draft,
+        base: b.name === list?.defaultBranch ? undefined : b.name,
+      });
+    if (draft.mode === 'folder' && isDirty && b.name !== list?.current)
+      return setSwitchTarget(b);
+    onChange({
+      ...draft,
+      branch: b.name,
+      isExisting: draft.mode === 'worktree' || b.name !== list?.current,
+    });
   };
 
   return (
@@ -117,22 +207,40 @@ function BranchPicker({ workspace }: { workspace: Workspace }) {
       }}
     >
       <PopoverTrigger asChild>
-        <MetaChip className="bg-transparent" aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}>
+        <MetaChip
+          className="bg-transparent"
+          aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}
+        >
           <Hierarchy2 />
-          <span className="truncate">{isNew ? `from ${label ?? '…'}` : (label ?? 'Pick a branch')}</span>
+          <span className="truncate">
+            {isNew ? `from ${label ?? '…'}` : (label ?? 'Pick a branch')}
+          </span>
           <ChevronDown data-icon="inline-end" />
         </MetaChip>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] p-0">
+      <PopoverContent
+        align="start"
+        className="w-80 max-w-[calc(100vw-2rem)] p-0"
+      >
         <BranchList workspace={workspace} onChoose={choose} />
         {draft.mode === 'worktree' && <WorktreeFooter workspace={workspace} />}
       </PopoverContent>
-      <SwitchBranchDialog workspace={workspace} target={switchTarget} onClose={() => setSwitchTarget(null)} />
+      <SwitchBranchDialog
+        workspace={workspace}
+        target={switchTarget}
+        onClose={() => setSwitchTarget(null)}
+      />
     </Popover>
   );
 }
 
-function BranchList({ workspace, onChoose }: { workspace: Workspace; onChoose: (b: Branch) => void }) {
+function BranchList({
+  workspace,
+  onChoose,
+}: {
+  workspace: Workspace;
+  onChoose: (b: Branch) => void;
+}) {
   const { draft, branches, branch } = workspace;
   const { list } = branches;
   const isNew = draft.mode === 'worktree' && !draft.isExisting;
@@ -140,18 +248,33 @@ function BranchList({ workspace, onChoose }: { workspace: Workspace; onChoose: (
   const local = list?.branches.filter((b) => !b.isRemote) ?? [];
   const remote = list?.branches.filter((b) => b.isRemote) ?? [];
   // Another checkout holding the branch blocks checking it out; the folder's own current branch is fine to stay on.
-  const blockedBy = (b: Branch) => (!isNew && b.worktree && !(draft.mode === 'folder' && b.name === list?.current) ? b.worktree : undefined);
-  const heading = isNew ? 'Start from' : draft.mode === 'worktree' ? 'Check out' : 'Switch to';
+  const blockedBy = (b: Branch) =>
+    !isNew &&
+    b.worktree &&
+    !(draft.mode === 'folder' && b.name === list?.current)
+      ? b.worktree
+      : undefined;
+  const heading = isNew
+    ? 'Start from'
+    : draft.mode === 'worktree'
+      ? 'Check out'
+      : 'Switch to';
   const rows = { list, selected, onChoose, blockedBy };
 
   return (
     <Command>
       <CommandInput placeholder="Search branches" />
       <CommandList className="max-h-64">
-        <CommandEmpty>{list ? 'No branch matches' : 'Reading branches…'}</CommandEmpty>
-        {local.length > 0 && <BranchGroup heading={heading} branches={local} {...rows} />}
+        <CommandEmpty>
+          {list ? 'No branch matches' : 'Reading branches…'}
+        </CommandEmpty>
+        {local.length > 0 && (
+          <BranchGroup heading={heading} branches={local} {...rows} />
+        )}
         {local.length > 0 && remote.length > 0 && <CommandSeparator />}
-        {remote.length > 0 && <BranchGroup heading="Remote" branches={remote} {...rows} />}
+        {remote.length > 0 && (
+          <BranchGroup heading="Remote" branches={remote} {...rows} />
+        )}
       </CommandList>
     </Command>
   );
@@ -164,16 +287,31 @@ interface BranchRowsProps {
   blockedBy: (b: Branch) => string | undefined;
 }
 
-function BranchGroup({ heading, branches, list, selected, onChoose, blockedBy }: BranchRowsProps & { heading: string; branches: Branch[] }) {
+function BranchGroup({
+  heading,
+  branches,
+  list,
+  selected,
+  onChoose,
+  blockedBy,
+}: BranchRowsProps & { heading: string; branches: Branch[] }) {
   return (
     <CommandGroup heading={heading}>
       {branches.map((b) => {
         const at = blockedBy(b);
         return (
-          <CommandItem key={b.name} value={b.name} disabled={!!at} data-checked={b.name === selected} onSelect={() => onChoose(b)}>
+          <CommandItem
+            key={b.name}
+            value={b.name}
+            disabled={!!at}
+            data-checked={b.name === selected}
+            onSelect={() => onChoose(b)}
+          >
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate">{b.name}</span>
-              <span className="truncate type-caption text-subtle-foreground">{at ? `In use at ${at}` : list && branchMeta(b, list)}</span>
+              <span className="truncate type-caption text-subtle-foreground">
+                {at ? `In use at ${at}` : list && branchMeta(b, list)}
+              </span>
             </span>
           </CommandItem>
         );
@@ -183,7 +321,10 @@ function BranchGroup({ heading, branches, list, selected, onChoose, blockedBy }:
 }
 
 function branchMeta(b: Branch, list: BranchList) {
-  const tags = [b.name === list.current && 'current', b.name === list.defaultBranch && 'default'].filter(Boolean);
+  const tags = [
+    b.name === list.current && 'current',
+    b.name === list.defaultBranch && 'default',
+  ].filter(Boolean);
   return [...tags, timeAgo((Date.now() - b.committedAt) / 60_000)].join(' · ');
 }
 
@@ -196,10 +337,19 @@ function WorktreeFooter({ workspace }: { workspace: Workspace }) {
     <div className="flex flex-col gap-2 border-t p-3">
       {isNew && (
         <div className="flex flex-col gap-1">
-          <Label htmlFor={`${id}-name`} className="type-caption text-subtle-foreground">
+          <Label
+            htmlFor={`${id}-name`}
+            className="type-caption text-subtle-foreground"
+          >
             New branch
           </Label>
-          <BranchNameInput id={`${id}-name`} value={branch ?? ''} isInvalid={!!error} describedBy={`${id}-error`} onCommit={(name) => onChange({ ...draft, branch: name })} />
+          <BranchNameInput
+            id={`${id}-name`}
+            value={branch ?? ''}
+            isInvalid={!!error}
+            describedBy={`${id}-error`}
+            onCommit={(name) => onChange({ ...draft, branch: name })}
+          />
           {!!error && (
             <p id={`${id}-error`} className="type-caption text-destructive">
               {error}
@@ -211,14 +361,37 @@ function WorktreeFooter({ workspace }: { workspace: Workspace }) {
         <Label htmlFor={`${id}-existing`} className="font-normal">
           Check out an existing branch
         </Label>
-        <Switch id={`${id}-existing`} size="sm" checked={!!draft.isExisting} onCheckedChange={(on) => onChange(on ? { mode: 'worktree', isExisting: true } : { mode: 'worktree' })} />
+        <Switch
+          id={`${id}-existing`}
+          size="sm"
+          checked={!!draft.isExisting}
+          onCheckedChange={(on) =>
+            onChange(
+              on
+                ? { mode: 'worktree', isExisting: true }
+                : { mode: 'worktree' },
+            )
+          }
+        />
       </div>
     </div>
   );
 }
 
 /** Commits on blur or Enter, so a half-typed name is never checked or used. */
-function BranchNameInput({ id, value, isInvalid, describedBy, onCommit }: { id: string; value: string; isInvalid: boolean; describedBy: string; onCommit: (name: string) => void }) {
+function BranchNameInput({
+  id,
+  value,
+  isInvalid,
+  describedBy,
+  onCommit,
+}: {
+  id: string;
+  value: string;
+  isInvalid: boolean;
+  describedBy: string;
+  onCommit: (name: string) => void;
+}) {
   const [text, setText] = useState(value);
   const [synced, setSynced] = useState(value);
   if (value !== synced) {
@@ -246,17 +419,28 @@ function BranchNameInput({ id, value, isInvalid, describedBy, onCommit }: { id: 
 export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
   const { draft, branches, sharers, error, root, isDirty } = workspace;
   const notes = [
-    draft.mode === 'folder' && sharers.length > 0 && `${sharers.length === 1 ? `"${sharers[0].title}" is` : `${sharers.length} threads are`} already working in ${projectName(root)}; both edit the same files.`,
-    draft.mode === 'folder' && isDirty && `${projectName(root)} has uncommitted changes; the agent works on top of them.`,
-    !!branches.error && `${projectName(root)} isn't a git repository, so the agent works in the folder itself.`,
+    draft.mode === 'folder' &&
+      sharers.length > 0 &&
+      `${sharers.length === 1 ? `"${sharers[0].title}" is` : `${sharers.length} threads are`} already working in ${projectName(root)}; both edit the same files.`,
+    draft.mode === 'folder' &&
+      isDirty &&
+      `${projectName(root)} has uncommitted changes; the agent works on top of them.`,
+    !!branches.error &&
+      `${projectName(root)} isn't a git repository, so the agent works in the folder itself.`,
     error,
   ].filter((n): n is string => !!n);
   if (!notes.length) return null;
   return (
-    <ul role="status" className="flex flex-col gap-0.5 px-2 pt-2 pb-1 type-caption text-subtle-foreground">
+    <ul
+      role="status"
+      className="flex flex-col gap-0.5 px-2 pt-2 pb-1 type-caption text-subtle-foreground"
+    >
       {notes.map((note) => (
         <li key={note} className="flex gap-1.5">
-          <WarningAlt className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
+          <WarningAlt
+            className="mt-0.5 size-3.5 shrink-0 text-warning"
+            aria-hidden
+          />
           {note}
         </li>
       ))}
@@ -266,6 +450,10 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
 
 function useBranchNameError(root: string, name: string | undefined) {
   const settled = useDebounced(name, NAME_CHECK_MS);
-  const nameQuery = useQuery({ queryKey: queryKeys.git.branchNameError(root, settled), queryFn: () => host.git.branchNameError(root, settled!), enabled: settled !== undefined });
-  return name === settled ? nameQuery.data ?? null : null;
+  const nameQuery = useQuery({
+    queryKey: queryKeys.git.branchNameError(root, settled),
+    queryFn: () => host.git.branchNameError(root, settled!),
+    enabled: settled !== undefined,
+  });
+  return name === settled ? (nameQuery.data ?? null) : null;
 }

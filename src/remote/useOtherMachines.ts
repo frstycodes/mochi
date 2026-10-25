@@ -8,11 +8,18 @@ import { queryKeys } from '../queryKeys';
 
 /** Computers on your account that aren't among yours yet, through the relay, and joining through one. Loads only while signed in. */
 export function useOtherMachines(isSignedIn: boolean) {
-  const machinesQuery = useQuery({ queryKey: queryKeys.remote.otherMachines(), queryFn: () => host.remote.otherMachines(), enabled: isSignedIn });
-  const machines = isSignedIn ? machinesQuery.data ?? null : null;
+  const machinesQuery = useQuery({
+    queryKey: queryKeys.remote.otherMachines(),
+    queryFn: () => host.remote.otherMachines(),
+    enabled: isSignedIn,
+  });
+  const machines = isSignedIn ? (machinesQuery.data ?? null) : null;
   const error = machinesQuery.error ? ipcMessage(machinesQuery.error) : null;
   const refresh = machinesQuery.refetch;
-  const [joining, setJoining] = useState<{ machine: OtherMachine; error?: string } | null>(null);
+  const [joining, setJoining] = useState<{
+    machine: OtherMachine;
+    error?: string;
+  } | null>(null);
 
   const join = async (machine: OtherMachine) => {
     setJoining({ machine });
@@ -22,9 +29,20 @@ export function useOtherMachines(isSignedIn: boolean) {
       toast.success(`Joined your computers through ${machine.name}`);
       void refresh();
     } catch (e) {
-      setJoining((current) => (current?.machine.id === machine.id ? { machine, error: ipcMessage(e as Error) } : current));
+      setJoining((current) =>
+        current?.machine.id === machine.id
+          ? { machine, error: ipcMessage(e as Error) }
+          : current,
+      );
     }
   };
 
-  return { machines, error, refresh, joining, join, closeJoining: () => setJoining(null) };
+  return {
+    machines,
+    error,
+    refresh,
+    joining,
+    join,
+    closeJoining: () => setJoining(null),
+  };
 }

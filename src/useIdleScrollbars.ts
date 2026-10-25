@@ -16,15 +16,26 @@ export function useIdleScrollbars() {
     const onScroll = (e: Event) => {
       if (performance.now() - lastInput > INPUT_WINDOW_MS) return;
       lastInput = performance.now();
-      const el = e.target instanceof Element ? e.target : document.documentElement;
+      const el =
+        e.target instanceof Element ? e.target : document.documentElement;
       el.setAttribute('data-scrolling', '');
       window.clearTimeout(timers.get(el));
-      timers.set(el, window.setTimeout(() => el.removeAttribute('data-scrolling'), IDLE_MS));
+      timers.set(
+        el,
+        window.setTimeout(() => el.removeAttribute('data-scrolling'), IDLE_MS),
+      );
     };
-    INPUTS.forEach((t) => document.addEventListener(t, onInput, { capture: true, passive: true }));
-    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    INPUTS.forEach((t) =>
+      document.addEventListener(t, onInput, { capture: true, passive: true }),
+    );
+    document.addEventListener('scroll', onScroll, {
+      capture: true,
+      passive: true,
+    });
     return () => {
-      INPUTS.forEach((t) => document.removeEventListener(t, onInput, { capture: true }));
+      INPUTS.forEach((t) =>
+        document.removeEventListener(t, onInput, { capture: true }),
+      );
       document.removeEventListener('scroll', onScroll, { capture: true });
     };
   }, []);

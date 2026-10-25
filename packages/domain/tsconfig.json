@@ -1,6 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
   // Not a composite project: the projection runs the renderer's store slices (`src/store/*`), outside one rootDir.
-  "compilerOptions": { "composite": false, "declaration": false, "emitDeclarationOnly": false, "noEmit": true, "lib": ["ES2023", "DOM"], "resolveJsonModule": true },
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "lib": ["ES2023", "DOM"],
+    "resolveJsonModule": true
+  },
   "include": ["src"]
 }

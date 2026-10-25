@@ -14,17 +14,37 @@ export const ANIMATIONS = {
     label: 'Sidebar animations',
     description: 'Showing, hiding and peeking',
     items: [
-      { value: 'sidebar-toggle', label: 'Show and hide', description: 'The docked sidebar slides when you toggle it' },
-      { value: 'sidebar-peek', label: 'Peek', description: 'The floating sidebar slides in from the left edge' },
+      {
+        value: 'sidebar-toggle',
+        label: 'Show and hide',
+        description: 'The docked sidebar slides when you toggle it',
+      },
+      {
+        value: 'sidebar-peek',
+        label: 'Peek',
+        description: 'The floating sidebar slides in from the left edge',
+      },
     ],
   },
   pane: {
     label: 'Side pane animations',
     description: 'Opening, closing, moving and expanding panes',
     items: [
-      { value: 'pane-slide', label: 'First and last pane', description: 'Slides in from and out to the right edge' },
-      { value: 'pane-pop', label: 'Panes beside others', description: 'Scales in on open, fades out on close' },
-      { value: 'pane-layout', label: 'Moving and expanding', description: 'Panes glide to their new size and place' },
+      {
+        value: 'pane-slide',
+        label: 'First and last pane',
+        description: 'Slides in from and out to the right edge',
+      },
+      {
+        value: 'pane-pop',
+        label: 'Panes beside others',
+        description: 'Scales in on open, fades out on close',
+      },
+      {
+        value: 'pane-layout',
+        label: 'Moving and expanding',
+        description: 'Panes glide to their new size and place',
+      },
     ],
   },
 } as const;
@@ -86,18 +106,29 @@ export const BRANCH_FROM = [
   { value: 'base', label: 'Base branch' },
 ] as const;
 
-export const ENGINES = (Object.keys(SEARCH_ENGINES) as Prefs['searchEngine'][]).map((id) => ({ value: id, label: SEARCH_ENGINES[id].name }));
+export const ENGINES = (
+  Object.keys(SEARCH_ENGINES) as Prefs['searchEngine'][]
+).map((id) => ({ value: id, label: SEARCH_ENGINES[id].name }));
 
-export const AGENTS = HARNESS_IDS.map((id) => ({ value: id, label: HARNESSES[id].name }));
+export const AGENTS = HARNESS_IDS.map((id) => ({
+  value: id,
+  label: HARNESSES[id].name,
+}));
 
 export const AGENT_CONTROL = {
   label: 'Agents can change Mochi',
   options: [
     { value: 'read', label: 'Read only' },
     { value: 'changes', label: 'Changes, never deletes or settings' },
-    { value: 'everything', label: 'Everything, asking before deletes and settings' },
+    {
+      value: 'everything',
+      label: 'Everything, asking before deletes and settings',
+    },
   ],
-} as const satisfies { label: string; options: readonly { value: AgentControl; label: string }[] };
+} as const satisfies {
+  label: string;
+  options: readonly { value: AgentControl; label: string }[];
+};
 
 /** Settings › Appearance › App icon: each value names `build/icons/<value>.svg` and the `.png` main hands the Dock. */
 export const APP_ICONS = [

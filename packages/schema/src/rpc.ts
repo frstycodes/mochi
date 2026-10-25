@@ -44,19 +44,29 @@ export const hostMethods = {
 type Invoke = { readonly input: Schema.Top; readonly output: Schema.Top };
 
 /** The tags of the RPCs, `<namespace>.<method>`, one per request/response method. */
-export const hostTags = Object.entries(hostMethods).flatMap(([namespace, methods]) =>
-  Object.entries(methods as Record<string, object>)
-    .filter(([, definition]) => 'input' in definition)
-    .map(([method]) => `${namespace}.${method}`),
+export const hostTags = Object.entries(hostMethods).flatMap(
+  ([namespace, methods]) =>
+    Object.entries(methods as Record<string, object>)
+      .filter(([, definition]) => 'input' in definition)
+      .map(([method]) => `${namespace}.${method}`),
 );
 
 /** The input and output schemas of `host.<namespace>.<method>`. */
 export const definitionOf = (tag: string) => {
-  const [namespace, method] = tag.split('.') as [keyof typeof hostMethods, string];
+  const [namespace, method] = tag.split('.') as [
+    keyof typeof hostMethods,
+    string,
+  ];
   return (hostMethods[namespace] as Record<string, object>)[method] as Invoke;
 };
 
 /** A failure crosses the socket as its message: the renderer rethrows it as an `Error` (`src/host/desktop/rpc.ts`). */
 export class HostRpcs extends RpcGroup.make(
-  ...hostTags.map((tag) => Rpc.make(tag, { payload: definitionOf(tag).input, success: definitionOf(tag).output, error: Schema.String })),
+  ...hostTags.map((tag) =>
+    Rpc.make(tag, {
+      payload: definitionOf(tag).input,
+      success: definitionOf(tag).output,
+      error: Schema.String,
+    }),
+  ),
 ) {}

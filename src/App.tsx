@@ -33,7 +33,11 @@ import { RenameLayer } from './RenameDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useAutoArchive } from './git/autoArchive';
-import { useCheckoutRecovery, useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
+import {
+  useCheckoutRecovery,
+  useWorktreeManager,
+  useWorktreeCleanup,
+} from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
 import { ReplayPage } from './replay/ReplayView';
 import { ColorThemeController } from './themes/ColorThemeController';
@@ -44,12 +48,23 @@ import { useLibraryNamesLoader } from './library/useLibrary';
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
 
-export function App() { return <QueryProvider><AppContent /></QueryProvider>; }
+export function App() {
+  return (
+    <QueryProvider>
+      <AppContent />
+    </QueryProvider>
+  );
+}
 function AppContent() {
   const route = useHashRoute();
   useIdleScrollbars();
   return (
-    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider
+      attribute="data-theme"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
       <ColorThemeController />
       <ReducedMotion>
         <TooltipProvider delayDuration={400}>
@@ -63,10 +78,10 @@ function AppContent() {
             ) : (
               <HarnessProvider>
                 <MachinesProvider>
-                    {/* Inside the store's provider: a crash in the shell (the sidebar) keeps the store and its running agents. */}
-                    <ErrorBoundary FallbackComponent={ErrorFallback}>
-                      <Shell />
-                    </ErrorBoundary>
+                  {/* Inside the store's provider: a crash in the shell (the sidebar) keeps the store and its running agents. */}
+                  <ErrorBoundary FallbackComponent={ErrorFallback}>
+                    <Shell />
+                  </ErrorBoundary>
                 </MachinesProvider>
                 <Orbit />
                 <PhotoViewer />
@@ -89,7 +104,13 @@ function AppContent() {
 /** Rendered after the headers: Electron applies `app-region` in document order, so an earlier no-drag control under a drag header can't be clicked. */
 function AppZoomChip() {
   const zoom = useAppZoom();
-  return <ZoomChip zoom={zoom} onReset={() => void host.windows.resetZoom()} className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag" />;
+  return (
+    <ZoomChip
+      zoom={zoom}
+      onReset={() => void host.windows.resetZoom()}
+      className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag"
+    />
+  );
 }
 
 /**
@@ -104,7 +125,11 @@ function ReducedMotion({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.animations = animations.join(' ');
   }, [animations]);
-  return <MotionConfig reducedMotion={MOTION_CONFIG[reduceMotion]}>{children}</MotionConfig>;
+  return (
+    <MotionConfig reducedMotion={MOTION_CONFIG[reduceMotion]}>
+      {children}
+    </MotionConfig>
+  );
 }
 
 const MOTION_CONFIG = { system: 'user', on: 'always', off: 'never' } as const;
@@ -129,11 +154,17 @@ function Shell() {
   useSettingsShortcut();
 
   const content = (
-    <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
+    <SidebarProvider
+      className="h-svh min-h-0"
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+    >
       {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
       <SidebarInset className="isolate order-last min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[pathname]}>
+          <ErrorBoundary
+            FallbackComponent={ErrorFallback}
+            resetKeys={[pathname]}
+          >
             <RouterProvider router={getRouter()} />
           </ErrorBoundary>
         </div>
@@ -143,7 +174,11 @@ function Shell() {
         <SettingsSidebar width={sidebarWidth} onResize={setSidebarWidth} />
       ) : (
         <>
-          <AppSidebar onSearch={() => setSearchOpen(true)} width={sidebarWidth} onResize={setSidebarWidth} />
+          <AppSidebar
+            onSearch={() => setSearchOpen(true)}
+            width={sidebarWidth}
+            onResize={setSidebarWidth}
+          />
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
@@ -151,7 +186,11 @@ function Shell() {
       <ShellEffects />
     </SidebarProvider>
   );
-  return isSettingsOpen ? <AgentSettingsProvider>{content}</AgentSettingsProvider> : content;
+  return isSettingsOpen ? (
+    <AgentSettingsProvider>{content}</AgentSettingsProvider>
+  ) : (
+    content
+  );
 }
 
 /** The app's store-driven side effects, in a leaf of their own: they read the whole state, so they re-render on every change. */

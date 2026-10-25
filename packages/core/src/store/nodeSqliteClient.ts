@@ -1,35 +1,35 @@
 // Vendored from T3 Code (github.com/pingdotgg/t3code @ 5ffe045, packages/shared/src/nodeSqliteClient.ts), MIT License,
 // Copyright (c) 2026 T3 Tools Inc. Full notice: ./LICENSE-T3. Local edits: `cause: Error` on the two worker error handlers.
 
-import * as NodeSqlite from "node:sqlite";
-import * as NodeUtil from "node:util";
-import * as NodeWorkerThreads from "node:worker_threads";
+import * as NodeSqlite from 'node:sqlite';
+import * as NodeUtil from 'node:util';
+import * as NodeWorkerThreads from 'node:worker_threads';
 
-import * as Cache from "effect/Cache";
-import * as Clock from "effect/Clock";
-import * as Duration from "effect/Duration";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Fiber from "effect/Fiber";
-import { identity } from "effect/Function";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Predicate from "effect/Predicate";
-import * as References from "effect/References";
-import * as Schema from "effect/Schema";
-import * as Scheduler from "effect/Scheduler";
-import * as Scope from "effect/Scope";
-import * as Semaphore from "effect/Semaphore";
-import * as Context from "effect/Context";
-import * as Stream from "effect/Stream";
-import * as Tracer from "effect/Tracer";
-import * as Reactivity from "effect/reactivity/Reactivity";
-import * as Client from "effect/sql/SqlClient";
-import type { Borrower, Connection } from "effect/sql/SqlConnection";
-import { SqlError, classifySqliteError } from "effect/sql/SqlError";
-import * as Statement from "effect/sql/Statement";
+import * as Cache from 'effect/Cache';
+import * as Clock from 'effect/Clock';
+import * as Duration from 'effect/Duration';
+import * as Effect from 'effect/Effect';
+import * as Exit from 'effect/Exit';
+import * as Fiber from 'effect/Fiber';
+import { identity } from 'effect/Function';
+import * as Layer from 'effect/Layer';
+import * as Option from 'effect/Option';
+import * as Predicate from 'effect/Predicate';
+import * as References from 'effect/References';
+import * as Schema from 'effect/Schema';
+import * as Scheduler from 'effect/Scheduler';
+import * as Scope from 'effect/Scope';
+import * as Semaphore from 'effect/Semaphore';
+import * as Context from 'effect/Context';
+import * as Stream from 'effect/Stream';
+import * as Tracer from 'effect/Tracer';
+import * as Reactivity from 'effect/reactivity/Reactivity';
+import * as Client from 'effect/sql/SqlClient';
+import type { Borrower, Connection } from 'effect/sql/SqlConnection';
+import { SqlError, classifySqliteError } from 'effect/sql/SqlError';
+import * as Statement from 'effect/sql/Statement';
 
-const ATTR_DB_SYSTEM_NAME = "db.system.name";
+const ATTR_DB_SYSTEM_NAME = 'db.system.name';
 
 export interface SqliteClientConfig {
   readonly filename: string;
@@ -53,7 +53,7 @@ export interface SqliteClientConfig {
 
 // SqlClient masks transaction acquisition, so readOnly carries the caller's interruption policy.
 const ReadOnly = Context.Reference<typeof Effect.interruptible | undefined>(
-  "@t3tools/shared/nodeSqliteClient/ReadOnly",
+  '@t3tools/shared/nodeSqliteClient/ReadOnly',
   { defaultValue: () => undefined },
 );
 
@@ -63,29 +63,37 @@ const ReadOnly = Context.Reference<typeof Effect.interruptible | undefined>(
  * the reads keep using the writer, and a write attempted on the reader fails
  * with "attempt to write a readonly database".
  */
-export const readOnly = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+export const readOnly = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
   Effect.uninterruptibleMask((restore) =>
     restore(Effect.provideService(effect, ReadOnly, restore)),
   );
 
 interface Acquired {
-  readonly connection: "writer" | "reader";
+  readonly connection: 'writer' | 'reader';
   readonly lockWaitMs: number;
 }
 
-const annotateAcquired = (fiber: Fiber.Fiber<unknown, unknown>, acquired: Acquired | undefined) => {
+const annotateAcquired = (
+  fiber: Fiber.Fiber<unknown, unknown>,
+  acquired: Acquired | undefined,
+) => {
   const span = Context.getOrUndefined(fiber.context, Tracer.ParentSpan);
-  if (span?._tag !== "Span" || acquired === undefined) return;
-  span.attribute("db.connection", acquired.connection);
-  span.attribute("db.lock_wait_ms", acquired.lockWaitMs);
+  if (span?._tag !== 'Span' || acquired === undefined) return;
+  span.attribute('db.connection', acquired.connection);
+  span.attribute('db.lock_wait_ms', acquired.lockWaitMs);
 };
 
 const TransactionAcquire = Context.Reference<
-  { acquired?: Acquired; restore: typeof Effect.interruptible | undefined } | undefined
->("@t3tools/shared/nodeSqliteClient/TransactionAcquire", { defaultValue: () => undefined });
+  | { acquired?: Acquired; restore: typeof Effect.interruptible | undefined }
+  | undefined
+>('@t3tools/shared/nodeSqliteClient/TransactionAcquire', {
+  defaultValue: () => undefined,
+});
 
 export class UnsupportedNodeSqliteVersionError extends Schema.TaggedError<UnsupportedNodeSqliteVersionError>()(
-  "UnsupportedNodeSqliteVersionError",
+  'UnsupportedNodeSqliteVersionError',
   {
     nodeVersion: Schema.String,
     requirement: Schema.String,
@@ -97,25 +105,28 @@ export class UnsupportedNodeSqliteVersionError extends Schema.TaggedError<Unsupp
 }
 
 export class UnsupportedNodeSqliteOperationError extends Schema.TaggedError<UnsupportedNodeSqliteOperationError>()(
-  "UnsupportedNodeSqliteOperationError",
+  'UnsupportedNodeSqliteOperationError',
   {},
 ) {
   override get message(): string {
-    return "Node SQLite does not support executeStream.";
+    return 'Node SQLite does not support executeStream.';
   }
 }
 
 const checkNodeSqliteCompat = () => {
-  const parts = process.versions.node.split(".").map(Number);
+  const parts = process.versions.node.split('.').map(Number);
   const major = parts[0] ?? 0;
   const minor = parts[1] ?? 0;
-  const supported = (major === 22 && minor >= 16) || (major === 23 && minor >= 11) || major >= 24;
+  const supported =
+    (major === 22 && minor >= 16) ||
+    (major === 23 && minor >= 11) ||
+    major >= 24;
 
   if (!supported) {
     return Effect.die(
       new UnsupportedNodeSqliteVersionError({
         nodeVersion: process.versions.node,
-        requirement: "Node.js >=22.16, >=23.11, or >=24",
+        requirement: 'Node.js >=22.16, >=23.11, or >=24',
       }),
     );
   }
@@ -128,9 +139,9 @@ const checkNodeSqliteCompat = () => {
  */
 const classifyError = (cause: unknown, message: string, operation: string) => {
   if (
-    Predicate.hasProperty(cause, "errcode") &&
-    typeof cause.errcode === "number" &&
-    !Predicate.hasProperty(cause, "errno")
+    Predicate.hasProperty(cause, 'errcode') &&
+    typeof cause.errcode === 'number' &&
+    !Predicate.hasProperty(cause, 'errno')
   ) {
     Object.assign(cause, { errno: cause.errcode });
   }
@@ -147,7 +158,7 @@ const isBlob = (value: unknown): value is ArrayBufferView | ArrayBufferLike =>
   ArrayBuffer.isView(value) || NodeUtil.types.isAnyArrayBuffer(value);
 
 const bindingSize = (value: unknown): number => {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return value.length;
   }
   return isBlob(value) ? value.byteLength : 0;
@@ -158,15 +169,17 @@ const hasLargeBinding = (params: ReadonlyArray<unknown>): boolean => {
     let size = 0;
     for (const param of params) {
       if (
-        (typeof param === "object" || typeof param === "function") &&
+        (typeof param === 'object' || typeof param === 'function') &&
         param !== null &&
         !isBlob(param)
       ) {
         // `node:sqlite` takes named parameters as one object, callable or not.
         // Read data properties only: calling a getter here would run it twice.
-        for (const property of Object.values(Object.getOwnPropertyDescriptors(param))) {
+        for (const property of Object.values(
+          Object.getOwnPropertyDescriptors(param),
+        )) {
           if (!property.enumerable) continue;
-          if (!("value" in property)) return true;
+          if (!('value' in property)) return true;
           size += bindingSize(property.value);
         }
       } else {
@@ -252,15 +265,15 @@ interface ReaderRequest {
 }
 
 type ReaderStartup =
-  | { readonly type: "ready" }
-  | { readonly type: "unavailable"; readonly message: string };
+  | { readonly type: 'ready' }
+  | { readonly type: 'unavailable'; readonly message: string };
 
 type ReaderReply =
   | { readonly id: number; readonly rows: ReadonlyArray<any> }
   | {
       readonly id: number;
       readonly error: {
-        readonly operation: "open" | "prepare" | "execute";
+        readonly operation: 'open' | 'prepare' | 'execute';
         readonly message: string;
         readonly code?: unknown;
         readonly errcode?: unknown;
@@ -269,9 +282,9 @@ type ReaderReply =
     };
 
 const readerFailureMessages = {
-  open: "Failed to open database",
-  prepare: "Failed to prepare statement",
-  execute: "Failed to execute statement",
+  open: 'Failed to open database',
+  prepare: 'Failed to prepare statement',
+  execute: 'Failed to execute statement',
 } as const;
 
 const failed = (cause: unknown, message: string, operation: string) =>
@@ -279,7 +292,8 @@ const failed = (cause: unknown, message: string, operation: string) =>
 
 // COMMIT, ROLLBACK and ROLLBACK TO SAVEPOINT. On a reader they change nothing,
 // so they succeed once the worker is gone instead of failing the cleanup.
-const endsReadTransaction = (sql: string) => /^\s*ROLLBACK\b|^\s*COMMIT\b/i.test(sql);
+const endsReadTransaction = (sql: string) =>
+  /^\s*ROLLBACK\b|^\s*COMMIT\b/i.test(sql);
 
 /**
  * Each worker gets its own `Connection`, so a transaction stays on the worker
@@ -313,23 +327,26 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
     let stoppedMessage: string | undefined;
     const pending = new Map<
       number,
-      { readonly endsTransaction: boolean; readonly resume: (reply: ReaderReply) => void }
+      {
+        readonly endsTransaction: boolean;
+        readonly resume: (reply: ReaderReply) => void;
+      }
     >();
     const stop = (message: string) => {
       stoppedMessage = message;
-      announce({ type: "unavailable", message });
+      announce({ type: 'unavailable', message });
       if (current?.worker === worker) current = undefined;
       for (const [id, request] of pending) {
         request.resume(
           request.endsTransaction
             ? { id, rows: [] }
-            : { id, error: { operation: "execute", message } },
+            : { id, error: { operation: 'execute', message } },
         );
       }
       pending.clear();
     };
-    worker.on("message", (reply: ReaderReply | ReaderStartup) => {
-      if ("type" in reply) {
+    worker.on('message', (reply: ReaderReply | ReaderStartup) => {
+      if ('type' in reply) {
         announce(reply);
         if (pending.size === 0) worker.unref();
         return;
@@ -340,8 +357,12 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
       if (pending.size === 0) worker.unref();
       request.resume(reply);
     });
-    worker.on("error", (cause: Error) => stop(`Database reader failed: ${cause.message}`));
-    worker.on("exit", (code) => stop(`Database reader exited with code ${code}`));
+    worker.on('error', (cause: Error) =>
+      stop(`Database reader failed: ${cause.message}`),
+    );
+    worker.on('exit', (code) =>
+      stop(`Database reader exited with code ${code}`),
+    );
 
     const request = (input: ReaderRequest) =>
       Effect.withFiber<ReadonlyArray<any>, SqlError>((fiber) => {
@@ -350,16 +371,22 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
           return endsTransaction
             ? Effect.succeed([])
             : Effect.fail(
-                failed(new Error(stoppedMessage), readerFailureMessages.execute, "execute"),
+                failed(
+                  new Error(stoppedMessage),
+                  readerFailureMessages.execute,
+                  'execute',
+                ),
               );
         }
-        const safeIntegers = Boolean(Context.get(fiber.context, Client.SafeIntegers));
+        const safeIntegers = Boolean(
+          Context.get(fiber.context, Client.SafeIntegers),
+        );
         return Effect.callback<ReadonlyArray<any>, SqlError>((resume) => {
           const id = nextRequestId++;
           pending.set(id, {
             endsTransaction,
             resume: (reply) => {
-              if ("rows" in reply) {
+              if ('rows' in reply) {
                 resume(Effect.succeed(reply.rows));
                 return;
               }
@@ -384,7 +411,13 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
 
     const connection = identity<Connection>({
       execute(sql, params, rowTransform) {
-        const effect = request({ sql, params, cached: true, values: false, raw: false });
+        const effect = request({
+          sql,
+          params,
+          cached: true,
+          values: false,
+          raw: false,
+        });
         return rowTransform ? Effect.map(effect, rowTransform) : effect;
       },
       executeRaw(sql, params) {
@@ -394,12 +427,18 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
         return request({ sql, params, cached: true, values: true, raw: false });
       },
       executeValuesUnprepared(sql, params) {
-        return request({ sql, params: params ?? [], cached: false, values: true, raw: false });
+        return request({
+          sql,
+          params: params ?? [],
+          cached: false,
+          values: true,
+          raw: false,
+        });
       },
       executeUnprepared(sql, params, rowTransform) {
         // A read-only connection rejects BEGIN IMMEDIATE and BEGIN EXCLUSIVE,
         // and a deferred BEGIN is all a read snapshot needs.
-        const statement = /^\s*BEGIN\b/i.test(sql) ? "BEGIN" : sql;
+        const statement = /^\s*BEGIN\b/i.test(sql) ? 'BEGIN' : sql;
         const effect = request({
           sql: statement,
           params: params ?? [],
@@ -435,9 +474,12 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
       }
       if (unavailable) return Effect.succeed(undefined);
       unavailable = true;
-      return Effect.logWarning("SQLite reader worker unavailable; reads use the main connection", {
-        reason,
-      }).pipe(Effect.as(undefined));
+      return Effect.logWarning(
+        'SQLite reader worker unavailable; reads use the main connection',
+        {
+          reason,
+        },
+      ).pipe(Effect.as(undefined));
     });
 
   return Effect.suspend((): Effect.Effect<Connection | undefined> => {
@@ -463,11 +505,11 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
         // waited; a late "ready" must not hand out a worker that is being terminated.
         unavailable || current !== reader
           ? Effect.succeed(undefined)
-          : Option.isSome(startup) && startup.value.type === "ready"
+          : Option.isSome(startup) && startup.value.type === 'ready'
             ? Effect.succeed(reader.connection)
             : turnOff(
                 reader,
-                Option.isSome(startup) && startup.value.type === "unavailable"
+                Option.isSome(startup) && startup.value.type === 'unavailable'
                   ? startup.value.message
                   : `worker did not open the database within ${Duration.toMillis(startupTimeout)} ms`,
               ),
@@ -480,8 +522,10 @@ const CHECKPOINT_IDLE_MS = 100;
 const CHECKPOINT_BACKPRESSURE_FRAMES = 10 * CHECKPOINT_FRAMES;
 
 const readSafeSqliteInteger = (value: unknown) => {
-  const number = typeof value === "bigint" ? Number(value) : value;
-  return typeof number === "number" && Number.isSafeInteger(number) ? number : undefined;
+  const number = typeof value === 'bigint' ? Number(value) : value;
+  return typeof number === 'number' && Number.isSafeInteger(number)
+    ? number
+    : undefined;
 };
 
 // Evaluated source also works in bundles and single-executable builds.
@@ -610,22 +654,29 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
 ) {
   const warn = (reason: string) =>
     Effect.logWarning(
-      "SQLite checkpoint worker unavailable; checkpoints run on the main connection",
+      'SQLite checkpoint worker unavailable; checkpoints run on the main connection',
       { reason },
     );
-  if (typeof writer.isTransaction !== "boolean" || typeof writer.setAuthorizer !== "function") {
-    yield* warn("Node SQLite lacks transaction-state or statement-authorizer support");
+  if (
+    typeof writer.isTransaction !== 'boolean' ||
+    typeof writer.setAuthorizer !== 'function'
+  ) {
+    yield* warn(
+      'Node SQLite lacks transaction-state or statement-authorizer support',
+    );
     return undefined;
   }
-  const version = String(writer.prepare("SELECT sqlite_version() AS version").get()?.version);
-  const [major = 0, minor = 0] = version.split(".").map(Number);
+  const version = String(
+    writer.prepare('SELECT sqlite_version() AS version').get()?.version,
+  );
+  const [major = 0, minor = 0] = version.split('.').map(Number);
   // Older SQLite treats NOOP as PASSIVE, which would checkpoint on the writer.
   if (major < 3 || (major === 3 && minor < 51)) {
     yield* warn(`SQLite ${version} has no NOOP checkpoint`);
     return undefined;
   }
-  const frames = writer.prepare("PRAGMA wal_checkpoint(NOOP)");
-  const sizeLimit = writer.prepare("PRAGMA journal_size_limit");
+  const frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)');
+  const sizeLimit = writer.prepare('PRAGMA journal_size_limit');
   let worker: NodeWorkerThreads.Worker;
   try {
     worker = new NodeWorkerThreads.Worker(checkpointWorkerSource, {
@@ -658,7 +709,10 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
   const gated = () =>
     !stopped &&
     !writer.isTransaction &&
-    (unknown || blocked || truncate !== undefined || log >= CHECKPOINT_BACKPRESSURE_FRAMES);
+    (unknown ||
+      blocked ||
+      truncate !== undefined ||
+      log >= CHECKPOINT_BACKPRESSURE_FRAMES);
   const wake = () => {
     if (!gated() && elected === undefined) {
       elected = waiters.shift();
@@ -692,9 +746,15 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
     }
   };
   const acknowledge = () => {
-    if (truncate === undefined || truncate.acknowledged || stopped || writer.isTransaction) return;
+    if (
+      truncate === undefined ||
+      truncate.acknowledged ||
+      stopped ||
+      writer.isTransaction
+    )
+      return;
     truncate.acknowledged = true;
-    send({ type: "truncate", truncateId: truncate.id });
+    send({ type: 'truncate', truncateId: truncate.id });
   };
   const observe = () => {
     try {
@@ -702,7 +762,7 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
       const nextLog = readSafeSqliteInteger(state?.log);
       const nextCheckpointed = readSafeSqliteInteger(state?.checkpointed);
       if (nextLog === undefined || nextCheckpointed === undefined)
-        throw new Error("Invalid WAL frame counts");
+        throw new Error('Invalid WAL frame counts');
       log = nextLog;
       checkpointed = nextCheckpointed;
       unknown = false;
@@ -724,10 +784,12 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
     inFlight = ++nextId;
     try {
       send({
-        type: "check",
+        type: 'check',
         id: inFlight,
         generation,
-        journalSizeLimit: readSafeSqliteInteger(sizeLimit.get()?.journal_size_limit),
+        journalSizeLimit: readSafeSqliteInteger(
+          sizeLimit.get()?.journal_size_limit,
+        ),
         force: force || gated(),
       });
     } catch (cause) {
@@ -741,33 +803,42 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
     request();
     wake();
   };
-  worker.on("error", (cause: Error) => handBack(cause.message));
-  worker.on("exit", (code) => handBack(`exited with code ${code}`));
-  worker.on("message", (message: unknown) => {
-    if (stopped || typeof message !== "object" || message === null || !("type" in message)) return;
+  worker.on('error', (cause: Error) => handBack(cause.message));
+  worker.on('exit', (code) => handBack(`exited with code ${code}`));
+  worker.on('message', (message: unknown) => {
     if (
-      message.type === "truncate-request" &&
-      "truncateId" in message &&
-      typeof message.truncateId === "number"
+      stopped ||
+      typeof message !== 'object' ||
+      message === null ||
+      !('type' in message)
+    )
+      return;
+    if (
+      message.type === 'truncate-request' &&
+      'truncateId' in message &&
+      typeof message.truncateId === 'number'
     ) {
       truncate = { id: message.truncateId, acknowledged: false };
       blocked = true;
       acknowledge();
       return;
     }
-    if (message.type !== "checkpoint") return;
+    if (message.type !== 'checkpoint') return;
     const completedTruncate =
-      truncate !== undefined && "truncateId" in message && message.truncateId === truncate.id;
+      truncate !== undefined &&
+      'truncateId' in message &&
+      message.truncateId === truncate.id;
     if (completedTruncate) truncate = undefined;
     // An acknowledged truncate excludes new writer mutations, so its result is current.
     if (
-      (completedTruncate || ("generation" in message && message.generation === generation)) &&
-      "log" in message &&
-      typeof message.log === "number" &&
-      "checkpointed" in message &&
-      typeof message.checkpointed === "number" &&
-      "blocked" in message &&
-      typeof message.blocked === "boolean"
+      (completedTruncate ||
+        ('generation' in message && message.generation === generation)) &&
+      'log' in message &&
+      typeof message.log === 'number' &&
+      'checkpointed' in message &&
+      typeof message.checkpointed === 'number' &&
+      'blocked' in message &&
+      typeof message.blocked === 'boolean'
     ) {
       log = message.log;
       checkpointed = message.checkpointed;
@@ -775,7 +846,7 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
       unknown = false;
     }
     // Even a stale snapshot must retire its request so a newer check can run.
-    if ("id" in message && message.id === inFlight) inFlight = undefined;
+    if ('id' in message && message.id === inFlight) inFlight = undefined;
     if (checkAgain && inFlight === undefined) {
       checkAgain = false;
       request(true);
@@ -790,7 +861,7 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
       return worker.terminate();
     }),
   );
-  writer.exec("PRAGMA wal_autocheckpoint = 0;");
+  writer.exec('PRAGMA wal_autocheckpoint = 0;');
   observe();
   worker.unref();
 
@@ -836,13 +907,18 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
   return { check, runWithAdmission };
 });
 
-const make = Effect.fn("makeWithDatabase")(function* (
+const make = Effect.fn('makeWithDatabase')(function* (
   options: SqliteClientConfig,
-): Effect.fn.Return<Client.SqlClient, SqlError, Scope.Scope | Reactivity.Reactivity> {
+): Effect.fn.Return<
+  Client.SqlClient,
+  SqlError,
+  Scope.Scope | Reactivity.Reactivity
+> {
   yield* checkNodeSqliteCompat();
 
   const compiler = Statement.makeCompilerSqlite(options.transformQueryNames);
-  const isFileDatabase = options.filename !== ":memory:" && options.filename !== "";
+  const isFileDatabase =
+    options.filename !== ':memory:' && options.filename !== '';
   const transformRows = options.transformResultNames
     ? Statement.defaultTransforms(options.transformResultNames).array
     : undefined;
@@ -857,7 +933,7 @@ const make = Effect.fn("makeWithDatabase")(function* (
         }),
       catch: (cause) =>
         new SqlError({
-          reason: classifyError(cause, "Failed to open database", "open"),
+          reason: classifyError(cause, 'Failed to open database', 'open'),
         }),
     });
     yield* Scope.addFinalizer(
@@ -866,7 +942,7 @@ const make = Effect.fn("makeWithDatabase")(function* (
         try: () => db.close(),
         catch: (cause) =>
           new SqlError({
-            reason: classifyError(cause, "Failed to close database", "close"),
+            reason: classifyError(cause, 'Failed to close database', 'close'),
           }),
       }).pipe(Effect.orDie),
     );
@@ -876,7 +952,10 @@ const make = Effect.fn("makeWithDatabase")(function* (
         ? yield* startCheckpointWorker(options.filename, db)
         : undefined;
 
-    const statementReaderCache = new WeakMap<NodeSqlite.StatementSync, boolean>();
+    const statementReaderCache = new WeakMap<
+      NodeSqlite.StatementSync,
+      boolean
+    >();
     interface CheckpointClassification {
       backpressure: boolean;
       check: boolean;
@@ -886,17 +965,17 @@ const make = Effect.fn("makeWithDatabase")(function* (
       CheckpointClassification
     >();
     const mutatingPragmasWithValues = new Set([
-      "application_id",
-      "auto_vacuum",
-      "journal_mode",
-      "schema_version",
-      "user_version",
+      'application_id',
+      'auto_vacuum',
+      'journal_mode',
+      'schema_version',
+      'user_version',
     ]);
     const mutatesPragma = (name: string | null, value: string | null) => {
       const pragma = name?.toLowerCase();
       if (pragma === undefined) return false;
-      if (pragma === "incremental_vacuum" || pragma === "optimize") return true;
-      if (pragma === "wal_checkpoint") return value?.toLowerCase() !== "noop";
+      if (pragma === 'incremental_vacuum' || pragma === 'optimize') return true;
+      if (pragma === 'wal_checkpoint') return value?.toLowerCase() !== 'noop';
       return value !== null && mutatingPragmasWithValues.has(pragma);
     };
     let activeClassification: CheckpointClassification | undefined;
@@ -921,12 +1000,15 @@ const make = Effect.fn("makeWithDatabase")(function* (
         if (classification === undefined) return NodeSqlite.constants.SQLITE_OK;
         const constants = NodeSqlite.constants;
         if (actionCode === constants.SQLITE_TRANSACTION) {
-          classification.backpressure ||= action === "BEGIN";
-          classification.check ||= action === "COMMIT" || action === "ROLLBACK";
+          classification.backpressure ||= action === 'BEGIN';
+          classification.check ||= action === 'COMMIT' || action === 'ROLLBACK';
         } else if (actionCode === constants.SQLITE_SAVEPOINT) {
-          classification.backpressure ||= action === "BEGIN";
+          classification.backpressure ||= action === 'BEGIN';
           classification.check = true;
-        } else if (actionCode === constants.SQLITE_PRAGMA && mutatesPragma(action, argument)) {
+        } else if (
+          actionCode === constants.SQLITE_PRAGMA &&
+          mutatesPragma(action, argument)
+        ) {
           classification.backpressure = true;
           classification.check = true;
         } else if (
@@ -956,13 +1038,20 @@ const make = Effect.fn("makeWithDatabase")(function* (
       Effect.try({
         try: () => {
           const classification = { backpressure: false, check: false };
-          const statement = withClassification(classification, () => db.prepare(sql));
-          if (checkpoint !== undefined) checkpointClassifications.set(statement, classification);
+          const statement = withClassification(classification, () =>
+            db.prepare(sql),
+          );
+          if (checkpoint !== undefined)
+            checkpointClassifications.set(statement, classification);
           return statement;
         },
         catch: (cause) =>
           new SqlError({
-            reason: classifyError(cause, "Failed to prepare statement", "prepare"),
+            reason: classifyError(
+              cause,
+              'Failed to prepare statement',
+              'prepare',
+            ),
           }),
       });
 
@@ -970,7 +1059,9 @@ const make = Effect.fn("makeWithDatabase")(function* (
       capacity: options.prepareCacheSize ?? 200,
       // A transient prepare failure must not outlive the lock or missing schema.
       timeToLive: (exit) =>
-        Exit.isSuccess(exit) ? (options.prepareCacheTTL ?? Duration.minutes(10)) : Duration.zero,
+        Exit.isSuccess(exit)
+          ? (options.prepareCacheTTL ?? Duration.minutes(10))
+          : Duration.zero,
     });
 
     const statementFor = (sql: string, params: ReadonlyArray<unknown>) =>
@@ -979,7 +1070,7 @@ const make = Effect.fn("makeWithDatabase")(function* (
     const runStatement = (
       statement: NodeSqlite.StatementSync,
       params: ReadonlyArray<unknown>,
-      mode: "rows" | "raw" | "values" = "rows",
+      mode: 'rows' | 'raw' | 'values' = 'rows',
     ) =>
       Effect.withFiber<ReadonlyArray<any>, SqlError>((fiber) => {
         const classification = checkpointClassifications.get(statement);
@@ -988,20 +1079,28 @@ const make = Effect.fn("makeWithDatabase")(function* (
           let result: Exit.Exit<ReadonlyArray<unknown>, SqlError>;
           try {
             const value = withClassification(classification, () => {
-              statement.setReadBigInts(Boolean(Context.get(fiber.context, Client.SafeIntegers)));
+              statement.setReadBigInts(
+                Boolean(Context.get(fiber.context, Client.SafeIntegers)),
+              );
               if (hasRows(statement)) {
-                arrays = mode === "values";
+                arrays = mode === 'values';
                 if (arrays) statement.setReturnArrays(true);
                 return statement.all(...(params as any));
               }
               const result = statement.run(...(params as any));
-              return mode === "raw" ? (result as unknown as ReadonlyArray<unknown>) : [];
+              return mode === 'raw'
+                ? (result as unknown as ReadonlyArray<unknown>)
+                : [];
             });
             result = Exit.succeed(value);
           } catch (cause) {
             result = Exit.fail(
               new SqlError({
-                reason: classifyError(cause, "Failed to execute statement", "execute"),
+                reason: classifyError(
+                  cause,
+                  'Failed to execute statement',
+                  'execute',
+                ),
               }),
             );
           } finally {
@@ -1016,8 +1115,8 @@ const make = Effect.fn("makeWithDatabase")(function* (
                 new SqlError({
                   reason: classifyError(
                     cause,
-                    "Failed to reset statement result mode",
-                    "resetResultMode",
+                    'Failed to reset statement result mode',
+                    'resetResultMode',
                   ),
                 }),
               );
@@ -1032,16 +1131,18 @@ const make = Effect.fn("makeWithDatabase")(function* (
 
     const run = (sql: string, params: ReadonlyArray<unknown>, raw = false) =>
       Effect.flatMap(statementFor(sql, params), (statement) =>
-        runStatement(statement, params, raw ? "raw" : "rows"),
+        runStatement(statement, params, raw ? 'raw' : 'rows'),
       );
     const runValues = (sql: string, params: ReadonlyArray<unknown>) =>
       Effect.flatMap(statementFor(sql, params), (statement) =>
-        runStatement(statement, params, "values"),
+        runStatement(statement, params, 'values'),
       );
 
     return identity<Connection>({
       execute(sql, params, rowTransform) {
-        return rowTransform ? Effect.map(run(sql, params), rowTransform) : run(sql, params);
+        return rowTransform
+          ? Effect.map(run(sql, params), rowTransform)
+          : run(sql, params);
       },
       executeRaw(sql, params) {
         return run(sql, params, true);
@@ -1051,7 +1152,7 @@ const make = Effect.fn("makeWithDatabase")(function* (
       },
       executeValuesUnprepared(sql, params) {
         return Effect.flatMap(prepare(sql), (statement) =>
-          runStatement(statement, params ?? [], "values"),
+          runStatement(statement, params ?? [], 'values'),
         );
       },
       executeUnprepared(sql, params, rowTransform) {
@@ -1069,27 +1170,34 @@ const make = Effect.fn("makeWithDatabase")(function* (
   const semaphore = yield* Semaphore.make(1);
   const connection = yield* makeConnection;
   const acquireReader =
-    options.readerWorker && isFileDatabase ? yield* makeReader(options) : undefined;
+    options.readerWorker && isFileDatabase
+      ? yield* makeReader(options)
+      : undefined;
   const readerSemaphore = yield* Semaphore.make(1);
 
-  const writer = { name: "writer" as const, lock: semaphore, connection };
+  const writer = { name: 'writer' as const, lock: semaphore, connection };
   const route = Effect.withFiber((fiber) =>
     acquireReader !== undefined && Context.get(fiber.context, ReadOnly)
       ? Effect.map(acquireReader, (readerConnection) =>
           readerConnection === undefined
             ? writer
-            : { name: "reader" as const, lock: readerSemaphore, connection: readerConnection },
+            : {
+                name: 'reader' as const,
+                lock: readerSemaphore,
+                connection: readerConnection,
+              },
         )
       : Effect.succeed(writer),
   );
 
   const acquired = (
-    target: { readonly name: Acquired["connection"] },
+    target: { readonly name: Acquired['connection'] },
     clock: Clock.Clock,
     start: bigint,
   ): Acquired => ({
     connection: target.name,
-    lockWaitMs: Number((clock.monotonicTimeNanosUnsafe() - start) / 1000n) / 1000,
+    lockWaitMs:
+      Number((clock.monotonicTimeNanosUnsafe() - start) / 1000n) / 1000,
   });
 
   const writerBorrowBatchSize = 16;
@@ -1108,7 +1216,7 @@ const make = Effect.fn("makeWithDatabase")(function* (
           }
           return use(target.connection);
         });
-        if (!options.checkpointWorker || target.name !== "writer") {
+        if (!options.checkpointWorker || target.name !== 'writer') {
           return target.lock.withPermits(1)(useConnection);
         }
         const writerUse = Effect.onExit(useConnection, (exit) =>
@@ -1118,23 +1226,28 @@ const make = Effect.fn("makeWithDatabase")(function* (
               : Math.min(writerBorrowsSinceYield + 1, writerBorrowBatchSize);
           }),
         );
-        return Effect.flatMap(target.lock.withPermitsIfAvailable(1)(writerUse), (result) =>
-          Option.isSome(result)
-            ? Effect.succeed(result.value)
-            : target.lock.withPermits(1)(
-                Effect.andThen(
-                  // Failed SQL also consumes the batch; cancellation hands off immediately.
-                  Effect.suspend(() => {
-                    if (writerBorrowsSinceYield < writerBorrowBatchSize) return Effect.void;
-                    writerBorrowsSinceYield = 0;
-                    return Effect.callback<void>((resume) => {
-                      const immediate = setImmediate(() => resume(Effect.void));
-                      return Effect.sync(() => clearImmediate(immediate));
-                    });
-                  }),
-                  writerUse,
+        return Effect.flatMap(
+          target.lock.withPermitsIfAvailable(1)(writerUse),
+          (result) =>
+            Option.isSome(result)
+              ? Effect.succeed(result.value)
+              : target.lock.withPermits(1)(
+                  Effect.andThen(
+                    // Failed SQL also consumes the batch; cancellation hands off immediately.
+                    Effect.suspend(() => {
+                      if (writerBorrowsSinceYield < writerBorrowBatchSize)
+                        return Effect.void;
+                      writerBorrowsSinceYield = 0;
+                      return Effect.callback<void>((resume) => {
+                        const immediate = setImmediate(() =>
+                          resume(Effect.void),
+                        );
+                        return Effect.sync(() => clearImmediate(immediate));
+                      });
+                    }),
+                    writerUse,
+                  ),
                 ),
-              ),
         );
       }),
     );
@@ -1145,10 +1258,14 @@ const make = Effect.fn("makeWithDatabase")(function* (
       const clock = fiber.getRef(Clock.Clock);
       const start = clock.monotonicTimeNanosUnsafe();
       const pending = fiber.getRef(TransactionAcquire);
-      const acquire = Effect.tap((pending?.restore ?? restore)(target.lock.take(1)), () => {
-        if (pending !== undefined) pending.acquired = acquired(target, clock, start);
-        return Scope.addFinalizer(scope, target.lock.release(1));
-      });
+      const acquire = Effect.tap(
+        (pending?.restore ?? restore)(target.lock.take(1)),
+        () => {
+          if (pending !== undefined)
+            pending.acquired = acquired(target, clock, start);
+          return Scope.addFinalizer(scope, target.lock.release(1));
+        },
+      );
       return Effect.as(
         // A scheduler yield after taking the permit must not precede its release finalizer.
         Effect.provideService(acquire, Scheduler.PreventSchedulerYield, true),
@@ -1165,10 +1282,10 @@ const make = Effect.fn("makeWithDatabase")(function* (
     // A deferred BEGIN only takes the write lock at the first write. If another
     // process commits after this transaction's first read, that write fails at
     // once with SQLITE_BUSY_SNAPSHOT, which busy_timeout cannot wait out.
-    beginTransaction: options.readonly === true ? "BEGIN" : "BEGIN IMMEDIATE",
+    beginTransaction: options.readonly === true ? 'BEGIN' : 'BEGIN IMMEDIATE',
     spanAttributes: [
       ...(options.spanAttributes ? Object.entries(options.spanAttributes) : []),
-      [ATTR_DB_SYSTEM_NAME, "sqlite"],
+      [ATTR_DB_SYSTEM_NAME, 'sqlite'],
     ],
     transformRows,
   });
@@ -1177,7 +1294,10 @@ const make = Effect.fn("makeWithDatabase")(function* (
     withTransaction: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       Effect.uninterruptibleMask((restore) => {
         // SqlClient masks setup; acquisition must preserve the caller's interruptibility.
-        const pending: { acquired?: Acquired; restore: typeof Effect.interruptible | undefined } = {
+        const pending: {
+          acquired?: Acquired;
+          restore: typeof Effect.interruptible | undefined;
+        } = {
           restore,
         };
         const body = Effect.withFiber<A, E, R>((fiber) => {
@@ -1186,11 +1306,17 @@ const make = Effect.fn("makeWithDatabase")(function* (
           return effect;
         });
         return restore(
-          withTransaction(body).pipe(Effect.provideService(TransactionAcquire, pending)),
+          withTransaction(body).pipe(
+            Effect.provideService(TransactionAcquire, pending),
+          ),
         );
       }),
   });
 });
 
-export const layer = (config: SqliteClientConfig): Layer.Layer<Client.SqlClient, SqlError> =>
-  Layer.effect(Client.SqlClient, make(config)).pipe(Layer.provide(Reactivity.layer));
+export const layer = (
+  config: SqliteClientConfig,
+): Layer.Layer<Client.SqlClient, SqlError> =>
+  Layer.effect(Client.SqlClient, make(config)).pipe(
+    Layer.provide(Reactivity.layer),
+  );

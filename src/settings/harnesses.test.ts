@@ -6,15 +6,30 @@ import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
 
 test('every harness gets defaults and a default account from the registry', () => {
   for (const id of HARNESS_IDS) {
-    assert.deepEqual(DEFAULT_SETTINGS.harnesses[id], { path: '', model: HARNESSES[id].defaultModel, secondOpinionModel: '' });
-    assert.ok(DEFAULT_ACCOUNTS.some((a) => a.provider === id && a.configDir === null));
+    assert.deepEqual(DEFAULT_SETTINGS.harnesses[id], {
+      path: '',
+      model: HARNESSES[id].defaultModel,
+      secondOpinionModel: '',
+    });
+    assert.ok(
+      DEFAULT_ACCOUNTS.some((a) => a.provider === id && a.configDir === null),
+    );
   }
 });
 
 test('a patch merges per harness field and keeps everything else', () => {
-  const next = mergeSettings(DEFAULT_SETTINGS, { harnesses: { claude: { path: '/opt/claude' } } });
-  assert.deepEqual(next.harnesses.claude, { path: '/opt/claude', model: '', secondOpinionModel: '' });
+  const next = mergeSettings(DEFAULT_SETTINGS, {
+    harnesses: { claude: { path: '/opt/claude' } },
+  });
+  assert.deepEqual(next.harnesses.claude, {
+    path: '/opt/claude',
+    model: '',
+    secondOpinionModel: '',
+  });
   assert.deepEqual(next.harnesses.codex, DEFAULT_SETTINGS.harnesses.codex);
   assert.equal(next.concurrency, 6);
-  assert.equal(mergeSettings(next, { concurrency: 3 }).harnesses.claude.path, '/opt/claude');
+  assert.equal(
+    mergeSettings(next, { concurrency: 3 }).harnesses.claude.path,
+    '/opt/claude',
+  );
 });

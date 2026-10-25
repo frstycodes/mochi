@@ -1,5 +1,18 @@
 import { useTheme } from 'next-themes';
-import { ChevronDown, Login, Logout, Monitor, Moon, Pause, Play, Refresh, Settings, Sun, UserCircle, UserEdit } from '@/icons';
+import {
+  ChevronDown,
+  Login,
+  Logout,
+  Monitor,
+  Moon,
+  Pause,
+  Play,
+  Refresh,
+  Settings,
+  Sun,
+  UserCircle,
+  UserEdit,
+} from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,10 +48,21 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={`${name ?? 'Account'}: account, settings and theme`} className="h-7 max-w-36 min-w-0 gap-1.5 rounded-lg px-1.5 font-normal text-muted-foreground hover:text-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={`${name ?? 'Account'}: account, settings and theme`}
+          className="h-7 max-w-36 min-w-0 gap-1.5 rounded-lg px-1.5 font-normal text-muted-foreground hover:text-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-foreground"
+        >
           <Avatar className="size-5">
             {!!user?.imageUrl && <AvatarImage src={user.imageUrl} alt="" />}
-            <AvatarFallback className="text-[0.625rem] font-semibold">{name ? name[0].toUpperCase() : <UserCircle className="size-3.5" />}</AvatarFallback>
+            <AvatarFallback className="text-[0.625rem] font-semibold">
+              {name ? (
+                name[0].toUpperCase()
+              ) : (
+                <UserCircle className="size-3.5" />
+              )}
+            </AvatarFallback>
           </Avatar>
           <span className="truncate">{name ?? 'Account'}</span>
           <ChevronDown data-icon="inline-end" />
@@ -58,7 +82,9 @@ export function UserMenu() {
             <DropdownMenuGroup>
               <DropdownMenuLabel>Prototype</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
-                <IconSwap id={isPaused ? 'play' : 'pause'}>{isPaused ? <Play /> : <Pause />}</IconSwap>
+                <IconSwap id={isPaused ? 'play' : 'pause'}>
+                  {isPaused ? <Play /> : <Pause />}
+                </IconSwap>
                 {isPaused ? 'Resume simulation' : 'Pause simulation'}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
@@ -69,14 +95,22 @@ export function UserMenu() {
           </>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="font-normal text-subtle-foreground">Hold Option, or long-press, for Orbit</DropdownMenuLabel>
+        <DropdownMenuLabel className="font-normal text-subtle-foreground">
+          Hold Option, or long-press, for Orbit
+        </DropdownMenuLabel>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
 /** Your Mochi account: sign in, or who you're signed in as with Clerk's Account Portal and Sign out. Nothing where sign-in isn't set up (web, builds without a Clerk app). */
-function AccountItems({ account, signIn, cancelSignIn, signOut, openAccountPortal }: ReturnType<typeof useMochiAccount>) {
+function AccountItems({
+  account,
+  signIn,
+  cancelSignIn,
+  signOut,
+  openAccountPortal,
+}: ReturnType<typeof useMochiAccount>) {
   if (!account || account.status === 'unconfigured') return null;
   return (
     <>
@@ -93,12 +127,17 @@ function AccountItems({ account, signIn, cancelSignIn, signOut, openAccountPorta
             <Spinner className="size-3.5" />
             Finish signing in in your browser
           </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => void cancelSignIn()}>Cancel sign-in</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void cancelSignIn()}>
+            Cancel sign-in
+          </DropdownMenuItem>
         </>
       )}
       {account.status === 'signed-in' && !!account.user && (
         <>
-          <SignedInLabel user={account.user} isPersistent={account.isPersistent} />
+          <SignedInLabel
+            user={account.user}
+            isPersistent={account.isPersistent}
+          />
           <DropdownMenuItem onSelect={() => void openAccountPortal()}>
             <UserEdit />
             Manage account
@@ -114,18 +153,34 @@ function AccountItems({ account, signIn, cancelSignIn, signOut, openAccountPorta
   );
 }
 
-function SignedInLabel({ user, isPersistent }: { user: MochiUser; isPersistent: boolean }) {
+function SignedInLabel({
+  user,
+  isPersistent,
+}: {
+  user: MochiUser;
+  isPersistent: boolean;
+}) {
   const shown = user.name ?? user.email ?? 'Signed in';
   return (
     <DropdownMenuLabel className="flex min-w-0 items-center gap-2 font-normal">
       <Avatar className="size-7">
         {!!user.imageUrl && <AvatarImage src={user.imageUrl} alt="" />}
-        <AvatarFallback className="type-caption">{shown[0].toUpperCase()}</AvatarFallback>
+        <AvatarFallback className="type-caption">
+          {shown[0].toUpperCase()}
+        </AvatarFallback>
       </Avatar>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-foreground">{shown}</span>
-        {!!user.email && user.email !== shown && <span className="truncate type-caption text-subtle-foreground">{user.email}</span>}
-        {!isPersistent && <span className="type-caption text-subtle-foreground">Signed in until Mochi quits</span>}
+        {!!user.email && user.email !== shown && (
+          <span className="truncate type-caption text-subtle-foreground">
+            {user.email}
+          </span>
+        )}
+        {!isPersistent && (
+          <span className="type-caption text-subtle-foreground">
+            Signed in until Mochi quits
+          </span>
+        )}
       </span>
     </DropdownMenuLabel>
   );
@@ -154,7 +209,11 @@ function ThemeSubmenu() {
       <DropdownMenuSubContent>
         <DropdownMenuRadioGroup value={current.value} onValueChange={setTheme}>
           {THEMES.map(({ value, label, Icon }) => (
-            <DropdownMenuRadioItem key={value} value={value} onSelect={(e) => e.preventDefault()}>
+            <DropdownMenuRadioItem
+              key={value}
+              value={value}
+              onSelect={(e) => e.preventDefault()}
+            >
               <Icon />
               {label}
             </DropdownMenuRadioItem>

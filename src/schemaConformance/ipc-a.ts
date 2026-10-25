@@ -17,7 +17,11 @@ import type * as Notify from '../host/types/notify.ts';
 import type * as Ports from '../host/types/ports.ts';
 import type * as Pty from '../host/types/pty.ts';
 import type { RefState, GithubRef } from '../chat/refs.ts';
-import type { LibraryEntry, PluginReview, SkillDestination } from '../library/library.ts';
+import type {
+  LibraryEntry,
+  PluginReview,
+  SkillDestination,
+} from '../library/library.ts';
 import type { ConnectorSettings } from '../library/connectorTools.ts';
 import type { SetupResult, SetupTarget } from '../library/recipes.ts';
 import type { QuietHours } from '../notify/model.ts';

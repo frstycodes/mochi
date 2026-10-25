@@ -16,7 +16,14 @@ const Strings = Schema.Array(S);
 // {PINS}
 
 /** A pinned message, or a passage inside one (`src/chat/pins.ts`); empty `text` pins the whole message. */
-export const Pin = versioned(1, Schema.Struct({ id: S, index: Int.check(Schema.isGreaterThanOrEqualTo(0)), text: S }));
+export const Pin = versioned(
+  1,
+  Schema.Struct({
+    id: S,
+    index: Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    text: S,
+  }),
+);
 
 /** `harness.pins.v1`: each thread's pins, by thread id. */
 export const Pins = Schema.Record(S, Schema.Array(Pin));
@@ -25,7 +32,13 @@ export type Pins = typeof Pins.Type;
 // {PROFILES}
 
 /** A profile as `isProfile` accepts it: its id names folders and the browser session, so lowercase letters, digits and dashes. */
-export const Profile = versioned(1, Space.mapFields((fields) => ({ ...fields, id: S.check(Schema.isPattern(/^[a-z0-9-]+$/)) })));
+export const Profile = versioned(
+  1,
+  Space.mapFields((fields) => ({
+    ...fields,
+    id: S.check(Schema.isPattern(/^[a-z0-9-]+$/)),
+  })),
+);
 
 /**
  * `mochi.profiles.v1`. GAP: `parseProfiles` keeps the valid entries and the first `MAX_PROFILES` (9) of them; this refuses
@@ -37,19 +50,38 @@ export type Profiles = typeof Profiles.Type;
 // {THEMES}
 
 /** `mochi.themes.v1`, the web build's installed and custom themes (`src/host/web/themes.ts`); custom is file name → JSON text. */
-export const StoredThemes = versioned(1, Schema.Struct({ installed: Schema.Array(ColorTheme), custom: Schema.Record(S, S) }));
+export const StoredThemes = versioned(
+  1,
+  Schema.Struct({
+    installed: Schema.Array(ColorTheme),
+    custom: Schema.Record(S, S),
+  }),
+);
 export type StoredThemes = typeof StoredThemes.Type;
 
 // {PROJECTS}
 
 /** A project row in main's `projects.json` (`StoredProject`, electron/projects/registry.ts); unset `iconMode` predates icons and reads as `auto`. */
-export const StoredProject = versioned(1, Schema.Struct({ id: S, name: S, path: S, origin: Schema.NullOr(S), addedAt: Schema.Number, iconMode: key(ProjectIconMode) }));
+export const StoredProject = versioned(
+  1,
+  Schema.Struct({
+    id: S,
+    name: S,
+    path: S,
+    origin: Schema.NullOr(S),
+    addedAt: Schema.Number,
+    iconMode: key(ProjectIconMode),
+  }),
+);
 export type StoredProject = typeof StoredProject.Type;
 
 /** `projects.json`: every profile's projects. The file already carries its own `version: 1`. */
 export const ProjectRegistryFile = Schema.Struct({
   version: Schema.Literal(1),
-  spaces: Schema.Record(S, Schema.Struct({ projects: Schema.Array(StoredProject), isMigrated: B })),
+  spaces: Schema.Record(
+    S,
+    Schema.Struct({ projects: Schema.Array(StoredProject), isMigrated: B }),
+  ),
 });
 export type ProjectRegistryFile = typeof ProjectRegistryFile.Type;
 
@@ -120,27 +152,72 @@ const prefsFields = {
 export const Prefs = Schema.Struct(prefsFields);
 export type Prefs = typeof Prefs.Type;
 
-const optionalPrefs = Schema.Struct(Object.fromEntries(Object.entries(prefsFields).map(([k, field]) => [k, key(field)])) as { [K in keyof typeof prefsFields]: Schema.optionalKey<(typeof prefsFields)[K]> });
+const optionalPrefs = Schema.Struct(
+  Object.fromEntries(
+    Object.entries(prefsFields).map(([k, field]) => [k, key(field)]),
+  ) as {
+    [K in keyof typeof prefsFields]: Schema.optionalKey<
+      (typeof prefsFields)[K]
+    >;
+  },
+);
 
 /** v1: `mochi.prefs.v1` with `v`. Any subset: the renderer merges it over `DEFAULT_PREFS`, so a pref added later needs no migration. */
-export const StoredPrefsV1 = optionalPrefs.pipe(Schema.fieldsAssign({ v: Schema.Literal(1) }));
+export const StoredPrefsV1 = optionalPrefs.pipe(
+  Schema.fieldsAssign({ v: Schema.Literal(1) }),
+);
 
-const RENAMED_ACCESS: Record<string, string> = { 'Ask first': 'Manual', 'Auto edit': 'Auto' };
+const RENAMED_ACCESS: Record<string, string> = {
+  'Ask first': 'Manual',
+  'Auto edit': 'Auto',
+};
 
 /**
  * Before `v`, as `parsePrefs` read it: a value of the wrong type is dropped, not fatal; `goals` (retired) and the old empty
  * `branchPrefix` default are dropped; `permissions` take today's names, any other or `Plan` reading as `Auto`.
  */
 const UnversionedPrefs = Schema.Record(S, Schema.Unknown)
-  .check(Schema.makeFilter((saved) => !('v' in saved) || 'an unversioned prefs row has no v'))
-  .pipe(Schema.decodeTo(Schema.Record(S, Schema.Unknown), SchemaTransformation.transform({ decode: upgradePrefs, encode: (prefs) => prefs })));
+  .check(
+    Schema.makeFilter(
+      (saved) => !('v' in saved) || 'an unversioned prefs row has no v',
+    ),
+  )
+  .pipe(
+    Schema.decodeTo(
+      Schema.Record(S, Schema.Unknown),
+      SchemaTransformation.transform({
+        decode: upgradePrefs,
+        encode: (prefs) => prefs,
+      }),
+    ),
+  );
 
-export const StoredPrefs = Schema.Union([StoredPrefsV1, upgrade(UnversionedPrefs, StoredPrefsV1, (prefs) => ({ ...(prefs as typeof optionalPrefs.Encoded), v: 1 as const }), ({ v: _, ...prefs }) => prefs)]);
+export const StoredPrefs = Schema.Union([
+  StoredPrefsV1,
+  upgrade(
+    UnversionedPrefs,
+    StoredPrefsV1,
+    (prefs) => ({ ...(prefs as typeof optionalPrefs.Encoded), v: 1 as const }),
+    ({ v: _, ...prefs }) => prefs,
+  ),
+]);
 export type StoredPrefs = typeof StoredPrefs.Type;
 
 function upgradePrefs(saved: Record<string, unknown>) {
   const { goals: _, ...rest } = saved;
   if (rest.branchPrefix === '') delete rest.branchPrefix;
-  if (typeof rest.permissions === 'string') rest.permissions = SharedAccess.literals.find((a) => a === (RENAMED_ACCESS[rest.permissions as string] ?? rest.permissions)) ?? 'Auto';
-  return Object.fromEntries(Object.entries(rest).filter(([k, value]) => k in prefsFields && Schema.is(prefsFields[k as keyof typeof prefsFields])(value)));
+  if (typeof rest.permissions === 'string')
+    rest.permissions =
+      SharedAccess.literals.find(
+        (a) =>
+          a ===
+          (RENAMED_ACCESS[rest.permissions as string] ?? rest.permissions),
+      ) ?? 'Auto';
+  return Object.fromEntries(
+    Object.entries(rest).filter(
+      ([k, value]) =>
+        k in prefsFields &&
+        Schema.is(prefsFields[k as keyof typeof prefsFields])(value),
+    ),
+  );
 }

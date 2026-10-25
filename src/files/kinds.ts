@@ -10,7 +10,11 @@ export const PREVIEW_KINDS = {
 export type PreviewKind = keyof typeof PREVIEW_KINDS;
 
 export function previewKind(path: string) {
-  return (Object.keys(PREVIEW_KINDS) as PreviewKind[]).find((kind) => PREVIEW_KINDS[kind].test(path)) ?? null;
+  return (
+    (Object.keys(PREVIEW_KINDS) as PreviewKind[]).find((kind) =>
+      PREVIEW_KINDS[kind].test(path),
+    ) ?? null
+  );
 }
 
 // Attachments can arrive without a telling extension (pasted files, `blob` names); the media type fills in.
@@ -25,7 +29,11 @@ const MEDIA_KINDS: Record<string, PreviewKind | undefined> = {
 
 export function fileKind(name: string, mediaType?: string) {
   if (!mediaType) return previewKind(name);
-  return previewKind(name) ?? MEDIA_KINDS[mediaType] ?? (mediaType.startsWith('image/') ? 'image' : null);
+  return (
+    previewKind(name) ??
+    MEDIA_KINDS[mediaType] ??
+    (mediaType.startsWith('image/') ? 'image' : null)
+  );
 }
 
 // Past this, CodeMirror and the markdown and table renderers get slow enough to freeze the window.
@@ -34,19 +42,27 @@ export const MAX_TEXT_PREVIEW = 2_000_000;
 export type ViewerBody = PreviewKind | 'code' | 'none';
 
 /** What the file viewer shows for a loaded file: a preview, read-only highlighted source, or the can't-preview state. */
-export function viewerBody(kind: PreviewKind | null, content: { kind: 'text'; text: string } | { kind: 'binary' }): ViewerBody {
-  if (content.kind === 'binary') return kind === 'image' || kind === 'pdf' ? kind : 'none';
+export function viewerBody(
+  kind: PreviewKind | null,
+  content: { kind: 'text'; text: string } | { kind: 'binary' },
+): ViewerBody {
+  if (content.kind === 'binary')
+    return kind === 'image' || kind === 'pdf' ? kind : 'none';
   if (content.text.length > MAX_TEXT_PREVIEW) return 'none';
   return kind ?? 'code';
 }
 
 /** Preview kinds whose source is readable text, so the viewer offers a preview/source toggle. */
 export function hasTextSource(body: ViewerBody) {
-  return body === 'markdown' || body === 'json' || body === 'csv' || body === 'svg';
+  return (
+    body === 'markdown' || body === 'json' || body === 'csv' || body === 'svg'
+  );
 }
 
-const PATH = /^(?:\.{0,2}\/)?(?:[\w@.-]+\/)*[\w@-][\w@.-]*\.[A-Za-z0-9]+(?::\d+){0,2}$/;
-const KNOWN_EXTENSION = /\.(tsx?|jsx?|mjs|cjs|json|jsonc|md|mdx|css|scss|html?|py|rs|go|ya?ml|toml|sh|csv|tsv|txt|pdf|svg|png|jpe?g|gif|webp|lock)$/i;
+const PATH =
+  /^(?:\.{0,2}\/)?(?:[\w@.-]+\/)*[\w@-][\w@.-]*\.[A-Za-z0-9]+(?::\d+){0,2}$/;
+const KNOWN_EXTENSION =
+  /\.(tsx?|jsx?|mjs|cjs|json|jsonc|md|mdx|css|scss|html?|py|rs|go|ya?ml|toml|sh|csv|tsv|txt|pdf|svg|png|jpe?g|gif|webp|lock)$/i;
 
 /** Inline code that names a file: `src/a.ts`, `src/a.ts:12`, `package.json`. A bare `name.ext` needs a known extension so `latitude.sid` stays code. */
 export function isFilePath(text: string) {
@@ -64,11 +80,11 @@ export function parseCsv(text: string, delimiter = ','): string[][] {
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     if (isQuoted) {
-      if (c === '"' && text[i + 1] === '"') (field += '"'), i++;
+      if (c === '"' && text[i + 1] === '"') ((field += '"'), i++);
       else if (c === '"') isQuoted = false;
       else field += c;
     } else if (c === '"' && field === '') isQuoted = true;
-    else if (c === delimiter) row.push(field), (field = '');
+    else if (c === delimiter) (row.push(field), (field = ''));
     else if (c === '\n' || c === '\r') {
       if (c === '\r' && text[i + 1] === '\n') i++;
       rows.push([...row, field]);
@@ -84,7 +100,11 @@ export function parseCsv(text: string, delimiter = ','): string[][] {
  * A path from chat (`./src/a.ts:12`, `/abs/root/src/a.ts`, `/src/a.ts`, `src/a.ts#L12`) → the viewer link `src/a.ts:12` when that file exists
  * in `files` (relative to `root`); null otherwise, so only real files become links.
  */
-export function worktreeLink(text: string, root: string, files: ReadonlySet<string>) {
+export function worktreeLink(
+  text: string,
+  root: string,
+  files: ReadonlySet<string>,
+) {
   const m = text.match(/^(.*?)(?::(\d+)(?::\d+)?|#L(\d+)(?:-L\d+)?)?$/)!;
   const line = m[2] ?? m[3];
   let path = m[1];

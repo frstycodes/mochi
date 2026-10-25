@@ -2,7 +2,15 @@ import { Effect } from 'effect';
 import { Migrator, SqlClient } from 'effect/sql';
 
 /** Tables holding one JSON document per key, each replacing one of the JSON files main used to write. */
-export const docTables = ['settings', 'projects', 'schedule', 'autofix', 'library', 'limits', 'window_bounds'] as const;
+export const docTables = [
+  'settings',
+  'projects',
+  'schedule',
+  'autofix',
+  'library',
+  'limits',
+  'window_bounds',
+] as const;
 export type DocTable = (typeof docTables)[number];
 
 // Shapes of `events`, `command_receipts` and `outbox` from T3 Code's `055_OrchestrationV2.ts` / `OrchestrationV2/Foundation.ts`.
@@ -59,7 +67,10 @@ const initial = Effect.gen(function* () {
   `;
   // The renderer's `SavedIndex` (src/store/saved.ts): one row.
   yield* sql`CREATE TABLE thread_index (id INTEGER PRIMARY KEY CHECK (id = 1), payload_json TEXT NOT NULL, updated_at TEXT NOT NULL)`;
-  for (const table of docTables) yield* sql.unsafe(`CREATE TABLE ${table} (key TEXT PRIMARY KEY, payload_json TEXT NOT NULL, updated_at TEXT NOT NULL)`);
+  for (const table of docTables)
+    yield* sql.unsafe(
+      `CREATE TABLE ${table} (key TEXT PRIMARY KEY, payload_json TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+    );
   yield* sql`CREATE TABLE imports (source TEXT PRIMARY KEY, status TEXT NOT NULL, detail TEXT, at TEXT NOT NULL)`;
 });
 
@@ -74,6 +85,15 @@ const snapshotSequence = Effect.gen(function* () {
 });
 
 // The reactor enqueues a command once per `command_id`, however often its rule emits it.
-const outboxCommandUnique = Effect.flatMap(SqlClient.SqlClient, (sql) => sql`CREATE UNIQUE INDEX outbox_command_idx ON outbox(command_id)`);
+const outboxCommandUnique = Effect.flatMap(
+  SqlClient.SqlClient,
+  (sql) => sql`CREATE UNIQUE INDEX outbox_command_idx ON outbox(command_id)`,
+);
 
-export const migrate = Migrator.make({})({ loader: Migrator.fromRecord({ '1_initial': initial, '2_outbox_command_unique': outboxCommandUnique, '3_snapshot_sequence': snapshotSequence }) });
+export const migrate = Migrator.make({})({
+  loader: Migrator.fromRecord({
+    '1_initial': initial,
+    '2_outbox_command_unique': outboxCommandUnique,
+    '3_snapshot_sequence': snapshotSequence,
+  }),
+});

@@ -2,7 +2,19 @@ import type { Pin, Pins } from '../chat/pins.ts';
 import { DEFAULT_PREFS, type Prefs } from '../settings/prefsDefaults.ts';
 
 /** The prefs the thread projection and Core's reactor rules read; the rest of `Prefs` is this window's own. */
-export type ProjectionPrefs = Pick<Prefs, 'goals' | 'driftGuard' | 'autofixPrs' | 'autoArchivePrs' | 'workspaceMode' | 'branchPrefix' | 'idleChecks' | 'simplifyAuto' | 'simplifyAutoWords' | 'whileWorking'>;
+export type ProjectionPrefs = Pick<
+  Prefs,
+  | 'goals'
+  | 'driftGuard'
+  | 'autofixPrs'
+  | 'autoArchivePrs'
+  | 'workspaceMode'
+  | 'branchPrefix'
+  | 'idleChecks'
+  | 'simplifyAuto'
+  | 'simplifyAutoWords'
+  | 'whileWorking'
+>;
 
 /**
  * What the projection reads besides the state and the event: your prefs and pins. Core keeps them in its settings store
@@ -14,7 +26,18 @@ export interface ProjectionContext {
   pins: Pins;
 }
 
-export const projectionPrefs = ({ goals, driftGuard, autofixPrs, autoArchivePrs, workspaceMode, branchPrefix, idleChecks, simplifyAuto, simplifyAutoWords, whileWorking }: ProjectionPrefs): ProjectionPrefs => ({
+export const projectionPrefs = ({
+  goals,
+  driftGuard,
+  autofixPrs,
+  autoArchivePrs,
+  workspaceMode,
+  branchPrefix,
+  idleChecks,
+  simplifyAuto,
+  simplifyAutoWords,
+  whileWorking,
+}: ProjectionPrefs): ProjectionPrefs => ({
   goals,
   driftGuard,
   autofixPrs,
@@ -27,7 +50,10 @@ export const projectionPrefs = ({ goals, driftGuard, autofixPrs, autoArchivePrs,
   whileWorking,
 });
 
-export const DEFAULT_CONTEXT: ProjectionContext = { prefs: projectionPrefs(DEFAULT_PREFS), pins: {} };
+export const DEFAULT_CONTEXT: ProjectionContext = {
+  prefs: projectionPrefs(DEFAULT_PREFS),
+  pins: {},
+};
 
 let ambientPrefs = (): ProjectionPrefs => DEFAULT_CONTEXT.prefs;
 let ambientPins = (): Pins => DEFAULT_CONTEXT.pins;
@@ -38,13 +64,18 @@ let scopedMs: number | undefined;
 export const prefsNow = () => scoped?.prefs ?? ambientPrefs();
 
 const EMPTY: Pin[] = [];
-export const pinsOf = (threadId: string) => (scoped?.pins ?? ambientPins())[threadId] ?? EMPTY;
+export const pinsOf = (threadId: string) =>
+  (scoped?.pins ?? ambientPins())[threadId] ?? EMPTY;
 
 /** Wall-clock ms for what a fold stamps (a task's start): when the event was logged, so every fold of it stamps the same. */
 export const wallNow = () => scopedMs ?? Date.now();
 
 /** Runs a fold with `context` in scope, and `ms` as its wall clock. */
-export function withContext<T>(context: ProjectionContext, run: () => T, ms?: number): T {
+export function withContext<T>(
+  context: ProjectionContext,
+  run: () => T,
+  ms?: number,
+): T {
   const outer = { scoped, scopedMs };
   scoped = context;
   scopedMs = ms;

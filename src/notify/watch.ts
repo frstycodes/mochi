@@ -35,12 +35,24 @@ export function ciStatus(checks: PrCheck[]): CiStatus | null {
 }
 
 /** A pass or fail is reported once, when it follows another state of the same PR; the first look at a PR only sets the baseline. */
-export function ciTransition(seen: CiSeen | undefined, pr: PrInfo): { seen: CiSeen | undefined; result?: CiResult } {
+export function ciTransition(
+  seen: CiSeen | undefined,
+  pr: PrInfo,
+): { seen: CiSeen | undefined; result?: CiResult } {
   const status = ciStatus(pr.checks);
   if (!status) return { seen };
   const next = { pr: pr.number, status };
-  if (seen?.pr !== pr.number || seen.status === status || status === 'pending') return { seen: next };
-  return { seen: next, result: { pr: pr.number, url: pr.url, status, failed: pr.checks.filter((c) => c.state === 'fail') } };
+  if (seen?.pr !== pr.number || seen.status === status || status === 'pending')
+    return { seen: next };
+  return {
+    seen: next,
+    result: {
+      pr: pr.number,
+      url: pr.url,
+      status,
+      failed: pr.checks.filter((c) => c.state === 'fail'),
+    },
+  };
 }
 
 /** "CI failed on #12: lint", "CI failed on #12: lint and 2 more", "CI passed on #12". */
@@ -53,11 +65,28 @@ export function ciTitle(result: Pick<CiResult, 'pr' | 'status' | 'failed'>) {
 /** A burst becomes one notification per thread (reasons stacked), or a single summary once more than two threads are in it. */
 export function coalesce(notices: OsNotice[]): OsNotice[] {
   const byThread = new Map<string, OsNotice[]>();
-  for (const n of notices) byThread.set(n.threadId, [...(byThread.get(n.threadId) ?? []), n]);
+  for (const n of notices)
+    byThread.set(n.threadId, [...(byThread.get(n.threadId) ?? []), n]);
   if (byThread.size > 2) {
     const titles = [...byThread.values()].map((list) => list[0].title);
-    return [{ threadId: '', kind: 'summary', title: `${byThread.size} threads need a look`, body: titles.join('\n') }];
+    return [
+      {
+        threadId: '',
+        kind: 'summary',
+        title: `${byThread.size} threads need a look`,
+        body: titles.join('\n'),
+      },
+    ];
   }
   // A merged notification can't say which of its approvals a button answers, so it drops them.
-  return [...byThread.values()].map((list) => (list.length === 1 ? list[0] : { threadId: list[0].threadId, kind: list[0].kind, title: list[0].title, body: list.map((n) => n.body).join('\n') }));
+  return [...byThread.values()].map((list) =>
+    list.length === 1
+      ? list[0]
+      : {
+          threadId: list[0].threadId,
+          kind: list[0].kind,
+          title: list[0].title,
+          body: list.map((n) => n.body).join('\n'),
+        },
+  );
 }

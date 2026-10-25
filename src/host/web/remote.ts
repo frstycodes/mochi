@@ -1,6 +1,21 @@
 import type { RemoteHost } from '../types/remote.ts';
 
-const OFF = { settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'This browser', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' as const }, isOnBattery: false };
+const OFF = {
+  settings: {
+    isEnabled: false,
+    allowsNetwork: false,
+    machineName: '',
+    reachesAnywhere: false,
+    keepsAwake: true,
+  },
+  hostName: 'This browser',
+  addresses: [],
+  devices: [],
+  members: [],
+  isRemoved: false,
+  relay: { status: 'off' as const },
+  isOnBattery: false,
+};
 
 // Devices control the desktop app; the web build has no server to reach.
 export const remote: RemoteHost = {

@@ -13,7 +13,8 @@ export function longThreadFromUrl(): Thread | undefined {
 export function longThread(count: number): Thread {
   const s = 600;
   const activity: ActivityEntry[] = [];
-  for (let i = 0; activity.length < count; i++) activity.push(...turn(i, s + i));
+  for (let i = 0; activity.length < count; i++)
+    activity.push(...turn(i, s + i));
   return {
     id: 'long',
     spaceId: 'latitude',
@@ -37,11 +38,36 @@ export function longThread(count: number): Thread {
 function turn(i: number, at: number): ActivityEntry[] {
   const file = `apps/api/module${i % 17}/handler${i}.ts`;
   return [
-    { at, who: 'you', kind: 'message', text: `Step ${i}: tighten the handler in \`${file}\` and keep the tests green.` },
-    { at, who: 'claude', kind: 'reasoning', seconds: 4, text: `The handler at ${file} reads the request twice; folding that into one parse keeps the hot path allocation free.` },
+    {
+      at,
+      who: 'you',
+      kind: 'message',
+      text: `Step ${i}: tighten the handler in \`${file}\` and keep the tests green.`,
+    },
+    {
+      at,
+      who: 'claude',
+      kind: 'reasoning',
+      seconds: 4,
+      text: `The handler at ${file} reads the request twice; folding that into one parse keeps the hot path allocation free.`,
+    },
     { at, who: 'claude', kind: 'tool', text: `Read ${file}` },
-    { at, who: 'claude', kind: 'tool', text: `Edit ${file}  +6 −3`, patch: patch(file, i) },
-    { at, who: 'claude', kind: 'tool', text: `Run pnpm --filter api test -- handler${i}`, description: `Run the handler ${i} tests`, output: `✓ handler${i} parses once (3 ms)\n✓ handler${i} rejects bad input (1 ms)\n\nTests: 2 passed`, exitCode: 0 },
+    {
+      at,
+      who: 'claude',
+      kind: 'tool',
+      text: `Edit ${file}  +6 −3`,
+      patch: patch(file, i),
+    },
+    {
+      at,
+      who: 'claude',
+      kind: 'tool',
+      text: `Run pnpm --filter api test -- handler${i}`,
+      description: `Run the handler ${i} tests`,
+      output: `✓ handler${i} parses once (3 ms)\n✓ handler${i} rejects bad input (1 ms)\n\nTests: 2 passed`,
+      exitCode: 0,
+    },
     { at, who: 'claude', kind: 'message', text: reply(i, file) },
   ];
 }

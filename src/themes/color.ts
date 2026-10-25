@@ -11,19 +11,33 @@ export function parseHex(value: unknown): Rgba | null {
   const hex = value.trim().replace(/^#/, '');
   if (!/^([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return null;
   const full = hex.length <= 4 ? hex.replace(/./g, '$&$&') : hex;
-  const channel = (i: number) => parseInt(full.slice(i * 2, i * 2 + 2), 16) / 255;
-  return { r: channel(0), g: channel(1), b: channel(2), a: full.length === 8 ? channel(3) : 1 };
+  const channel = (i: number) =>
+    parseInt(full.slice(i * 2, i * 2 + 2), 16) / 255;
+  return {
+    r: channel(0),
+    g: channel(1),
+    b: channel(2),
+    a: full.length === 8 ? channel(3) : 1,
+  };
 }
 
 export function toHex({ r, g, b, a }: Rgba) {
-  const byte = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0');
+  const byte = (v: number) =>
+    Math.round(Math.min(1, Math.max(0, v)) * 255)
+      .toString(16)
+      .padStart(2, '0');
   return `#${byte(r)}${byte(g)}${byte(b)}${a < 1 ? byte(a) : ''}`;
 }
 
 /** `top` painted over an opaque `bottom`. */
 export function over(top: Rgba, bottom: Rgba): Rgba {
   const mix = (t: number, b: number) => t * top.a + b * (1 - top.a);
-  return { r: mix(top.r, bottom.r), g: mix(top.g, bottom.g), b: mix(top.b, bottom.b), a: 1 };
+  return {
+    r: mix(top.r, bottom.r),
+    g: mix(top.g, bottom.g),
+    b: mix(top.b, bottom.b),
+    a: 1,
+  };
 }
 
 /** `amount` of `b` into `a`, per channel; alpha kept from `a`. */
@@ -34,8 +48,10 @@ export function mix(a: Rgba, b: Rgba, amount: number): Rgba {
 
 export const withAlpha = (c: Rgba, a: number): Rgba => ({ ...c, a });
 
-const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-const gamma = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
+const linear = (v: number) =>
+  v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+const gamma = (v: number) =>
+  v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055;
 
 /** WCAG 2 relative luminance of an opaque color. */
 export function luminance({ r, g, b }: Rgba) {
@@ -60,9 +76,15 @@ interface Oklch {
 
 function toOklch({ r, g, b }: Rgba): Oklch {
   const [lr, lg, lb] = [linear(r), linear(g), linear(b)];
-  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
-  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
-  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  const l = Math.cbrt(
+    0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb,
+  );
+  const m = Math.cbrt(
+    0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb,
+  );
+  const s = Math.cbrt(
+    0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb,
+  );
   const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
   const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
   const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
@@ -87,7 +109,10 @@ function fromOklch({ l: L, c, h }: Oklch, a: number): Rgba {
 
 /** The color with its OKLab lightness set to `l`, hue and chroma kept. */
 export function withLightness(color: Rgba, l: number): Rgba {
-  return fromOklch({ ...toOklch(color), l: Math.min(1, Math.max(0, l)) }, color.a);
+  return fromOklch(
+    { ...toOklch(color), l: Math.min(1, Math.max(0, l)) },
+    color.a,
+  );
 }
 
 export const AA = 4.5;
@@ -97,9 +122,11 @@ export const AA = 4.5;
  * already passes comes back unchanged. Surfaces are opaque; translucent text is judged painted over each one.
  */
 export function nudge(text: Rgba, surfaces: Rgba[], ratio = AA): Rgba {
-  const worst = (c: Rgba) => Math.min(...surfaces.map((s) => contrast(c.a < 1 ? over(c, s) : c, s)));
+  const worst = (c: Rgba) =>
+    Math.min(...surfaces.map((s) => contrast(c.a < 1 ? over(c, s) : c, s)));
   if (worst(text) >= ratio) return text;
-  const meanSurface = surfaces.reduce((sum, s) => sum + luminance(s), 0) / surfaces.length;
+  const meanSurface =
+    surfaces.reduce((sum, s) => sum + luminance(s), 0) / surfaces.length;
   // Text goes lighter on dark surfaces, darker on light ones: toward whichever end has more room.
   const direction = meanSurface < 0.18 ? 1 : -1;
   const solid = { ...text, a: 1 };

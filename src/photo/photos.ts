@@ -23,7 +23,10 @@ export const usePhotoRequest = store.use;
 export function openFromScope(img: HTMLImageElement) {
   const scope = img.closest('[data-photo-scope]') ?? document;
   const imgs = [...scope.querySelectorAll<HTMLImageElement>('img[data-photo]')];
-  const photos = imgs.map((el) => ({ src: el.currentSrc || el.src, name: el.alt || 'Image' }));
+  const photos = imgs.map((el) => ({
+    src: el.currentSrc || el.src,
+    name: el.alt || 'Image',
+  }));
   openPhotos({ photos, index: Math.max(0, imgs.indexOf(img)) });
 }
 
@@ -54,14 +57,26 @@ async function toPng(src: string) {
   img.crossOrigin = 'anonymous';
   img.src = src;
   await img.decode();
-  const canvas = Object.assign(document.createElement('canvas'), { width: img.naturalWidth, height: img.naturalHeight });
+  const canvas = Object.assign(document.createElement('canvas'), {
+    width: img.naturalWidth,
+    height: img.naturalHeight,
+  });
   canvas.getContext('2d')!.drawImage(img, 0, 0);
-  return new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode PNG'))), 'image/png'));
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('Could not encode PNG'))),
+      'image/png',
+    ),
+  );
 }
 
 export function imageFileName(name: string | undefined, type: string) {
   const ext = type.split('/')[1]?.replace('svg+xml', 'svg') || 'png';
   const stem = (name ?? '').replace(/\.[a-z0-9]+$/i, '');
-  const base = stem.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'image';
+  const base =
+    stem
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'image';
   return `${base}.${ext}`;
 }

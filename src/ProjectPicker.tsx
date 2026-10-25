@@ -2,8 +2,21 @@ import { useState, type KeyboardEvent } from 'react';
 import { Chat, Check, ChevronDown, Folder, FolderPlus } from '@/icons';
 import type { Project } from './host/types/projects';
 import { ProjectIcon } from './ProjectIcon';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import type { FollowedMachine } from './host/types/remote';
 import { MetaChip } from './MetaChip';
 import { AddProject, type AddedProject } from './AddProject';
@@ -25,7 +38,19 @@ export interface PickerProject {
  * Where a new thread runs: one of the chosen computer's projects, or no folder at all, with Add project… at the bottom.
  * `machine` is another computer the list and Add project belong to; unset, this one.
  */
-export function ProjectPicker({ value, projects, machine, onChange, onAdded }: { value: string | null; projects: PickerProject[]; machine?: FollowedMachine; onChange: (project: string | null) => void; onAdded?: () => void }) {
+export function ProjectPicker({
+  value,
+  projects,
+  machine,
+  onChange,
+  onAdded,
+}: {
+  value: string | null;
+  projects: PickerProject[];
+  machine?: FollowedMachine;
+  onChange: (project: string | null) => void;
+  onAdded?: () => void;
+}) {
   const spaceId = useHarnessSelector((s) => s.spaceId);
   const [isOpen, setOpen] = useState(false);
   const chosen = projects.find((p) => p.ref === value);
@@ -47,30 +72,82 @@ export function ProjectPicker({ value, projects, machine, onChange, onAdded }: {
       <PopoverTrigger asChild>
         <MetaChip aria-label={`Project: ${name ?? 'No project'}`}>
           {!value && <Chat />}
-          {!!value && (chosen?.icon ? <ProjectIcon name={chosen.name} icon={chosen.icon} /> : <Folder />)}
+          {!!value &&
+            (chosen?.icon ? (
+              <ProjectIcon name={chosen.name} icon={chosen.icon} />
+            ) : (
+              <Folder />
+            ))}
           <span className="truncate">{name ?? 'No project'}</span>
           <ChevronDown data-icon="inline-end" />
         </MetaChip>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-0">
-        <ProjectChooser value={value} projects={projects} machine={machine} onChoose={choose} onAdded={onAdded} />
+        <ProjectChooser
+          value={value}
+          projects={projects}
+          machine={machine}
+          onChoose={choose}
+          onAdded={onAdded}
+        />
       </PopoverContent>
     </Popover>
   );
 }
 
 /** The searchable list with Add project… in place: the picker's popover, and the new-thread page's first step. */
-export function ProjectChooser({ value, projects, machine, placeholder = 'Search projects', onChoose, onAdded }: { value: string | null; projects: PickerProject[]; machine?: FollowedMachine; placeholder?: string; onChoose: (project: string | null) => void; onAdded?: () => void }) {
+export function ProjectChooser({
+  value,
+  projects,
+  machine,
+  placeholder = 'Search projects',
+  onChoose,
+  onAdded,
+}: {
+  value: string | null;
+  projects: PickerProject[];
+  machine?: FollowedMachine;
+  placeholder?: string;
+  onChoose: (project: string | null) => void;
+  onAdded?: () => void;
+}) {
   const [isAdding, setAdding] = useState(false);
   const added = (project: AddedProject) => {
     onAdded?.();
     onChoose(project.ref);
   };
-  if (isAdding) return <AddProject machine={machine} onBack={() => setAdding(false)} onAdded={added} />;
-  return <ProjectList projects={projects} value={value} placeholder={placeholder} onChoose={onChoose} onAdd={() => setAdding(true)} />;
+  if (isAdding)
+    return (
+      <AddProject
+        machine={machine}
+        onBack={() => setAdding(false)}
+        onAdded={added}
+      />
+    );
+  return (
+    <ProjectList
+      projects={projects}
+      value={value}
+      placeholder={placeholder}
+      onChoose={onChoose}
+      onAdd={() => setAdding(true)}
+    />
+  );
 }
 
-function ProjectList({ projects, value, placeholder, onChoose, onAdd }: { projects: PickerProject[]; value: string | null; placeholder: string; onChoose: (project: string | null) => void; onAdd: () => void }) {
+function ProjectList({
+  projects,
+  value,
+  placeholder,
+  onChoose,
+  onAdd,
+}: {
+  projects: PickerProject[];
+  value: string | null;
+  placeholder: string;
+  onChoose: (project: string | null) => void;
+  onAdd: () => void;
+}) {
   // Runs before the window's pinned-thread listener, which skips events already prevented.
   const chooseByNumber = (e: KeyboardEvent) => {
     if (!isMod(e) || e.shiftKey || e.altKey || !/^[1-9]$/.test(e.key)) return;
@@ -89,11 +166,28 @@ function ProjectList({ projects, value, placeholder, onChoose, onAdd }: { projec
           <>
             <CommandGroup heading="Projects">
               {projects.map((p, i) => (
-                <CommandItem key={p.ref} value={p.ref} keywords={[p.name]} disabled={p.isMissing} data-checked={p.ref === value} onSelect={() => onChoose(p.ref)}>
+                <CommandItem
+                  key={p.ref}
+                  value={p.ref}
+                  keywords={[p.name]}
+                  disabled={p.isMissing}
+                  data-checked={p.ref === value}
+                  onSelect={() => onChoose(p.ref)}
+                >
                   <ProjectIcon name={p.name} icon={p.icon} />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate">{p.name}</span>
-                    {p.isMissing ? <span className="truncate type-caption text-warning">Folder not found; relocate it in Projects</span> : !!p.detail && <span className="truncate type-caption text-subtle-foreground">{p.detail}</span>}
+                    {p.isMissing ? (
+                      <span className="truncate type-caption text-warning">
+                        Folder not found; relocate it in Projects
+                      </span>
+                    ) : (
+                      !!p.detail && (
+                        <span className="truncate type-caption text-subtle-foreground">
+                          {p.detail}
+                        </span>
+                      )
+                    )}
                   </span>
                   {i < 9 && !p.isMissing && (
                     <CommandShortcut className="flex items-center gap-2">
@@ -108,14 +202,25 @@ function ProjectList({ projects, value, placeholder, onChoose, onAdd }: { projec
           </>
         )}
         <CommandGroup>
-          <CommandItem value="No project" keywords={['chat', 'folder']} data-checked={value === null} onSelect={() => onChoose(null)}>
+          <CommandItem
+            value="No project"
+            keywords={['chat', 'folder']}
+            data-checked={value === null}
+            onSelect={() => onChoose(null)}
+          >
             <Chat />
             <span className="flex min-w-0 flex-col">
               No project
-              <span className="type-caption text-subtle-foreground">Chat without a folder, branch or files</span>
+              <span className="type-caption text-subtle-foreground">
+                Chat without a folder, branch or files
+              </span>
             </span>
           </CommandItem>
-          <CommandItem value="Add project" keywords={['open', 'folder', 'clone', 'github', 'git', 'new']} onSelect={onAdd}>
+          <CommandItem
+            value="Add project"
+            keywords={['open', 'folder', 'clone', 'github', 'git', 'new']}
+            onSelect={onAdd}
+          >
             <FolderPlus />
             Add project…
           </CommandItem>

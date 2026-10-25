@@ -1,21 +1,34 @@
-import { BrowserWindow, Menu, nativeTheme, screen, shell, type Rectangle } from 'electron';
+import {
+  BrowserWindow,
+  Menu,
+  nativeTheme,
+  screen,
+  shell,
+  type Rectangle,
+} from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
-const background = () => (nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9');
+const background = () =>
+  nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9';
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
 
 export const isTrustedUrl = (url: string) =>
-  devServerUrl ? url.startsWith(devServerUrl) : url.startsWith(pathToFileURL(indexHtml).href);
+  devServerUrl
+    ? url.startsWith(devServerUrl)
+    : url.startsWith(pathToFileURL(indexHtml).href);
 
 const routed = new Map<string, BrowserWindow>();
 
 /** The window holding the app's store; torn-off windows show a single route. */
-export const mainWindow = () => BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && ![...routed.values()].includes(w));
+export const mainWindow = () =>
+  BrowserWindow.getAllWindows().find(
+    (w) => !w.isDestroyed() && ![...routed.values()].includes(w),
+  );
 
 /** A torn-off window: focuses the one already showing `route`, otherwise opens it on a display with no Mochi window yet, one per monitor. */
 export function openRoute(route: string) {
@@ -46,17 +59,27 @@ export function trafficLightsAt(zoom: number) {
 
 /** Windows' min / max / close drawn over the page's top-right corner, as tall as the 44px headers at the page zoom; symbols in DESIGN.md `foreground`. */
 function captionsAt(zoom: number): Electron.TitleBarOverlay {
-  return { color: '#00000000', symbolColor: nativeTheme.shouldUseDarkColors ? '#f2f2f5' : '#1c1b21', height: Math.round(HEADER_PX * zoom) };
+  return {
+    color: '#00000000',
+    symbolColor: nativeTheme.shouldUseDarkColors ? '#f2f2f5' : '#1c1b21',
+    height: Math.round(HEADER_PX * zoom),
+  };
 }
 
 /** `hiddenInset` only exists on macOS: Windows gets no native title bar (and so no menu bar) through `titleBarOverlay`. Linux keeps its frame. */
 const titleBar = (): Electron.BrowserWindowConstructorOptions =>
-  process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: captionsAt(1) } : { titleBarStyle: 'hiddenInset', trafficLightPosition: trafficLightsAt(1) };
+  process.platform === 'win32'
+    ? { titleBarStyle: 'hidden', titleBarOverlay: captionsAt(1) }
+    : {
+        titleBarStyle: 'hiddenInset',
+        trafficLightPosition: trafficLightsAt(1),
+      };
 
 /** Re-fits the native window buttons to the page's current zoom and theme. */
 export function fitWindowButtons(win: BrowserWindow) {
   const zoom = win.webContents.getZoomFactor();
-  if (process.platform === 'darwin') win.setWindowButtonPosition(trafficLightsAt(zoom));
+  if (process.platform === 'darwin')
+    win.setWindowButtonPosition(trafficLightsAt(zoom));
   if (process.platform === 'win32') win.setTitleBarOverlay(captionsAt(zoom));
 }
 
@@ -79,19 +102,34 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     },
   });
   win.once('ready-to-show', () => !isHidden && win.show());
-  win.on('enter-full-screen', () => win.webContents.send('windows:onFullScreenChange', true));
-  win.on('leave-full-screen', () => win.webContents.send('windows:onFullScreenChange', false));
+  win.on('enter-full-screen', () =>
+    win.webContents.send('windows:onFullScreenChange', true),
+  );
+  win.on('leave-full-screen', () =>
+    win.webContents.send('windows:onFullScreenChange', false),
+  );
   // writeDoc logs a failure; the window opens at its default size next time.
-  if (isMain) win.on('close', () => void writeDoc('window_bounds', 'main', win.getNormalBounds()).catch(() => {}));
+  if (isMain)
+    win.on(
+      'close',
+      () =>
+        void writeDoc('window_bounds', 'main', win.getNormalBounds()).catch(
+          () => {},
+        ),
+    );
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
-  win.webContents.on('context-menu', (_event, params) => showTextMenu(win, params));
+  win.webContents.on('context-menu', (_event, params) =>
+    showTextMenu(win, params),
+  );
   win.webContents.on('render-process-gone', (_event, { reason, exitCode }) => {
     if (reason === 'clean-exit' || win.isDestroyed()) return;
-    console.error(`Window renderer gone (${reason}, exit ${exitCode}), reloading`);
+    console.error(
+      `Window renderer gone (${reason}, exit ${exitCode}), reloading`,
+    );
     win.reload();
   });
   win.webContents.on('will-navigate', (event, url) => {
@@ -99,7 +137,8 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   });
 
   const hash = route && `/${route}`;
-  if (devServerUrl) void win.loadURL(hash ? `${devServerUrl}#${hash}` : devServerUrl);
+  if (devServerUrl)
+    void win.loadURL(hash ? `${devServerUrl}#${hash}` : devServerUrl);
   else void win.loadFile(indexHtml, { hash });
   return win;
 }
@@ -115,7 +154,10 @@ nativeTheme.on('updated', () =>
 // text fields and selected text get the native edit menu, everything else stays without one.
 function showTextMenu(win: BrowserWindow, params: Electron.ContextMenuParams) {
   if (params.isEditable) {
-    const spelling = params.dictionarySuggestions.map((word) => ({ label: word, click: () => win.webContents.replaceMisspelling(word) }));
+    const spelling = params.dictionarySuggestions.map((word) => ({
+      label: word,
+      click: () => win.webContents.replaceMisspelling(word),
+    }));
     const template: Electron.MenuItemConstructorOptions[] = [
       ...spelling,
       ...(spelling.length ? [{ type: 'separator' as const }] : []),
@@ -129,18 +171,28 @@ function showTextMenu(win: BrowserWindow, params: Electron.ContextMenuParams) {
     ];
     return Menu.buildFromTemplate(template).popup({ window: win });
   }
-  if (params.selectionText.trim()) Menu.buildFromTemplate([{ role: 'copy' }]).popup({ window: win });
+  if (params.selectionText.trim())
+    Menu.buildFromTemplate([{ role: 'copy' }]).popup({ window: win });
 }
 
 /** Every display already holding a window is taken; with none free the window opens where Electron cascades it. */
 function freeDisplayBounds(): Rectangle | undefined {
-  const taken = new Set(BrowserWindow.getAllWindows().map((w) => screen.getDisplayMatching(w.getBounds()).id));
+  const taken = new Set(
+    BrowserWindow.getAllWindows().map(
+      (w) => screen.getDisplayMatching(w.getBounds()).id,
+    ),
+  );
   const free = screen.getAllDisplays().find((d) => !taken.has(d.id));
   if (!free) return undefined;
   const { x, y, width, height } = free.workArea;
   const w = Math.min(1280, width);
   const h = Math.min(820, height);
-  return { x: x + Math.round((width - w) / 2), y: y + Math.round((height - h) / 2), width: w, height: h };
+  return {
+    x: x + Math.round((width - w) / 2),
+    y: y + Math.round((height - h) / 2),
+    width: w,
+    height: h,
+  };
 }
 
 function savedBounds(): Rectangle | undefined {
@@ -148,6 +200,10 @@ function savedBounds(): Rectangle | undefined {
   if (!bounds) return undefined;
   // A display that was unplugged since last run would leave the window off-screen.
   const { workArea } = screen.getDisplayMatching(bounds);
-  const visible = bounds.x < workArea.x + workArea.width && bounds.x + bounds.width > workArea.x && bounds.y < workArea.y + workArea.height && bounds.y + bounds.height > workArea.y;
+  const visible =
+    bounds.x < workArea.x + workArea.width &&
+    bounds.x + bounds.width > workArea.x &&
+    bounds.y < workArea.y + workArea.height &&
+    bounds.y + bounds.height > workArea.y;
   return visible ? bounds : undefined;
 }

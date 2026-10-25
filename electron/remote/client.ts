@@ -1,10 +1,19 @@
 import { Cause, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { RpcClientError } from 'effect/rpc';
 import { Persist, type Relay } from '@mochi/schema';
-import { makeDeviceClient, type DeviceClient, type Route } from '@mochi/core/remote/device';
+import {
+  makeDeviceClient,
+  type DeviceClient,
+  type Route,
+} from '@mochi/core/remote/device';
 import type { Link, RawLink } from '@mochi/core/remote/link';
 import { reconnect } from '@mochi/core/remote/reconnect';
-import type { CommandResult, DeviceKind, FollowedMachine, RemoteCommand } from '../../src/host/types/remote.ts';
+import type {
+  CommandResult,
+  DeviceKind,
+  FollowedMachine,
+  RemoteCommand,
+} from '../../src/host/types/remote.ts';
 import { asKind, PairingRefused } from './pairing.ts';
 
 export type { Route };
@@ -19,7 +28,9 @@ export interface FollowOptions {
   onChange: (state: FollowedMachine) => void;
   onFrame: (frame: Relay.MirrorFrame) => void;
   /** A terminal opened on the machine printed (or exited); in order, from the offset the window last got. */
-  onTerminal: (output: { terminalId: string } & typeof Relay.TerminalOutput.Type) => void;
+  onTerminal: (
+    output: { terminalId: string } & typeof Relay.TerminalOutput.Type,
+  ) => void;
   /** What it said about itself, to remember for the next launch. */
   onWelcome: (welcome: { addresses: string[]; kind?: DeviceKind }) => void;
   /** This computer's membership records, sent in each hello. */
@@ -40,7 +51,10 @@ export interface MachineFollower {
 
 const COMMAND_TIMEOUT_MS = 60_000;
 /** A clone runs as long as the repository takes to download. */
-const LONG_COMMAND_TIMEOUT_MS = { 'clone-project': 15 * 60_000, 'add-project': 2 * 60_000 } satisfies Partial<Record<RemoteCommand['type'], number>>;
+const LONG_COMMAND_TIMEOUT_MS = {
+  'clone-project': 15 * 60_000,
+  'add-project': 2 * 60_000,
+} satisfies Partial<Record<RemoteCommand['type'], number>>;
 const decodeThread = Schema.decodeUnknownExit(Persist.SavedThread);
 
 /**
@@ -50,8 +64,22 @@ const decodeThread = Schema.decodeUnknownExit(Persist.SavedThread);
  */
 export function followMachine(options: FollowOptions): MachineFollower {
   const { machine } = options;
-  let state: FollowedMachine = { id: machine.id, name: machine.name, kind: machine.kind, status: 'connecting', scopes: [], lastSeenAt: machine.lastSeenAt };
-  let session: { scope: Scope.Closeable; fiber: Fiber.Fiber<unknown, unknown>; client?: DeviceClient; terminals: Map<string, Fiber.Fiber<unknown, unknown>> } | undefined;
+  let state: FollowedMachine = {
+    id: machine.id,
+    name: machine.name,
+    kind: machine.kind,
+    status: 'connecting',
+    scopes: [],
+    lastSeenAt: machine.lastSeenAt,
+  };
+  let session:
+    | {
+        scope: Scope.Closeable;
+        fiber: Fiber.Fiber<unknown, unknown>;
+        client?: DeviceClient;
+        terminals: Map<string, Fiber.Fiber<unknown, unknown>>;
+      }
+    | undefined;
 
   const set = (patch: Partial<FollowedMachine>) => {
     state = { ...state, ...patch };
@@ -60,7 +88,11 @@ export function followMachine(options: FollowOptions): MachineFollower {
 
   function start() {
     const scope = Scope.makeUnsafe();
-    const current: NonNullable<typeof session> = { scope, fiber: undefined as never, terminals: new Map() };
+    const current: NonNullable<typeof session> = {
+      scope,
+      fiber: undefined as never,
+      terminals: new Map(),
+    };
     session = current;
     options.onFrame({ type: 'reset' });
     set({ status: 'connecting', error: undefined });
@@ -74,16 +106,36 @@ export function followMachine(options: FollowOptions): MachineFollower {
         onWelcome: (welcome, route) => {
           const kind = asKind(welcome.machineKind) ?? state.kind;
           options.onWelcome({ addresses: [...welcome.addresses], kind });
-          if (welcome.members !== undefined) options.onMembers?.(welcome.members);
-          set({ status: 'online', route, name: welcome.machineName, kind, scopes: [...welcome.scopes], error: undefined, lastSeenAt: Date.now() });
+          if (welcome.members !== undefined)
+            options.onMembers?.(welcome.members);
+          set({
+            status: 'online',
+            route,
+            name: welcome.machineName,
+            kind,
+            scopes: [...welcome.scopes],
+            error: undefined,
+            lastSeenAt: Date.now(),
+          });
         },
         onOffline: (error) => {
           if (session !== current || state.status === 'refused') return;
-          set({ status: 'offline', route: undefined, error, lastSeenAt: state.status === 'online' ? Date.now() : state.lastSeenAt });
+          set({
+            status: 'offline',
+            route: undefined,
+            error,
+            lastSeenAt:
+              state.status === 'online' ? Date.now() : state.lastSeenAt,
+          });
         },
         onRefused: (reason) => {
           if (session !== current) return;
-          set({ status: 'refused', route: undefined, scopes: [], error: reason });
+          set({
+            status: 'refused',
+            route: undefined,
+            scopes: [],
+            error: reason,
+          });
           stop(current);
         },
       });
@@ -94,16 +146,38 @@ export function followMachine(options: FollowOptions): MachineFollower {
 
   function stop(current: NonNullable<typeof session>) {
     if (session === current) session = undefined;
-    void Effect.runPromise(Fiber.interruptAll([current.fiber, ...current.terminals.values()]).pipe(Effect.andThen(Scope.close(current.scope, Exit.void))));
+    void Effect.runPromise(
+      Fiber.interruptAll([current.fiber, ...current.terminals.values()]).pipe(
+        Effect.andThen(Scope.close(current.scope, Exit.void)),
+      ),
+    );
   }
 
   /** A terminal opened on the machine pushes its output until it is closed or exits, resuming after a dropped link where it left off. */
-  function watchTerminal(current: NonNullable<typeof session>, client: DeviceClient, command: RemoteCommand, result: CommandResult) {
-    if (command.type === 'terminal-close') return void interrupt(current.terminals, command.terminalId);
-    if (command.type !== 'terminal-open' || !result.isOk || !result.data || !('terminalId' in result.data)) return;
+  function watchTerminal(
+    current: NonNullable<typeof session>,
+    client: DeviceClient,
+    command: RemoteCommand,
+    result: CommandResult,
+  ) {
+    if (command.type === 'terminal-close')
+      return void interrupt(current.terminals, command.terminalId);
+    if (
+      command.type !== 'terminal-open' ||
+      !result.isOk ||
+      !result.data ||
+      !('terminalId' in result.data)
+    )
+      return;
     const { terminalId } = result.data;
     let after = 0;
-    const output = Stream.suspend(() => client['terminal.output']({ terminalId, threadId: command.threadId, after })).pipe(
+    const output = Stream.suspend(() =>
+      client['terminal.output']({
+        terminalId,
+        threadId: command.threadId,
+        after,
+      }),
+    ).pipe(
       Stream.runForEach((chunk) =>
         Effect.sync(() => {
           after = chunk.next;
@@ -112,7 +186,9 @@ export function followMachine(options: FollowOptions): MachineFollower {
       ),
       Effect.retry({ schedule: reconnect, while: isDropped }),
       Effect.ignore,
-      Effect.ensuring(Effect.sync(() => void current.terminals.delete(terminalId))),
+      Effect.ensuring(
+        Effect.sync(() => void current.terminals.delete(terminalId)),
+      ),
     );
     current.terminals.set(terminalId, Effect.runFork(output));
   }
@@ -122,17 +198,30 @@ export function followMachine(options: FollowOptions): MachineFollower {
     state: () => state,
     async command(command) {
       const client = session?.client;
-      if (!client || state.status !== 'online') return { isOk: false, error: `${state.name} is offline` };
-      const timeout = LONG_COMMAND_TIMEOUT_MS[command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS] ?? COMMAND_TIMEOUT_MS;
-      const exit = await Effect.runPromiseExit(client['device.command']({ command }).pipe(Effect.timeout(timeout)));
+      if (!client || state.status !== 'online')
+        return { isOk: false, error: `${state.name} is offline` };
+      const timeout =
+        LONG_COMMAND_TIMEOUT_MS[
+          command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS
+        ] ?? COMMAND_TIMEOUT_MS;
+      const exit = await Effect.runPromiseExit(
+        client['device.command']({ command }).pipe(Effect.timeout(timeout)),
+      );
       if (Exit.isSuccess(exit)) {
         const result = exit.value as CommandResult;
         if (session) watchTerminal(session, client, command, result);
         return result;
       }
       const error = Cause.squash(exit.cause);
-      if (Cause.isTimeoutError(error)) return { isOk: false, error: `${state.name} didn’t answer; check the thread before trying again` };
-      return { isOk: false, error: error instanceof Error ? error.message : String(error) };
+      if (Cause.isTimeoutError(error))
+        return {
+          isOk: false,
+          error: `${state.name} didn’t answer; check the thread before trying again`,
+        };
+      return {
+        isOk: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     },
     resync() {
       if (session) stop(session);
@@ -151,14 +240,24 @@ const mirror = (client: DeviceClient, options: FollowOptions) =>
     const after = new Map<string, number>();
 
     const send = (threadId: string, saved: unknown) => {
-      if (saved === null) return options.onFrame({ type: 'thread', threadId, saved: null });
+      if (saved === null)
+        return options.onFrame({ type: 'thread', threadId, saved: null });
       const decoded = decodeThread(saved);
-      if (Exit.isSuccess(decoded)) return options.onFrame({ type: 'thread', threadId, saved: decoded.value });
-      options.onRejected(`Thread ${threadId} didn’t decode: ${Cause.pretty(decoded.cause).slice(0, 500)}`);
+      if (Exit.isSuccess(decoded))
+        return options.onFrame({
+          type: 'thread',
+          threadId,
+          saved: decoded.value,
+        });
+      options.onRejected(
+        `Thread ${threadId} didn’t decode: ${Cause.pretty(decoded.cause).slice(0, 500)}`,
+      );
     };
 
     const thread = (threadId: string) =>
-      Stream.suspend(() => client.thread({ threadId, afterSequence: after.get(threadId) ?? 0 })).pipe(
+      Stream.suspend(() =>
+        client.thread({ threadId, afterSequence: after.get(threadId) ?? 0 }),
+      ).pipe(
         Stream.runForEach((item) =>
           Effect.sync(() => {
             if (item._tag === 'snapshot') {
@@ -175,7 +274,8 @@ const mirror = (client: DeviceClient, options: FollowOptions) =>
 
     const follow = (threadId: string) =>
       Effect.gen(function* () {
-        if (!following.has(threadId)) following.set(threadId, yield* Effect.forkChild(thread(threadId)));
+        if (!following.has(threadId))
+          following.set(threadId, yield* Effect.forkChild(thread(threadId)));
       });
     const unfollow = (threadId: string) =>
       Effect.gen(function* () {
@@ -192,7 +292,8 @@ const mirror = (client: DeviceClient, options: FollowOptions) =>
         Effect.gen(function* () {
           if (item._tag === 'snapshot') {
             const ids = new Set(item.shell.threads.map((t) => t.id));
-            for (const id of [...following.keys()]) if (!ids.has(id)) yield* unfollow(id);
+            for (const id of [...following.keys()])
+              if (!ids.has(id)) yield* unfollow(id);
             for (const id of ids) yield* follow(id);
             return;
           }
@@ -208,10 +309,14 @@ const mirror = (client: DeviceClient, options: FollowOptions) =>
     );
   });
 
-function interrupt(fibers: Map<string, Fiber.Fiber<unknown, unknown>>, id: string) {
+function interrupt(
+  fibers: Map<string, Fiber.Fiber<unknown, unknown>>,
+  id: string,
+) {
   const fiber = fibers.get(id);
   fibers.delete(id);
   if (fiber) void Effect.runPromise(Fiber.interrupt(fiber));
 }
 
-const isDropped = (error: unknown) => error instanceof RpcClientError.RpcClientError;
+const isDropped = (error: unknown) =>
+  error instanceof RpcClientError.RpcClientError;

@@ -18,14 +18,25 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTabKind, Thread } from './model';
 import { PANE_TABS } from './pane/tabs';
 import { layoutOf } from './store/panes';
 import { BoundShortcut } from './Shortcut';
 import { commandOf, paneCommand, listenKeydown } from './keymap';
-import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop, type PinnableKind } from './pane/headerPins';
+import {
+  isInside,
+  PINNABLE_KINDS,
+  setPinned,
+  useHeaderPins,
+  usePinDrop,
+  type PinnableKind,
+} from './pane/headerPins';
 import { isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
@@ -50,7 +61,9 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();
   const { isWide, isFocused } = useSplit();
   useSeen({ threadId: thread.id }, 'open-and-leave');
-  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === thread.id));
+  const pane = useHarnessSelector((s) =>
+    s.panes.find((p) => p.threadId === thread.id),
+  );
   const isPaneOpen = !!pane?.isOpen;
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
   const [isPaneTabOpen, setPaneTabOpen] = useState(false);
@@ -68,8 +81,13 @@ export function ThreadView({ thread }: { thread: Thread }) {
 
   const toggleKind = (kind: PaneTabKind) => {
     const split = pane?.tabs.find((t) => t.kind === kind && inSplits.has(t.id));
-    if (split) return dispatch({ type: 'go', view: { kind: 'tab', threadId: thread.id, tabId: split.id } });
-    if (openKinds.includes(kind)) return dispatch({ type: 'pane-close-kind', threadId: thread.id, kind });
+    if (split)
+      return dispatch({
+        type: 'go',
+        view: { kind: 'tab', threadId: thread.id, tabId: split.id },
+      });
+    if (openKinds.includes(kind))
+      return dispatch({ type: 'pane-close-kind', threadId: thread.id, kind });
     dispatch({ type: 'pane-show-tab', threadId: thread.id, kind });
     if (!isWide) setPaneTabOpen(true);
   };
@@ -79,9 +97,15 @@ export function ThreadView({ thread }: { thread: Thread }) {
     <ThreadHeader
       thread={thread}
       isSummaryOpen={isWide ? summary.isShown : isSummarySheetOpen}
-      onToggleSummary={isWide ? summary.toggle : () => setSummarySheetOpen((o) => !o)}
+      onToggleSummary={
+        isWide ? summary.toggle : () => setSummarySheetOpen((o) => !o)
+      }
       isPaneOpen={isPaneShown}
-      onTogglePane={() => (isWide ? dispatch({ type: 'pane-toggle', threadId: thread.id }) : setPaneTabOpen((o) => !o))}
+      onTogglePane={() =>
+        isWide
+          ? dispatch({ type: 'pane-toggle', threadId: thread.id })
+          : setPaneTabOpen((o) => !o)
+      }
       openKinds={openKinds}
       onToggleKind={toggleKind}
     />
@@ -94,13 +118,31 @@ export function ThreadView({ thread }: { thread: Thread }) {
         {header}
       </div>
       <div
-        className={cn('grid min-h-0 flex-1 overflow-hidden', summary.animates && 'transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none')}
-        style={{ gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}` }}
+        className={cn(
+          'grid min-h-0 flex-1 overflow-hidden',
+          summary.animates &&
+            'transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
+        )}
+        style={{
+          gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}`,
+        }}
       >
         <ChatView thread={thread} />
-        {isWide && <DockedSummary thread={thread} isOpen={summary.isDocked} animates={summary.animates} />}
+        {isWide && (
+          <DockedSummary
+            thread={thread}
+            isOpen={summary.isDocked}
+            animates={summary.animates}
+          />
+        )}
       </div>
-      {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} animates={summary.animates} />}
+      {isWide && (
+        <FloatingSummary
+          thread={thread}
+          isOpen={summary.isFloating}
+          animates={summary.animates}
+        />
+      )}
       <div className="pointer-events-none absolute inset-x-0 top-1 bottom-36 z-30">
         <PipLayer thread={thread} />
       </div>
@@ -113,7 +155,19 @@ export function ThreadView({ thread }: { thread: Thread }) {
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
       {isChatHidden && header}
       <div className="min-h-0 flex-1">
-        {isWide || isChatHidden ? <SidePane thread={thread} pane={isChatHidden ? { ...(pane ?? noPane(thread.id)), isOpen: true } : (pane ?? noPane(thread.id))} chat={isChatHidden ? undefined : chat} /> : chat}
+        {isWide || isChatHidden ? (
+          <SidePane
+            thread={thread}
+            pane={
+              isChatHidden
+                ? { ...(pane ?? noPane(thread.id)), isOpen: true }
+                : (pane ?? noPane(thread.id))
+            }
+            chat={isChatHidden ? undefined : chat}
+          />
+        ) : (
+          chat
+        )}
       </div>
       {!isWide && (
         <Sheet open={isSummarySheetOpen} onOpenChange={setSummarySheetOpen}>
@@ -140,14 +194,18 @@ function noPane(threadId: string): Pane {
 }
 
 /** Each pane's toggle command (mod Alt + its letter by default) toggles that pane in the focused split. */
-function usePaneShortcuts(isFocused: boolean, onToggle: (kind: PaneTabKind) => void) {
+function usePaneShortcuts(
+  isFocused: boolean,
+  onToggle: (kind: PaneTabKind) => void,
+) {
   const toggle = useEffectEvent(onToggle);
   useEffect(() => {
     if (!isFocused) return;
     const onKey = (e: KeyboardEvent) => {
       const command = commandOf(e, PINNABLE_KINDS.map(paneCommand));
       if (!command) return;
-      const kind = PINNABLE_KINDS[PINNABLE_KINDS.map(paneCommand).indexOf(command)];
+      const kind =
+        PINNABLE_KINDS[PINNABLE_KINDS.map(paneCommand).indexOf(command)];
       e.preventDefault();
       toggle(kind);
     };
@@ -179,20 +237,40 @@ function useSummaryState(isPaneOpen: boolean, isWide: boolean) {
     if (isPaneOpen) setFloatingOpen((o) => !o);
     else setDockedOpen((o) => !o);
   };
-  return { isDocked, isFloating, isShown: isDocked || isFloating, animates, toggle };
+  return {
+    isDocked,
+    isFloating,
+    isShown: isDocked || isFloating,
+    animates,
+    toggle,
+  };
 }
 
 /** The summary column grows from the right edge while the card itself rises out of the header toggle above it. */
-function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
+function DockedSummary({
+  thread,
+  isOpen,
+  animates,
+}: {
+  thread: Thread;
+  isOpen: boolean;
+  animates: boolean;
+}) {
   const shown = useHeldWhileClosed(thread, isOpen);
   return (
     // Above the header's blur edge, which is for the scrolling chat only; the header's own controls stay clickable past it.
-    <div className="pointer-events-none relative z-30 min-w-0 overflow-hidden pt-(--chat-top)" inert={!isOpen || undefined}>
+    <div
+      className="pointer-events-none relative z-30 min-w-0 overflow-hidden pt-(--chat-top)"
+      inert={!isOpen || undefined}
+    >
       <div
         className={cn(
           'pointer-events-auto h-full w-[300px] origin-top-right pr-3 pb-3',
           isOpen ? 'scale-100 opacity-100' : 'scale-[0.97] opacity-0',
-          animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
+          animates && [
+            'transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
+            isOpen ? 'duration-200' : 'duration-150',
+          ],
         )}
       >
         <SummaryPanel thread={shown} className="h-full" />
@@ -201,7 +279,15 @@ function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: b
   );
 }
 
-function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
+function FloatingSummary({
+  thread,
+  isOpen,
+  animates,
+}: {
+  thread: Thread;
+  isOpen: boolean;
+  animates: boolean;
+}) {
   const shown = useHeldWhileClosed(thread, isOpen);
   return (
     <div
@@ -209,11 +295,18 @@ function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen:
       className={cn(
         'pointer-events-none absolute top-11 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right',
         isOpen ? 'scale-100 opacity-100' : 'scale-[0.97] opacity-0',
-        animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
+        animates && [
+          'transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
+          isOpen ? 'duration-200' : 'duration-150',
+        ],
       )}
     >
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
-      <SummaryPanel thread={shown} isFloating className={cn('max-h-full', isOpen && 'pointer-events-auto')} />
+      <SummaryPanel
+        thread={shown}
+        isFloating
+        className={cn('max-h-full', isOpen && 'pointer-events-auto')}
+      />
     </div>
   );
 }
@@ -250,12 +343,26 @@ function ThreadHeader({
 
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
-      <TitleBar ref={header} isFirst={isFirst} isMulti={isMulti} data-pin-drop className={cn('@container transition-colors duration-150', pinDrop.isOver && 'bg-accent/40')}>
+      <TitleBar
+        ref={header}
+        isFirst={isFirst}
+        isMulti={isMulti}
+        data-pin-drop
+        className={cn(
+          '@container transition-colors duration-150',
+          pinDrop.isOver && 'bg-accent/40',
+        )}
+      >
         <ThreadMenu thread={thread} />
         <LimitChip thread={thread} />
         {thread.prs.map((pr) => (
           <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr}>
-            <Badge variant="secondary" tabIndex={0} aria-label={`#${pr.number}: ${pr.title}`} className="hidden @2xl:inline-flex">
+            <Badge
+              variant="secondary"
+              tabIndex={0}
+              aria-label={`#${pr.number}: ${pr.title}`}
+              className="hidden @2xl:inline-flex"
+            >
               #{pr.number}
             </Badge>
           </ThreadPrHoverCard>
@@ -263,10 +370,26 @@ function ThreadHeader({
         <span className="flex-1" />
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Thread summary"
+              aria-pressed={isSummaryOpen}
+              onClick={onToggleSummary}
+              className={cn(
+                'gap-1.5 px-2 text-muted-foreground',
+                isSummaryOpen && 'bg-accent text-foreground',
+              )}
+            >
               {hasGoal(thread) ? (
                 <>
-                  <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+                  <ProgressRing
+                    met={progress.met}
+                    total={progress.total}
+                    slot={thread.line}
+                    size={14}
+                    isWorking={isWorking(thread)}
+                  />
                   <span className="tabular">{progressLabel(progress)}</span>
                 </>
               ) : (
@@ -274,15 +397,24 @@ function ThreadHeader({
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{isSummaryOpen ? 'Hide the summary' : 'Show the summary'}</TooltipContent>
+          <TooltipContent>
+            {isSummaryOpen ? 'Hide the summary' : 'Show the summary'}
+          </TooltipContent>
         </Tooltip>
         <SplitControls />
-        <HeaderPins openKinds={openKinds} onToggle={onToggleKind} drop={pinDrop} />
+        <HeaderPins
+          openKinds={openKinds}
+          onToggle={onToggleKind}
+          drop={pinDrop}
+        />
         <TooltipIconButton
           label={isPaneOpen ? 'Hide the panes' : 'Show the panes'}
           aria-pressed={isPaneOpen}
           onClick={onTogglePane}
-          className={cn('text-muted-foreground', isPaneOpen && 'bg-accent text-foreground')}
+          className={cn(
+            'text-muted-foreground',
+            isPaneOpen && 'bg-accent text-foreground',
+          )}
         >
           <SidebarRight />
         </TooltipIconButton>
@@ -299,14 +431,22 @@ function ThreadMenu({ thread }: { thread: Thread }) {
     <DropdownMenu>
       <h1 className="flex min-w-0">
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="min-w-0 shrink gap-1 px-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-w-0 shrink gap-1 px-1.5"
+          >
             <span className="truncate type-title">{thread.title}</span>
             <ChevronDown aria-hidden className="text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
       </h1>
       <DropdownMenuContent align="start" className="w-60">
-        <ActionItems target={{ threadId: thread.id }} groups={THREAD_ACTIONS_MENU} menu="dropdown" />
+        <ActionItems
+          target={{ threadId: thread.id }}
+          groups={THREAD_ACTIONS_MENU}
+          menu="dropdown"
+        />
         <RewindMenuItems thread={thread} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -314,19 +454,48 @@ function ThreadMenu({ thread }: { thread: Thread }) {
 }
 
 /** Pinned panes as toggles, pressed while open; while a pane is dragged over the header, a slot shows where it would pin. */
-function HeaderPins({ openKinds, onToggle, drop }: { openKinds: PaneTabKind[]; onToggle: (kind: PaneTabKind) => void; drop: ReturnType<typeof usePinDrop> }) {
+function HeaderPins({
+  openKinds,
+  onToggle,
+  drop,
+}: {
+  openKinds: PaneTabKind[];
+  onToggle: (kind: PaneTabKind) => void;
+  drop: ReturnType<typeof usePinDrop>;
+}) {
   const pins = useHeaderPins();
   return (
     <div className="hidden items-center gap-0.5 @xl:flex">
       {pins.map((kind) => (
-        <PinnedTab key={kind} kind={kind} isOpen={openKinds.includes(kind)} onToggle={() => onToggle(kind)} />
+        <PinnedTab
+          key={kind}
+          kind={kind}
+          isOpen={openKinds.includes(kind)}
+          onToggle={() => onToggle(kind)}
+        />
       ))}
-      {drop.isDragging && <span aria-hidden className={cn('size-7 rounded-md border border-dashed border-foreground/25 transition-colors', drop.isOver && 'border-foreground/50 bg-accent')} />}
+      {drop.isDragging && (
+        <span
+          aria-hidden
+          className={cn(
+            'size-7 rounded-md border border-dashed border-foreground/25 transition-colors',
+            drop.isOver && 'border-foreground/50 bg-accent',
+          )}
+        />
+      )}
     </div>
   );
 }
 
-function PinnedTab({ kind, isOpen, onToggle }: { kind: PinnableKind; isOpen: boolean; onToggle: () => void }) {
+function PinnedTab({
+  kind,
+  isOpen,
+  onToggle,
+}: {
+  kind: PinnableKind;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
   const { title, icon: Icon } = PANE_TABS[kind];
   const [drag, setDrag] = useState<'idle' | 'inside' | 'outside'>('idle');
   // Motion still fires click on the release that ends a drag.
@@ -346,19 +515,26 @@ function PinnedTab({ kind, isOpen, onToggle }: { kind: PinnableKind; isOpen: boo
         wasDragged.current = true;
         setDrag('inside');
       }}
-      onDrag={(_, info) => setDrag(isInHeader(info.point.x, info.point.y) ? 'inside' : 'outside')}
+      onDrag={(_, info) =>
+        setDrag(isInHeader(info.point.x, info.point.y) ? 'inside' : 'outside')
+      }
       onDragEnd={(_, info) => {
         setDrag('idle');
         if (!isInHeader(info.point.x, info.point.y)) setPinned(kind, false);
       }}
       whileDrag={{ scale: 1.1, zIndex: 50 }}
-      className={cn('rounded-md transition-opacity', drag !== 'idle' && 'bg-popover shadow-float', drag === 'outside' && 'opacity-50')}
+      className={cn(
+        'rounded-md transition-opacity',
+        drag !== 'idle' && 'bg-popover shadow-float',
+        drag === 'outside' && 'opacity-50',
+      )}
     >
       <TooltipIconButton
         label={title}
         hint={
           <>
-            {isOpen ? `Close ${title}.` : `Open ${title} beside the chat.`} <BoundShortcut command={paneCommand(kind)} />
+            {isOpen ? `Close ${title}.` : `Open ${title} beside the chat.`}{' '}
+            <BoundShortcut command={paneCommand(kind)} />
           </>
         }
         aria-pressed={isOpen}
@@ -366,7 +542,10 @@ function PinnedTab({ kind, isOpen, onToggle }: { kind: PinnableKind; isOpen: boo
           if (wasDragged.current) return void (wasDragged.current = false);
           onToggle();
         }}
-        className={cn('text-muted-foreground', isOpen && 'bg-accent text-foreground')}
+        className={cn(
+          'text-muted-foreground',
+          isOpen && 'bg-accent text-foreground',
+        )}
       >
         <Icon />
       </TooltipIconButton>
@@ -375,14 +554,25 @@ function PinnedTab({ kind, isOpen, onToggle }: { kind: PinnableKind; isOpen: boo
 }
 
 /** Every pane, open or closed with its shortcut, then which of them sit in the header. */
-function PanesMenu({ openKinds, onToggle }: { openKinds: PaneTabKind[]; onToggle: (kind: PaneTabKind) => void }) {
+function PanesMenu({
+  openKinds,
+  onToggle,
+}: {
+  openKinds: PaneTabKind[];
+  onToggle: (kind: PaneTabKind) => void;
+}) {
   const pins = useHeaderPins();
   return (
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Panes" className="text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Panes"
+              className="text-muted-foreground"
+            >
               <OverflowIcon vertical />
             </Button>
           </DropdownMenuTrigger>
@@ -396,7 +586,12 @@ function PanesMenu({ openKinds, onToggle }: { openKinds: PaneTabKind[]; onToggle
             const { title, icon: Icon } = PANE_TABS[kind];
             return (
               // No check column: the label's strength says the pane is open, so the shortcut keys sit at the item's right padding.
-              <DropdownMenuCheckboxItem key={kind} checked={openKinds.includes(kind)} onCheckedChange={() => onToggle(kind)} className="pr-1.5 text-muted-foreground data-[state=checked]:text-foreground *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden">
+              <DropdownMenuCheckboxItem
+                key={kind}
+                checked={openKinds.includes(kind)}
+                onCheckedChange={() => onToggle(kind)}
+                className="pr-1.5 text-muted-foreground data-[state=checked]:text-foreground *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden"
+              >
                 <Icon />
                 {title}
                 <DropdownMenuShortcut>
@@ -413,7 +608,12 @@ function PanesMenu({ openKinds, onToggle }: { openKinds: PaneTabKind[]; onToggle
             {PINNABLE_KINDS.map((kind) => {
               const { title, icon: Icon } = PANE_TABS[kind];
               return (
-                <DropdownMenuCheckboxItem key={kind} checked={pins.includes(kind)} onCheckedChange={(checked) => setPinned(kind, checked)} onSelect={(e) => e.preventDefault()}>
+                <DropdownMenuCheckboxItem
+                  key={kind}
+                  checked={pins.includes(kind)}
+                  onCheckedChange={(checked) => setPinned(kind, checked)}
+                  onSelect={(e) => e.preventDefault()}
+                >
                   <Icon />
                   {title}
                 </DropdownMenuCheckboxItem>
