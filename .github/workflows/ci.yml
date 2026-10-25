@@ -77,9 +77,9 @@ jobs:
           restore-keys: |
             vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-
       # A pull request runs only the tests its diff reaches (vite.config.ts `forceRerunTriggers` widens that to all); main runs every test.
-      # Ubuntu also prints a coverage summary (v8, no gate).
-      # Windows runs `vp test` directly: under `vp run` the tracked child processes (`sh`, git) die with 0xC0000142 (STATUS_DLL_INIT_FAILED).
-      - run: ${{ matrix.os == 'windows-latest' && 'vp test run' || 'vp run test' }} ${{ github.event_name == 'pull_request' && '--changed HEAD~1' || '' }} ${{ matrix.os == 'ubuntu-latest' && '--coverage' || '' }}
+      # macOS replays cached results. Windows runs `vp test` directly: under `vp run` the tracked child processes (`sh`, git) die with 0xC0000142 (STATUS_DLL_INIT_FAILED).
+      # Ubuntu runs it directly too, to print a v8 coverage summary (no gate): vitest wipes ./coverage, which `vp run` records as a changed input.
+      - run: ${{ matrix.os == 'macos-latest' && 'vp run test' || 'vp test run' }} ${{ github.event_name == 'pull_request' && '--changed HEAD~1' || '' }} ${{ matrix.os == 'ubuntu-latest' && '--coverage' || '' }}
       # electron:build minus its `tsc` steps, which the check job runs.
       - run: pnpm electron:pack
 
