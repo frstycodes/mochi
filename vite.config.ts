@@ -122,7 +122,12 @@ export default defineConfig(({ mode }) => ({
               // node-pty is a native addon: bundling it breaks its `.node` and spawn-helper lookups.
               // playwright-core resolves its own package.json and reads files beside it at runtime.
               main: {
-                entry: ['electron/main.ts', 'packages/core/src/core.ts'],
+                // `serve.js` is `mochi serve` (bin/mochi.mjs): the same Core under plain Node.
+                entry: [
+                  'electron/main.ts',
+                  'packages/core/src/core.ts',
+                  'packages/core/src/serve/serve.ts',
+                ],
                 vite: {
                   // Mochi's OAuth app secrets (electron/library/oauthApps.ts), from the gitignored .env.local.
                   define: {
