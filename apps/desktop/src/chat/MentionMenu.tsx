@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
+  type ComponentProps,
   useDeferredValue,
   useEffect,
   useEffectEvent,
@@ -7,13 +8,16 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { EditorView } from '@codemirror/view';
 import { Chat, Plug, ShieldAlert, Skill, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
-import { CommandGroup, CommandItem } from '@/components/ui/command';
+import {
+  CommandGroup,
+  CommandItem,
+  CommandShortcut,
+} from '@/components/ui/command';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import { useFileList } from '../files/useFiles';
@@ -70,7 +74,6 @@ export function MentionMenu({
   return (
     <CaretMenu
       isOpen={menu.isOpen}
-      editor={menu.editor}
       listRef={menu.listRef}
       listId={menu.listId}
       label="Reference a file, thread, window, skill, connector or plugin"
@@ -127,9 +130,7 @@ function MentionItem({ item }: { item: MenuItem }) {
         <WindowIcon icon={item.window.icon} />
         <span className="min-w-0 truncate">{item.window.title}</span>
         {!!item.window.app && item.window.app !== item.window.title && (
-          <span className="ml-auto shrink-0 type-caption text-subtle-foreground">
-            {item.window.app}
-          </span>
+          <ItemMeta>{item.window.app}</ItemMeta>
         )}
       </>
     );
@@ -152,9 +153,7 @@ function MentionItem({ item }: { item: MenuItem }) {
         <span className="min-w-0 truncate font-medium" title={item.server.name}>
           {names.server(item.server.name).title}
         </span>
-        <span className="ml-auto shrink-0 type-caption text-subtle-foreground tabular">
-          {toolCountLabel(item.server)}
-        </span>
+        <ItemMeta className="tabular">{toolCountLabel(item.server)}</ItemMeta>
       </>
     );
   if (item.kind === 'plugin')
@@ -170,10 +169,27 @@ function MentionItem({ item }: { item: MenuItem }) {
     <>
       <Chat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="min-w-0 truncate">{item.thread.title}</span>
-      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">
-        {item.thread.repo?.project ?? 'No project'}
-      </span>
+      <ItemMeta>{item.thread.repo?.project ?? 'No project'}</ItemMeta>
     </>
+  );
+}
+
+/**
+ * A row's trailing detail, pinned to its right edge. A `CommandShortcut`, so the item drops the check icon whose own `ml-auto`
+ * would otherwise split the free space and leave this mid-row.
+ */
+export function ItemMeta({
+  className,
+  ...props
+}: ComponentProps<typeof CommandShortcut>) {
+  return (
+    <CommandShortcut
+      className={cn(
+        'shrink-0 type-caption tracking-normal text-subtle-foreground',
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
@@ -311,7 +327,6 @@ export function useMentionMenu(
   const { textInput } = usePromptInputController();
   const [activeKey, setActiveKey] = useState<string>();
   const listRef = useRef<HTMLDivElement>(null);
-  const editor = useRef<EditorView>(null);
   const [dismissedAt, setDismissedAt] = useState<string>();
   const [picks, setMentions] = useState<Mention[]>([]);
   const text = textInput.value;
@@ -394,8 +409,7 @@ export function useMentionMenu(
     add(mention);
   };
 
-  const onKeyDown = (e: KeyboardEvent, view?: EditorView) => {
-    if (view) editor.current = view;
+  const onKeyDown = (e: KeyboardEvent) => {
     if (!isOpen) {
       const last = mentions.findLast((m) => !isInline(m));
       if (e.key === 'Backspace' && text === '' && last) remove(last.id);
@@ -439,7 +453,6 @@ export function useMentionMenu(
     activeKey: current && itemKey(current),
     setActiveKey,
     dismiss: () => setDismissedAt(text),
-    editor,
     listRef,
     isOpen,
     choose,

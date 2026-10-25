@@ -1,5 +1,4 @@
-import { useRef, type ReactNode, type RefObject } from 'react';
-import type { EditorView } from '@codemirror/view';
+import type { ReactNode, RefObject } from 'react';
 import { Command, CommandList } from '@/components/ui/command';
 import {
   Popover,
@@ -9,7 +8,6 @@ import {
 
 type CaretMenuProps = {
   isOpen: boolean;
-  editor: RefObject<EditorView | null>;
   /** The cmdk root: the menu's hook forwards arrow keys to it, since focus stays in the editor. */
   listRef: RefObject<HTMLDivElement | null>;
   listId: string;
@@ -22,12 +20,12 @@ type CaretMenuProps = {
 };
 
 /**
- * A cmdk list in a popover above the editor's caret. Focus never leaves the editor: the hook owns typing and filtering
+ * A cmdk list in a popover above the composer, as wide as it. Render it inside the `relative` box that wraps the composer card:
+ * that box is the anchor, so the menu sits right even before the editor has reported a caret (a draft restored with `@` in it). Focus never leaves the editor: the hook owns typing and filtering
  * (`shouldFilter` off) and forwards arrows here, so cmdk keeps the highlight and scrolls it into view.
  */
 export function CaretMenu({
   isOpen,
-  editor,
   listRef,
   listId,
   label,
@@ -36,12 +34,11 @@ export function CaretMenu({
   onDismiss,
   children,
 }: CaretMenuProps) {
-  const anchor = useRef({
-    getBoundingClientRect: () => caretRect(editor.current),
-  });
   return (
     <Popover open={isOpen} onOpenChange={(open) => !open && onDismiss()}>
-      <PopoverAnchor virtualRef={anchor} />
+      <PopoverAnchor asChild>
+        <div aria-hidden className="pointer-events-none absolute inset-0" />
+      </PopoverAnchor>
       <PopoverContent
         side="top"
         align="start"
@@ -51,7 +48,7 @@ export function CaretMenu({
         onCloseAutoFocus={(e) => e.preventDefault()}
         onPointerDown={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="w-[28rem] max-w-(--radix-popover-content-available-width) gap-0 p-0"
+        className="w-(--radix-popover-trigger-width) max-w-(--radix-popover-content-available-width) gap-0 p-0"
       >
         <Command
           ref={listRef}
@@ -76,11 +73,4 @@ export function forwardKey(list: HTMLElement | null, e: KeyboardEvent) {
   list?.dispatchEvent(
     new KeyboardEvent('keydown', { key: e.key, bubbles: true }),
   );
-}
-
-function caretRect(view: EditorView | null) {
-  const caret = view?.coordsAtPos(view.state.selection.main.head);
-  if (caret)
-    return new DOMRect(caret.left, caret.top, 0, caret.bottom - caret.top);
-  return view?.dom.getBoundingClientRect() ?? new DOMRect();
 }

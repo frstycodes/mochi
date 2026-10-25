@@ -13,7 +13,7 @@ import { HARNESSES } from '../settings/harnesses';
 import { isAbsolutePath } from '../projects';
 import type { Caret } from './ComposerEditor';
 import { CaretMenu, forwardKey } from './CaretMenu';
-import { SkillFallback } from './MentionMenu';
+import { ItemMeta, SkillFallback } from './MentionMenu';
 import { SkillMark } from './McpIcon';
 import {
   bySlashGroup,
@@ -40,7 +40,6 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   return (
     <CaretMenu
       isOpen={menu.isOpen}
-      editor={menu.editor}
       listRef={menu.listRef}
       listId={menu.listId}
       label="Commands and skills"
@@ -69,15 +68,13 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
                 {item.description}
               </span>
               {item.disabledReason ? (
-                <span className="ml-auto shrink-0 type-caption text-subtle-foreground">
-                  {item.disabledReason}
-                </span>
+                <ItemMeta>{item.disabledReason}</ItemMeta>
               ) : (
                 menu.isMidText &&
                 !item.isSkill && (
-                  <span className="ml-auto shrink-0 type-caption text-warning">
+                  <ItemMeta className="text-warning group-data-selected/command-item:text-warning">
                     Runs only at the start of a message
-                  </span>
+                  </ItemMeta>
                 )
               )}
             </CommandItem>
@@ -178,7 +175,6 @@ export function useSlashMenu(items: SlashItem[]) {
     activeKey: matches[index] && itemKey(matches[index]),
     setActiveKey,
     dismiss: () => setDismissedAt(text),
-    editor,
     listRef,
     isOpen,
     isMidText: !!range && range.start > 0,
