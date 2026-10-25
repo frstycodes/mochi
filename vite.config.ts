@@ -15,7 +15,11 @@ export default defineConfig(({ mode }) => ({
   base: './',
   run: {
     tasks: {
-      test: 'vp test run',
+      test: {
+        command: 'vp test run',
+        // Tests spawn `sh` and git; a clean task env drops the Windows variables they need (SystemRoot, TEMP, ...).
+        cache: { untrackedEnv: ['*'] },
+      },
       typecheck: {
         command:
           'tsc -b && tsc -p packages/domain && tsc -p packages/core && tsc -p electron && tsc -p infra/relay',
