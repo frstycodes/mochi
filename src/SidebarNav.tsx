@@ -3,6 +3,7 @@ import {
   Chart,
   Clock,
   Connector,
+  Folder,
   Inbox,
   Plugin,
   Route,
@@ -31,7 +32,6 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
 import { DEFAULT_PREFS, setPrefs, usePrefs } from './settings/prefs';
 import { openSettings } from './routes/nav';
 import type { View } from './store';
@@ -39,7 +39,7 @@ import { OverflowIcon } from './ui';
 
 /**
  * The sidebar destinations you choose (Edit sidebar), like Claude's: the ones you show, then More with the rest and
- * Edit sidebar…. Search, Projects, New thread, Review and Notifications are fixed and stay out of this list.
+ * Edit sidebar…. Search, New thread, Review and Notifications are fixed and stay out of this list.
  */
 export function SidebarNav({
   view,
@@ -73,7 +73,7 @@ export function SidebarNav({
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="h-8 text-sm [&_svg]:size-4.5">
+            <SidebarMenuButton className="h-8 text-sm [&_svg]:size-4">
               <OverflowIcon />
               <span>More</span>
             </SidebarMenuButton>
@@ -115,6 +115,12 @@ type SidebarItem = { id: string; label: string; icon: IconComponent } & (
 export const SIDEBAR_ITEMS = [
   { id: 'queue', label: 'Queue', icon: Inbox, view: { kind: 'queue' } },
   { id: 'board', label: 'Board', icon: Route, view: { kind: 'board' } },
+  {
+    id: 'projects',
+    label: 'Projects',
+    icon: Folder,
+    view: { kind: 'projects' },
+  },
   { id: 'usage', label: 'Usage', icon: Chart, view: { kind: 'usage' } },
   { id: 'skills', label: 'Skills', icon: Skill, section: 'skills' },
   { id: 'plugins', label: 'Plugins', icon: Plugin, section: 'plugins' },
@@ -178,7 +184,6 @@ export function NavItem({
   onClick,
   trailing,
   badge,
-  actions,
 }: {
   icon: ReactNode;
   label: string;
@@ -186,14 +191,13 @@ export function NavItem({
   onClick: () => void;
   trailing?: ReactNode;
   badge?: number;
-  actions?: ReactNode;
 }) {
   return (
-    <SidebarMenuItem className={cn(!!actions && 'flex items-center gap-0.5')}>
+    <SidebarMenuItem>
       <SidebarMenuButton
         isActive={isActive}
         onClick={onClick}
-        className="h-8 text-sm [&_svg]:size-4.5"
+        className="h-8 text-sm [&_svg]:size-4"
       >
         {icon}
         <span>{label}</span>
@@ -206,7 +210,6 @@ export function NavItem({
       {badge !== undefined && (
         <SidebarMenuBadge className="tabular">{badge}</SidebarMenuBadge>
       )}
-      {actions}
     </SidebarMenuItem>
   );
 }

@@ -12,10 +12,9 @@ import { useDraggable } from '@dnd-kit/react';
 import {
   Archive,
   Chat,
-  Edit,
   Eye,
-  Folder,
   Menu,
+  Plus,
   Search,
   TaskSquare,
   Unarchive,
@@ -373,6 +372,18 @@ function SpaceNav({
         <SidebarGroupContent>
           <SidebarMenu>
             <NavItem
+              icon={<Plus />}
+              label="New"
+              isActive={view.kind === 'new'}
+              onClick={() => go({ kind: 'new' })}
+              trailing={
+                <BoundShortcut
+                  command="go-new"
+                  className="hidden md:inline-flex"
+                />
+              }
+            />
+            <NavItem
               icon={<Search />}
               label="Search"
               onClick={onSearch}
@@ -381,27 +392,6 @@ function SpaceNav({
                   command="palette"
                   className="hidden md:inline-flex"
                 />
-              }
-              actions={
-                <>
-                  <TooltipIconButton
-                    label="Projects"
-                    aria-pressed={view.kind === 'projects'}
-                    onClick={() => go({ kind: 'projects' })}
-                    className="size-8 text-sidebar-foreground/75 aria-pressed:bg-sidebar-accent [&_svg]:size-4.5"
-                  >
-                    <Folder />
-                  </TooltipIconButton>
-                  <TooltipIconButton
-                    label="New thread"
-                    hint={<BoundShortcut command="go-new" />}
-                    aria-pressed={view.kind === 'new'}
-                    onClick={() => go({ kind: 'new' })}
-                    className="size-8 text-sidebar-foreground/75 aria-pressed:bg-sidebar-accent [&_svg]:size-4.5"
-                  >
-                    <Edit />
-                  </TooltipIconButton>
-                </>
               }
             />
             {review.count > 0 && (
