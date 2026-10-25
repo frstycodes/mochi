@@ -919,7 +919,9 @@ test('browser_handoff returns by itself once doneWhen holds, and refuses one tha
   await vi.advanceTimersByTimeAsync(600);
   assert.equal(t.state().queue.some((q) => q.tool?.isHandoff), true, 'still waiting');
   isSignedIn = true;
-  await vi.advanceTimersByTimeAsync(1000);
+  await vi.advanceTimersByTimeAsync(500);
+  assert.equal(t.state().queue.some((q) => q.tool?.isHandoff), true, 'one poll could be a redirect passing through');
+  await vi.advanceTimersByTimeAsync(500);
   assert.equal(JSON.parse((await pending).text).done, 'detected');
   assert.equal(t.state().queue.some((q) => q.tool), false, 'the card closed itself');
 });
