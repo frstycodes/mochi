@@ -19,7 +19,9 @@ import type {
   AgentDecision,
   AgentImage,
   AgentRunOptions,
+  AgentSendInput,
 } from '../../../../../src/host/types/agent.ts';
+import type { HarnessAdapter } from '../adapter.ts';
 import type { McpWidgetResource } from '../../../../../src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../../../src/settings/harnesses.ts';
@@ -36,10 +38,12 @@ import {
   commandsFrom,
   createMapper,
   HIDDEN_PLAN_TOOLS,
+  isPreApproved,
   mcpServersFromStatus,
   PERMISSION_MODES,
   permissionOptions,
   permissionResult,
+  setMode,
   userContent,
 } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../mochiTools.ts';
@@ -132,14 +136,23 @@ export const DEFAULT_MODEL = 'claude-opus-5-5';
 const DEFAULT_CAP = 6;
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
-export const claudeSessionIds = () => [...sessions.keys()];
+export const claude = {
+  has: (threadId) => sessions.has(threadId),
+  threadIds: () => [...sessions.keys()],
+  start: startClaude,
+  send: sendClaude,
+  unsteer: unsteerClaude,
+  compact: compactClaude,
+  interrupt: interruptClaude,
+  stop: async (threadId) => stopClaude(threadId),
+  stopTask: stopClaudeTask,
+  respond: async (requestId, decision) => resolveClaude(requestId, decision),
+  rewindPoint: claudeRewindPoint,
+  rewindFiles: rewindClaude,
+  runOptions: (threadId) => sessions.get(threadId)?.options,
+} satisfies HarnessAdapter;
 
-/** What a live session runs on, with the speed its latest message set. */
-export const claudeRunOptions = (threadId: string) =>
-  sessions.get(threadId)?.options;
-
-export async function startClaude(threadId: string, options: AgentRunOptions) {
+async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.permissionMode && !(options.permissionMode in PERMISSION_MODES))
     throw new TypeError(
       `permissionMode must be one of ${Object.keys(PERMISSION_MODES).join(', ')}`,
@@ -168,25 +181,36 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   await schedule(session);
 }
 
-/** `speed`: '' standard, 'fast' fast mode, unset keeps it; a live process switches before reading the message. */
-/** `steer`: the turn in flight folds the message in at its next step instead of answering it after (the queue's Send now). */
-/** `steerId`: reported back as `steer-read` once Claude Code takes the message, and what `unsteerClaude` takes back before then. */
-export async function sendClaude(
+/**
+ * A live process switches `policy` before reading the message; a relaunch starts in it. `steer`: the turn in flight folds the
+ * message in at its next step instead of answering it after (the queue's Send now). `steerId`: reported back as `steer-read`
+ * once Claude Code takes the message, and what `unsteerClaude` takes back before then.
+ */
+async function sendClaude(
   threadId: string,
-  text: string,
-  images?: AgentImage[],
-  speed?: string,
-  steer?: boolean,
-  steerId?: string,
+  { text, images, steer, steerId, policy = {} }: AgentSendInput,
 ) {
   const session = sessions.get(threadId);
   if (!session)
     throw new Error(
       'No Claude session for this thread in this run of Harness; start it again with resume',
     );
+  const { speed, permissionMode } = policy;
   if (speed !== undefined && speed !== (session.options.speed ?? '')) {
     session.options = { ...session.options, speed: speed || undefined };
     await session.query?.applyFlagSettings({ fastMode: !!speed });
+  }
+  if (
+    permissionMode !== undefined &&
+    permissionMode !== session.options.permissionMode
+  ) {
+    if (!(permissionMode in PERMISSION_MODES))
+      throw new TypeError(
+        `permissionMode must be one of ${Object.keys(PERMISSION_MODES).join(', ')}`,
+      );
+    session.options = { ...session.options, permissionMode };
+    if (session.query)
+      await setMode(session.query, permissionMode as PermissionMode);
   }
   session.inbox.push({
     text,
@@ -203,7 +227,7 @@ export async function sendClaude(
  * Takes back a message sent into the running turn before Claude Code reads it. False once it can't: Claude Code already took it
  * (its `steer-read` follows), or it is being folded in right now.
  */
-export async function unsteerClaude(threadId: string, steerId: string) {
+async function unsteerClaude(threadId: string, steerId: string) {
   const session = sessions.get(threadId);
   if (!session) return true;
   const queued = session.inbox.findIndex((m) => m.steerId === steerId);
@@ -224,8 +248,10 @@ export async function unsteerClaude(threadId: string, steerId: string) {
 }
 
 /** `/compact` is Claude Code's own command, taken as a message; the PreCompact hook adds Mochi's instructions to `focus`. */
-export function compactClaude(threadId: string, focus: string) {
-  return sendClaude(threadId, focus ? `/compact ${focus}` : '/compact');
+function compactClaude(threadId: string, focus: string) {
+  return sendClaude(threadId, {
+    text: focus ? `/compact ${focus}` : '/compact',
+  });
 }
 
 export function setClaudeCompactInstructions(
@@ -236,7 +262,7 @@ export function setClaudeCompactInstructions(
   else keep.delete(threadId);
 }
 
-export async function interruptClaude(threadId: string) {
+async function interruptClaude(threadId: string) {
   const session = sessions.get(threadId);
   if (!session) return;
   dropApprovals(threadId, 'Interrupted by the user');
@@ -248,7 +274,7 @@ export async function interruptClaude(threadId: string) {
   await session.query.interrupt();
 }
 
-export function stopClaude(threadId: string) {
+function stopClaude(threadId: string) {
   const session = sessions.get(threadId);
   if (!session) return;
   sessions.delete(threadId);
@@ -263,7 +289,7 @@ export function stopClaude(threadId: string) {
  */
 // GAP: matched by text because activity entries carry no message id yet; pass the uuid once the entry stores it. Two
 // identical messages rewind to the later one.
-export async function rewindClaude(threadId: string, text: string) {
+async function rewindClaude(threadId: string, text: string) {
   const session = sessions.get(threadId);
   const uuid = session?.sent.findLast((m) => m.text.includes(text))?.uuid;
   if (!session?.query || !uuid) return;
@@ -275,7 +301,7 @@ export async function rewindClaude(threadId: string, text: string) {
 }
 
 /** The transcript entry just before the latest sent message with this text, for `forkAt`; null when unknown or it was the first. */
-export async function claudeRewindPoint(threadId: string, text: string) {
+async function claudeRewindPoint(threadId: string, text: string) {
   const session = sessions.get(threadId);
   const index = session?.sent.findLastIndex((m) => m.text.includes(text)) ?? -1;
   if (!session?.sessionId || index < 0) return null;
@@ -287,7 +313,7 @@ export async function claudeRewindPoint(threadId: string, text: string) {
 }
 
 /** Stops one background task of a live session: a subagent (by its Agent call's id) or a shell, workflow or monitor (by its task id); Claude Code then reports it `stopped`. */
-export async function stopClaudeTask(threadId: string, id: string) {
+async function stopClaudeTask(threadId: string, id: string) {
   const session = sessions.get(threadId);
   const taskId = session?.mapper.taskOf(id);
   if (!session?.query || !taskId)
@@ -295,7 +321,7 @@ export async function stopClaudeTask(threadId: string, id: string) {
   await session.query.stopTask(taskId);
 }
 
-export function resolveClaude(requestId: string, decision: AgentDecision) {
+function resolveClaude(requestId: string, decision: AgentDecision) {
   const pending = approvals.get(requestId);
   if (!pending) return false;
   approvals.delete(requestId);
@@ -499,7 +525,7 @@ async function launch(session: Session) {
           () => {},
         );
       }
-      // Auto mode depends on the plan, the model and fast mode; where Claude Code can't run it, edits fall back to acceptEdits rather than asking every time.
+      // `setMode`'s fallback, for a session that started in Auto: init reports the mode it actually runs.
       if (
         message.type === 'system' &&
         message.subtype === 'init' &&
@@ -725,6 +751,10 @@ function approve(threadId: string): CanUseTool {
     { signal, toolUseID, title, description, decisionReason },
   ) =>
     new Promise((resolve) => {
+      if (
+        isPreApproved(sessions.get(threadId)?.options.permissionMode, toolName)
+      )
+        return resolve({ behavior: 'allow', updatedInput: input });
       approvals.set(toolUseID, { threadId, toolName, input, resolve });
       // Claude Code withdrew the prompt (interrupt, its own cancel): the card goes with it rather than taking an answer nobody reads.
       signal.addEventListener(

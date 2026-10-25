@@ -75,14 +75,9 @@ test('IPC inputs carry the limits main checks by hand today', () => {
     /API key/,
   );
   const send = Schema.decodeUnknownSync(agentRpc.send.input);
-  assert.deepEqual(send(['t', 'hello', undefined, undefined, 'fast']), [
-    't',
-    'hello',
-    undefined,
-    undefined,
-    'fast',
-  ]);
-  assert.throws(() => send(['t', 'x'.repeat(100_001)]));
+  const input = { text: 'hello', policy: { speed: 'fast' } };
+  assert.deepEqual(send(['t', input]), ['t', input]);
+  assert.throws(() => send(['t', { text: 'x'.repeat(100_001) }]));
   assert.throws(() =>
     Schema.decodeUnknownSync(agentRpc.readWidget.input)([
       't',

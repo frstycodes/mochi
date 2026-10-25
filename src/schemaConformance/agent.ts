@@ -12,5 +12,6 @@ export type Conformance = [
   Check<Same<Decoded<typeof Agent.AgentEvent>, A.AgentEvent>>,
   Check<Same<Decoded<typeof Agent.SeqAgentEvent>, A.SeqAgentEvent>>,
   Check<Same<Decoded<typeof Agent.AgentStartOptions>, A.AgentStartOptions>>,
+  Check<Same<Decoded<typeof Agent.AgentSendInput>, A.AgentSendInput>>,
   Check<Rpc<A.AgentHost, typeof Agent.agentRpc>>,
 ];

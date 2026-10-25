@@ -4,6 +4,7 @@ import type {
   ModelInfo,
   PermissionMode,
   PermissionResult,
+  Query,
   SDKCompactBoundaryMessage,
   SDKMessage,
   SDKStatusMessage,
@@ -1231,12 +1232,37 @@ export const PERMISSION_MODES = {
 
 /** The `query()` options for a mode; the caller adds its own `allowedTools` (Mochi's) to these. */
 export function permissionOptions(mode: PermissionMode) {
-  // The SDK refuses bypassPermissions without this opt-in; Full access is the user's explicit, confirmed choice in the composer.
+  // The SDK refuses bypassPermissions without this opt-in, at start or switched to later (`send`); it only makes the mode
+  // available. Full access is the user's explicit, confirmed choice in the composer.
   return {
     permissionMode: mode,
-    allowDangerouslySkipPermissions: mode === 'bypassPermissions',
+    allowDangerouslySkipPermissions: true,
     allowedTools: PERMISSION_MODES[mode],
   };
+}
+
+/** Auto depends on the plan, the model and fast mode; where Claude Code can't run it, edits fall back to acceptEdits rather than asking every time. */
+export async function setMode(
+  query: Pick<Query, 'setPermissionMode'>,
+  mode: PermissionMode,
+) {
+  await query
+    .setPermissionMode(mode)
+    .catch(() =>
+      mode === 'auto' ? query.setPermissionMode('acceptEdits') : undefined,
+    );
+}
+
+/**
+ * `allowedTools` is fixed at start, so `canUseTool` allows what the session's current mode pre-approves.
+ * GAP: a tool the start mode pre-approved stays allowed after a switch to a stricter mode (WebFetch from Auto to Manual).
+ */
+export function isPreApproved(mode: string | undefined, toolName: string) {
+  const tools: readonly string[] =
+    mode && mode in PERMISSION_MODES
+      ? PERMISSION_MODES[mode as PermissionMode]
+      : [];
+  return tools.includes(toolName);
 }
 
 /** A message for Claude Code: image blocks ahead of the text, or the text alone. */

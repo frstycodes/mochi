@@ -1,7 +1,8 @@
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { cached } from '../cache.ts';
+import { writeFileAtomic } from '@mochi/core/utility/atomicWrite';
 import type { Locator, Page } from 'playwright-core';
 import {
   BUILT_IN_RECIPES,
@@ -182,8 +183,6 @@ export async function overrideStep(
     version: recipe.version,
     targets: { ...current, [stepId]: after },
   };
-  const tmp = `${overridesFile()}.${process.pid}.tmp`;
-  await writeFile(tmp, JSON.stringify(all, null, 2));
-  await rename(tmp, overridesFile());
+  await writeFileAtomic(overridesFile(), JSON.stringify(all, null, 2));
   return { before: step.target, after };
 }

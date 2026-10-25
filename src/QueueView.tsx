@@ -60,6 +60,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import {
   answerText,
   isMochiCard,
@@ -243,7 +244,7 @@ export function QueueDecision({
           {item.blocks.steps > 0 && (
             <span className="tabular">
               Blocks {item.blocks.steps}{' '}
-              {item.blocks.steps === 1 ? 'step' : 'steps'}
+              {plural(item.blocks.steps, 'step', 'steps')}
               {item.blocks.threads > 1 && ` in ${item.blocks.threads} threads`}
             </span>
           )}

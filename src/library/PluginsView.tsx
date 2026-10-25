@@ -1,4 +1,6 @@
-import { useRef, useState, useSyncExternalStore } from 'react';
+import { useRef, useState } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { ChevronDown, Globe, Plus, Trash, Upload } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -109,22 +111,16 @@ function InstalledPlugins({
 // {MARKETPLACE CHOICE}
 
 // Shared by the header's Add marketplace (which picks the one it added) and the catalog showing it.
-let picked = FEATURED_MARKETPLACES[0].name;
-const listeners = new Set<() => void>();
+const marketplaceStore = createStore<{ picked: string }>(() => ({
+  picked: FEATURED_MARKETPLACES[0].name,
+}));
 
 function pickMarketplace(name: string) {
-  picked = name;
-  listeners.forEach((l) => l());
+  marketplaceStore.setState({ picked: name });
 }
 
 function usePickedMarketplace() {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => void listeners.delete(listener);
-    },
-    () => picked,
-  );
+  return useStore(marketplaceStore, (s) => s.picked);
 }
 
 // {CATALOG}

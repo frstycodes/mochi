@@ -1,6 +1,7 @@
 import type { ActivityEntry } from './model.ts';
 import { isMochiTarget } from './chat/mochiCalls.ts';
 import { isSendTarget } from './chat/threadMessages.ts';
+import { plural } from './lib/format.ts';
 
 export type ToolVerb =
   | 'Read'
@@ -154,8 +155,6 @@ export function summarize(activity: ActivityEntry[]): ThreadSummary {
   };
 }
 
-const PLURAL = new Intl.PluralRules('en');
-
 // Ordered by importance: what changed the repo, then what ran, then what was looked up.
 // `two` is English's "twice", which plural rules don't have; only phrases that read better with it set it.
 const TURN_PHRASES: {
@@ -243,9 +242,7 @@ export function turnSummary(entries: ActivityEntry[]) {
     const form =
       count === 2 && forms.two
         ? forms.two
-        : PLURAL.select(count) === 'one'
-          ? forms.one
-          : forms.other;
+        : plural(count, forms.one, forms.other);
     return [form.replace('#', String(count))];
   });
   const text =

@@ -3,6 +3,7 @@ import { boardColumns } from '../progress';
 import { lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import type { DiffSpec } from './fence';
+import { plural } from '../lib/format.ts';
 
 const GUTTER = 132;
 const COL = 104;
@@ -97,7 +98,7 @@ export function DiffVisual({ spec }: { spec: DiffSpec }) {
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2 pb-1 type-meta text-muted-foreground">
         <span className="tabular">
-          {spec.files.length} {spec.files.length === 1 ? 'file' : 'files'}{' '}
+          {spec.files.length} {plural(spec.files.length, 'file', 'files')}{' '}
           changed
         </span>
         <span className="ml-auto">

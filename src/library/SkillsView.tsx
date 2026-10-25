@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   CheckBadge,
   Download,
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from '@/toast/store';
+import { useDebounced } from '@/hooks/useDebounced';
 import { host } from '../host';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
 import {
@@ -335,15 +336,6 @@ function copyToLibrary(library: Library, item: NativeItem) {
             ' stays as it is.',
       });
   });
-}
-
-function useDebounced(value: string, ms: number) {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
 }
 
 /** Copies what the profile's own Claude Code or Codex account already has into the library. */

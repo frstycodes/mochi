@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { plural, TOKENS } from '@/lib/format';
 import { formatElapsed } from '../progress';
 import {
   SubagentAvatar,
@@ -21,7 +22,6 @@ import {
   SubagentModel,
   subagentPersona,
   TaskIcon,
-  TOKENS,
   useElapsed,
 } from '../agents/parts';
 import { splitPath } from '../chat/imageSrc';
@@ -236,7 +236,7 @@ function AgentCard({
         {subagent.steps.length > 0 && (
           <Count
             value={String(subagent.steps.length)}
-            unit={subagent.steps.length === 1 ? 'tool use' : 'tool uses'}
+            unit={plural(subagent.steps.length, 'tool use', 'tool uses')}
           />
         )}
         <SubagentLine subagent={subagent} />

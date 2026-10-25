@@ -5,7 +5,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -28,7 +27,8 @@ import {
   VISIBLE,
   type Slot,
 } from './stack';
-import { dismiss, getToasts, subscribe, type Toast } from './store';
+import { useIsWindowActive } from '../lib/windowFocus';
+import { dismiss, useToasts, type Toast } from './store';
 import { ToastRow, ToastSummary } from './ToastContent';
 
 /** How far an opened toast grows past the stack on each side, never past a 16px gutter. */
@@ -45,7 +45,7 @@ const WIDGET_WIDTH = `calc(100cqw + 2 * ${GROWTH})`;
  * `expand` widget opens in place into it, like the Dynamic Island, and the rest of the stack steps aside.
  */
 export function Toaster() {
-  const toasts = useSyncExternalStore(subscribe, getToasts);
+  const toasts = useToasts();
   const [heights, setHeights] = useState<Record<string, number>>({});
   const [isHovered, setHovered] = useState(false);
   const [isInteracting, setInteracting] = useState(false);
@@ -525,22 +525,6 @@ function useCloseOnOutsidePointer(
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [listRef, isActive]);
-}
-
-function useIsWindowActive() {
-  return useSyncExternalStore(
-    (onChange) => {
-      window.addEventListener('focus', onChange);
-      window.addEventListener('blur', onChange);
-      document.addEventListener('visibilitychange', onChange);
-      return () => {
-        window.removeEventListener('focus', onChange);
-        window.removeEventListener('blur', onChange);
-        document.removeEventListener('visibilitychange', onChange);
-      };
-    },
-    () => document.hasFocus() && !document.hidden,
-  );
 }
 
 /** Alt+T jumps to the newest toast's first control, so an Undo is reachable without tabbing through the app. */

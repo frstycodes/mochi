@@ -32,24 +32,13 @@ import {
   warmClaude,
 } from './claude/oneshot.ts';
 import {
-  claudeRewindPoint,
-  claudeRunOptions,
+  claude,
   readClaudeWidget,
-  claudeSessionIds,
-  compactClaude,
-  hasClaudeSession,
   setClaudeCompactInstructions,
-  interruptClaude,
-  resolveClaude,
-  rewindClaude,
-  sendClaude,
-  startClaude,
   stopAllClaude,
-  unsteerClaude,
-  stopClaude,
-  stopClaudeTask,
 } from './claude/sessions.ts';
 import { CodexAdapter } from './codex/adapter.ts';
+import type { HarnessAdapter } from './adapter.ts';
 import { reviewClaude, type ReviewUpdate } from './review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from './config.ts';
 import { limitsOf, recordLimits } from './limits.ts';
@@ -167,6 +156,10 @@ const codex = new CodexAdapter(
   },
   (spaceId) => profileInstructions(spaceId, 'codex'),
 );
+const ADAPTERS = { claude, codex } satisfies Record<Provider, HarnessAdapter>;
+const adapters: HarnessAdapter[] = Object.values(ADAPTERS);
+/** The harness holding the thread's live session, if any. */
+const adapterOf = (threadId: string) => adapters.find((a) => a.has(threadId));
 // One model call per distinct command per launch: agents rerun the same `pnpm test` all day.
 const commandTitles = new Map<string, Promise<string>>();
 const MAX_COMMAND_TITLES = 500;
@@ -179,8 +172,7 @@ onAgentEvent((event) => {
 
 /** A command its agent sent without a description (always on Codex, sometimes on Claude) gets one from the background model, for its row and the sidebar. */
 async function describeCommand(threadId: string, id: string, command: string) {
-  const spaceId = (claudeRunOptions(threadId) ?? codex.runOptions(threadId))
-    ?.spaceId;
+  const spaceId = adapterOf(threadId)?.runOptions(threadId)?.spaceId;
   if (!spaceId) return;
   if (commandTitles.size >= MAX_COMMAND_TITLES) commandTitles.clear();
   let title = commandTitles.get(command);
@@ -273,11 +265,13 @@ export const agent = {
       throw error;
     });
   },
-  async send(_window, threadId, text, pictures, skills, speed, steer, steerId) {
+  async send(_window, threadId, input) {
     // Sent while the worktree is being set up: it goes to the agent once that start is through.
     await starts.wait(threadId);
-    const run = claudeRunOptions(threadId) ?? codex.runOptions(threadId);
-    if (!run) throw new Error(NO_AGENT_PROCESS);
+    const adapter = adapterOf(threadId);
+    const run = adapter?.runOptions(threadId);
+    if (!adapter || !run) throw new Error(NO_AGENT_PROCESS);
+    const speed = input.policy?.speed;
     // '' is standard; a tier the running model doesn't list runs standard too.
     const tier =
       speed === undefined
@@ -292,45 +286,28 @@ export const agent = {
             )
           ).speed ?? '');
     markBusy(threadId);
-    if (hasClaudeSession(threadId))
-      return sendClaude(
-        threadId,
-        text,
-        pictures,
-        tier,
-        steer === true,
-        steerId,
-      );
-    return codex.send(
-      threadId,
-      text,
-      pictures,
-      skills,
-      tier,
-      steer === true,
-      steerId,
-    );
+    return adapter.send(threadId, {
+      ...input,
+      policy: { ...input.policy, speed: tier },
+    });
   },
   async unsteer(_window, threadId, steerId) {
-    if (hasClaudeSession(threadId)) return unsteerClaude(threadId, steerId);
-    return codex.unsteer(threadId, steerId);
+    return adapterOf(threadId)?.unsteer(threadId, steerId) ?? true;
   },
   async compact(_window, threadId, focus) {
     await starts.wait(threadId);
-    if (!hasClaudeSession(threadId) && !codex.owns(threadId))
-      throw new Error(NO_AGENT_PROCESS);
+    const adapter = adapterOf(threadId);
+    if (!adapter) throw new Error(NO_AGENT_PROCESS);
     markBusy(threadId);
-    if (hasClaudeSession(threadId)) return compactClaude(threadId, focus);
-    return codex.compact(threadId);
+    return adapter.compact(threadId, focus);
   },
   async compactInstructions(_window, threadId, instructions) {
     setClaudeCompactInstructions(threadId, instructions);
   },
   async interrupt(_window, threadId) {
     if (starts.abort(threadId)) return;
-    if (hasClaudeSession(threadId)) return interruptClaude(threadId);
-    if (codex.owns(threadId)) return codex.interrupt(threadId);
-    // Nothing running for this thread (already stopped, or never started this launch): nothing to interrupt.
+    // No adapter: nothing running for this thread (already stopped, or never started this launch): nothing to interrupt.
+    return adapterOf(threadId)?.interrupt(threadId);
   },
   async setupChoice(_window, threadId, choice) {
     if (!starts.choose(threadId, choice))
@@ -349,8 +326,7 @@ export const agent = {
     const id = threadId;
     await Promise.all([
       ...threadSessions(id, [
-        ...claudeSessionIds(),
-        ...codex.threadIds(),
+        ...adapters.flatMap((a) => a.threadIds()),
         ...starts.ids(),
       ]).map(endSession),
       main.settle(id),
@@ -358,7 +334,7 @@ export const agent = {
   },
   async attached(_window, threads) {
     return threads
-      .filter((t) => hasClaudeSession(t.threadId) || codex.owns(t.threadId))
+      .filter((t) => adapterOf(t.threadId))
       .map(({ threadId, after }) => ({
         threadId,
         isWorking: isBusy(threadId),
@@ -366,9 +342,8 @@ export const agent = {
       }));
   },
   async stopTask(_window, threadId, taskId) {
-    if (hasClaudeSession(threadId)) return stopClaudeTask(threadId, taskId);
-    if (codex.owns(threadId)) return codex.stopTask(threadId, taskId);
-    // Its parent's process is gone, so the task already stopped with it.
+    // No adapter: its parent's process is gone, so the task already stopped with it.
+    return adapterOf(threadId)?.stopTask(threadId, taskId);
   },
   async warm(_window, spaceId) {
     return warmClaude(spaceId);
@@ -386,11 +361,10 @@ export const agent = {
     return limitsOf((await accountFor(spaceId, provider)).account.id, provider);
   },
   async rewindFiles(_window, threadId, text) {
-    if (hasClaudeSession(threadId)) return rewindClaude(threadId, text);
+    return adapterOf(threadId)?.rewindFiles?.(threadId, text);
   },
   async rewindPoint(_window, threadId, text) {
-    if (hasClaudeSession(threadId)) return claudeRewindPoint(threadId, text);
-    return codex.rewindPoint(threadId, text);
+    return adapterOf(threadId)?.rewindPoint(threadId, text) ?? null;
   },
   async readWidget(_window, threadId, server, uri) {
     return readWidget(threadId, server, uri);
@@ -562,8 +536,8 @@ async function stopSession(threadId: string) {
   markIdle(threadId);
   forgetEvents(threadId);
   starts.abort(threadId);
-  if (hasClaudeSession(threadId)) return stopClaude(threadId);
-  return codex.stop(threadId);
+  // Every harness: Codex also drops a start still waiting on its app-server.
+  await Promise.all(adapters.map((a) => a.stop(threadId)));
 }
 
 /** Answers a pending approval or question, from the renderer or a notification's buttons. */
@@ -571,8 +545,8 @@ export async function resolveRequest(
   requestId: string,
   decision: AgentDecision,
 ) {
-  if (resolveClaude(requestId, decision)) return;
-  if (codex.ownsRequest(requestId)) return codex.resolve(requestId, decision);
+  for (const adapter of adapters)
+    if (await adapter.respond(requestId, decision)) return;
   throw new Error(NO_PENDING_REQUEST);
 }
 
@@ -603,8 +577,7 @@ export async function startAgent(
         speed,
       )),
     };
-    if (options.provider === 'claude') return startClaude(id, run);
-    return codex.start(id, run, start.signal);
+    return ADAPTERS[options.provider].start(id, run, start.signal);
   };
   let isLaunching = false;
   try {

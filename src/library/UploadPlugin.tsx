@@ -1,7 +1,8 @@
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { useQuery } from '@tanstack/react-query';
 import {
   useState,
-  useSyncExternalStore,
   type DragEvent,
   type ReactNode,
   type RefObject,
@@ -123,22 +124,16 @@ const MAX_UPLOAD_BYTES = 20_000_000;
 // {PENDING FILE}
 
 // Shared by the header's picker and the page's drop zone, which sit in different parts of the page.
-let pending: File | null = null;
-const listeners = new Set<() => void>();
+const pendingStore = createStore<{ file: File | null }>(() => ({
+  file: null,
+}));
 
 function setPendingUpload(file: File | null) {
-  pending = file;
-  listeners.forEach((l) => l());
+  pendingStore.setState({ file });
 }
 
 function usePendingUpload() {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => void listeners.delete(listener);
-    },
-    () => pending,
-  );
+  return useStore(pendingStore, (s) => s.file);
 }
 
 // {REVIEW}

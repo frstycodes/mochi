@@ -3,6 +3,7 @@ import type { Thread, TurnReport } from '../model.ts';
 import { parentOf, subThreadsOf } from '../reorder.ts';
 import { nextStep } from './report.ts';
 import { YOUR_CALL, type Gap, type Verdict } from './verdict.ts';
+import { plural } from '../lib/format.ts';
 
 export type MoveKind =
   | 'confirm'
@@ -77,7 +78,7 @@ export function moveFor(
   if (subPrs.length)
     return {
       kind: 'merge-subs',
-      label: `Merge ${subPrs.length} ${subPrs.length === 1 ? 'PR' : 'PRs'}`,
+      label: `Merge ${subPrs.length} ${plural(subPrs.length, 'PR', 'PRs')}`,
     };
   const step = nextStep(prStates);
   if (step === 'open-pr')
@@ -95,7 +96,7 @@ function subMove(sub: NonNullable<Verdict['subThread']>): Move | null {
   if (sub.kind === 'gaps')
     return {
       kind: 'close-gaps',
-      label: `Close ${sub.openGaps} ${sub.openGaps === 1 ? 'gap' : 'gaps'}`,
+      label: `Close ${sub.openGaps} ${plural(sub.openGaps, 'gap', 'gaps')}`,
       threadId: sub.id,
     };
   if (sub.kind === 'done' || sub.kind === 'idle')
@@ -105,7 +106,7 @@ function subMove(sub: NonNullable<Verdict['subThread']>): Move | null {
 
 const closeGaps = (count: number): Move => ({
   kind: 'close-gaps',
-  label: `Close ${count} ${count === 1 ? 'gap' : 'gaps'}`,
+  label: `Close ${count} ${plural(count, 'gap', 'gaps')}`,
 });
 
 /**
@@ -167,7 +168,7 @@ export function questionFor(
   const open = verdict.gaps.filter((g) => !g.isAccepted).length;
   const sub = verdict.subThread;
   if (sub && move.kind === 'close-gaps')
-    return `${sub.title} has ${sub.openGaps === 1 ? 'a gap' : `${sub.openGaps} gaps`}: hand ${sub.openGaps === 1 ? 'it' : 'them'} back to its agent?`;
+    return `${sub.title} has ${plural(sub.openGaps, 'a gap', `${sub.openGaps} gaps`)}: hand ${plural(sub.openGaps, 'it', 'them')} back to its agent?`;
   if (sub && move.kind === 'hand-back')
     return `${sub.title} is finished. Hand its result back to this thread?`;
   switch (move.kind) {
@@ -176,7 +177,7 @@ export function questionFor(
         ? 'Verify the completed work against the goal criteria?'
         : verdict.reason;
     case 'close-gaps':
-      return `Hand the ${open === 1 ? 'gap' : `${open} gaps`} back to ${agent}?`;
+      return `Hand the ${plural(open, 'gap', `${open} gaps`)} back to ${agent}?`;
     case 'continue':
       return report?.next ?? `Pick up where ${agent} stopped?`;
     case 'commit':

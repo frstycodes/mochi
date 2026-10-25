@@ -1,4 +1,6 @@
-import { useSyncExternalStore, type Dispatch } from 'react';
+import type { Dispatch } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { Thread } from '../model';
@@ -8,16 +10,19 @@ import { runUtility } from '../utility/runUtility';
 import { localSimplify, rulesKey, simplifyPrompt } from './simplify';
 
 // Messages being simplified right now, as `threadId:index`, so the bar and the row can show it.
-const pending = new Set<string>();
-const listeners = new Set<() => void>();
-const changed = () => listeners.forEach((l) => l());
-const subscribe = (l: () => void) => (
-  listeners.add(l),
-  () => void listeners.delete(l)
-);
+const pendingStore = createStore<{ keys: ReadonlySet<string> }>(() => ({
+  keys: new Set(),
+}));
+const setPending = (key: string, isPending: boolean) =>
+  pendingStore.setState(({ keys }) => {
+    const next = new Set(keys);
+    if (isPending) next.add(key);
+    else next.delete(key);
+    return { keys: next };
+  });
 
 export const useIsSimplifying = (threadId: string, index: number) =>
-  useSyncExternalStore(subscribe, () => pending.has(`${threadId}:${index}`));
+  useStore(pendingStore, (s) => s.keys.has(`${threadId}:${index}`));
 
 /** Shows a reply's stored simplified version, or makes them with the Simplify settings when there are none or they're out of date. */
 export async function simplify(
@@ -27,13 +32,12 @@ export async function simplify(
 ) {
   const entry = thread.activity[index];
   const key = `${thread.id}:${index}`;
-  if (!entry || pending.has(key)) return;
+  if (!entry || pendingStore.getState().keys.has(key)) return;
   const prefs = getPrefs();
   const rules = rulesKey(prefs);
   if (entry.simplified?.rulesKey === rules)
     return dispatch({ type: 'simplify-toggle', threadId: thread.id, index });
-  pending.add(key);
-  changed();
+  setPending(key, true);
   try {
     const answer = host.isDesktop
       ? await runUtility(
@@ -56,7 +60,6 @@ export async function simplify(
       rulesKey: rules,
     });
   } finally {
-    pending.delete(key);
-    changed();
+    setPending(key, false);
   }
 }

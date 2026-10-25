@@ -4,6 +4,7 @@ import type { ConnectorSettings } from './connectorTools.ts';
 import { connectorIcon } from './connectors.ts';
 import type { PluginBundle } from './pluginBundle.ts';
 import { parseSkillMd } from './skillMd.ts';
+import { plural } from '../lib/format.ts';
 
 /**
  * The profile library (LIBRARY.md): each item is held once, and a profile is the set of item ids it turned on. Sessions
@@ -397,7 +398,7 @@ function pluginContents(bundle: PluginBundle) {
   return (
     counts
       .filter(([n]) => n)
-      .map(([n, label]) => `${n} ${label}${n === 1 ? '' : 's'}`)
+      .map(([n, label]) => `${n} ${label}${plural(n, '', 's')}`)
       .join(' · ') || null
   );
 }

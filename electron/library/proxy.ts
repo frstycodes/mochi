@@ -1,14 +1,9 @@
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { Client } from '@modelcontextprotocol/client';
 import {
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
+  Server,
   type CallToolResult,
   type Tool,
-} from '@modelcontextprotocol/sdk/types.js';
+} from '@modelcontextprotocol/server';
 import { ACCOUNT_ARGUMENT } from '../../src/library/connectors.ts';
 
 /**
@@ -37,12 +32,12 @@ export async function connectorServer(
         undefined,
     },
   );
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  server.setRequestHandler('tools/list', async () => ({
     tools: (await allTools(upstream)).map((tool) =>
       isShared ? withAccount(tool, aliases) : tool,
     ),
   }));
-  server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
+  server.setRequestHandler('tools/call', async ({ params }) => {
     const { [ACCOUNT_ARGUMENT]: chosen, ...args } = params.arguments ?? {};
     const alias = isShared ? chosen : first;
     if (typeof alias !== 'string' || !aliases.includes(alias))
@@ -60,15 +55,15 @@ export async function connectorServer(
     }
   });
   // An upstream without resources answers "method not found"; the session just sees none.
-  server.setRequestHandler(ListResourcesRequestSchema, (request) =>
+  server.setRequestHandler('resources/list', (request) =>
     upstream.listResources(request.params).catch(() => ({ resources: [] })),
   );
-  server.setRequestHandler(ListResourceTemplatesRequestSchema, (request) =>
+  server.setRequestHandler('resources/templates/list', (request) =>
     upstream
       .listResourceTemplates(request.params)
       .catch(() => ({ resourceTemplates: [] })),
   );
-  server.setRequestHandler(ReadResourceRequestSchema, (request) =>
+  server.setRequestHandler('resources/read', (request) =>
     upstream.readResource(request.params),
   );
   return server;

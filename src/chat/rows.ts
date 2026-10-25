@@ -2,6 +2,7 @@ import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
 import { isTurnCall } from './mochiCalls.ts';
 import type { TurnChanges } from './turnChanges.ts';
+import { plural } from '../lib/format.ts';
 
 export type ChatRow =
   | {
@@ -168,7 +169,7 @@ export function planSummary(entries: ActivityEntry[]) {
   const changes = entries.map((e) => planChange(e)!);
   const dropped = changes.reduce((n, c) => n + c.dropped, 0);
   const added = changes.reduce((n, c) => n + c.added, 0);
-  const steps = (n: number) => `${n} ${n === 1 ? 'step' : 'steps'}`;
+  const steps = (n: number) => `${n} ${plural(n, 'step', 'steps')}`;
   return `Plan updated: ${[dropped && `dropped ${steps(dropped)}`, added && `added ${steps(added)}`].filter(Boolean).join(', ')}`;
 }
 
