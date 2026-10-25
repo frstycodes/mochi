@@ -14,10 +14,7 @@
     "src/goals/outcome.ts",
     "src/settings/sections/goals.tsx"
   ],
-  "ignoreDependencies": [
-    "@effect/language-service",
-    "cloudflare"
-  ],
+  "ignoreDependencies": ["@effect/language-service", "cloudflare"],
   "ignoreBinaries": ["mkfifo", "screencapture"],
   "rules": {
     "exports": "off",
