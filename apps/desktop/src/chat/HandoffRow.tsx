@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { ChevronRight, Transfer } from '@/icons';
+import { ArrowRight, ChevronRight, Transfer } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
-import type { Handoff } from '../model';
+import type { Handoff, Provider } from '../model';
 import { clock } from '../progress';
 import { useModels } from '../ModelControls';
 import { PROVIDER_NAME } from '../rewind/handoff';
 import { optionFor } from '../runtime/models';
+import { ProviderMark } from '../ui';
 import { Expand } from '../WorkLog';
 
 const FALLBACK_NOTE = {
@@ -47,11 +48,13 @@ export function HandoffRow({
             className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2"
           />
         )}
-        <Transfer aria-hidden className="size-4 shrink-0" />
         {isSwitch(handoff) ? (
           <SwitchLine handoff={handoff} spaceId={spaceId} />
         ) : (
-          <HandoffLine handoff={handoff} />
+          <>
+            <Transfer aria-hidden className="size-4 shrink-0" />
+            <HandoffLine handoff={handoff} />
+          </>
         )}
         {hasBody && (
           <ChevronRight
@@ -92,7 +95,11 @@ export function HandoffRow({
 const isSwitch = (handoff: Handoff) =>
   handoff.status === 'pending' || handoff.contents !== undefined;
 
-/** `Switches to Codex · GPT-5.5 on your next message`, then `Switched to Codex · GPT-5.5` and what the package held. */
+/**
+ * `[Claude] Opus 5.5 → [Codex] GPT-5.5 on your next message`, then the same pair and what the package held. Each side is its
+ * provider's mark and the model's name from the catalog (the id until that loads); a row from before `fromModel` was recorded
+ * names the provider alone.
+ */
 function SwitchLine({
   handoff,
   spaceId,
@@ -100,31 +107,41 @@ function SwitchLine({
   handoff: Handoff;
   spaceId: string;
 }) {
-  const target = useTargetName(handoff, spaceId);
-  if (handoff.status === 'pending')
-    return (
-      <span className="min-w-0 truncate">
-        Switches to {target} on your next message
-      </span>
-    );
+  const catalog = useModels(spaceId);
+  const nameOf = (provider: Provider, model: string | undefined) =>
+    model === undefined
+      ? PROVIDER_NAME[provider]
+      : optionFor(catalog[provider], model, provider).name;
+  const isPending = handoff.status === 'pending';
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span className="shrink-0">Switched to {target}</span>
-      {!!handoff.contents && (
-        <span className="min-w-0 truncate text-subtle-foreground">
-          {handoff.contents}
-        </span>
-      )}
+      <span className="sr-only">
+        {isPending ? 'Switches from' : 'Switched from'}
+      </span>
+      <ModelName
+        provider={handoff.from}
+        name={nameOf(handoff.from, handoff.fromModel)}
+      />
+      <ArrowRight aria-hidden className="size-3 shrink-0" />
+      <span className="sr-only">to</span>
+      <ModelName
+        provider={handoff.to}
+        name={nameOf(handoff.to, handoff.model ?? '')}
+      />
+      <span className="min-w-0 truncate text-subtle-foreground">
+        {isPending ? 'on your next message' : handoff.contents}
+      </span>
     </span>
   );
 }
 
-/** The provider, then the model's name from its catalog (the id until that loads); just the provider for its default model. */
-function useTargetName(handoff: Handoff, spaceId: string) {
-  const catalog = useModels(spaceId);
-  const provider = PROVIDER_NAME[handoff.to];
-  if (!handoff.model) return provider;
-  return `${provider} · ${optionFor(catalog[handoff.to], handoff.model, handoff.to).name}`;
+function ModelName({ provider, name }: { provider: Provider; name: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <ProviderMark provider={provider} size={14} />
+      {name}
+    </span>
+  );
 }
 
 function HandoffLine({ handoff }: { handoff: Handoff }) {
