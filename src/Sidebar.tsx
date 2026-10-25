@@ -369,7 +369,7 @@ function SpaceNav({
 
   return (
     <>
-      <SidebarGroup>
+      <SidebarGroup className="pt-3">
         <SidebarGroupContent>
           <SidebarMenu>
             <NavItem
