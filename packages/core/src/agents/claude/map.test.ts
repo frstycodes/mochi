@@ -908,7 +908,7 @@ test('a foreground Agent call ends with its answer from the tool result; a faile
   );
 });
 
-test('commands keep skills and custom commands with their argument hints, not Claude Code built-ins', () => {
+test('commands keep Claude Code built-ins, skills and custom commands with their argument hints; a built-in wins its name', () => {
   assert.deepEqual(
     commandsFrom([
       {
@@ -917,6 +917,7 @@ test('commands keep skills and custom commands with their argument hints, not Cl
         argumentHint: '',
         builtin: true,
       },
+      { name: 'compact', description: 'My compact', argumentHint: '' },
       {
         name: 'fix-lint',
         description: 'Fix lint',
@@ -925,6 +926,11 @@ test('commands keep skills and custom commands with their argument hints, not Cl
       { name: 'review', description: 'Review', argumentHint: '' },
     ]),
     [
+      {
+        name: 'compact',
+        description: 'Compact the conversation',
+        builtin: true,
+      },
       {
         name: 'fix-lint',
         description: 'Fix lint',

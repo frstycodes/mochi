@@ -397,7 +397,7 @@ export interface AgentInfo {
   skills?: string[];
   plugins?: { name: string; version?: string }[];
   slashCommands?: string[];
-  /** Skills and custom or plugin commands `/name` runs, with what they say about themselves; the harness's built-ins left out. */
+  /** The harness's built-ins, skills, and custom or plugin commands `/name` runs, with what they say about themselves. */
   commands?: AgentCommand[];
 }
 
@@ -408,6 +408,8 @@ export interface AgentCommand {
   argumentHint?: string;
   /** Codex: the skill's SKILL.md, which a turn names to run it. */
   path?: string;
+  /** The harness's own command (`/compact`), not a skill or a user, plugin or MCP one. */
+  builtin?: boolean;
 }
 
 export interface McpServer {

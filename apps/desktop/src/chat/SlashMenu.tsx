@@ -5,12 +5,19 @@ import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';
-import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
+import type {
+  AgentCommand,
+  AgentInfo,
+  McpServer,
+  Provider,
+  Thread,
+} from '../model';
 import { offItems } from '../library/nativeOverrides';
 import { useProfiles } from '../profiles';
 import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { isAbsolutePath } from '../projects';
+import { useHarnessSelector } from '../store';
 import type { Caret } from './ComposerEditor';
 import { CaretMenu, forwardKey } from './CaretMenu';
 import { ItemMeta, SkillFallback } from './MentionMenu';
@@ -23,6 +30,7 @@ import {
   slashItems,
   slashMatches,
   slashQueryAt,
+  withBuiltins,
   type SlashItem,
 } from './slash';
 import { queryKeys } from '../queryKeys';
@@ -309,10 +317,18 @@ function useAgentCommands(
     projectRoot,
     !agent?.commands,
   );
+  const known = useHarnessSelector((s) =>
+    agent?.commands ? undefined : liveCommands(s.threads, provider),
+  );
   return agent?.commands
     ? { commands: agent.commands, skills: agent.skills }
-    : configured;
+    : { ...configured, commands: withBuiltins(configured.commands, known) };
 }
+
+// GAP: until a thread on `provider` has reported its live list, the built-ins stay out.
+const liveCommands = (threads: Thread[], provider: Provider) =>
+  threads.find((t) => t.providers[0] === provider && t.agent?.commands)?.agent
+    ?.commands;
 
 /** Leaves out what the Skills tab turned off for the profile, as the session will once it starts. */
 function useConfiguredCommands(

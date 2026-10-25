@@ -61,6 +61,8 @@ export const AgentCommand = Schema.Struct({
   description: Schema.String,
   argumentHint: opt(Schema.String),
   path: opt(Schema.String),
+  /** The harness's own command (`/compact`), not a skill or a user, plugin or MCP one. */
+  builtin: opt(Schema.Boolean),
 });
 export type AgentCommand = typeof AgentCommand.Type;
 

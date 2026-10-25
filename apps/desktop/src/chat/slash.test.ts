@@ -14,6 +14,7 @@ import {
   slashTokens,
   slotPlaceholder,
   typedSkills,
+  withBuiltins,
 } from './slash.ts';
 
 test('parses /side with its question, keeping line breaks', () => {
@@ -321,4 +322,21 @@ test('before the agent starts, lists enabled account skills then project, plugin
     false,
   );
   assert.equal(listedItems.find((i) => i.name === 'repo-skill')?.isSkill, true);
+});
+
+test('built-ins from a live list lead the commands read from disk and take their name', () => {
+  const builtin = { name: 'review', description: 'Review a PR', builtin: true };
+  assert.deepEqual(
+    withBuiltins(
+      [
+        { name: 'review', description: 'Mine' },
+        { name: 'fix-lint', description: 'Fix lint' },
+      ],
+      [builtin, { name: 'other-skill', description: 'Not a built-in' }],
+    ).map((c) => c.description),
+    ['Review a PR', 'Fix lint'],
+  );
+  assert.deepEqual(withBuiltins([{ name: 'a', description: 'A' }]), [
+    { name: 'a', description: 'A' },
+  ]);
 });
