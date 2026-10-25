@@ -92,5 +92,36 @@ it.live(
         typeof (yield* Effect.promise(() => call('ports.allocate', ['t1']))),
         'number',
       );
+
+      const output = yield* client.agentPush().pipe(
+        Stream.filter((item) => item.channel === 'pty:onData'),
+        Stream.map((item) => (item.payload as { data: string }).data),
+        Stream.scan(
+          () => '',
+          (all, data) => all + data,
+        ),
+        Stream.takeUntil((all) => withoutEscapes(all).includes('mochi-pty-ok')),
+        Stream.runLast,
+        Effect.forkScoped({ startImmediately: true }),
+      );
+      yield* client.ping();
+      const { id } = (yield* Effect.promise(() =>
+        call('pty.spawn', [{ cwd: repo, cols: 80, rows: 24, threadId: 't1' }]),
+      )) as { id: string };
+      yield* Effect.promise(() =>
+        call('pty.write', [id, 'echo mochi-pty-ok\r']),
+      );
+      // The shell's echo of the line is enough: it came back through the pty and Core's push.
+      assert.ok(
+        withoutEscapes(Option.getOrThrow(yield* Fiber.join(output))).includes(
+          'mochi-pty-ok',
+        ),
+      );
+      yield* Effect.promise(() => call('pty.kill', [id]));
     }),
 );
+
+/** Terminal output without its control sequences: shells colour and redraw the line they echo (PSReadLine, zsh highlighting). */
+const withoutEscapes = (text: string) =>
+  // oxlint-disable-next-line no-control-regex -- matching escape sequences is the point.
+  text.replace(/\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g, '');

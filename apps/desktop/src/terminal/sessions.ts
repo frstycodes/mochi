@@ -229,8 +229,8 @@ function createSession(
     lineHeight: 1.4,
     scrollback: getPrefs().terminalScrollback,
     macOptionIsMeta: true,
-    // The web build has no shell; its mock plays a scripted session.
-    disableStdin: kind !== 'shell' || !host.isDesktop,
+    // Without Core there is no shell; the web build's mock plays a scripted session.
+    disableStdin: kind !== 'shell' || !host.hasCore,
     cursorInactiveStyle: 'none',
     // Token colors are tuned for text on `card`; programs also paint ANSI pairs like black on red. xterm nudges any pair under AA.
     minimumContrastRatio: 4.5,
@@ -411,8 +411,8 @@ function wireHost() {
       }),
     );
   });
-  // Desktop only: the web mock replays its demo on every spawn, so restored scrollback would just repeat it.
-  if (host.isDesktop)
+  // Not for the web mock: it replays its demo on every spawn, so restored scrollback would just repeat it.
+  if (host.hasCore)
     addEventListener('pagehide', () => groups().forEach(saveGroup));
 }
 
@@ -452,7 +452,7 @@ function saveGroup(group: TerminalGroup) {
 }
 
 function loadGroup(key: string): SavedGroup | null {
-  if (!host.isDesktop || !getPrefs().restoreTerminals) return null;
+  if (!host.hasCore || !getPrefs().restoreTerminals) return null;
   try {
     const saved: SavedGroup | null = terminalSlice(key).getState().value;
     return saved?.sessions.length ? saved : null;
