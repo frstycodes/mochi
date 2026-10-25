@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import { ErrorBoundary } from 'react-error-boundary';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
-import { Edit, Folder, Ban, Inbox, Route, Chart } from '@/icons';
+import { Edit, Folder, Ban, Inbox, Chart } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ErrorFallback } from '@/components/ErrorFallback';
 import {
@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
 import { COMPOSER_EDITABLE } from '../chat/ComposerEditor';
-import { BoardView } from '../BoardView';
 import { UsagePage } from '../usage/UsagePage';
 import { HANDOFF_TRANSITION, isHandingOff } from '../Composer';
 import { NewThreadView } from '../NewThreadView';
@@ -252,7 +251,6 @@ function LeafContent({ leafId, view }: { leafId: string; view: View }) {
 const PAGES = {
   new: { icon: Edit, title: 'New thread', component: NewThreadView },
   queue: { icon: Inbox, title: 'Queue', component: QueueView },
-  board: { icon: Route, title: 'Board', component: BoardView },
   projects: { icon: Folder, title: 'Projects', component: ProjectsView },
   usage: { icon: Chart, title: 'Usage', component: UsagePage },
 } satisfies Record<Exclude<View['kind'], 'thread' | 'tab'>, unknown>;

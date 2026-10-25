@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import { singleLayout, splitLeaf, type View } from '../layout/tree.ts';
 import type { Pane, QueueItem, Thread } from '../model.ts';
-import { reviewThreads, stepIndex } from '../review/order.ts';
 import type { State } from '../store/index.tsx';
 import { available, scopeOf, splitByRule, when } from './when.ts';
 
@@ -14,8 +13,6 @@ const thread = (id: string, patch: Partial<Thread> = {}) =>
     repo: { project: 'p', branch: 'b' },
     ...patch,
   }) as Thread;
-const review = (threadId: string, createdAt: number) =>
-  ({ id: `q-${threadId}`, kind: 'review', threadId, createdAt }) as QueueItem;
 
 function state(
   view: View,
@@ -54,7 +51,6 @@ const ACTIONS = [
   { id: 'unpin', when: when.pinned },
   { id: 'dev', when: when.repo },
   { id: 'close-split', when: when.splits },
-  { id: 'review', when: when.reviews },
   { id: 'space-s', when: when.otherSpace('s') },
   { id: 'space-t', when: when.otherSpace('t') },
 ];
@@ -110,36 +106,15 @@ test('a pane tab dragged into a split counts as its thread; chats without a fold
   );
 });
 
-test('split actions need two splits; review needs a thread in review', () => {
+test('split actions need two splits', () => {
   const s = state({ kind: 'queue' }, [thread('a', { status: 'review' })]);
   const layout = s.layouts.s;
   s.layouts.s = {
     ...layout,
-    root: splitLeaf(layout.root, layout.focusId, { kind: 'board' }, 'right')
+    root: splitLeaf(layout.root, layout.focusId, { kind: 'usage' }, 'right')
       .root,
   };
-  assert.deepEqual(ids(s), ['queue', 'close-split', 'review', 'space-t']);
-});
-
-test('review order: oldest request first, other spaces and non-review threads left out', () => {
-  const threads = [
-    thread('new', { status: 'review' }),
-    thread('old', { status: 'review' }),
-    thread('busy'),
-    thread('away', { status: 'review', spaceId: 't' }),
-    thread('unqueued', { status: 'review' }),
-  ];
-  const queue = [review('new', 30), review('old', 10), review('away', 1)];
-  assert.deepEqual(
-    reviewThreads({ threads, queue, spaceId: 's' }).map((t) => t.id),
-    ['old', 'new', 'unqueued'],
-  );
-});
-
-test('review navigation wraps both ways and survives an empty list', () => {
-  assert.equal(stepIndex(2, 3, 1), 0);
-  assert.equal(stepIndex(0, 3, -1), 2);
-  assert.equal(stepIndex(0, 0, 1), 0);
+  assert.deepEqual(ids(s), ['queue', 'close-split', 'space-t']);
 });
 
 const MENU = [

@@ -12,7 +12,6 @@ import {
   Send,
   Settings,
   ShieldCheck,
-  TaskSquare,
   type IconComponent,
 } from '@/icons';
 import { useContainingToastId } from '@/toast/context';
@@ -69,7 +68,6 @@ import {
   type Thread,
 } from './model';
 import { duration } from './progress';
-import { useReviewEntry } from './review/useReviewMode';
 import {
   snapshot,
   useHarness,
@@ -108,8 +106,6 @@ export function QueueView() {
   const isWorking = useSpaceThreads().some(
     (t) => t.status === 'running' && (!t.live || t.live.isWorking),
   );
-  const { state } = useHarness();
-  const review = useReviewEntry(state.spaceId);
   const [selected, setSelected] = useState(0);
   useSeen({ queueIds: items.map((q) => q.id) }, 'leave');
   const index = Math.min(selected, Math.max(0, items.length - 1));
@@ -130,12 +126,6 @@ export function QueueView() {
             <BoundShortcut command="list-previous" />
             move
           </span>
-          {review.count > 0 && (
-            <Button variant="outline" size="sm" onClick={review.open}>
-              <TaskSquare data-icon="inline-start" />
-              Review <span className="tabular">{review.count}</span>
-            </Button>
-          )}
         </div>
         {items.length === 0 && remote.length === 0 && (
           <EmptyQueue isWorking={isWorking} />

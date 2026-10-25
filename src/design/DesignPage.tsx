@@ -82,7 +82,6 @@ import {
   SkillIcon,
 } from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
-import { BoardView } from '../BoardView';
 import {
   seedQueue,
   type LineSlot,
@@ -1327,15 +1326,6 @@ function Recipes() {
                 </Button>
               </div>
             )}
-          </div>
-        </Block>
-        <Block
-          title="Metro board"
-          use="Threads as lines, each agent's plan items as stations."
-          wide
-        >
-          <div className="h-[460px] overflow-hidden rounded-xl border">
-            <BoardView />
           </div>
         </Block>
         <Block

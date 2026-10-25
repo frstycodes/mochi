@@ -37,14 +37,12 @@ import {
   Play,
   Refresh,
   Rotation,
-  Route,
   Columns,
   Rows,
   Settings,
   Sidebar,
   SidebarRight,
   Sun,
-  TaskSquare,
   Transfer,
   VideoPlay,
   Share,
@@ -107,7 +105,6 @@ export interface ActionContext {
   dispatch: Dispatch<Action>;
   scope: ActionScope;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  openReview: () => void;
 }
 
 export interface PaletteAction {
@@ -144,22 +141,6 @@ export const ACTIONS = [
     title: 'Queue',
     icon: Inbox,
     run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'queue' } }),
-  },
-  {
-    id: 'go-review',
-    group: 'Go to',
-    title: 'Review mode',
-    icon: TaskSquare,
-    keywords: 'inbox approve',
-    when: when.reviews,
-    run: ({ openReview }) => openReview(),
-  },
-  {
-    id: 'go-board',
-    group: 'Go to',
-    title: 'Board',
-    icon: Route,
-    run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }),
   },
   {
     id: 'go-usage',

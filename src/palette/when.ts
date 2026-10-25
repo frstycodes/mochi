@@ -2,7 +2,6 @@ import { findLeaf, leaves, type View } from '../layout/tree.ts';
 import { isMultiTab, type PaneTab, type Thread } from '../model.ts';
 import { autofixPr } from '../git/autofixToggle.ts';
 import { pinnedThreads } from '../reorder.ts';
-import { reviewThreads } from '../review/order.ts';
 import type { State } from '../store/index.tsx';
 
 /** What an action runs on. The palette scopes to the focused split; a context menu scopes to the row, card, split or tab it was opened on. */
@@ -24,7 +23,6 @@ export interface ActionScope {
   spaceId: string;
   leafCount: number;
   isZoomed: boolean;
-  reviewCount: number;
 }
 
 export interface ScopeTarget {
@@ -58,7 +56,6 @@ export const when = {
   /** Swap, rotate and zoom need every split on screen. */
   unzoomedSplits: (s: ActionScope) => s.leafCount > 1 && !s.isZoomed,
   zoomed: (s: ActionScope) => s.isZoomed,
-  reviews: (s: ActionScope) => s.reviewCount > 0,
   otherSpace: (id: string) => (s: ActionScope) => s.spaceId !== id,
   tab: (s: ActionScope) => !!s.tab,
   /** A tab of a pane that holds several (Preview, side chat): it can be duplicated. */
@@ -127,7 +124,6 @@ export function scopeOf(
     spaceId: state.spaceId,
     leafCount: leaves(layout.root).length,
     isZoomed: !!layout.zoomId,
-    reviewCount: reviewThreads(state).length,
   };
 }
 

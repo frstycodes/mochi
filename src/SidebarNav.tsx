@@ -1,12 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import {
-  Chart,
   Clock,
   Connector,
   Folder,
   Inbox,
   Plugin,
-  Route,
   Skill,
   type IconComponent,
 } from '@/icons';
@@ -114,14 +112,12 @@ type SidebarItem = { id: string; label: string; icon: IconComponent } & (
 /** In sidebar order. Skills, Plugins, Connectors and Scheduled live in Settings; their items are shortcuts there. */
 export const SIDEBAR_ITEMS = [
   { id: 'queue', label: 'Queue', icon: Inbox, view: { kind: 'queue' } },
-  { id: 'board', label: 'Board', icon: Route, view: { kind: 'board' } },
   {
     id: 'projects',
     label: 'Projects',
     icon: Folder,
     view: { kind: 'projects' },
   },
-  { id: 'usage', label: 'Usage', icon: Chart, view: { kind: 'usage' } },
   { id: 'skills', label: 'Skills', icon: Skill, section: 'skills' },
   { id: 'plugins', label: 'Plugins', icon: Plugin, section: 'plugins' },
   {

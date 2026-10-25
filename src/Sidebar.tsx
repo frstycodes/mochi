@@ -9,16 +9,7 @@ import {
 } from 'react';
 import { motion } from 'motion/react';
 import { useDraggable } from '@dnd-kit/react';
-import {
-  Archive,
-  Chat,
-  Eye,
-  Menu,
-  Plus,
-  Search,
-  TaskSquare,
-  Unarchive,
-} from '@/icons';
+import { Archive, Chat, Eye, Menu, Plus, Search, Unarchive } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -88,7 +79,6 @@ import { SidebarResizer } from './SidebarResizer';
 import { NavItem, SidebarNav } from './SidebarNav';
 import { useSettle } from './useSettle';
 import { NextRunBadge } from './schedule/NextRunBadge';
-import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
 import {
@@ -335,7 +325,6 @@ function SpaceNav({
     (n, m) => n + (m.state ? remoteDecisions(m.state).length : 0),
     0,
   );
-  const review = useReviewEntry(spaceId);
   const { setOpenMobile } = useSidebar();
   const go = (v: View) => {
     dispatch({ type: 'go', view: v });
@@ -394,15 +383,6 @@ function SpaceNav({
                 />
               }
             />
-            {review.count > 0 && (
-              <NavItem
-                icon={<TaskSquare />}
-                label="Review"
-                isActive={review.isOpen}
-                onClick={review.open}
-                badge={review.count}
-              />
-            )}
             <SidebarNav
               view={view}
               go={go}

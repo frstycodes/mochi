@@ -2,7 +2,6 @@ import { structuralEqual } from '../lib/structuralEqual.ts';
 
 export type View =
   | { kind: 'queue' }
-  | { kind: 'board' }
   | { kind: 'projects' }
   | { kind: 'usage' }
   | { kind: 'new' }
