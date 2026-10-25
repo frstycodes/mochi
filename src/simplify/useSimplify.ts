@@ -5,7 +5,7 @@ import type { Thread } from '../model';
 import { getPrefs } from '../settings/prefs';
 import type { Action } from '../store';
 import { runUtility } from '../utility/runUtility';
-import { localSimplify, rulesKey, simplifyPrompt, wordCount } from './simplify';
+import { localSimplify, rulesKey, simplifyPrompt } from './simplify';
 
 // Messages being simplified right now, as `threadId:index`, so the bar and the row can show it.
 const pending = new Set<string>();
@@ -59,28 +59,4 @@ export async function simplify(
     pending.delete(key);
     changed();
   }
-}
-
-// Once per message per launch, so turning auto off and on doesn't re-run old replies.
-const autoDone = new Set<string>();
-
-/** With Settings › Simplify › auto on: a long reply is simplified once its thread goes idle (the reactor's `simplify.auto`). */
-export function autoSimplify(t: Thread, dispatch: Dispatch<Action>) {
-  const prefs = getPrefs();
-  if (!prefs.simplifyAuto || t.live?.isWorking || t.status === 'running')
-    return;
-  const index = t.activity.findLastIndex(
-    (e) => e.kind === 'message' && (e.who === 'claude' || e.who === 'codex'),
-  );
-  const entry = t.activity[index];
-  const key = `${t.id}:${index}:${entry?.at}`;
-  if (
-    !entry ||
-    entry.simplified ||
-    autoDone.has(key) ||
-    wordCount(entry.text) < prefs.simplifyAutoWords
-  )
-    return;
-  autoDone.add(key);
-  void simplify(t, index, dispatch);
 }

@@ -28,6 +28,7 @@ const { DEFAULT_CONTEXT, migratedContext } = await import('./store/context.ts');
 const { createStore } = await import('zustand/vanilla');
 type State = import('./store/types.ts').State;
 type Space = import('./model.ts').Space;
+type ProjectionContext = import('./store/context.ts').ProjectionContext;
 
 // The window's replica as profiles.ts reads it: a `context` command replaces the context, as the reducer does.
 const store = createStore<State>()(
@@ -118,6 +119,22 @@ test('the first sync migrates profiles once: with the context, after it, never o
     migratedContext({ ...DEFAULT_CONTEXT, profiles: [] }, local, read),
     null,
   );
+  // A pref that joined the context after Core saved it comes from this window; Core's others stay.
+  const { simplifyRules: _, ...older } = DEFAULT_CONTEXT.prefs;
+  const held = {
+    pins: {},
+    profiles: [],
+    prefs: { ...older, goals: false },
+  } as unknown as ProjectionContext;
+  const mine = {
+    ...local,
+    prefs: { ...local.prefs, simplifyRules: 'Plain words' },
+  };
+  assert.deepEqual(migratedContext(held, mine, read)?.prefs, {
+    ...DEFAULT_CONTEXT.prefs,
+    goals: false,
+    simplifyRules: 'Plain words',
+  });
 });
 
 test('Core’s profiles are what every reader sees, the same list until they change', () => {

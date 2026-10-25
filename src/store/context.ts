@@ -14,6 +14,9 @@ export type ProjectionPrefs = Pick<
   | 'idleChecks'
   | 'simplifyAuto'
   | 'simplifyAutoWords'
+  | 'simplifyLength'
+  | 'simplifyNeedsFirst'
+  | 'simplifyRules'
   | 'whileWorking'
 >;
 
@@ -38,6 +41,9 @@ export const projectionPrefs = ({
   idleChecks,
   simplifyAuto,
   simplifyAutoWords,
+  simplifyLength,
+  simplifyNeedsFirst,
+  simplifyRules,
   whileWorking,
 }: ProjectionPrefs): ProjectionPrefs => ({
   goals,
@@ -49,12 +55,15 @@ export const projectionPrefs = ({
   idleChecks,
   simplifyAuto,
   simplifyAutoWords,
+  simplifyLength,
+  simplifyNeedsFirst,
+  simplifyRules,
   whileWorking,
 });
 
 /**
- * What a window's first sync sends Core: its own context when Core holds none, Core's plus `stored` profiles when Core holds
- * no profiles yet (prefs and pins migrated before profiles did), else nothing. Lossless: `stored` is the window's whole list.
+ * What a window's first sync sends Core: its own context when Core holds none, else Core's plus what Core doesn't hold yet
+ * (profiles, prefs that joined the context later) from this window, else nothing. Lossless: `stored` is the window's whole list.
  */
 export function migratedContext(
   held: ProjectionContext | null,
@@ -62,8 +71,11 @@ export function migratedContext(
   stored: () => Space[],
 ): ProjectionContext | null {
   if (!held) return { ...local, profiles: stored() };
-  if (!held.profiles) return { ...held, profiles: stored() };
-  return null;
+  const prefs = { ...local.prefs, ...held.prefs };
+  const isPrefMissing =
+    Object.keys(prefs).length > Object.keys(held.prefs).length;
+  if (held.profiles && !isPrefMissing) return null;
+  return { ...held, prefs, profiles: held.profiles ?? stored() };
 }
 
 export const DEFAULT_CONTEXT: ProjectionContext = {

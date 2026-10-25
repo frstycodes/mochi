@@ -310,7 +310,7 @@ function withDispatchContext(state: State, action: Action): Action {
 /**
  * Keeps your prefs and pins (`ProjectionContext`) one value between this window and Core, which holds them in its settings
  * store: Core's when it changes (another window, a device), yours when you change them here. A window that finds Core with
- * none sends its own once, migrating them out of this window's storage; profiles likewise, the first time Core has none.
+ * none sends its own once, migrating them out of this window's storage; likewise profiles and any pref Core doesn't hold yet.
  * Profiles change only in Core (`src/profiles.ts`), so this carries Core's along.
  */
 function useProjectionContext(replica: Replica, dispatch: Dispatch<Action>) {
@@ -332,7 +332,7 @@ function useProjectionContext(replica: Replica, dispatch: Dispatch<Action>) {
     const migrated =
       isFirst && migratedContext(coreHeld, local, storedProfiles);
     if (migrated) {
-      if (coreHeld && mine !== core) adoptContext(held);
+      if (coreHeld && mine !== JSON.stringify(migrated)) adoptContext(migrated);
       synced.current = JSON.stringify(migrated);
       return dispatch({ type: 'context', context: migrated });
     }

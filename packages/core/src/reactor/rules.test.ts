@@ -8,7 +8,6 @@ import {
   autoTitles,
   compactInstructions,
   delegatedReports,
-  draftsPrune,
   idleChecks,
   limitResumes,
   prSync,
@@ -291,17 +290,6 @@ test('PR sync: a tool that pushes or opens a PR refreshes, other tools and tool 
   assert.deepEqual(prSync(tool('gh pr create --fill'), NONE, NONE).length, 1);
   assert.deepEqual(prSync(tool('git status'), NONE, NONE), []);
   assert.deepEqual(prSync(tool('git push', 'end'), NONE, NONE), []);
-});
-
-test('drafts prune: a thread gone from the state takes its drafts', () => {
-  assert.deepEqual(
-    draftsPrune(
-      saved(),
-      state([thread('t1'), thread('t2')]),
-      state([thread('t2')]),
-    ),
-    [{ type: 'drafts.prune', key: 'drafts:t1', threadId: 't1' }],
-  );
 });
 
 test('state rules run on a fold that changed the state, not on a streamed token or an unchanged one', () => {

@@ -4,7 +4,7 @@ import { toPullRequest } from '@mochi/core/github/nodes';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
 import { getProfiles } from '../profiles.ts';
-import { branchPrsQuery, refreshGithub } from './githubWatch.ts';
+import { branchPrsQuery } from './githubWatch.ts';
 import { worktreePath } from './worktrees.ts';
 import { useDispatch, useHarnessSelector } from '../store/index.tsx';
 
@@ -17,7 +17,7 @@ interface WatchedWorktree {
 /**
  * Records GitHub's PRs for every unsettled worktree thread's branch on `thread.prs`, so every surface reads one list. Each worktree
  * watches its branch through Core, which reads each repository once per poll for every surface on it. A turn that pushed or ran
- * `gh pr` asks Core to read now: the reactor's `pr.refresh` (`refreshThreadPrs`).
+ * `gh pr` makes Core read now and record what it finds itself: the reactor's `pr.refresh` (packages/core/src/reactor/hostWork.ts).
  */
 export function usePrSync() {
   const watched = useHarnessSelector(
@@ -38,13 +38,6 @@ export function usePrSync() {
       if (found?.length) dispatch({ type: 'prs-seen', threadId, prs: found });
     });
   }, [watched, prs, dispatch]);
-}
-
-/** Core reads the thread's branch PRs now and fast while CI runs. */
-export function refreshThreadPrs(threads: Thread[], threadId: string) {
-  const w = watchedWorktrees(threads).find((t) => t.threadId === threadId);
-  if (w)
-    refreshGithub({ cwd: w.worktree, githubUser: w.githubUser, isPush: true });
 }
 
 const isSameWatched = (a: WatchedWorktree[], b: WatchedWorktree[]) =>
