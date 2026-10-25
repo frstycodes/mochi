@@ -1,6 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, type MotionProps } from 'motion/react';
+import { motion } from 'motion/react';
 import { Archive, Chat, Edit, Eye, Menu, Search, TaskSquare, Unarchive } from '@/icons';
 import {
   Sidebar,
@@ -26,6 +25,8 @@ import { SubThreadGuide } from './goals/SubThreads';
 import { nestWithUndo, unnestWithUndo } from './subThreadActions';
 import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
+import { DragGhost } from './DragGhost';
+import { DropLine } from './DropLine';
 import { endDrag, MENTION_DROP_EVENT, mentionDropAt, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
@@ -332,7 +333,7 @@ function useThreadSelection(order: string[], openId: string | undefined) {
 /**
  * Pinned threads in your order (your other computers' among them), then the rest by recent activity, split by the Threads label;
  * sub-threads hang under their parent on an L-shaped guide. Drag a row across the label to pin or unpin, within Pinned to reorder,
- * out onto a split to open it there, or hold it over the middle of another row to nest it there; drag a sub-thread out of its
+ * out onto a split to open it there, or drag it right past the indent to nest it under the row above the line; drag a sub-thread out of its
  * group to make it a thread of its own. Alt ↑/↓ reorders from the keyboard, the row menu nests.
  */
 function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: ThreadGroup[]; remotePins: RemotePin[]; active: ThreadGroup[]; row: (t: Thread, isSub?: boolean) => ReactNode; selectedIds: string[] }) {
@@ -371,16 +372,15 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
           {...rowProps}
           data-thread-row={t.id}
           data-sub-of={sub?.parentId}
-          data-nest-target={drag.state?.nestUnder === t.id || undefined}
           onKeyDown={(e) => {
             if (sub || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
             e.preventDefault();
             step(t.id, e.key === 'ArrowUp' ? -1 : 1);
           }}
           aria-keyshortcuts={sub ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
-          className={cn(NEST_TARGET, sub && 'pl-[27px]')}
+          className={cn(sub && 'pl-[27px]')}
         >
-          <motion.li {...glide}>
+          <motion.li {...glide} layoutId={rowLayoutId(t.id)}>
             {!!sub && <SubThreadGuide isLast={sub.isLast} className="left-[15px]" />}
             {row(t, !!sub)}
           </motion.li>
@@ -396,7 +396,7 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
       if (r.remote)
         return (
           <SidebarMenuItem key={r.rowId} asChild {...rowProps} data-remote-thread-row={t.id}>
-            <motion.li {...glide}>
+            <motion.li {...glide} layoutId={rowLayoutId(r.rowId)}>
               <RemoteScope machine={r.remote.machine} state={r.remote.state}>
                 <ThreadItem thread={t} machine={r.remote.machine} isActive={route?.machineId === r.remote.machine.id && route.threadId === t.id} onSelect={() => openRemoteThread({ machineId: r.remote!.machine.id, threadId: t.id })} />
               </RemoteScope>
@@ -414,9 +414,10 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
       );
     });
     const slot = drag.state?.slot;
-    // Threads sort by recency, so a row dropped there lands where its last activity puts it, not where the pointer is.
-    const at = slot && !isPinned && dragged && !dragged.thread.parent ? rows.filter((r) => r.rowId !== dragged.rowId && lastActivityAt(r.thread) > lastActivityAt(dragged.thread)).length : slot?.index;
-    if (slot && slot.toPinned === isPinned) items.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} isHidden={!!drag.state!.nestUnder} glide={glide} />);
+    // Threads sort by recency, so a row dropped there lands where its last activity puts it, not where the pointer is; a nesting
+    // line stays under the row it nests under.
+    const at = slot && !isPinned && dragged && !dragged.thread.parent && !drag.state!.nestUnder ? rows.filter((r) => r.rowId !== dragged.rowId && lastActivityAt(r.thread) > lastActivityAt(dragged.thread)).length : slot?.index;
+    if (slot && slot.toPinned === isPinned) items.splice(at!, 0, <DropLine key="placeholder" height={drag.state!.height} isNested={!!drag.state!.nestUnder} glide={glide} />);
     return items;
   };
   const showPinned = pins.length > 0 || !!drag.state;
@@ -448,7 +449,7 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
       <p role="status" className="sr-only">
         {target ? `Drop to make it a sub-thread of ${target.title}` : ''}
       </p>
-      {!!drag.state && !!dragged && <RowGhost thread={dragged.thread} drag={drag.state} />}
+      {!!drag.state && !!dragged && <RowGhost thread={dragged.thread} drag={drag.state} layoutId={rowLayoutId(dragged.rowId)} />}
     </SidebarGroup>
   );
 }
@@ -470,10 +471,6 @@ interface ListRow {
 
 const localRow = (group: ThreadGroup): ListRow => ({ rowId: group.thread.id, ...group });
 
-// The nest target's inside hairline: on a pseudo-element, so no row changes size while you drag over it.
-const NEST_TARGET =
-  "after:pointer-events-none after:absolute after:inset-0 after:rounded-md after:border after:border-transparent data-nest-target:after:border-foreground/20 data-nest-target:[&_[data-sidebar=menu-button]]:bg-sidebar-accent";
-
 /** Every computer's pins as one list, by pin order (`pinOrderOf`); this computer's first among equal keys. */
 function mergePins(pinned: ThreadGroup[], remotePins: RemotePin[]): ListRow[] {
   const rows = [...pinned.map(localRow), ...remotePins.map((remote) => ({ rowId: `${remote.machine.id}:${remote.thread.id}`, thread: remote.thread, remote }))];
@@ -487,26 +484,21 @@ function useRemotePins(): RemotePin[] {
 
 function rowOrderKey(pinnedIds: string[], activeIds: string[], drag: RowDragState | null) {
   const slot = drag?.slot ? `${drag.slot.toPinned ? 'p' : 'u'}${drag.slot.index}` : '';
-  return `${pinnedIds.join(',')}|${activeIds.join(',')}|${drag?.id ?? ''}|${slot}`;
+  return `${pinnedIds.join(',')}|${activeIds.join(',')}|${drag?.id ?? ''}|${slot}|${drag?.nestUnder ?? ''}`;
 }
 
-/** Holds the dragged row's space at its slot; hidden, not removed, while a nest target is held, so nothing shifts under the pointer. */
-function DropPlaceholder({ height, isHidden, glide }: { height: number; isHidden: boolean; glide: MotionProps }) {
+// Shared by a row and its drag ghost, so a dropped row glides from the ghost into its slot.
+const rowLayoutId = (rowId: string) => `sidebar-row-${rowId}`;
+
+function RowGhost({ thread, drag, layoutId }: { thread: Thread; drag: RowDragState; layoutId: string }) {
   return (
-    <motion.li {...glide} aria-hidden className="relative" style={{ height }}>
-      <span className={cn('absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-foreground/40', isHidden && 'opacity-0')} />
-    </motion.li>
-  );
-}
-
-function RowGhost({ thread, drag }: { thread: Thread; drag: RowDragState }) {
-  return createPortal(
-    <ul aria-hidden data-sidebar="menu" className="pointer-events-none fixed z-[600] list-none rounded-md bg-sidebar text-sidebar-foreground shadow-float" style={{ left: drag.x - drag.grabX, top: drag.y - drag.grabY, width: drag.width }}>
-      <SidebarMenuItem>
-        <ThreadItem thread={thread} isActive={false} onSelect={() => undefined} />
-      </SidebarMenuItem>
-    </ul>,
-    document.body,
+    <DragGhost x={drag.x - drag.grabX} y={drag.y - drag.grabY} width={drag.width} grabX={drag.grabX} grabY={drag.grabY} layoutId={layoutId} className="rounded-md bg-sidebar text-sidebar-foreground">
+      <ul data-sidebar="menu" className="list-none">
+        <SidebarMenuItem>
+          <ThreadItem thread={thread} isActive={false} onSelect={() => undefined} />
+        </SidebarMenuItem>
+      </ul>
+    </DragGhost>
   );
 }
 
@@ -519,7 +511,7 @@ interface RowDragState {
   grabX: number;
   grabY: number;
   slot: DropAt['slot'];
-  /** The row held over long enough to nest under. */
+  /** The row it nests under on drop: the one above the line, while the drag is indented. */
   nestUnder: string | null;
 }
 
@@ -527,11 +519,11 @@ const DRAG_THRESHOLD = 5;
 const EDGE_SCROLL_PX = 40;
 const EDGE_SCROLL_SPEED = 12;
 const LIST_SLACK_PX = 24;
-// Sweeping across rows while reordering crosses every row's middle; only a pause there means "nest here".
-const NEST_HOLD_MS = 400;
+// How far right of where it was picked up a row has to be dragged to nest: about the sub-thread indent.
+const NEST_INDENT_PX = 24;
 
 /**
- * Pointer drag for sidebar rows: placeholder slot from live row positions, nesting after a hold over a row's middle (this
+ * Pointer drag for sidebar rows: placeholder slot from live row positions, nesting when dragged right by the indent (this
  * computer's rows only), edge auto-scroll, and a hand-off to the split drop zones once the pointer leaves the sidebar.
  */
 function useRowDrag(
@@ -555,7 +547,6 @@ function useRowDrag(
     let current: RowDragState | null = null;
     let pointerY = e.clientY;
     let frame = 0;
-    let held: { id: string; timer: number } | null = null;
 
     const scroller = () => listRef.current?.closest<HTMLElement>('[data-sidebar=content]');
     const autoScroll = () => {
@@ -571,12 +562,6 @@ function useRowDrag(
       current = next;
       setDrag(next);
     };
-    // The nest target shows only after the pointer has stayed over that row's middle; moving off it drops it at once.
-    const hold = (id: string | null) => {
-      if (held?.id === id) return;
-      if (held) window.clearTimeout(held.timer);
-      held = id ? { id, timer: window.setTimeout(() => current && update({ ...current, nestUnder: id }), NEST_HOLD_MS) } : null;
-    };
 
     const onMove = (ev: PointerEvent) => {
       pointerY = ev.clientY;
@@ -589,12 +574,8 @@ function useRowDrag(
         frame = requestAnimationFrame(autoScroll);
       }
       if (!row.remote) moveDrag(ev.clientX, ev.clientY);
-      const at = dropOver(listRef.current, row, latest.current.pinnedIds, getState().threads, ev.clientX, ev.clientY);
-      hold(at?.nestUnder ?? null);
-      // While a nest target is held the slot stays where it was, so the rows don't move under the pointer.
-      const slot = at?.nestUnder ? (current?.slot ?? null) : (at?.slot ?? null);
-      const nestUnder = at?.nestUnder && current?.nestUnder === at.nestUnder ? at.nestUnder : null;
-      update({ id: row.rowId, x: ev.clientX, y: ev.clientY, width: rect.width, height: rect.height, grabX: start.x - rect.left, grabY: start.y - rect.top, slot, nestUnder });
+      const at = dropOver(listRef.current, row, latest.current.pinnedIds, getState().threads, ev.clientX, ev.clientY, ev.clientX - start.x >= NEST_INDENT_PX);
+      update({ id: row.rowId, x: ev.clientX, y: ev.clientY, width: rect.width, height: rect.height, grabX: start.x - rect.left, grabY: start.y - rect.top, slot: at?.slot ?? null, nestUnder: at?.nestUnder ?? null });
     };
     const finish = (isCancel: boolean) => {
       window.removeEventListener('pointermove', onMove);
@@ -603,7 +584,6 @@ function useRowDrag(
       window.removeEventListener('blur', onLost);
       window.removeEventListener('keydown', onKey, true);
       cancelAnimationFrame(frame);
-      hold(null);
       if (!current) return;
       document.documentElement.style.userSelect = '';
       // The pointerup after a drag still fires a click on the row; swallow it so the drop doesn't also navigate.
@@ -647,7 +627,7 @@ function useRowDrag(
  * place carry a transform that would flip the slot mid-animation. Another computer's row only reorders, and counts only its own
  * five pins, so its machine decides. Null when the pointer is off the list.
  */
-function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string[], threads: Thread[], x: number, y: number): DropAt | null {
+function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string[], threads: Thread[], x: number, y: number, isIndented: boolean): DropAt | null {
   if (!list) return null;
   const box = list.getBoundingClientRect();
   if (x < box.left - LIST_SLACK_PX || x > box.right + LIST_SLACK_PX) return null;
@@ -656,7 +636,7 @@ function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string
   const isFull = !row.remote && pinnedIds.filter((id) => id !== row.rowId).length >= PIN_SLOTS.length;
   const canNest = (parentId: string) => !row.remote && parentId !== row.thread.parent?.threadId && threads.some((t) => t.id === parentId) && !nestBlocker(threads, row.thread.id, parentId);
   const root = row.remote ? row.thread : rootOf(threads, row.thread);
-  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: row.rowId, ...(root.id !== row.thread.id && { parentId: root.id }) }, y - box.top, isFull, canNest);
+  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: row.rowId, ...(root.id !== row.thread.id && { parentId: root.id }) }, y - box.top, isIndented, isFull, canNest);
 }
 
 /**
