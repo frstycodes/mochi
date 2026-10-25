@@ -8,6 +8,7 @@ import type {
 } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
+import { pendingSwitch, providerOf } from '../rewind/switch.ts';
 import {
   isUnstarted,
   startWorkspace,
@@ -114,7 +115,7 @@ export function agentCalls(
       const skills = action.skills?.length ? { skills: action.skills } : {};
       // Every message carries the thread's speed and permissions, so a change in the composer applies from the next one.
       const policy = thread.controls ? { policy: policyOf(thread) } : {};
-      if (thread.live.isDetached)
+      if (thread.live.isDetached || isSwitching(thread))
         return reattach(thread, text, undefined, images.images, skills.skills);
       const steer =
         action.steers && thread.live.isWorking
@@ -461,10 +462,13 @@ function reattach(
   images?: AgentImage[],
   skills?: string[],
 ) {
-  const provider = thread.session?.provider ?? thread.providers[0];
+  const provider = providerOf(thread);
   const restart = thread.live?.restart;
   const seed = restart && 'seed' in restart ? restart.seed : undefined;
-  const resume = seed === undefined ? thread.session?.id : undefined;
+  const switchFrom = pendingSwitch(thread);
+  // A switch has no session of `provider` to resume here: Core keeps each provider's own and picks it (`ThreadContext`).
+  const resume =
+    seed === undefined && !switchFrom ? thread.session?.id : undefined;
   const forkAt = restart && 'forkAt' in restart ? restart.forkAt : undefined;
   // Cleanup removed its worktree: main makes it again on the same branch, at the same path, so `resume` still finds the session.
   const remake = isCleanedUp(thread)
@@ -481,6 +485,7 @@ function reattach(
     {
       resume,
       ...(forkAt && { forkAt }),
+      ...(switchFrom && { switchFrom }),
       useApiKey: onApiKey || thread.live?.isOnApiKey || undefined,
       ...(images && { images }),
       ...(skills && { skills }),
@@ -488,6 +493,9 @@ function reattach(
     },
   );
 }
+
+/** A switch waits for your next message, which starts the new provider whether or not the old session still runs. */
+const isSwitching = (thread: Thread) => !!pendingSwitch(thread);
 
 /** A worktree thread whose agent ran in a worktree that's gone from the list (Settings › Git and worktrees cleanup, Clean up settled worktrees). */
 function isCleanedUp(thread: Thread) {

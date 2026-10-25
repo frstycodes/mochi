@@ -15,6 +15,7 @@ import {
   NO_PENDING_REQUEST,
   type AgentEvent,
 } from '../../../../apps/desktop/src/host/types/agent.ts';
+import type { ThreadContext } from '../switch/context.ts';
 import { UtilityQueue } from '../utility/queue.ts';
 import { useAgentConfig } from './config.ts';
 import { onAgentEvent } from './events.ts';
@@ -96,7 +97,13 @@ it.live.skipIf(process.platform === 'win32')(
           : undefined,
       );
       const turns = yield* Turns.make;
-      useAgentServices({ turns, queue: yield* UtilityQueue.make });
+      useAgentServices({
+        turns,
+        queue: yield* UtilityQueue.make,
+        context: {
+          prepare: () => Effect.succeed({}),
+        } as unknown as ThreadContext['Service'],
+      });
       const events: AgentEvent[] = [];
       const approvalSeen =
         yield* Deferred.make<Extract<AgentEvent, { type: 'approval' }>>();

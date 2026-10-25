@@ -1,6 +1,7 @@
 import type { StartWorkspace } from '../host/types/agent.ts';
 import type { Head } from '../host/types/git.ts';
 import type { Repo, Thread } from '../model.ts';
+import { pendingSwitch } from '../rewind/switch.ts';
 
 export type WorkspaceMode = 'worktree' | 'folder';
 
@@ -95,5 +96,10 @@ export function branchFromTitle(
 
 /** A thread whose folder isn't set up yet (a scheduled thread before its first run): its workspace can still change. */
 export function isUnstarted(thread: Thread) {
-  return !!thread.repo && !!thread.live?.isDetached && !thread.session;
+  return (
+    !!thread.repo &&
+    !!thread.live?.isDetached &&
+    !thread.session &&
+    !pendingSwitch(thread)
+  );
 }

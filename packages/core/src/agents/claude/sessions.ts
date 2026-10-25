@@ -422,7 +422,7 @@ async function launch(session: Session) {
           : {
               type: 'preset',
               preset: 'claude_code',
-              append: [mochiInstructions(options), profileText]
+              append: [mochiInstructions(options), profileText, options.context]
                 .filter(Boolean)
                 .join('\n\n'),
             },

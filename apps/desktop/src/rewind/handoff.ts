@@ -45,6 +45,7 @@ export function handoffSummary(
 
 const VERB = {
   drafting: 'Handing off',
+  pending: 'Switching',
   started: 'Handed off',
   failed: 'Could not hand off',
 } satisfies Record<Handoff['status'], string>;
@@ -138,10 +139,12 @@ export function handoffFail(
 
 /** Every drafting row in `activity` failed with `error`; same array when none was open. */
 export function failDrafts(activity: ActivityEntry[], error: string) {
-  if (!activity.some((e) => e.handoff?.status === 'drafting')) return activity;
+  const isDraft = (e: ActivityEntry) =>
+    e.handoff?.status === 'drafting' && !e.handoff.isSwitch;
+  if (!activity.some(isDraft)) return activity;
   return activity.map((e) =>
-    e.handoff?.status === 'drafting'
-      ? handoffEntry(e.at, { ...e.handoff, status: 'failed', error })
+    isDraft(e)
+      ? handoffEntry(e.at, { ...e.handoff!, status: 'failed', error })
       : e,
   );
 }

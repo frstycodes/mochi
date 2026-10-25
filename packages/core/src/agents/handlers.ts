@@ -52,6 +52,10 @@ import { main } from './main.ts';
 import { userData } from './paths.ts';
 import type { Turns } from './turns.ts';
 import type { UtilityQueue } from '../utility/queue.ts';
+import type { ThreadContext } from '../switch/context.ts';
+import { permissionModeOf } from '../../../../apps/desktop/src/runtime/access.ts';
+import type { HandoffAsk } from '../switch/handoff.ts';
+import { launchSession } from '../switch/launch.ts';
 import { PRIORITY } from '../utility/queue.ts';
 import {
   commandPrompt,
@@ -210,13 +214,15 @@ const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
 let turns: Turns['Service'] | undefined;
 let queue: UtilityQueue['Service'] | undefined;
+let context: ThreadContext['Service'] | undefined;
 
 /** Set once by the agents layer. */
 export function useAgentServices(services: {
   turns: Turns['Service'];
   queue: UtilityQueue['Service'];
+  context: ThreadContext['Service'];
 }) {
-  ({ turns, queue } = services);
+  ({ turns, queue, context } = services);
 }
 
 const required = <A>(service: A | undefined) => {
@@ -476,6 +482,62 @@ export function runUtility(
   );
 }
 
+/** Past this a handoff turn gives up: the switch goes on without one. */
+const HANDOFF_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * One read-only turn on a side session of the thread (`<thread>--handoff`), for its handoff after a switch: `resume` continues
+ * the native session that ran the thread, so the reply comes from what it still holds. Its events go to the log under the side
+ * id, which no thread shows. The reply's last message, or null when the turn failed, hit a limit or passed the timeout.
+ */
+export async function handoffTurn(
+  threadId: string,
+  spaceId: string,
+  cwd: string,
+  ask: HandoffAsk,
+): Promise<string | null> {
+  const id = `${threadId}--handoff`;
+  const adapter = ADAPTERS[ask.provider];
+  let reply = '';
+  let off = () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const ended = new Promise<string | null>((resolve) => {
+    off = onAgentEvent((event) => {
+      if (event.threadId !== id) return;
+      if (event.type === 'message')
+        reply = event.isDelta ? reply + event.text : event.text;
+      if (event.type === 'limit') resolve(null);
+      if (event.type === 'turn-end')
+        resolve(event.status === 'done' && reply.trim() ? reply.trim() : null);
+    });
+    timer = setTimeout(() => resolve(null), HANDOFF_TIMEOUT_MS);
+  });
+  try {
+    await adapter.start(id, {
+      provider: ask.provider,
+      spaceId,
+      cwd,
+      prompt: ask.prompt,
+      ...(ask.resume && { resume: ask.resume }),
+      permissionMode: permissionModeOf(ask.provider, 'Plan'),
+      isGoalsOff: true,
+      ...(await offered(ask.provider, spaceId, ask.model, undefined)),
+    });
+    return await ended;
+  } catch (error) {
+    Effect.runSync(
+      Effect.logWarning(`Handoff turn failed: ${error}`).pipe(
+        Effect.annotateLogs({ source: 'agents', threadId }),
+      ),
+    );
+    return null;
+  } finally {
+    off();
+    clearTimeout(timer);
+    await adapter.stop(id);
+  }
+}
+
 /** The queued model call: a failure answers null, so its caller keeps its local behaviour. */
 export const utilityCall = (
   task: UtilityTask,
@@ -558,7 +620,7 @@ export async function startAgent(
   options: AgentStartOptions & { worktree?: string },
 ) {
   // `speed` goes only through `offered`, which drops one the model doesn't list.
-  const { workspace, worktree, speed, ...rest } = options;
+  const { workspace, worktree, speed, switchFrom, ...rest } = options;
   // A trigger saved before workspaces carries `worktree: <branch>` instead of `workspace`.
   const startsIn =
     workspace ??
@@ -579,7 +641,14 @@ export async function startAgent(
         speed,
       )),
     };
-    return ADAPTERS[options.provider].start(id, run, start.signal);
+    return launchSession(
+      required(context),
+      ADAPTERS[options.provider],
+      id,
+      run,
+      switchFrom,
+      start.signal,
+    );
   };
   let isLaunching = false;
   try {

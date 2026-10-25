@@ -32,6 +32,7 @@ import {
   withGeneratedTitle,
 } from '../store/threads.ts';
 import { createdPr } from '../git/prs.ts';
+import { switchDelivered, switchWriting } from '../rewind/switch.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
@@ -214,6 +215,10 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return withdraw(state, thread, `q-${event.requestId}`);
     case 'compaction':
       return update((t) => applyCompaction(t, event, now));
+    case 'context':
+      return update((t) => switchDelivered(t, event, now));
+    case 'context-writing':
+      return update(switchWriting);
     case 'usage':
       return update((t) => ({
         ...t,
