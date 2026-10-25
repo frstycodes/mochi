@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { middleHalf } from './drag.ts';
 
 // A 40px-tall row at y 100–140, x 0–200: its middle half is y 110–130.

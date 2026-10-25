@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../../electron/git/checkpoints.ts';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();

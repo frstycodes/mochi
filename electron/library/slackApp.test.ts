@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { createSlackApp } from './slackApp.ts';
 
 test('creates the Slack app from the manifest with MCP on and returns its credentials', async () => {

@@ -99,5 +99,6 @@ function useFlashSetting(route: SettingsRoute | null) {
       cancelAnimationFrame(frame);
       clearTimeout(timer);
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `nonce` re-runs it when the same setting is deep-linked twice
   }, [route?.nonce, route?.settingId]);
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { leaves, singleLayout, splitLeaf, type View } from '../layout/tree.ts';
 import type { Thread } from '../model.ts';
 import type { State } from './index.tsx';

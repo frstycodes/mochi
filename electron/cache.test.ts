@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { cached, uncache } from './cache.ts';
 
 test('cached shares one load, drops failures, and uncache forces a reload', async () => {

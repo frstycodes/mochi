@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronDown } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -128,30 +128,28 @@ type ThemeColors = (typeof MOCHI_COLORS)[ThemeSlot];
 const themeColors = new WeakMap<ColorTheme, ThemeColors>();
 
 /** The handful of colors a preview paints with, read once per theme; null is Mochi. */
-export function useThemeColors(theme: ColorTheme | null, slot: ThemeSlot): ThemeColors {
-  return useMemo(() => {
-    if (!theme) return MOCHI_COLORS[slot];
-    const cached = themeColors.get(theme);
-    if (cached) return cached;
-    const tokens = themeTokens(theme.theme, theme.kind);
-    const fallback = MOCHI_COLORS[slotOf(theme.kind)];
-    const colors = {
-      background: tokens['--background'] ?? fallback.background,
-      foreground: tokens['--foreground'] ?? fallback.foreground,
-      sidebar: tokens['--sidebar'] ?? tokens['--background'] ?? fallback.sidebar,
-      muted: tokens['--muted'] ?? fallback.muted,
-      primary: tokens['--primary'] ?? fallback.primary,
-      keyword: tokens['--syntax-keyword'] ?? fallback.keyword,
-      string: tokens['--syntax-string'] ?? fallback.string,
-    };
-    themeColors.set(theme, colors);
-    return colors;
-  }, [theme, slot]);
+export function themeColorsOf(theme: ColorTheme | null, slot: ThemeSlot): ThemeColors {
+  if (!theme) return MOCHI_COLORS[slot];
+  const cached = themeColors.get(theme);
+  if (cached) return cached;
+  const tokens = themeTokens(theme.theme, theme.kind);
+  const fallback = MOCHI_COLORS[slotOf(theme.kind)];
+  const colors = {
+    background: tokens['--background'] ?? fallback.background,
+    foreground: tokens['--foreground'] ?? fallback.foreground,
+    sidebar: tokens['--sidebar'] ?? tokens['--background'] ?? fallback.sidebar,
+    muted: tokens['--muted'] ?? fallback.muted,
+    primary: tokens['--primary'] ?? fallback.primary,
+    keyword: tokens['--syntax-keyword'] ?? fallback.keyword,
+    string: tokens['--syntax-string'] ?? fallback.string,
+  };
+  themeColors.set(theme, colors);
+  return colors;
 }
 
 /** A theme in 32×20: its editor background, an "Aa" in its foreground, and a stripe of its primary, keyword and string colors. */
 export function ThemeSwatch({ theme, slot }: { theme: ColorTheme | null; slot: ThemeSlot }) {
-  const c = useThemeColors(theme, slot);
+  const c = themeColorsOf(theme, slot);
   return (
     <span aria-hidden className="relative flex h-5 w-8 shrink-0 items-center overflow-hidden rounded-sm pl-1 text-[9px]/none font-semibold shadow-[inset_0_0_0_1px_var(--border)]" style={{ background: c.background, color: c.foreground }}>
       Aa

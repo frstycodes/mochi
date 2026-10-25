@@ -84,7 +84,7 @@ async function asAccount<T>(account: GithubAccountRef, use: (token: string) => P
     if (/HTTP 401|Bad credentials|authentication|Authentication failed/i.test(message)) tokens.delete(name);
     // gh's GraphQL wording, and git's over HTTPS, for "this login can't see or write the repository".
     if (/Could not resolve to a Repository|Repository not found|Permission to .* denied|returned error: 403/.test(message))
-      throw new Error(`${account.login} can't reach this repository on ${account.host}. Give ${account.login} access, or pick another GitHub account in Settings › Profiles.`);
+      throw new Error(`${account.login} can't reach this repository on ${account.host}. Give ${account.login} access, or pick another GitHub account in Settings › Profiles.`, { cause: error });
     throw error;
   }
 }

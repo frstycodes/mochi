@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import type { AgentEvent } from '../../../../../src/host/types/agent.ts';
 import { CodexAdapter, imageModel, reply } from './adapter.ts';
 import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
@@ -140,12 +140,12 @@ test('a usage limit pauses the thread with the account-wide reset time, then end
 test('one app-server per account: threads route to their profile account and never share a server', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, FAKE_CODEX);
-  const events: AgentEvent[] = [];
+  const { events, emit, waitFor } = recordEvents();
   const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, side: { id: 'work', configDir: path.join(home, 'work') }, home: { id: 'default' } };
-  const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
+  const codex = new CodexAdapter(emit, async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
   try {
     for (const [threadId, spaceId] of [['a', 'work'], ['b', 'side'], ['c', 'home']]) await codex.start(threadId, { provider: 'codex', spaceId, cwd: home, prompt: 'hi' });
-    await new Promise((r) => setTimeout(r, 200));
+    await waitFor((e) => e.type === 'message', 3);
     const sessions = Object.fromEntries(events.flatMap((e) => (e.type === 'session' ? [[e.threadId, e.sessionId]] : [])));
     const [a, b, c] = ['a', 'b', 'c'].map((t) => JSON.parse(sessions[t]));
     assert.equal(a.pid, b.pid, 'two profiles sharing an account share its server');
@@ -178,20 +178,20 @@ test('a thread runs at the speed it started with, and a message changes it for i
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'tiers.log');
-  const events: AgentEvent[] = [];
-  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  const { events, emit, waitFor } = recordEvents();
+  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
   // Lets each turn end before the next send.
-  const settle = () => new Promise((r) => setTimeout(r, 150));
+  const turnEnds = (count: number) => waitFor((e) => e.type === 'turn-end', count);
   try {
     await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority', effort: 'max' });
     assert.ok(events.some((e) => e.type === 'info' && e.info.effort === 'max'));
-    await settle();
+    await turnEnds(1);
     await codex.send('t', 'again');
-    await settle();
+    await turnEnds(2);
     await codex.send('t', 'slower', undefined, undefined, '');
-    await settle();
+    await turnEnds(3);
     await codex.send('t', 'faster', undefined, undefined, 'priority');
-    await settle();
+    await turnEnds(4);
     await codex.start('u', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
     const expected = ['thread/start priority', 'turn/start priority', 'turn/start priority', 'turn/start null', 'turn/start priority', 'thread/start null', 'turn/start null'];
     assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), expected);
@@ -204,11 +204,12 @@ test('images go to turn/start as data-URL image inputs ahead of the text, on the
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'inputs.log');
-  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: path.join(home, 'tiers.log'), INPUT_LOG: log } }));
+  const { emit, waitFor } = recordEvents();
+  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: path.join(home, 'tiers.log'), INPUT_LOG: log } }));
   const png = { mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
   try {
     await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'what is this?', images: [png] });
-    await new Promise((r) => setTimeout(r, 150));
+    await waitFor((e) => e.type === 'turn-end');
     await codex.send('t', 'and this?', [{ mediaType: 'image/webp', data: 'UklGRg==' }]);
     const inputs = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.deepEqual(inputs, [
@@ -224,33 +225,34 @@ test('an interrupt while Codex has not answered turn/start ends the start at onc
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, STUCK_CODEX);
   const log = path.join(home, 'stuck.log');
-  const events: AgentEvent[] = [];
-  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STUCK_LOG: log } }));
-  const logged = () => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : []);
+  const { events, emit, waitFor } = recordEvents();
+  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STUCK_LOG: log } }));
+  const logged = () => readFileSync(log, 'utf8').trim().split('\n');
+  const fakeSaid = (text: string) => waitFor((e) => e.type === 'message' && e.text === text);
   try {
     const starting = codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
-    for (let i = 0; i < 100 && !logged().includes('turn/start'); i++) await new Promise((r) => setTimeout(r, 20));
-    const startedAt = performance.now();
+    await fakeSaid('turn/start');
     await codex.interrupt('t');
     await starting;
-    assert.ok(performance.now() - startedAt < 1000, 'neither call waits out an RPC timeout');
+    assert.ok(!events.some((e) => e.type === 'message' && e.text === 'answered turn/start'), 'neither call waits for the late turn/start answer, let alone an RPC timeout');
     assert.deepEqual(events.filter((e) => e.type === 'turn-end'), [{ threadId: 't', type: 'turn-end', status: 'interrupted' }]);
     // The fake answers turn/start only once interrupted: that late turn is stopped.
-    for (let i = 0; i < 100 && !logged().includes('turn/interrupt late-1'); i++) await new Promise((r) => setTimeout(r, 20));
+    await fakeSaid('turn/interrupt late-1');
     assert.deepEqual(logged(), ['turn/start', 'turn/interrupt late-1']);
   } finally {
     codex.dispose();
   }
 });
 
-/** Answers turn/start 300 ms late, after the client has given up on it; logs turn/start and turn/interrupt to $STUCK_LOG. */
+/** Answers turn/start 300 ms late, after the client has given up on it; logs turn/start and turn/interrupt to $STUCK_LOG and says each as an agent message. */
 const STUCK_CODEX = `#!/usr/bin/env node
 const fs = require('node:fs');
 let buf = '';
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+const say = (text) => send({ method: 'item/completed', params: { threadId: 'c1', item: { type: 'agentMessage', id: text, text } } });
 process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
-  if (m.method === 'turn/start') { fs.appendFileSync(process.env.STUCK_LOG, 'turn/start\\n'); setTimeout(() => send({ id: m.id, result: { turn: { id: 'late-1' } } }), 300); }
-  else if (m.method === 'turn/interrupt') { fs.appendFileSync(process.env.STUCK_LOG, 'turn/interrupt ' + m.params.turnId + '\\n'); send({ id: m.id, result: {} }); }
+  if (m.method === 'turn/start') { fs.appendFileSync(process.env.STUCK_LOG, 'turn/start\\n'); say('turn/start'); setTimeout(() => { say('answered turn/start'); send({ id: m.id, result: { turn: { id: 'late-1' } } }); }, 300); }
+  else if (m.method === 'turn/interrupt') { const line = 'turn/interrupt ' + m.params.turnId; fs.appendFileSync(process.env.STUCK_LOG, line + '\\n'); send({ id: m.id, result: {} }); say(line); }
   else if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
   else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c1' } } });
   else if (m.id !== undefined) send({ id: m.id, result: {} });
@@ -352,13 +354,10 @@ test('rpc: line framing, id correlation out of order, errors, timeouts and inval
   const invalid: string[] = [];
   const requests: [RpcId, string][] = [];
   const rpc = new RpcClient(input, output, { onNotification: () => {}, onRequest: (id, method) => requests.push([id, method]), onInvalid: (reason) => invalid.push(reason) });
-  const sent: { id: number; method: string }[] = [];
-  output.on('data', (d: Buffer) => sent.push(...d.toString().trim().split('\n').map((l) => JSON.parse(l))));
-
   const a = rpc.request('a', {});
   const b = rpc.request('b', {});
   const c = rpc.request('c', {}, 20);
-  await new Promise((r) => setImmediate(r));
+  const sent: { id: number; method: string }[] = String(output.read()).trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(sent.map((m) => [m.id, m.method]), [[1, 'a'], [2, 'b'], [3, 'c']]);
 
   input.write('{"id":2,"result":"B"}\n{"id":1,"res');
@@ -384,6 +383,27 @@ test('parseMessage tells notifications, requests and responses apart', () => {
   assert.equal(parseMessage('{"id":1.5,"result":1}'), 'no method and no id');
   assert.equal(parseMessage('{"id":1}'), 'response without result or error');
 });
+
+/** Collects a fake's events; `waitFor` resolves with the `count`th match, seen already or still to come. */
+function recordEvents() {
+  const events: AgentEvent[] = [];
+  const waiters = new Set<{ match: (e: AgentEvent) => boolean; count: number; resolve: (e: AgentEvent) => void }>();
+  const emit = (event: AgentEvent) => {
+    events.push(event);
+    for (const waiter of waiters) {
+      const matches = events.filter(waiter.match);
+      if (matches.length < waiter.count) continue;
+      waiters.delete(waiter);
+      waiter.resolve(matches[waiter.count - 1]);
+    }
+  };
+  const waitFor = (match: (e: AgentEvent) => boolean, count = 1) => {
+    const seen = events.filter(match);
+    if (seen.length >= count) return Promise.resolve(seen[count - 1]);
+    return new Promise<AgentEvent>((resolve) => waiters.add({ match, count, resolve }));
+  };
+  return { events, emit, waitFor };
+}
 
 // Array.fromAsync is past the TS lib target.
 async function collect<T>(items: AsyncIterable<T>) {
@@ -422,11 +442,11 @@ test('model/list maps to the picker: real ids, names, default flag, efforts and 
 test('a spawned agent becomes a subagent of its thread with its own steps, result and tokens (real 0.155.1 trace)', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, REPLAY_CODEX);
-  const events: AgentEvent[] = [];
-  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/subagent.jsonl', import.meta.url)) } }));
+  const { events, emit, waitFor } = recordEvents();
+  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/subagent.jsonl', import.meta.url)) } }));
   try {
     await codex.start('h1', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'Spawn one sub-agent' });
-    for (let i = 0; i < 50 && !events.some((e) => e.type === 'turn-end'); i++) await new Promise((r) => setTimeout(r, 20));
+    await waitFor((e) => e.type === 'turn-end');
     const child = '01a1317e-8947-7c73-866e-ec3ce63a621b';
     const subagent = events.filter((e) => e.type === 'subagent');
     assert.ok(subagent.every((e) => e.threadId === 'h1' && e.id === child), 'the child reports as a subagent of the thread that spawned it');
@@ -461,18 +481,17 @@ test('a command still running when the turn ends is a background task that ends 
 test('stopping a background task terminates its terminal and ends it stopped, not failed (real 0.163.0 trace)', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, STOP_CODEX);
-  const events: AgentEvent[] = [];
-  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/background-stop.jsonl', import.meta.url)) } }));
+  const { events, emit, waitFor } = recordEvents();
+  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/background-stop.jsonl', import.meta.url)) } }));
   const id = 'exec-aaec80e8-e146-42a6-babd-b605b1490725';
-  const ended = () => events.find((e) => e.type === 'task' && e.phase === 'end');
+  const isEnd = (e: AgentEvent) => e.type === 'task' && e.phase === 'end';
   try {
     await codex.start('h1', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'Start sleep 600 in the background' });
-    for (let i = 0; i < 50 && !events.some((e) => e.type === 'turn-end'); i++) await new Promise((r) => setTimeout(r, 20));
+    await waitFor((e) => e.type === 'turn-end');
     assert.ok(events.some((e) => e.type === 'task' && e.phase === 'start' && e.id === id));
-    assert.equal(ended(), undefined, 'still running after the turn');
+    assert.equal(events.find(isEnd), undefined, 'still running after the turn');
     await codex.stopTask('h1', id);
-    for (let i = 0; i < 50 && !ended(); i++) await new Promise((r) => setTimeout(r, 20));
-    assert.deepEqual(ended(), { threadId: 'h1', type: 'task', id, phase: 'end', status: 'stopped', exitCode: 137 });
+    assert.deepEqual(await waitFor(isEnd), { threadId: 'h1', type: 'task', id, phase: 'end', status: 'stopped', exitCode: 137 });
   } finally {
     codex.dispose();
   }
@@ -597,15 +616,15 @@ test('a steer waits in Mochi until the turn finishes a step, can be taken back u
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, STEER_CODEX);
   const log = path.join(home, 'steers.log');
-  const events: AgentEvent[] = [];
-  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STEER_LOG: log } }));
+  const { events, emit, waitFor } = recordEvents();
+  const codex = new CodexAdapter(emit, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STEER_LOG: log } }));
   try {
     await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'run the tests' });
     await codex.send('t', 'create a PR', undefined, undefined, undefined, true, 's1');
     await codex.send('t', 'never mind', undefined, undefined, undefined, true, 's2');
     assert.equal(existsSync(log), false, 'nothing reaches Codex before the step ends');
     assert.equal(await codex.unsteer('t', 's2'), true);
-    await new Promise((r) => setTimeout(r, 400));
+    await waitFor((e) => e.type === 'steer-read' && e.id === 's1');
     assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['create a PR s1'], 'the taken-back message never went');
     const order = events.flatMap((e) => (e.type === 'tool' && e.phase === 'end' ? ['tool end'] : e.type === 'steer-read' ? [`read ${e.id}`] : []));
     assert.deepEqual(order, ['tool end', 'read s1']);

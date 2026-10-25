@@ -55,11 +55,14 @@ export class GithubTransport extends Context.Service<
       const query = (account: { host: string; login?: string }, text: string, variables: Record<string, string>) =>
         Effect.flatMap(tokenFor(account.host, account.login), ({ key, token }) =>
           Effect.tryPromise({
-            try: (signal) => graphql(text, { ...variables, baseUrl: apiUrl(account.host), headers: { authorization: `token ${token}` }, request: { signal } }),
-            catch: (error) => error,
+            try: (signal) =>
+              graphql(text, { ...variables, baseUrl: apiUrl(account.host), headers: { authorization: `token ${token}` }, request: { signal } }).catch((error: unknown) => {
+                // A ref GitHub can't resolve fails its field and still answers the rest.
+                if (error instanceof GraphqlResponseError && error.data) return error.data as unknown;
+                throw error;
+              }),
+            catch: asGithubError,
           }).pipe(
-            // A ref GitHub can't resolve fails its field and still answers the rest.
-            Effect.catch((error) => (error instanceof GraphqlResponseError && error.data ? Effect.succeed(error.data as unknown) : Effect.fail(asGithubError(error)))),
             // A revoked or rotated token: the next poll reads gh's store again.
             Effect.tapError((error) => Effect.sync(() => error.status === 401 && tokens.delete(key))),
           ),

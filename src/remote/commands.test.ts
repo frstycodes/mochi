@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
 import { host } from '../host/index.ts';
 import type { MachineCatalog } from '../host/types/remote.ts';
 import type { QueueItem } from '../model.ts';
@@ -11,10 +11,7 @@ import { runRemoteCommand } from './commands.ts';
 import { closeIdleShells, shellOf, terminalCore } from './terminals.ts';
 import { markOwnAnswer } from './answers.ts';
 
-async function until(isDone: () => boolean) {
-  for (let i = 0; i < 100 && !isDone(); i++) await new Promise((r) => setTimeout(r, 5));
-  assert.ok(isDone(), 'timed out');
-}
+afterEach(() => vi.restoreAllMocks());
 
 function machine() {
   const base = {
@@ -49,7 +46,7 @@ test('the first answer to a queue item wins; a later one, even against the same 
 
 test('an answer given on the machine itself wins over a device', async () => {
   const { state } = machine();
-  // The machine's own Queue answering (`useStoreDispatch`).
+  // The machine's own Queue answering (`storeDispatch`).
   markOwnAnswer('q-2');
   const dispatched: Action[] = [];
   const result = await runRemoteCommand({ type: 'resolve', queueId: 'q-2' }, device(state, 'Laptop', dispatched));
@@ -93,7 +90,9 @@ test('send goes out now to an idle agent and queues behind a working one, like t
 test('operate and manage commands dispatch the same actions the UI does, and the reducer applies them', async () => {
   const { state, threadId } = machine();
   const dispatched: Action[] = [];
-  const env = device(state, 'Laptop', dispatched);
+  let handOff = () => {};
+  const handedOff = new Promise<void>((resolve) => (handOff = resolve));
+  const env = { ...device(state, 'Laptop', dispatched), dispatch: (a: Action) => void (dispatched.push(a), a.type === 'handoff' && handOff()) };
   for (const command of [
     { type: 'rename', threadId, title: 'Ship the login fix' },
     { type: 'edit-goal', threadId, goal: 'Login works with SSO' },
@@ -106,7 +105,7 @@ test('operate and manage commands dispatch the same actions the UI does, and the
   ] as const) {
     assert.deepEqual(await runRemoteCommand(command, env), { isOk: true }, command.type);
     // The handoff drafts its prompt first, as a click here does; it lands before the next command.
-    if (command.type === 'handoff') await until(() => dispatched.some((a) => a.type === 'handoff'));
+    if (command.type === 'handoff') await handedOff;
   }
   assert.deepEqual(dispatched.map((a) => a.type), ['rename', 'edit-goal', 'reorder', 'fork', 'handoff-draft', 'handoff', 'settle', 'create']);
 
@@ -149,25 +148,25 @@ test('delete, a line comment and a rewind dispatch what the UI does for them', a
   });
 });
 
-test('code commands make the Changes and Files tabs’ host calls in the thread’s folder, resolved on the machine', async (t) => {
+test('code commands make the Changes and Files tabs’ host calls in the thread’s folder, resolved on the machine', async () => {
   const { state, threadId } = machine();
   const env = device(state, 'Laptop', []);
   const diff = { branch: 'b', base: 'main', files: [] };
-  const diffCall = t.mock.method(host.git, 'diff', async () => diff);
-  const stage = t.mock.method(host.git, 'stage', async () => {});
-  t.mock.method(host.fs, 'list', async () => Array.from({ length: 10_001 }, (_, i) => `f${i}.ts`));
-  const read = t.mock.method(host.fs, 'read', async (_root: string, path: string) =>
+  const diffCall = vi.spyOn(host.git, 'diff').mockImplementation(async () => diff);
+  const stage = vi.spyOn(host.git, 'stage').mockImplementation(async () => {});
+  vi.spyOn(host.fs, 'list').mockImplementation(async () => Array.from({ length: 10_001 }, (_, i) => `f${i}.ts`));
+  const read = vi.spyOn(host.fs, 'read').mockImplementation(async (_root: string, path: string) =>
     path.endsWith('.png') ? { kind: 'binary', bytes: new Uint8Array(1), mtimeMs: 0 } : { kind: 'text', text: 'hi', mtimeMs: 0 },
   );
 
   assert.deepEqual(await runRemoteCommand({ type: 'diff', threadId, scope: 'uncommitted' }, env), { isOk: true, data: diff });
-  assert.deepEqual(diffCall.mock.calls[0].arguments, ['/work/reply', 'uncommitted', undefined]);
+  assert.deepEqual(diffCall.mock.calls[0], ['/work/reply', 'uncommitted', undefined]);
   await runRemoteCommand({ type: 'change', threadId, action: 'stage', target: { path: 'a.ts', staged: false } }, env);
-  assert.deepEqual(stage.mock.calls[0].arguments, ['/work/reply', { path: 'a.ts', staged: false }]);
+  assert.deepEqual(stage.mock.calls[0], ['/work/reply', { path: 'a.ts', staged: false }]);
   const files = await runRemoteCommand({ type: 'files', threadId }, env);
   assert.ok(files.isOk && files.data && 'paths' in files.data && files.data.paths.length === 10_000 && files.data.isTruncated, 'capped');
   assert.deepEqual(await runRemoteCommand({ type: 'read-file', threadId, path: 'a.ts' }, env), { isOk: true, data: { text: 'hi' } });
-  assert.deepEqual(read.mock.calls[0].arguments, ['/work/reply', 'a.ts']);
+  assert.deepEqual(read.mock.calls[0], ['/work/reply', 'a.ts']);
   assert.deepEqual(await runRemoteCommand({ type: 'read-file', threadId, path: 'logo.png' }, env), {
     isOk: false,
     error: 'This is a binary file; open it on that computer',
@@ -180,23 +179,27 @@ test('code commands make the Changes and Files tabs’ host calls in the thread�
   });
 });
 
-test('a device shell runs in the thread’s folder and is that thread’s alone; its output goes to Core in order', async (t) => {
+test('a device shell runs in the thread’s folder and is that thread’s alone; its output goes to Core in order', async () => {
+  const T0 = 1_700_000_000_000;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(T0);
+  onTestFinished(() => void vi.useRealTimers());
   const { state, threadId } = machine();
   const env = device(state, 'Laptop', []);
-  t.mock.method(host.ports, 'allocate', async () => 4100);
-  const spawn = t.mock.method(host.pty, 'spawn', async () => ({ id: 'pty-remote-1' }));
-  const write = t.mock.method(host.pty, 'write', async () => {});
+  vi.spyOn(host.ports, 'allocate').mockImplementation(async () => 4100);
+  const spawn = vi.spyOn(host.pty, 'spawn').mockImplementation(async () => ({ id: 'pty-remote-1' }));
+  const write = vi.spyOn(host.pty, 'write').mockImplementation(async () => {});
   let emit: (event: { id: string; data: string }) => void = () => {};
-  t.mock.method(host.pty, 'onData', (listener: typeof emit) => ((emit = listener), () => {}));
-  t.mock.method(host.pty, 'onExit', () => () => {});
-  t.mock.method(host.pty, 'kill', async () => {});
+  vi.spyOn(host.pty, 'onData').mockImplementation((listener: typeof emit) => ((emit = listener), () => {}));
+  vi.spyOn(host.pty, 'onExit').mockImplementation(() => () => {});
+  vi.spyOn(host.pty, 'kill').mockImplementation(async () => {});
   const core: [string, unknown][] = [];
   let isWatched = false;
-  t.mock.method(terminalCore, 'call', async (tag: string, payload: unknown) => (core.push([tag, payload]), tag === 'terminal.watched' ? isWatched : undefined));
+  vi.spyOn(terminalCore, 'call').mockImplementation(async (tag: string, payload: unknown) => (core.push([tag, payload]), tag === 'terminal.watched' ? isWatched : undefined));
 
   const opened = await runRemoteCommand({ type: 'terminal-open', threadId, cols: 80, rows: 24 }, env);
   assert.deepEqual(opened, { isOk: true, data: { terminalId: 'pty-remote-1' } });
-  assert.deepEqual(spawn.mock.calls[0].arguments, [{ cwd: '/work/reply', cols: 80, rows: 24, port: 4100, threadId }]);
+  assert.deepEqual(spawn.mock.calls[0], [{ cwd: '/work/reply', cols: 80, rows: 24, port: 4100, threadId }]);
   emit({ id: 'pty-remote-1', data: 'hello ' });
   emit({ id: 'pty-remote-1', data: 'world' });
   assert.deepEqual(core, [
@@ -205,7 +208,7 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
     ['terminal.feed', { terminalId: 'pty-remote-1', data: 'world' }],
   ]);
   await runRemoteCommand({ type: 'terminal-write', threadId, terminalId: 'pty-remote-1', data: 'ls\r' }, env);
-  assert.deepEqual(write.mock.calls[0].arguments, ['pty-remote-1', 'ls\r']);
+  assert.deepEqual(write.mock.calls[0], ['pty-remote-1', 'ls\r']);
 
   const other = threadsReducer(state, { type: 'create', title: 'other', provider: 'claude', project: null, isLive: true });
   const otherId = other.threads.at(-1)!.id;
@@ -221,25 +224,25 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
     { isOk: false, error: 'That terminal is closed' },
     'the machine’s own terminals are out of reach',
   );
-  await closeIdleShells(Date.now() + 30_000);
+  await closeIdleShells(T0 + 30_000);
   assert.equal(shellOf('pty-remote-1', threadId)?.threadId, threadId, 'a shell in use stays open');
   isWatched = true;
-  await closeIdleShells(Date.now() + 61_000);
+  await closeIdleShells(T0 + 61_000);
   assert.ok(shellOf('pty-remote-1', threadId), 'a shell a device is watching stays open');
   isWatched = false;
-  await closeIdleShells(Date.now() + 200_000);
+  await closeIdleShells(T0 + 200_000);
   assert.equal(shellOf('pty-remote-1', threadId), undefined, 'a device that left without closing it');
   assert.deepEqual(core.at(-1), ['terminal.close', { terminalId: 'pty-remote-1' }]);
 });
 
-test('a new thread starts only in a project the machine listed, by its id, with the controls and images sent', async (t) => {
+test('a new thread starts only in a project the machine listed, by its id, with the controls and images sent', async () => {
   const { state } = machine();
   const withProject = {
     ...state,
     threads: [...state.threads, { ...state.threads[0], id: 'p', spaceId: state.spaceId, repo: { project: 'api', branch: 'main', path: '/src/api' } }],
   };
-  t.mock.method(host.settings, 'get', async () => ({ harnesses: { claude: { model: 'opus' }, codex: { model: '' } } }));
-  t.mock.method(host.agent, 'models', async () => []);
+  vi.spyOn(host.settings, 'get').mockImplementation(async () => ({ harnesses: { claude: { model: 'opus' }, codex: { model: '' } } }) as never);
+  vi.spyOn(host.agent, 'models').mockImplementation(async () => []);
   const listed = await runRemoteCommand({ type: 'catalog' }, device(withProject, 'Laptop', []));
   assert.ok(listed.isOk);
   const catalog = listed.data as MachineCatalog;
@@ -264,21 +267,21 @@ test('a new thread starts only in a project the machine listed, by its id, with 
   assert.deepEqual(create.images, images);
 });
 
-test('a device’s clone lands in this machine’s projects folder, and its failure comes back as git said it', async (t) => {
+test('a device’s clone lands in this machine’s projects folder, and its failure comes back as git said it', async () => {
   const { state } = machine();
-  const clone = t.mock.method(host.projects, 'clone', async (_space: string, source: { url: string }) => {
-    if (source.url.includes('missing')) throw new Error('fatal: repository not found');
-    return { id: 'p1', name: 'repo', path: '/home/me/dev/repo', origin: 'gitlab.com/me/repo', addedAt: 1, isMissing: false };
+  const clone = vi.spyOn(host.projects, 'clone').mockImplementation(async (_space, source) => {
+    if ('url' in source && source.url.includes('missing')) throw new Error('fatal: repository not found');
+    return { id: 'p1', name: 'repo', path: '/home/me/dev/repo', origin: 'gitlab.com/me/repo', addedAt: 1, iconMode: 'auto', icon: null, favicon: null, isMissing: false };
   });
   const added = await runRemoteCommand({ type: 'clone-project', source: { url: 'https://gitlab.com/me/repo.git' } }, device(state, 'Laptop', []));
   assert.deepEqual(added, { isOk: true, data: { ref: 'p1', name: 'repo' } });
-  assert.equal(clone.mock.calls[0].arguments[2]?.parentDir, '~/dev', 'Settings › Projects folder, picked here');
+  assert.equal(clone.mock.calls[0][2]?.parentDir, '~/dev', 'Settings › Projects folder, picked here');
   assert.deepEqual(await runRemoteCommand({ type: 'clone-project', source: { url: 'https://gitlab.com/me/missing.git' } }, device(state, 'Laptop', [])), { isOk: false, error: 'fatal: repository not found' });
 });
 
-test('settings a device writes stay on the machine; Devices and the demo switch can’t be changed from one', async (t) => {
+test('settings a device writes stay on the machine; Devices and the demo switch can’t be changed from one', async () => {
   const { state } = machine();
-  t.mock.method(host.settings, 'get', async () => ({ harnesses: { claude: { model: '' }, codex: { model: '' } } }));
+  vi.spyOn(host.settings, 'get').mockImplementation(async () => ({ harnesses: { claude: { model: '' }, codex: { model: '' } } }) as never);
   const env = device(state, 'Laptop', []);
   assert.deepEqual(await runRemoteCommand({ type: 'setting', key: 'nope', value: 'x' }, env), { isOk: false, error: 'No setting nope' });
   const remoteRow = await runRemoteCommand({ type: 'setting', key: 'remoteEnabled', value: 'false' }, env);

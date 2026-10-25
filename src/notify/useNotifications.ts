@@ -14,6 +14,7 @@ import { saveNotifySettings } from './slice';
 import { useRemoteAlerts } from './useRemoteAlerts';
 import { useMachines, type FollowedView } from '../remote/useMachines';
 import { queryKeys } from '../queryKeys';
+import { useLatest } from '../useLatest';
 
 /** For watched threads main shows these itself (`electron/notify/watch.ts`), so the renderer doesn't alert them twice. */
 const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'ci'];
@@ -24,8 +25,7 @@ export function useNotifications() {
   const { items, muted, quiet } = state.notifications;
   const jump = useJump();
   const openThread = useOpenThread();
-  const latest = useRef({ items, jump, openThread });
-  latest.current = { items, jump, openThread };
+  const latest = useLatest({ items, jump, openThread });
   const shown = useRef(items);
   const prefs = usePrefs();
   const { alertKinds, watchedToasts, idleAlerts } = prefs;
@@ -62,7 +62,7 @@ export function useNotifications() {
       if (n.kind === 'idle' || !state.watched.includes(n.threadId)) continue;
       toast(n.title, { description: n.body, ...(n.queueId && queueToast(n.queueId)), action: { label: 'Open', onClick: () => latest.current.jump(n) } });
     }
-  }, [items, quiet, state.watched, alertKinds, watchedToasts, idleAlerts, viewedId]);
+  }, [items, quiet, state.watched, alertKinds, watchedToasts, idleAlerts, viewedId, latest]);
 
   useAddressedOnView(viewedId);
   useRemoteAlerts();
@@ -77,12 +77,12 @@ export function useNotifications() {
         const n = latest.current.items.find((x) => x.id === id);
         if (n) latest.current.jump(n);
       }),
-    [],
+    [latest],
   );
 
   const pendingOpenQuery = useQuery({ queryKey: queryKeys.notify.pendingOpen(), queryFn: () => host.notify.pendingOpen(), staleTime: Infinity, gcTime: 0 });
-  useEffect(() => { if (pendingOpenQuery.data) latest.current.openThread(pendingOpenQuery.data); }, [pendingOpenQuery.data]);
-  useEffect(() => host.notify.onOpenThread((id) => latest.current.openThread(id)), []);
+  useEffect(() => { if (pendingOpenQuery.data) latest.current.openThread(pendingOpenQuery.data); }, [pendingOpenQuery.data, latest]);
+  useEffect(() => host.notify.onOpenThread((id) => latest.current.openThread(id)), [latest]);
 
   useEffect(() => saveNotifySettings({ muted, quiet }), [muted, quiet]);
 }

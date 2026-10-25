@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { DEVICES, fitDevice } from './devices.ts';
 import { EMPTY_HISTORY, history, isTooSmall, shapePath, type Shape } from './annotations.ts';
 import { nextScrollSync } from './scrollSync.ts';

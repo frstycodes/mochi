@@ -1,4 +1,4 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useContext, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { Danger } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -120,8 +120,7 @@ export function deviceSize(page: Page) {
  * Returns the ref for the stand-in `<img>`, which this hook positions and fills directly, without React renders.
  */
 function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, device: { width: number; height: number } | null) {
-  const params = useRef({ page, device });
-  params.current = { page, device };
+  const params = useEffectEvent(() => ({ page, device }));
   const standInRef = useRef<HTMLImageElement>(null);
   const isPreview = useContext(PreviewContext);
   const id = isPreview ? undefined : page.hostId;
@@ -171,7 +170,7 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
       frame = requestAnimationFrame(tick);
       const el = frameRef.current;
       if (!el) return;
-      const { page, device } = params.current;
+      const { page, device } = params();
       const r = el.getBoundingClientRect();
       const fit = device ? fitDevice({ width: r.width, height: r.height }, device, page.isRotated) : null;
       const placed = !!page.error || r.width < 1 || r.height < 1 ? null : fit ? { x: r.x + fit.x, y: r.y + fit.y, width: fit.width, height: fit.height, radius: 0 } : { x: r.x, y: r.y, width: r.width, height: r.height, radius: roundRadius(el) };

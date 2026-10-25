@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { cloneProject, initProject } from './add.ts';
 
 const scratch = () => realpathSync(mkdtempSync(join(tmpdir(), 'mochi-clone-')));

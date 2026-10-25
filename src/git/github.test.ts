@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { formatGithubAccount, parseGithubAccount, parseRemote, tokenVariable } from './github.ts';
 
 test('account refs keep bare logins on github.com and prefix other hosts', () => {

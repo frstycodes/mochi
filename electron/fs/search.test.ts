@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { SearchLine } from '../../src/host/types/fs.ts';
 import { searchFiles } from './search.ts';
 

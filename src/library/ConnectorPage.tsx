@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNow } from '../useNow';
 import { ArrowLeft, Ban, CheckCircle, ChevronDown, Pen, Plus, RaisedHand, Refresh, SearchAlt, type IconComponent } from '@/icons';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
@@ -62,7 +63,8 @@ function BackLink() {
 /** Back to the list, then the connector's tile, name and what it holds, with its on/off switch and a refresh on the right. */
 function ConnectorHeader({ connector, settings, library, isListing, onList, onChange }: { connector: ToolsConnector; settings: ConnectorSettings; library: Library; isListing: boolean; onList: () => void; onChange: Change }) {
   const { toolList, isOff = false } = settings;
-  const meta = isOff ? 'Off: threads don’t load it' : toolList && !toolList.error ? `${countOf(toolList.tools.length, 'tool')} · listed ${timeAgo((Date.now() - toolList.listedAt) / 60_000)}` : connector.url;
+  const now = useNow(60_000);
+  const meta = isOff ? 'Off: threads don’t load it' : toolList && !toolList.error ? `${countOf(toolList.tools.length, 'tool')} · listed ${timeAgo((now - toolList.listedAt) / 60_000)}` : connector.url;
   return (
     <div className="flex flex-col gap-4">
       <BackLink />

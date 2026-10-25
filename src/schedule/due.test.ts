@@ -1,7 +1,7 @@
 process.env.TZ = 'America/New_York';
 
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Trigger } from '../host/types/schedule.ts';
 import { afterLaunch, branchMatches, cronDecision, prEvents, summaryLine, triggerAfter, type PrSnapshot } from './due.ts';
 

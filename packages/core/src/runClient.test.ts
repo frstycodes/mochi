@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { runCommand, RunError, spawnCommand } from './runClient.ts';
 
 test('runCommand returns output, rejects a bad exit and a timeout as RunError', async () => {

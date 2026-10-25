@@ -1,19 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { basicSetup } from 'codemirror';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { languageFor } from './languages';
+import { useLatest } from '@/useLatest';
 import { tags as t } from '@lezer/highlight';
 
 /** `isWrapped` folds long lines instead of scrolling sideways, for reading prose-heavy files in a narrow pane. */
 export default function CodeEditor({ path, value, line, column, readOnly, isWrapped, onChange }: { path: string; value: string; line?: number; column?: [number, number]; readOnly?: boolean; isWrapped?: boolean; onChange?: (text: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  const onChangeRef = useLatest(onChange);
 
-  useEffect(() => {
+  const createEditor = useEffectEvent((path: string) => {
     const language = new Compartment();
     const editor = new EditorView({
       parent: host.current!,
@@ -41,11 +41,15 @@ export default function CodeEditor({ path, value, line, column, readOnly, isWrap
       editor.dispatch({ selection: { anchor: from, head: to }, effects: EditorView.scrollIntoView(from, { y: 'center' }) });
     }
     if (!readOnly) editor.focus();
+    return editor;
+  });
+  // A new path is a new document (fresh undo history); `value` changes are synced below without rebuilding.
+  useEffect(() => {
+    const editor = createEditor(path);
     return () => {
       view.current = null;
       editor.destroy();
     };
-    // A new path is a new document (fresh undo history); `value` changes are synced below without rebuilding.
   }, [path]);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { POLICIES } from '@mochi/core/agents/codex/adapter';
 import { permissionOptions } from '@mochi/core/agents/claude/map';
 import { ACCESS, accessOf } from './access.ts';

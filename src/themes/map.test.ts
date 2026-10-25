@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { contrast, nudge, parseHex, toHex } from './color.ts';
 import githubLight from 'shiki/dist/themes/github-light.mjs';
 import { LIGHT_CODE_SURFACES, readableTokenColors, scopeColor, themeTokens } from './map.ts';

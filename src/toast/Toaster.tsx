@@ -1,6 +1,7 @@
 import { listenKeydown, isCommand } from '../keymap';
 import {
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -44,9 +45,7 @@ export function Toaster() {
   useFocusHotkey(listRef, toasts.length > 0);
 
   const isEmpty = toasts.length === 0;
-  useEffect(() => {
-    if (isEmpty) setHovered(false);
-  }, [isEmpty]);
+  if (isEmpty && isHovered) setHovered(false);
 
   // Right after a collapse the pointer is still over the stack and focus is back on the toast, which would fan the stack out
   // mid-morph. It stays folded until the pointer moves or a key is pressed in it.
@@ -335,18 +334,17 @@ function withHeight(heights: Record<string, number>, id: string, height: number 
 }
 
 function useMeasure(ref: RefObject<HTMLElement | null>, onHeight: (height: number | null) => void, isActive: boolean) {
-  const latest = useRef(onHeight);
-  latest.current = onHeight;
+  const report = useEffectEvent(onHeight);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !isActive) return;
     // offsetHeight, not the bounding rect: the stack scales items behind the front one.
-    latest.current(el.offsetHeight);
-    const observer = new ResizeObserver(() => latest.current(el.offsetHeight));
+    report(el.offsetHeight);
+    const observer = new ResizeObserver(() => report(el.offsetHeight));
     observer.observe(el);
     return () => {
       observer.disconnect();
-      latest.current(null);
+      report(null);
     };
   }, [ref, isActive]);
 }
@@ -355,14 +353,13 @@ function useMeasure(ref: RefObject<HTMLElement | null>, onHeight: (height: numbe
 const PORTALED = '[data-radix-popper-content-wrapper], [data-slot$="-content"]';
 
 function useCloseOnOutsidePointer(listRef: RefObject<HTMLElement | null>, isActive: boolean, onClose: () => void) {
-  const latest = useRef(onClose);
-  latest.current = onClose;
+  const close = useEffectEvent(onClose);
   useEffect(() => {
     if (!isActive) return;
     const onPointerDown = (e: globalThis.PointerEvent) => {
       const target = e.target as Element;
       if (listRef.current?.contains(target) || target.closest(PORTALED)) return;
-      latest.current();
+      close();
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);

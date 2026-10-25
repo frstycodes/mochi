@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { fileLink, filePathsIn } from './links.ts';
 
 test('file paths with line and column are found, URL paths are left to the URL matcher', () => {

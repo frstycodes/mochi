@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { rehypeRefs, rehypeRelativeLinks, rehypeSlashTokens } from './rehypeRefs.ts';
 
 const text = (value: string) => ({ type: 'text', value });

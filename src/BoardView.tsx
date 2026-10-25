@@ -26,7 +26,7 @@ export function BoardView() {
   const dispatch = useDispatch();
   const threads = useSpaceThreads().filter((t) => t.status !== 'settled');
   const [hovered, setHovered] = useState<Hovered | null>(null);
-  const layout = useBoardLayout(threads);
+  const layout = boardLayout(threads);
 
   if (threads.length === 0) return <EmptyBoard />;
 
@@ -109,7 +109,7 @@ function visibleSteps(t: Thread) {
   return t.steps.filter((s) => s.status !== 'dropped');
 }
 
-function useBoardLayout(threads: Thread[]) {
+function boardLayout(threads: Thread[]) {
   const cols = boardColumns(threads.map(visibleSteps));
   const maxCol = Math.max(0, ...cols.values());
   return { cols, width: X0 + maxCol * COL + 200 };

@@ -21,6 +21,7 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
   const postTheme = () => frame.current?.contentWindow?.postMessage({ type: 'harness-theme', vars: themeVars(), scheme }, '*');
   useEffect(() => {
     // next-themes applies its DOM theme in an effect; read tokens after that write.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `scheme` and `theme` are the triggers: themeVars() reads the tokens next-themes writes for them
     const frame = requestAnimationFrame(postTheme);
     return () => cancelAnimationFrame(frame);
   }, [scheme, theme]);

@@ -1,10 +1,10 @@
 import { browserStorage } from '../lib/uiStorage.ts';
 import assert from 'node:assert/strict';
-import { mock, test } from 'node:test';
+import { test, vi } from 'vite-plus/test';
 
 const storage = new Map<string, string>();
-mock.method(browserStorage, 'getItem', (key: string) => storage.get(key) ?? null);
-mock.method(browserStorage, 'setItem', (key: string, value: string) => void storage.set(key, value));
+vi.spyOn(browserStorage, 'getItem').mockImplementation((key: string) => storage.get(key) ?? null);
+vi.spyOn(browserStorage, 'setItem').mockImplementation((key: string, value: string) => void storage.set(key, value));
 const { DEFAULT_PREFS, PREFS_KEY, getPrefs, parsePrefs, reloadPrefs, setPrefs, subscribePrefs } = await import('./prefs.ts');
 
 test('parsePrefs falls back to defaults for missing, mistyped and unparseable values', () => {

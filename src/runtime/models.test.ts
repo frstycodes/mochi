@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import type { AgentModel } from '../host/types/agent.ts';
 import { claudeFast, effortId, isNewThreadModel, listedHarnesses, optionFor, resolveRun, searchModels, type ModelOption } from './models.ts';
 

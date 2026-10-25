@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { EditorState } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
 import { languageFor } from './languages.ts';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { decodeArgs, DEV_TOOL_TABLE, jsonSchemaOf, TOOL_TABLE } from './toolTable.ts';
 
 test('every tool lists its input as a JSON Schema object, descriptions kept, no null for an optional field', () => {

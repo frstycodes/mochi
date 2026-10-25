@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { CLOSE, splitChannel, withChannel, type StoredRecord } from './protocol.ts';
 import { Relay, type Attachment, type MachineRecord, type Room } from './relay.ts';
 

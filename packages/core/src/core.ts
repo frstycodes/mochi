@@ -30,4 +30,4 @@ const exporter = process.env.MOCHI_OTLP_URL
   ? Otlp.layerJson({ baseUrl: process.env.MOCHI_OTLP_URL, resource: { serviceName: 'mochi-core' } }).pipe(Layer.provide(NodeHttpClient.layerUndici))
   : Layer.empty;
 
-NodeRuntime.runMain(program.pipe(Effect.provide(layerSpans.pipe(Layer.provide(exporter))), Effect.provide(layerLog(env('MOCHI_LOG_FILE')))));
+NodeRuntime.runMain(program.pipe(Effect.provide(Layer.mergeAll(layerSpans.pipe(Layer.provide(exporter)), layerLog(env('MOCHI_LOG_FILE'))))));

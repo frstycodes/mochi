@@ -1,4 +1,4 @@
-// browser_eval's limits and its CDP answer turned into what the agent reads. No electron import, so it runs under node --test.
+// browser_eval's limits and its CDP answer turned into what the agent reads. No electron import, so it runs in plain-Node tests.
 
 export const EVAL_TIMEOUT_MS = 10_000;
 export const EVAL_MAX_CHARS = 20_000;

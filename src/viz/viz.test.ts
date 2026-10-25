@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { compareCells, nextSort } from './cells.ts';
 import { parseFence, readWidgetMessage } from './fence.ts';
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { fileKind, hasTextSource, isFilePath, MAX_TEXT_PREVIEW, parseCsv, viewerBody, worktreeLink } from './kinds.ts';
 
 const text = (t: string) => ({ kind: 'text' as const, text: t });

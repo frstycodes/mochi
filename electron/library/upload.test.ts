@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { deflateRawSync, gzipSync } from 'node:zlib';
 import { reviewUpload, unpackUpload, UPLOAD_LIMITS } from './upload.ts';
 

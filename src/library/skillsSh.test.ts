@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { parseLeaderboard } from './skillsSh.ts';
 
 test('parseLeaderboard reads the escaped initialSkills the skills.sh front page embeds', () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { GAP, itemHeight, itemTransform, motionTiming, stackSlots } from './stack.ts';
 import type { Toast } from './store.ts';
 

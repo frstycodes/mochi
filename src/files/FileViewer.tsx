@@ -1,6 +1,6 @@
 import type { FileContent } from '@/host/types/fs';
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useState, type KeyboardEvent } from 'react';
+import { lazy, Suspense, useState, type KeyboardEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronLeft, ChevronRight, Code, Copy, File, Download, Eye, SidebarRight, X } from '@/icons';
@@ -24,11 +24,11 @@ const CodeEditor = lazy(() => import('./CodeEditor'));
 /** Full-window viewer for files in chat and non-image composer attachments. Mounted once; `openFiles` drives it. */
 export function FileViewer() {
   const request = useFileRequest();
-  const [index, setIndex] = useState(0);
-  useEffect(() => setIndex(request?.index ?? 0), [request]);
+  const [picked, setPicked] = useState({ request, index: 0 });
+  const index = picked.request === request ? picked.index : (request?.index ?? 0);
   const files = request?.files ?? [];
   const file = files[index];
-  const step = files.length > 1 ? (by: number) => setIndex((i) => (i + by + files.length) % files.length) : undefined;
+  const step = files.length > 1 ? (by: number) => setPicked({ request, index: (index + by + files.length) % files.length }) : undefined;
   const onKeyDown = (e: KeyboardEvent) => {
     if (!step || isTextEntry(e.target)) return;
     if (e.key === 'ArrowLeft') step(-1);
@@ -47,7 +47,7 @@ export function FileViewer() {
           className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none"
         >
           {!!file && <FilePane key={`${index}:${viewerPath(file)}`} file={file} position={step && `${index + 1} of ${files.length}`} onStep={step} />}
-          {files.length > 1 && <FileStrip files={files} index={index} onSelect={setIndex} />}
+          {files.length > 1 && <FileStrip files={files} index={index} onSelect={(i) => setPicked({ request, index: i })} />}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

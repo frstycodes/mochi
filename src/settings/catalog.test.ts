@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { DEFAULT_SETTINGS, type ProfileConfig, type ProviderConfig } from '../host/types/settings.ts';
 import { DEFAULT_SPACES, type Provider } from '../model.ts';
 import { DEFAULT_ACCOUNTS } from './accounts.ts';

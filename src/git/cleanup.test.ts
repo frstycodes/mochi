@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { dueForCleanup } from './cleanup.ts';
 
 const DAY = 24 * 60 * 60 * 1000;

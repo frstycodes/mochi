@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { bindingOf, checkBinding, chordOf, chordText, COMMAND_IDS, COMMANDS, conflictOf, defaultKeys, filterCommands, isCommand, parseChord, rebind, reservedReason, resetBinding, type CommandId } from './keymap.ts';
 
 const key = (code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ code, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods });
 
-for (const isMac of [true, false])
-  test(`defaults on ${isMac ? 'macOS' : 'Windows and Linux'} are unique where they listen and never reserved`, () => {
-    for (const id of COMMAND_IDS) {
-      const keys = defaultKeys(id, isMac);
-      assert.equal(reservedReason(keys, isMac, COMMANDS[id].scope), undefined, `${id}: ${chordText(keys)}`);
-      assert.equal(conflictOf(id, keys, {}, isMac), undefined, `${id}: ${chordText(keys)}`);
-    }
-  });
+test.each([
+  { isMac: true, platform: 'macOS' },
+  { isMac: false, platform: 'Windows and Linux' },
+])('defaults on $platform are unique where they listen and never reserved', ({ isMac }) => {
+  for (const id of COMMAND_IDS) {
+    const keys = defaultKeys(id, isMac);
+    assert.equal(reservedReason(keys, isMac, COMMANDS[id].scope), undefined, `${id}: ${chordText(keys)}`);
+    assert.equal(conflictOf(id, keys, {}, isMac), undefined, `${id}: ${chordText(keys)}`);
+  }
+});
 
 test('chords read and write as text, modifiers in a fixed order, letters in any case', () => {
   assert.deepEqual(parseChord('shift+MOD+k'), ['mod', 'shift', 'K']);

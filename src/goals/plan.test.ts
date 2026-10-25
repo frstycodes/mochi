@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { AgentPlanItem } from '../host/types/agent.ts';
 import type { Step } from '../model.ts';
 import type { State } from '../store/index.tsx';

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { MachineCache } from './cache.ts';
 
 /** Reversible, and visibly not plain text. */

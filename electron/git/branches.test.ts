@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { test } from 'node:test';
+import { basename, join } from 'node:path';
+import { test } from 'vite-plus/test';
 import { addBranchWorktree, assertFreeBranch, branchNameError, listBranches, renameAutoBranch, switchBranch } from './branches.ts';
 
 // A Mochi session injects its commit-msg hook through GIT_CONFIG_*; the scratch repo's commits mustn't run it.
@@ -160,7 +160,7 @@ test('a temp branch is renamed after the title, made unique; a switched, publish
 test("a thread's first start refuses a branch that exists; a restart or a branch you picked checks it out", async () => {
   const { dir, git } = repo();
   git('branch', 'mochi/0badf00d');
-  const at = (name: string) => join(dir, '..', `${name}-${Date.now()}`);
+  const at = (name: string) => join(dir, '..', `${basename(dir)}-${name}`);
   const fresh = at('fresh');
   await assert.rejects(addBranchWorktree(dir, fresh, 'mochi/0badf00d', { isNew: true }), { message: "A branch named mochi/0badf00d already exists; name the thread's branch something else" });
   assert.ok(!existsSync(fresh), 'no worktree made');

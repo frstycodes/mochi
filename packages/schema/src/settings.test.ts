@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Schema } from 'effect';
 import { AgentSettingsPatch, ConfigChange, settingsRpc } from './ipc/settings.ts';
 import { AccountsState, AgentSettings, SettingsFile } from './settings.ts';

@@ -11,13 +11,13 @@ import { outboxWorker, type Outcome } from './worker.ts';
  * Core's reactor: each event Core's projection folds runs the rules against the state before and after it; the commands they
  * emit go to the outbox, once per key, and `execute` runs them, retried across restarts.
  */
-export const runReactor = (execute: (effect: OutboxEffect) => Effect.Effect<Outcome, unknown>) =>
+export const runReactor = (execute: (effect: OutboxEffect) => Effect.Effect<Outcome, unknown>, onForget: (key: string) => void = () => {}) =>
   Effect.gen(function* () {
     const store = yield* Store;
     const projection = yield* Projection;
     // Keys this run already enqueued: a rule emits a due command on every fold, and only the first needs the database.
     const enqueued = new Set<string>();
-    const worker = yield* outboxWorker(store, execute, (key) => enqueued.delete(key));
+    const worker = yield* outboxWorker(store, execute, (key) => (enqueued.delete(key), onForget(key)));
     const boot = randomUUID();
     const stateOf = ({ threads, queue, context }: Domain): ReactorState => ({ threads, queue, context, boot });
 

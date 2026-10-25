@@ -1,5 +1,5 @@
 import { listenKeydown, commandOf, type CommandId } from '../keymap';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronDownSmall, Rewind10, FileText, Share, Forward10, Pause, Play, SkipForwardAlt, SkipBack, VideoPlay, X } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ export function ReplayView() {
 /** An exported page: the same player over the inlined recording, with no app around it. */
 export function ReplayPage({ payload }: { payload: ReplayExport }) {
   const title = payload.recording.base.base.thread.title;
-  const checkpoints = useMemo(() => exportedCheckpoints(payload.checkpoints), [payload]);
+  const checkpoints = exportedCheckpoints(payload.checkpoints);
   return (
     <div className="h-svh">
       <ReplayPlayer recording={payload.recording} checkpoints={checkpoints} header={<ReplayHeader title={title} />} />
@@ -56,23 +56,23 @@ export function ReplayPage({ payload }: { payload: ReplayExport }) {
 }
 
 function useRecording(thread: Thread | undefined) {
-  const [recording, setRecording] = useState<Recording | null | undefined>(undefined);
+  const [loaded, setLoaded] = useState<{ id: string; recording: Recording | null } | null>(null);
   const id = thread?.id;
-  const latest = useRef(thread);
-  latest.current = thread;
+  const currentThread = useEffectEvent(() => thread!);
   useEffect(() => {
-    if (!latest.current) return setRecording(null);
+    if (!id) return;
     let isCurrent = true;
-    loadRecording(latest.current).then(
-      (r) => isCurrent && setRecording(r),
+    loadRecording(currentThread()).then(
+      (recording) => isCurrent && setLoaded({ id, recording }),
       (error: unknown) => {
         console.error('Reading the replay failed', error);
-        if (isCurrent) setRecording(null);
+        if (isCurrent) setLoaded({ id, recording: null });
       },
     );
     return () => void (isCurrent = false);
   }, [id]);
-  return recording;
+  if (!id) return null;
+  return loaded?.id === id ? loaded.recording : undefined;
 }
 
 function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: () => void; onClose?: () => void }) {
@@ -102,6 +102,7 @@ function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: 
 /** The exported page has no sidebar around it. */
 function useOptionalSidebar() {
   try {
+    // oxlint-disable-next-line react/hooks -- useSidebar runs on every render; the catch only covers its throw outside a SidebarProvider.
     return useSidebar();
   } catch {
     return null;
@@ -116,8 +117,8 @@ const NO_DISPATCH = () => {};
 
 function ReplayPlayer({ recording, checkpoints, header }: { recording: Recording; checkpoints: CheckpointSource; header: ReactNode }) {
   const playback = usePlayback(recording);
-  const stateAt = useMemo(() => createReplayer(recording), [recording]);
-  const scratch = useMemo(() => stateAt(playback.n), [stateAt, playback.n]);
+  const stateAt = createReplayer(recording);
+  const scratch = stateAt(playback.n);
   const thread = replayedThread(scratch, recording.base.base.thread.id);
   useReplayKeys(playback);
 
@@ -176,12 +177,12 @@ function usePlayback(recording: Recording): Playback {
   const [clock, setClockState] = useState(0);
   // The frame loop reads the clock here, so a frame never waits on a render to know where it is.
   const clockRef = useRef(0);
-  const setClock = useCallback((ms: number) => {
+  const setClock = (ms: number) => {
     clockRef.current = ms;
     setClockState(ms);
-  }, []);
-  const times = useMemo(() => timeline(recording, skipIdle), [recording, skipIdle]);
-  const marks = useMemo(() => markers(recording), [recording]);
+  };
+  const times = timeline(recording, skipIdle);
+  const marks = markers(recording);
   const total = times.at(-1) ?? 0;
   const n = stepsBy(times, clock);
 
@@ -200,8 +201,8 @@ function usePlayback(recording: Recording): Playback {
     return () => cancelAnimationFrame(frame);
   }, [isPlaying, speed, total, setClock]);
 
-  const seek = useCallback((ms: number) => setClock(Math.max(0, Math.min(total, ms))), [total, setClock]);
-  const seekStep = useCallback((to: number) => setClock(to <= 0 ? 0 : (times[Math.min(to, times.length) - 1] ?? 0)), [times, setClock]);
+  const seek = (ms: number) => setClock(Math.max(0, Math.min(total, ms)));
+  const seekStep = (to: number) => setClock(to <= 0 ? 0 : (times[Math.min(to, times.length) - 1] ?? 0));
   return {
     clock,
     total,
@@ -230,34 +231,30 @@ function usePlayback(recording: Recording): Playback {
 
 /** Space / K play and pause, ←/→ step one event, Shift+←/→ jump between markers, J/L 10 s back and forward, Home/End. */
 function useReplayKeys(playback: Playback) {
-  const latest = useRef(playback);
-  latest.current = playback;
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || isTyping(e.target)) return;
-      const { toggle, seek, seekStep, clock, total, n, marks } = latest.current;
-      const marker = (by: 1 | -1) => (by > 0 ? marks.find((m) => m.n > n) : marks.findLast((m) => m.n < n));
-      const actions: Record<string, () => void> = {
-        'replay-toggle': toggle,
-        'replay-toggle-k': toggle,
-        'replay-back': () => seek(clock - 10_000),
-        'replay-forward': () => seek(clock + 10_000),
-        'replay-previous': () => seekStep(n - 1),
-        'replay-next': () => seekStep(n + 1),
-        'replay-marker-previous': () => seekStep(marker(-1)?.n ?? 0),
-        'replay-marker-next': () => seekStep(marker(1)?.n ?? n),
-        'replay-start': () => seek(0),
-        'replay-end': () => seek(total),
-      };
-      const command = commandOf(e, Object.keys(actions) as CommandId[]);
-      const action = command && actions[command];
-      if (!action) return;
-      // Also keeps Space from clicking the focused button (it would toggle twice) or scrolling the transcript.
-      e.preventDefault();
-      action();
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.defaultPrevented || isTyping(e.target)) return;
+    const { toggle, seek, seekStep, clock, total, n, marks } = playback;
+    const marker = (by: 1 | -1) => (by > 0 ? marks.find((m) => m.n > n) : marks.findLast((m) => m.n < n));
+    const actions: Record<string, () => void> = {
+      'replay-toggle': toggle,
+      'replay-toggle-k': toggle,
+      'replay-back': () => seek(clock - 10_000),
+      'replay-forward': () => seek(clock + 10_000),
+      'replay-previous': () => seekStep(n - 1),
+      'replay-next': () => seekStep(n + 1),
+      'replay-marker-previous': () => seekStep(marker(-1)?.n ?? 0),
+      'replay-marker-next': () => seekStep(marker(1)?.n ?? n),
+      'replay-start': () => seek(0),
+      'replay-end': () => seek(total),
     };
-    return listenKeydown(onKey);
-  }, []);
+    const command = commandOf(e, Object.keys(actions) as CommandId[]);
+    const action = command && actions[command];
+    if (!action) return;
+    // Also keeps Space from clicking the focused button (it would toggle twice) or scrolling the transcript.
+    e.preventDefault();
+    action();
+  });
+  useEffect(() => listenKeydown((e) => onKey(e)), []);
 }
 
 function Transport({ playback, isCapped, files }: { playback: Playback; isCapped: boolean; files: ReactNode }) {
@@ -347,10 +344,10 @@ function Legend() {
 function Timeline({ playback }: { playback: Playback }) {
   const { clock, total, times, marks, seek } = playback;
   const track = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<{ x: number; marker?: Marker } | null>(null);
+  const [hover, setHover] = useState<{ x: number; width: number; ms: number; marker?: Marker } | null>(null);
   const at = (marker: Marker) => times[marker.n - 1] ?? 0;
   const pct = (ms: number) => (total ? (ms / total) * 100 : 0);
-  const sorted = useMemo(() => [...marks].sort((a, b) => MARKER_ORDER.indexOf(a.kind) - MARKER_ORDER.indexOf(b.kind)), [marks]);
+  const sorted = [...marks].sort((a, b) => MARKER_ORDER.indexOf(a.kind) - MARKER_ORDER.indexOf(b.kind));
 
   const msAt = (clientX: number) => {
     const rect = track.current!.getBoundingClientRect();
@@ -363,7 +360,7 @@ function Timeline({ playback }: { playback: Playback }) {
       const dx = Math.abs((pct(at(m)) / 100) * rect.width - x);
       return dx <= 6 && (!best || dx < Math.abs((pct(at(best)) / 100) * rect.width - x)) ? m : best;
     }, undefined);
-    setHover({ x, marker: near });
+    setHover({ x, width: rect.width, ms: msAt(e.clientX), marker: near });
     if (e.buttons === 1) seek(near && e.type === 'pointerdown' ? at(near) : msAt(e.clientX));
   };
 
@@ -395,10 +392,10 @@ function Timeline({ playback }: { playback: Playback }) {
         <span
           aria-hidden
           className="pointer-events-none absolute bottom-full z-10 mb-1 flex max-w-64 -translate-x-1/2 items-center gap-1.5 rounded-md bg-popover px-2 py-1 type-caption text-popover-foreground shadow-popover"
-          style={{ left: Math.max(60, Math.min(hover.x, (track.current?.clientWidth ?? 0) - 60)) }}
+          style={{ left: Math.max(60, Math.min(hover.x, hover.width - 60)) }}
         >
           {!!hover.marker && <span className={cn('h-2.5 w-0.5 shrink-0 rounded-full', MARKER_STYLE[hover.marker.kind].className)} />}
-          <span className="truncate">{hover.marker ? hover.marker.label : duration(msAt(hover.x + (track.current?.getBoundingClientRect().left ?? 0)))}</span>
+          <span className="truncate">{hover.marker ? hover.marker.label : duration(hover.ms)}</span>
         </span>
       )}
     </div>
@@ -459,19 +456,15 @@ function ReplayFiles({ source, thread, now }: { source: CheckpointSource; thread
 }
 
 function useCheckpointFiles(source: CheckpointSource, index: number) {
-  const cache = useRef(new Map<number, DiffFile[] | null>());
-  const [, rerender] = useState(0);
+  const [cache, setCache] = useState(() => new Map<number, DiffFile[] | null>());
+  const isCached = cache.has(index);
   useEffect(() => {
-    if (index < 0 || cache.current.has(index)) return;
-    let isCurrent = true;
-    source.files(index).then(
-      (files) => cache.current.set(index, files),
-      () => cache.current.set(index, null),
-    ).finally(() => isCurrent && rerender((r) => r + 1));
-    return () => void (isCurrent = false);
-  }, [source, index]);
+    if (index < 0 || isCached) return;
+    const store = (files: DiffFile[] | null) => setCache((all) => new Map(all).set(index, files));
+    source.files(index).then(store, () => store(null));
+  }, [source, index, isCached]);
   if (index < 0) return null;
-  return cache.current.has(index) ? cache.current.get(index) : undefined;
+  return cache.has(index) ? cache.get(index) : undefined;
 }
 
 function DiffFileRow({ file }: { file: DiffFile }) {

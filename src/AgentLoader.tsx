@@ -25,7 +25,7 @@ const IDLE_FRAME_MS = 1000 / 30;
 export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: AgentPhase; flavor?: MochiFlavor; className?: string }) {
   const reduce = useReducedMotionConfig();
   const id = `mochi${useId().replace(/\W/g, '')}`;
-  const refs = useFrameRefs();
+  const { shadow, body, eye, glint, props } = useFrameRefs();
   const svg = useRef<SVGSVGElement>(null);
   // Offscreen (a pinned page beside the one in view, a row scrolled away), the pose holds still instead of costing a frame callback.
   const isOnScreen = useInView(svg);
@@ -43,7 +43,7 @@ export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: A
     const isSettledIdle = phase === 'idle' && morph.weights[IDLE] > 0.999;
     if (isSettledIdle && time - paintedAt.current < IDLE_FRAME_MS) return;
     paintedAt.current = time;
-    paint(refs, morph.weights, frameAt(morph.weights, time / 1000));
+    paint({ shadow, body, eye, glint, props }, morph.weights, frameAt(morph.weights, time / 1000));
   });
 
   const colors = MOCHI_FLAVORS[flavor];
@@ -70,19 +70,19 @@ export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: A
           <stop offset="1" stopColor="black" stopOpacity="0" />
         </radialGradient>
       </defs>
-      <ellipse ref={refs.shadow} cy={GROUND[1] + 0.3} ry={1.1} {...frame.shadow} fill={`url(#${id}-shadow)`} />
-      <g ref={refs.body} transform={frame.body}>
+      <ellipse ref={shadow} cy={GROUND[1] + 0.3} ry={1.1} {...frame.shadow} fill={`url(#${id}-shadow)`} />
+      <g ref={body} transform={frame.body}>
         {/* Light pages wash out the pale flavours; drawn under the body so only the outer 1px shows, at any size. */}
         <path d={BODY} fill="none" strokeWidth={2} vectorEffect="non-scaling-stroke" className="stroke-foreground/25 dark:stroke-transparent" />
         <path d={BODY} fill={`url(#${id}-body)`} />
         <path d={BODY} fill={`url(#${id}-base)`} stroke={colors.shade} strokeOpacity={0.5} strokeWidth={0.3} />
         <ellipse cx={-2.7} cy={-7.2} rx={2.3} ry={1.2} transform="rotate(-25 -2.7 -7.2)" fill={`url(#${id}-shine)`} />
         <ellipse cx={3.3} cy={-2.9} rx={1} ry={0.5} fill={colors.blush} opacity={0.6} />
-        <ellipse ref={refs.eye} {...frame.eye} fill={colors.ink} />
-        <circle ref={refs.glint} {...frame.glint} fill="white" />
+        <ellipse ref={eye} {...frame.eye} fill={colors.ink} />
+        <circle ref={glint} {...frame.glint} fill="white" />
       </g>
       {PHASES.map((p, k) => (
-        <g key={p} ref={(el) => void (refs.props.current[k] = el)} opacity={weights[k]} fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <g key={p} ref={(el) => void (props.current[k] = el)} opacity={weights[k]} fill="none" strokeLinecap="round" strokeLinejoin="round">
           {frame.props[k].map((s, i) => (
             <path key={i} d={s.d} opacity={s.o} fill={s.fill ?? 'none'} stroke={s.stroke} strokeWidth={s.w} />
           ))}

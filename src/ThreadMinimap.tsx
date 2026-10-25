@@ -77,6 +77,7 @@ function useRowsInView(scrollRef: React.RefObject<HTMLElement | null>, count: nu
       ro.disconnect();
       el.removeEventListener('scroll', schedule);
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- a new row count re-measures and re-observes the list's current first child
   }, [scrollRef, count]);
 
   return inView;

@@ -277,7 +277,7 @@ export function parseServerJson(text: string): McpServerDef[] {
   try {
     value = JSON.parse(text);
   } catch (error) {
-    throw new Error(`That isn't valid JSON: ${(error as Error).message}`);
+    throw new Error(`That isn't valid JSON: ${(error as Error).message}`, { cause: error });
   }
   if (!isObject(value)) throw new Error('Paste a JSON object');
   const map = isObject(value.mcpServers) ? value.mcpServers : value;
@@ -373,7 +373,7 @@ function parseJsonObject(text: string, file: string): Record<string, unknown> {
   try {
     value = JSON.parse(text);
   } catch (error) {
-    throw new Error(`${file} isn't valid JSON: ${(error as Error).message}`);
+    throw new Error(`${file} isn't valid JSON: ${(error as Error).message}`, { cause: error });
   }
   if (!isObject(value)) throw new Error(`${file} isn't a JSON object`);
   return value;

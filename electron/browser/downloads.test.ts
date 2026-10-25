@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { uniqueName } from './filename.ts';
 
 test('a free name is kept, a taken one gets the next free number before the extension', () => {

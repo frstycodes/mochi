@@ -57,8 +57,6 @@ export function playwrightOps(page: Page): RecipeOps {
   };
 }
 
-// {OVERRIDES}
-
 const overridesFile = () => join(app.getPath('userData'), 'setup-overrides.json');
 
 async function readOverrides(): Promise<Record<string, RecipeOverrides>> {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { agentSnapshot, ariaSelector } from './ariaRefs.ts';
 
 // Captured from page.ariaSnapshot({ mode: 'ai' }) on scripts/fixtures/browser-smoke.html, with an iframe and a quoted name added.

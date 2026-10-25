@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useLatest } from './useLatest';
 import { createPortal } from 'react-dom';
 import { haptic } from './haptic';
 import { DOCK_WHEEL_RATIO, dockDragOffset, dragSteps, wheelPx, wheelStep } from './scrub';
@@ -81,8 +82,7 @@ export function ScrollDock<T extends string>({ label, value, onChange, onTap, it
   const index = Math.max(0, items.findIndex((i) => i.value === value));
   const [preview, setPreview] = useState(index);
   const previewRef = useRef(index);
-  const live = useRef({ index, items, onChange, onTap });
-  live.current = { index, items, onChange, onTap };
+  const live = useLatest({ index, items, onChange, onTap });
 
   useEffect(() => {
     const el = ref.current;
@@ -158,7 +158,7 @@ export function ScrollDock<T extends string>({ label, value, onChange, onTap, it
       window.removeEventListener('pointermove', onMove);
       stopDrag();
     };
-  }, []);
+  }, [live]);
 
   const isOpen = !!anchor;
   useEffect(() => {
@@ -210,9 +210,8 @@ function DockStrip<T>({ ref, items, startIndex, onBrowse }: { ref: RefObject<HTM
   const pos = useTransform(scrollX, (x) => x / SPACING);
 
   // Mount only: after opening, the scroll offset is the source of truth.
-  useLayoutEffect(() => {
-    if (ref.current) ref.current.scrollLeft = startIndex * SPACING;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const scrollToStart = useEffectEvent(() => ref.current && (ref.current.scrollLeft = startIndex * SPACING));
+  useLayoutEffect(() => void scrollToStart(), []);
 
   useMotionValueEvent(pos, 'change', (p) => onBrowse(Math.min(items.length - 1, Math.max(0, Math.round(p)))));
 
@@ -248,8 +247,7 @@ function DockTile({ pos, i, children }: { pos: MotionValue<number>; i: number; c
  */
 export function WheelStepper<T extends string>({ values, value, onChange, onTap, children }: { values: readonly T[]; value: T; onChange: (v: T) => void; onTap: () => void; children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const live = useRef({ values, value, onChange, onTap });
-  live.current = { values, value, onChange, onTap };
+  const live = useLatest({ values, value, onChange, onTap });
 
   useEffect(() => {
     const el = ref.current;
@@ -295,7 +293,7 @@ export function WheelStepper<T extends string>({ values, value, onChange, onTap,
       el.removeEventListener('wheel', onWheel);
       stopDrag();
     };
-  }, []);
+  }, [live]);
 
   return (
     <span ref={ref} className="relative inline-flex *:cursor-ew-resize">

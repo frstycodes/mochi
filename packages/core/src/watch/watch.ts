@@ -96,9 +96,11 @@ export const makeWatch = (deps: WatchDeps) =>
     const files = yield* RcMap.make({
       lookup: (root: string) =>
         Effect.gen(function* () {
+          // Watching starts before the first read, so a change in between marks it stale instead of going unseen.
+          const changes = yield* roots(root);
           const files = yield* topic('files', { isPoll: false }, Effect.map(deps.host('fs.list', [root]), (files): WatchValue => ({ _tag: 'files', files: files as string[] })));
           // Only a create or delete changes the list; .git's churn never does.
-          yield* forkEach(roots(root), (batch) => (batch.some((c) => c.type !== 'update' && !isGitPath(c.path)) ? files.markStale : Effect.void));
+          yield* forkEach(changes, (batch) => (batch.some((c) => c.type !== 'update' && !isGitPath(c.path)) ? files.markStale : Effect.void));
           return files;
         }),
     });
@@ -111,10 +113,10 @@ export const makeWatch = (deps: WatchDeps) =>
             Effect.orElseSucceed(() => [cwd, ''] as const),
           );
           const [top, gitDir] = where;
+          // A linked worktree keeps its index under the main repo's .git/worktrees, outside `top`. Both are watched before the first read.
+          const watched = [yield* roots(top), ...(gitDir && !isInside(gitDir, top) ? [yield* roots(gitDir)] : [])];
           const status = yield* topic('git', { isPoll: false }, fingerprint(deps, top));
-          yield* forkEach(roots(top), () => status.markStale);
-          // A linked worktree keeps its index under the main repo's .git/worktrees, outside the tree watched above.
-          if (gitDir && !isInside(gitDir, top)) yield* forkEach(roots(gitDir), () => status.markStale);
+          for (const changes of watched) yield* forkEach(changes, () => status.markStale);
           return status;
         }),
     });
@@ -202,7 +204,7 @@ export const makeWatch = (deps: WatchDeps) =>
         case 'files':
           return follow(RcMap.get(files, key.root));
         case 'changes':
-          return roots(key.root).pipe(
+          return Stream.unwrap(roots(key.root)).pipe(
             Stream.map((batch) => batch.filter((c) => !isGitPath(c.path)).map((c) => c.path)),
             Stream.filter((paths) => paths.length > 0),
             Stream.map((paths) => ({ _tag: 'changes', paths }) as const),

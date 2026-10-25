@@ -5,7 +5,11 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import electron from 'vite-plugin-electron/simple';
+import { COMPLEX_FILES } from './scripts/oxlint/complexity-burndown.ts';
 import { csp } from './scripts/csp.ts';
+
+// Copied from shadcn and AI Elements and kept as published, so an update diffs cleanly.
+const VENDORED = ['src/components/ui/**', 'src/components/ai-elements/**'];
 
 export default defineConfig(({ mode }) => ({
   base: './',
@@ -13,13 +17,70 @@ export default defineConfig(({ mode }) => ({
   // GAP: format check is off until in-flight branches land; turning it on reformats ~210 files in one commit.
   check: { fmt: false },
   lint: {
-    jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
-    rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },
-    options: { typeAware: true, typeCheck: true },
-    // node:test's `test()` returns a promise the runner already tracks.
-    overrides: [{ files: ['**/*.test.ts'], rules: { 'typescript/no-floating-promises': 'off' } }],
+    plugins: ['eslint', 'typescript', 'unicorn', 'oxc', 'react'],
+    jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }, './scripts/oxlint/index.ts', 'eslint-plugin-sonarjs'],
+    rules: { 'vite-plus/prefer-vite-plus-imports': 'error', 'eslint/preserve-caught-error': 'error' },
+    overrides: [
+      {
+        files: ['**/*.{ts,tsx}'],
+        excludeFiles: VENDORED,
+        rules: {
+          'mochi/require-suppression-reason': 'error',
+          'mochi/no-low-value-comments': 'error',
+          // SonarSource's default limit.
+          'sonarjs/cognitive-complexity': ['error', 15],
+        },
+      },
+      { files: COMPLEX_FILES, rules: { 'sonarjs/cognitive-complexity': ['warn', 15] } },
+      // Vendored from T3 Code; kept close to upstream.
+      { files: ['scripts/oxlint/rules/*.ts'], excludeFiles: ['**/*.test.ts'], rules: { 'sonarjs/cognitive-complexity': 'off' } },
+      {
+        files: ['src/**', 'electron/**', 'packages/*/src/**', 'infra/*/src/**'],
+        excludeFiles: [...VENDORED, '**/*.test.ts'],
+        rules: { 'mochi/no-em-dash-copy': 'error' },
+      },
+      {
+        files: ['**/*.test.ts'],
+        rules: {
+          'mochi/no-manual-effect-runtime-in-tests': 'error',
+          'mochi/no-polling-loop-in-tests': 'error',
+          'mochi/no-real-time-wait-in-tests': 'error',
+          'mochi/no-test-in-loop': 'error',
+          'mochi/no-wall-clock-in-tests': 'error',
+        },
+      },
+      // The React Compiler builds the renderer only; Core's `use*` setters are not hooks.
+      {
+        files: ['src/**/*.{ts,tsx}'],
+        excludeFiles: VENDORED,
+        rules: {
+          'react/hooks': 'error',
+          'mochi/no-hookless-use-function': 'error',
+          'react/refs': 'error',
+          'react/set-state-in-effect': 'error',
+          'react/purity': 'error',
+          'react/immutability': 'error',
+          'react/static-components': 'error',
+          'react/preserve-manual-memoization': 'error',
+          'react/exhaustive-effect-dependencies': 'error',
+          'mochi/no-manual-memo': 'error',
+        },
+      },
+    ],
+    // `pnpm typecheck` (tsc-rs) is the type check; tsgolint only supplies types to the type-aware rules.
+    options: { typeAware: true, typeCheck: false },
   },
-  plugins: lazyPlugins(() => [
+  test: {
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'electron/**/*.test.ts', 'infra/**/src/**/*.test.ts'],
+    setupFiles: ['scripts/test-env.ts'],
+    // `--changed` follows imports only; a dependency bump or a fixture a test reads from disk reruns everything.
+    forceRerunTriggers: ['**/package.json', '**/{vitest,vite}.config.*', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '**/fixtures/**'],
+    // Suites that spawn Core, git or a fake CLI take seconds; the default is 5s.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
+  },
+  // Tests run the sources as Node would, without the renderer's transforms.
+  plugins: lazyPlugins(() => mode === 'test' ? [] : [
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),

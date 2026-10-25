@@ -99,20 +99,24 @@ export function DragSurface({ distance, canStart, autoScroll = false, children, 
   ]);
   // dnd-kit computes collisions only once a shape is set, and again whenever it changes: Feedback keeps it under the pointer, but
   // `feedback: 'none'` skips that, so the surface does it.
-  const [shape] = useState<{ start?: DOMRectangle }>({});
   const onDragStart: SurfaceHandlers['onDragStart'] = (event, manager) => {
     const element = manager.dragOperation.source?.element;
-    shape.start = element && new DOMRectangle(element);
-    if (shape.start) manager.dragOperation.shape = shape.start;
+    const start = element && new DOMRectangle(element);
+    dragStarts.set(manager, start);
+    if (start) manager.dragOperation.shape = start;
     handlers.onDragStart?.(event, manager);
   };
   const onDragMove: SurfaceHandlers['onDragMove'] = (event, manager) => {
     const { transform } = manager.dragOperation;
-    if (shape.start) manager.dragOperation.shape = shape.start.translate(transform.x, transform.y);
+    const start = dragStarts.get(manager);
+    if (start) manager.dragOperation.shape = start.translate(transform.x, transform.y);
     handlers.onDragMove?.(event, manager);
   };
   return createElement(DragDropProvider, { sensors, plugins, ...handlers, onDragStart, onDragMove }, children);
 }
+
+/** The dragged source's rect at the start, per surface's manager: each runs one drag at a time. */
+const dragStarts = new WeakMap<object, DOMRectangle | undefined>();
 
 // About 40px of a full-height sidebar.
 const EDGE_SCROLL_SHARE = 0.05;

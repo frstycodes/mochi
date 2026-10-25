@@ -59,6 +59,7 @@ function Measured({ className, heightFor, children }: { className?: string; heig
 function ChartTip({ tip, width }: { tip: Tip; width: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [tipWidth, setTipWidth] = useState(0);
+  // oxlint-disable-next-line react/exhaustive-effect-dependencies -- measures again once each new `tip` has rendered its rows
   useLayoutEffect(() => setTipWidth(ref.current?.offsetWidth ?? 0), [tip]);
   const half = tipWidth / 2;
   const left = Math.min(Math.max(tip.x, half), Math.max(half, width - half));

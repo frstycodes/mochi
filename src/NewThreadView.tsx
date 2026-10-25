@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { motion } from 'motion/react';
 import { getPrefs, setPrefs, usePrefs } from './settings/prefs';
 import { useHarness, useSpace, useSpaceThreads } from './store';
@@ -27,6 +27,7 @@ import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from 
 import type { WorkspaceDraft } from './git/workspace';
 import { RunsOnMenu } from './remote/RunsOnMenu';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
+import { useNow } from './useNow';
 
 /** The new-thread page's picks, kept with its draft. */
 interface NewThreadPicks {
@@ -75,14 +76,13 @@ function NewThread() {
   const slashItems = useSlashItems(provider, spaceId, project).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
   // No thread is this page's own, so none is left out.
-  const mentionFiles = useMemo(() => ({ root: project && projectRoot(repoFor(project, '')), recent: [] }), [project]);
+  const mentionFiles = { root: project && projectRoot(repoFor(project, '')), recent: [] };
   const mention = useMentionMenu(layoutId, useThreadSkills(provider, spaceId, project), useThreadServers(provider, spaceId, project), useThreadPlugins(provider, spaceId, project), mentionFiles);
   const threadDrop = useThreadMentionDrop(mention);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
   const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
-  useEffect(() => {
-    mention.restore(saved?.mentions ?? []);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const restoreMentions = useEffectEvent(() => mention.restore(saved?.mentions ?? []));
+  useEffect(() => restoreMentions(), []);
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const machines = useMachines();
   const [runsOn, setRunsOn] = useState<string | null>(null);
@@ -100,7 +100,7 @@ function NewThread() {
   const draft = textInput.value;
   // Picks only ride along with something typed or attached; on their own they aren't a draft.
   const hasDraft = !!draft || attachments.files.length > 0 || mention.mentions.length > 0;
-  const draftExtra = useMemo<NewThreadPicks | undefined>(() => (hasDraft ? { provider, picked, project, mentions: mention.mentions } : undefined), [hasDraft, provider, picked, project, mention.mentions]);
+  const draftExtra: NewThreadPicks | undefined = hasDraft ? { provider, picked, project, mentions: mention.mentions } : undefined;
   // The worktree checkbox remembers your last choice for the next new thread.
   const changeWorkspace = (next: WorkspaceDraft) => {
     if (next.mode !== workspaceDraft.mode) setPrefs({ workspaceMode: next.mode });
@@ -114,15 +114,19 @@ function NewThread() {
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
   // The sidebar's Projects: a new thread here, in that project, whatever was picked before.
+  const now = useNow(null);
   const requestedProject = useRequestedProject();
-  useEffect(() => {
-    if (!requestedProject) return;
+  const openRequested = useEffectEvent(() => {
     const ref = takeRequestedProject();
     if (!ref) return;
     changeRunsOn(null);
     changeProject(ref);
     setStep('compose');
-  }, [requestedProject]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- the sidebar's request is a one-shot mailbox outside React; taking it is the sync
+    if (requestedProject) openRequested();
+  }, [requestedProject]);
 
   const chooseFirst = (next: string | null) => {
     if (remote) changeRunsOn(null);
@@ -174,7 +178,7 @@ function NewThread() {
     // The greeting row has a fixed height, so the card's top stays put whichever step it holds and however tall it grows.
     <div className="mx-auto grid min-h-full max-w-[720px] grid-cols-1 grid-rows-[auto_auto_1fr] px-4 md:px-6">
       <header className="flex min-h-[30vh] flex-col items-center justify-end pt-10 pb-6 text-center">
-        <h1 className="text-balance type-display">{greeting(new Date())}</h1>
+        <h1 className="text-balance type-display">{greeting(new Date(now))}</h1>
       </header>
 
       {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. A constant layoutDependency keeps its resizes (project step to composer) instant; the handoff still animates. */}
@@ -259,7 +263,7 @@ const NO_PROJECTS: PickerProject[] = [];
 /** This computer's projects as the picker lists them: by folder, which is what a thread here starts in. */
 function useProjectRows(spaceId: string): PickerProject[] {
   const projects = useProjects(spaceId, useSpaceThreads());
-  return useMemo(() => projects?.map((p) => ({ ref: p.path, name: p.name, ...(p.path !== p.name && { detail: p.path }), isMissing: p.isMissing, icon: p.icon })) ?? NO_PROJECTS, [projects]);
+  return projects?.map((p) => ({ ref: p.path, name: p.name, ...(p.path !== p.name && { detail: p.path }), isMissing: p.isMissing, icon: p.icon })) ?? NO_PROJECTS;
 }
 
 function placeholder(machineName: string | undefined, projectLabel: string | null) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { EVAL_MAX_CHARS, evalResult, withTimeout } from './evaluate.ts';
 
 test('evalResult returns the last value as JSON and says when it cut it', () => {

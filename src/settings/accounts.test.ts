@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Account } from '../host/types/settings.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId, profilesUsing, signInCommand } from './accounts.ts';
 

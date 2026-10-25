@@ -9,10 +9,11 @@
     "dev": "vp dev",
     "build": "tsc -b && vp build",
     "typecheck": "tsc -b && tsc -p packages/domain && tsc -p packages/core && tsc -p electron && tsc -p infra/relay",
-    "test": "node --import ./scripts/test-env.ts --test \"src/**/*.test.ts\" \"packages/*/src/**/*.test.ts\" \"electron/**/*.test.ts\" \"infra/**/src/**/*.test.ts\"",
+    "test": "vp test run",
     "artifact": "pnpm build --mode artifact && node scripts/artifact.mjs",
     "electron:dev": "vp dev --mode electron",
-    "electron:build": "tsc -b && tsc -p electron && vp build --mode electron && node scripts/build-native.mjs && electron-builder --dir"
+    "electron:build": "tsc -b && tsc -p electron && pnpm electron:pack",
+    "electron:pack": "vp build --mode electron && node scripts/build-native.mjs && electron-builder --dir"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.296",
@@ -105,6 +106,7 @@
   },
   "devDependencies": {
     "@babel/core": "^8.0.7",
+    "@effect/vitest": "4.0.5",
     "@lobehub/icons-static-svg": "^1.95.1",
     "@playwright/test": "1.60.0",
     "@rolldown/plugin-babel": "^0.2.4",
@@ -118,8 +120,9 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "electron": "44.7.0",
     "electron-builder": "26.15.3",
+    "eslint-plugin-sonarjs": "^4.2.2",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
+    "typescript": "npm:@tsc-rs/typescript@0.8.0",
     "vite": "catalog:",
     "vite-plugin-electron": "1.1.2",
     "vite-plugin-singlefile": "^2.3.3",

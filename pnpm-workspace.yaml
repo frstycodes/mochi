@@ -4,13 +4,23 @@ packages:
 onlyBuiltDependencies:
   - electron
   - node-pty
+  - "@tsc-rs/typescript"
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.1.0
   vite-plus: 1.1.0
 overrides:
   vite@*: "catalog:"
+  "@effect/vitest>vitest": "-"
+# Our patch makes @effect/vitest import vite-plus/test, so it runs on the one test runner Vite+ ships. Keep in step with the catalog.
+packageExtensions:
+  "@effect/vitest@*":
+    dependencies:
+      vite-plus: 1.1.0
+patchedDependencies:
+  "@effect/vitest@4.0.5": patches/@effect__vitest@4.0.5.patch
 peerDependencyRules:
   allowAny:
+    - typescript
     - vite
   allowedVersions:
     vite: "*"

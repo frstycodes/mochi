@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { emptyShell, emptyThread, projectShell, projectThread, summarizeProjects, summarizeThread, type LoggedEvent } from './index.ts';
 
 const event = (sequence: number, type: string, threadId: string | null, payload: unknown): LoggedEvent => ({ sequence, type, threadId, payload });

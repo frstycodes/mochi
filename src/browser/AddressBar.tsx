@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useDebounced } from '../hooks/useDebounced';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { ArrowUpRight, Globe, Monitor, SearchAlt } from '@/icons';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
@@ -33,18 +33,24 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
   const anchorRef = useRef<HTMLFormElement>(null);
   const [typed, setTyped] = useState<string | null>(null);
   const [completion, setCompletion] = useState('');
-  const [selected, setSelected] = useState('');
   const candidates = useCandidates(thread, pageId);
   // Focusing selects the page's URL; until you type, the list shows what's open, running and recent.
   const query = typed === null || typed === page.url ? '' : typed;
   const remote = useSearchSuggestions(query);
   const rows = useRows(query, completion, candidates, remote);
   const isOpen = typed !== null && rows.length > 0;
+  // A new list starts on its first row.
+  const rowsKey = rows.map((r) => r.value).join('\n');
+  const [selected, setSelected] = useState(rows[0]?.value ?? '');
+  const [selectedIn, setSelectedIn] = useState(rowsKey);
+  if (rowsKey !== selectedIn) {
+    setSelectedIn(rowsKey);
+    setSelected(rows[0]?.value ?? '');
+  }
 
   useLayoutEffect(() => {
     if (completion && typed) inputRef.current?.setSelectionRange(typed.length, typed.length + completion.length);
   }, [typed, completion]);
-  useEffect(() => setSelected(rows[0]?.value ?? ''), [rows]);
 
   const finish = () => {
     setTyped(null);
@@ -133,19 +139,16 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
 }
 
 /** The thread's other browser tabs, its running dev servers and the address history, as one list to rank. */
-function useCandidates(thread: Thread, pageId: string) {
+function useCandidates(thread: Thread, pageId: string): Candidate[] {
   const { state } = useHarness();
   const history = useAddressHistory();
   const { ports } = usePorts(thread.id, threadCwd(thread) ?? null);
   const tabs = state.panes.find((p) => p.threadId === thread.id)?.tabs;
-  return useMemo<Candidate[]>(
-    () => [
-      ...(tabs ?? []).filter((t) => t.kind === 'browser' && !!t.url && pageKey(thread.id, t.id) !== pageId).map((t) => ({ kind: 'tab' as const, url: t.url!, title: t.title ?? '', tabId: t.id })),
-      ...(ports ?? []).map((p) => ({ kind: 'server' as const, url: `http://localhost:${p.port}`, title: p.command })),
-      ...history.map((url) => ({ kind: 'history' as const, url, title: historyTitle(url) })),
-    ],
-    [tabs, ports, history, thread.id, pageId],
-  );
+  return [
+    ...(tabs ?? []).filter((t) => t.kind === 'browser' && !!t.url && pageKey(thread.id, t.id) !== pageId).map((t) => ({ kind: 'tab' as const, url: t.url!, title: t.title ?? '', tabId: t.id })),
+    ...(ports ?? []).map((p) => ({ kind: 'server' as const, url: `http://localhost:${p.port}`, title: p.command })),
+    ...history.map((url) => ({ kind: 'history' as const, url, title: historyTitle(url) })),
+  ];
 }
 
 /** The engine's suggestions for `query`, kept while the next keystroke's answer is on its way so the list doesn't blink. */
@@ -159,23 +162,21 @@ function useSearchSuggestions(query: string) {
 
 function useRows(query: string, completion: string, candidates: Candidate[], remote: string[]) {
   const { searchEngine } = usePrefs();
-  return useMemo(() => {
-    const engine = SEARCH_ENGINES[searchEngine];
-    const ranked = rankSuggestions(query, candidates);
-    // With an inline completion the completed page is the top row, so Enter opens what the field shows.
-    const completed = completion ? ranked.find((c) => bare(c.url).toLowerCase() === (query + completion).toLowerCase()) : undefined;
-    const target = query && normalizeUrl(query, searchEngine);
-    const isSearch = !!target && target.startsWith(engine.url);
-    const typedRow: Row[] = !query || completed ? [] : [{ value: `go:${target}`, url: target, label: isSearch ? query : displayUrl(target), detail: isSearch ? `Search ${engine.name}` : '', icon: isSearch ? 'search' : 'go' }];
-    const pages = (completed ? [completed, ...ranked.filter((c) => c !== completed)] : ranked).map(
-      (c): Row => ({ value: `${c.kind}:${c.url}`, url: c.url, label: c.kind === 'server' ? bare(c.url) : c.title || bare(c.url), detail: c.kind === 'server' ? c.title : c.title ? bare(c.url) : '', icon: c.kind === 'server' ? 'server' : 'site', tabId: c.tabId }),
-    );
-    const searches = remote
-      .filter((s) => s.toLowerCase() !== query.toLowerCase())
-      .slice(0, 4)
-      .map((s): Row => ({ value: `search:${s}`, url: engine.url + encodeURIComponent(s), label: s, detail: '', icon: 'search' }));
-    return [...typedRow, ...pages, ...searches];
-  }, [query, completion, candidates, remote, searchEngine]);
+  const engine = SEARCH_ENGINES[searchEngine];
+  const ranked = rankSuggestions(query, candidates);
+  // With an inline completion the completed page is the top row, so Enter opens what the field shows.
+  const completed = completion ? ranked.find((c) => bare(c.url).toLowerCase() === (query + completion).toLowerCase()) : undefined;
+  const target = query && normalizeUrl(query, searchEngine);
+  const isSearch = !!target && target.startsWith(engine.url);
+  const typedRow: Row[] = !query || completed ? [] : [{ value: `go:${target}`, url: target, label: isSearch ? query : displayUrl(target), detail: isSearch ? `Search ${engine.name}` : '', icon: isSearch ? 'search' : 'go' }];
+  const pages = (completed ? [completed, ...ranked.filter((c) => c !== completed)] : ranked).map(
+    (c): Row => ({ value: `${c.kind}:${c.url}`, url: c.url, label: c.kind === 'server' ? bare(c.url) : c.title || bare(c.url), detail: c.kind === 'server' ? c.title : c.title ? bare(c.url) : '', icon: c.kind === 'server' ? 'server' : 'site', tabId: c.tabId }),
+  );
+  const searches = remote
+    .filter((s) => s.toLowerCase() !== query.toLowerCase())
+    .slice(0, 4)
+    .map((s): Row => ({ value: `search:${s}`, url: engine.url + encodeURIComponent(s), label: s, detail: '', icon: 'search' }));
+  return [...typedRow, ...pages, ...searches];
 }
 
 /** Sits over the field's right end, shown while the bar is hovered or the button has keyboard focus. */
@@ -203,15 +204,17 @@ function RowIcon({ row }: { row: Row }) {
 /** The site's own /favicon.ico (never a third-party favicon service, which would learn your history), a globe when it has none. */
 function SiteIcon({ url }: { url: string }) {
   const [hasFailed, setFailed] = useState(false);
-  const origin = useMemo(() => {
-    try {
-      return new URL(url).origin;
-    } catch {
-      return null;
-    }
-  }, [url]);
+  const origin = originOf(url);
   if (!origin || hasFailed) return <Globe className="text-muted-foreground" />;
   return <img src={`${origin}/favicon.ico`} alt="" aria-hidden referrerPolicy="no-referrer" onError={() => setFailed(true)} className="size-4 shrink-0 rounded-xs" />;
+}
+
+function originOf(url: string) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
 }
 
 function isLocal(url: string) {

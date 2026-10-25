@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import { fileAt } from './fileAt.ts';
 
 test('fileAt: inside the thread folder reads relative to it; an absolute path elsewhere, or with no folder, reads from its own folder', () => {

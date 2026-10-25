@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { afterEach, test, vi } from 'vite-plus/test';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
 import { shortElapsed } from '../progress.ts';
 import { activeTasks, taskResult, threadTasks } from './tasks.ts';
+
+afterEach(() => vi.useRealTimers());
 
 /** A live Claude thread plus every host.agent call the store would make. */
 function setup() {
@@ -45,18 +47,18 @@ test('a background command runs, picks up its log, and stops only when its harne
   assert.deepEqual(calls, [], 'nothing to stop once it ended');
 });
 
-test('one list holds commands and every agent in start order; only running ones are active', (t) => {
-  t.mock.timers.enable({ apis: ['Date'] });
+test('one list holds commands and every agent in start order; only running ones are active', () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: 0 });
   const { id, dispatch, event, thread } = setup();
   const agent = (agentId: string, phase: 'start' | 'end', isBackground = false) =>
     dispatch({ type: 'agent', event: { threadId: id, type: 'subagent', id: agentId, phase, name: agentId, isBackground, ...(phase === 'end' && { status: 'done' as const }) } });
   agent('a1', 'start', true);
-  t.mock.timers.tick(1000);
+  vi.advanceTimersByTime(1000);
   agent('a2', 'start');
-  t.mock.timers.tick(1000);
+  vi.advanceTimersByTime(1000);
   event({ id: 'b2', phase: 'start', kind: 'shell', title: 'exit 3' });
   event({ id: 'b2', phase: 'end', status: 'failed', exitCode: 3 });
-  t.mock.timers.tick(1000);
+  vi.advanceTimersByTime(1000);
   event({ id: 'w1', phase: 'start', kind: 'workflow', title: 'Release' });
   agent('a2', 'end');
 

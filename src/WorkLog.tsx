@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { File, PatchDiff } from './files/Diffs';
@@ -113,7 +113,7 @@ function useWorkLogFiles(): ThreadFiles {
   const threadId = useVizThreadId();
   const files = useThreadFiles();
   // Stable, like `useThreadFiles`: the image loaders' effects key on it.
-  return useMemo(() => files ?? { threadId, root: '' }, [files, threadId]);
+  return files ?? { threadId, root: '' };
 }
 
 /** The bordered list of calls: an open work group, a subagent's log. Inside border: an outside ring would be cut off by an expander's clip. */
@@ -419,17 +419,15 @@ function ActionIcon({ action }: { action: CurrentAction }) {
 function useDwell(title: Title, dwell: number): Title {
   const [shown, setShown] = useState(title);
   const shownAt = useRef(0);
-  const latest = useRef(title);
-  latest.current = title;
+  const show = useEffectEvent(() => {
+    shownAt.current = performance.now();
+    setShown(title);
+  });
   useEffect(() => {
     if (title.key === shown.key) return;
-    const show = () => {
-      shownAt.current = performance.now();
-      setShown(latest.current);
-    };
     const wait = shownAt.current + dwell - performance.now();
     if (wait <= 0) return show();
-    const t = window.setTimeout(show, wait);
+    const t = window.setTimeout(() => show(), wait);
     return () => window.clearTimeout(t);
   }, [title.key, shown.key, dwell]);
   return title.key === shown.key ? title : shown;

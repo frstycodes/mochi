@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { firstPrompt } from '../model.ts';
 import { initialQueue } from '../store/queue.ts';
 import type { State } from '../store/index.tsx';

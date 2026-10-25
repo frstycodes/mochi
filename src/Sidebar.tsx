@@ -100,9 +100,11 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
   const closeTimer = useRef(0);
   const isCollapsed = state === 'collapsed' && !isMobile;
 
-  useEffect(() => {
+  const [wasCollapsed, setWasCollapsed] = useState(isCollapsed);
+  if (isCollapsed !== wasCollapsed) {
+    setWasCollapsed(isCollapsed);
     if (!isCollapsed) setOpen(false);
-  }, [isCollapsed]);
+  }
 
   if (!isCollapsed && !isDocking) return null;
   const open = () => {
@@ -346,10 +348,12 @@ function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: 
   const pins = mergePins(pinned, remotePins);
   const pinnedIds = pinned.map((g) => g.thread.id);
   const activeIds = active.map((g) => g.thread.id);
+  // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
   const reorder = (lists: { pinned: string[]; unpinned: string[] } | null) => lists && dispatch({ type: 'reorder', ...lists, at: Date.now() });
   const drop = (dragged: ListRow, slot: NonNullable<RowDragState['slot']>) => {
     if (!dragged.remote && !slot.toPinned) return reorder(dropPin(pinnedIds, activeIds, dragged.thread.id, false, slot.index));
     const others = pins.filter((p) => p.rowId !== dragged.rowId);
+    // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
     const order = orderBetween(others[slot.index - 1] && pinOrderOf(others[slot.index - 1].thread), others[slot.index] && pinOrderOf(others[slot.index].thread), Date.now());
     if (!dragged.remote) return dispatch({ type: 'pin-at', threadId: dragged.thread.id, order });
     void run(dragged.remote.machine.id, slot.toPinned ? { type: 'pin', threadId: dragged.thread.id, isPinned: true, order } : { type: 'pin', threadId: dragged.thread.id, isPinned: false });

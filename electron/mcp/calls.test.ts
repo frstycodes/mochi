@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { test } from 'node:test';
+import { afterEach, test, vi } from 'vite-plus/test';
 import type { AgentToolCall } from '../../src/host/types/agent.ts';
 import { WINDOW_GONE, toolCalls, type Renderer } from './calls.ts';
+
+afterEach(() => vi.useRealTimers());
 
 class FakeRenderer extends EventEmitter {
   sent: AgentToolCall[] = [];
@@ -13,16 +15,16 @@ class FakeRenderer extends EventEmitter {
 
 const request = { threadId: 't1', name: 'browser_eval', args: {} };
 
-test('a call waiting on a widget is never cut short by its tier, only by the overall timeout', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('a call waiting on a widget is never cut short by its tier, only by the overall timeout', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const calls = toolCalls(31 * 60_000);
   const renderer = new FakeRenderer();
   let result: unknown;
   void calls.call(renderer as unknown as Renderer, request).then((r) => (result = r));
-  t.mock.timers.tick(30_000);
+  vi.advanceTimersByTime(30_000);
   await Promise.resolve();
   assert.equal(result, undefined, 'still waiting after 30s');
-  t.mock.timers.tick(31 * 60_000);
+  vi.advanceTimersByTime(31 * 60_000);
   await new Promise(setImmediate);
   assert.deepEqual(result, { text: 'Mochi did not answer in time', isError: true });
 });

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { Starts } from './starts.ts';
 
 test('a message sent during setup waits for the start instead of finding no agent', async () => {
@@ -7,7 +7,7 @@ test('a message sent during setup waits for the start instead of finding no agen
   const start = starts.begin('t1');
   const order: string[] = [];
   const send = starts.wait('t1').then(() => order.push('send'));
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  await Promise.resolve();
   assert.equal(order.length, 0, 'still setting up: the send is held');
   order.push('agent started');
   start.end();

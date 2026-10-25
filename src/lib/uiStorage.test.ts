@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { mock, test } from 'node:test';
+import { test, vi } from 'vite-plus/test';
 import { browserStorage, persistedFamily, persistedSlice } from './uiStorage.ts';
 
 const storage = new Map<string, string>();
-mock.method(browserStorage, 'getItem', (key: string) => storage.get(key) ?? null);
-mock.method(browserStorage, 'setItem', (key: string, value: string) => void storage.set(key, value));
-mock.method(browserStorage, 'removeItem', (key: string) => void storage.delete(key));
+vi.spyOn(browserStorage, 'getItem').mockImplementation((key: string) => storage.get(key) ?? null);
+vi.spyOn(browserStorage, 'setItem').mockImplementation((key: string, value: string) => void storage.set(key, value));
+vi.spyOn(browserStorage, 'removeItem').mockImplementation((key: string) => void storage.delete(key));
 
 test('legacy values hydrate synchronously, migrate to version one and survive a fresh slice', () => {
   for (const [key, raw, fallback, expected] of [
@@ -51,7 +51,7 @@ test('dynamic slices import each old key and keep their values separate', () => 
 });
 
 test('blocked storage keeps session state, while theme saves can report the failure', () => {
-  const blocked = mock.method(browserStorage, 'setItem', () => {
+  const blocked = vi.spyOn(browserStorage, 'setItem').mockImplementation(() => {
     throw new Error('quota');
   });
   try {
@@ -61,6 +61,6 @@ test('blocked storage keeps session state, while theme saves can report the fail
     const themes = persistedSlice('themes', {}, undefined, true);
     assert.throws(() => themes.setState({ value: { installed: [] } }), /quota/);
   } finally {
-    blocked.mock.restore();
+    blocked.mockRestore();
   }
 });

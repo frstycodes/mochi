@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { claudePermissions, codexToolConfig, connectorName, groupPermission, setTools, toolGroups, toolRules, type ConnectorSettings, type ConnectorTool } from './connectorTools.ts';
 import { profileConnectors, type LibraryIndex } from './library.ts';
 

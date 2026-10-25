@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { SetupChoice, WorktreeSetup } from '../../src/host/types/agent.ts';
 import { includePatterns, installCommand, matchesInclude, prepareWorktree } from './setup.ts';
 
@@ -112,11 +112,14 @@ test('an abort stops the running command and ends the setup cancelled', async ()
   const { project, dir } = scratch();
   const { emit, last } = recorder();
   const abort = new AbortController();
-  const started = Date.now();
-  setTimeout(() => abort.abort(), 300);
-  const status = await prepareWorktree({ root: project, dir, include: '', command: 'sleep 30', emit, choose: () => Promise.resolve('skip'), signal: abort.signal });
+  // The command's first output means it is spawned and listening for the abort. Node, not `echo; sleep`: Windows runs it through cmd.exe.
+  const emitUntilStarted = (update: WorktreeSetup) => {
+    emit(update);
+    if (update.steps.some((s) => s.id === 'script' && s.output?.includes('started'))) abort.abort();
+  };
+  const status = await prepareWorktree({ root: project, dir, include: '', command: `node -e "console.log('started'); setTimeout(() => {}, 30_000)"`, emit: emitUntilStarted, choose: () => Promise.resolve('skip'), signal: abort.signal });
   assert.equal(status, 'cancelled');
-  assert.ok(Date.now() - started < 5000, 'the sleep was killed, not waited out');
+  assert.notEqual(last().steps.find((s) => s.id === 'script')!.exitCode, 0, 'the sleep was killed, not waited out');
   assert.equal(last().status, 'cancelled');
 });
 

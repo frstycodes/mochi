@@ -10,7 +10,14 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["@cloudflare/workers-types", "node"]
+    "types": ["@cloudflare/workers-types", "node"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "includeSuggestionsInTsc": false,
+        "diagnosticSeverity": { "unstableApiUsage": "off", "schemaNumber": "off" }
+      }
+    ]
   },
   "include": ["src"]
 }

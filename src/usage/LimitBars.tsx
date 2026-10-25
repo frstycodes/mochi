@@ -2,13 +2,14 @@ import type { CSSProperties } from 'react';
 import { Progress } from '@/components/ui/progress';
 import type { AccountLimits, LimitWindow } from '../host/types/agent.ts';
 import { timeAgo } from '../progress.ts';
+import { useNow } from '../useNow.ts';
 import { TONE_COLORS, toneFor, untilLabel } from './limits.ts';
 
 /** One bar per plan window the account reported, with when it resets; nothing for a window the plan doesn't have. */
 export function LimitBars({ limits }: { limits: AccountLimits | null }) {
+  const now = useNow(60_000);
   if (!limits) return <p className="type-caption text-subtle-foreground">Reading plan limits…</p>;
   if (!limits.windows.length) return <p className="type-caption text-subtle-foreground">No plan limits reported yet. They appear after the first reply on this account.</p>;
-  const now = Date.now();
   return (
     <ul className="flex flex-col gap-2.5">
       {limits.windows.map((w) => (
@@ -49,6 +50,7 @@ function ResetTime({ at, now }: { at: Date; now: number }) {
 
 /** "Updated 3 minutes ago", or nothing before the provider ever reported. */
 export function UpdatedAt({ limits }: { limits: AccountLimits | null }) {
+  const now = useNow(60_000);
   if (!limits?.updatedAt) return null;
-  return <span className="type-caption text-subtle-foreground">Updated {timeAgo((Date.now() - Date.parse(limits.updatedAt)) / 60_000)}</span>;
+  return <span className="type-caption text-subtle-foreground">Updated {timeAgo((now - Date.parse(limits.updatedAt)) / 60_000)}</span>;
 }

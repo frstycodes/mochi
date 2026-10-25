@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { describeCall, describeCommand } from './describe.ts';
 
 test('Codex commands read as plain sentences, the raw command as the fallback', () => {

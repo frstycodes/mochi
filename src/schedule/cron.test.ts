@@ -2,7 +2,7 @@
 process.env.TZ = 'America/New_York';
 
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { describeCron, nextRun, nextRuns, parseCron } from './cron.ts';
 
 const local = (y: number, mo: number, d: number, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();

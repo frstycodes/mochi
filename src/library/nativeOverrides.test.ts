@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { ProviderConfig } from '../host/types/settings.ts';
 import { claudeNativeSettings, codexNativeConfig, offItems } from './nativeOverrides.ts';
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { isNewerVersion, parseClaudeAuth, parseCodexAccount, parseVersion } from './parse.ts';
 
 // CLAUDE_LOGGED_OUT and CODEX_PLUS are real output (Claude Code 2.1.296, codex-cli 0.155.1), emails replaced.

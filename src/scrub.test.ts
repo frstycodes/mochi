@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { DOCK_DRAG_RATIO, DOCK_WHEEL_RATIO, EFFORT_STEP_PX, dockDragOffset, dragSteps, wheelPx, wheelStep } from './scrub.ts';
 
 // GAP: synthetic, not a recorded device trace. A medium trackpad swipe: 10 tracking events, then momentum decaying 0.88 a frame (275px).

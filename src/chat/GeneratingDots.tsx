@@ -1,5 +1,5 @@
 import { useReducedMotionConfig } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 const PITCH = 9;
@@ -23,8 +23,7 @@ const RIPPLE_WIDTH = 8;
 export function GeneratingDots({ className, onCentre }: { className?: string; onCentre?: (x: number, y: number) => void }) {
   const reduced = useReducedMotionConfig();
   const ref = useRef<HTMLCanvasElement>(null);
-  const report = useRef(onCentre);
-  report.current = onCentre;
+  const report = useEffectEvent((x: number, y: number) => onCentre?.(x, y));
 
   useEffect(() => {
     const canvas = ref.current!;
@@ -88,7 +87,7 @@ export function GeneratingDots({ className, onCentre }: { className?: string; on
       }
       ctx.globalAlpha = 1;
       pooled = { x: best.x, y: best.y };
-      report.current?.(best.x / width, best.y / height);
+      report(best.x / width, best.y / height);
       if (isVisible && !reduced) frame = requestAnimationFrame(draw);
     };
 

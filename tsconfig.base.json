@@ -12,6 +12,13 @@
     "declaration": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["node"]
+    "types": ["node"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "includeSuggestionsInTsc": false,
+        "diagnosticSeverity": { "unstableApiUsage": "off", "schemaNumber": "off" }
+      }
+    ]
   }
 }

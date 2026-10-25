@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { MAX_DRAFT_BYTES, clearDraft, flushDrafts, getDraft, loadDrafts, newThreadDraftKey, saveDraft, threadDraftKey, type Draft, type DraftStore } from './drafts.ts';
 
 function memoryStore(initial: [string, Draft][] = []) {

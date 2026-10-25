@@ -1,7 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { AccountId, AccountsState, AgentInstall, AgentSettingsPatch, ApiKeyState } from '../host/types/settings';
@@ -47,14 +47,14 @@ function useAgentSettingsState(isDetecting: boolean) {
   const apiKeys: Partial<Record<Provider, ApiKeyState>> = Object.fromEntries(HARNESS_IDS.map((id, i) => [id, keyQueries[i].data]));
   const [updating, setUpdating] = useState<Provider | null>(null);
   const [restartNeeded, setRestartNeeded] = useState<Provider[]>([]);
-  const check = useCallback((id: AccountId) => {
+  const check = (id: AccountId) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.agent.install(id) });
     void queryClient.fetchQuery({ queryKey: queryKeys.agent.install(id), queryFn: () => host.settings.detect(id) }).catch(() => {});
-  }, []);
-  const checkLatest = useCallback((provider: Provider) => {
+  };
+  const checkLatest = (provider: Provider) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.agent.version(provider) });
     void queryClient.fetchQuery({ queryKey: queryKeys.agent.version(provider), queryFn: () => host.settings.latestVersion(provider) }).catch(() => {});
-  }, []);
+  };
 
   const checkProvider = (provider: Provider) => {
     accounts?.accounts.filter((a) => a.provider === provider).forEach((a) => check(a.id));

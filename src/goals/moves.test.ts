@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Thread, TurnReport } from '../model.ts';
 import { agentAsk, continuePrompt, moveFor, questionFor, withUnseenGaps } from './moves.ts';
 import type { Gap, Verdict } from './verdict.ts';

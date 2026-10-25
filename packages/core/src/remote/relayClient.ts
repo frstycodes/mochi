@@ -1,4 +1,4 @@
-import { Effect, Fiber } from 'effect';
+import { Data, Effect, Fiber } from 'effect';
 import WebSocket from 'ws';
 import { RelayWire, type Remote } from '@mochi/schema';
 import { HEARTBEAT_MS, keepAlive, queuedReader, socketLink, toBytes, type RawLink } from './link.ts';
@@ -117,7 +117,7 @@ export function connectMachine(options: {
 }
 
 /** The relay didn't take the connection. Anything else (`token()` rejected) means there is no session to connect with. */
-class Unreachable extends Error {}
+class Unreachable extends Data.TaggedError('Unreachable') {}
 const messageOf = (error: unknown) => {
   const cause = (error as { cause?: unknown })?.cause ?? error;
   return cause instanceof Error ? cause.message : String(cause);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { isSharedSetting, settingsCatalog } from '../settings/catalog.ts';
 import { DEFAULT_PREFS } from '../settings/prefs.ts';
 import { driftedKeys, sharedValues } from './sharedSettings.ts';

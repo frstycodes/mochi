@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources.ts';
 
 test('a source is a link when it has a scheme or a host before a path, a file otherwise', () => {

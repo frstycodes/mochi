@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { Refresh } from '@/icons';
 import { toast } from '@/toast/store';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -18,18 +18,15 @@ const canWrite = (machine: FollowedMachine) => machine.status === 'online' && ma
  */
 export function useShareSetting() {
   const { machines, ask } = useMachines();
-  return useCallback(
-    (key: string, value: string) => {
-      const targets = machines.map((m) => m.machine).filter(canWrite);
-      void Promise.allSettled(targets.map((machine) => ask(machine.id, { type: 'setting', key, value }))).then((results) => {
-        const failed = results.flatMap((r, i) =>
-          r.status === 'rejected' ? [`${targets[i].name}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`] : [],
-        );
-        if (failed.length > 0) toast.error('Not changed on every computer', { description: failed.join('\n') });
-      });
-    },
-    [machines, ask],
-  );
+  return (key: string, value: string) => {
+    const targets = machines.map((m) => m.machine).filter(canWrite);
+    void Promise.allSettled(targets.map((machine) => ask(machine.id, { type: 'setting', key, value }))).then((results) => {
+      const failed = results.flatMap((r, i) =>
+        r.status === 'rejected' ? [`${targets[i].name}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`] : [],
+      );
+      if (failed.length > 0) toast.error('Not changed on every computer', { description: failed.join('\n') });
+    });
+  };
 }
 
 /** Above Settings: your other computers whose shared settings differ from this one's, each with a way to bring them in line. */
@@ -84,24 +81,27 @@ function DriftAlert({ machine, changes, refresh }: Drift) {
 function useSharedSettingsDrift(): Drift[] {
   const { machines, ask } = useMachines();
   const { sources } = useSettingSources(undefined, false);
-  const local = useMemo(() => sharedValues(sources), [sources]);
+  const local = sharedValues(sources);
   const [remote, setRemote] = useState<Record<string, Record<string, string>>>({});
-  const [nonce, setNonce] = useState(0);
   const online = machines.map((m) => m.machine).filter((m) => m.status === 'online' && m.scopes.includes('read'));
   const onlineKey = online.map((m) => m.id).join(',');
-  useEffect(() => {
-    let isCurrent = true;
-    for (const machine of online)
-      ask(machine.id, { type: 'settings' }).then(
-        (values) => isCurrent && setRemote((all) => ({ ...all, [machine.id]: values })),
+  const read = (ids: string[], isCurrent: () => boolean) => {
+    for (const id of ids)
+      ask(id, { type: 'settings' }).then(
+        (values) => isCurrent() && setRemote((all) => ({ ...all, [id]: values })),
         () => {},
       );
+  };
+  const readOnOpen = useEffectEvent(read);
+  useEffect(() => {
+    let isCurrent = true;
+    readOnOpen(onlineKey ? onlineKey.split(',') : [], () => isCurrent);
     return () => {
       isCurrent = false;
     };
-  }, [onlineKey, nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [onlineKey]);
   const catalog = settingsCatalog();
-  const refresh = () => setNonce((n) => n + 1);
+  const refresh = () => read(online.map((m) => m.id), () => true);
   return online.flatMap((machine) => {
     const values = remote[machine.id];
     if (!values) return [];

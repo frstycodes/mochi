@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { composeInstructions, instructionsFileOf } from './instructionFiles.ts';
 
 test('composeInstructions puts the shared file before the harness’s own, and adds nothing when both are empty', () => {

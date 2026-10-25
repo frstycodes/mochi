@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { seedThreads } from '../model.ts';
 import type { Action } from '../store/index.tsx';
 import { agentAskSecondOpinion } from './run.ts';

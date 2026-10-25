@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from '../toast/store.ts';
 import { gitError } from '../git/useGit.ts';
 import { useWorktreePath } from '../git/worktrees.ts';
@@ -7,6 +7,7 @@ import type { Thread } from '../model.ts';
 import { useHarness } from '../store/index.tsx';
 import { editedLater, isTurnUndone, turnChanges, type TurnChanges } from '../chat/turnChanges.ts';
 import { excerpt, rewindBlockedReason, turnCheckpoint } from './checkpoints.ts';
+import { useLatest } from '../useLatest.ts';
 
 /** What undoing the turn would also take back: later turns' edits to the same files, and changes made outside the agent since its last turn. */
 export interface UndoConflicts {
@@ -23,8 +24,7 @@ export function useTurnUndo(thread: Thread, turn: TurnChanges) {
   const cwd = useWorktreePath(thread.id);
   const [conflicts, setConflicts] = useState<UndoConflicts | null>(null);
   const [isPending, setPending] = useState(false);
-  const latest = useRef(thread);
-  latest.current = thread;
+  const latest = useLatest(thread);
   const checkpoint = turnCheckpoint(state.checkpoints[thread.id] ?? [], turn.start);
   const isUndone = isTurnUndone(thread.activity, turn.start);
   const reason = rewindBlockedReason(thread) ? 'Stop the agent to undo' : !cwd ? NO_WORKTREE : !checkpoint?.ref ? NOT_SAVED : undefined;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { MirrorFrame } from '../host/types/remote.ts';
 import type { Action } from '../store/index.tsx';
 import { mirrorState, reducer } from '../store/root.ts';

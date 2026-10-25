@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { parseJsonc } from './jsonc.ts';
 import { extractThemes, parseTheme, resolvePath } from './vsix.ts';

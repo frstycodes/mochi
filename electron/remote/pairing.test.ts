@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import sodium from 'libsodium-wrappers';
 import { queuedReader, type RawLink } from '@mochi/core/remote/link';
 import { DEFAULT_SCOPES } from '../../src/host/types/remote.ts';

@@ -12,6 +12,7 @@ import { triggerNextRun, useSchedules } from '../../schedule/useSchedules';
 import { useHarness, useDispatch } from '../../store';
 import { IconSwap, TooltipIconButton } from '../../ui';
 import { goHome } from '../../routes/nav';
+import { useNow } from '../../useNow';
 import { SettingsGroup, SettingsRow } from '../parts';
 
 export function SchedulesSection() {
@@ -56,7 +57,7 @@ function NoSchedules() {
 function TriggerRow({ trigger }: { trigger: Trigger }) {
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === trigger.threadId);
-  const now = Date.now();
+  const now = useNow(60_000);
   const next = triggerNextRun(trigger, now);
   const last = trigger.runs.at(-1);
   const when = [describeTrigger(trigger.when), trigger.isPaused ? 'Paused' : next && `next ${shortRunTime(next, now)}`].filter(Boolean).join(' · ');

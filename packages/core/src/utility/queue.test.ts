@@ -1,59 +1,63 @@
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { Effect } from 'effect';
+import { assert, it } from '@effect/vitest';
+import { Deferred, Effect, Fiber } from 'effect';
 import { PRIORITY, UtilityQueue } from './queue.ts';
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const make = () => Effect.runSync(UtilityQueue.make);
-const submit = (queue: ReturnType<typeof make>, thread: string, kind: string, priority: number, run: () => Promise<string | null>) =>
-  Effect.runPromise(queue.submit({ thread, kind, priority, promptChars: 40, run: Effect.promise(run) }));
+type Queue = UtilityQueue['Service'];
 
-test('waiting jobs run by priority then arrival, one at a time', async () => {
-  const queue = make();
-  const order: string[] = [];
-  let running = 0;
-  let peak = 0;
-  const record = (name: string) => async () => {
-    peak = Math.max(peak, ++running);
-    await sleep(5);
-    order.push(name);
-    running--;
-    return name;
-  };
-  let release: (() => void) | undefined;
-  const held = submit(queue, 'hold', 'hold', 9, () => new Promise((resolve) => (release = () => resolve('held'))));
-  // Until the held job starts, the others would queue behind nothing; a slow runner takes more than a tick to start it.
-  while (!release) await sleep(1);
-  const rest = Promise.all([
-    submit(queue, 't1', 'simplify', PRIORITY.simplify, record('simplify')),
-    submit(queue, 't2', 'audit', PRIORITY.audit, record('audit')),
-    submit(queue, 't3', 'classify', PRIORITY.classify, record('classify')),
-    submit(queue, 't4', 'audit', PRIORITY.audit, record('audit-later')),
-  ]);
-  await sleep(5);
-  release();
-  await Promise.all([held, rest]);
-  assert.deepEqual(order, ['classify', 'audit', 'audit-later', 'simplify']);
-  assert.equal(peak, 1);
-});
+// Started at once, a submit is queued before this fiber moves on, so arrival order is the order of the calls.
+const submit = (queue: Queue, thread: string, kind: string, priority: number, run: Effect.Effect<string | null>) =>
+  Effect.forkChild(queue.submit({ thread, kind, priority, promptChars: 40, run }), { startImmediately: true });
 
-test('a newer job for the same (thread, kind) replaces the older, queued or running', async () => {
-  const queue = make();
-  const never = () => new Promise<string | null>(() => {});
-  const running = submit(queue, 't', 'title', 1, never);
-  await sleep(5);
-  const queued = submit(queue, 'u', 'title', 1, async () => 'old');
-  const blocked = submit(queue, 'v', 'title', 1, async () => 'v');
-  await sleep(5);
-  // `queued` waits behind `running`; replacing both lets the newer ones through.
-  const newerRunning = submit(queue, 't', 'title', 1, async () => 'new');
-  const newerQueued = submit(queue, 'u', 'title', 1, async () => 'newer');
-  assert.equal(await running, null);
-  assert.equal(await queued, null);
-  assert.equal(await newerRunning, 'new');
-  assert.equal(await newerQueued, 'newer');
-  assert.equal(await blocked, 'v');
-  const stats = Effect.runSync(queue.stats);
-  assert.equal(stats.replaced, 2);
-  assert.ok(stats.tokensIn > 0);
-});
+it.effect('waiting jobs run by priority then arrival, one at a time', () =>
+  Effect.gen(function* () {
+    const queue = yield* UtilityQueue.make;
+    const order: string[] = [];
+    let running = 0;
+    let peak = 0;
+    const record = (name: string) =>
+      Effect.gen(function* () {
+        peak = Math.max(peak, ++running);
+        yield* Effect.yieldNow;
+        order.push(name);
+        running--;
+        return name;
+      });
+    const started = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<string>();
+    const held = yield* submit(queue, 'hold', 'hold', 9, Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release))));
+    yield* Deferred.await(started);
+    const rest = [
+      yield* submit(queue, 't1', 'simplify', PRIORITY.simplify, record('simplify')),
+      yield* submit(queue, 't2', 'audit', PRIORITY.audit, record('audit')),
+      yield* submit(queue, 't3', 'classify', PRIORITY.classify, record('classify')),
+      yield* submit(queue, 't4', 'audit', PRIORITY.audit, record('audit-later')),
+    ];
+    yield* Deferred.succeed(release, 'held');
+    assert.equal(yield* Fiber.join(held), 'held');
+    yield* Fiber.joinAll(rest);
+    assert.deepEqual(order, ['classify', 'audit', 'audit-later', 'simplify']);
+    assert.equal(peak, 1);
+  }),
+);
+
+it.effect('a newer job for the same (thread, kind) replaces the older, queued or running', () =>
+  Effect.gen(function* () {
+    const queue = yield* UtilityQueue.make;
+    const started = yield* Deferred.make<void>();
+    const running = yield* submit(queue, 't', 'title', 1, Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)));
+    yield* Deferred.await(started);
+    const queued = yield* submit(queue, 'u', 'title', 1, Effect.succeed('old'));
+    const blocked = yield* submit(queue, 'v', 'title', 1, Effect.succeed('v'));
+    // `queued` waits behind `running`; replacing both lets the newer ones through.
+    const newerRunning = yield* submit(queue, 't', 'title', 1, Effect.succeed('new'));
+    const newerQueued = yield* submit(queue, 'u', 'title', 1, Effect.succeed('newer'));
+    assert.equal(yield* Fiber.join(running), null);
+    assert.equal(yield* Fiber.join(queued), null);
+    assert.equal(yield* Fiber.join(newerRunning), 'new');
+    assert.equal(yield* Fiber.join(newerQueued), 'newer');
+    assert.equal(yield* Fiber.join(blocked), 'v');
+    const stats = yield* queue.stats;
+    assert.equal(stats.replaced, 2);
+    assert.ok(stats.tokensIn > 0);
+  }),
+);
