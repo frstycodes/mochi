@@ -61,7 +61,13 @@ export const layerAgents = (userData: string | undefined) =>
         Effect.runPromise(
           capabilities
             .call({ capability, method, args })
-            .pipe(Effect.catch((message) => Effect.die(new Error(message)))),
+            .pipe(
+              Effect.catch((error) =>
+                Effect.die(
+                  typeof error === 'string' ? new Error(error) : error,
+                ),
+              ),
+            ),
         );
       useAgentConfig({
         read: () => settingsDoc,
@@ -69,7 +75,8 @@ export const layerAgents = (userData: string | undefined) =>
           throw new Error('Agent settings are written by main');
         },
         keychain: {
-          isAvailable: async () => true,
+          // Nothing serves it under `mochi serve`: keys are refused there rather than stored without the OS keychain.
+          isAvailable: async () => capabilities.offers('secureStorage'),
           encrypt: (text) =>
             call('secureStorage', 'encrypt', [text]) as Promise<string>,
           decrypt: (base64) =>

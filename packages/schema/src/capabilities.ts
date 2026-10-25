@@ -58,6 +58,19 @@ export const CapabilityName = Schema.Literals([
 ]);
 export type CapabilityName = typeof CapabilityName.Type;
 
+/**
+ * No connected client serves `capability`: main is restarting, or Core runs headless (`mochi serve`), where the desktop's
+ * capabilities (notifications, browser views, the keychain, simulators, main's `host.*` handlers) don't exist.
+ */
+export class CapabilityUnavailable extends Schema.TaggedError<CapabilityUnavailable>()(
+  'CapabilityUnavailable',
+  { capability: CapabilityName },
+) {
+  override get message() {
+    return `No connected client offers ${this.capability}`;
+  }
+}
+
 /** Core → the client that registered `capability`. `args` and the reply's `value` are JSON-encoded with the method's schema. */
 export const CapabilityCall = Schema.Struct({
   id: Schema.Number,
