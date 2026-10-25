@@ -459,7 +459,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
 
 /**
  * A device's command: Core applies one that is store actions itself (`storeCommand`); one that needs a window's host (a diff,
- * a terminal, a push, a send that starts the agent) runs in a window, through main's `remote` capability.
+ * a terminal, a push) runs in a window, through main's `remote` capability.
  */
 const deviceCommand = (
   capabilities: Capabilities['Service'],
@@ -481,9 +481,7 @@ const deviceCommand = (
       device.name,
     );
     if (!stored) return yield* inWindow(capabilities, device, command);
-    for (const action of stored.actions)
-      if ((yield* commands.apply(action)) === 'needs-window')
-        return yield* inWindow(capabilities, device, command);
+    for (const action of stored.actions) yield* commands.apply(action);
     const late = stored.verdict;
     if (late)
       yield* Effect.forkDetach(

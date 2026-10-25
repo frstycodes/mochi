@@ -7,6 +7,7 @@ import {
   type Space,
   type SpaceIconName,
 } from './model.ts';
+import { setAmbientProfiles } from './store/context.ts';
 import type { Replica } from './store/replica.ts';
 
 /**
@@ -178,3 +179,5 @@ function withDemo(list: Space[]) {
 function subscribe(listener: () => void) {
   return replica?.store.subscribe(listener) ?? (() => {});
 }
+
+setAmbientProfiles(getProfiles);

@@ -3,7 +3,7 @@ import { test } from 'vite-plus/test';
 import { POLICIES } from '@mochi/core/agents/codex/adapter';
 import { permissionOptions } from '@mochi/core/agents/claude/map';
 import { ACCESS, accessOf } from './access.ts';
-import { agentOptions } from './startOptions.ts';
+import { agentOptions } from './agentOptions.ts';
 import { parsePrefs } from '../settings/prefs.ts';
 
 const sent = (

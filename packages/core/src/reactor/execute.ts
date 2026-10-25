@@ -32,8 +32,8 @@ const isUnserved = (error: unknown) =>
 
 /**
  * The reactor with its executors. Core applies what is a store action to its own log, with the agent calls it means
- * (`Commands`), and runs the utility model in its queue. A window does only what needs its host or storage, or a start,
- * which reads its profiles: any window serving `reactor`, the latest first (`Capabilities`).
+ * (`Commands`), starts included, and runs the utility model in its queue. A window does only what needs its host or
+ * storage: any window serving `reactor`, the latest first (`Capabilities`).
  */
 export const layerReactor = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -63,19 +63,15 @@ export const layerReactor = Layer.effectDiscard(
           ),
         );
 
-    /** Applied in Core, unless its agent call is a start: then the window does it, as it did before Core held the store. */
     const apply = (
       command: ReactorCommand,
       ...actions: Action[]
     ): Effect.Effect<Outcome, unknown> =>
-      Effect.gen(function* () {
-        for (const action of actions)
-          if (
-            (yield* commands.apply(action, `${command.key}:${action.type}`)) ===
-            'needs-window'
-          )
-            return yield* toWindow(command as WindowCommand);
-      });
+      Effect.forEach(
+        actions,
+        (action) => commands.apply(action, `${command.key}:${action.type}`),
+        { discard: true },
+      );
 
     const execute = (effect: OutboxEffect): Effect.Effect<Outcome, unknown> =>
       Effect.gen(function* () {

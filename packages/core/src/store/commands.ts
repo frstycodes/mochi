@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { Context, Effect, Layer, Semaphore } from 'effect';
 import { COMMAND_TYPE, project } from '@mochi/domain';
 import type {
@@ -12,7 +13,10 @@ import {
   unsentTurns,
   type AgentCall,
 } from '../../../../src/runtime/live.ts';
+import { setStartEnv } from '../../../../src/runtime/startEnv.ts';
+import { withContext } from '../../../../src/store/context.ts';
 import type { Action, State } from '../../../../src/store/types.ts';
+import type { Thread } from '../../../../src/model.ts';
 import { agent } from '../agents/handlers.ts';
 import { removeSchedule } from '../schedule/scheduler.ts';
 import { Projection } from './projection.ts';
@@ -45,8 +49,20 @@ export class AgentCaller extends Context.Service<
   });
 }
 
-/** `apply`'s answer: done, or the action's agent call is a start, which reads what only a window holds (`startEnv`). */
-export type Applied = 'applied' | 'needs-window';
+/** A thread's worktree as Core knows it: the folder its agent ran in, while that is still on disk and isn't the project folder. */
+const worktreeOf = (thread: Pick<Thread, 'repo' | 'live'>) => {
+  const cwd = thread.live?.cwd;
+  return cwd && cwd !== thread.repo?.path && existsSync(cwd) ? cwd : undefined;
+};
+
+// A window knows its worktree paths from main's events; Core reads them off disk, so a cleaned-up worktree is remade on resume.
+setStartEnv({
+  worktreePath: worktreeOf,
+  threadCwd: (thread) =>
+    thread.repo
+      ? (worktreeOf(thread) ?? thread.repo.path ?? null)
+      : (thread.live?.cwd ?? null),
+});
 
 /**
  * Core's own dispatch: an action applied as a command in Core's log, with what a window's dispatch sets off for it
@@ -77,15 +93,16 @@ export class Commands extends Context.Service<Commands>()(
       const apply = (
         action: Action,
         commandId: string = randomUUID(),
-      ): Effect.Effect<Applied, unknown> =>
+      ): Effect.Effect<void, unknown> =>
         one.withPermits(1)(
           Effect.gen(function* () {
             const before = (yield* projection.current)
               .domain as unknown as State;
             const next = project(before, action);
-            const calls = agentCalls(before, action, () => next);
-            if (calls.some((call) => call.method === 'start'))
-              return 'needs-window' as const;
+            // A start reads the profile and prefs it runs with from Core's context (`agentOptions`).
+            const calls = withContext(before.context, () =>
+              agentCalls(before, action, () => next),
+            );
             const threadId =
               'threadId' in action && typeof action.threadId === 'string'
                 ? action.threadId
@@ -99,7 +116,7 @@ export class Commands extends Context.Service<Commands>()(
                 commandId,
               })).isDuplicate
             )
-              return 'applied' as const;
+              return;
             const answer = resolution(before, action);
             if (answer)
               yield* agents.resolve(answer.requestId, answer.decision).pipe(
@@ -123,7 +140,6 @@ export class Commands extends Context.Service<Commands>()(
                 .pipe(Effect.catch((error) => failed(call.threadId, error)));
             for (const id of unsentTurns(before, next, calls))
               yield* failed(id, 'Mochi had no agent to send this to');
-            return 'applied' as const;
           }),
         );
 

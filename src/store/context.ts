@@ -73,11 +73,15 @@ export const DEFAULT_CONTEXT: ProjectionContext = {
 
 let ambientPrefs = (): ProjectionPrefs => DEFAULT_CONTEXT.prefs;
 let ambientPins = (): Pins => DEFAULT_CONTEXT.pins;
+let ambientProfiles = (): Space[] => [];
 let scoped: ProjectionContext | null = null;
 let scopedMs: number | undefined;
 
 /** Inside a fold, the state's prefs; outside one (a component rendering), this window's own (`setAmbientPrefs`). */
 export const prefsNow = () => scoped?.prefs ?? ambientPrefs();
+
+/** Inside a fold or Core's command (`withContext`), the state's profiles; outside one, this window's (`setAmbientProfiles`). */
+export const profilesNow = () => scoped?.profiles ?? ambientProfiles();
 
 const EMPTY: Pin[] = [];
 export const pinsOf = (threadId: string) =>
@@ -108,4 +112,8 @@ export function setAmbientPrefs(read: () => ProjectionPrefs) {
 
 export function setAmbientPins(read: () => Pins) {
   ambientPins = read;
+}
+
+export function setAmbientProfiles(read: () => Space[]) {
+  ambientProfiles = read;
 }
