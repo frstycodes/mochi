@@ -1,4 +1,5 @@
 import type { Pin, Pins } from '../chat/pins.ts';
+import type { Space } from '../model.ts';
 import { DEFAULT_PREFS, type Prefs } from '../settings/prefsDefaults.ts';
 
 /** The prefs the thread projection and Core's reactor rules read; the rest of `Prefs` is this window's own. */
@@ -17,13 +18,14 @@ export type ProjectionPrefs = Pick<
 >;
 
 /**
- * What the projection reads besides the state and the event: your prefs and pins. Core keeps them in its settings store
- * (`settings`/`shared`) and every window folds with them, so a fold reads these from the state (`context` commands set them),
- * never from this window's storage.
+ * What the projection reads besides the state and the event: your prefs, pins and profiles. Core keeps them in its settings
+ * store (`settings`/`shared`) and every window folds with them, so a fold reads these from the state (`context` commands set
+ * them), never from this window's storage. `profiles` is unset until the first window migrates its own (src/store/index.tsx).
  */
 export interface ProjectionContext {
   prefs: ProjectionPrefs;
   pins: Pins;
+  profiles?: Space[];
 }
 
 export const projectionPrefs = ({
@@ -49,6 +51,20 @@ export const projectionPrefs = ({
   simplifyAutoWords,
   whileWorking,
 });
+
+/**
+ * What a window's first sync sends Core: its own context when Core holds none, Core's plus `stored` profiles when Core holds
+ * no profiles yet (prefs and pins migrated before profiles did), else nothing. Lossless: `stored` is the window's whole list.
+ */
+export function migratedContext(
+  held: ProjectionContext | null,
+  local: ProjectionContext,
+  stored: () => Space[],
+): ProjectionContext | null {
+  if (!held) return { ...local, profiles: stored() };
+  if (!held.profiles) return { ...held, profiles: stored() };
+  return null;
+}
 
 export const DEFAULT_CONTEXT: ProjectionContext = {
   prefs: projectionPrefs(DEFAULT_PREFS),
