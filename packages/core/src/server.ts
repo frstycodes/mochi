@@ -31,6 +31,7 @@ import { AgentCaller, Commands } from './store/commands.ts';
 import { Projection } from './store/projection.ts';
 import { Store } from './store/store.ts';
 import { layerReactor } from './reactor/execute.ts';
+import { ThreadContext } from './switch/context.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
 import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
 import { Watch } from './watch/watch.ts';
@@ -81,6 +82,11 @@ export const layerCore = (options: ServerOptions) =>
     Layer.provide(Watch.layer),
     Layer.provideMerge(layerAgents(options.userData)),
     Layer.provideMerge(Scheduler.layer),
+    Layer.provideMerge(
+      ThreadContext.layer((spaceId, prompt) =>
+        utilityCall('handoff', spaceId, prompt),
+      ),
+    ),
     Layer.provide(
       Layer.mergeAll(
         GitHub.layer.pipe(Layer.provide(GithubTransport.layer)),

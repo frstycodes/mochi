@@ -90,10 +90,40 @@ const outboxCommandUnique = Effect.flatMap(
   (sql) => sql`CREATE UNIQUE INDEX outbox_command_idx ON outbox(command_id)`,
 );
 
+/**
+ * A provider switch (`PROVIDER-SWITCH.md`): each provider session a thread used, with what it last saw of the log and the context
+ * package it gets on every launch; and each thread's rolling brief.
+ */
+const providerSwitch = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`
+    CREATE TABLE thread_sessions (
+      thread_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      native_session_id TEXT,
+      model TEXT,
+      last_seen_seq INTEGER NOT NULL DEFAULT 0,
+      state TEXT NOT NULL CHECK (state IN ('active', 'detached', 'lost')),
+      context TEXT,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (thread_id, provider)
+    )
+  `;
+  yield* sql`
+    CREATE TABLE thread_briefs (
+      thread_id TEXT PRIMARY KEY,
+      through_seq INTEGER NOT NULL,
+      brief_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `;
+});
+
 export const migrate = Migrator.make({})({
   loader: Migrator.fromRecord({
     '1_initial': initial,
     '2_outbox_command_unique': outboxCommandUnique,
     '3_snapshot_sequence': snapshotSequence,
+    '4_provider_switch': providerSwitch,
   }),
 });

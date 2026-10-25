@@ -23,6 +23,7 @@ import { GitHub } from '../github/service.ts';
 import { Capabilities, hostHandlers } from '../hostServer.ts';
 import { Commands } from '../store/commands.ts';
 import { Projection } from '../store/projection.ts';
+import { ThreadContext } from '../switch/context.ts';
 import type { OutboxEffect } from '../store/store.ts';
 import { PRIORITY, UtilityQueue } from '../utility/queue.ts';
 import type { ReactorCommand } from './commands.ts';
@@ -42,6 +43,7 @@ export const layerReactor = Layer.effectDiscard(
     const commands = yield* Commands;
     const projection = yield* Projection;
     const github = yield* GitHub;
+    const context = yield* ThreadContext;
     const host = hostHandlers(capabilities, undefined) as Record<
       string,
       (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>
@@ -194,6 +196,9 @@ export const layerReactor = Layer.effectDiscard(
             return yield* autoSimplify(work, state, thread);
           case 'pr.refresh':
             return yield* refreshPrs(work, state, thread);
+          case 'brief.update':
+            if (!thread?.live) return yield* skip;
+            return yield* context.updateBrief(thread.id);
         }
       });
 

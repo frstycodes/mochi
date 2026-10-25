@@ -52,6 +52,8 @@ import { main } from './main.ts';
 import { userData } from './paths.ts';
 import type { Turns } from './turns.ts';
 import type { UtilityQueue } from '../utility/queue.ts';
+import type { ThreadContext } from '../switch/context.ts';
+import { launchSession } from '../switch/launch.ts';
 import { PRIORITY } from '../utility/queue.ts';
 import {
   commandPrompt,
@@ -212,13 +214,15 @@ const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
 let turns: Turns['Service'] | undefined;
 let queue: UtilityQueue['Service'] | undefined;
+let context: ThreadContext['Service'] | undefined;
 
 /** Set once by the agents layer. */
 export function useAgentServices(services: {
   turns: Turns['Service'];
   queue: UtilityQueue['Service'];
+  context: ThreadContext['Service'];
 }) {
-  ({ turns, queue } = services);
+  ({ turns, queue, context } = services);
 }
 
 const required = <A>(service: A | undefined) => {
@@ -559,7 +563,7 @@ export async function startAgent(
   options: AgentStartOptions & { worktree?: string },
 ) {
   // `speed` goes only through `offered`, which drops one the model doesn't list.
-  const { workspace, worktree, speed, ...rest } = options;
+  const { workspace, worktree, speed, switchFrom, ...rest } = options;
   // A trigger saved before workspaces carries `worktree: <branch>` instead of `workspace`.
   const startsIn =
     workspace ??
@@ -580,7 +584,14 @@ export async function startAgent(
         speed,
       )),
     };
-    return ADAPTERS[options.provider].start(id, run, start.signal);
+    return launchSession(
+      required(context),
+      ADAPTERS[options.provider],
+      id,
+      run,
+      switchFrom,
+      start.signal,
+    );
   };
   let isLaunching = false;
   try {

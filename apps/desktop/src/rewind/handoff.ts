@@ -45,6 +45,7 @@ export function handoffSummary(
 
 const VERB = {
   drafting: 'Handing off',
+  pending: 'Switching',
   started: 'Handed off',
   failed: 'Could not hand off',
 } satisfies Record<Handoff['status'], string>;

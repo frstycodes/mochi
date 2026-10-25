@@ -35,6 +35,8 @@ export interface AgentStartOptions {
   resume?: string;
   /** With `resume`: continue a fork of that session holding only what came up to this point (`rewindPoint`), leaving the original as it was. */
   forkAt?: string;
+  /** The thread switched to `provider` from this one: Core resumes `provider`'s own earlier session or starts one, with the thread so far. */
+  switchFrom?: Provider;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
   /** Goals are off (always, now they're retired): the session gets no goal instructions, tools or nudge. Read at session start. */
@@ -200,6 +202,16 @@ export type AgentEvent =
       summary?: string;
       error?: string;
     }
+  /** Core assembled the thread so far for the provider the thread switched to (`contextPackage`); `text` is what it got. */
+  | {
+      threadId: string;
+      type: 'context';
+      from: Provider;
+      to: Provider;
+      model?: string;
+      text: string;
+      contents: string;
+    }
   | {
       threadId: string;
       type: 'turn-end';
@@ -343,6 +355,8 @@ export interface AgentImage {
 /** What an adapter gets once main has resolved and checked the folder. */
 export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'workspace'> & {
   cwd: string;
+  /** The thread so far, for a session that took over from another provider: appended to its instructions, never sent as your message. */
+  context?: string;
 };
 
 /** You can always type your own answer too, so `options` may be empty. */

@@ -708,7 +708,11 @@ export class CodexAdapter implements HarnessAdapter {
       cwd: options.cwd,
       model: options.model ?? null,
       serviceTier: options.speed ?? null,
-      developerInstructions: [mochiInstructions(options), profileText]
+      developerInstructions: [
+        mochiInstructions(options),
+        profileText,
+        options.context,
+      ]
         .filter(Boolean)
         .join('\n\n'),
       config: {

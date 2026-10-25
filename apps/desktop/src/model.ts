@@ -239,15 +239,23 @@ export interface ThreadProposal {
 /** App-clock minutes: a week. */
 export const PROPOSAL_TTL = 7 * 24 * 60;
 
-/** A handoff to the other agent: drafting while a model writes `prompt`, started once the new agent has it as its first message. */
+/**
+ * A handoff to the other agent: drafting while a model writes `prompt`, started once the new agent has it as its first message.
+ * A provider switch is `pending` until your next message starts `to`, then `started` with the context package it got as `prompt`
+ * and `contents` naming what the package holds.
+ */
 export interface Handoff {
   from: Provider;
   to: Provider;
-  status: 'drafting' | 'started' | 'failed';
+  status: 'drafting' | 'pending' | 'started' | 'failed';
   prompt?: string;
   /** Why `prompt` is the local summary instead of a model's draft. */
   fallback?: 'timeout' | 'error';
   error?: string;
+  /** A switch: the model `to` runs; unset runs its default. */
+  model?: string;
+  /** A switch: what the package held, `brief, 6 recent turns, 11.8k tokens`. */
+  contents?: string;
 }
 
 /**
@@ -631,8 +639,11 @@ export interface LiveRun {
   isOnApiKey?: boolean;
   /** Codex compaction restore notes, sent to the agent ahead of your next message. */
   notes?: string[];
-  /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
-  restart?: { forkAt: string } | { seed: string };
+  /**
+   * A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as
+   * `seed`. A provider switch: the next start runs `providers[0]`, and Core hands it the thread so far (`switchFrom` is the old one).
+   */
+  restart?: { forkAt: string } | { seed: string } | { switchFrom: Provider };
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */

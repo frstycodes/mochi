@@ -5,6 +5,7 @@ export * as Relay from './relay.ts';
 export * as RelayWire from './relayWire.ts';
 export * as Settings from './settings.ts';
 export * as Stored from './stored.ts';
+export * as Switch from './switch.ts';
 export * as Account from './ipc/account.ts';
 export * as Browser from './ipc/browser.ts';
 export * as Data from './ipc/data.ts';

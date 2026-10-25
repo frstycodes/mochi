@@ -6,6 +6,7 @@ import { Capabilities } from '../hostServer.ts';
 import { clientFromRun, useCoreClient } from '../runClient.ts';
 import { Run } from '../run.ts';
 import { Store } from '../store/store.ts';
+import { ThreadContext } from '../switch/context.ts';
 import { UtilityQueue } from '../utility/queue.ts';
 import { reloadAgentConfig, useAgentConfig } from './config.ts';
 import {
@@ -46,6 +47,7 @@ export const layerAgents = (userData: string | undefined) =>
       const run = yield* Run;
       const queue = yield* UtilityQueue;
       const turns = yield* Turns;
+      const context = yield* ThreadContext;
       if (userData) {
         setDataDir(userData);
         setImageDir(path.join(userData, 'images'));
@@ -117,7 +119,7 @@ export const layerAgents = (userData: string | undefined) =>
         set: (accountId, limits) =>
           Effect.runPromise(store.setDoc('limits', accountId, limits)),
       });
-      useAgentServices({ turns, queue });
+      useAgentServices({ turns, queue, context });
       yield* Effect.addFinalizer(() => Effect.sync(disposeAgents));
     }),
   );

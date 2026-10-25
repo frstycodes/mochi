@@ -73,6 +73,7 @@ import {
   prefsNow,
   type ProjectionContext,
 } from './context.ts';
+import { switchProvider } from '../rewind/switch.ts';
 import { threadRoot } from '../git/root.ts';
 import { projectRef, repoFor } from '../projectRef.ts';
 import { autofixTitle } from '../git/autofix.ts';
@@ -317,6 +318,8 @@ export type ThreadsAction =
       fallback?: Handoff['fallback'];
     }
   | { type: 'handoff-fail'; threadId: string; error: string }
+  /** Moves the thread to another provider from its next message on (`src/rewind/switch.ts`); `model` '' runs its default. */
+  | { type: 'provider-switch'; threadId: string; to: Provider; model?: string }
   /** A task the thread's agent delegated (`delegate_task`); `agentCalls` starts its session. */
   | { type: 'bg-start'; threadId: string; agent: BackgroundStart }
   /** Stops a subagent: a Mochi one ends here, a native one when its harness reports it stopped. */
@@ -1069,6 +1072,8 @@ function reduce(state: State, action: Action): State {
     }
     case 'handoff-fail':
       return handoffFail(state, action.threadId, action.error);
+    case 'provider-switch':
+      return switchProvider(state, action.threadId, action.to, action.model);
     default:
       return state;
   }

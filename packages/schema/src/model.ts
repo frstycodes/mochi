@@ -589,10 +589,12 @@ export const ThreadProposal = Schema.Struct({
 export const Handoff = Schema.Struct({
   from: Provider,
   to: Provider,
-  status: Schema.Literals(['drafting', 'started', 'failed']),
+  status: Schema.Literals(['drafting', 'pending', 'started', 'failed']),
   prompt: opt(Schema.String),
   fallback: opt(Schema.Literals(['timeout', 'error'])),
   error: opt(Schema.String),
+  model: opt(Schema.String),
+  contents: opt(Schema.String),
 });
 
 export const Compaction = Schema.Struct({
@@ -763,6 +765,7 @@ export const LiveRun = Schema.Struct({
     Schema.Union([
       Schema.Struct({ forkAt: Schema.String }),
       Schema.Struct({ seed: Schema.String }),
+      Schema.Struct({ switchFrom: Provider }),
     ]),
   ),
 });
