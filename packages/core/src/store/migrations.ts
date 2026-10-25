@@ -92,7 +92,7 @@ const outboxCommandUnique = Effect.flatMap(
 
 /**
  * A provider switch (`PROVIDER-SWITCH.md`): each provider session a thread used, with what it last saw of the log and the context
- * package it gets on every launch; and each thread's rolling brief.
+ * package it gets on every launch.
  */
 const providerSwitch = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -107,14 +107,6 @@ const providerSwitch = Effect.gen(function* () {
       context TEXT,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (thread_id, provider)
-    )
-  `;
-  yield* sql`
-    CREATE TABLE thread_briefs (
-      thread_id TEXT PRIMARY KEY,
-      through_seq INTEGER NOT NULL,
-      brief_json TEXT NOT NULL,
-      updated_at TEXT NOT NULL
     )
   `;
 });

@@ -1,5 +1,5 @@
-import type { Switch } from '@mochi/schema';
 import type { Provider } from '../../../../apps/desktop/src/model.ts';
+import type { Handoff } from './handoff.ts';
 import { itemText, type TranscriptItem } from './transcript.ts';
 
 /** ~4 characters a token: no tokenizer runs here. GAP: calibrate per provider against the `usage` each turn reports. */
@@ -12,11 +12,13 @@ export const PACKAGE_TOKENS = 24_000;
 const MAX_DETAIL = 2_000;
 
 const HISTORY_LINE =
-  "Earlier work in this thread is in Mochi's thread_history tool; check it before redoing or contradicting something. Every [seq] below is an address it takes.";
+  "Mochi's thread_history tool holds this thread's whole event log. What is here should be enough to go on: use the tool only when you need something it doesn't cover, such as an exact command output, a whole diff or an earlier message. Every [seq] below is an address it takes.";
 
 export interface PackageInput {
   readonly from: Provider;
-  readonly brief: Switch.StoredBrief | undefined;
+  /** The provider taking over; the same as `from` for a fresh session after a usage limit. */
+  readonly to: Provider;
+  readonly handoff: Handoff | null;
   readonly items: ReadonlyArray<TranscriptItem>;
   /** A resumed session already holds everything up to here; 0 for a fresh one. */
   readonly sinceSeq: number;
@@ -27,51 +29,44 @@ export interface PackageInput {
 
 export interface ContextPackage {
   readonly text: string;
-  /** `brief, 6 recent turns, 11.8k tokens`. */
+  /** `handoff by Claude, 2 recent turns, 3.1k tokens`. */
   readonly contents: string;
   readonly tokens: number;
 }
 
 /**
- * What the provider a thread switched to starts from (`PROVIDER-SWITCH.md` §3): the brief, then the turns after `sinceSeq` newest
- * first while they fit, each long output cut rather than dropped, then the worktree as it is now. A resumed session that holds
- * the brief's span already gets only what it missed. Never fails for lack of budget: the brief's top and chapters are the floor.
+ * What a session starts from after a switch (`PROVIDER-SWITCH.md` §3): the handoff, then the turns after `sinceSeq` newest first
+ * while they fit, each long output cut rather than dropped, then the worktree as it is now. A resumed session gets only what it
+ * missed. Never fails for lack of budget: the handoff always goes, and the history tool holds the rest.
  */
 export function contextPackage(input: PackageInput): ContextPackage {
-  const { from, brief, sinceSeq, ground, budget } = input;
+  const { from, to, handoff, sinceSeq, ground, budget } = input;
   const isResumed = sinceSeq > 0;
   const header = isResumed
     ? `You are back on this thread after it ran on ${NAME[from]}. Below is what happened since you last saw it. Your user's next message follows; this is context, not a request.`
-    : `This thread ran on ${NAME[from]} until now and continues with you. Below is the thread so far, kept by Mochi. Your user's next message follows; this is context, not a request.`;
+    : from === to
+      ? "This thread continues in a fresh session: the previous one ran out of usage. Below is the thread so far, kept by Mochi. Your user's next message follows; this is context, not a request."
+      : `This thread ran on ${NAME[from]} until now and continues with you. Below is the thread so far, kept by Mochi. Your user's next message follows; this is context, not a request.`;
+  const handoffText =
+    handoff &&
+    `## Handoff (written by ${handoff.by === to ? 'you, from the transcript' : NAME[handoff.by]})\n${handoff.text}`;
   const worktree = ground && `## The worktree now\n${ground}`;
-  const room = budget - tokensOf([header, HISTORY_LINE, worktree].join('\n\n'));
-  let shown = isResumed ? NO_BRIEF : briefFor(brief?.brief, room);
+  const room =
+    budget -
+    tokensOf([header, HISTORY_LINE, handoffText, worktree].join('\n\n'));
   const recent = newestThatFit(
     input.items.filter((i) => i.seq > sinceSeq),
-    room - tokensOf(shown.text),
+    room,
   );
-  // A resumed session that missed more than fits gets the brief after all, so the gap isn't silent.
-  if (isResumed && !recent.isAll && brief)
-    shown = { text: briefTop(brief.brief), label: 'brief outline' };
   const recentText =
     recent.texts.length > 0 &&
     `## ${isResumed ? 'Since you left' : 'Latest turns'}${recent.isAll ? '' : ' (older ones: thread_history)'}\n${recent.texts.join('\n\n')}`;
-  const text = [header, HISTORY_LINE, shown.text, recentText, worktree]
+  const text = [header, HISTORY_LINE, handoffText, recentText, worktree]
     .filter(Boolean)
     .join('\n\n');
   const tokens = tokensOf(text);
-  return { text, contents: contentsOf(shown.label, recent, tokens), tokens };
-}
-
-const NO_BRIEF = { text: '', label: '' };
-
-/** The whole brief when it fits `room`, else its top and chapters. */
-function briefFor(brief: Switch.ThreadBrief | undefined, room: number) {
-  if (!brief) return NO_BRIEF;
-  const full = briefText(brief);
-  return tokensOf(full) <= room
-    ? { text: full, label: 'brief' }
-    : { text: briefTop(brief), label: 'brief outline' };
+  const by = handoff && `handoff by ${NAME[handoff.by]}`;
+  return { text, contents: contentsOf(by || '', recent, tokens), tokens };
 }
 
 interface Recent {
@@ -98,9 +93,9 @@ function newestThatFit(
   return { texts, turns, isAll: texts.length === items.length };
 }
 
-const contentsOf = (briefLabel: string, recent: Recent, tokens: number) =>
+const contentsOf = (lead: string, recent: Recent, tokens: number) =>
   [
-    briefLabel,
+    lead,
     recent.texts.length > 0 &&
       (recent.turns > 0
         ? `${recent.turns} recent ${recent.turns === 1 ? 'turn' : 'turns'}`
@@ -114,37 +109,3 @@ const NAME = { claude: 'Claude', codex: 'Codex' } satisfies Record<
   Provider,
   string
 >;
-
-const list = (title: string, lines: ReadonlyArray<string>) =>
-  lines.length > 0 && `### ${title}\n${lines.map((l) => `- ${l}`).join('\n')}`;
-
-const chapters = (brief: Switch.ThreadBrief) =>
-  list(
-    'Chapters',
-    brief.chapters.map((c) => `${c.fromSeq}–${c.toSeq} · ${c.line}`),
-  );
-
-function briefText(brief: Switch.ThreadBrief) {
-  return [
-    `## Brief\n**Goal:** ${brief.goal}`,
-    `**Current state:** ${brief.state}`,
-    list('Decisions', brief.decisions),
-    list('Ruled out', brief.ruledOut),
-    list('Open', brief.open),
-    list('User preferences', brief.preferences),
-    chapters(brief),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-}
-
-/** The brief's top section and its chapter index: what goes when the whole brief doesn't fit. */
-function briefTop(brief: Switch.ThreadBrief) {
-  return [
-    `## Brief\n**Goal:** ${brief.goal}`,
-    `**Current state:** ${brief.state}`,
-    chapters(brief),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-}

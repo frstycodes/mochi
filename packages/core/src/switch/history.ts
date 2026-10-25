@@ -1,12 +1,11 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Schema } from 'effect';
-import type { Switch } from '@mochi/schema';
 import { itemText, type TranscriptItem } from './transcript.ts';
 
 export const HISTORY_TOOL = 'thread_history';
 
 export const HISTORY_TOOL_DESCRIPTION =
-  "Read this thread's earlier work from Mochi's event log, including what ran before a provider switch or a compaction. op outline: the thread's chapters with their seq ranges. op read with fromSeq and toSeq: the events in that range, tool calls with their inputs and outputs, paged. op search with query: matching messages, tool inputs and outputs, each with its seq and a snippet. op get with seq or toolCallId: one item in full (a complete output or the whole diff). Check it before redoing or contradicting something done earlier in the thread.";
+  "Read this thread's earlier work from Mochi's event log, including what ran before a provider switch or a compaction. op outline: each turn's first line with its seq range. op read with fromSeq and toSeq: the events in that range, tool calls with their inputs and outputs, paged. op search with query: matching messages, tool inputs and outputs, each with its seq and a snippet. op get with seq or toolCallId: one item in full (a complete output or the whole diff). Use it when what you were handed doesn't cover something you need, not as a first step.";
 
 const Seq = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
@@ -28,17 +27,16 @@ const MAX_HITS = 20;
 const SNIPPET = 160;
 
 /**
- * The answer to a `thread_history` call over the thread's transcript and brief. Search is a scan of this one thread's items,
- * which holds while a thread's log loads at once. ponytail: FTS5 over `events` once one thread outgrows that.
+ * The answer to a `thread_history` call over the thread's transcript. Search is a scan of this one thread's items, which holds
+ * while a thread's log loads at once. ponytail: FTS5 over `events` once one thread outgrows that.
  */
 export function historyAnswer(
   args: HistoryArgs,
   items: ReadonlyArray<TranscriptItem>,
-  brief: Switch.StoredBrief | undefined,
 ): CallToolResult {
   switch (args.op) {
     case 'outline':
-      return outline(items, brief);
+      return outline(items);
     case 'read':
       return read(items, args.fromSeq ?? 0, args.toSeq ?? Infinity);
     case 'search':
@@ -59,23 +57,19 @@ const failed = (t: string): CallToolResult => ({
   isError: true,
 });
 
-function outline(
-  items: ReadonlyArray<TranscriptItem>,
-  brief: Switch.StoredBrief | undefined,
-) {
-  const first = items[0]?.seq ?? 0;
-  const last = items.at(-1)?.seq ?? 0;
-  const chapters = (brief?.brief.chapters ?? []).map(
-    (c) => `${c.fromSeq}–${c.toSeq} · ${c.line}`,
-  );
-  const uncovered =
-    last > (brief?.throughSeq ?? 0) &&
-    `${(brief?.throughSeq ?? first - 1) + 1}–${last} · not in a chapter yet: read it`;
-  const lines = [...chapters, uncovered].filter(Boolean);
+/** One line per turn: what you asked, and the seq range the turn ran over. */
+function outline(items: ReadonlyArray<TranscriptItem>) {
+  const starts = items.filter((i) => i.kind === 'you');
+  if (!starts.length) return text('This thread has no history yet.');
+  const last = items.at(-1)!.seq;
   return text(
-    lines.length
-      ? `${brief ? `Goal: ${brief.brief.goal}\n` : ''}${lines.join('\n')}`
-      : 'This thread has no history yet.',
+    starts
+      .map((turn, n) => {
+        const end = (starts[n + 1]?.seq ?? last + 1) - 1;
+        const line = turn.text.split('\n')[0].slice(0, 120);
+        return `${turn.seq}–${Math.max(turn.seq, end)} · ${line}`;
+      })
+      .join('\n'),
   );
 }
 
