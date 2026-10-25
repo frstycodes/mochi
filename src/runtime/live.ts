@@ -2,6 +2,7 @@ import { agentImage } from '../chat/images.ts';
 import { interruptsToSend } from '../chat/queued.ts';
 import type {
   AgentImage,
+  AgentSendInput,
   AgentStartOptions,
   StartWorkspace,
 } from '../host/types/agent.ts';
@@ -19,6 +20,7 @@ import { autofixSend } from '../schedule/slice.ts';
 import {
   controlsOf,
   DEFAULT_CONTROLS,
+  policyOf,
   type ThreadControls,
 } from './controls.ts';
 import { startEnv } from './startEnv.ts';
@@ -35,16 +37,7 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
-  | {
-      method: 'send';
-      threadId: string;
-      text: string;
-      images?: AgentImage[];
-      skills?: string[];
-      speed?: string;
-      steer?: boolean;
-      steerId?: string;
-    }
+  | ({ method: 'send'; threadId: string } & AgentSendInput)
   | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop' | 'settle' | 'keepTitle'; threadId: string }
   | { method: 'stopTask'; threadId: string; taskId: string };
@@ -52,15 +45,10 @@ export type AgentCall =
 /** A call's `host.agent` arguments after the thread id, in the method's order. */
 export function agentCallArgs(call: AgentCall): unknown[] {
   if (call.method === 'start') return [call.options];
-  if (call.method === 'send')
-    return [
-      call.text,
-      call.images,
-      call.skills,
-      call.speed,
-      call.steer,
-      call.steerId,
-    ];
+  if (call.method === 'send') {
+    const { method: _, threadId: __, ...input } = call;
+    return [input];
+  }
   if (call.method === 'compact') return [call.focus];
   if (call.method === 'stopTask') return [call.taskId];
   return [];
@@ -123,8 +111,8 @@ export function agentCalls(
       const text = withNotes(thread, action.prompt ?? action.text);
       const images = action.images?.length ? { images: action.images } : {};
       const skills = action.skills?.length ? { skills: action.skills } : {};
-      // Every message carries the thread's speed, so a change in the composer applies from the next one.
-      const speed = thread.controls ? { speed: controlsOf(thread).speed } : {};
+      // Every message carries the thread's speed and permissions, so a change in the composer applies from the next one.
+      const policy = thread.controls ? { policy: policyOf(thread) } : {};
       if (thread.live.isDetached)
         return reattach(thread, text, undefined, images.images, skills.skills);
       const steer =
@@ -138,7 +126,7 @@ export function agentCalls(
           text,
           ...images,
           ...skills,
-          ...speed,
+          ...policy,
           ...steer,
         },
       ];

@@ -84,7 +84,14 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
       drift: 'on-goal',
       reason: '',
     }),
-    [{ method: 'send', threadId: id, text: 'and add a test', speed: '' }],
+    [
+      {
+        method: 'send',
+        threadId: id,
+        text: 'and add a test',
+        policy: { speed: '', permissionMode: 'default' },
+      },
+    ],
   );
   assert.deepEqual(calls(s, { type: 'interrupt', threadId: id }), [
     { method: 'interrupt', threadId: id },
@@ -796,5 +803,42 @@ test("main's pre-start naming lands as the title and branch unless you renamed i
     thread().repo?.branch,
     'mochi/login-redirect',
     'a rename never touches the branch',
+  );
+});
+
+test('a permissions change goes with the next message to the running agent, which keeps going', () => {
+  const controls = {
+    model: '',
+    effort: 'high',
+    speed: '',
+    access: 'Manual',
+  } as const;
+  let s = run(base(), {
+    type: 'create',
+    title: 'fix the bug',
+    provider: 'codex',
+    project: '/Users/me/dev/harness',
+    isLive: true,
+    controls,
+  });
+  const id = s.threads.at(-1)!.id;
+  const toFull: Action = {
+    type: 'controls',
+    threadId: id,
+    controls: { ...controls, access: 'Full access' },
+  };
+  assert.deepEqual(calls(s, toFull), [], 'no stop, no restart');
+  s = run(s, toFull);
+  assert.equal(s.threads.find((t) => t.id === id)!.live?.isDetached, undefined);
+  const [send] = calls(s, {
+    type: 'send',
+    threadId: id,
+    text: 'go on',
+    drift: 'on-goal',
+    reason: '',
+  });
+  assert.equal(
+    send.method === 'send' && send.policy?.permissionMode,
+    'bypassPermissions',
   );
 });
