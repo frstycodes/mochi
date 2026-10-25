@@ -27,17 +27,15 @@ export function CommandPalette({
   onOpenChange: (open: boolean) => void;
 }) {
   const { state, dispatch } = useHarness();
-  const { actions, run: runAction, scope, review } = useActions();
+  const { actions, run: runAction, scope } = useActions();
   useReviewerChecks();
   const liveSteps = useLiveSteps();
   const close = () => onOpenChange(false);
   const go = (threadId: string) => {
-    review.close();
     dispatch({ type: 'go', view: { kind: 'thread', id: threadId } });
     close();
   };
   const run = (action: PaletteAction) => {
-    if (action.id !== 'go-review') review.close();
     runAction(action);
     close();
   };

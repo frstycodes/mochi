@@ -1,12 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import {
-  Chart,
   Clock,
   Connector,
   Folder,
   Inbox,
   Plugin,
-  Route,
   Skill,
   type IconComponent,
 } from '@/icons';
@@ -73,7 +71,7 @@ export function SidebarNav({
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="text-xs [&_svg]:size-3.5">
+            <SidebarMenuButton className="h-8 text-sm [&_svg]:size-4">
               <OverflowIcon />
               <span>More</span>
             </SidebarMenuButton>
@@ -114,14 +112,12 @@ type SidebarItem = { id: string; label: string; icon: IconComponent } & (
 /** In sidebar order. Skills, Plugins, Connectors and Scheduled live in Settings; their items are shortcuts there. */
 export const SIDEBAR_ITEMS = [
   { id: 'queue', label: 'Queue', icon: Inbox, view: { kind: 'queue' } },
-  { id: 'board', label: 'Board', icon: Route, view: { kind: 'board' } },
   {
     id: 'projects',
     label: 'Projects',
     icon: Folder,
     view: { kind: 'projects' },
   },
-  { id: 'usage', label: 'Usage', icon: Chart, view: { kind: 'usage' } },
   { id: 'skills', label: 'Skills', icon: Skill, section: 'skills' },
   { id: 'plugins', label: 'Plugins', icon: Plugin, section: 'plugins' },
   {
@@ -197,7 +193,7 @@ export function NavItem({
       <SidebarMenuButton
         isActive={isActive}
         onClick={onClick}
-        className="text-xs [&_svg]:size-3.5"
+        className="h-8 text-sm [&_svg]:size-4"
       >
         {icon}
         <span>{label}</span>

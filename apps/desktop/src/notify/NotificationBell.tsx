@@ -37,11 +37,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import { UnreadDot } from '../ui';
 import { host } from '../host';
@@ -91,79 +86,71 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
   const [isOpen, setOpen] = useState(false);
 
   return (
-    <SidebarMenuItem>
-      <Popover open={isOpen} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <SidebarMenuButton
-            aria-label={
-              unread ? `Notifications, ${unread} unread` : 'Notifications'
+    <Popover open={isOpen} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={
+            unread ? `Notifications, ${unread} unread` : 'Notifications'
+          }
+          className="relative text-muted-foreground"
+        >
+          <Bell />
+          {unread > 0 && <UnreadDot className="absolute top-1 right-1" />}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        collisionPadding={8}
+        className="max-h-(--radix-popover-content-available-height) w-88 gap-0 overflow-hidden p-0"
+      >
+        <div className="flex items-center gap-1 py-2 pr-2 pl-3">
+          <h2 className="flex-1 type-title">Notifications</h2>
+          <Button
+            variant="ghost"
+            size="xs"
+            disabled={unread === 0}
+            onClick={() =>
+              dispatch({ type: 'notify-read', ids: notices.map((n) => n.id) })
             }
           >
-            <Bell />
-            <span>Notifications</span>
-          </SidebarMenuButton>
-        </PopoverTrigger>
-        <PopoverContent
-          side="right"
-          align="start"
-          sideOffset={8}
-          collisionPadding={8}
-          className="max-h-(--radix-popover-content-available-height) w-88 gap-0 overflow-hidden p-0"
-        >
-          <div className="flex items-center gap-1 py-2 pr-2 pl-3">
-            <h2 className="flex-1 type-title">Notifications</h2>
-            <Button
-              variant="ghost"
-              size="xs"
-              disabled={unread === 0}
-              onClick={() =>
-                dispatch({ type: 'notify-read', ids: notices.map((n) => n.id) })
-              }
-            >
-              Mark all read
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Clear notifications"
-              disabled={notices.length === 0}
-              onClick={() => dispatch({ type: 'notify-clear' })}
-            >
-              <Trash />
-            </Button>
-          </div>
-          {bursts.length === 0 ? (
-            <NoNotices />
-          ) : (
-            <ScrollArea
-              type="scroll"
-              className="flex min-h-0 flex-col *:data-[slot=scroll-area-viewport]:max-h-96"
-            >
-              <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
-                {bursts.map((b) => (
-                  <BurstRow
-                    key={b.id}
-                    burst={b}
-                    onJump={() => setOpen(false)}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-          <NotifyFooter
-            onOpenSettings={() => {
-              setOpen(false);
-              openSettings('notifications', 'quietHours');
-            }}
-          />
-        </PopoverContent>
-      </Popover>
-      {unread > 0 && (
-        <SidebarMenuBadge className="tabular font-medium text-sidebar-foreground">
-          {unread}
-        </SidebarMenuBadge>
-      )}
-    </SidebarMenuItem>
+            Mark all read
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Clear notifications"
+            disabled={notices.length === 0}
+            onClick={() => dispatch({ type: 'notify-clear' })}
+          >
+            <Trash />
+          </Button>
+        </div>
+        {bursts.length === 0 ? (
+          <NoNotices />
+        ) : (
+          <ScrollArea
+            type="scroll"
+            className="flex min-h-0 flex-col *:data-[slot=scroll-area-viewport]:max-h-96"
+          >
+            <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
+              {bursts.map((b) => (
+                <BurstRow key={b.id} burst={b} onJump={() => setOpen(false)} />
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+        <NotifyFooter
+          onOpenSettings={() => {
+            setOpen(false);
+            openSettings('notifications', 'quietHours');
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 
