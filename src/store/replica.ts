@@ -55,12 +55,12 @@ const RESUME_MS = 1000;
  * A window's store: a read-only replica of Core's thread projection, fed by `replica` items, plus this window's own slices
  * (layout, panes). A command (an action that changes the projection) applies here at once, goes to Core, and folds again in
  * Core's order when it comes back: until then, events from Core fold beneath the window's pending commands, which replay on
- * top (`rebase`). Streamed items reach subscribers once a frame; your own actions at once. Resolves on the first item.
+ * top (`rebase`). Streamed items reach subscribers once a batch (`BATCH_MS`); your own actions at once. Resolves on the first item.
  */
 export function createReplica(
   log: ReplicaLog,
   initial: (saved: Saved | null) => State,
-  schedule = nextFrame,
+  schedule = nextBatch,
 ): Promise<Replica> {
   const origin = crypto.randomUUID();
   let count = 0;
@@ -256,14 +256,10 @@ const decodeContext = (value: unknown) => {
   return decoded._tag === 'Some' ? decoded.value : null;
 };
 
-// A hidden window gets no animation frames; the timeout keeps its store moving, at a slower pace.
-const FRAME_FALLBACK_MS = 100;
+// A few streamed tokens per commit instead of one a frame; the stream still reads as fluid. A timer, unlike an animation frame, also runs in a hidden window.
+const BATCH_MS = 50;
 
-function nextFrame(run: () => void) {
-  const frame = requestAnimationFrame(run);
-  const timer = setTimeout(run, FRAME_FALLBACK_MS);
-  return () => {
-    cancelAnimationFrame(frame);
-    clearTimeout(timer);
-  };
+function nextBatch(run: () => void) {
+  const timer = setTimeout(run, BATCH_MS);
+  return () => clearTimeout(timer);
 }

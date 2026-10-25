@@ -28,7 +28,7 @@ export function WindowReactor() {
   const getState = useGetState();
   const dispatch = useDispatch();
   useEffect(() => {
-    if (!host.isDesktop) return;
+    if (!host.hasCore) return;
     const served = Promise.all([
       coreClient(),
       import('@mochi/core/hostClient'),

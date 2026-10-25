@@ -77,7 +77,7 @@ let replica: Replica | undefined;
 /** This window's store, once Core's first item is in; `src/main.tsx` waits for it before the first render. */
 export async function startStore() {
   replica ??= await createReplica(
-    host.isDesktop ? coreLog() : pageLog(),
+    host.hasCore ? coreLog() : pageLog(),
     (saved) => initialState(saved),
   );
   replica.listen((action) => {

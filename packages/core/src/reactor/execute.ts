@@ -1,4 +1,5 @@
 import { Effect, Layer } from 'effect';
+import { Capabilities as Contract } from '@mochi/schema';
 import {
   compactFocus,
   compactInstructions,
@@ -27,8 +28,7 @@ import { Unavailable, type Outcome } from './worker.ts';
 
 /** Capabilities' failures when no window serves `reactor`: retried until one does. One that left mid-call already went to the next. */
 const isUnserved = (error: unknown) =>
-  typeof error === 'string' &&
-  (error.startsWith('No connected client') || error === DISCONNECTED);
+  error instanceof Contract.CapabilityUnavailable || error === DISCONNECTED;
 
 /**
  * The reactor with its executors. Core applies what is a store action to its own log, with the agent calls it means
@@ -52,7 +52,11 @@ export const layerReactor = Layer.effectDiscard(
         .pipe(
           Effect.timeout('30 seconds'),
           Effect.mapError((error) =>
-            isUnserved(error) ? new Unavailable(error as string) : error,
+            isUnserved(error)
+              ? new Unavailable(
+                  error instanceof Error ? error.message : String(error),
+                )
+              : error,
           ),
           Effect.map((value): Outcome =>
             value === 'skipped' ? 'skipped' : undefined,

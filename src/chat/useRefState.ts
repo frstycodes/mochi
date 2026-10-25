@@ -37,7 +37,7 @@ export function refreshRef(
   expected?: Partial<RefState>,
 ) {
   patchRef(ref, expected ?? {}, 0);
-  if (host.isDesktop)
+  if (host.hasCore)
     return refreshGithub({ ref, githubUser: scope.githubUser, isPush: false });
   void queryClient.invalidateQueries({
     queryKey: refQuery(ref, scope).queryKey,
@@ -50,7 +50,7 @@ function refQuery(ref: GithubRef, scope: Scope) {
     scope.cwd,
     scope.githubUser,
   );
-  if (!host.isDesktop)
+  if (!host.hasCore)
     return {
       queryKey,
       staleTime: 60_000,

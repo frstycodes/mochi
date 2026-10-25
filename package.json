@@ -2,6 +2,9 @@
   "name": "harness-proto",
   "version": "0.0.0",
   "private": true,
+  "bin": {
+    "mochi": "bin/mochi.mjs"
+  },
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {

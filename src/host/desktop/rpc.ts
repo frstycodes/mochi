@@ -1,11 +1,16 @@
 import type { CoreClient } from '@mochi/core/client';
 import { manifest, type HostBridge, type Namespace } from '../types/index.ts';
+import { isServed, servedCoreUrl } from '../web/core.ts';
 import { bridge } from './bridge.ts';
 
 let client: Promise<CoreClient> | undefined;
 
 /** Main posts Core's socket URL after each page load; the client lives as long as the page and redials on its own. */
 function connect() {
+  if (isServed)
+    return import('@mochi/core/client').then(
+      async ({ connectCore }) => (await connectCore(servedCoreUrl())).client,
+    );
   return new Promise<CoreClient>((resolve) => {
     const onMessage = (
       event: MessageEvent<{ channel?: string; url?: string }>,
