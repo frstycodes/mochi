@@ -251,6 +251,16 @@ export interface AccountLimits {
   updatedAt?: string;
 }
 
+/** Claude Code's `/context` breakdown. `deferred` rows are tool schemas outside the window, listed for awareness only. */
+export interface ContextUsage {
+  categories: {
+    name: string;
+    tokens: number;
+    kind: 'used' | 'free' | 'buffer' | 'deferred';
+  }[];
+  totalTokens: number;
+}
+
 export type SubagentStatus = 'running' | 'done' | 'failed' | 'stopped';
 
 export type BackgroundTaskKind = 'shell' | 'workflow' | 'monitor';
@@ -532,6 +542,8 @@ export interface AgentHost {
   ): Promise<McpWidgetResource>;
   /** Stops one of a thread's native background tasks (a Claude subagent or shell task, a Codex spawned agent or background terminal); it ends with status `stopped`. */
   stopTask(threadId: string, taskId: string): Promise<void>;
+  /** What fills a live Claude session's context window, by category; null with no live Claude session for the thread. */
+  contextUsage(threadId: string): Promise<ContextUsage | null>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
   warm(spaceId: string): Promise<void>;
   /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
@@ -573,6 +585,7 @@ export const agentMethods = {
   rewindPoint: 'invoke',
   readWidget: 'invoke',
   stopTask: 'invoke',
+  contextUsage: 'invoke',
   warm: 'invoke',
   models: 'invoke',
   limits: 'invoke',

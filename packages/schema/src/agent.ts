@@ -187,6 +187,18 @@ export const AccountLimits = Schema.Struct({
 });
 export type AccountLimits = typeof AccountLimits.Type;
 
+export const ContextUsage = Schema.Struct({
+  categories: Schema.Array(
+    Schema.Struct({
+      name: S,
+      tokens: N,
+      kind: Schema.Literals(['used', 'free', 'buffer', 'deferred']),
+    }),
+  ),
+  totalTokens: N,
+});
+export type ContextUsage = typeof ContextUsage.Type;
+
 export const StartWorkspace = Schema.Struct({
   mode: Schema.Literals(['worktree', 'folder']),
   branch: Str(255),
@@ -394,6 +406,7 @@ export const agentRpc = {
     McpWidgetResource,
   ),
   stopTask: invoke(T([Id, Id]), Void),
+  contextUsage: invoke(T([Id]), Schema.NullOr(ContextUsage)),
   warm: invoke(T([Short]), Void),
   models: invoke(T([Provider, Short]), Schema.Array(AgentModel)),
   limits: invoke(T([Provider, Short, o(B)]), AccountLimits),

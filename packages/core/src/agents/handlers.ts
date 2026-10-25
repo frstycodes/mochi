@@ -33,6 +33,7 @@ import {
 } from './claude/oneshot.ts';
 import {
   claude,
+  claudeContextUsage,
   readClaudeWidget,
   setClaudeCompactInstructions,
   stopAllClaude,
@@ -357,6 +358,9 @@ export const agent = {
   async stopTask(_window, threadId, taskId) {
     // No adapter: its parent's process is gone, so the task already stopped with it.
     return adapterOf(threadId)?.stopTask(threadId, taskId);
+  },
+  async contextUsage(_window, threadId) {
+    return claudeContextUsage(threadId);
   },
   async warm(_window, spaceId) {
     return warmClaude(spaceId);

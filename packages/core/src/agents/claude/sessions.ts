@@ -20,6 +20,7 @@ import type {
   AgentImage,
   AgentRunOptions,
   AgentSendInput,
+  ContextUsage,
 } from '../../../../../apps/desktop/src/host/types/agent.ts';
 import type { HarnessAdapter } from '../adapter.ts';
 import type { McpWidgetResource } from '../../../../../apps/desktop/src/model.ts';
@@ -619,6 +620,25 @@ export async function readClaudeWidget(
     (item?.blob && Buffer.from(item.blob, 'base64').toString('utf8'));
   if (!html) throw new Error(`${server} returned no HTML for ${uri}.`);
   return { html, ...(item._meta && { meta: item._meta }) };
+}
+
+/** `summary` answers from the last response's usage and local estimates, skipping a token-count API call per category. */
+export async function claudeContextUsage(
+  threadId: string,
+): Promise<ContextUsage | null> {
+  const live = sessions.get(threadId)?.query;
+  if (!live) return null;
+  const { categories, totalTokens } = await live.getContextUsage({
+    detail: 'summary',
+  });
+  return {
+    categories: categories.map(({ name, tokens, kind }) => ({
+      name,
+      tokens,
+      kind,
+    })),
+    totalTokens,
+  };
 }
 
 /** Ends a session's process and hands its slot to the next waiting thread. The record stays for `send` unless stopped. */

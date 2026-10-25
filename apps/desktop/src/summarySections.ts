@@ -7,6 +7,7 @@ import { plural } from '@mochi/domain/lib/format';
 export type SummaryCardId =
   | 'goal'
   | 'environment'
+  | 'context'
   | 'sources'
   | 'connectors'
   | 'servers'
@@ -29,6 +30,7 @@ export function summaryCards({
   const cards: (SummaryCardId | false)[] = [
     hasGoal(thread) && 'goal',
     'environment',
+    thread.context.max > 0 && 'context',
     'sources',
     !!thread.agent?.mcpServers?.length && 'connectors',
     portCount > 0 && 'servers',
