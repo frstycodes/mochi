@@ -90,7 +90,7 @@ jobs:
           path: node_modules/.vite/task-cache
           key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 
-      # Streams a reply into the built app; fails over the render and script budgets in tests/e2e/stream.perf.spec.ts.
+      # Runs every spec in tests/e2e: stream.perf.spec.ts streams a reply into the built app and fails over its render and script budgets; browser.spec.ts drives the browser views through the CDP relay.
       # Ubuntu 24.04's AppArmor blocks the user namespaces Chromium's sandbox needs.
       - if: matrix.os == 'ubuntu-latest'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
