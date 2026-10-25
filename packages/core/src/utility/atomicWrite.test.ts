@@ -11,6 +11,7 @@ test('writeFileAtomic replaces the file with its data, applies the mode, and lea
   await writeFileAtomic(file, 'one', 0o600);
   await writeFileAtomic(file, 'two', 0o600);
   assert.equal(await readFile(file, 'utf8'), 'two');
-  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  if (process.platform !== 'win32')
+    assert.equal((await stat(file)).mode & 0o777, 0o600);
   assert.deepEqual(await readdir(dir), ['state.json']);
 });
