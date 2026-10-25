@@ -13,6 +13,7 @@ import {
 } from '../chat/turnChanges.ts';
 import { excerpt, rewindBlockedReason, turnCheckpoint } from './checkpoints.ts';
 import { useLatest } from '../useLatest.ts';
+import { plural } from '../lib/format.ts';
 
 /** What undoing the turn would also take back: later turns' edits to the same files, and changes made outside the agent since its last turn. */
 export interface UndoConflicts {
@@ -45,7 +46,7 @@ export function useTurnUndo(thread: Thread, turn: TurnChanges) {
   const paths = turn.files.map((f) =>
     cwd && f.path.startsWith(`${cwd}/`) ? f.path.slice(cwd.length + 1) : f.path,
   );
-  const what = `${turn.files.length === 1 ? '1 file' : `${turn.files.length} files`} from ${turn.start < 0 ? 'the first turn' : `"${excerpt(thread.activity[turn.start].text)}"`}`;
+  const what = `${plural(turn.files.length, '1 file', `${turn.files.length} files`)} from ${turn.start < 0 ? 'the first turn' : `"${excerpt(thread.activity[turn.start].text)}"`}`;
 
   const restore = async (n: number | 'undo', isUndone: boolean) => {
     if (!cwd || rewindBlockedReason(latest.current)) return false;

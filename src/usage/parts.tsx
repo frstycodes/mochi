@@ -3,6 +3,7 @@ import { Coin, Commit } from '@/icons';
 import { GitMergeIcon } from '@/icons/github';
 import { DiffIcon } from '@/icons/panes';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import type { Provider } from '../model';
 import { HARNESSES } from '../settings/harnesses';
 import { ProviderMark } from '../ui';
@@ -57,7 +58,7 @@ function HarnessRow({
       <ProviderMark provider={provider} size={16} />
       <span className="min-w-0 flex-1 truncate">
         {HARNESSES[provider].name} · {sessions.toLocaleString('en-US')}{' '}
-        {sessions === 1 ? 'session' : 'sessions'}
+        {plural(sessions, 'session', 'sessions')}
       </span>
       <span className="figure font-semibold text-foreground">
         {usd(cost, 2)}

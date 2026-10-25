@@ -91,6 +91,7 @@ import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
 import { spaceCommand, type CommandId } from '../keymap';
 import type { PaneTab } from '../model';
+import { plural } from '@/lib/format';
 
 export const ACTION_GROUPS = [
   'Go to',
@@ -894,9 +895,11 @@ function watch(threads: Thread[], { state, dispatch }: ActionContext) {
 function copyBranches(threads: Thread[]) {
   copyText(
     threads.map((t) => t.repo!.branch).join('\n'),
-    threads.length === 1
-      ? 'Copied branch name'
-      : `Copied ${threads.length} branch names`,
+    plural(
+      threads.length,
+      'Copied branch name',
+      `Copied ${threads.length} branch names`,
+    ),
   );
 }
 
@@ -916,7 +919,7 @@ function closeTabs(
     threadId,
     tabIds: tabs.map((t) => t.id),
   });
-  toast(tabs.length === 1 ? 'Closed 1 tab' : `Closed ${tabs.length} tabs`, {
+  toast(plural(tabs.length, 'Closed 1 tab', `Closed ${tabs.length} tabs`), {
     action: {
       label: 'Undo',
       onClick: () => dispatch({ type: 'pane-restore', pane: before }),

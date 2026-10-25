@@ -2,6 +2,7 @@ import type { McpServer, Thread } from './model.ts';
 import type { ThreadSummary } from './summary.ts';
 import { hasGoal } from './drift.ts';
 import { activeTasks } from './runtime/tasks.ts';
+import { plural } from './lib/format.ts';
 
 export type SummaryCardId =
   | 'goal'
@@ -12,11 +13,6 @@ export type SummaryCardId =
   | 'outputs'
   | 'changes'
   | 'tasks';
-
-export const TOKENS = new Intl.NumberFormat('en', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
 
 /** The cards with something to show, in Claude's order: where it runs, what it holds, what it reaches, what it made, then what still runs. */
 export function summaryCards({
@@ -44,8 +40,6 @@ export function summaryCards({
   return cards.filter((c) => c !== false);
 }
 
-const PLURAL = new Intl.PluralRules('en');
-
 /** The connectors' state in a few words: what needs you first, else how many are up. */
 export function connectorStatus(servers: Pick<McpServer, 'status'>[]) {
   const broken = servers.filter(
@@ -60,8 +54,7 @@ export function connectorStatus(servers: Pick<McpServer, 'status'>[]) {
   return { text: `${connected} of ${servers.length} on`, needsYou: false };
 }
 
-export const fileCount = (n: number) =>
-  `${n} ${PLURAL.select(n) === 'one' ? 'file' : 'files'}`;
+export const fileCount = (n: number) => `${n} ${plural(n, 'file', 'files')}`;
 
 /** `cards` in the order you dragged them to; a card you never placed keeps its default slot among them. */
 export function orderCards(

@@ -14,11 +14,8 @@ import { LimitBars, UpdatedAt } from './usage/LimitBars';
 import { hottest, TONE_COLORS, toneFor } from './usage/limits';
 import type { Usage } from './usage/model';
 import { useAccountLimits } from './usage/useAccountLimits';
+import { TOKENS } from '@/lib/format';
 
-const TOKENS = new Intl.NumberFormat('en', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
 const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
 const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<
   Provider,

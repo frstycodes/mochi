@@ -32,6 +32,7 @@ import { SwitchBranchDialog } from './SwitchBranchDialog';
 import { useBranches } from './useGit';
 import { isUnstarted, type WorkspaceDraft } from './workspace';
 import { queryKeys } from '../queryKeys';
+import { plural } from '@/lib/format';
 
 const NAME_CHECK_MS = 250;
 
@@ -421,7 +422,7 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
   const notes = [
     draft.mode === 'folder' &&
       sharers.length > 0 &&
-      `${sharers.length === 1 ? `"${sharers[0].title}" is` : `${sharers.length} threads are`} already working in ${projectName(root)}; both edit the same files.`,
+      `${plural(sharers.length, `"${sharers[0].title}" is`, `${sharers.length} threads are`)} already working in ${projectName(root)}; both edit the same files.`,
     draft.mode === 'folder' &&
       isDirty &&
       `${projectName(root)} has uncommitted changes; the agent works on top of them.`,
