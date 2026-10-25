@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => ({
             { auto: true },
             '!node_modules/.modules.yaml',
             '!node_modules/.vite/**',
+            '!coverage',
             '!coverage/**',
           ],
         },
