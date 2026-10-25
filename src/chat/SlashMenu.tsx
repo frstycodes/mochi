@@ -326,8 +326,10 @@ function useConfiguredCommands(
   isNeeded: boolean,
 ) {
   const config = useProfileConfig(isNeeded ? spaceId : undefined, projectRoot);
-  const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
-  // Stable per config read: the menu reveals its current row when that row changes.
+  const profiles = useProfiles();
+  const nativeOff = profiles.find((p) => p.id === spaceId)?.nativeOff;
+  // Stable per config read: the menu reveals its current row when that row changes, and every chat row re-renders.
+  // `useProfiles()` stays out of the expression below, or React Compiler leaves it unmemoized.
   return config
     ? configuredCommands(
         config[provider],
