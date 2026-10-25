@@ -18,7 +18,7 @@ import { showsDemoData } from '../demoData.ts';
 import { NO_AGENT_PROCESS, type AgentToolCall } from '../host/types/agent.ts';
 import { isListed, type Thread } from '../model.ts';
 import { isSameListing } from '../reorder.ts';
-import { useProfiles } from '../profiles.ts';
+import { followProfiles, storedProfiles, useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import {
@@ -34,7 +34,11 @@ import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
 import { setPrefs, usePrefs } from '../settings/prefs.ts';
-import { projectionPrefs, type ProjectionContext } from './context.ts';
+import {
+  migratedContext,
+  projectionPrefs,
+  type ProjectionContext,
+} from './context.ts';
 import { savePanes } from './panes.ts';
 import { rankQueue } from './queue.ts';
 import { createReplica, type Replica } from './replica.ts';
@@ -80,6 +84,7 @@ export async function startStore() {
     host.hasCore ? coreLog() : pageLog(),
     (saved) => initialState(saved),
   );
+  followProfiles(replica);
   replica.listen((action) => {
     if (action.type === 'agent' && action.event.type === 'worktree')
       setWorktreePath(action.event.threadId, action.event.path);
@@ -307,22 +312,31 @@ function withDispatchContext(state: State, action: Action): Action {
 /**
  * Keeps your prefs and pins (`ProjectionContext`) one value between this window and Core, which holds them in its settings
  * store: Core's when it changes (another window, a device), yours when you change them here. A window that finds Core with
- * none sends its own once, migrating them out of this window's storage.
+ * none sends its own once, migrating them out of this window's storage; profiles likewise, the first time Core has none.
+ * Profiles change only in Core (`src/profiles.ts`), so this carries Core's along.
  */
 function useProjectionContext(replica: Replica, dispatch: Dispatch<Action>) {
   const prefs = usePrefs();
   const pins = useAllPins();
-  const local = { prefs: projectionPrefs(prefs), pins };
   const held = useStore(replica.store, (s) => s.context);
+  const local: ProjectionContext = {
+    prefs: projectionPrefs(prefs),
+    pins,
+    ...(held.profiles && { profiles: held.profiles }),
+  };
   /** The value both sides last agreed on, as JSON. */
   const synced = useRef<string | null>(null);
   useEffect(() => {
     const core = JSON.stringify(held);
     const mine = JSON.stringify(local);
     const isFirst = synced.current === null;
-    if (isFirst && !replica.isContextSet()) {
-      synced.current = mine;
-      return dispatch({ type: 'context', context: local });
+    const coreHeld = replica.isContextSet() ? held : null;
+    const migrated =
+      isFirst && migratedContext(coreHeld, local, storedProfiles);
+    if (migrated) {
+      if (coreHeld && mine !== core) adoptContext(held);
+      synced.current = JSON.stringify(migrated);
+      return dispatch({ type: 'context', context: migrated });
     }
     if (isFirst || core !== synced.current) {
       synced.current = core;

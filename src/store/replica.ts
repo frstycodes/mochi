@@ -1,4 +1,5 @@
 import { Schema } from 'effect';
+import { Model } from '@mochi/schema';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
   actionOf,
@@ -249,6 +250,7 @@ const ContextSchema = Schema.Struct({
     whileWorking: Schema.Literals(['queue', 'steer']),
   }),
   pins: Schema.Record(Schema.String, Schema.Array(Pin)),
+  profiles: Schema.optional(Schema.Array(Model.Space)),
 });
 const decodeContextOption = Schema.decodeUnknownOption(ContextSchema);
 const decodeContext = (value: unknown) => {

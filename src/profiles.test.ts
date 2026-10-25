@@ -2,6 +2,8 @@ import { browserStorage } from './lib/uiStorage.ts';
 import assert from 'node:assert/strict';
 import { test, vi } from 'vite-plus/test';
 
+const demo = vi.hoisted(() => ({ isOn: true }));
+vi.mock('./demoData.ts', () => ({ showsDemoData: () => demo.isOn }));
 const storage = new Map<string, string>();
 vi.spyOn(browserStorage, 'getItem').mockImplementation(
   (key: string) => storage.get(key) ?? null,
@@ -14,12 +16,29 @@ const {
   MAX_PROFILES,
   PROFILES_KEY,
   addProfile,
+  followProfiles,
   getProfiles,
   newProfileId,
   parseProfiles,
   removeProfile,
+  storedProfiles,
   updateProfile,
 } = await import('./profiles.ts');
+const { DEFAULT_CONTEXT, migratedContext } = await import('./store/context.ts');
+const { createStore } = await import('zustand/vanilla');
+type State = import('./store/types.ts').State;
+type Space = import('./model.ts').Space;
+
+// The window's replica as profiles.ts reads it: a `context` command replaces the context, as the reducer does.
+const store = createStore<State>()(
+  () => ({ context: DEFAULT_CONTEXT }) as State,
+);
+followProfiles({
+  store,
+  getState: store.getState,
+  dispatch: (action) =>
+    action.type === 'context' && store.setState({ context: action.context }),
+});
 
 test('parseProfiles keeps valid entries and falls back to the built-in profiles', () => {
   assert.deepEqual(parseProfiles(null), DEFAULT_SPACES);
@@ -60,7 +79,63 @@ test('newProfileId makes a session-safe slug that never collides', () => {
   assert.equal(newProfileId('🚀', []), 'profile');
 });
 
+const stored: Space = {
+  id: 'side',
+  name: 'Side',
+  icon: 'rocket',
+  plans: { claude: '', codex: '' },
+  github: 'octo',
+  nativeOff: ['claude:default:skill:user:ui'],
+  nativeNew: { codex: 'off' },
+};
+
+test('the migration reads the profiles this window stored before Core held them, whole', () => {
+  storage.set(
+    PROFILES_KEY,
+    JSON.stringify({ state: { value: [stored] }, version: 1 }),
+  );
+  assert.deepEqual(storedProfiles(), [stored]);
+  // Written before persist wrapped entries.
+  storage.set(PROFILES_KEY, JSON.stringify([stored]));
+  assert.deepEqual(storedProfiles(), [stored]);
+  storage.delete(PROFILES_KEY);
+  assert.deepEqual(storedProfiles(), DEFAULT_SPACES);
+});
+
+test('the first sync migrates profiles once: with the context, after it, never over Core’s', () => {
+  const local = { ...DEFAULT_CONTEXT, pins: { t1: [] } };
+  const read = () => [stored];
+  assert.deepEqual(migratedContext(null, local, read), {
+    ...local,
+    profiles: [stored],
+  });
+  // Prefs and pins migrated before profiles did: Core's stay, the stored profiles join them.
+  assert.deepEqual(migratedContext(DEFAULT_CONTEXT, local, read), {
+    ...DEFAULT_CONTEXT,
+    profiles: [stored],
+  });
+  assert.equal(
+    migratedContext({ ...DEFAULT_CONTEXT, profiles: [] }, local, read),
+    null,
+  );
+});
+
+test('Core’s profiles are what every reader sees, the same list until they change', () => {
+  assert.deepEqual(getProfiles(), DEFAULT_SPACES);
+  store.setState({ context: { ...DEFAULT_CONTEXT, profiles: [stored] } });
+  const first = getProfiles();
+  assert.deepEqual(
+    first.map((p) => p.id),
+    ['side', ...DEFAULT_SPACES.map((p) => p.id)],
+    'demo profiles join, unsaved',
+  );
+  assert.equal(getProfiles(), first);
+  store.setState({ context: DEFAULT_CONTEXT });
+});
+
 test('add, rename, remove and undo keep the order and persist', () => {
+  demo.isOn = false;
+  store.setState({ context: { ...DEFAULT_CONTEXT, profiles: DEFAULT_SPACES } });
   const added = addProfile('Personal');
   assert.equal(added.id, 'personal-2');
   assert.notEqual(added.icon, 'home');
@@ -76,7 +151,8 @@ test('add, rename, remove and undo keep the order and persist', () => {
     getProfiles().map((p) => p.id),
     ['latitude', 'personal', 'liane', 'personal-2'],
   );
-  assert.equal(JSON.parse(storage.get(PROFILES_KEY)!).state.value.length, 4);
+  assert.equal(store.getState().context.profiles!.length, 4);
+  assert.deepEqual(storedProfiles(), getProfiles(), 'kept in storage too');
 });
 
 test('the last profile stays and the list stops at the cap', () => {
