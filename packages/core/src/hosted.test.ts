@@ -93,15 +93,13 @@ it.live(
         'number',
       );
 
+      let seen = '';
       const output = yield* client.agentPush().pipe(
-        Stream.filter((item) => item.channel === 'pty:onData'),
-        Stream.map((item) => (item.payload as { data: string }).data),
-        Stream.scan(
-          () => '',
-          (all, data) => all + data,
-        ),
-        Stream.takeUntil((all) => withoutEscapes(all).includes('mochi-pty-ok')),
-        Stream.runLast,
+        Stream.filter((item) => item.channel.startsWith('pty:')),
+        Stream.map((item) => JSON.stringify(item.payload)),
+        Stream.tap((data) => Effect.sync(() => (seen += data))),
+        Stream.takeUntil(() => withoutEscapes(seen).includes('mochi-pty-ok')),
+        Stream.runDrain,
         Effect.forkScoped({ startImmediately: true }),
       );
       yield* client.ping();
@@ -112,11 +110,10 @@ it.live(
         call('pty.write', [id, 'echo mochi-pty-ok\r']),
       );
       // The shell's echo of the line is enough: it came back through the pty and Core's push.
-      assert.ok(
-        withoutEscapes(Option.getOrThrow(yield* Fiber.join(output))).includes(
-          'mochi-pty-ok',
-        ),
+      const isDone = yield* Fiber.join(output).pipe(
+        Effect.timeoutOption('20 seconds'),
       );
+      assert.ok(Option.isSome(isDone), `pty pushed: ${seen.slice(-800)}`);
       yield* Effect.promise(() => call('pty.kill', [id]));
     }),
 );

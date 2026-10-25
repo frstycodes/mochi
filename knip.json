@@ -23,7 +23,7 @@
         "src/goals/outcome.ts",
         "src/settings/sections/goals.tsx"
       ],
-      "ignoreDependencies": ["@parcel/watcher"]
+      "ignoreDependencies": ["@parcel/watcher", "node-pty"]
     },
     "packages/schema": {
       "ignore": ["scripts/**"],
