@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { Thread } from '../model';
@@ -20,21 +21,19 @@ export interface BuildState {
 }
 
 // Module-level, by device: a build keeps streaming and keeps its state while the Simulator tab is unmounted (Show log switches tabs).
-const builds = new Map<string, BuildState>();
-const listeners = new Set<() => void>();
+const buildsStore = createStore<Record<string, BuildState>>(() => ({}));
+const getBuild = (udid: string) => buildsStore.getState()[udid];
 
 /** Build & run for one device: the full log streams into a read-only Build session in a Terminal tab; this returns the compact status. */
 export function useBuild(udid: string | null, thread: Thread) {
   const { state, dispatch } = useHarness();
   const openers = usePaneOpeners(thread.id);
-  const build = useSyncExternalStore(subscribe, () =>
-    udid ? builds.get(udid) : undefined,
-  );
+  const build = useStore(buildsStore, (all) => (udid ? all[udid] : undefined));
 
   const run = async (cwd: string) => {
     if (!udid || build?.isBuilding) return;
     const { startBuildLog } = await import('../terminal/sessions');
-    if (builds.get(udid)?.isBuilding) return;
+    if (getBuild(udid)?.isBuilding) return;
     const pane = state.panes.find((p) => p.threadId === thread.id);
     const terminal = pane?.tabs.find((t) => t.kind === 'terminal');
     const tabId = terminal?.id ?? nextTabId(pane?.tabs ?? []);
@@ -55,12 +54,12 @@ export function useBuild(udid: string | null, thread: Thread) {
     const off = host.sim.onBuildLog((line) => {
       if (line.udid !== udid) return;
       session.term.write(`${line.text}\r\n`);
-      set(udid, { ...builds.get(udid)!, lastLine: line.text });
+      set(udid, { ...getBuild(udid)!, lastLine: line.text });
     });
     try {
       const { bundleId } = await host.sim.buildAndRun(udid, cwd);
       set(udid, {
-        ...builds.get(udid)!,
+        ...getBuild(udid)!,
         isBuilding: false,
         result: { isOk: true, bundleId },
       });
@@ -68,7 +67,7 @@ export function useBuild(udid: string | null, thread: Thread) {
     } catch (e) {
       session.term.write(`\x1b[31m${message(e)}\x1b[0m\r\n`);
       set(udid, {
-        ...builds.get(udid)!,
+        ...getBuild(udid)!,
         isBuilding: false,
         result: { isOk: false, error: message(e) },
       });
@@ -91,19 +90,12 @@ export function useBuild(udid: string | null, thread: Thread) {
 
   const dismiss = () => {
     if (!udid || build?.isBuilding) return;
-    builds.delete(udid);
-    listeners.forEach((l) => l());
+    buildsStore.setState(({ [udid]: _, ...rest }) => rest, true);
   };
 
   return { build, run, showLog, dismiss };
 }
 
 function set(udid: string, next: BuildState) {
-  builds.set(udid, next);
-  listeners.forEach((l) => l());
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
+  buildsStore.setState({ [udid]: next });
 }

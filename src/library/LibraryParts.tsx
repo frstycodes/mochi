@@ -14,6 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import { OpenFileItems } from '../files/OpenFileItems';
 import { IconImage } from '../IconImage';
 import type { Space } from '../model';
@@ -65,9 +66,8 @@ export const PAGE = 50;
 
 export const ALL = 'all';
 
-const PLURAL = new Intl.PluralRules('en');
 export const countOf = (n: number, noun: string) =>
-  `${n} ${PLURAL.select(n) === 'one' ? noun : `${noun}s`}`;
+  `${n} ${plural(n, noun, `${noun}s`)}`;
 
 const KIND_LABELS = {
   skill: 'Skill',

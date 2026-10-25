@@ -1,6 +1,7 @@
 import { DiagramTree } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import type { Thread } from '../model';
 import { isWorking } from '../agentPhase';
 import { PrStack } from '../git/PrStack';
@@ -42,13 +43,11 @@ function SubThreadCount({ subs }: { subs: Thread[] }) {
       <span className="tabular">{`${subs.length} sub-threads`}</span>
       {working > 0 && <span className="tabular">{`· ${working} working`}</span>}
       {asks > 0 && (
-        <span className="tabular text-warning">{`· ${asks} ${ASKS.select(asks) === 'one' ? 'needs' : 'need'} you`}</span>
+        <span className="tabular text-warning">{`· ${asks} ${plural(asks, 'needs', 'need')} you`}</span>
       )}
     </p>
   );
 }
-
-const ASKS = new Intl.PluralRules('en');
 
 function SubThreadRow({ sub }: { sub: Thread }) {
   const row = useThreadRow(sub);

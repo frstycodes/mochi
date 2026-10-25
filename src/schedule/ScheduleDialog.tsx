@@ -1,4 +1,6 @@
-import { useState, useSyncExternalStore, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
@@ -23,23 +25,18 @@ import { DEFAULT_FORM, fromWhen, toWhen } from './form';
 import { ScheduleFields } from './ScheduleFields';
 import { useTrigger } from './useSchedules';
 
-let openThreadId: string | null = null;
-const listeners = new Set<() => void>();
+const openStore = createStore<{ threadId: string | null }>(() => ({
+  threadId: null,
+}));
 
 /** Opens the schedule editor for a thread (thread menu, Settings › Schedules); null closes it. */
 export function openSchedule(threadId: string | null) {
-  openThreadId = threadId;
-  listeners.forEach((l) => l());
+  openStore.setState({ threadId });
 }
-
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-};
 
 /** Mounted once at the app root. */
 export function ScheduleLayer() {
-  const threadId = useSyncExternalStore(subscribe, () => openThreadId);
+  const threadId = useStore(openStore, (s) => s.threadId);
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
   const trigger = useTrigger(threadId ?? '');

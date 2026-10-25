@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
 import type { MachineCatalog } from './host/types/remote';
@@ -521,8 +522,6 @@ function ModelItem({
   );
 }
 
-const MODEL_COUNT = new Intl.PluralRules('en');
-
 /** The checked models' names, else how many the harness offers. */
 function harnessSummary(
   models: ModelOption[],
@@ -532,7 +531,7 @@ function harnessSummary(
   if (isLoading) return 'Loading models…';
   const checked = models.filter(isChecked);
   if (checked.length) return checked.map((m) => m.name).join(', ');
-  return `${models.length} ${MODEL_COUNT.select(models.length) === 'one' ? 'model' : 'models'}`;
+  return `${models.length} ${plural(models.length, 'model', 'models')}`;
 }
 
 /** Each harness's models, and which of `harnesses` the pickers list: set up, and its list read (`listedHarnesses`). */

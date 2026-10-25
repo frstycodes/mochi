@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef } from 'react';
 import { toast } from '../toast/store.ts';
 import { queueToast } from '../QueueToast';
 import { host } from '../host';
@@ -7,6 +7,7 @@ import { isListed } from '../model';
 import { threadCwd } from '../host/cwd';
 import type { WatchConfig } from '../host/types/notify';
 import { getProfiles } from '../profiles';
+import { useHasFocus } from '../lib/windowFocus';
 import { usePrefs } from '../settings/prefs';
 import {
   useDispatch,
@@ -156,9 +157,7 @@ export function useNotifications() {
 /** Looking at a thread in a focused window settles the notices that only asked you to look, here and in main. */
 function useAddressedOnView(threadId: string | undefined) {
   const dispatch = useDispatch();
-  const isFocused = useSyncExternalStore(subscribeFocus, () =>
-    document.hasFocus(),
-  );
+  const isFocused = useHasFocus();
   const isViewed = isFocused && !!threadId;
   const hasAddressed = useHarnessSelector(
     (s) =>
@@ -174,15 +173,6 @@ function useAddressedOnView(threadId: string | undefined) {
   useEffect(() => {
     if (hasAddressed && threadId) dispatch({ type: 'notify-viewed', threadId });
   }, [hasAddressed, threadId, dispatch]);
-}
-
-function subscribeFocus(onChange: () => void) {
-  window.addEventListener('focus', onChange);
-  window.addEventListener('blur', onChange);
-  return () => {
-    window.removeEventListener('focus', onChange);
-    window.removeEventListener('blur', onChange);
-  };
 }
 
 function watchConfig(

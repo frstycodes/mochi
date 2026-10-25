@@ -2,6 +2,7 @@ import type { Dispatch } from 'react';
 import { toast } from './toast/store.ts';
 import type { Thread } from './model';
 import { type Action, useDispatch } from './store';
+import { plural } from './lib/format.ts';
 
 /** Settle or reactivate a thread, with an undo toast. */
 export function useSettle(thread: Thread) {
@@ -18,7 +19,7 @@ export function toggleSettle(threads: Thread[], dispatch: Dispatch<Action>) {
   const each = (type: 'settle' | 'unsettle') =>
     threads.forEach((t) => dispatch({ type, threadId: t.id }));
   each(isSettled ? 'unsettle' : 'settle');
-  const count = threads.length === 1 ? 'Thread' : `${threads.length} threads`;
+  const count = plural(threads.length, 'Thread', `${threads.length} threads`);
   toast(isSettled ? `${count} active again` : `${count} archived`, {
     description: isSettled
       ? undefined

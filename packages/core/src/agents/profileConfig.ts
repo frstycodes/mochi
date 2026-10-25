@@ -146,15 +146,11 @@ export async function testMcpServer(
     );
   const { def } = server;
   const [
-    { Client },
+    { Client, StreamableHTTPClientTransport, SSEClientTransport },
     { StdioClientTransport },
-    { StreamableHTTPClientTransport },
-    { SSEClientTransport },
   ] = await Promise.all([
-    import('@modelcontextprotocol/sdk/client/index.js'),
-    import('@modelcontextprotocol/sdk/client/stdio.js'),
-    import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
-    import('@modelcontextprotocol/sdk/client/sse.js'),
+    import('@modelcontextprotocol/client'),
+    import('@modelcontextprotocol/client/stdio'),
   ]);
   const headers = expandAll(def.headers);
   const transport =

@@ -498,11 +498,14 @@ test('a thread runs at the speed it started with, and a message changes it for i
     });
     assert.ok(events.some((e) => e.type === 'info' && e.info.effort === 'max'));
     await turnEnds(1);
-    await codex.send('t', 'again');
+    await codex.send('t', { text: 'again' });
     await turnEnds(2);
-    await codex.send('t', 'slower', undefined, undefined, '');
+    await codex.send('t', { text: 'slower', policy: { speed: '' } });
     await turnEnds(3);
-    await codex.send('t', 'faster', undefined, undefined, 'priority');
+    await codex.send('t', {
+      text: 'faster',
+      policy: { speed: 'priority' },
+    });
     await turnEnds(4);
     await codex.start('u', {
       provider: 'codex',
@@ -518,6 +521,59 @@ test('a thread runs at the speed it started with, and a message changes it for i
       'turn/start priority',
       'thread/start null',
       'turn/start null',
+    ];
+    assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), expected);
+  } finally {
+    codex.dispose();
+  }
+});
+
+test('a thread runs in the mode it started with, and a message in another mode changes it for its turn and the ones after', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = fakeCodex(home, TIER_CODEX);
+  const log = path.join(home, 'policy.log');
+  const { emit, waitFor } = recordEvents();
+  const codex = new CodexAdapter(
+    emit,
+    async () => ({ id: 'default' }),
+    async () => ({
+      path: fake,
+      env: {
+        ...process.env,
+        TIER_LOG: path.join(home, 'tiers.log'),
+        POLICY_LOG: log,
+      },
+    }),
+  );
+  const turnEnds = (count: number) =>
+    waitFor((e) => e.type === 'turn-end', count);
+  try {
+    await codex.start('t', {
+      provider: 'codex',
+      spaceId: 'home',
+      cwd: home,
+      prompt: 'hi',
+      permissionMode: 'auto',
+    });
+    await turnEnds(1);
+    await codex.send('t', {
+      text: 'same mode',
+      policy: { permissionMode: 'auto' },
+    });
+    await turnEnds(2);
+    await codex.send('t', {
+      text: 'ask first',
+      policy: { permissionMode: 'default' },
+    });
+    await turnEnds(3);
+    await codex.send('t', { text: 'still asking' });
+    await turnEnds(4);
+    const expected = [
+      'thread/start on-request workspace-write auto_review',
+      'turn/start',
+      'turn/start',
+      'turn/start on-request readOnly user',
+      'turn/start on-request readOnly user',
     ];
     assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), expected);
   } finally {
@@ -552,9 +608,10 @@ test('images go to turn/start as data-URL image inputs ahead of the text, on the
       images: [png],
     });
     await waitFor((e) => e.type === 'turn-end');
-    await codex.send('t', 'and this?', [
-      { mediaType: 'image/webp', data: 'UklGRg==' },
-    ]);
+    await codex.send('t', {
+      text: 'and this?',
+      images: [{ mediaType: 'image/webp', data: 'UklGRg==' }],
+    });
     const inputs = readFileSync(log, 'utf8')
       .trim()
       .split('\n')
@@ -630,7 +687,7 @@ process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n'
 } });
 `;
 
-/** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG (and turn/start's input to $INPUT_LOG); each turn completes shortly after its reply. */
+/** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG (turn/start's input to $INPUT_LOG, both's policy to $POLICY_LOG); each turn completes shortly after its reply. */
 const TIER_CODEX = `#!/usr/bin/env node
 const fs = require('node:fs');
 let buf = '', n = 0;
@@ -640,6 +697,7 @@ const done = (threadId, id) => setTimeout(() => send({ method: 'turn/completed',
 process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
   if (['thread/start', 'turn/start'].includes(m.method)) fs.appendFileSync(process.env.TIER_LOG, m.method + ' ' + m.params.serviceTier + '\\n');
   if (m.method === 'turn/start' && process.env.INPUT_LOG) fs.appendFileSync(process.env.INPUT_LOG, JSON.stringify(m.params.input) + '\\n');
+  if (['thread/start', 'turn/start'].includes(m.method) && process.env.POLICY_LOG) fs.appendFileSync(process.env.POLICY_LOG, [m.method, m.params.approvalPolicy, m.params.sandbox ?? m.params.sandboxPolicy?.type, m.params.approvalsReviewer].join(' ').trim() + '\\n');
   if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
   else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c' + ++n } } });
   else if (m.method === 'turn/start') { const id = 'u' + ++n; send({ id: m.id, result: { turn: { id } } }); done(m.params.threadId, id); }
@@ -1493,24 +1551,8 @@ test('a steer waits in Mochi until the turn finishes a step, can be taken back u
       cwd: home,
       prompt: 'run the tests',
     });
-    await codex.send(
-      't',
-      'create a PR',
-      undefined,
-      undefined,
-      undefined,
-      true,
-      's1',
-    );
-    await codex.send(
-      't',
-      'never mind',
-      undefined,
-      undefined,
-      undefined,
-      true,
-      's2',
-    );
+    await codex.send('t', { text: 'create a PR', steer: true, steerId: 's1' });
+    await codex.send('t', { text: 'never mind', steer: true, steerId: 's2' });
     assert.equal(
       existsSync(log),
       false,

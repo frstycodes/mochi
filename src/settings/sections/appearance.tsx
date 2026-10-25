@@ -38,6 +38,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import { host } from '../../host';
 import {
   filterPackages,
@@ -1033,10 +1034,8 @@ const DOWNLOADS = new Intl.NumberFormat(undefined, {
   notation: 'compact',
   maximumFractionDigits: 1,
 });
-const THEME_COUNT = new Intl.PluralRules();
-
 const themeCount = (count: number) =>
-  THEME_COUNT.select(count) === 'one' ? '1 theme' : `${count} themes`;
+  plural(count, '1 theme', `${count} themes`);
 
 function extensionMeta({
   namespace,

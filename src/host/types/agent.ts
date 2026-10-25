@@ -45,6 +45,30 @@ export interface AgentStartOptions {
   nativeOff?: string[];
 }
 
+/** One message to a live agent. */
+export interface AgentSendInput {
+  text: string;
+  images?: AgentImage[];
+  /** As `AgentStartOptions.skills`, for this message. */
+  skills?: string[];
+  /** The turn in flight takes the message at its next step instead of a new turn starting after it (Claude `priority: 'next'`, Codex `turn/steer`). */
+  steer?: boolean;
+  /** Names a steered message, so `steer-read` reports when the agent took it and `unsteer` can take it back until then. */
+  steerId?: string;
+  policy?: TurnPolicy;
+}
+
+/**
+ * What the session runs under from this message on, applied before the agent reads it; an unset field keeps what it had.
+ * GAP: model and effort are read at start only; they join here once both harnesses can switch them on a live session.
+ */
+export interface TurnPolicy {
+  /** As `AgentStartOptions.permissionMode`. */
+  permissionMode?: string;
+  /** '' standard, else a speed id from the model's `speeds`. */
+  speed?: string;
+}
+
 export type SeqAgentEvent = AgentEvent & { seq?: number };
 
 export interface AttachedAgent {
@@ -424,20 +448,7 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  /**
-   * `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it.
-   * `steer`: the turn in flight takes the message at its next step instead of a new turn starting after it (Claude `priority: 'next'`, Codex `turn/steer`).
-   * `steerId`: names a steered message, so `steer-read` reports when the agent took it and `unsteer` can take it back until then.
-   */
-  send(
-    threadId: string,
-    text: string,
-    images?: AgentImage[],
-    skills?: string[],
-    speed?: string,
-    steer?: boolean,
-    steerId?: string,
-  ): Promise<void>;
+  send(threadId: string, input: AgentSendInput): Promise<void>;
   /** Takes back a steered message the agent hasn't read; false once it can't (it was read, or is being read now). */
   unsteer(threadId: string, steerId: string): Promise<boolean>;
   /** Compacts the live session now with the harness's own compaction; `focus` is what you typed after `/compact` (Claude only). */

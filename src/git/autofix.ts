@@ -3,6 +3,7 @@ import type {
   AutofixComment,
   AutofixSnapshot,
 } from '@mochi/core/github/schema';
+import { plural } from '../lib/format.ts';
 
 /** A PR you turned Auto-fix on for; `since` (when you did) starts a fresh baseline, so turning it off and on again ignores what passed meanwhile. */
 export interface AutofixTarget {
@@ -134,7 +135,7 @@ export function autofixTitle(event: AutofixEvent) {
   if (event.kind === 'ci') return `CI failed on ${pr} · fixing`;
   if (event.kind === 'conflict') return `Merge conflict on ${pr} · fixing`;
   if (event.kind === 'review')
-    return `${event.comments.length === 1 ? 'Review comment' : `${event.comments.length} review comments`} on ${pr} · weighing`;
+    return `${plural(event.comments.length, 'Review comment', `${event.comments.length} review comments`)} on ${pr} · weighing`;
   if (event.reason === 'cap')
     return `Auto-fix stopped on ${pr} after ${AUTOFIX_ATTEMPTS} fixes CI still failed`;
   return `Auto-fix off: ${pr} was ${event.reason}`;

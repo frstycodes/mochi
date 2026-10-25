@@ -11,6 +11,7 @@ import type { EditorView } from '@codemirror/view';
 import { Chat, Plug, ShieldAlert, Skill, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';
@@ -187,11 +188,10 @@ function PluginFallback() {
   return <Plug className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
-const TOOLS = new Intl.PluralRules('en');
 function toolCountLabel(server: Pick<McpServer, 'toolCount' | 'status'>) {
   if (server.toolCount === undefined)
     return server.status === 'needs-auth' ? 'Needs sign-in' : 'Not started yet';
-  return `${server.toolCount} ${TOOLS.select(server.toolCount) === 'one' ? 'tool' : 'tools'}`;
+  return `${server.toolCount} ${plural(server.toolCount, 'tool', 'tools')}`;
 }
 
 function WindowIcon({ icon }: { icon?: string }) {

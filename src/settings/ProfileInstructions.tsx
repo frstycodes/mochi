@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FolderOpen } from '@/icons';
 import mochiIcon from '../../build/icon.svg';
 import { Button } from '@/components/ui/button';
+import { plural } from '@/lib/format';
 import {
   Tooltip,
   TooltipContent,
@@ -78,7 +79,7 @@ export function ProfileInstructions({ profile }: { profile: Space }) {
               <span className="font-mono">{file.name}</span>
             </span>
           }
-          description={`${readBy(file)} · ${file.lines ? `${file.lines} ${LINES.select(file.lines) === 'one' ? 'line' : 'lines'}` : 'empty'}`}
+          description={`${readBy(file)} · ${file.lines ? `${file.lines} ${plural(file.lines, 'line', 'lines')}` : 'empty'}`}
           control={
             host.isDesktop && (
               <div className="flex items-center gap-1">
@@ -110,8 +111,6 @@ export function ProfileInstructions({ profile }: { profile: Space }) {
     </SettingsGroup>
   );
 }
-
-const LINES = new Intl.PluralRules('en');
 
 const readBy = (file: InstructionsFile) =>
   file.provider ? `${HARNESSES[file.provider].name} only` : 'Every harness';
