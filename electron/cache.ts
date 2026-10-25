@@ -12,9 +12,9 @@ export async function cached<A>(
   const exit = await runtime.runPromiseExit(
     Effect.gen(function* () {
       const cache = yield* Cache;
-      // @effect-diagnostics-next-line unknownInEffectCatch:off - the rejection is rethrown to the caller as is.
       return yield* cache.get(
         key,
+        // @effect-diagnostics-next-line unknownInEffectCatch:off - the rejection is rethrown to the caller as is.
         Effect.tryPromise({ try: load, catch: (error) => error }),
         ttl,
       );
