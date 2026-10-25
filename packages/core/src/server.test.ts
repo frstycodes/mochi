@@ -207,6 +207,31 @@ it.live(
 );
 
 it.live(
+  'a capability reply holding an unset optional still reaches the caller',
+  () =>
+    Effect.gen(function* () {
+      const port = yield* startCore;
+      const window = makeHostCaller(
+        yield* makeCoreClient(coreUrl(port, TOKEN, 7)),
+      );
+      const main = yield* makeCoreClient(coreUrl(port, TOKEN));
+      yield* serveCapabilities(main, ['notify'], async () => ({
+        text: 'ok',
+        isError: undefined,
+      })).pipe(Effect.forkScoped({ startImmediately: true }));
+      yield* main.ping();
+      // notify.show wants null, so Core rejects this reply; before, the reply never reached Core and the call hung.
+      const outcome = yield* Effect.promise(() =>
+        window('notify.show', [{ title: 'Done' }]).then(
+          () => 'resolved',
+          (error: Error) => error.message,
+        ),
+      ).pipe(Effect.timeout('2 seconds'), Effect.orDie);
+      assert.equal(outcome, 'Expected null');
+    }),
+);
+
+it.live(
   "a window's host call reaches the client serving its capability, with the window's id and encoded args",
   () =>
     Effect.gen(function* () {
