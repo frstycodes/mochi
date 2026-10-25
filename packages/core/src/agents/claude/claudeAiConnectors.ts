@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { McpServerStatus } from '@anthropic-ai/claude-agent-sdk';
+import { Effect, Option, Schema } from 'effect';
 import { userData } from '../paths.ts';
 
 /**
@@ -10,10 +11,15 @@ import { userData } from '../paths.ts';
  */
 let known: Record<string, string[]> | null = null;
 const file = () => join(userData(), 'claude-ai-connectors.json');
+const decodeKnown = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Record(Schema.String, Schema.mutable(Schema.Array(Schema.String))),
+  ),
+);
 
 async function load() {
   known ??= await readFile(file(), 'utf8').then(
-    (text) => JSON.parse(text) as Record<string, string[]>,
+    (text) => Option.getOrElse(decodeKnown(text), () => ({})),
     () => ({}),
   );
   return known;
@@ -43,6 +49,8 @@ export async function recordClaudeAiConnectors(
   if (names.join() === all[accountId]?.join()) return;
   all[accountId] = names;
   void writeFile(file(), JSON.stringify(all)).catch((error) =>
-    console.warn('Could not save claude.ai connectors', error),
+    Effect.runSync(
+      Effect.logWarning('Could not save claude.ai connectors', error),
+    ),
   );
 }

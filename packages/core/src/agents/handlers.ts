@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
-import { Effect } from 'effect';
+import { Effect, Option, Schema } from 'effect';
+import { Model } from '@mochi/schema';
 import {
   NO_AGENT_PROCESS,
   NO_PENDING_REQUEST,
@@ -118,13 +119,17 @@ async function readWidget(
     return resource;
   } catch (error) {
     const kept = await readFile(file, 'utf8').then(
-      (text) => JSON.parse(text) as McpWidgetResource,
+      (text) => Option.getOrNull(decodeWidget(text)),
       () => null,
     );
     if (kept) return kept;
     throw error;
   }
 }
+
+const decodeWidget = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Model.McpWidgetResource),
+);
 // Codex review threads report like any thread; their events go to the review that owns them, never to the store.
 const reviewers = new Map<string, (event: AgentEvent) => void>();
 const codex = new CodexAdapter(
@@ -374,7 +379,9 @@ export const agent = {
   async limits(_window, provider, spaceId, refresh) {
     if (refresh)
       await refreshLimits(provider, spaceId).catch((error) =>
-        console.warn(`Could not read ${provider} limits`, error),
+        Effect.runSync(
+          Effect.logWarning(`Could not read ${provider} limits`, error),
+        ),
       );
     return limitsOf((await accountFor(spaceId, provider)).account.id, provider);
   },
@@ -535,8 +542,10 @@ async function executeUtility(
     task,
     prompt,
   );
-  console.info(
-    `utility ${task}: ${answer ? `${answer.provider} ${answer.model}` : 'no model answered, local fallback'} in ${Math.round(performance.now() - startedAt)}ms`,
+  Effect.runSync(
+    Effect.logInfo(
+      `utility ${task}: ${answer ? `${answer.provider} ${answer.model}` : 'no model answered, local fallback'} in ${Math.round(performance.now() - startedAt)}ms`,
+    ),
   );
   return answer?.text ?? null;
 }
@@ -781,8 +790,10 @@ async function workspaceFolder(
     () => false,
   );
   if (!isRepo) {
-    console.warn(
-      `No worktree for ${threadId}: ${root} isn't a git repo, running there`,
+    Effect.runSync(
+      Effect.logWarning(
+        `No worktree for ${threadId}: ${root} isn't a git repo, running there`,
+      ),
     );
     return { cwd: root };
   }

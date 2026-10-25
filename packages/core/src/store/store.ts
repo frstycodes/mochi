@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Context, Effect, Layer, PubSub, Stream } from 'effect';
+import { Context, Effect, Layer, PubSub, Schema, Stream } from 'effect';
 import { SqlClient } from 'effect/sql';
 import {
   MAX_REPLAY_BYTES,
@@ -75,12 +75,14 @@ const toEvent = (row: EventRow): LoggedEvent => ({
 const now = () => new Date().toISOString();
 
 /** `threadIds` of a `SavedIndex`; a legacy `threads.json` has none, its threads are inside it. */
-const threadIdsOf = (index: string): string[] => {
-  const ids = (JSON.parse(index) as { threadIds?: unknown }).threadIds;
-  return Array.isArray(ids)
-    ? ids.filter((id): id is string => typeof id === 'string')
-    : [];
-};
+const IndexThreadIds = Schema.fromJsonString(
+  Schema.Struct({ threadIds: Schema.optional(Schema.Array(Schema.String)) }),
+);
+const threadIdsOf = (index: string) =>
+  Schema.decodeUnknownEffect(IndexThreadIds)(index).pipe(
+    Effect.map(({ threadIds }) => threadIds ?? []),
+    Effect.orDie,
+  );
 
 /**
  * Core's SQLite: the append-only `events` log with `command_receipts`, the `outbox`, the thread snapshots Core's projection
@@ -176,7 +178,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
       );
       return {
         index: index.payload_json,
-        threads: threadIdsOf(index.payload_json).flatMap(
+        threads: (yield* threadIdsOf(index.payload_json)).flatMap(
           (id) => byId.get(id) ?? [],
         ),
         sequence: index.sequence,
@@ -201,7 +203,7 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
     ) =>
       commit(
         Effect.gen(function* () {
-          const ids = new Set(threadIdsOf(index));
+          const ids = new Set(yield* threadIdsOf(index));
           const events: LoggedEvent[] = [];
           for (const [id, json] of Object.entries(changed)) {
             const summary = summarizeThread(id, JSON.parse(json));

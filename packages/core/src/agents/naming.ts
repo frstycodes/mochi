@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import type { AgentEvent } from '../../../../src/host/types/agent.ts';
 import { renameAutoBranch } from '../../../../electron/git/branches.ts';
 import type { Starts } from './starts.ts';
@@ -10,7 +11,7 @@ export const TITLE_WAIT_MS = 3_000;
  * branch it couldn't rename, or your own name meanwhile (`keepTitle`) leaves both for the renderer, which names it after the
  * first exchange.
  */
-export async function nameThread(
+export function nameThread(
   threadId: string,
   dir: string,
   branch: string,
@@ -19,18 +20,27 @@ export async function nameThread(
   emit: (event: AgentEvent) => void,
   waitMs = TITLE_WAIT_MS,
 ) {
-  const answer = await Promise.race([
-    title,
-    new Promise<null>((resolve) => setTimeout(resolve, waitMs, null)),
-  ]);
-  if (!answer || start.signal.aborted || start.keepsTitle()) return;
-  const named = await renameAutoBranch(dir, branch, answer).catch(
-    (error: unknown) => {
-      console.warn(`Branch of ${threadId} not renamed`, error);
-      return null;
-    },
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const answer = yield* Effect.promise(() => title).pipe(
+        Effect.timeoutOrElse({
+          duration: waitMs,
+          orElse: () => Effect.succeed(null),
+        }),
+      );
+      if (!answer || start.signal.aborted || start.keepsTitle()) return;
+      const named = yield* Effect.tryPromise(() =>
+        renameAutoBranch(dir, branch, answer),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(`Branch of ${threadId} not renamed`, cause).pipe(
+            Effect.as(null),
+          ),
+        ),
+      );
+      if (!named) return;
+      emit({ threadId, type: 'branch', branch: named });
+      emit({ threadId, type: 'title', title: answer });
+    }),
   );
-  if (!named) return;
-  emit({ threadId, type: 'branch', branch: named });
-  emit({ threadId, type: 'title', title: answer });
 }
