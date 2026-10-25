@@ -6,10 +6,10 @@ import type {
   BrowserAct,
   BrowserSnapshot,
   BrowserWait,
-} from '../host/types/browser.ts';
+} from '@mochi/domain/host/types/browser';
 import { authorName, type EventGlyph, type PaneTab } from '../model.ts';
 import type { ToolContext, ToolSpec } from './tools.ts';
-import type { ToolName } from './toolTable.ts';
+import type { ToolName } from '@mochi/domain/runtime/toolTable';
 
 const LOAD_TIMEOUT_MS = 15_000;
 const VIEW_TIMEOUT_MS = 5_000;

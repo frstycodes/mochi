@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import { host } from './host/index.ts';
-import type { Project } from './host/types/projects.ts';
+import type { Project } from '@mochi/domain/host/types/projects';
 import { QueryObserver } from '@tanstack/react-query';
 import { projectsQueryOptions, refreshProjects } from './projects.ts';
 import { queryClient } from './query.ts';

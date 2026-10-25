@@ -32,7 +32,7 @@ import { SwitchBranchDialog } from './SwitchBranchDialog';
 import { useBranches } from './useGit';
 import { isUnstarted, type WorkspaceDraft } from './workspace';
 import { queryKeys } from '../queryKeys';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 
 const NAME_CHECK_MS = 250;
 

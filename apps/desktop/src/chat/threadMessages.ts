@@ -1,5 +1,5 @@
 import type { ActivityEntry, Thread, ThreadRef } from '../model.ts';
-import { MOCHI_SERVER } from '../runtime/toolTable.ts';
+import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 
 export const isSendCall = (entry: Pick<ActivityEntry, 'mcp'>) =>
   entry.mcp?.server === MOCHI_SERVER && entry.mcp.tool === 'send_to_thread';

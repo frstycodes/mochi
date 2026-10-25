@@ -1,6 +1,6 @@
 import type { AgentEvent, StartWorkspace } from '../host/types/agent.ts';
 import type { PrEvent, ScheduleRun, Trigger } from '../host/types/schedule.ts';
-import { describeCron, nextRun } from './cron.ts';
+import { describeCron, nextRun } from '@mochi/domain/schedule/cron';
 
 /** What the scheduler does with a trigger on a tick. `skip` accounts for the due run without running it; `wait` leaves it due. */
 export type Decision =

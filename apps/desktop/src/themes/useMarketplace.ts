@@ -5,8 +5,11 @@ import { useTheme } from 'next-themes';
 import { host } from '../host';
 import { getPrefs } from '../settings/prefs';
 import { slotsUsing, type PackageGroup } from './groups';
-import { slotOf, type ColorTheme } from './model';
-import { PAGE_SIZE, type MarketplaceExtension } from './openVsx';
+import { slotOf, type ColorTheme } from '@mochi/domain/themes/model';
+import {
+  PAGE_SIZE,
+  type MarketplaceExtension,
+} from '@mochi/domain/themes/openVsx';
 import { chooseTheme, refreshThemes } from './store';
 import { queryKeys } from '../queryKeys';
 

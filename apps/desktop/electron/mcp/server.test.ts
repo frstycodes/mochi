@@ -18,7 +18,7 @@ import {
   isGoalTool,
   SETTINGS_CHAT_TOOLS,
   TOOL_NAMES,
-} from '../../src/runtime/toolTable.ts';
+} from '@mochi/domain/runtime/toolTable';
 
 afterEach(() => vi.restoreAllMocks());
 

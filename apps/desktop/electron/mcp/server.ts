@@ -15,7 +15,7 @@ import {
   DEV_TOOL_TABLE,
   MOCHI_TIMEOUT_MS,
   type MochiScope,
-} from '../../src/runtime/toolTable.ts';
+} from '@mochi/domain/runtime/toolTable';
 import {
   instructionsFor,
   mochiServer,

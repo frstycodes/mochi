@@ -1,4 +1,4 @@
-import type { FileContent } from '@/host/types/fs';
+import type { FileContent } from '@mochi/domain/host/types/fs';
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useState, type KeyboardEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';

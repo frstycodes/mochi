@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import { compareCells, nextSort } from './cells.ts';
-import { parseFence, readWidgetMessage } from './fence.ts';
+import { parseFence, readWidgetMessage } from '@mochi/domain/viz/fence';
 
 const chart =
   '{"type":"line","x":"day","data":[{"day":"Mon","calls":3,"errors":1},{"day":"Tue","calls":5,"errors":0}]}';

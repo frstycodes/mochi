@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { contrast, nudge, parseHex, toHex } from './color.ts';
+import { contrast, nudge, parseHex, toHex } from '@mochi/domain/themes/color';
 import githubLight from 'shiki/dist/themes/github-light.mjs';
 import {
   LIGHT_CODE_SURFACES,

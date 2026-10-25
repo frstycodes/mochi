@@ -4,7 +4,7 @@ import {
   compactTree,
   visibleRows,
   type TreeNode,
-} from '../files/tree.ts';
+} from '@mochi/domain/files/tree';
 
 export interface ChangeSection {
   /** "Staged" / "Changes" while staging is possible; null for one flat list. */

@@ -20,7 +20,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
-import type { ChartSpec } from './fence';
+import type { ChartSpec } from '@mochi/domain/viz/fence';
 
 export function ChartVisual({ spec }: { spec: ChartSpec }) {
   const config = chartConfig(spec);

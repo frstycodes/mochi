@@ -30,7 +30,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { GitMergeIcon, GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import {
   usePrSwitches,
   type PrSwitch,
@@ -49,7 +49,7 @@ import {
   type GithubRef,
   type RefState,
   type ReviewState,
-} from './refs';
+} from '@mochi/domain/chat/refs';
 
 /** One PR or issue reference: `githubRef` when its repo is known, `label` (`#482`) for the trigger and the card's fallback title. */
 export interface RefItem {

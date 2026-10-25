@@ -13,7 +13,7 @@ import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { CallList } from '../WorkLog';
 import { openGoalEditor } from './GoalEditor';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 
 /**
  * The goal the agent wrote after its first look. Waiting: the draft it replaces struck through, the new outcome, its criteria

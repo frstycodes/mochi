@@ -37,7 +37,7 @@ import type { PaneVisual } from '../model';
 import { useDispatch } from '../store';
 import { IconSwap, TooltipIconButton } from '../ui';
 import { download, serializeSvg, svgToPng } from './exportVisual';
-import type { VizLanguage } from './fence';
+import type { VizLanguage } from '@mochi/domain/viz/fence';
 import { EmbedFrame } from './EmbedFrame';
 import { useVizThreadId } from './WidgetVisual';
 

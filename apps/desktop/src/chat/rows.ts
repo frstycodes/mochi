@@ -2,7 +2,7 @@ import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
 import { isTurnCall } from './mochiCalls.ts';
 import type { TurnChanges } from './turnChanges.ts';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 export type ChatRow =
   | {

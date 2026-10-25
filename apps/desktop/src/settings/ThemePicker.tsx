@@ -21,7 +21,7 @@ import {
   slotOf,
   type ColorTheme,
   type ThemeSlot,
-} from '../themes/model';
+} from '@mochi/domain/themes/model';
 import { setThemePreview, useThemesState } from '../themes/store';
 import { useApplyTheme } from '../themes/useMarketplace';
 import { settingControlId } from './parts';

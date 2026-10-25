@@ -11,7 +11,7 @@ import {
   type UsageTarget,
 } from './report.ts';
 import { queryKeys } from '../queryKeys.ts';
-import type { Project } from '../host/types/projects.ts';
+import type { Project } from '@mochi/domain/host/types/projects';
 import type { Thread } from '../model.ts';
 
 /** Usage over `range` for `target`; reads logs and repos again when the range, the projects or the reach (everywhere) change. */

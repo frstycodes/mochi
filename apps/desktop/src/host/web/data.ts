@@ -3,7 +3,7 @@ import {
   embedReplay,
   isSelfContained,
   replayFileName,
-} from '../../replay/page.ts';
+} from '@mochi/domain/replay/page';
 
 // The web build and the artifact run on demo data that starts fresh on every load; recordings last for the page.
 const replays = new Map<string, string>();

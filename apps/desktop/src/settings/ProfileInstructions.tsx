@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FolderOpen } from '@/icons';
 import mochiIcon from '../../build/icon.svg';
 import { Button } from '@/components/ui/button';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import {
   Tooltip,
   TooltipContent,

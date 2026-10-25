@@ -1,4 +1,4 @@
-import type { PortsHost } from '../types/ports.ts';
+import type { PortsHost } from '@mochi/domain/host/types/ports';
 
 const minutesAgo = (m: number) => Date.now() - m * 60_000;
 

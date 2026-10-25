@@ -1,5 +1,5 @@
 import type { AgentImage } from './agent.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 
 /** macOS Screen Recording access as `systemPreferences.getMediaAccessStatus('screen')` reports it; `unsupported` off the desktop app. */
 export type ScreenAccess =

@@ -5,7 +5,7 @@ import {
   type SetupRecipe,
   type SetupResult,
   type SetupTarget,
-} from '../../src/library/recipes.ts';
+} from '@mochi/domain/library/recipes';
 
 /** What a run does to a page; Playwright's in the app (`playwrightOps`), a fake in tests. */
 export interface RecipeOps {

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { app, type Session, type WebContents } from 'electron';
-import type { BrowserEvent } from '../../src/host/types/browser.ts';
+import type { BrowserEvent } from '@mochi/domain/host/types/browser';
 import { uniqueName } from './filename.ts';
 
 export interface FinishedDownload {

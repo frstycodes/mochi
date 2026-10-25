@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { faviconFallback } from './favicon';
+import { faviconFallback } from '@mochi/domain/favicon';
 
 export function IconImage({
   src,

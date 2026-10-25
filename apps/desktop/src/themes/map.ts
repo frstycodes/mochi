@@ -10,13 +10,13 @@ import {
   withAlpha,
   withLightness,
   type Rgba,
-} from './color.ts';
+} from '@mochi/domain/themes/color';
 import {
   slotOf,
   type ThemeKind,
   type TokenColor,
   type VsCodeTheme,
-} from './model.ts';
+} from '@mochi/domain/themes/model';
 
 /**
  * VS Code `colors` keys each Mochi token reads, first present wins (DESIGN.md › Color themes has this table). A token whose

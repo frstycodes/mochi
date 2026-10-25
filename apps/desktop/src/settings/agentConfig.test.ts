@@ -24,7 +24,7 @@ import {
   stripSecrets,
   type McpServerDef,
 } from './agentConfig.ts';
-import { parseToml } from './toml.ts';
+import { parseToml } from '@mochi/domain/settings/toml';
 
 // Shaped like the files Claude Code 2.1.296 and codex-cli 0.155.1 wrote for `mcp add` in a scratch config folder.
 const CLAUDE_JSON = `{

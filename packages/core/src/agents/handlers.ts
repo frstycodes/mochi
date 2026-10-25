@@ -78,7 +78,7 @@ import {
   switchBranch,
 } from '../../../../apps/desktop/electron/git/branches.ts';
 import { topLevel } from '../../../../apps/desktop/electron/git/run.ts';
-import { codexToolConfig } from '../../../../apps/desktop/src/library/connectorTools.ts';
+import { codexToolConfig } from '@mochi/domain/library/connectorTools';
 import { codexServerConfig } from '../../../../apps/desktop/src/library/library.ts';
 import {
   codexNativeConfig,

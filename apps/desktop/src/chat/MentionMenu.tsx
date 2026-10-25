@@ -11,7 +11,7 @@ import type { EditorView } from '@codemirror/view';
 import { Chat, Plug, ShieldAlert, Skill, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';

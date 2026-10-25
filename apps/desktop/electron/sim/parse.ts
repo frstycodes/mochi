@@ -5,7 +5,7 @@ import {
   type SimContentSize,
   type Simulator,
   type SimTouchPhase,
-} from '../../src/host/types/sim.ts';
+} from '@mochi/domain/host/types/sim';
 
 interface SimctlDevice {
   udid: string;

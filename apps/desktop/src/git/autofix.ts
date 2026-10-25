@@ -3,7 +3,7 @@ import type {
   AutofixComment,
   AutofixSnapshot,
 } from '@mochi/core/github/schema';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 /** A PR you turned Auto-fix on for; `since` (when you did) starts a fresh baseline, so turning it off and on again ignores what passed meanwhile. */
 export interface AutofixTarget {

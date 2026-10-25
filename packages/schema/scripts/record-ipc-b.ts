@@ -9,7 +9,7 @@ import { schedule } from '../../../apps/desktop/src/host/web/schedule.ts';
 import { sim } from '../../../apps/desktop/src/host/web/sim.ts';
 import { usage } from '../../../apps/desktop/src/host/web/usage.ts';
 import { windows } from '../../../apps/desktop/src/host/web/windows.ts';
-import { customTheme } from '../../../apps/desktop/src/themes/custom.ts';
+import { customTheme } from '@mochi/domain/themes/custom';
 
 type Call = { input?: unknown[]; output?: unknown; event?: unknown };
 const calls: Record<string, Call[]> = {};

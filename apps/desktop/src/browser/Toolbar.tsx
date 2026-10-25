@@ -49,7 +49,10 @@ import {
 } from '@/components/ui/tooltip';
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
-import type { BrowserCommand, BrowserDevtools } from '@/host/types/browser';
+import type {
+  BrowserCommand,
+  BrowserDevtools,
+} from '@mochi/domain/host/types/browser';
 import { cn } from '@/lib/utils';
 import type { Thread } from '@/model';
 import { useDispatch } from '@/store';

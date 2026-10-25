@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import { useConfirm } from '../../git/useConfirm';
 import { formatGithubAccount } from '../../git/github';
 import { host } from '../../host';

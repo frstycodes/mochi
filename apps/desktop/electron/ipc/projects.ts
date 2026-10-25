@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { join } from 'node:path';
-import type { ProjectsHost } from '../../src/host/types/projects.ts';
+import type { ProjectsHost } from '@mochi/domain/host/types/projects';
 import { openWindows } from '../agents/events.ts';
 import { githubAccount } from '../git/gh.ts';
 import {

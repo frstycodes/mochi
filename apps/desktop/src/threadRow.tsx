@@ -1,6 +1,6 @@
 import { Hierarchy } from '@/icons';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import type { Thread } from './model';
 import { workingLabel } from './agentPhase';
 import { limitStatus } from './chat/LimitCard';

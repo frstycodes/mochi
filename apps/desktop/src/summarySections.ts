@@ -2,7 +2,7 @@ import type { McpServer, Thread } from './model.ts';
 import type { ThreadSummary } from './summary.ts';
 import { hasGoal } from './drift.ts';
 import { activeTasks } from './runtime/tasks.ts';
-import { plural } from './lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 export type SummaryCardId =
   | 'goal'

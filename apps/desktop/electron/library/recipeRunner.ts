@@ -14,7 +14,7 @@ import {
   type RecipeOverrides,
   type SetupRecipe,
   type SetupTarget,
-} from '../../src/library/recipes.ts';
+} from '@mochi/domain/library/recipes';
 import type { RecipeOps } from './runRecipe.ts';
 import { copiedBy } from '../browser/views.ts';
 

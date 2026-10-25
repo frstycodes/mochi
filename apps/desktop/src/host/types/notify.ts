@@ -1,6 +1,6 @@
 import type { QuietHours } from '../../notify/model.ts';
 import type { AutofixTarget } from '../../git/autofix.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 
 export interface Notice {
   title: string;

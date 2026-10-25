@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
 import { Chat, Check, ChevronDown, Folder, FolderPlus } from '@/icons';
-import type { Project } from './host/types/projects';
+import type { Project } from '@mochi/domain/host/types/projects';
 import { ProjectIcon } from './ProjectIcon';
 import {
   Command,

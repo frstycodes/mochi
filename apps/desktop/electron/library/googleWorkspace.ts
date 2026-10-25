@@ -7,7 +7,7 @@ import {
   GOOGLE_WORKSPACE_PORT,
   GOOGLE_WORKSPACE_URL,
   isSameServer,
-} from '../../src/library/connectors.ts';
+} from '@mochi/domain/library/connectors';
 import { spawnCommand, type CoreChild } from '@mochi/core/runClient';
 import { userPath } from '@mochi/core/shellPath';
 import { readSecrets, saveSecrets } from './connectors.ts';

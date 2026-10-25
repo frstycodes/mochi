@@ -1,7 +1,7 @@
 import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
 import { useSimulators } from '../../sim/useSimulators';
 import {

@@ -18,7 +18,10 @@ import {
 import type { Action, State } from './types.ts';
 import { showsDemoData } from '../demoData.ts';
 import { runningBackground } from '../runtime/subagents.ts';
-import { defaultBrowserUrl, listeningPorts } from '../terminal/devServer.ts';
+import {
+  defaultBrowserUrl,
+  listeningPorts,
+} from '@mochi/domain/terminal/devServer';
 
 export interface PanesState {
   panes: Pane[];

@@ -12,7 +12,7 @@ import {
   type UtilityTask,
 } from '../../utility/prompts.ts';
 import type { AppIcon } from '../../settings/settingOptions.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 
 /** What the user's own install reports. Never carries credentials, emails or key material: only method and plan names. */
 export interface AgentInstall {

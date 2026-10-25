@@ -17,7 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/toast/store';
-import { renderSkillMd } from './skillMd';
+import { renderSkillMd } from '@mochi/domain/library/skillMd';
 import type { Library } from './useLibrary';
 
 /** Write a skill in Mochi: its name, when an agent should reach for it, and its instructions, saved as the skill's SKILL.md. */

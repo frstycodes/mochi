@@ -14,7 +14,7 @@ import { optionFor } from '../runtime/models';
 import { useSpace } from '../store';
 import { parseTool } from '../summary';
 import { ProviderMark } from '../ui';
-import { TOKENS } from '@/lib/format';
+import { TOKENS } from '@mochi/domain/lib/format';
 
 /** Each subagent is a Mochi of its own flavor, named after it; vanilla stays the thread's own Mochi. Past five, names count up ("Matcha 2"). */
 export function subagentPersona(

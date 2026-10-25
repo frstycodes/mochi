@@ -1,5 +1,8 @@
-import { connectorName } from '../../library/connectorTools.ts';
-import { connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
+import { connectorName } from '@mochi/domain/library/connectorTools';
+import {
+  connectorKey,
+  OAUTH_PROVIDER_IDS,
+} from '@mochi/domain/library/connectors';
 import {
   FEATURED_MARKETPLACES,
   libraryEntries,
@@ -10,7 +13,7 @@ import {
   type LibraryIndex,
   type LibraryItem,
 } from '../../library/library.ts';
-import { parseSkillSource } from '../../library/skillSource.ts';
+import { parseSkillSource } from '@mochi/domain/library/skillSource';
 import type { LibraryHost } from '../types/library.ts';
 import {
   CONNECTOR_TOOLS,

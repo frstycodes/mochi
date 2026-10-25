@@ -10,7 +10,7 @@ import type {
   ThreadRef,
   WebLink,
 } from '../../model.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
 export interface AgentStartOptions {

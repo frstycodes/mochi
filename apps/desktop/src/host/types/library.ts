@@ -1,8 +1,11 @@
 import type {
   ConnectorSettings,
   ConnectorToolList,
-} from '../../library/connectorTools.ts';
-import type { AppProviderId, DeviceCode } from '../../library/connectors.ts';
+} from '@mochi/domain/library/connectorTools';
+import type {
+  AppProviderId,
+  DeviceCode,
+} from '@mochi/domain/library/connectors';
 import type {
   CatalogSkill,
   LibraryEntry,
@@ -12,9 +15,9 @@ import type {
   SkillDestination,
   SkillsShSkill,
 } from '../../library/library.ts';
-import type { SetupResult, SetupTarget } from '../../library/recipes.ts';
+import type { SetupResult, SetupTarget } from '@mochi/domain/library/recipes';
 import type { Provider } from '../../model.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 
 /** The profile library (LIBRARY.md), held by main; every change returns the profile's entries as they are after it. */
 export interface LibraryHost {

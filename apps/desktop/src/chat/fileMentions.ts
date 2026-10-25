@@ -1,5 +1,5 @@
 import type { Provider } from '../model.ts';
-import { fuzzyMatches } from '../files/fuzzy.ts';
+import { fuzzyMatches } from '@mochi/domain/files/fuzzy';
 
 /** A file or folder picked from `@`: `label` as the composer shows it (`src/a.ts`, `../x/`), `path` as the agent gets it. */
 export type FileMention = {

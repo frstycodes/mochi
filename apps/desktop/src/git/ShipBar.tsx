@@ -4,7 +4,7 @@ import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { PrStateIcon } from '@/icons/github';
-import type { RefStatus } from '../chat/refs';
+import type { RefStatus } from '@mochi/domain/chat/refs';
 import { host } from '../host';
 import type { GitDiff, PrInfo } from '../host/types/git';
 import { CheckList, ChecksSummary } from './Checks';

@@ -3,10 +3,10 @@ import { ChevronRight, Minimize } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import type { Compaction, Provider } from '../model';
 import { clock } from '../progress';
-import { TOKENS } from '@/lib/format';
+import { TOKENS } from '@mochi/domain/lib/format';
 import { Expand } from '../WorkLog';
 
 /** A compaction as one log line like a work group: what it shrank the context to and what Mochi asked it to keep; open, the summary. */

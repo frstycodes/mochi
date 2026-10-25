@@ -8,7 +8,7 @@ import { host } from '../host';
 import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
 import { offItems } from '../library/nativeOverrides';
 import { useProfiles } from '../profiles';
-import { MOCHI_SERVER } from '../runtime/toolTable';
+import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { isAbsolutePath } from '../projects';
 import type { Caret } from './ComposerEditor';

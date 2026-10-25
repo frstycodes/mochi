@@ -4,7 +4,7 @@ import { MessageResponse } from '@/components/ai-elements/message';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
-import { splitFrontmatter } from '../library/skillMd';
+import { splitFrontmatter } from '@mochi/domain/library/skillMd';
 
 // Lazy so CodeMirror parses only when someone asks for the source.
 const CodeEditor = lazy(() => import('./CodeEditor'));

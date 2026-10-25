@@ -32,7 +32,7 @@ import { useToggleSlot } from '../SidebarToggle';
 import { DragStrip, TitleBar } from '../TitleBar';
 import { useDispatch, useHarnessSelector } from '../store';
 import { useSplit } from './SplitContext';
-import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
+import { findLeaf, PRESETS, PRESET_LABELS } from '@mochi/domain/layout/tree';
 import { BoundShortcut } from '../Shortcut';
 import { SPLIT_MENU } from '../menus/menus';
 import { TargetContextMenu } from '../menus/TargetContextMenu';

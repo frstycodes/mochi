@@ -10,7 +10,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'vite-plus/test';
-import type { SearchLine } from '../../src/host/types/fs.ts';
+import type { SearchLine } from '@mochi/domain/host/types/fs';
 import { searchFiles } from './search.ts';
 
 const PLAIN = { isCaseSensitive: false, isRegex: false, isWholeWord: false };

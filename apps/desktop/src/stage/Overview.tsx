@@ -10,7 +10,11 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Kbd } from '@/components/ui/kbd';
-import { ARROW_SIDE, neighbourInDirection, type Side } from '../layout/tree';
+import {
+  ARROW_SIDE,
+  neighbourInDirection,
+  type Side,
+} from '@mochi/domain/layout/tree';
 import { activeThreads, pinnedThreads } from '../reorder';
 import { TitleBar } from '../TitleBar';
 import { useHarness } from '../store';

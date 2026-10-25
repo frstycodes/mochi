@@ -1,7 +1,7 @@
 import type { DiffFile } from '../host/types/git.ts';
 import { redactSecrets } from '../settings/agentConfig.ts';
 import type { Recording } from './record.ts';
-import { PAYLOAD_ID } from './page.ts';
+import { PAYLOAD_ID } from '@mochi/domain/replay/page';
 
 /** A shared replay: the recording and the checkpoint diffs it scrubs through, inlined into the app's own single-file page. */
 export interface ReplayExport {

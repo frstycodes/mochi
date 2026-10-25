@@ -26,7 +26,7 @@ import type { McpWidgetResource } from '../../../../../apps/desktop/src/model.ts
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../../../apps/desktop/src/settings/harnesses.ts';
 import { toClaude } from '../../../../../apps/desktop/src/settings/agentConfig.ts';
-import { claudePermissions } from '../../../../../apps/desktop/src/library/connectorTools.ts';
+import { claudePermissions } from '@mochi/domain/library/connectorTools';
 import {
   claudeNativeSettings,
   offItems,
@@ -62,7 +62,7 @@ import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
 import { profileInstructions } from '../profileFolder.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../../../apps/desktop/src/usage/limits.ts';
-import { MOCHI_TIMEOUT_MS } from '../../../../../apps/desktop/src/runtime/toolTable.ts';
+import { MOCHI_TIMEOUT_MS } from '@mochi/domain/runtime/toolTable';
 import { recordClaudeAiConnectors } from './claudeAiConnectors.ts';
 import {
   FORK_MISSING_NOTICE,

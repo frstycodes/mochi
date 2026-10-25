@@ -1,10 +1,14 @@
 import { isMet, type Criterion, type Thread } from '../model.ts';
-import { bareState, type RefState, type RefTone } from '../chat/refs.ts';
+import {
+  bareState,
+  type RefState,
+  type RefTone,
+} from '@mochi/domain/chat/refs';
 import { resetLabel } from '../usage/limits.ts';
 import { subThreadsOf } from '../reorder.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { nextStep, turnReport } from './report.ts';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 export type VerdictKind =
   | 'checking'

@@ -3,7 +3,7 @@ import { host } from '../host/index.ts';
 import type { Trigger } from '../host/types/schedule.ts';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
-import { nextRun } from './cron.ts';
+import { nextRun } from '@mochi/domain/schedule/cron';
 
 const NONE: Trigger[] = [];
 let isWatching = false;

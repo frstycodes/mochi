@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { MochiUser } from '../../src/host/types/account.ts';
+import type { MochiUser } from '@mochi/domain/host/types/account';
 
 // Paths from Clerk's discovery document (`<issuer>/.well-known/openid-configuration`), the same on every instance.
 export const ENDPOINTS = {

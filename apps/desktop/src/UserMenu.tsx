@@ -32,7 +32,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { useMochiAccount } from './account/useMochiAccount';
 import { showsDemoData } from './demoData';
-import type { MochiUser } from './host/types/account';
+import type { MochiUser } from '@mochi/domain/host/types/account';
 import { openSettings } from './routes/nav';
 import { BoundShortcut } from './Shortcut';
 import { useDispatch, useHarnessSelector } from './store';

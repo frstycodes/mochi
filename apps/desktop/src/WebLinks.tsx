@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { hostname } from './agentPhase';
-import { faviconUrl } from './favicon';
+import { faviconUrl } from '@mochi/domain/favicon';
 import { IconImage } from './IconImage';
 import { copyText } from './clipboard';
 import type { WebLink } from './model';

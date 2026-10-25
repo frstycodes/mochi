@@ -1,6 +1,6 @@
 import { isMet, type Thread, type TurnReport } from '../model.ts';
 import { openTurn } from '../chat/turnChanges.ts';
-import type { RefStatus } from '../chat/refs.ts';
+import type { RefStatus } from '@mochi/domain/chat/refs';
 
 /** The latest report while it still describes the thread: it isn't working, and you haven't written since. */
 export function currentReport(t: Thread) {

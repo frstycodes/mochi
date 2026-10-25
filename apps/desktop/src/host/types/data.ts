@@ -1,5 +1,5 @@
 import type { AgentImage } from './agent.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 
 /** The saved threads as Core stores them: an index (`SavedIndex` JSON) and one `SavedThread` JSON per thread, shaped by `src/store/saved.ts`. */
 export interface SavedFiles {

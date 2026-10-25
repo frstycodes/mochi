@@ -4,8 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { toast } from '@/toast/store';
 import { host } from '../host';
-import { connectorIcon, connectorKey } from './connectors';
-import type { ConnectorSettings } from './connectorTools';
+import { connectorIcon, connectorKey } from '@mochi/domain/library/connectors';
+import type { ConnectorSettings } from '@mochi/domain/library/connectorTools';
 import type { LibraryEntry } from './library';
 import { serviceName } from './names';
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { parsePluginBundle } from './pluginBundle.ts';
+import { parsePluginBundle } from '@mochi/domain/library/pluginBundle';
 import {
   codexServerConfig,
   EMPTY_LIBRARY,

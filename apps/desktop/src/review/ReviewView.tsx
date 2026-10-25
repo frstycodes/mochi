@@ -28,7 +28,10 @@ import { ChangesTab } from '../pane/ChangesTab';
 import { useUndoable } from '../QueueView';
 import { useHarness } from '../store';
 import { summarize } from '../summary';
-import { defaultBrowserUrl, listeningPorts } from '../terminal/devServer';
+import {
+  defaultBrowserUrl,
+  listeningPorts,
+} from '@mochi/domain/terminal/devServer';
 import { TitleBar } from '../TitleBar';
 import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';

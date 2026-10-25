@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { hashKey, useQuery } from '@tanstack/react-query';
 import { host } from '@/host';
-import type { SearchHits, SearchOptions } from '@/host/types/fs';
+import type { SearchHits, SearchOptions } from '@mochi/domain/host/types/fs';
 import { useDebounced } from '../hooks/useDebounced';
-import { compileQuery } from './search';
+import { compileQuery } from '@mochi/domain/files/search';
 
 type SearchState =
   | { files: SearchHits[]; status: 'idle' | 'searching' | 'done' | 'truncated' }

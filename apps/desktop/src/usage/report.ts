@@ -1,6 +1,6 @@
 import type { Provider } from '../model.ts';
 import type { UsageReport } from '../host/types/usage.ts';
-import { daysBetween, localDay } from './days.ts';
+import { daysBetween, localDay } from '@mochi/domain/usage/days';
 
 export type RangeId = '7d' | '30d' | '90d' | 'all';
 

@@ -55,7 +55,7 @@ import {
   type Split,
   type View,
   type Zone,
-} from './tree';
+} from '@mochi/domain/layout/tree';
 import { useLayoutKeys } from './useLayoutKeys';
 import { useWatchToasts } from './useWatchToasts';
 

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/toast/store';
 import { host } from '@/host';
-import type { Editor } from '@/host/types/fs';
+import type { Editor } from '@mochi/domain/host/types/fs';
 import { IS_MAC, IS_WINDOWS } from '../keys';
 import { queryKeys } from '../queryKeys';
 

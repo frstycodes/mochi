@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
 import type { MachineCatalog } from './host/types/remote';

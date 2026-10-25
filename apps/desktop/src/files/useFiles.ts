@@ -4,7 +4,7 @@ import { queryKeys } from '../queryKeys.ts';
 import { useWatchQuery, watchKey } from '../watch/useWatchQuery.ts';
 import { useEffect, useState } from 'react';
 import { host } from '@/host';
-import type { FileContent } from '@/host/types/fs';
+import type { FileContent } from '@mochi/domain/host/types/fs';
 import { useLatest } from '@/useLatest';
 
 /** The root's file list, re-listed by Core when a file under it is created or deleted. */

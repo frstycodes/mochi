@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/dom';
 import { DOMRectangle } from '@dnd-kit/dom/utilities';
 import { DragDropProvider } from '@dnd-kit/react';
-import { zoneAt, type View, type Zone } from './tree.ts';
+import { zoneAt, type View, type Zone } from '@mochi/domain/layout/tree';
 
 export interface DragSession {
   view: View;

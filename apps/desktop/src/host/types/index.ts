@@ -1,20 +1,32 @@
-import { accountMethods, type AccountHost } from './account.ts';
+import {
+  accountMethods,
+  type AccountHost,
+} from '@mochi/domain/host/types/account';
 import { agentMethods, type AgentHost } from './agent.ts';
 import { dataMethods, type DataHost } from './data.ts';
-import { browserMethods, type BrowserHost } from './browser.ts';
-import { fsMethods, type FsHost } from './fs.ts';
+import {
+  browserMethods,
+  type BrowserHost,
+} from '@mochi/domain/host/types/browser';
+import { fsMethods, type FsHost } from '@mochi/domain/host/types/fs';
 import { gitMethods, type GitHost } from './git.ts';
 import { libraryMethods, type LibraryHost } from './library.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 import { notifyMethods, type NotifyHost } from './notify.ts';
-import { portsMethods, type PortsHost } from './ports.ts';
-import { projectsMethods, type ProjectsHost } from './projects.ts';
-import { ptyMethods, type PtyHost } from './pty.ts';
+import { portsMethods, type PortsHost } from '@mochi/domain/host/types/ports';
+import {
+  projectsMethods,
+  type ProjectsHost,
+} from '@mochi/domain/host/types/projects';
+import { ptyMethods, type PtyHost } from '@mochi/domain/host/types/pty';
 import { remoteMethods, type RemoteHost } from './remote.ts';
 import { scheduleMethods, type ScheduleHost } from './schedule.ts';
 import { settingsMethods, type SettingsHost } from './settings.ts';
-import { simMethods, type SimHost } from './sim.ts';
-import { themesMethods, type ThemesHost } from './themes.ts';
+import { simMethods, type SimHost } from '@mochi/domain/host/types/sim';
+import {
+  themesMethods,
+  type ThemesHost,
+} from '@mochi/domain/host/types/themes';
 import { usageMethods, type UsageHost } from './usage.ts';
 import { windowsMethods, type WindowsHost } from './windows.ts';
 

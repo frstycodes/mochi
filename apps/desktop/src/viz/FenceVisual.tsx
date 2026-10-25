@@ -17,7 +17,7 @@ import {
   VIZ_LANGUAGES,
   type VizLanguage,
   type VizSpecs,
-} from './fence';
+} from '@mochi/domain/viz/fence';
 import { DiffVisual, MetroVisual } from './HarnessVisuals';
 import { ImageVisual } from './ImageVisual';
 import { SortableTable } from './SortableTable';

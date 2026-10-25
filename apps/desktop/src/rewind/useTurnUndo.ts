@@ -13,7 +13,7 @@ import {
 } from '../chat/turnChanges.ts';
 import { excerpt, rewindBlockedReason, turnCheckpoint } from './checkpoints.ts';
 import { useLatest } from '../useLatest.ts';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 /** What undoing the turn would also take back: later turns' edits to the same files, and changes made outside the agent since its last turn. */
 export interface UndoConflicts {

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { COMPOSER_EDITABLE } from '../chat/ComposerEditor';
 import { haptic } from '../haptic';
 import { LeafView, Workspace, WorkspaceEffects } from '../layout/Workspace';
-import type { Leaf } from '../layout/tree';
+import type { Leaf } from '@mochi/domain/layout/tree';
 import { Overview } from '../stage/Overview';
 import { useDispatch, useHarnessSelector, type State } from '../store';
 import { useSnapPager } from '../useSnapPager';

@@ -1,4 +1,4 @@
-import type { BrowserHost } from '../types/browser.ts';
+import type { BrowserHost } from '@mochi/domain/host/types/browser';
 
 let nextId = 0;
 

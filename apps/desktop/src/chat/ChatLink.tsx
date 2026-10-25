@@ -33,7 +33,7 @@ import {
   refTone,
   refUrl,
   type GithubRef,
-} from './refs';
+} from '@mochi/domain/chat/refs';
 import { REF_CHIP_CLASS } from '@/icons/github';
 import { useRefState, useRepoSlug } from './useRefState';
 

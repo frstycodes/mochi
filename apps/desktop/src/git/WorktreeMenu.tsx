@@ -18,7 +18,7 @@ import type { ConfirmRequest } from './useConfirm';
 import { gitError } from './useGit';
 import { setWorktreePath, worktreePath } from './worktrees';
 import { OverflowIcon } from '../ui';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 
 interface WorktreeMenuProps {
   cwd: string;

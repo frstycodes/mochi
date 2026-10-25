@@ -1,4 +1,4 @@
-import type { AccountHost } from '../types/account.ts';
+import type { AccountHost } from '@mochi/domain/host/types/account';
 
 // The web build has no main process to hold tokens, so it never signs in (DEVICES.md: tokens live only in main).
 const UNCONFIGURED = { status: 'unconfigured', isPersistent: false } as const;

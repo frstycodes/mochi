@@ -4,7 +4,7 @@ import { ChevronRight, Folder, FolderOpen } from '@/icons';
 import { cn } from '@/lib/utils';
 import { FileContextMenu } from './FileContextMenu';
 import { Highlighted } from './Highlighted';
-import { toRanges, type TreeRow } from './tree';
+import { toRanges, type TreeRow } from '@mochi/domain/files/tree';
 
 /** `root` is this computer's folder for the context menu (reveal, open in an editor); another computer's tree has none. */
 export function FileTree({

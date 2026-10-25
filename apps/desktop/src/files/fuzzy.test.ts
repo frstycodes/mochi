@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import { slashItems, slashMatches } from '../chat/slash.ts';
-import { fuzzyMatch, fuzzyMatches } from './fuzzy.ts';
+import { fuzzyMatch, fuzzyMatches } from '@mochi/domain/files/fuzzy';
 
 test('one matcher preserves slash rank tiers and stable ties, plus file basename and boundary bonuses', () => {
   const names = ['r-e-v', 'preview', 'review-long', 'review', 'other'];

@@ -27,7 +27,7 @@ import {
   TOOL_NAMES,
   TOOL_TABLE,
   type MochiScope,
-} from '../../../../apps/desktop/src/runtime/toolTable.ts';
+} from '@mochi/domain/runtime/toolTable';
 import { agentSettings } from './config.ts';
 
 /**

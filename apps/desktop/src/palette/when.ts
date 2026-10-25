@@ -1,4 +1,4 @@
-import { findLeaf, leaves, type View } from '../layout/tree.ts';
+import { findLeaf, leaves, type View } from '@mochi/domain/layout/tree';
 import { isMultiTab, type PaneTab, type Thread } from '../model.ts';
 import { autofixPr } from '../git/autofixToggle.ts';
 import { pinnedThreads } from '../reorder.ts';

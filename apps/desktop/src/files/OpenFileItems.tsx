@@ -1,7 +1,7 @@
 import { Code, FolderOpen } from '@/icons';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { host } from '../host';
-import type { DiskFile } from '../host/types/fs';
+import type { DiskFile } from '@mochi/domain/host/types/fs';
 import {
   EDITOR_NAMES,
   openInEditor,

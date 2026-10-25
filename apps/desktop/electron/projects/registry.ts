@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { basename, isAbsolute, join, resolve } from 'node:path';
-import { normalizeOrigin } from '../../src/git/origin.ts';
+import { normalizeOrigin } from '@mochi/domain/git/origin';
 import type {
   Project,
   ProjectIconMode,
-} from '../../src/host/types/projects.ts';
+} from '@mochi/domain/host/types/projects';
 import {
   customIconFile,
   findFavicon,

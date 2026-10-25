@@ -28,7 +28,7 @@ import {
 } from '../model';
 import { ProgressRing } from '../ui';
 import { RefChip } from '../chat/ChatLink';
-import type { RefTone } from '../chat/refs';
+import type { RefTone } from '@mochi/domain/chat/refs';
 import { openTurn } from '../chat/turnChanges';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { OPEN_PR_PROMPT } from '../git/prs';

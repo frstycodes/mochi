@@ -10,7 +10,7 @@ import {
   toolRules,
   type ConnectorSettings,
   type ConnectorTool,
-} from './connectorTools.ts';
+} from '@mochi/domain/library/connectorTools';
 import { profileConnectors, type LibraryIndex } from './library.ts';
 
 const tool = (name: string, isReadOnly: boolean): ConnectorTool => ({

@@ -3,12 +3,12 @@ import { Coin, Commit } from '@/icons';
 import { GitMergeIcon } from '@/icons/github';
 import { DiffIcon } from '@/icons/panes';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import type { Provider } from '../model';
 import { HARNESSES } from '../settings/harnesses';
 import { ProviderMark } from '../ui';
 import { SparkBars, type TipContent } from './charts';
-import { periodName } from './days';
+import { periodName } from '@mochi/domain/usage/days';
 import { compact, Figure, usd } from './Figure';
 import type { UsageView } from './report';
 

@@ -44,7 +44,7 @@ import {
   OAUTH_PROVIDERS,
   type AppProviderId,
   type DeviceCode,
-} from './connectors';
+} from '@mochi/domain/library/connectors';
 import { LibraryIcon } from './LibraryParts';
 import { serviceName } from './names';
 import type { Library } from './useLibrary';

@@ -3,7 +3,10 @@ import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
 import { toast } from '@/toast/store';
 import { host } from '@/host';
-import type { SimAppearance, SimContentSize } from '@/host/types/sim';
+import type {
+  SimAppearance,
+  SimContentSize,
+} from '@mochi/domain/host/types/sim';
 import { message } from './useSimulators';
 
 /** Appearance and Dynamic Type of a booted device, read on mount and written optimistically. */

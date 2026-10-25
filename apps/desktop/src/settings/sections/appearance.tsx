@@ -38,7 +38,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import { host } from '../../host';
 import {
   filterPackages,
@@ -51,8 +51,8 @@ import {
   type ColorTheme,
   type ThemeKind,
   type ThemeSlot,
-} from '../../themes/model';
-import type { MarketplaceExtension } from '../../themes/openVsx';
+} from '@mochi/domain/themes/model';
+import type { MarketplaceExtension } from '@mochi/domain/themes/openVsx';
 import {
   refreshThemes,
   setThemePreview,

@@ -11,7 +11,7 @@ import {
 import { toast } from '../../toast/store.ts';
 import { host } from '../../host';
 import type { ScheduleRun, Trigger } from '../../host/types/schedule';
-import { shortRunTime } from '../../schedule/cron';
+import { shortRunTime } from '@mochi/domain/schedule/cron';
 import { describeTrigger } from '../../schedule/describe';
 import { openSchedule } from '../../schedule/ScheduleDialog';
 import { runOutcome } from '../../schedule/slice';

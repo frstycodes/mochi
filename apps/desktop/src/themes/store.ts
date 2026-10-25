@@ -16,7 +16,7 @@ import {
   slotOf,
   type ColorTheme,
   type ThemeSlot,
-} from './model';
+} from '@mochi/domain/themes/model';
 
 // The chosen themes themselves, so a launch paints them before main has listed what's installed.
 const activeSlice = persistedSlice<State['active']>(

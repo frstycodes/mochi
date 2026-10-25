@@ -22,10 +22,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { isCloneUrl } from './git/origin';
+import { isCloneUrl } from '@mochi/domain/git/origin';
 import { gitError } from './git/useGit';
 import { host } from './host';
-import type { CloneSource, Project } from './host/types/projects';
+import type { CloneSource, Project } from '@mochi/domain/host/types/projects';
 import type { FollowedMachine } from './host/types/remote';
 import { GithubMarkIcon } from './icons/github';
 import {

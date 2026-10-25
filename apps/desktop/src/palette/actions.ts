@@ -59,7 +59,7 @@ import { threadCwd } from '../host/cwd';
 import { autofixPr, setAutofix } from '../git/autofixToggle';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
-import { PRESETS, PRESET_LABELS } from '../layout/tree';
+import { PRESETS, PRESET_LABELS } from '@mochi/domain/layout/tree';
 import type { Provider, Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
@@ -91,7 +91,7 @@ import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
 import { spaceCommand, type CommandId } from '../keymap';
 import type { PaneTab } from '../model';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 
 export const ACTION_GROUPS = [
   'Go to',

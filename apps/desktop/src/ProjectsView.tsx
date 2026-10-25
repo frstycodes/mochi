@@ -48,11 +48,11 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import { AddProject } from './AddProject';
 import { gitError } from './git/useGit';
 import { host } from './host';
-import type { Project } from './host/types/projects';
+import type { Project } from '@mochi/domain/host/types/projects';
 import type { FollowedMachine } from './host/types/remote';
 import { GithubMarkIcon } from './icons/github';
 import { ProjectIcon } from './ProjectIcon';

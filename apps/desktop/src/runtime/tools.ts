@@ -5,11 +5,11 @@ import type {
   AgentToolCall,
   AgentToolResult,
 } from '../host/types/agent.ts';
-import type { BrowserHost } from '../host/types/browser.ts';
+import type { BrowserHost } from '@mochi/domain/host/types/browser';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
-import type { ThemesHost } from '../host/types/themes.ts';
+import type { ThemesHost } from '@mochi/domain/host/types/themes';
 import {
   nextProposalId,
   PROPOSALS_PER_TURN,
@@ -59,10 +59,10 @@ import {
   TOOL_TABLE,
   type ArgsOf,
   type ToolName,
-} from './toolTable.ts';
+} from '@mochi/domain/runtime/toolTable';
 import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 /** What the store and the app give a tool run. The renderer wires the real ones (`store/index.tsx`); tests pass stubs. */
 export interface ToolEnv {

@@ -45,7 +45,7 @@ import {
   startDrag,
   type SurfaceHandlers,
 } from './layout/drag';
-import { splitTabIds } from './layout/tree';
+import { splitTabIds } from '@mochi/domain/layout/tree';
 import { PreviewContext } from './layout/SplitContext';
 import { pageKey, usePage } from './browser/pages';
 import { useSize } from './browser/PageSurface';

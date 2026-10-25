@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { host } from '../host';
 import type { ConfigPreview } from '../host/types/settings';

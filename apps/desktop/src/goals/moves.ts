@@ -1,9 +1,9 @@
-import type { RefStatus } from '../chat/refs.ts';
+import type { RefStatus } from '@mochi/domain/chat/refs';
 import type { Thread, TurnReport } from '../model.ts';
 import { parentOf, subThreadsOf } from '../reorder.ts';
 import { nextStep } from './report.ts';
 import { YOUR_CALL, type Gap, type Verdict } from './verdict.ts';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 export type MoveKind =
   | 'confirm'

@@ -1,6 +1,6 @@
 import type { ClipboardEvent, KeyboardEvent, PointerEvent } from 'react';
 import { host } from '@/host';
-import type { Simulator, SimTouchPhase } from '@/host/types/sim';
+import type { Simulator, SimTouchPhase } from '@mochi/domain/host/types/sim';
 import { cn } from '@/lib/utils';
 
 // Non-printing keys → HID usage (keyboard page 7).

@@ -1,6 +1,6 @@
 import { Clock } from '@/icons';
 import { useNow } from '../useNow';
-import { shortRunTime } from './cron';
+import { shortRunTime } from '@mochi/domain/schedule/cron';
 import { describeTrigger } from './describe';
 import { triggerNextRun, useTrigger } from './useSchedules';
 

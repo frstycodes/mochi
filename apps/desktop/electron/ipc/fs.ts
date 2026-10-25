@@ -2,7 +2,7 @@ import { BrowserWindow, dialog, shell } from 'electron';
 import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import type { FsHost } from '../../src/host/types/fs.ts';
+import type { FsHost } from '@mochi/domain/host/types/fs';
 import { installedEditors, openInEditor } from '../fs/editors.ts';
 import { readInside, writeInside } from '../fs/files.ts';
 import { resolveInside, resolveRoot } from '../fs/contain.ts';

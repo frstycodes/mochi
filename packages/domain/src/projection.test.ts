@@ -5,6 +5,8 @@ import { test } from 'vite-plus/test';
 import { setAmbientPrefs } from '../../../apps/desktop/src/store/context.ts';
 import { actionOf, COMMAND_TYPE, domainFrom, project } from './index.ts';
 
+const DOMAIN_SRC = join(import.meta.dirname);
+
 /** Every module the file loads at runtime (type-only imports are erased), and the packages they name. */
 function runtimeGraph(entry: string) {
   const modules = new Set<string>();
@@ -16,6 +18,8 @@ function runtimeGraph(entry: string) {
       /^(?:import|export) (?!type )[^;]*?from '([^']+)';/gms,
     )) {
       if (from!.startsWith('.')) visit(resolve(dirname(file), from!));
+      else if (from!.startsWith('@mochi/domain/'))
+        visit(join(DOMAIN_SRC, `${from!.slice('@mochi/domain/'.length)}.ts`));
       else packages.add(from!);
     }
   };

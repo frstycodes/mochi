@@ -1,7 +1,7 @@
 import { RefIcon, RefListHoverCard } from '../chat/RefHoverCard';
-import { refDescription } from '../chat/refs';
+import { refDescription } from '@mochi/domain/chat/refs';
 import type { Thread } from '../model';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 import { useThreadPrs } from './useThreadPrs';
 
 const MAX_SHOWN = 3;

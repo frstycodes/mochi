@@ -6,7 +6,7 @@ import type { CommandResult, RemoteCommand } from '../host/types/remote.ts';
 import type { Thread } from '../model.ts';
 import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
 import type { Action, State } from '../store/types.ts';
-import { answeredBy, markAnswered } from './answers.ts';
+import { answeredBy, markAnswered } from '@mochi/domain/remote/answers';
 
 /**
  * A device command that is only store actions: what to apply, and the device's answer. `verdict` is a send's drift verdict

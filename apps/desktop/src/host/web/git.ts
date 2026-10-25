@@ -1,5 +1,5 @@
 import { parseDiff } from '../../git/parse.ts';
-import { bareState, refKey, type RefState } from '../../chat/refs.ts';
+import { bareState, refKey, type RefState } from '@mochi/domain/chat/refs';
 import type { GitHost, PrReview } from '../types/git.ts';
 import { branchFromTitle } from '../../git/workspace.ts';
 

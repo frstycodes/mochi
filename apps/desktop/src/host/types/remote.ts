@@ -2,8 +2,8 @@ import type { Provider, SentImage } from '../../model.ts';
 import type { ThreadControls } from '../../runtime/controls.ts';
 import type { AgentModel } from './agent.ts';
 import type { ChangeTarget, DiffScope, GitDiff } from './git.ts';
-import type { Manifest } from './manifest.ts';
-import type { CloneSource, Project } from './projects.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
+import type { CloneSource, Project } from '@mochi/domain/host/types/projects';
 
 /** What a paired device may do on this machine (DEVICES.md › Devices and what they can do). */
 export const SCOPES = [

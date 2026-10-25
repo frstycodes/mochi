@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { host } from '../host/index.ts';
-import type { PortsListing } from '../host/types/ports.ts';
-import { recordListeningPorts } from './devServer.ts';
+import type { PortsListing } from '@mochi/domain/host/types/ports';
+import { recordListeningPorts } from '@mochi/domain/terminal/devServer';
 import { queryKeys } from '../queryKeys.ts';
 import { markStale, useWatchQuery } from '../watch/useWatchQuery.ts';
 

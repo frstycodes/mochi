@@ -15,7 +15,7 @@ import { openExternally } from '../browser/systemBrowser';
 import { host } from '../host';
 import { namesNow, useLibraryNames } from '../library/names';
 import type { McpWidget, McpWidgetResource } from '../model';
-import type { ThemeSlot } from '../themes/model';
+import type { ThemeSlot } from '@mochi/domain/themes/model';
 import { useColorTheme } from '../themes/store';
 import { EmbedFrame } from '../viz/EmbedFrame';
 import { useFrameDocument } from '../viz/frameDocument';

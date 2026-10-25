@@ -5,7 +5,7 @@ import type {
   SimHost,
   SimLogLine,
   Simulator,
-} from '../types/sim.ts';
+} from '@mochi/domain/host/types/sim';
 
 const devices: Simulator[] = [
   {

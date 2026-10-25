@@ -12,7 +12,7 @@ import path from 'node:path';
 import { test } from 'vite-plus/test';
 import { resolveInside } from '../../electron/fs/contain.ts';
 import { listFiles } from '../../electron/fs/list.ts';
-import { fuzzyFiles } from './fuzzy.ts';
+import { fuzzyFiles } from '@mochi/domain/files/fuzzy';
 
 function fixture() {
   // `.native` also expands Windows 8.3 short names, as resolveInside's own realpath does.

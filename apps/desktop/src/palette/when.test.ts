@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { singleLayout, splitLeaf, type View } from '../layout/tree.ts';
+import { singleLayout, splitLeaf, type View } from '@mochi/domain/layout/tree';
 import type { Pane, QueueItem, Thread } from '../model.ts';
 import { reviewThreads, stepIndex } from '../review/order.ts';
 import type { State } from '../store/index.tsx';

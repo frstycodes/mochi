@@ -1,6 +1,6 @@
 import { useDispatch } from '../store';
 import { fileLink } from './links';
-import { portUrl } from './devServer';
+import { portUrl } from '@mochi/domain/terminal/devServer';
 import type { TerminalLinks } from './sessions';
 
 export function usePaneOpeners(threadId: string) {

@@ -1,6 +1,6 @@
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
-import type { FileContent } from '@/host/types/fs';
+import type { FileContent } from '@mochi/domain/host/types/fs';
 import { createRequestStore } from '@/lib/requestStore';
 import { useThread } from '../store';
 import { fileLink } from '../terminal/links';

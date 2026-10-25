@@ -1,4 +1,4 @@
-import { refKey, splitRefs } from './refs.ts';
+import { refKey, splitRefs } from '@mochi/domain/chat/refs';
 
 type HastText = { type: 'text'; value: string };
 type HastElement = {

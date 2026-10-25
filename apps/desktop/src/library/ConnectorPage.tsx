@@ -63,7 +63,7 @@ import {
 import { useHarnessSelector } from '../store';
 import { OverflowIcon } from '../ui';
 import { ConnectAccountDialog } from './ConnectDialog';
-import { connectorKey } from './connectors';
+import { connectorKey } from '@mochi/domain/library/connectors';
 import {
   groupPermission,
   setTools,
@@ -72,7 +72,7 @@ import {
   type ConnectorSettings,
   type ConnectorTool,
   type ToolPermission,
-} from './connectorTools';
+} from '@mochi/domain/library/connectorTools';
 import type { LibraryEntry } from './library';
 import {
   countOf,

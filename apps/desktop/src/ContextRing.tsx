@@ -14,7 +14,7 @@ import { LimitBars, UpdatedAt } from './usage/LimitBars';
 import { hottest, TONE_COLORS, toneFor } from './usage/limits';
 import type { Usage } from './usage/model';
 import { useAccountLimits } from './usage/useAccountLimits';
-import { TOKENS } from '@/lib/format';
+import { TOKENS } from '@mochi/domain/lib/format';
 
 const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
 const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<

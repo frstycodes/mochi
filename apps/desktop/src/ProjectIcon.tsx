@@ -1,4 +1,4 @@
-import type { Project } from './host/types/projects';
+import type { Project } from '@mochi/domain/host/types/projects';
 import { cn } from '@/lib/utils';
 
 /**

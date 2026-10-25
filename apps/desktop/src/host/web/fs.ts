@@ -1,6 +1,10 @@
 import { joinPath } from '../../chat/fileMentions.ts';
-import { compileQuery, matchLines } from '../../files/search.ts';
-import type { FileContent, FsHost, SearchHits } from '../types/fs.ts';
+import { compileQuery, matchLines } from '@mochi/domain/files/search';
+import type {
+  FileContent,
+  FsHost,
+  SearchHits,
+} from '@mochi/domain/host/types/fs';
 
 // In-memory files so the web build can show the tree, editor and previews; every root sees the same set.
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3987e5"/><path d="M20 20v24M44 20v24M20 32h24" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>\n`;

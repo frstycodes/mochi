@@ -15,7 +15,7 @@ import {
   SettingsSelect,
   settingControlId,
 } from '../settings/parts';
-import { shortRunTime } from './cron';
+import { shortRunTime } from '@mochi/domain/schedule/cron';
 import { PR_EVENT_LABELS } from './due';
 import {
   PRESETS,

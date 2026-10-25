@@ -22,7 +22,7 @@ import type {
   BrowserSnapshot,
   FindOptions,
   PickedElement,
-} from '../../src/host/types/browser.ts';
+} from '@mochi/domain/host/types/browser';
 import { dialogNote } from '../../src/browser/dialog.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
 import { agentSnapshot, ariaSelector } from './ariaRefs.ts';

@@ -1,5 +1,5 @@
 import { host } from '@/host';
-import type { Simulator } from '@/host/types/sim';
+import type { Simulator } from '@mochi/domain/host/types/sim';
 import { queryKeys } from '../queryKeys';
 import { useWatchQuery } from '../watch/useWatchQuery';
 

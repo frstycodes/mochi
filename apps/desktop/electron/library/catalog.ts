@@ -8,12 +8,12 @@ import type {
   CatalogPlugin,
   MarketplaceCatalog,
 } from '../../src/library/library.ts';
-import { parsePluginBundle } from '../../src/library/pluginBundle.ts';
-import { isInternalSkill, parseSkillMd } from '../../src/library/skillMd.ts';
+import { parsePluginBundle } from '@mochi/domain/library/pluginBundle';
+import { isInternalSkill, parseSkillMd } from '@mochi/domain/library/skillMd';
 import {
   findSkillDirs,
   parseSkillSource,
-} from '../../src/library/skillSource.ts';
+} from '@mochi/domain/library/skillSource';
 import { readTar } from '../../src/library/tar.ts';
 import { run } from '../git/run.ts';
 

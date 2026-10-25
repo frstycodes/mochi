@@ -9,7 +9,7 @@ import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { runRemoteCommand } from './commands.ts';
 import { closeIdleShells, shellOf, terminalCore } from './terminals.ts';
-import { markOwnAnswer } from './answers.ts';
+import { markOwnAnswer } from '@mochi/domain/remote/answers';
 
 afterEach(() => vi.restoreAllMocks());
 

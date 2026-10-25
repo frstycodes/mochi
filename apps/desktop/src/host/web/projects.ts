@@ -1,5 +1,9 @@
-import { normalizeOrigin, repoName } from '../../git/origin.ts';
-import type { GithubRepo, Project, ProjectsHost } from '../types/projects.ts';
+import { normalizeOrigin, repoName } from '@mochi/domain/git/origin';
+import type {
+  GithubRepo,
+  Project,
+  ProjectsHost,
+} from '@mochi/domain/host/types/projects';
 
 // A browser has no folders or git: projects live in memory, and Add project pretends, so the flows can be tried.
 const spaces = new Map<string, { projects: Project[]; isMigrated: boolean }>();

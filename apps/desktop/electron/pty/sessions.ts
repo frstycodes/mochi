@@ -4,7 +4,7 @@ import type {
   PtyData,
   PtyExit,
   PtySpawnOptions,
-} from '../../src/host/types/pty.ts';
+} from '@mochi/domain/host/types/pty';
 import { ensureSpawnHelper, shellLaunch } from './shell.ts';
 
 const sessions = new Map<

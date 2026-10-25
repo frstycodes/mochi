@@ -3,7 +3,7 @@ import {
   isTurnTool,
   MOCHI_SERVER,
   type ToolName,
-} from '../runtime/toolTable.ts';
+} from '@mochi/domain/runtime/toolTable';
 
 /**
  * Each Mochi tool in words, like Claude's own tools: while it runs, then in its work-group row. What it changed is the

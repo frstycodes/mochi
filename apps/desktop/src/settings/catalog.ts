@@ -10,7 +10,7 @@ import {
   slotOf,
   type ColorTheme,
   type ThemeSlot,
-} from '../themes/model.ts';
+} from '@mochi/domain/themes/model';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../utility/prompts.ts';
 import {
   CONCURRENCY_RANGE,
@@ -35,7 +35,7 @@ import {
 } from '../keymap.ts';
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
-import type { SettingSection } from './settingSections.ts';
+import type { SettingSection } from '@mochi/domain/settings/settingSections';
 import {
   AGENT_CONTROL,
   AGENTS,

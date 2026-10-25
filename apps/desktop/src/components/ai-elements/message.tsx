@@ -28,7 +28,7 @@ import type { CodeHighlighterPlugin } from "@streamdown/code";
 import type { ThemeRegistrationAny } from "shiki";
 import { shikiTheme } from "@/themes/shiki";
 import { LIGHT_CODE_SURFACES, readableTokenColors } from "@/themes/map";
-import type { ColorTheme } from "@/themes/model";
+import type { ColorTheme } from "@mochi/domain/themes/model";
 import { useColorTheme } from "@/themes/store";
 import { Streamdown, type PluginConfig } from "streamdown";
 import { withDiffFences } from "@/chat/diffCodePlugin";

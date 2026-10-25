@@ -1,7 +1,7 @@
 import type { ActivityEntry } from './model.ts';
 import { isMochiTarget } from './chat/mochiCalls.ts';
 import { isSendTarget } from './chat/threadMessages.ts';
-import { plural } from './lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 export type ToolVerb =
   | 'Read'

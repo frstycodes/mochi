@@ -19,10 +19,7 @@ import type {
   Trigger,
   TriggerInput,
 } from '../../../../apps/desktop/src/host/types/schedule.ts';
-import {
-  describeCron,
-  parseCron,
-} from '../../../../apps/desktop/src/schedule/cron.ts';
+import { describeCron, parseCron } from '@mochi/domain/schedule/cron';
 import {
   afterLaunch,
   cronDecision,

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import type { Pane } from '../model.ts';
 import type { State } from './index.tsx';
-import { defaultBrowserUrl } from '../terminal/devServer.ts';
+import { defaultBrowserUrl } from '@mochi/domain/terminal/devServer';
 import { panesReducer, shownTab } from './panes.ts';
 
 const pane = (rest: Partial<Pane> = {}): Pane => ({

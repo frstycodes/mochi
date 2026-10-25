@@ -27,7 +27,7 @@ import {
   type RefKind,
   type RefStatus,
   type RefTone,
-} from '@/chat/refs';
+} from '@mochi/domain/chat/refs';
 
 type OcticonProps = SVGProps<SVGSVGElement>;
 

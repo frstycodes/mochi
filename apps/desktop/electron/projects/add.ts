@@ -1,9 +1,16 @@
 import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { isCloneUrl, normalizeOrigin, repoName } from '../../src/git/origin.ts';
+import {
+  isCloneUrl,
+  normalizeOrigin,
+  repoName,
+} from '@mochi/domain/git/origin';
 import type { GithubAccountRef } from '../../src/git/github.ts';
-import type { CloneSource, GithubRepo } from '../../src/host/types/projects.ts';
+import type {
+  CloneSource,
+  GithubRepo,
+} from '@mochi/domain/host/types/projects';
 import { runGhOn, runGitAs } from '../git/gh.ts';
 import { runGit, runStreaming } from '../git/run.ts';
 

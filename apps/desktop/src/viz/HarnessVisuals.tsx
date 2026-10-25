@@ -2,8 +2,8 @@ import type { Step, Thread } from '../model';
 import { boardColumns } from '../progress';
 import { lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
-import type { DiffSpec } from './fence';
-import { plural } from '../lib/format.ts';
+import type { DiffSpec } from '@mochi/domain/viz/fence';
+import { plural } from '@mochi/domain/lib/format';
 
 const GUTTER = 132;
 const COL = 104;

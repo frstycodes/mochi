@@ -1,5 +1,5 @@
-import type { GithubRef, RefState, RepoSlug } from '../../chat/refs.ts';
-import type { Manifest } from './manifest.ts';
+import type { GithubRef, RefState, RepoSlug } from '@mochi/domain/chat/refs';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 import type { PullRequest } from '../../model.ts';
 
 export interface GitFileStatus {

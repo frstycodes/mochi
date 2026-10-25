@@ -1,6 +1,9 @@
 import type { WebContents } from 'electron';
 import { statSync } from 'node:fs';
-import { connectorKey, type DeviceCode } from '../../src/library/connectors.ts';
+import {
+  connectorKey,
+  type DeviceCode,
+} from '@mochi/domain/library/connectors';
 import {
   libraryEntries,
   removeItem,

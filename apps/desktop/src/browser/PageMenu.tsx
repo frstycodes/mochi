@@ -27,7 +27,7 @@ import { host } from '@/host';
 import type {
   BrowserContextMenu,
   BrowserMenuCommand,
-} from '@/host/types/browser';
+} from '@mochi/domain/host/types/browser';
 import type { Thread } from '@/model';
 import { copyText } from '../clipboard';
 import type { Key } from '../keys';

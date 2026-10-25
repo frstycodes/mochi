@@ -12,7 +12,7 @@ import {
   type Page,
 } from './pages';
 import { displayUrl } from './url';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 
 /** Desktop: the next click in the page picks an element. Web demo page: toggles its own comment mode. */
 export async function togglePick(key: string, page: Page, thread: Thread) {

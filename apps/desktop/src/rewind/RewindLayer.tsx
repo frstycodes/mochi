@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import {
   Dialog,
   DialogContent,

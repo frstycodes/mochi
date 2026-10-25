@@ -3,7 +3,7 @@ import { host } from '../host/index.ts';
 import { useRemoteStatus } from './useRemoteStatus';
 import type { Action, State } from '../store/index.tsx';
 import { runRemoteCommand } from './commands.ts';
-import { setMachineName } from './answers.ts';
+import { setMachineName } from '@mochi/domain/remote/answers';
 import { closeIdleShells, SWEEP_MS } from './terminals.ts';
 
 /** Runs devices' commands, which reach this window from Core through main, while the store lives here. */

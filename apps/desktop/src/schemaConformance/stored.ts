@@ -1,10 +1,13 @@
 import type * as Stored from '../../../../packages/schema/src/stored.ts';
 import type { Pin, Pins } from '../chat/pins.ts';
-import type { Project, ProjectIconMode } from '../host/types/projects.ts';
+import type {
+  Project,
+  ProjectIconMode,
+} from '@mochi/domain/host/types/projects';
 import type { Space } from '../model.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { ToolPolicy } from '../runtime/toolPolicy.ts';
-import type { ColorTheme } from '../themes/model.ts';
+import type { ColorTheme } from '@mochi/domain/themes/model';
 import type { Schema } from 'effect';
 import type { Check, Decoded, Same } from './check.ts';
 

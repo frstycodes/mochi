@@ -15,7 +15,7 @@ import {
   embedReplay,
   isSelfContained,
   replayFileName,
-} from '../../src/replay/page.ts';
+} from '@mochi/domain/replay/page';
 import { indexHtml } from '../window.ts';
 import type { Handlers } from './handlers.ts';
 

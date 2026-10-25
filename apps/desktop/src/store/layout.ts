@@ -21,7 +21,7 @@ import {
   type SpaceLayout,
   type View,
   type Zone,
-} from '../layout/tree.ts';
+} from '@mochi/domain/layout/tree';
 import { getProfiles } from '../profiles.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Thread } from '../model.ts';

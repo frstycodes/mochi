@@ -3,7 +3,7 @@ import { canStore, open, seal } from '../secrets';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
-import type { MochiAccount, MochiUser } from '../../src/host/types/account.ts';
+import type { MochiAccount, MochiUser } from '@mochi/domain/host/types/account';
 import { openWindows } from '../agents/events.ts';
 import {
   accountPortalUrl,

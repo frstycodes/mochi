@@ -1,4 +1,4 @@
-import type { ToolName } from '../runtime/toolTable.ts';
+import type { ToolName } from '@mochi/domain/runtime/toolTable';
 
 /** Settings › Mochi access shows tools in these groups, in this order. */
 export const TOOL_GROUPS = [

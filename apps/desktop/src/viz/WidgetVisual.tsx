@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react';
 import { useDispatch } from '../store';
-import { readWidgetMessage } from './fence';
+import { readWidgetMessage } from '@mochi/domain/viz/fence';
 import { useFrameDocument } from './frameDocument';
 
 /**

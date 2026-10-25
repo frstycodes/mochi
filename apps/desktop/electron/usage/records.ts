@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline';
 import { cached } from '../cache.ts';
 import type { Provider } from '../../src/model.ts';
 import type { TokenBucket, UsageSession } from '../../src/host/types/usage.ts';
-import { localDay } from '../../src/usage/days.ts';
+import { localDay } from '@mochi/domain/usage/days';
 import { responseCost, uncachedCost, type PriceBook } from './prices.ts';
 
 /** One model response's tokens, as a harness log reported it. `input` excludes cache reads and writes. */

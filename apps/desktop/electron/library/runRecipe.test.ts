@@ -7,7 +7,7 @@ import {
   parseTarget,
   withOverrides,
   type SetupTarget,
-} from '../../src/library/recipes.ts';
+} from '@mochi/domain/library/recipes';
 import { runRecipe, type RecipeOps } from './runRecipe.ts';
 
 const slack = BUILT_IN_RECIPES.slack!;

@@ -10,7 +10,7 @@ import {
   marketplaceThemeId,
   type ColorTheme,
   type ThemeKind,
-} from './model.ts';
+} from '@mochi/domain/themes/model';
 
 const theme = { colors: {}, tokenColors: [] };
 

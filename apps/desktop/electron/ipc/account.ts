@@ -1,4 +1,4 @@
-import type { AccountHost } from '../../src/host/types/account.ts';
+import type { AccountHost } from '@mochi/domain/host/types/account';
 import {
   cancelSignIn,
   current,

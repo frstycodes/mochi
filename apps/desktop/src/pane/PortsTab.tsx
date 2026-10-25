@@ -39,11 +39,11 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
-import type { ListeningPort, RunTarget } from '../host/types/ports';
+import type { ListeningPort, RunTarget } from '@mochi/domain/host/types/ports';
 import type { Pane, Thread } from '../model';
 import { useDispatch } from '../store';
 import { nextTabId } from '../store/panes';
-import { portUrl } from '../terminal/devServer';
+import { portUrl } from '@mochi/domain/terminal/devServer';
 import { refreshPorts, usePorts } from '../terminal/ports';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { TooltipIconButton } from '../ui';

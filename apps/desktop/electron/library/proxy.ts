@@ -4,7 +4,7 @@ import {
   type CallToolResult,
   type Tool,
 } from '@modelcontextprotocol/server';
-import { ACCOUNT_ARGUMENT } from '../../src/library/connectors.ts';
+import { ACCOUNT_ARGUMENT } from '@mochi/domain/library/connectors';
 
 /**
  * One connector as one MCP server over all of a profile's accounts on it (LIBRARY.md decision 5): the upstream's tools

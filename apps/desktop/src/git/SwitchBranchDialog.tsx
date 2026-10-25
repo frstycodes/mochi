@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, WarningAlt } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import {
   ButtonGroup,
   ButtonGroupSeparator,

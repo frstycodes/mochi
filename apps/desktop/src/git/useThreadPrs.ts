@@ -7,7 +7,7 @@ import {
   refLabel,
   type GithubRef,
   type RepoSlug,
-} from '../chat/refs';
+} from '@mochi/domain/chat/refs';
 import { useRefStates, useRepoSlug } from '../chat/useRefState';
 import type { PullRequest, Thread } from '../model';
 import { useProfiles } from '../profiles';

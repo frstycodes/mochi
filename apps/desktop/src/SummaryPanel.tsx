@@ -73,7 +73,7 @@ import {
 import { openFiles } from './files/viewer';
 import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { ThreadName } from './chat/ThreadMessage';
-import { refDescription, type ChecksState } from './chat/refs';
+import { refDescription, type ChecksState } from '@mochi/domain/chat/refs';
 import { usePrSwitches } from './git/prSwitches';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
@@ -123,7 +123,7 @@ import { McpServerMark, SkillMark } from './chat/McpIcon';
 import { useLibraryNames } from './library/names';
 import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
 import { useLaunchNames, usePorts } from './terminal/ports';
-import { portUrl } from './terminal/devServer';
+import { portUrl } from '@mochi/domain/terminal/devServer';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { PortIcon } from './pane/PortIcon';
 import { queuedMessage } from './chat/outbox';
@@ -133,8 +133,8 @@ import {
   type VisualArtifact,
 } from './pane/artifacts';
 import { splitPath } from './chat/imageSrc';
-import type { VizLanguage } from './viz/fence';
-import type { ListeningPort } from './host/types/ports';
+import type { VizLanguage } from '@mochi/domain/viz/fence';
+import type { ListeningPort } from '@mochi/domain/host/types/ports';
 
 const LIST_LIMIT = 3;
 const OPEN_BY_DEFAULT: string[] = [

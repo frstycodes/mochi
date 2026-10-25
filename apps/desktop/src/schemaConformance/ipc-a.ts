@@ -7,23 +7,23 @@ import type * as LibraryS from '../../../../packages/schema/src/ipc/library.ts';
 import type * as NotifyS from '../../../../packages/schema/src/ipc/notify.ts';
 import type * as PortsS from '../../../../packages/schema/src/ipc/ports.ts';
 import type * as PtyS from '../../../../packages/schema/src/ipc/pty.ts';
-import type * as Account from '../host/types/account.ts';
-import type * as Browser from '../host/types/browser.ts';
+import type * as Account from '@mochi/domain/host/types/account';
+import type * as Browser from '@mochi/domain/host/types/browser';
 import type * as Data from '../host/types/data.ts';
-import type * as Fs from '../host/types/fs.ts';
+import type * as Fs from '@mochi/domain/host/types/fs';
 import type * as Git from '../host/types/git.ts';
 import type * as Library from '../host/types/library.ts';
 import type * as Notify from '../host/types/notify.ts';
-import type * as Ports from '../host/types/ports.ts';
-import type * as Pty from '../host/types/pty.ts';
-import type { RefState, GithubRef } from '../chat/refs.ts';
+import type * as Ports from '@mochi/domain/host/types/ports';
+import type * as Pty from '@mochi/domain/host/types/pty';
+import type { RefState, GithubRef } from '@mochi/domain/chat/refs';
 import type {
   LibraryEntry,
   PluginReview,
   SkillDestination,
 } from '../library/library.ts';
-import type { ConnectorSettings } from '../library/connectorTools.ts';
-import type { SetupResult, SetupTarget } from '../library/recipes.ts';
+import type { ConnectorSettings } from '@mochi/domain/library/connectorTools';
+import type { SetupResult, SetupTarget } from '@mochi/domain/library/recipes';
 import type { QuietHours } from '../notify/model.ts';
 import type { Check, Decoded, Rpc, Same } from './check.ts';
 

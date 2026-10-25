@@ -1,4 +1,4 @@
-import type { SearchEngine } from '../host/types/browser.ts';
+import type { SearchEngine } from '@mochi/domain/host/types/browser';
 import type { PaneTabKind } from '../model.ts';
 import type { SharedAccess } from '../runtime/access.ts';
 import type { ToolPolicies } from '../runtime/toolPolicy.ts';

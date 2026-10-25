@@ -60,7 +60,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import {
   answerText,
   isMochiCard,

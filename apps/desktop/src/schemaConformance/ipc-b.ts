@@ -9,7 +9,7 @@ import type {
   ProjectsHost,
   CloneSource,
   Project,
-} from '../host/types/projects.ts';
+} from '@mochi/domain/host/types/projects';
 import type { RemoteHost, RemoteStatus } from '../host/types/remote.ts';
 import type {
   ScheduleEvent,
@@ -17,11 +17,11 @@ import type {
   Trigger,
   TriggerInput,
 } from '../host/types/schedule.ts';
-import type { SimHost } from '../host/types/sim.ts';
-import type { ThemesHost } from '../host/types/themes.ts';
+import type { SimHost } from '@mochi/domain/host/types/sim';
+import type { ThemesHost } from '@mochi/domain/host/types/themes';
 import type { UsageHost, UsageReport } from '../host/types/usage.ts';
 import type { WindowsHost } from '../host/types/windows.ts';
-import type { ColorTheme } from '../themes/model.ts';
+import type { ColorTheme } from '@mochi/domain/themes/model';
 import type { Check, Decoded, Rpc, Same } from './check.ts';
 
 export type Conformance = [

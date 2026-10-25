@@ -1,10 +1,10 @@
 import type { Provider } from '../model.ts';
 import { serverSummary, type McpServerDef } from '../settings/agentConfig.ts';
-import type { ConnectorSettings } from './connectorTools.ts';
-import { connectorIcon } from './connectors.ts';
-import type { PluginBundle } from './pluginBundle.ts';
-import { parseSkillMd } from './skillMd.ts';
-import { plural } from '../lib/format.ts';
+import type { ConnectorSettings } from '@mochi/domain/library/connectorTools';
+import { connectorIcon } from '@mochi/domain/library/connectors';
+import type { PluginBundle } from '@mochi/domain/library/pluginBundle';
+import { parseSkillMd } from '@mochi/domain/library/skillMd';
+import { plural } from '@mochi/domain/lib/format';
 
 /**
  * The profile library (LIBRARY.md): each item is held once, and a profile is the set of item ids it turned on. Sessions

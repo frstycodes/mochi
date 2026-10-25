@@ -12,7 +12,7 @@ import type { McpServerDef } from './settings/agentConfig.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { WorkspaceDraft } from './git/workspace.ts';
 import type { Review } from './secondOpinion/verdict.ts';
-import type { VizLanguage } from './viz/fence.ts';
+import type { VizLanguage } from '@mochi/domain/viz/fence';
 import type { PaneLayout } from './pane/layout.ts';
 import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 import { vizGalleryThread } from './viz/fixtures.ts';

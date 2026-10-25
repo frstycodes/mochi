@@ -49,7 +49,7 @@ import { actedOn } from '../notify/slice.ts';
 import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
-import { markOwnAnswer } from '../remote/answers.ts';
+import { markOwnAnswer } from '@mochi/domain/remote/answers';
 import { classifyInCore } from '../utility/runUtility.ts';
 import { WindowReactor } from '../reactor/WindowReactor.tsx';
 

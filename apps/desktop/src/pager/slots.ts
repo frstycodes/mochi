@@ -1,5 +1,5 @@
 import { pinnedThreads } from '../reorder.ts';
-import { findLeaf, leaves } from '../layout/tree.ts';
+import { findLeaf, leaves } from '@mochi/domain/layout/tree';
 import type { State } from '../store/index.tsx';
 
 /** The pinned pager: which view sits on which page. Pure, so `node --test` covers it. */

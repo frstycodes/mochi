@@ -12,11 +12,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { SearchOptions } from '@/host/types/fs';
+import type { SearchOptions } from '@mochi/domain/host/types/fs';
 import { revealIn } from '@/lib/revealIn';
 import { ContentResults, contentHits } from './ContentResults';
 import { FileTree } from './FileTree';
-import { ancestors, buildTree, filterFiles, visibleRows } from './tree';
+import {
+  ancestors,
+  buildTree,
+  filterFiles,
+  visibleRows,
+} from '@mochi/domain/files/tree';
 import { useContentSearch } from './useContentSearch';
 
 export interface FileTarget {

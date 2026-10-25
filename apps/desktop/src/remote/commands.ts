@@ -7,7 +7,7 @@ import type {
   MachineCatalog,
   RemoteCommand,
 } from '../host/types/remote.ts';
-import type { Project } from '../host/types/projects.ts';
+import type { Project } from '@mochi/domain/host/types/projects';
 import type { Thread } from '../model.ts';
 import { getProfiles } from '../profiles.ts';
 import {

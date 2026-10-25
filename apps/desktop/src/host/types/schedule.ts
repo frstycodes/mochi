@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentStartOptions } from './agent.ts';
 import type { AutofixEvent } from '../../git/autofix.ts';
 import type { CiResult } from '../../notify/watch.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 
 export const PR_EVENTS = ['opened', 'review-requested', 'ci-failed'] as const;
 export type PrEvent = (typeof PR_EVENTS)[number];

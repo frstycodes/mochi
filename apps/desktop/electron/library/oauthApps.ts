@@ -2,7 +2,7 @@ import type { OAuthClientInformationMixed } from '@modelcontextprotocol/client';
 import {
   OAUTH_PROVIDER_IDS,
   type OAuthProviderId,
-} from '../../src/library/connectors.ts';
+} from '@mochi/domain/library/connectors';
 
 /**
  * Mochi's own OAuth app per provider whose MCP servers can't register clients (`OAUTH_PROVIDERS`). Each is a native or

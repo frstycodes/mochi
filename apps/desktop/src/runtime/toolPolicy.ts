@@ -1,5 +1,9 @@
 import { AGENT_CONTROLS, type AgentControl } from '../settings/prefs.ts';
-import { tierOf, type Tier, type ToolName } from './toolTable.ts';
+import {
+  tierOf,
+  type Tier,
+  type ToolName,
+} from '@mochi/domain/runtime/toolTable';
 
 /**
  * What one Mochi tool does when an agent calls it (Settings › Mochi access). `allow` runs it (a setting tool's widget

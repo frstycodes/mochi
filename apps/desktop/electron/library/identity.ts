@@ -1,4 +1,4 @@
-import { connectorKey } from '../../src/library/connectors.ts';
+import { connectorKey } from '@mochi/domain/library/connectors';
 import type { LibraryConnector } from '../../src/library/library.ts';
 
 /**

@@ -2,7 +2,7 @@ import type {
   ListeningPort,
   PortsListing,
   RunTarget,
-} from '../host/types/ports.ts';
+} from '@mochi/domain/host/types/ports';
 
 // Shared by electron/ipc/ports.ts (main) and its test; pure so `node --test` can run it without Electron.
 

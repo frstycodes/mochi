@@ -25,7 +25,7 @@ import {
   relayState,
   type DeviceCode,
   type OAuthProviderId,
-} from '../../src/library/connectors.ts';
+} from '@mochi/domain/library/connectors';
 import { RELAY_URL } from '@mochi/core/remote/relayClient';
 import { writeFileAtomic } from '@mochi/core/utility/atomicWrite';
 import { mochiOAuthApp } from './oauthApps.ts';
@@ -36,7 +36,7 @@ import {
   type ConnectorSettings,
   type ConnectorToolList,
   type ToolRules,
-} from '../../src/library/connectorTools.ts';
+} from '@mochi/domain/library/connectorTools';
 import {
   profileConnectors,
   type LibraryConnector,

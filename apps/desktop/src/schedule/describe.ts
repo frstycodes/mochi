@@ -1,5 +1,5 @@
 import type { TriggerWhen } from '../host/types/schedule.ts';
-import { describeCron } from './cron.ts';
+import { describeCron } from '@mochi/domain/schedule/cron';
 import { PR_EVENT_LABELS } from './due.ts';
 
 /** "Every day at 02:00", "PR opened on release/*", "PR CI failed with label deps". */

@@ -1,5 +1,5 @@
-import type { ConnectorTool } from '../../library/connectorTools.ts';
-import { CONNECTORS } from '../../library/connectors.ts';
+import type { ConnectorTool } from '@mochi/domain/library/connectorTools';
+import { CONNECTORS } from '@mochi/domain/library/connectors';
 import type {
   CatalogPlugin,
   CatalogSkill,

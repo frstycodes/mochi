@@ -2,7 +2,7 @@ import { threadRoot } from '../git/root.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { State } from '../store/types.ts';
 import { summarize } from '../summary.ts';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 /** Files the thread's agent edited or wrote, relative to its own worktree so two worktrees of one repo compare. */
 export function editedFiles(t: Thread) {

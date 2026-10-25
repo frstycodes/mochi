@@ -1,5 +1,5 @@
 import type { Provider } from '../../model.ts';
-import type { Manifest } from './manifest.ts';
+import type { Manifest } from '@mochi/domain/host/types/manifest';
 
 /**
  * Usage history read from the harnesses' own logs and the repositories, for the Usage page. Mochi keeps only a running

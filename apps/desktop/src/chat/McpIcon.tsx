@@ -5,7 +5,7 @@ import { hostname } from '../agentPhase';
 import { IconImage } from '../IconImage';
 import { McpServerIcon } from '../icons/ObjectIcons';
 import { useLibraryNames } from '../library/names';
-import { MOCHI_SERVER } from '../runtime/toolTable';
+import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { useThread } from '../store';
 import { useVizThreadId } from '../viz/WidgetVisual';
 import { Favicon } from '../WebLinks';

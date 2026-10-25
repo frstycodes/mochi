@@ -1,4 +1,4 @@
-import type { PtyData, PtyExit, PtyHost } from '../types/pty.ts';
+import type { PtyData, PtyExit, PtyHost } from '@mochi/domain/host/types/pty';
 
 const listeners = new Set<(event: PtyData) => void>();
 const emit = (event: PtyData) =>

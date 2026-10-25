@@ -6,8 +6,8 @@ import type {
   SearchLine,
   SearchOptions,
   SearchSummary,
-} from '../../src/host/types/fs.ts';
-import { compileQuery, matchLines } from '../../src/files/search.ts';
+} from '@mochi/domain/host/types/fs';
+import { compileQuery, matchLines } from '@mochi/domain/files/search';
 import { isInside, resolveRoot } from './contain.ts';
 import { listFiles } from './list.ts';
 

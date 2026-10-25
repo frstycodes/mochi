@@ -8,7 +8,11 @@ import {
 import { moveContext, moveFor, questionFor } from '../goals/moves.ts';
 import { authorName } from '../model.ts';
 import { summary, type ToolEnv } from './tools.ts';
-import { decodeArgs, DEV_TOOL_TABLE, type DevToolName } from './toolTable.ts';
+import {
+  decodeArgs,
+  DEV_TOOL_TABLE,
+  type DevToolName,
+} from '@mochi/domain/runtime/toolTable';
 import { initialControls } from './startOptions.ts';
 
 /** Only dispatched by the opt-in dev MCP endpoint; task actions match the composer. */

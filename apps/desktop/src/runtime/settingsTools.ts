@@ -37,15 +37,15 @@ import {
   connectorFor,
   freeAlias,
   isSameServer,
-} from '../library/connectors.ts';
+} from '@mochi/domain/library/connectors';
 import {
   BUILT_IN_RECIPES,
   type SetupResult,
   type SetupTarget,
-} from '../library/recipes.ts';
+} from '@mochi/domain/library/recipes';
 import { openInNewTab, refView, tabView } from './browserTools.ts';
 import { ownAppSetup } from '../library/ownApps.ts';
-import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
+import { MOCHI_THEME_ID, slotOf } from '@mochi/domain/themes/model';
 import {
   card,
   cardId,
@@ -56,7 +56,7 @@ import {
   type ToolSpec,
 } from './tools.ts';
 import { queryKeys } from '../queryKeys.ts';
-import { plural } from '../lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 type SettingsToolName =
   | 'get_settings'

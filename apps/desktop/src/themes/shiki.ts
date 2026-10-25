@@ -1,5 +1,5 @@
 import type { ThemeRegistration } from '@pierre/diffs';
-import { slotOf, type ColorTheme } from './model';
+import { slotOf, type ColorTheme } from '@mochi/domain/themes/model';
 
 /**
  * A color theme as shiki takes it. Named by a hash of its content: shiki and pierre cache by name, and a custom theme

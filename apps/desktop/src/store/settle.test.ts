@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { leaves, singleLayout, splitLeaf, type View } from '../layout/tree.ts';
+import {
+  leaves,
+  singleLayout,
+  splitLeaf,
+  type View,
+} from '@mochi/domain/layout/tree';
 import type { Thread } from '../model.ts';
 import type { State } from './index.tsx';
 import { layoutReducer } from './layout.ts';

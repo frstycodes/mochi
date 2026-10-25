@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { onTestFinished, test, vi } from 'vite-plus/test';
 import type { Page } from '../browser/pages.ts';
-import type { BrowserAct } from '../host/types/browser.ts';
+import type { BrowserAct } from '@mochi/domain/host/types/browser';
 import { draftFrom } from '../goals/edit.ts';
-import { singleLayout } from '../layout/tree.ts';
+import { singleLayout } from '@mochi/domain/layout/tree';
 import type { LibraryEntry } from '../library/library.ts';
-import type { SetupResult } from '../library/recipes.ts';
+import type { SetupResult } from '@mochi/domain/library/recipes';
 import {
   DEFAULT_SETTINGS,
   type AccountsState,
@@ -39,7 +39,12 @@ import { sidechatReducer } from '../store/sidechat.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
-import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
+import {
+  asks,
+  TOOL_NAMES,
+  tierOf,
+  type ToolName,
+} from '@mochi/domain/runtime/toolTable';
 import { applyUndo } from './undo.ts';
 import { startTitleRequest, titleRequest } from '../utility/titles.ts';
 import { runDevTool } from './devTools.ts';

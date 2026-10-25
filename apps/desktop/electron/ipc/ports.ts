@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { runCommand } from '@mochi/core/runClient';
-import type { ListeningPort, PortsHost } from '../../src/host/types/ports.ts';
+import type { ListeningPort, PortsHost } from '@mochi/domain/host/types/ports';
 import {
   launchConfigs,
   listeningUnder,

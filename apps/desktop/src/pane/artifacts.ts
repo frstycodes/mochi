@@ -5,7 +5,7 @@ import {
   parseFence,
   VIZ_LANGUAGES,
   type VizLanguage,
-} from '../viz/fence.ts';
+} from '@mochi/domain/viz/fence';
 
 export interface VisualArtifact {
   language: VizLanguage;

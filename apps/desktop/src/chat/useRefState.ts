@@ -3,7 +3,7 @@ import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
 import { host } from '@/host';
 import { githubStreamQuery, refreshGithub } from '../git/githubWatch.ts';
-import { refKey, type GithubRef, type RefState } from './refs';
+import { refKey, type GithubRef, type RefState } from '@mochi/domain/chat/refs';
 
 type Scope = { cwd: string | null; githubUser?: string };
 

@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, symlinkSync, unlinkSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import type { CompareBase } from '../../src/host/types/browser.ts';
+import type { CompareBase } from '@mochi/domain/host/types/browser';
 import { devTarget, pickPort } from '../../src/terminal/lsof.ts';
 import { worktreeRoot } from '@mochi/core/agents/config';
 import { baseRef, localName } from '../git/branches.ts';

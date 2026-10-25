@@ -12,7 +12,7 @@ import {
 import { Copy, Download } from '@/icons';
 import { useSize } from '../browser/PageSurface';
 import { download } from '../viz/exportVisual';
-import { localDay } from './days';
+import { localDay } from '@mochi/domain/usage/days';
 import { rangeStart, type RangeId, type UsageView } from './report';
 import { CARD, ShareCard } from './ShareCard';
 

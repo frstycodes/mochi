@@ -33,7 +33,7 @@ import type {
   WebSearchOutput,
 } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
-import { ACCOUNT_ARGUMENT } from '../../../../../apps/desktop/src/library/connectors.ts';
+import { ACCOUNT_ARGUMENT } from '@mochi/domain/library/connectors';
 import type {
   AgentCommand,
   AgentInfo,
@@ -48,7 +48,7 @@ import {
   IMAGE_TOOL,
   imageCard,
 } from '../../../../../apps/desktop/src/runtime/imageTool.ts';
-import { MOCHI_SERVER } from '../../../../../apps/desktop/src/runtime/toolTable.ts';
+import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { claudeEventWindow } from '../../../../../apps/desktop/src/usage/limits.ts';
 import { posixPath } from '../../../../../apps/desktop/electron/platform.ts';
 import type { SaveImage } from '../images.ts';

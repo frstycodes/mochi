@@ -4,7 +4,7 @@ import type {
   TokenBucket,
   UsageHost,
 } from '../types/usage.ts';
-import { localDay } from '../../usage/days.ts';
+import { localDay } from '@mochi/domain/usage/days';
 
 // The web build has no logs or git: a week shaped like Mochi's own first week, ending today, so the page can be tried.
 const DEMO_DAYS = [

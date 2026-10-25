@@ -26,7 +26,7 @@ import { DiffIcon } from '../icons/panes';
 import { timeAgo } from '../progress';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
-import type { VizLanguage } from '../viz/fence';
+import type { VizLanguage } from '@mochi/domain/viz/fence';
 import {
   artifactsOf,
   type FileArtifact,

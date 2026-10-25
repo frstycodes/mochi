@@ -1,5 +1,5 @@
 import { useSidebar } from '@/components/ui/sidebar';
-import { displayRoot, leaves } from './layout/tree';
+import { displayRoot, leaves } from '@mochi/domain/layout/tree';
 import { useHarnessSelector } from './store';
 
 /** A page header carries the sidebar trigger while the sidebar is hidden (always on phones, where it's a sheet), never once several splits are on screen. While collapsed on desktop, the first header also clears the traffic lights. */

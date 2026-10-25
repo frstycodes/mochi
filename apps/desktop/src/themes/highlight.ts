@@ -1,5 +1,5 @@
 import { DEFAULT_THEMES, registerCustomTheme } from '@pierre/diffs';
-import type { ColorTheme } from './model';
+import type { ColorTheme } from '@mochi/domain/themes/model';
 import { shikiTheme } from './shiki';
 import { useColorTheme } from './store';
 

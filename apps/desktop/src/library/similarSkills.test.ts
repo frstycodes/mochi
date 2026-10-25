@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import { isSimilarName } from './similarSkills.ts';
-import { isInternalSkill } from './skillMd.ts';
+import { isInternalSkill } from '@mochi/domain/library/skillMd';
 
 test('isSimilarName matches the same words minus filler, or a long enough name inside another', () => {
   assert.equal(isSimilarName('ui-skill', 'UI'), true);

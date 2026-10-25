@@ -6,7 +6,7 @@ import type { Action, State } from '../store/index.tsx';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { redactExport, type ReplayExport } from './export.ts';
-import { embedReplay, isSelfContained } from './page.ts';
+import { embedReplay, isSelfContained } from '@mochi/domain/replay/page';
 import {
   compact,
   linesFor,

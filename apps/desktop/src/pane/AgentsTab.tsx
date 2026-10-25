@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { plural, TOKENS } from '@/lib/format';
+import { plural, TOKENS } from '@mochi/domain/lib/format';
 import { formatElapsed } from '../progress';
 import {
   SubagentAvatar,

@@ -7,7 +7,7 @@ import type {
   BrowserDialog,
   BrowserEmulation,
   CompareBase,
-} from '@/host/types/browser';
+} from '@mochi/domain/host/types/browser';
 import { DEVICES, RESPONSIVE } from './devices';
 import { notifyDownload } from './downloads';
 import { pushHistory } from './url';

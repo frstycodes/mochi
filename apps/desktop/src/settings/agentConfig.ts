@@ -6,7 +6,7 @@ import {
   tomlKey,
   tomlValue,
   type TomlDoc,
-} from './toml.ts';
+} from '@mochi/domain/settings/toml';
 
 /**
  * What a profile's accounts carry in their own config folders (CLAUDE.md / AGENTS.md, MCP servers, skills), read and

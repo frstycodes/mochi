@@ -1,4 +1,4 @@
-import type { BrowserDialog } from '../host/types/browser.ts';
+import type { BrowserDialog } from '@mochi/domain/host/types/browser';
 
 /** What the agent hears while a dialog blocks the page: every other browser tool on the tab fails with it. */
 export const dialogNote = ({ kind, message }: BrowserDialog) =>

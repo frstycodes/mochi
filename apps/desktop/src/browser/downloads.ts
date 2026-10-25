@@ -1,6 +1,6 @@
 import { toast } from '@/toast/store';
 import { host } from '@/host';
-import type { BrowserEvent } from '@/host/types/browser';
+import type { BrowserEvent } from '@mochi/domain/host/types/browser';
 import { IS_MAC } from '@/keys';
 
 const REVEAL_LABEL = IS_MAC ? 'Show in Finder' : 'Show in folder';

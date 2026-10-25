@@ -1,4 +1,4 @@
-import type { CaptureKind } from '../../src/library/recipes.ts';
+import type { CaptureKind } from '@mochi/domain/library/recipes';
 
 /** What a setup run left in main for `connect_account`'s `fromSetup`: captured values, and the run's own params (a workspace). */
 export interface SetupCapture {

@@ -44,7 +44,7 @@ import {
   type McpServerDef,
   type SkillEntry,
 } from '../../../../apps/desktop/src/settings/agentConfig.ts';
-import { parseToml } from '../../../../apps/desktop/src/settings/toml.ts';
+import { parseToml } from '@mochi/domain/settings/toml';
 import {
   HARNESS_IDS,
   HARNESSES,

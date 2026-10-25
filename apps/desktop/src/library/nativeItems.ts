@@ -1,7 +1,7 @@
 import type { Account, ProviderConfig } from '../host/types/settings.ts';
 import type { McpServerDef } from '../settings/agentConfig.ts';
 import type { Provider } from '../model.ts';
-import type { DiskFile } from '../host/types/fs.ts';
+import type { DiskFile } from '@mochi/domain/host/types/fs';
 
 export type NativeKind = 'skill' | 'plugin' | 'server' | 'connector';
 

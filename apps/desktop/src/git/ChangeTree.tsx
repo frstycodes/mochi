@@ -3,7 +3,7 @@ import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronRight } from '@/icons';
 import { cn } from '@/lib/utils';
 import type { DiffFile } from '../host/types/git';
-import { visibleRows } from '../files/tree';
+import { visibleRows } from '@mochi/domain/files/tree';
 import { DiffStat } from '../WorkLog';
 import { fileKey, type ChangeSection } from './files';
 

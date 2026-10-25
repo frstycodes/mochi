@@ -70,7 +70,7 @@ import {
   type SimButton,
   type SimContentSize,
   type Simulator,
-} from '@/host/types/sim';
+} from '@mochi/domain/host/types/sim';
 import { cn } from '@/lib/utils';
 import { DeviceScreen } from '@/sim/DeviceScreen';
 import { useBuild, type BuildState } from '@/sim/useBuild';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from '@/toast/store';
 import { host } from '@/host';
-import type { Simulator } from '@/host/types/sim';
+import type { Simulator } from '@mochi/domain/host/types/sim';
 import { useDispatch } from '@/store';
 import { message } from './useSimulators';
 

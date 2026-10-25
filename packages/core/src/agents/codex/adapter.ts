@@ -53,7 +53,7 @@ import {
 import {
   MOCHI_TIMEOUT_MS,
   type MochiScope,
-} from '../../../../../apps/desktop/src/runtime/toolTable.ts';
+} from '@mochi/domain/runtime/toolTable';
 import { CHEAP_MODELS } from '../../../../../apps/desktop/src/utility/prompts.ts';
 
 interface Live {

@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
 import { open, readFile, stat } from 'node:fs/promises';
-import type { FileContent, WriteResult } from '../../src/host/types/fs.ts';
+import type { FileContent, WriteResult } from '@mochi/domain/host/types/fs';
 import { resolveInside } from './contain.ts';
 
 const MAX_TEXT_BYTES = 5 * 1024 * 1024;

@@ -1,4 +1,4 @@
-import type { ConnectorId } from './connectors.ts';
+import type { ConnectorId } from '@mochi/domain/library/connectors';
 
 /**
  * How an agent sets up the user's own app for a service Mochi has no app for (`list_connectors` hands it these). The agent

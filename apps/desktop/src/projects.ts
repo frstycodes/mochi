@@ -5,7 +5,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 import { queryClient } from './query.ts';
 import { queryKeys } from './queryKeys.ts';
 import { host } from './host/index.ts';
-import type { CloneSource, Project } from './host/types/projects.ts';
+import type { CloneSource, Project } from '@mochi/domain/host/types/projects';
 import type { Thread } from './model.ts';
 import { getProfiles } from './profiles.ts';
 import { getPrefs } from './settings/prefs.ts';

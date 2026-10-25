@@ -11,7 +11,7 @@ import {
   MANIFEST_PATHS,
   parsePluginBundle,
   type PluginBundle,
-} from '../../src/library/pluginBundle.ts';
+} from '@mochi/domain/library/pluginBundle';
 import { readTar } from '../../src/library/tar.ts';
 import type { Provider } from '../../src/model.ts';
 

@@ -11,7 +11,7 @@ import type {
 } from '../../src/host/types/agent.ts';
 import type { AgentLogin } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
-import type { MochiScope } from '../../src/runtime/toolTable.ts';
+import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 import { mainCoreClient } from '@mochi/core/host';
 import { makeHostCaller } from '@mochi/core/hostClient';
 import { useAgentConfig } from '@mochi/core/agents/config';

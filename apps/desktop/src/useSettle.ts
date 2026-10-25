@@ -2,7 +2,7 @@ import type { Dispatch } from 'react';
 import { toast } from './toast/store.ts';
 import type { Thread } from './model';
 import { type Action, useDispatch } from './store';
-import { plural } from './lib/format.ts';
+import { plural } from '@mochi/domain/lib/format';
 
 /** Settle or reactivate a thread, with an undo toast. */
 export function useSettle(thread: Thread) {

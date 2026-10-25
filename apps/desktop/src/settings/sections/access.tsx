@@ -26,7 +26,7 @@ import {
   TOOL_NAMES,
   type Tier,
   type ToolName,
-} from '../../runtime/toolTable';
+} from '@mochi/domain/runtime/toolTable';
 import { useSettingsRoute } from '../../routes/nav';
 import {
   SettingsCard,

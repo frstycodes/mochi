@@ -16,7 +16,7 @@ import {
   connectorKey,
   isSameServer,
   type Connector,
-} from './connectors';
+} from '@mochi/domain/library/connectors';
 import { useLibraryScope } from './libraryScope';
 import { serviceName } from './names';
 import type { LibraryEntry } from './library';

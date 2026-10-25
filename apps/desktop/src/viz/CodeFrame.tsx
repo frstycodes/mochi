@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { EmbedFrame } from './EmbedFrame';
-import { VIZ_LANGUAGES } from './fence';
+import { VIZ_LANGUAGES } from '@mochi/domain/viz/fence';
 import { serializeSvg } from './exportVisual';
 import { CopyButton, VisualFrame } from './VisualFrame';
 

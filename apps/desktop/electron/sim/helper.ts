@@ -8,7 +8,7 @@ import {
   spawnCommand,
   type CoreChild,
 } from '@mochi/core/runClient';
-import type { SimFrame } from '../../src/host/types/sim.ts';
+import type { SimFrame } from '@mochi/domain/host/types/sim';
 import { frameSplitter } from './parse.ts';
 import helperSource from './simhelper.swift?raw';
 

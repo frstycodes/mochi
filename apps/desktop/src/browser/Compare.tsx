@@ -14,7 +14,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { host } from '@/host';
-import type { CompareBase } from '@/host/types/browser';
+import type { CompareBase } from '@mochi/domain/host/types/browser';
 import type { Thread } from '@/model';
 import { TooltipIconButton } from '../ui';
 import { closeCompare, openCompare } from './actions';

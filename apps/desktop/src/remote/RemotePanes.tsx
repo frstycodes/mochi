@@ -35,7 +35,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ComposerCard } from '../Composer';
 import { FileTree } from '../files/FileTree';
 import { FilePath } from '../files/FileView';
-import { ancestors, buildTree, visibleRows } from '../files/tree';
+import { ancestors, buildTree, visibleRows } from '@mochi/domain/files/tree';
 import type { FileTarget } from '../files/FileFinder';
 import {
   ChangeList,

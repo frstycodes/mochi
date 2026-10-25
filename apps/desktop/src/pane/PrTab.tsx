@@ -18,8 +18,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
-import { STATUS_WORDS } from '../chat/refs';
+import { plural } from '@mochi/domain/lib/format';
+import { STATUS_WORDS } from '@mochi/domain/chat/refs';
 import { ChangeList, type ChangeActions } from '../git/ChangeList';
 import { CheckList, ChecksSummary } from '../git/Checks';
 import { changeSections } from '../git/files';

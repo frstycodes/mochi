@@ -1,4 +1,4 @@
-import { fuzzyMatch } from '../files/fuzzy.ts';
+import { fuzzyMatch } from '@mochi/domain/files/fuzzy';
 import type { ProviderConfig } from '../host/types/settings.ts';
 import type { NativeItem } from '../library/nativeItems.ts';
 import type { AgentCommand, Provider } from '../model.ts';

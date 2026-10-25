@@ -1,7 +1,11 @@
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { MOCHI_SERVER } from '../runtime/toolTable.ts';
-import { connectorIcon, connectorKey, CONNECTORS } from './connectors.ts';
+import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
+import {
+  connectorIcon,
+  connectorKey,
+  CONNECTORS,
+} from '@mochi/domain/library/connectors';
 import { skillPluginName, type LibraryEntry } from './library.ts';
 
 /** What to show for a server, plugin or skill: its human name, its own image when it has one, the raw id for a tooltip. */

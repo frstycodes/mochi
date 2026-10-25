@@ -35,7 +35,7 @@ import { ConnectorPage } from '../../library/ConnectorPage';
 import { PluginsView } from '../../library/PluginsView';
 import { SkillsView } from '../../library/SkillsView';
 import { AccessSection, toolRowId } from './access';
-import { isGoalTool, TOOL_NAMES } from '../../runtime/toolTable';
+import { isGoalTool, TOOL_NAMES } from '@mochi/domain/runtime/toolTable';
 import { TOOL_GUIDE } from '../toolGuide';
 import { AppearanceSection } from './appearance';
 import { BrowserSection } from './browser';

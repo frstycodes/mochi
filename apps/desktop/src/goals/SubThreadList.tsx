@@ -1,7 +1,7 @@
 import { DiagramTree } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import type { Thread } from '../model';
 import { isWorking } from '../agentPhase';
 import { PrStack } from '../git/PrStack';

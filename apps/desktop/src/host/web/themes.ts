@@ -1,17 +1,17 @@
 import { persistedSlice } from '../../lib/uiStorage.ts';
-import type { ThemesHost } from '../types/themes.ts';
+import type { ThemesHost } from '@mochi/domain/host/types/themes';
 import {
   checkCustomFile,
   customFileName,
   customTheme,
-} from '../../themes/custom.ts';
-import type { ColorTheme } from '../../themes/model.ts';
+} from '@mochi/domain/themes/custom';
+import type { ColorTheme } from '@mochi/domain/themes/model';
 import {
   checkRef,
   createMarketplace,
   readCapped,
-} from '../../themes/openVsx.ts';
-import { LIMITS } from '../../themes/vsix.ts';
+} from '@mochi/domain/themes/openVsx';
+import { LIMITS } from '@mochi/domain/themes/vsix';
 
 // The web build talks to Open VSX straight from the page (its API and CDN send `Access-Control-Allow-Origin: *`) and keeps
 // installed and custom themes in browser storage.

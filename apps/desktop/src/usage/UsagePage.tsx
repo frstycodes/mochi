@@ -27,9 +27,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Refresh, Share } from '@/icons';
 import { cn } from '@/lib/utils';
-import type { Project } from '../host/types/projects';
+import type { Project } from '@mochi/domain/host/types/projects';
 import { ProviderMark, TooltipIconButton } from '../ui';
-import { periodName } from './days';
+import { periodName } from '@mochi/domain/usage/days';
 import { CommitHeatmap, SpendTrend, TokenCostFlow } from './charts';
 import { compact, Figure, usd } from './Figure';
 import {

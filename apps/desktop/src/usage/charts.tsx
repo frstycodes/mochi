@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useSize } from '../browser/PageSurface';
 import { cn } from '@/lib/utils';
-import { periodName } from './days';
+import { periodName } from '@mochi/domain/usage/days';
 import { compact, usd } from './Figure';
 import type { SeriesPoint, UsageView } from './report';
 

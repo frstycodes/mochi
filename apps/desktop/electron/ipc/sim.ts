@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { runCommand } from '@mochi/core/runClient';
-import type { SimHost, SimLogLine } from '../../src/host/types/sim.ts';
+import type { SimHost, SimLogLine } from '@mochi/domain/host/types/sim';
 import { buildAndRun } from '../sim/build.ts';
 import {
   screenshot,

@@ -1,4 +1,8 @@
-import { slotOf, type ColorTheme, type ThemeSlot } from './model.ts';
+import {
+  slotOf,
+  type ColorTheme,
+  type ThemeSlot,
+} from '@mochi/domain/themes/model';
 
 export interface PackageGroup {
   id: string;

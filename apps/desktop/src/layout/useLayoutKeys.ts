@@ -2,7 +2,12 @@ import { useEffect, useEffectEvent } from 'react';
 import { toast } from '../toast/store.ts';
 import { pinnedThreads, togglePin } from '../reorder';
 import { useHarness, type State } from '../store';
-import { ARROW_SIDE, findLeaf, neighbourInDirection, type Rect } from './tree';
+import {
+  ARROW_SIDE,
+  findLeaf,
+  neighbourInDirection,
+  type Rect,
+} from '@mochi/domain/layout/tree';
 import {
   commandOf,
   pinnedCommand,

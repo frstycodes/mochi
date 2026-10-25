@@ -62,7 +62,7 @@ import {
   SimilarNote,
   useSimilarNative,
 } from './LibraryParts';
-import { parseSkillSource } from './skillSource';
+import { parseSkillSource } from '@mochi/domain/library/skillSource';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
 
 /**

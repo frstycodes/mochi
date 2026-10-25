@@ -1,7 +1,7 @@
 import { FileIcon } from '@react-symbols/icons/utils';
-import type { SearchHits, SearchLine } from '@/host/types/fs';
+import type { SearchHits, SearchLine } from '@mochi/domain/host/types/fs';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/format';
+import { plural } from '@mochi/domain/lib/format';
 import type { FileTarget } from './FileFinder';
 import { Highlighted } from './Highlighted';
 import type { useContentSearch } from './useContentSearch';

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { app, net, shell } from 'electron';
-import type { BrowserHost } from '../../src/host/types/browser.ts';
+import type { BrowserHost } from '@mochi/domain/host/types/browser';
 import { startCompare, stopCompare } from '../browser/compare.ts';
 import {
   browserLabel,

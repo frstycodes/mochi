@@ -9,15 +9,15 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
-import type { ThemesHost } from '../../src/host/types/themes.ts';
+import type { ThemesHost } from '@mochi/domain/host/types/themes';
 import {
   checkCustomFile,
   customFileName,
   customTheme,
-} from '../../src/themes/custom.ts';
-import type { ColorTheme } from '../../src/themes/model.ts';
-import { checkRef, createMarketplace } from '../../src/themes/openVsx.ts';
-import { LIMITS, loadTheme } from '../../src/themes/vsix.ts';
+} from '@mochi/domain/themes/custom';
+import type { ColorTheme } from '@mochi/domain/themes/model';
+import { checkRef, createMarketplace } from '@mochi/domain/themes/openVsx';
+import { LIMITS, loadTheme } from '@mochi/domain/themes/vsix';
 import type { Handlers } from './handlers.ts';
 
 // userData/themes/<namespace>.<name>.json holds an installed extension's themes, already read out of its .vsix;
