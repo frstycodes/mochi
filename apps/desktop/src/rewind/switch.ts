@@ -32,6 +32,8 @@ export function switchProvider(
       if (t.isSettingsChat) return t;
       const i = pendingIndex(t);
       const from = i >= 0 ? t.activity[i].handoff!.from : providerOf(t);
+      const fromModel =
+        i >= 0 ? t.activity[i].handoff!.fromModel : controlsOf(t).model;
       const kept = i >= 0 ? { ...t, activity: t.activity.toSpliced(i, 1) } : t;
       if (from === to && providerOf(t) === to) return t;
       const controls = {
@@ -43,7 +45,9 @@ export function switchProvider(
         ...kept,
         providers: [to, ...t.providers.filter((p) => p !== to)],
         controls,
+        // The old session's own report (its model, tools): the new one sends its own once it starts.
         session: undefined,
+        agent: undefined,
         ...(t.live && {
           live: {
             ...t.live,
@@ -60,6 +64,7 @@ export function switchProvider(
           from,
           to,
           status: 'pending',
+          fromModel,
           ...(model && { model }),
         }),
       );
@@ -73,15 +78,16 @@ export function switchDelivered(
   event: Extract<AgentEvent, { type: 'context' }>,
   now: number,
 ): Thread {
+  const i = pendingIndex(thread);
   const handoff: Handoff = {
     from: event.from,
+    fromModel: i >= 0 ? thread.activity[i].handoff!.fromModel : undefined,
     to: event.to,
     status: 'started',
     prompt: event.text,
     contents: event.contents,
     ...(event.model && { model: event.model }),
   };
-  const i = pendingIndex(thread);
   if (i < 0) return log(thread, switchEntry(now, handoff));
   return {
     ...thread,

@@ -593,6 +593,7 @@ export const Handoff = Schema.Struct({
   prompt: opt(Schema.String),
   fallback: opt(Schema.Literals(['timeout', 'error'])),
   error: opt(Schema.String),
+  fromModel: opt(Schema.String),
   model: opt(Schema.String),
   contents: opt(Schema.String),
 });

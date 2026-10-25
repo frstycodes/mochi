@@ -95,5 +95,12 @@ export function branchFromTitle(
 
 /** A thread whose folder isn't set up yet (a scheduled thread before its first run): its workspace can still change. */
 export function isUnstarted(thread: Thread) {
-  return !!thread.repo && !!thread.live?.isDetached && !thread.session;
+  const isSwitching =
+    !!thread.live?.restart && 'switchFrom' in thread.live.restart;
+  return (
+    !!thread.repo &&
+    !!thread.live?.isDetached &&
+    !thread.session &&
+    !isSwitching
+  );
 }

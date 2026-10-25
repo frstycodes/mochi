@@ -252,6 +252,8 @@ export interface Handoff {
   /** Why `prompt` is the local summary instead of a model's draft. */
   fallback?: 'timeout' | 'error';
   error?: string;
+  /** A switch: the model `from` ran ('' its default); unset on rows from before it was recorded. */
+  fromModel?: string;
   /** A switch: the model `to` runs; unset runs its default. */
   model?: string;
   /** A switch: what the package held, `brief, 6 recent turns, 11.8k tokens`. */

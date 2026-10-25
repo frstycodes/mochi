@@ -12,6 +12,7 @@ import type {
   AgentRunOptions,
 } from '../../../../apps/desktop/src/host/types/agent.ts';
 import type { Thread } from '../../../../apps/desktop/src/model.ts';
+import { isUnstarted } from '../../../../apps/desktop/src/git/workspace.ts';
 import { agentCalls } from '../../../../apps/desktop/src/runtime/live.ts';
 import type {
   Action,
@@ -210,6 +211,21 @@ it.live(
         }),
       );
       assert.equal(pending.thread.activity.at(-1)?.handoff?.status, 'pending');
+      assert.equal(
+        pending.thread.activity.at(-1)?.handoff?.fromModel,
+        '',
+        "Claude's default",
+      );
+      assert.equal(pending.thread.agent, undefined, "Claude's own report goes");
+      assert.equal(
+        isUnstarted({
+          ...pending.thread,
+          repo: { path: dir } as Thread['repo'],
+          live: { ...pending.thread.live!, isDetached: true },
+        }),
+        false,
+        'a pending switch is no new thread',
+      );
       const send: Action = {
         type: 'send',
         threadId: THREAD,
@@ -283,6 +299,7 @@ it.live(
       const row = switched.thread.activity.at(-1)!.handoff!;
       assert.equal(row.prompt, sent);
       assert.equal(row.model, 'gpt-6');
+      assert.equal(row.fromModel, '', 'kept from the pending row');
       assert.match(
         row.contents ?? '',
         /^brief, 2 recent turns, [\d.]+k tokens$/,
