@@ -1,4 +1,4 @@
-import type { Action, State } from './index.tsx';
+import type { Action, State } from './types.ts';
 
 export interface UiState {
   paused: boolean;

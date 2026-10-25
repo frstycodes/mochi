@@ -15,7 +15,12 @@ export interface Connector {
 export const GOOGLE_WORKSPACE_PORT = 47821;
 export const GOOGLE_WORKSPACE_URL = `http://localhost:${GOOGLE_WORKSPACE_PORT}/mcp`;
 
-export const CONNECTOR_CATEGORIES = ['Productivity', 'Engineering', 'Design', 'Business'] as const;
+export const CONNECTOR_CATEGORIES = [
+  'Productivity',
+  'Engineering',
+  'Design',
+  'Business',
+] as const;
 
 type ConnectorCategory = (typeof CONNECTOR_CATEGORIES)[number];
 
@@ -23,7 +28,8 @@ export const CONNECTORS = [
   {
     id: 'google-workspace',
     name: 'Google Workspace',
-    description: 'Gmail, Calendar and Drive: search and draft email, read your schedule, find files.',
+    description:
+      'Gmail, Calendar and Drive: search and draft email, read your schedule, find files.',
     category: 'Productivity',
     serverUrl: GOOGLE_WORKSPACE_URL,
     note: 'Runs on this computer. The first connection downloads what it needs, which takes a minute or two.',
@@ -71,7 +77,13 @@ export const CONNECTORS = [
     category: 'Engineering',
     serverUrl: 'https://mcp.sentry.dev/mcp',
   },
-  { id: 'vercel', name: 'Vercel', description: 'Projects, deployments and logs.', category: 'Engineering', serverUrl: 'https://mcp.vercel.com' },
+  {
+    id: 'vercel',
+    name: 'Vercel',
+    description: 'Projects, deployments and logs.',
+    category: 'Engineering',
+    serverUrl: 'https://mcp.vercel.com',
+  },
   {
     id: 'supabase',
     name: 'Supabase',
@@ -113,7 +125,8 @@ export type ConnectorId = (typeof CONNECTORS)[number]['id'];
 
 // The vendor's own site, for its favicon: MCP endpoints (`mcp.linear.app`) serve none. Google Workspace's is Google's G.
 const CONNECTOR_SITES = {
-  'google-workspace': 'https://www.gstatic.com/images/branding/productlogos/googleg/v6/36px.svg',
+  'google-workspace':
+    'https://www.gstatic.com/images/branding/productlogos/googleg/v6/36px.svg',
   notion: 'notion.so',
   slack: 'slack.com',
   linear: 'linear.app',
@@ -131,13 +144,19 @@ const CONNECTOR_SITES = {
 /** A connector's icon: its product icon or vendor favicon (via Google's favicon service), else the server host's favicon. */
 export function connectorIcon(serverUrl: string) {
   const known = connectorFor(serverUrl);
-  const site = known ? CONNECTOR_SITES[known.id as ConnectorId] : URL.canParse(serverUrl) ? new URL(serverUrl).hostname : null;
+  const site = known
+    ? CONNECTOR_SITES[known.id as ConnectorId]
+    : URL.canParse(serverUrl)
+      ? new URL(serverUrl).hostname
+      : null;
   if (site?.startsWith('https://')) return site;
   return site && faviconUrl(site, 64);
 }
 
 export function connectorFor(serverUrl: string): Connector | undefined {
-  return CONNECTORS.find((connector) => isSameServer(connector.serverUrl, serverUrl));
+  return CONNECTORS.find((connector) =>
+    isSameServer(connector.serverUrl, serverUrl),
+  );
 }
 
 export function isSameServer(a: string, b: string) {
@@ -146,7 +165,13 @@ export function isSameServer(a: string, b: string) {
 
 /** The server name a connector gets in a session: its directory id, else its host as a slug (`mcp-example-com`). */
 export function connectorKey(serverUrl: string) {
-  return connectorFor(serverUrl)?.id ?? new URL(serverUrl).hostname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return (
+    connectorFor(serverUrl)?.id ??
+    new URL(serverUrl).hostname
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+  );
 }
 
 /**
@@ -161,32 +186,67 @@ export function connectorKey(serverUrl: string) {
  * Google isn't here: its connector is a local server that registers clients itself (`GOOGLE_WORKSPACE_URL`).
  */
 export const OAUTH_PROVIDERS = {
-  github: { name: 'GitHub', hosts: [/^api\.githubcopilot\.com$/], consoleUrl: 'https://github.com/settings/applications/new', authorizationParams: {}, redirect: 'loopback', flow: 'device' },
-  slack: { name: 'Slack', hosts: [/^mcp\.slack\.com$/], consoleUrl: 'https://api.slack.com/apps', authorizationParams: {}, redirect: 'relay', flow: 'redirect' },
-} satisfies Record<string, { name: string; hosts: RegExp[]; consoleUrl: string; authorizationParams: Record<string, string>; redirect: 'loopback' | 'relay'; flow: 'redirect' | 'device' }>;
+  github: {
+    name: 'GitHub',
+    hosts: [/^api\.githubcopilot\.com$/],
+    consoleUrl: 'https://github.com/settings/applications/new',
+    authorizationParams: {},
+    redirect: 'loopback',
+    flow: 'device',
+  },
+  slack: {
+    name: 'Slack',
+    hosts: [/^mcp\.slack\.com$/],
+    consoleUrl: 'https://api.slack.com/apps',
+    authorizationParams: {},
+    redirect: 'relay',
+    flow: 'redirect',
+  },
+} satisfies Record<
+  string,
+  {
+    name: string;
+    hosts: RegExp[];
+    consoleUrl: string;
+    authorizationParams: Record<string, string>;
+    redirect: 'loopback' | 'relay';
+    flow: 'redirect' | 'device';
+  }
+>;
 
 export type OAuthProviderId = keyof typeof OAUTH_PROVIDERS;
 
-export const OAUTH_PROVIDER_IDS = Object.keys(OAUTH_PROVIDERS) as OAuthProviderId[];
+export const OAUTH_PROVIDER_IDS = Object.keys(
+  OAUTH_PROVIDERS,
+) as OAuthProviderId[];
 
 /** A provider whose app signs accounts in: the ones above, and Google for the local Google Workspace server. */
 export type AppProviderId = OAuthProviderId | 'google';
 
-export const GOOGLE_APP = { name: 'Google', consoleUrl: 'https://console.cloud.google.com/auth/clients' };
+export const GOOGLE_APP = {
+  name: 'Google',
+  consoleUrl: 'https://console.cloud.google.com/auth/clients',
+};
 
 /** Whose app a connector's accounts sign in with, if not one the server registers itself. */
 export function appProviderFor(serverUrl: string): AppProviderId | undefined {
-  return isSameServer(serverUrl, GOOGLE_WORKSPACE_URL) ? 'google' : oauthProviderFor(serverUrl);
+  return isSameServer(serverUrl, GOOGLE_WORKSPACE_URL)
+    ? 'google'
+    : oauthProviderFor(serverUrl);
 }
 
 export function appInfo(provider: AppProviderId) {
   return provider === 'google' ? GOOGLE_APP : OAUTH_PROVIDERS[provider];
 }
 
-export function oauthProviderFor(serverUrl: string): OAuthProviderId | undefined {
+export function oauthProviderFor(
+  serverUrl: string,
+): OAuthProviderId | undefined {
   if (!URL.canParse(serverUrl)) return undefined;
   const { hostname } = new URL(serverUrl);
-  return OAUTH_PROVIDER_IDS.find((id) => OAUTH_PROVIDERS[id].hosts.some((host) => host.test(hostname)));
+  return OAUTH_PROVIDER_IDS.find((id) =>
+    OAUTH_PROVIDERS[id].hosts.some((host) => host.test(hostname)),
+  );
 }
 
 /** The argument every connector tool gains when a profile has more than one account on it. */
@@ -196,7 +256,10 @@ const ALIAS_SUGGESTIONS = ['personal', 'work', 'client', 'team'];
 
 /** The first suggested account name no account on the service has yet. */
 export function freeAlias(taken: string[]) {
-  return ALIAS_SUGGESTIONS.find((a) => !taken.includes(a)) ?? `account-${taken.length + 1}`;
+  return (
+    ALIAS_SUGGESTIONS.find((a) => !taken.includes(a)) ??
+    `account-${taken.length + 1}`
+  );
 }
 
 /** OAuth `state` for a sign-in through the relay: the loopback port first, so the relay (`infra/relay/src/oauth.ts`) knows where to send the browser back. */

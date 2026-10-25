@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useNow } from '../useNow';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { BackgroundTask } from '@/icons';
 import { cn } from '@/lib/utils';
@@ -16,19 +16,45 @@ import { parseTool } from '../summary';
 import { ProviderMark } from '../ui';
 
 /** Each subagent is a Mochi of its own flavor, named after it; vanilla stays the thread's own Mochi. Past five, names count up ("Matcha 2"). */
-export function subagentPersona(thread: Thread, subagent: Subagent): { flavor: MochiFlavor; name: string } {
-  const i = Math.max(0, thread.subagents?.findIndex((s) => s.id === subagent.id) ?? 0);
+export function subagentPersona(
+  thread: Thread,
+  subagent: Subagent,
+): { flavor: MochiFlavor; name: string } {
+  const i = Math.max(
+    0,
+    thread.subagents?.findIndex((s) => s.id === subagent.id) ?? 0,
+  );
   const flavor = PERSONA_FLAVORS[i % PERSONA_FLAVORS.length];
   const round = Math.floor(i / PERSONA_FLAVORS.length);
   const name = flavor[0].toUpperCase() + flavor.slice(1);
   return { flavor, name: round ? `${name} ${round + 1}` : name };
 }
 
-const PERSONA_FLAVORS = ['matcha', 'sakura', 'ube', 'mango', 'soda'] as const satisfies MochiFlavor[];
+const PERSONA_FLAVORS = [
+  'matcha',
+  'sakura',
+  'ube',
+  'mango',
+  'soda',
+] as const satisfies MochiFlavor[];
 
 /** The agent's Mochi: acting out what it does while it runs, idle once it ends. */
-export function SubagentAvatar({ flavor, subagent, className }: { flavor: MochiFlavor; subagent: Subagent; className?: string }) {
-  return <AgentLoader phase={subagent.status === 'running' ? runningPhase(subagent) : 'idle'} flavor={flavor} className={cn('-my-1 size-6 shrink-0 text-foreground', className)} />;
+export function SubagentAvatar({
+  flavor,
+  subagent,
+  className,
+}: {
+  flavor: MochiFlavor;
+  subagent: Subagent;
+  className?: string;
+}) {
+  return (
+    <AgentLoader
+      phase={subagent.status === 'running' ? runningPhase(subagent) : 'idle'}
+      flavor={flavor}
+      className={cn('-my-1 size-6 shrink-0 text-foreground', className)}
+    />
+  );
 }
 
 function runningPhase(s: Subagent) {
@@ -40,7 +66,10 @@ function runningPhase(s: Subagent) {
 /** The row's one line: what a running agent does now, else its report's first line, or how it ended. */
 export function SubagentLine({ subagent }: { subagent: Subagent }) {
   if (subagent.status === 'running') {
-    const text = currentStep(subagent) ?? subagent.activity ?? (subagent.message || subagent.steps.length ? 'Thinking' : 'Starting');
+    const text =
+      currentStep(subagent) ??
+      subagent.activity ??
+      (subagent.message || subagent.steps.length ? 'Thinking' : 'Starting');
     return (
       <span className="flex min-w-0 flex-1" title={text}>
         <Shimmer as="span" className="min-w-0 truncate">
@@ -49,9 +78,21 @@ export function SubagentLine({ subagent }: { subagent: Subagent }) {
       </span>
     );
   }
-  if (subagent.status === 'failed') return <span className="min-w-0 flex-1 truncate text-destructive">{oneLine(subagent.error) || 'Failed'}</span>;
-  const text = subagent.status === 'stopped' ? 'Stopped' : oneLine(subagent.result) || 'Finished';
-  return <span className="min-w-0 flex-1 truncate text-muted-foreground">{text}</span>;
+  if (subagent.status === 'failed')
+    return (
+      <span className="min-w-0 flex-1 truncate text-destructive">
+        {oneLine(subagent.error) || 'Failed'}
+      </span>
+    );
+  const text =
+    subagent.status === 'stopped'
+      ? 'Stopped'
+      : oneLine(subagent.result) || 'Finished';
+  return (
+    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+      {text}
+    </span>
+  );
 }
 
 function currentStep(s: Subagent) {
@@ -60,10 +101,23 @@ function currentStep(s: Subagent) {
 }
 
 /** The model it ran on by its picker name ("Haiku 5.5") beside its harness's mark; an id the list lacks shows as written. */
-export function SubagentModel({ provider, model, className }: { provider: Provider; model: string; className?: string }) {
+export function SubagentModel({
+  provider,
+  model,
+  className,
+}: {
+  provider: Provider;
+  model: string;
+  className?: string;
+}) {
   const models = useModels(useSpace().id)[provider];
   return (
-    <span className={cn('flex shrink-0 items-center gap-1.5 text-muted-foreground', className)}>
+    <span
+      className={cn(
+        'flex shrink-0 items-center gap-1.5 text-muted-foreground',
+        className,
+      )}
+    >
       <ProviderMark provider={provider} size={14} />
       {optionFor(models, model, provider).name}
     </span>
@@ -71,32 +125,54 @@ export function SubagentModel({ provider, model, className }: { provider: Provid
 }
 
 /** Elapsed time and tokens, live while it runs. */
-export function SubagentMeta({ subagent, className }: { subagent: Subagent; className?: string }) {
+export function SubagentMeta({
+  subagent,
+  className,
+}: {
+  subagent: Subagent;
+  className?: string;
+}) {
   const elapsed = useElapsed(subagent.startedAt, subagent.endedAt);
   return (
-    <span className={cn('flex shrink-0 items-center gap-2 tabular text-subtle-foreground', className)}>
+    <span
+      className={cn(
+        'flex shrink-0 items-center gap-2 tabular text-subtle-foreground',
+        className,
+      )}
+    >
       <span>{formatElapsed(elapsed)}</span>
-      {subagent.tokens > 0 && <span>{TOKENS.format(subagent.tokens)} tokens</span>}
+      {subagent.tokens > 0 && (
+        <span>{TOKENS.format(subagent.tokens)} tokens</span>
+      )}
     </span>
   );
 }
 
-export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+export const TOKENS = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 
 export function useElapsed(startedAt: number, endedAt?: number) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (endedAt !== undefined) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [endedAt]);
+  const now = useNow(endedAt === undefined ? 1000 : null);
   return Math.max(0, (endedAt ?? now) - startedAt);
 }
 
-
 /** A task's kind at a glance: the agent's own Mochi, the terminal glyph for a command, else the background-task glyph. */
 export function TaskIcon({ thread, task }: { thread: Thread; task: TaskRow }) {
-  if (task.subagent) return <SubagentAvatar flavor={subagentPersona(thread, task.subagent).flavor} subagent={task.subagent} className="-mx-0.5 size-5" />;
+  if (task.subagent)
+    return (
+      <SubagentAvatar
+        flavor={subagentPersona(thread, task.subagent).flavor}
+        subagent={task.subagent}
+        className="-mx-0.5 size-5"
+      />
+    );
   const Icon = task.kind === 'shell' ? TerminalIcon : BackgroundTask;
-  return <Icon aria-label={task.kind === 'shell' ? 'Command' : 'Task'} className="size-4 text-muted-foreground" />;
+  return (
+    <Icon
+      aria-label={task.kind === 'shell' ? 'Command' : 'Task'}
+      className="size-4 text-muted-foreground"
+    />
+  );
 }

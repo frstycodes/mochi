@@ -3,7 +3,11 @@ import type { PrEvent, ScheduleRun, Trigger } from '../host/types/schedule.ts';
 import { describeCron, nextRun } from './cron.ts';
 
 /** What the scheduler does with a trigger on a tick. `skip` accounts for the due run without running it; `wait` leaves it due. */
-export type Decision = { kind: 'idle' } | { kind: 'wait' } | { kind: 'skip'; reason: string } | { kind: 'run'; reason: string };
+export type Decision =
+  | { kind: 'idle' }
+  | { kind: 'wait' }
+  | { kind: 'skip'; reason: string }
+  | { kind: 'run'; reason: string };
 
 export interface RunState {
   /** This trigger's own run is still going. */
@@ -17,11 +21,16 @@ export interface RunState {
  * Never two runs of one trigger at once: a run that comes due during the previous one is skipped. A thread you're
  * working in holds the run until its turn ends.
  */
-export function cronDecision(trigger: Trigger, now: number, state: RunState): Decision {
+export function cronDecision(
+  trigger: Trigger,
+  now: number,
+  state: RunState,
+): Decision {
   if (trigger.when.kind !== 'cron' || trigger.isPaused) return { kind: 'idle' };
   const due = nextRun(trigger.when.cron, trigger.checkedAt);
   if (due === null || due > now) return { kind: 'idle' };
-  if (state.isRunning) return { kind: 'skip', reason: 'the previous run was still going' };
+  if (state.isRunning)
+    return { kind: 'skip', reason: 'the previous run was still going' };
   if (state.isBusy) return { kind: 'wait' };
   return { kind: 'run', reason: describeCron(trigger.when.cron) };
 }
@@ -40,7 +49,9 @@ export interface PrSnapshot {
   headRefName: string;
   headRefOid: string;
   labels: { name: string }[];
-  statusCheckRollup?: { conclusion?: string | null; state?: string | null }[] | null;
+  statusCheckRollup?:
+    | { conclusion?: string | null; state?: string | null }[]
+    | null;
   /** Set when the list came from `--search review-requested:@me`. */
   isReviewRequested?: boolean;
 }
@@ -51,34 +62,59 @@ export interface PrFire {
   pr: PrSnapshot;
 }
 
-export const PR_EVENT_LABELS = { opened: 'opened', 'review-requested': 'review requested', 'ci-failed': 'CI failed' } satisfies Record<PrEvent, string>;
+export const PR_EVENT_LABELS = {
+  opened: 'opened',
+  'review-requested': 'review requested',
+  'ci-failed': 'CI failed',
+} satisfies Record<PrEvent, string>;
 
 const FAILED = new Set(['FAILURE', 'ERROR', 'TIMED_OUT', 'STARTUP_FAILURE']);
 
 /** Unseen events for this trigger in a poll, oldest PR first. The first poll after a trigger is set only records what is already there. */
-export function prEvents(trigger: Trigger, prs: PrSnapshot[]): { fires: PrFire[]; baseline?: string[] } {
+export function prEvents(
+  trigger: Trigger,
+  prs: PrSnapshot[],
+): { fires: PrFire[]; baseline?: string[] } {
   if (trigger.when.kind !== 'pr') return { fires: [] };
   const { event, branch, label } = trigger.when;
-  const matching = prs.filter((pr) => (!branch || branchMatches(branch, pr.headRefName)) && (!label || pr.labels.some((l) => l.name === label)));
+  const matching = prs.filter(
+    (pr) =>
+      (!branch || branchMatches(branch, pr.headRefName)) &&
+      (!label || pr.labels.some((l) => l.name === label)),
+  );
   const all = matching.flatMap((pr) => {
     const key = eventKey(event, pr);
-    return key ? [{ key, reason: `PR #${pr.number} ${PR_EVENT_LABELS[event]}`, pr }] : [];
+    return key
+      ? [{ key, reason: `PR #${pr.number} ${PR_EVENT_LABELS[event]}`, pr }]
+      : [];
   });
   if (!trigger.seen) return { fires: [], baseline: all.map((f) => f.key) };
   const seen = new Set(trigger.seen);
-  return { fires: all.filter((f) => !seen.has(f.key)).sort((a, b) => a.pr.number - b.pr.number) };
+  return {
+    fires: all
+      .filter((f) => !seen.has(f.key))
+      .sort((a, b) => a.pr.number - b.pr.number),
+  };
 }
 
 function eventKey(event: PrEvent, pr: PrSnapshot) {
   if (event === 'opened') return `opened:${pr.number}`;
-  if (event === 'review-requested') return pr.isReviewRequested ? `review:${pr.number}` : null;
+  if (event === 'review-requested')
+    return pr.isReviewRequested ? `review:${pr.number}` : null;
   // Once per pushed commit: a fix that fails again fires again.
-  return pr.statusCheckRollup?.some((c) => FAILED.has(c.conclusion ?? '') || FAILED.has(c.state ?? '')) ? `ci:${pr.number}:${pr.headRefOid}` : null;
+  return pr.statusCheckRollup?.some(
+    (c) => FAILED.has(c.conclusion ?? '') || FAILED.has(c.state ?? ''),
+  )
+    ? `ci:${pr.number}:${pr.headRefOid}`
+    : null;
 }
 
 /** `*` matches any run of characters; everything else is literal. */
 export function branchMatches(pattern: string, branch: string) {
-  const source = pattern.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+  const source = pattern
+    .split('*')
+    .map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
   return new RegExp(`^${source}$`).test(branch);
 }
 
@@ -87,11 +123,16 @@ export function prPrompt(prompt: string, fire: PrFire) {
   return `${prompt}\n\nTriggered by ${fire.reason}: "${fire.pr.title}" (branch ${fire.pr.headRefName}).`;
 }
 
-export const SUMMARY_HINT = 'Start your final message with a one-line summary of the result, for example "2 findings" or "No changes needed".';
+export const SUMMARY_HINT =
+  'Start your final message with a one-line summary of the result, for example "2 findings" or "No changes needed".';
 
 /** The first line of the agent's last message, without markdown markers, for the Queue title. */
 export function summaryLine(text: string) {
-  const line = text.split('\n').map((l) => l.replace(/^[#>*\-\s]+|[*_`]+/g, '').trim()).find(Boolean) ?? '';
+  const line =
+    text
+      .split('\n')
+      .map((l) => l.replace(/^[#>*\-\s]+|[*_`]+/g, '').trim())
+      .find(Boolean) ?? '';
   return line.length > 100 ? `${line.slice(0, 99)}…` : line;
 }
 
@@ -107,9 +148,26 @@ export function withRun(runs: ScheduleRun[], run: ScheduleRun) {
  */
 export function triggerAfter(trigger: Trigger, event: AgentEvent): Trigger {
   const { workspace } = trigger.start;
-  if (event.type === 'session') return { ...trigger, sessionId: event.sessionId, start: { ...trigger.start, workspace: workspace && laterRun(workspace) } };
-  if (event.type === 'branch' && workspace?.mode === 'worktree') return { ...trigger, start: { ...trigger.start, workspace: { ...workspace, branch: event.branch } } };
+  if (event.type === 'session')
+    return {
+      ...trigger,
+      sessionId: event.sessionId,
+      start: { ...trigger.start, workspace: workspace && laterRun(workspace) },
+    };
+  if (event.type === 'branch' && workspace?.mode === 'worktree')
+    return {
+      ...trigger,
+      start: {
+        ...trigger.start,
+        workspace: { ...workspace, branch: event.branch },
+      },
+    };
   return trigger;
 }
 
-const laterRun = ({ isNew: _, titlePrompt: __, title: ___, ...workspace }: StartWorkspace): StartWorkspace => workspace;
+const laterRun = ({
+  isNew: _,
+  titlePrompt: __,
+  title: ___,
+  ...workspace
+}: StartWorkspace): StartWorkspace => workspace;

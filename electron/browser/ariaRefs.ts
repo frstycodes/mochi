@@ -16,7 +16,10 @@ const REF_ATTR = /\[ref=((?:f\d+)?e\d+)\]/;
  * Playwright's `ariaSnapshot({ mode: 'ai' })` with each ref prefixed by `generation`, so a ref from an older snapshot can't
  * reach an element that has since taken its number. Cut to `MAX_CHARS` at a line; the refs are those left in the text.
  */
-export function agentSnapshot(yaml: string, generation: number): { text: string; refs: AriaRef[] } {
+export function agentSnapshot(
+  yaml: string,
+  generation: number,
+): { text: string; refs: AriaRef[] } {
   const refs: AriaRef[] = [];
   const lines: string[] = [];
   let size = 0;
@@ -38,17 +41,29 @@ export function agentSnapshot(yaml: string, generation: number): { text: string;
  * never reach it: Mochi reads them from the page itself (`readRefValue`). GAP: a screenshot still shows them; 32-hex hashes on other pages hide too.
  */
 export function hideSecrets(text: string) {
-  return text.replace(/GOCSPX-[\w-]+/g, '[secret hidden by Mochi]').replace(/xox[a-z](?:\.xox[a-z])?-[\w-]+/g, '[secret hidden by Mochi]').replace(/\b[0-9a-f]{32}\b/gi, '[secret hidden by Mochi]');
+  return text
+    .replace(/GOCSPX-[\w-]+/g, '[secret hidden by Mochi]')
+    .replace(/xox[a-z](?:\.xox[a-z])?-[\w-]+/g, '[secret hidden by Mochi]')
+    .replace(/\b[0-9a-f]{32}\b/gi, '[secret hidden by Mochi]');
 }
 
-function label(line: string, generation: number): { line: string; ref?: AriaRef } {
+function label(
+  line: string,
+  generation: number,
+): { line: string; ref?: AriaRef } {
   const match = LINE.exec(line);
   const ref = match?.[5] && REF_ATTR.exec(match[5])?.[1];
   if (!match || !ref) return { line };
   const [head, indent, quote, role, quotedName = '', attrs] = match;
   const agentRef = `g${generation}-${ref}`;
   return {
-    line: indent + quote + role + quotedName + attrs.replace(REF_ATTR, `[ref=${agentRef}]`) + line.slice(head.length),
+    line:
+      indent +
+      quote +
+      role +
+      quotedName +
+      attrs.replace(REF_ATTR, `[ref=${agentRef}]`) +
+      line.slice(head.length),
     ref: { ref: agentRef, role, name: nameOf(quotedName, !!quote) },
   };
 }
@@ -56,7 +71,11 @@ function label(line: string, generation: number): { line: string; ref?: AriaRef 
 /** The Playwright selector for an agent ref, or `null` when it's from another snapshot than `generation`. */
 export function ariaSelector(agentRef: string, generation: number) {
   const dash = agentRef.indexOf('-');
-  if (!AGENT_REF.test(agentRef) || agentRef.slice(1, dash) !== String(generation)) return null;
+  if (
+    !AGENT_REF.test(agentRef) ||
+    agentRef.slice(1, dash) !== String(generation)
+  )
+    return null;
   return `aria-ref=${agentRef.slice(dash + 1)}`;
 }
 

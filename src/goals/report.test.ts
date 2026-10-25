@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Thread } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { threadsReducer } from '../store/threads.ts';
-import { currentReport, nextStep, showsVerdictCard, suggestedReply, turnReport } from './report.ts';
+import {
+  currentReport,
+  nextStep,
+  showsVerdictCard,
+  suggestedReply,
+  turnReport,
+} from './report.ts';
 
 test('a met goal waits on opening a PR, then on its review, then on settling once merged', () => {
   assert.equal(nextStep([]), 'open-pr');
@@ -14,50 +20,166 @@ test('a met goal waits on opening a PR, then on its review, then on settling onc
 });
 
 test('answering the next move keeps it in the chat as a record and hides the card until the next turn ends', () => {
-  const t = { id: 't', goal: 'Ship it', status: 'running', steps: [], activity: [], prs: [], idle: { at: 5, accepted: [] } } as unknown as Thread;
-  const state = { now: 6, threads: [t], checkpoints: { t: [] }, checkpointSeq: 0 } as unknown as State;
+  const t = {
+    id: 't',
+    goal: 'Ship it',
+    status: 'running',
+    steps: [],
+    activity: [],
+    prs: [],
+    idle: { at: 5, accepted: [] },
+  } as unknown as Thread;
+  const state = {
+    now: 6,
+    threads: [t],
+    checkpoints: { t: [] },
+    checkpointSeq: 0,
+  } as unknown as State;
   assert.equal(showsVerdictCard(t), true);
-  const record = { summary: 'Added the limiter.', question: 'Open a PR?', answer: 'Open pull request' };
-  const [after] = threadsReducer(state, { type: 'next-move-record', threadId: 't', record }).threads;
+  const record = {
+    summary: 'Added the limiter.',
+    question: 'Open a PR?',
+    answer: 'Open pull request',
+  };
+  const [after] = threadsReducer(state, {
+    type: 'next-move-record',
+    threadId: 't',
+    record,
+  }).threads;
   assert.equal(showsVerdictCard(after), false);
   assert.deepEqual(after.activity.at(-1)?.nextMove, record);
 });
 
 test('without a goal, a reported turn still ends in the next-move card, and the next turn brings it back after an answer', () => {
-  const t = { id: 't', goal: '', status: 'running', steps: [], activity: [], prs: [], report: { at: 5, by: 'claude', decisions: [], left: [], next: 'Commit it?', options: [{ label: 'Commit', reply: 'Commit it.' }] } } as unknown as Thread;
-  const at = (now: number, s: Thread) => ({ now, threads: [s], checkpoints: { t: [] }, checkpointSeq: 0 }) as unknown as State;
+  const t = {
+    id: 't',
+    goal: '',
+    status: 'running',
+    steps: [],
+    activity: [],
+    prs: [],
+    report: {
+      at: 5,
+      by: 'claude',
+      decisions: [],
+      left: [],
+      next: 'Commit it?',
+      options: [{ label: 'Commit', reply: 'Commit it.' }],
+    },
+  } as unknown as Thread;
+  const at = (now: number, s: Thread) =>
+    ({
+      now,
+      threads: [s],
+      checkpoints: { t: [] },
+      checkpointSeq: 0,
+    }) as unknown as State;
   assert.equal(showsVerdictCard(t), true);
-  const [answered] = threadsReducer(at(6, t), { type: 'next-move-record', threadId: 't', record: { question: 'Commit it?', answer: 'Not now' } }).threads;
+  const [answered] = threadsReducer(at(6, t), {
+    type: 'next-move-record',
+    threadId: 't',
+    record: { question: 'Commit it?', answer: 'Not now' },
+  }).threads;
   assert.equal(showsVerdictCard(answered), false);
   const reported = { ...answered, report: { ...t.report!, at: 9 } };
-  const [idle] = threadsReducer(at(10, reported), { type: 'idle-start', threadId: 't' }).threads;
+  const [idle] = threadsReducer(at(10, reported), {
+    type: 'idle-start',
+    threadId: 't',
+  }).threads;
   assert.equal(showsVerdictCard(idle), true);
 });
 
 test("a quick turn without its own report doesn't bring back the last turn's question", () => {
-  const t = { id: 't', goal: '', status: 'running', steps: [], activity: [], prs: [] } as unknown as Thread;
-  const at = (now: number, s: Thread) => ({ now, threads: [s], checkpoints: { t: [] }, checkpointSeq: 0 }) as unknown as State;
-  const report = { by: 'claude' as const, decisions: [], left: [], next: 'Wait for it?', options: [{ label: 'Wait', reply: 'Wait.' }] };
-  const [reported] = threadsReducer(at(5, t), { type: 'report', threadId: 't', report }).threads;
-  const [first] = threadsReducer(at(5, reported), { type: 'idle-start', threadId: 't' }).threads;
+  const t = {
+    id: 't',
+    goal: '',
+    status: 'running',
+    steps: [],
+    activity: [],
+    prs: [],
+  } as unknown as Thread;
+  const at = (now: number, s: Thread) =>
+    ({
+      now,
+      threads: [s],
+      checkpoints: { t: [] },
+      checkpointSeq: 0,
+    }) as unknown as State;
+  const report = {
+    by: 'claude' as const,
+    decisions: [],
+    left: [],
+    next: 'Wait for it?',
+    options: [{ label: 'Wait', reply: 'Wait.' }],
+  };
+  const [reported] = threadsReducer(at(5, t), {
+    type: 'report',
+    threadId: 't',
+    report,
+  }).threads;
+  const [first] = threadsReducer(at(5, reported), {
+    type: 'idle-start',
+    threadId: 't',
+  }).threads;
   assert.equal(turnReport(first)?.next, 'Wait for it?');
-  const [second] = threadsReducer(at(5, first), { type: 'idle-start', threadId: 't' }).threads;
+  const [second] = threadsReducer(at(5, first), {
+    type: 'idle-start',
+    threadId: 't',
+  }).threads;
   assert.equal(turnReport(second), undefined);
   assert.equal(currentReport(second), null, 'the sidebar drops it too');
 });
 
 test("the composer suggests the agent's first answer to its next move, never its question, and nothing without answers", () => {
-  const at = (now: number, s: Thread) => ({ now, threads: [s], checkpoints: { t: [] }, checkpointSeq: 0 }) as unknown as State;
+  const at = (now: number, s: Thread) =>
+    ({
+      now,
+      threads: [s],
+      checkpoints: { t: [] },
+      checkpointSeq: 0,
+    }) as unknown as State;
   const ended = (report: Record<string, unknown>) => {
-    const t = { id: 't', goal: '', status: 'running', steps: [], activity: [], prs: [] } as unknown as Thread;
-    const [reported] = threadsReducer(at(5, t), { type: 'report', threadId: 't', report: { by: 'claude', decisions: [], left: [], ...report } as never }).threads;
-    return threadsReducer(at(5, reported), { type: 'idle-start', threadId: 't' }).threads[0];
+    const t = {
+      id: 't',
+      goal: '',
+      status: 'running',
+      steps: [],
+      activity: [],
+      prs: [],
+    } as unknown as Thread;
+    const [reported] = threadsReducer(at(5, t), {
+      type: 'report',
+      threadId: 't',
+      report: { by: 'claude', decisions: [], left: [], ...report } as never,
+    }).threads;
+    return threadsReducer(at(5, reported), {
+      type: 'idle-start',
+      threadId: 't',
+    }).threads[0];
   };
   const next = 'Should it commit both fixes and open a PR into `main`?';
-  const options = [{ label: 'Commit and PR', reply: 'Commit both fixes and open a PR into main.' }, { label: 'Only commit', reply: 'Just commit.' }];
-  assert.equal(suggestedReply(ended({ next, options })), 'Commit both fixes and open a PR into main.');
+  const options = [
+    {
+      label: 'Commit and PR',
+      reply: 'Commit both fixes and open a PR into main.',
+    },
+    { label: 'Only commit', reply: 'Just commit.' },
+  ];
+  assert.equal(
+    suggestedReply(ended({ next, options })),
+    'Commit both fixes and open a PR into main.',
+  );
   assert.equal(suggestedReply(ended({ next, question: next })), undefined);
   assert.equal(suggestedReply(ended({ next, options: [] })), undefined);
-  assert.equal(suggestedReply(ended({ next, options, isSuperseded: true })), undefined);
-  assert.equal(suggestedReply({ ...ended({ next, options }), live: { isWorking: true } } as unknown as Thread), undefined);
+  assert.equal(
+    suggestedReply(ended({ next, options, isSuperseded: true })),
+    undefined,
+  );
+  assert.equal(
+    suggestedReply({
+      ...ended({ next, options }),
+      live: { isWorking: true },
+    } as unknown as Thread),
+    undefined,
+  );
 });

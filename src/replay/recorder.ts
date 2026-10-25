@@ -1,7 +1,6 @@
 import { host } from '../host/index.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
-import { tapAction } from '../remote/tap.ts';
 import { compact, linesFor, toLines, type ReplayLine } from './record.ts';
 
 const FLUSH_MS = 1000;
@@ -17,13 +16,15 @@ let timer: ReturnType<typeof setTimeout> | undefined;
  * on writes a fresh one and the replay jumps over the gap instead of replaying a store it never saw.
  */
 export function recordAction(state: State, action: Action) {
-  tapAction(action);
   if (action.type === 'delete') return forget(action.threadIds);
   if (!getPrefs().recordReplays) return started.clear();
   const captured = linesFor(state, action, Date.now(), (id) => started.has(id));
   if (!captured || capped.has(captured.threadId)) return;
   started.add(captured.threadId);
-  pending.set(captured.threadId, [...(pending.get(captured.threadId) ?? []), ...captured.lines]);
+  pending.set(captured.threadId, [
+    ...(pending.get(captured.threadId) ?? []),
+    ...captured.lines,
+  ]);
   timer ??= setTimeout(flushReplays, FLUSH_MS);
 }
 
@@ -46,7 +47,9 @@ function forget(threadIds: string[]) {
     pending.delete(id);
     started.delete(id);
   }
-  host.data.clearReplays(threadIds).catch((error: unknown) => console.error('Removing replays failed', error));
+  host.data
+    .clearReplays(threadIds)
+    .catch((error: unknown) => console.error('Removing replays failed', error));
 }
 
 /** Clearing every recording in Settings: the next action of each thread writes a new base. */
@@ -56,4 +59,5 @@ export function forgetAllReplays() {
   capped.clear();
 }
 
-if (typeof window !== 'undefined') window.addEventListener('beforeunload', () => void flushReplays());
+if (typeof window !== 'undefined')
+  window.addEventListener('beforeunload', () => void flushReplays());

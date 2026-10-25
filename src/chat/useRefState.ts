@@ -1,134 +1,82 @@
-import { useEffect, useReducer, useSyncExternalStore } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { host } from '@/host';
-import { refKey, type GithubRef, type RefState, type RepoSlug } from './refs';
+import { githubStreamQuery, refreshGithub } from '../git/githubWatch.ts';
+import { refKey, type GithubRef, type RefState } from './refs';
 
-// ponytail: module-level cache, one per window. Entries older than TTL refetch on the next mount or window focus; nothing polls.
-const TTL_MS = 60_000;
-const BATCH_MS = 40;
-
-type Entry = { state: RefState | null; at: number };
 type Scope = { cwd: string | null; githubUser?: string };
 
-const cache = new Map<string, Entry>();
-const inFlight = new Set<string>();
-const queued = new Map<string, { scope: Scope; refs: Map<string, GithubRef> }>();
-const mounted = new Map<string, { ref: GithubRef; scope: Scope; count: number }>();
-const listeners = new Set<() => void>();
-let timer: ReturnType<typeof setTimeout> | undefined;
-// Bumped on every cache write, so a list of refs can subscribe with one snapshot.
-let version = 0;
-
-/** Live state of a PR or issue, `undefined` until first read, `null` when gh couldn't read it. Batched with every other chip on screen. */
 export function useRefState(ref: GithubRef, scope: Scope) {
   return useRefStates([ref], scope)[0];
 }
 
-/** `useRefState` for a list, in the same order; one batch, one cache. */
+/** Each chip watches its ref through Core, which reads every watched ref of a repository in one request per poll. */
 export function useRefStates(refs: GithubRef[], scope: Scope) {
-  const keys = refs.map(refKey);
-  const joined = keys.join('\n');
-  const { cwd, githubUser } = scope;
-  useEffect(() => {
-    refs.forEach((ref, i) => {
-      const seen = mounted.get(keys[i]);
-      mounted.set(keys[i], { ref, scope: { cwd, githubUser }, count: (seen?.count ?? 0) + 1 });
-      request(keys[i], ref, { cwd, githubUser });
-    });
-    return () => {
-      for (const key of keys) {
-        const m = mounted.get(key);
-        if (m && --m.count === 0) mounted.delete(key);
-      }
-    };
-  }, [joined, cwd, githubUser]);
-  useSyncExternalStore(subscribe, () => version);
-  return keys.map((key) => cache.get(key)?.state);
+  return useQueries({ queries: refs.map((ref) => refQuery(ref, scope)) }).map(
+    (result) => result.data,
+  );
 }
 
-/** Shows `patch` on `ref` now, without reading GitHub: an optimistic switch, or its rollback. */
-export function patchRef(ref: GithubRef, patch: Partial<RefState>, at?: number) {
-  const entry = cache.get(refKey(ref));
-  if (entry) cache.set(refKey(ref), { state: entry.state && { ...entry.state, ...patch }, at: at ?? entry.at });
-  version++;
-  listeners.forEach((l) => l());
+export function patchRef(
+  ref: GithubRef,
+  patch: Partial<RefState>,
+  at?: number,
+) {
+  queryClient.setQueriesData<RefState | null>(
+    { queryKey: queryKeys.chat.githubRef.ref(refKey(ref)) },
+    (state) => state && { ...state, ...patch },
+    at === undefined ? undefined : { updatedAt: at },
+  );
 }
 
-/** Reads `ref` again now, after Mochi changed it on GitHub; `expected` shows meanwhile, so a switch doesn't flick back. */
-export function refreshRef(ref: GithubRef, scope: Scope, expected?: Partial<RefState>) {
+/** Shows `expected` now and has Core read the ref's repository; its stream brings what GitHub says. */
+export function refreshRef(
+  ref: GithubRef,
+  scope: Scope,
+  expected?: Partial<RefState>,
+) {
   patchRef(ref, expected ?? {}, 0);
-  request(refKey(ref), ref, scope);
-}
-
-function request(key: string, ref: GithubRef, scope: Scope) {
-  const entry = cache.get(key);
-  if (inFlight.has(key) || (entry && Date.now() - entry.at < TTL_MS)) return;
-  const scopeKey = `${scope.cwd ?? ''}\u0000${scope.githubUser ?? ''}`;
-  const batch = queued.get(scopeKey) ?? { scope, refs: new Map() };
-  batch.refs.set(key, ref);
-  queued.set(scopeKey, batch);
-  timer ??= setTimeout(flush, BATCH_MS);
-}
-
-function flush() {
-  timer = undefined;
-  const batches = [...queued.values()];
-  queued.clear();
-  for (const { scope, refs } of batches) {
-    const keys = [...refs.keys()];
-    keys.forEach((k) => inFlight.add(k));
-    void host.git
-      .refStates(scope.cwd, [...refs.values()], scope.githubUser)
-      .catch(() => ({}) as Record<string, RefState>)
-      .then((states) => {
-        const at = Date.now();
-        for (const k of keys) {
-          inFlight.delete(k);
-          cache.set(k, { state: states[k] ?? null, at });
-        }
-        version++;
-        listeners.forEach((l) => l());
-      });
-  }
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-if (typeof window !== 'undefined')
-  window.addEventListener('focus', () => {
-    for (const [key, { ref, scope }] of mounted) {
-      const entry = cache.get(key);
-      // A focus within a few seconds of the last read isn't worth a gh call.
-      if (entry && Date.now() - entry.at > FOCUS_STALE_MS) cache.set(key, { ...entry, at: 0 });
-      request(key, ref, scope);
-    }
+  if (host.isDesktop)
+    return refreshGithub({ ref, githubUser: scope.githubUser, isPush: false });
+  void queryClient.invalidateQueries({
+    queryKey: refQuery(ref, scope).queryKey,
   });
+}
 
-const FOCUS_STALE_MS = 10_000;
-
-const slugs = new Map<string, Promise<RepoSlug | null>>();
-const slugValues = new Map<string, RepoSlug | null>();
-
-/** The thread's GitHub `owner/repo` from origin, read once per folder. */
-export function useRepoSlug(cwd: string | null) {
-  const [, rerender] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => {
-    if (!cwd || slugValues.has(cwd)) return;
-    let isCurrent = true;
-    if (!slugs.has(cwd))
-      slugs.set(
-        cwd,
-        host.git.repoSlug(cwd).then(
-          (s) => (slugValues.set(cwd, s), s),
-          () => (slugValues.set(cwd, null), null),
-        ),
-      );
-    void slugs.get(cwd)!.then(() => isCurrent && rerender());
-    return () => {
-      isCurrent = false;
+function refQuery(ref: GithubRef, scope: Scope) {
+  const queryKey = queryKeys.chat.githubRef.scoped(
+    refKey(ref),
+    scope.cwd,
+    scope.githubUser,
+  );
+  if (!host.isDesktop)
+    return {
+      queryKey,
+      staleTime: 60_000,
+      queryFn: async () =>
+        (await host.git.refStates(scope.cwd, [ref], scope.githubUser))[
+          refKey(ref)
+        ] ?? null,
     };
-  }, [cwd]);
-  return cwd ? (slugValues.get(cwd) ?? null) : null;
+  const { owner, repo, number } = ref;
+  return {
+    queryKey,
+    ...githubStreamQuery((client) =>
+      client['github.ref']({
+        ref: { owner, repo, number },
+        githubUser: scope.githubUser,
+      }),
+    ),
+  };
+}
+
+export function useRepoSlug(cwd: string | null) {
+  const slugQuery = useQuery({
+    queryKey: queryKeys.chat.repoSlug(cwd),
+    queryFn: () => host.git.repoSlug(cwd!),
+    enabled: !!cwd,
+    staleTime: Infinity,
+  });
+  return slugQuery.data ?? null;
 }

@@ -1,213 +1,442 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import WebSocket from 'ws';
-import { DEFAULT_SCOPES } from '../../src/host/types/remote.ts';
-import { serve } from './fixtures.ts';
-import { isPrivate } from './interfaces.ts';
-import { PROTOCOL_VERSION, THIS_KIND, type ServerFrame } from './protocol.ts';
+import { it } from '@effect/vitest';
+import {
+  Cause,
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Stream,
+} from 'effect';
+import { HttpServer } from 'effect/http';
+import sodium from 'libsodium-wrappers';
+import { Capabilities, type Relay } from '@mochi/schema';
+import { coreUrl, makeCoreClient } from '@mochi/core/client';
+import { serveCapabilities } from '@mochi/core/hostClient';
+import { makeDeviceClient } from '@mochi/core/remote/device';
+import { queuedReader, type Link, type RawLink } from '@mochi/core/remote/link';
+import { mintDeviceToken } from '@mochi/core/remote/token';
+import { Unauthorized } from '@mochi/core/rpc';
+import type { ThreadItem } from '@mochi/domain';
+import { layerCore } from '@mochi/core/server';
+import type { Scope } from '../../src/host/types/remote.ts';
+import type { DeviceKeys } from './crypto/keys.ts';
+import {
+  deviceId,
+  PairingRefused,
+  secureAsDevice,
+  secureAsMachine,
+  type MachineSide,
+} from './pairing.ts';
+import { startRemoteServer } from './server.ts';
 
-/** A device: every frame the server sends, readable in order. `auth` names it to `plainSecure`. */
-async function connect(port: string, { auth, ...hello }: { auth: string } & Record<string, unknown>) {
-  const socket = new WebSocket(`ws://${port}`);
-  const frames: ServerFrame[] = [];
-  const waiters: (() => void)[] = [];
-  socket.on('message', (data) => {
-    frames.push(JSON.parse((data as Buffer).toString('utf8')) as ServerFrame);
-    waiters.splice(0).forEach((w) => w());
+await sodium.ready;
+
+const TOKEN = 'core-token';
+const keypair = (): DeviceKeys => sodium.crypto_sign_keypair();
+
+/** Two ends of one relay channel: what one sends the other reads, in order. */
+function pipe() {
+  const ends = [0, 1].map(() => {
+    const reader = queuedReader();
+    const closes: ((code: number, reason: string) => void)[] = [];
+    let isOpen = true;
+    return {
+      reader,
+      closes,
+      isOpen: () => isOpen,
+      shut: (code: number, reason: string) =>
+        isOpen && ((isOpen = false), closes.forEach((c) => c(code, reason))),
+    };
   });
-  await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
-  socket.send(Buffer.from(auth));
-  socket.send(Buffer.from(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...hello })));
-  let read = 0;
-  const next = async (): Promise<ServerFrame> => {
-    while (read >= frames.length) await new Promise<void>((resolve) => waiters.push(resolve));
-    return frames[read++];
-  };
-  /** Reads until `count` frames of `type` have arrived. */
-  const until = async <T extends ServerFrame['type']>(type: T, count = 1) => {
-    const seen: Extract<ServerFrame, { type: T }>[] = [];
-    while (seen.length < count) {
-      const frame = await next();
-      if (frame.type === type) seen.push(frame as Extract<ServerFrame, { type: T }>);
-    }
-    return seen;
-  };
-  const command = (id: string, command: object) => socket.send(Buffer.from(JSON.stringify({ type: 'command', id, command })));
-  const close = () => new Promise((resolve) => (socket.once('close', resolve), socket.close()));
-  return { next, until, command, close, frames };
+  const link = (self: number): RawLink => ({
+    send: (bytes) =>
+      ends[self].isOpen() &&
+      queueMicrotask(() => ends[1 - self].reader.deliver(bytes)),
+    close: (code, reason) => ends.forEach((e) => e.shut(code, reason)),
+    onMessage: ends[self].reader.set,
+    onClose: (listener) => void ends[self].closes.push(listener),
+    isOpen: () => ends[self].isOpen(),
+  });
+  return { device: link(0), machine: link(1) };
 }
 
-test('a new device gets a snapshot, then every action in order with its sequence number', async () => {
-  const { server, act } = await serve();
-  act(2);
-  const device = await connect(server.addresses[0], { auth: 'laptop' });
-  assert.deepEqual(await device.next(), { type: 'welcome', version: PROTOCOL_VERSION, deviceId: 'd-laptop', machineName: 'Studio', machineKind: THIS_KIND, scopes: DEFAULT_SCOPES, addresses: [] });
-  const snapshot = await device.next();
-  assert.equal(snapshot.type === 'snapshot' && snapshot.seq, 2);
-  act(3);
-  const actions = await device.until('action', 3);
-  assert.deepEqual(actions.map((a) => a.seq), [3, 4, 5]);
-  await device.close();
-  await server.close();
-});
+/**
+ * Core in-process with a window client, and this computer's remote server with one paired device. The device reaches it
+ * through a fake relay: each dial is a fresh channel, paired and encrypted for real, then tunnelled into Core.
+ */
+const setup = (scopes: Scope[]) =>
+  Effect.gen(function* () {
+    const context = yield* Layer.build(
+      layerCore({
+        port: 0,
+        tokens: new Map([[TOKEN, Capabilities.allScopes]]),
+        origins: [],
+      }),
+    );
+    const port = (
+      Context.get(context, HttpServer.HttpServer).address as { port: number }
+    ).port;
+    const window = yield* makeCoreClient(coreUrl(port, TOKEN, 7));
+    const machineKeys = keypair();
+    const deviceKeys = keypair();
+    const device = {
+      id: deviceId(deviceKeys.publicKey),
+      name: 'Laptop',
+      publicKey: sodium.to_base64(
+        deviceKeys.publicKey,
+        sodium.base64_variants.ORIGINAL,
+      ),
+      scopes,
+      pairedAt: 1,
+    };
+    const side: MachineSide = {
+      keys: machineKeys,
+      find: (id) => (id === device.id ? device : undefined),
+      refresh: async () => {},
+      approve: async () => false,
+      add: async () => undefined,
+    };
+    const rejected: string[] = [];
+    const server = yield* Effect.acquireRelease(
+      Effect.promise(() =>
+        startRemoteServer({
+          hosts: [],
+          port: 0,
+          secure: (raw, origin) => secureAsMachine(raw, origin, side),
+          coreFor: async (grant) => ({
+            url: coreUrl(port, '').split('#')[0]!,
+            token: mintDeviceToken(TOKEN, grant),
+          }),
+          machineName: () => 'Studio',
+          onRejected: (_device, reason) => void rejected.push(reason),
+        }),
+      ),
+      (server) => Effect.promise(() => server.close()),
+    );
+    const dial = () => {
+      const ends = pipe();
+      server.attach(ends.machine);
+      return ends.device;
+    };
+    const secure = (raw: RawLink) =>
+      secureAsDevice(raw, deviceKeys, machineKeys.publicKey, 'Laptop', true);
+    const welcomes: Relay.WelcomeFrame[] = [];
+    const client = yield* makeDeviceClient({
+      routes: () => [{ kind: 'relay', open: async () => dial() }],
+      secure,
+      isRefusal: (error) => error instanceof PairingRefused,
+      onWelcome: (welcome) => void welcomes.push(welcome),
+      onOffline: () => {},
+      onRefused: (reason) => assert.fail(reason),
+    });
+    return { window, client, welcomes, rejected, dial, secure };
+  });
 
-test('a device back after a gap gets only the actions it missed, without a snapshot', async () => {
-  const { server, act } = await serve();
-  const first = await connect(server.addresses[0], { auth: 'laptop' });
-  await first.until('snapshot');
-  act(3);
-  const [, , last] = await first.until('action', 3);
-  await first.close();
-  act(4);
-  const back = await connect(server.addresses[0], { auth: 'laptop', resume: { epoch: last.epoch, seq: last.seq } });
-  const missed = await back.until('action', 4);
-  assert.deepEqual(missed.map((a) => a.seq), [4, 5, 6, 7]);
-  assert.ok(!back.frames.some((f) => f.type === 'snapshot'));
-  await back.close();
-  await server.close();
-});
-
-test('a gap older than the log, or from another epoch, falls back to a fresh snapshot', async () => {
-  const { server, act, store } = await serve(5);
-  act(20);
-  const stale = await connect(server.addresses[0], { auth: 'laptop', resume: { epoch: 'e1', seq: 3 } });
-  const [snapshot] = await stale.until('snapshot');
-  assert.equal(snapshot.seq, 20);
-  await stale.close();
-  // The renderer reloaded: its numbers start over in a new epoch.
-  store.epoch = 'e2';
-  store.seq = 0;
-  act(1);
-  const other = await connect(server.addresses[0], { auth: 'laptop', resume: { epoch: 'e1', seq: 20 } });
-  const [fresh] = await other.until('snapshot');
-  assert.deepEqual([fresh.epoch, fresh.seq], ['e2', 1]);
-  await other.close();
-  await server.close();
-});
-
-test('a device without the scope a command needs is refused, and the renderer never sees it', async () => {
-  const { server, runs } = await serve();
-  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
-  viewer.command('c1', { type: 'interrupt', threadId: 't1' });
-  const [result] = await viewer.until('result');
-  assert.deepEqual(result, { type: 'result', id: 'c1', isOk: false, error: 'This device can’t interrupt: it needs the operate scope' });
-  assert.equal(runs.length, 0);
-  await viewer.close();
-  await server.close();
-});
-
-test('a viewer’s seen is refused before it reaches the renderer', async () => {
-  const { server, runs } = await serve();
-  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
-  viewer.command('c1', { type: 'seen', threadId: 't1' });
-  const [result] = await viewer.until('result');
-  assert.deepEqual(result, { type: 'result', id: 'c1', isOk: false, error: 'This device can’t seen: it needs the operate scope' });
-  assert.equal(runs.length, 0);
-  await viewer.close();
-  await server.close();
-});
-
-test('a new device can read code but not open a terminal; a viewer can do neither', async () => {
-  const { server, runs } = await serve();
-  const laptop = await connect(server.addresses[0], { auth: 'laptop' });
-  laptop.command('c1', { type: 'terminal-open', threadId: 't1', cols: 80, rows: 24 });
-  laptop.command('c2', { type: 'diff', threadId: 't1', scope: 'branch' });
-  const results = await laptop.until('result', 2);
-  assert.deepEqual(
-    results.find((r) => r.id === 'c1'),
-    { type: 'result', id: 'c1', isOk: false, error: 'This device can’t terminal-open: it needs the terminal scope' },
+type Window = Effect.Success<ReturnType<typeof makeCoreClient>>;
+const command = (window: Window, threadId: string | null, payload: object) =>
+  window['events.append']({ type: 'command', threadId, payload });
+type SavedActivity = {
+  thread: { activity?: { kind: string; text: string; patch?: string }[] };
+} | null;
+/** A thread in Core's projection with an edit whose patch only `code` may read; done once Core has written the snapshot holding the patch. */
+const seed = (window: Window, title: string) =>
+  Effect.gen(function* () {
+    yield* command(window, null, {
+      type: 'create',
+      spaceId: 's',
+      title,
+      name: title,
+      provider: 'claude',
+      project: null,
+      isLive: true,
+    });
+    yield* window['events.append']({
+      type: 'agent.tool',
+      threadId: 'new-1',
+      payload: {
+        threadId: 'new-1',
+        type: 'tool',
+        id: 'e1',
+        phase: 'start',
+        text: 'Edited a.ts',
+      },
+    });
+    yield* window['events.append']({
+      type: 'agent.tool',
+      threadId: 'new-1',
+      payload: {
+        threadId: 'new-1',
+        type: 'tool',
+        id: 'e1',
+        phase: 'end',
+        text: 'Edited a.ts',
+        patch: '+secret',
+      },
+    });
+    yield* window.thread({ threadId: 'new-1', afterSequence: 0 }).pipe(
+      Stream.filter(
+        (item) =>
+          item._tag === 'snapshot' &&
+          !!(item.saved as SavedActivity)?.thread.activity?.some(
+            (e) => e.patch,
+          ),
+      ),
+      Stream.take(1),
+      Stream.runDrain,
+    );
+  });
+const snapshots = (stream: Stream.Stream<ThreadItem, unknown>, n: number) =>
+  stream.pipe(
+    Stream.filter((item) => item._tag === 'snapshot'),
+    Stream.take(n),
+    Stream.runCollect,
   );
-  assert.deepEqual(
-    results.find((r) => r.id === 'c2'),
-    { type: 'result', id: 'c2', isOk: true },
-  );
-  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
-  viewer.command('c3', { type: 'read-file', threadId: 't1', path: 'src/a.ts' });
-  const [refused] = await viewer.until('result');
-  assert.deepEqual(refused, { type: 'result', id: 'c3', isOk: false, error: 'This device can’t read-file: it needs the code scope' });
-  assert.deepEqual(
-    runs.map((r) => r.command.type),
-    ['diff'],
-  );
-  await laptop.close();
-  await viewer.close();
-  await server.close();
-});
 
-test('a duplicate command id runs once and both get the first result', async () => {
-  const { server, runs } = await serve();
-  const laptop = await connect(server.addresses[0], { auth: 'laptop' });
-  laptop.command('c1', { type: 'send', threadId: 't1', text: 'hi' });
-  laptop.command('c1', { type: 'send', threadId: 't1', text: 'hi' });
-  const results = await laptop.until('result', 2);
-  assert.deepEqual(results.map((r) => r.isOk), [true, true]);
-  assert.equal(runs.length, 1);
-  assert.deepEqual(runs[0].command, { type: 'send', threadId: 't1', text: 'hi' });
-  assert.equal(runs[0].deviceName, 'Laptop');
-  await laptop.close();
-  await server.close();
-});
+it.live(
+  'a paired device reads the same `thread` stream a window does, through a relay channel',
+  () =>
+    Effect.gen(function* () {
+      const { window, client, welcomes } = yield* setup([
+        'read',
+        'operate',
+        'manage',
+        'code',
+      ]);
+      yield* seed(window, 'Fix login');
+      // A stream's first snapshot means Core is already publishing the thread's later saves to it.
+      const read = (from: typeof window) =>
+        Effect.gen(function* () {
+          const subscribed = yield* Deferred.make<void>();
+          const collected = snapshots(
+            from
+              .thread({ threadId: 'new-1', afterSequence: 0 })
+              .pipe(Stream.tap(() => Deferred.succeed(subscribed, undefined))),
+            2,
+          );
+          return { subscribed, collected };
+        });
+      const fromBoth = [yield* read(window), yield* read(client)];
+      const both = yield* Effect.forkChild(
+        Effect.all(
+          fromBoth.map((r) => r.collected),
+          { concurrency: 'unbounded' },
+        ),
+      );
+      for (const { subscribed } of fromBoth) yield* Deferred.await(subscribed);
+      yield* command(window, 'new-1', {
+        type: 'rename',
+        threadId: 'new-1',
+        title: 'Fix SSO login',
+      });
+      const [fromWindow, fromDevice] = yield* Fiber.join(both);
+      assert.deepEqual([...fromDevice], [...fromWindow]);
+      assert.deepEqual(
+        [...fromDevice].map(
+          (item) =>
+            item._tag === 'snapshot' &&
+            (item.saved as { thread: { title: string } }).thread.title,
+        ),
+        ['Fix login', 'Fix SSO login'],
+      );
+      assert.equal(welcomes[0]?.machineName, 'Studio');
+    }),
+);
 
-test('commands sent right behind hello wait for the device check and come after welcome', async () => {
-  const { server, runs } = await serve();
-  const socket = new WebSocket(`ws://${server.addresses[0]}`);
-  const frames: ServerFrame[] = [];
-  socket.on('message', (data) => frames.push(JSON.parse((data as Buffer).toString('utf8')) as ServerFrame));
-  await new Promise((resolve) => socket.once('open', resolve));
-  socket.send(Buffer.from('viewer'));
-  socket.send(Buffer.from(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION })));
-  socket.send(Buffer.from(JSON.stringify({ type: 'command', id: 'early', command: { type: 'interrupt', threadId: 't1' } })));
-  while (!frames.some((f) => f.type === 'result')) await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.deepEqual(frames.map((f) => f.type).slice(0, 2), ['welcome', 'result']);
-  assert.equal(runs.length, 0, 'a refused command never reaches the renderer');
-  socket.close();
-  await server.close();
-});
+it.live(
+  'a device command that needs a window runs where main serves `remote`, named after the device; Core applies a store command itself; a read-scoped device is refused it',
+  () =>
+    Effect.gen(function* () {
+      const full = yield* setup(['read', 'operate']);
+      const runs: unknown[] = [];
+      yield* serveCapabilities(
+        full.window,
+        ['remote'],
+        async (call) => (runs.push(call.args[0]), { isOk: true }),
+      ).pipe(Effect.forkScoped({ startImmediately: true }));
+      // Core starts one socket's handlers in arrival order, so the ping's reply comes after the serve request registered.
+      yield* full.window.ping();
+      assert.deepEqual(
+        yield* full.client['device.command']({ command: { type: 'catalog' } }),
+        { isOk: true },
+      );
+      assert.deepEqual(runs, [
+        {
+          id: (runs[0] as { id: string }).id,
+          deviceName: 'Laptop',
+          command: { type: 'catalog' },
+        },
+      ]);
+      // An interrupt is a store action: Core applies it, no window hears of it.
+      yield* seed(full.window, 'Fix login');
+      assert.deepEqual(
+        yield* full.client['device.command']({
+          command: { type: 'interrupt', threadId: 'new-1' },
+        }),
+        { isOk: true },
+      );
+      assert.equal(runs.length, 1);
+      assert.deepEqual(
+        yield* full.client['device.command']({
+          command: { type: 'interrupt', threadId: 'nope' },
+        }),
+        { isOk: false, error: 'No such thread on this machine' },
+      );
 
-test('an unknown device, a wrong version or a first frame that is not hello is refused', async () => {
-  const { server } = await serve();
-  for (const hello of [{ auth: 'stranger' }, { auth: 'laptop', version: 99 }, { auth: 'laptop', type: 'command' }]) {
-    const device = await connect(server.addresses[0], hello);
-    assert.equal((await device.next()).type, 'refused');
-  }
-  await server.close();
-});
+      const reader = yield* setup(['read']);
+      yield* seed(reader.window, 'Fix login');
+      const refused = yield* reader.client['device.command']({
+        command: { type: 'interrupt', threadId: 't1' },
+      }).pipe(Effect.exit);
+      assert.ok(Exit.isFailure(refused));
+      const error = Cause.squash(refused.cause);
+      assert.ok(
+        error instanceof Unauthorized && error.scope === 'operate',
+        String(error),
+      );
+      // It still reads, without the diffs `code` would show it.
+      const [snapshot] = yield* snapshots(
+        reader.client.thread({ threadId: 'new-1', afterSequence: 0 }),
+        1,
+      );
+      const saved =
+        snapshot?._tag === 'snapshot'
+          ? (snapshot.saved as {
+              thread: { activity: { kind: string; text: string }[] };
+              checkpoints?: unknown;
+            })
+          : undefined;
+      assert.deepEqual(
+        saved?.thread.activity.map((e) => [e.kind, e.text, 'patch' in e]),
+        [
+          ['message', 'Fix login', false],
+          ['tool', 'Edited a.ts', false],
+        ],
+      );
+      assert.equal(saved?.checkpoints, undefined);
+    }),
+);
 
-test('without the code scope a device gets no diffs or checkpoints', async () => {
-  const { server } = await serve();
-  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
-  const [snapshot] = await viewer.until('snapshot');
-  assert.deepEqual(snapshot.saved, { threads: [{ activity: [{}] }], checkpoints: {} });
-  server.publish('e1', 1, { type: 'agent', event: { type: 'tool', phase: 'end', patch: '+secret' } });
-  const [action] = await viewer.until('action');
-  assert.deepEqual(action.action, { type: 'agent', event: { type: 'tool', phase: 'end' } });
-  await viewer.close();
-  await server.close();
-});
+it.live(
+  'terminal output is pushed to a device in order; a `read`-only device is refused the stream',
+  () =>
+    Effect.gen(function* () {
+      const { window, client } = yield* setup(['read', 'terminal']);
+      yield* window['terminal.open']({ terminalId: 'p1', threadId: 't1' });
+      yield* window['terminal.feed']({ terminalId: 'p1', data: 'one ' });
+      let output = '';
+      const arrived = {
+        'one ': yield* Deferred.make<void>(),
+        'one two three': yield* Deferred.make<void>(),
+      };
+      const chunks = yield* client['terminal.output']({
+        terminalId: 'p1',
+        threadId: 't1',
+        after: 0,
+      }).pipe(
+        Stream.tap((chunk) =>
+          Effect.sync(() => {
+            output += chunk.data;
+            if (output in arrived)
+              Deferred.doneUnsafe(
+                arrived[output as keyof typeof arrived],
+                Effect.void,
+              );
+          }),
+        ),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* Deferred.await(arrived['one ']);
+      yield* window['terminal.feed']({ terminalId: 'p1', data: 'two ' });
+      yield* window['terminal.feed']({ terminalId: 'p1', data: 'three' });
+      yield* Deferred.await(arrived['one two three']);
+      yield* window['terminal.exit']({ terminalId: 'p1', exitCode: 0 });
+      const received = [...(yield* Fiber.join(chunks))];
+      assert.equal(received.map((c) => c.data).join(''), 'one two three');
+      assert.equal(received.at(-1)?.exitCode, 0);
+      assert.ok(
+        received.length > 1,
+        'pushed in more than one piece, not read once',
+      );
+      // Resuming from an offset skips what it already has; another thread's id gets nothing.
+      const [tail] = yield* client['terminal.output']({
+        terminalId: 'p1',
+        threadId: 't1',
+        after: 4,
+      }).pipe(Stream.take(1), Stream.runCollect);
+      assert.equal(tail?.data, 'two three');
+      const other = yield* client['terminal.output']({
+        terminalId: 'p1',
+        threadId: 't2',
+        after: 0,
+      }).pipe(Stream.runCollect, Effect.exit);
+      assert.ok(Exit.isFailure(other));
 
-test('only LAN and Tailscale addresses count as this network', () => {
-  const cases = [
-    ['192.168.1.4', 'IPv4', true],
-    ['10.0.0.2', 'IPv4', true],
-    ['172.20.1.1', 'IPv4', true],
-    ['172.32.0.1', 'IPv4', false],
-    ['100.101.5.9', 'IPv4', true],
-    ['100.128.0.1', 'IPv4', false],
-    ['8.8.8.8', 'IPv4', false],
-    ['fd7a:115c:a1e0::1', 'IPv6', true],
-    ['2001:db8::1', 'IPv6', false],
-    ['fe80::1', 'IPv6', false],
-  ] as const;
-  for (const [address, family, expected] of cases) assert.equal(isPrivate(address, family), expected, address);
-});
+      const reader = yield* setup(['read']);
+      yield* reader.window['terminal.open']({
+        terminalId: 'p1',
+        threadId: 't1',
+      });
+      const refused = yield* reader.client['terminal.output']({
+        terminalId: 'p1',
+        threadId: 't1',
+        after: 0,
+      }).pipe(Stream.runCollect, Effect.exit);
+      assert.ok(Exit.isFailure(refused));
+      const error = Cause.squash(refused.cause);
+      assert.ok(
+        error instanceof Unauthorized && error.scope === 'terminal',
+        String(error),
+      );
+    }),
+);
 
-test('a device without manage can’t clone a project, and the renderer never sees the clone', async () => {
-  const { server, runs } = await serve();
-  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
-  viewer.command('c1', { type: 'clone-project', source: { url: 'https://github.com/a/b.git' } });
-  const [result] = await viewer.until('result');
-  assert.deepEqual(result, { type: 'result', id: 'c1', isOk: false, error: 'This device can’t clone-project: it needs the manage scope' });
-  assert.equal(runs.length, 0);
-  await viewer.close();
-  await server.close();
-});
+it.live('malformed frames from a device are refused and logged', () =>
+  Effect.gen(function* () {
+    const { dial, secure, rejected } = yield* setup(['read']);
+    const open = async (first: string) => {
+      const link = await secure(dial());
+      const closed = new Promise<void>((resolve) => link.onClose(resolve));
+      const replies: string[] = [];
+      let welcome = () => {};
+      const welcomed = new Promise<void>((resolve) => (welcome = resolve));
+      link.onMessage((text) => {
+        replies.push(text);
+        if (text.includes('"welcome"')) welcome();
+      });
+      link.send(first);
+      return { link, closed, replies, welcomed };
+    };
+
+    const badHello = yield* Effect.promise(() =>
+      open('{"type":"hello","version":3}'),
+    );
+    yield* Effect.promise(() => badHello.closed);
+    assert.match(badHello.replies[0] ?? '', /"refused".*protocol 4/);
+
+    // The old protocol's command frame, after a good hello: no longer anything Core speaks.
+    const old: {
+      link: Link;
+      closed: Promise<void>;
+      replies: string[];
+      welcomed: Promise<void>;
+    } = yield* Effect.promise(() =>
+      open(JSON.stringify({ type: 'hello', version: 4 })),
+    );
+    yield* Effect.promise(() => old.welcomed);
+    old.link.send(
+      JSON.stringify({
+        type: 'command',
+        id: 'c1',
+        command: { type: 'catalog' },
+      }),
+    );
+    yield* Effect.promise(() => old.closed);
+    assert.equal(rejected.length, 2);
+    assert.match(rejected[0]!, /protocol 4/);
+    assert.match(rejected[1]!, /Malformed frame: \{"type":"command"/);
+  }),
+);

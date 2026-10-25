@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { MachineCache } from './cache.ts';
 
 /** Reversible, and visibly not plain text. */
@@ -17,7 +17,10 @@ test('a snapshot is written encrypted and reads back with when it was saved', ()
   const dir = mkdtempSync(join(tmpdir(), 'mochi-cache-'));
   const cache = new MachineCache(dir, storage());
   cache.write('m1', '{"threads":[]}');
-  assert.notEqual(readFileSync(join(dir, 'machine-cache', 'm1'), 'utf8'), '{"threads":[]}');
+  assert.notEqual(
+    readFileSync(join(dir, 'machine-cache', 'm1'), 'utf8'),
+    '{"threads":[]}',
+  );
   assert.equal(cache.read('m1'), '{"threads":[]}');
   assert.ok((cache.savedAt('m1') ?? 0) > 0);
   cache.remove('m1');

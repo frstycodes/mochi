@@ -2,7 +2,13 @@ import type { AgentImage } from './agent.ts';
 import type { Manifest } from './manifest.ts';
 
 /** macOS Screen Recording access as `systemPreferences.getMediaAccessStatus('screen')` reports it; `unsupported` off the desktop app. */
-export type ScreenAccess = 'granted' | 'denied' | 'restricted' | 'not-determined' | 'unknown' | 'unsupported';
+export type ScreenAccess =
+  | 'granted'
+  | 'denied'
+  | 'restricted'
+  | 'not-determined'
+  | 'unknown'
+  | 'unsupported';
 
 export interface AppWindow {
   /** The window's id (ScreenCaptureKit window id on macOS, else a desktopCapturer source id), valid until it closes. */

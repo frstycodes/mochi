@@ -1,5 +1,5 @@
 import type { Thread } from '../model.ts';
-import type { Saved } from '../store/persist.ts';
+import type { Saved } from '../store/saved.ts';
 import type { State } from '../store/index.tsx';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
@@ -7,8 +7,22 @@ import type { Recording, ReplayBase, ReplayStep } from './record.ts';
 
 /** A store holding only the recorded thread, as it stood when recording began. The other slices never touch threads or the queue. */
 export function scratchState({ now, base }: ReplayBase): State {
-  const saved = { version: 1, now, seq: 1, threads: [base.thread], queue: base.queue, checkpoints: {}, checkpointSeq: 0, forks: {} } satisfies Saved;
-  return { ...initialThreads(saved, false), ...initialQueue(saved, false), spaceId: base.thread.spaceId, views: {} } as unknown as State;
+  const saved = {
+    version: 1,
+    now,
+    seq: 1,
+    threads: [base.thread],
+    queue: base.queue,
+    checkpoints: {},
+    checkpointSeq: 0,
+    forks: {},
+  } satisfies Saved;
+  return {
+    ...initialThreads(saved, false),
+    ...initialQueue(saved, false),
+    spaceId: base.thread.spaceId,
+    views: {},
+  } as unknown as State;
 }
 
 /** The store's own slices that own threads and the queue, in the store's order, at the app clock the step was recorded on. */
@@ -25,7 +39,10 @@ export function createReplayer(recording: Recording) {
   let last = { n: 0, state: snapshots.get(0)! };
   return function stateAt(n: number): State {
     const target = Math.max(0, Math.min(n, recording.steps.length));
-    let i = target >= last.n ? last.n : Math.floor(target / SNAPSHOT_EVERY) * SNAPSHOT_EVERY;
+    let i =
+      target >= last.n
+        ? last.n
+        : Math.floor(target / SNAPSHOT_EVERY) * SNAPSHOT_EVERY;
     while (i !== last.n && !snapshots.has(i)) i -= SNAPSHOT_EVERY;
     let state = i === last.n ? last.state : snapshots.get(i)!;
     for (; i < target; i++) {
@@ -37,7 +54,10 @@ export function createReplayer(recording: Recording) {
   };
 }
 
-export function replayedThread(state: State, threadId: string): Thread | undefined {
+export function replayedThread(
+  state: State,
+  threadId: string,
+): Thread | undefined {
   return state.threads.find((t) => t.id === threadId);
 }
 
@@ -87,17 +107,43 @@ export function markers(recording: Recording): Marker[] {
     const { event } = action;
     switch (event.type) {
       case 'tool':
-        if (event.phase === 'start') return [{ n, kind: 'tool', label: event.text }];
-        if (event.exitCode) return [{ n, kind: 'error', label: `Exit ${event.exitCode}: ${event.text}` }];
-        return event.files?.length ? [{ n, kind: 'edit', label: event.files.join(', ') }] : [];
+        if (event.phase === 'start')
+          return [{ n, kind: 'tool', label: event.text }];
+        if (event.exitCode)
+          return [
+            {
+              n,
+              kind: 'error',
+              label: `Exit ${event.exitCode}: ${event.text}`,
+            },
+          ];
+        return event.files?.length
+          ? [{ n, kind: 'edit', label: event.files.join(', ') }]
+          : [];
       case 'approval':
         return [{ n, kind: 'approval', label: event.title }];
       case 'question':
-        return [{ n, kind: 'approval', label: event.questions[0]?.text ?? 'Question' }];
+        return [
+          {
+            n,
+            kind: 'approval',
+            label: event.questions[0]?.text ?? 'Question',
+          },
+        ];
       case 'limit':
         return [{ n, kind: 'error', label: 'Usage limit reached' }];
       case 'turn-end':
-        return event.status === 'failed' ? [{ n, kind: 'error', label: event.error ? `Turn failed: ${event.error}` : 'Turn failed' }] : [];
+        return event.status === 'failed'
+          ? [
+              {
+                n,
+                kind: 'error',
+                label: event.error
+                  ? `Turn failed: ${event.error}`
+                  : 'Turn failed',
+              },
+            ]
+          : [];
       default:
         return [];
     }

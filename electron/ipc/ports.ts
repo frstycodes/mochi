@@ -1,36 +1,49 @@
-import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
-import { promisify } from 'node:util';
+import { runCommand } from '@mochi/core/runClient';
 import type { ListeningPort, PortsHost } from '../../src/host/types/ports.ts';
-import { launchConfigs, listeningUnder, packageScripts, parseCwds, parseListening, parsePs, pickPort, portsByRoot, type PortScan } from '../../src/terminal/lsof.ts';
+import {
+  launchConfigs,
+  listeningUnder,
+  packageScripts,
+  parseCwds,
+  parseListening,
+  parsePs,
+  pickPort,
+  portsByRoot,
+  type PortScan,
+} from '../../src/terminal/lsof.ts';
 import { resolveCwd } from '../pty/cwd.ts';
-import { integer, string, type Handlers } from './handlers.ts';
+import type { Handlers } from './handlers.ts';
 
-const exec = promisify(execFile);
 const FIRST_THREAD_PORT = 5300;
-const MAX_WATCHED = 256;
 const allocated = new Map<string, Promise<number>>();
 // The kill allowlist: whatever the user was last shown across every watched thread. A PID can't be killed without first appearing in a Ports tab.
 let shownPids = new Set<number>();
 
 export const ports = {
   async list(_sender, cwds) {
-    if (!Array.isArray(cwds) || cwds.length > MAX_WATCHED) throw new TypeError(`cwds must be a list of up to ${MAX_WATCHED} paths`);
     const found = portsByRoot(cwds.map(rootOrError), await scanListening());
-    shownPids = new Set(found.flatMap((r) => ('ports' in r ? r.ports.map((p) => p.pid) : [])));
+    shownPids = new Set(
+      found.flatMap((r) => ('ports' in r ? r.ports.map((p) => p.pid) : [])),
+    );
     return found;
   },
   async kill(_sender, pid) {
-    const target = integer(pid, 'pid', 2, 2 ** 31);
-    if (!shownPids.has(target) || target === process.pid) throw new Error(`pid ${target} is not a listed dev server`);
-    process.kill(target, 'SIGTERM');
+    if (!shownPids.has(pid) || pid === process.pid)
+      throw new Error(`pid ${pid} is not a listed dev server`);
+    process.kill(pid, 'SIGTERM');
   },
   async allocate(_sender, key) {
-    const id = string(key, 'key', 128);
-    if (!allocated.has(id)) allocated.set(id, Promise.all(allocated.values()).then((taken) => pickPort(FIRST_THREAD_PORT, new Set(taken), isFree)));
-    return allocated.get(id)!;
+    if (!allocated.has(key))
+      allocated.set(
+        key,
+        Promise.all(allocated.values()).then((taken) =>
+          pickPort(FIRST_THREAD_PORT, new Set(taken), isFree),
+        ),
+      );
+    return allocated.get(key)!;
   },
   async targets(_sender, cwd) {
     return runTargets(resolveCwd(cwd));
@@ -38,7 +51,10 @@ export const ports = {
 } satisfies Handlers<PortsHost>;
 
 export function runTargets(dir: string) {
-  return [...packageScripts(readJson(path.join(dir, 'package.json')), runnerFor(dir)), ...launchConfigs(readJson(path.join(dir, '.claude', 'launch.json')))];
+  return [
+    ...packageScripts(readJson(path.join(dir, 'package.json')), runnerFor(dir)),
+    ...launchConfigs(readJson(path.join(dir, '.claude', 'launch.json'))),
+  ];
 }
 
 export async function listeningPorts(root: string): Promise<ListeningPort[]> {
@@ -48,14 +64,20 @@ export async function listeningPorts(root: string): Promise<ListeningPort[]> {
 
 // GAP: macOS/Linux only (lsof + ps); Windows needs netstat -ano.
 async function scanListening(): Promise<PortScan> {
-  const listening = parseListening(await run('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fpn'])).filter((l) => l.pid !== process.pid);
-  if (listening.length === 0) return { listening, cwds: new Map(), procs: new Map() };
+  const listening = parseListening(
+    await run('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fpn']),
+  ).filter((l) => l.pid !== process.pid);
+  if (listening.length === 0)
+    return { listening, cwds: new Map(), procs: new Map() };
   const pids = [...new Set(listening.map((l) => l.pid))].join(',');
-  const [cwds, procs] = await Promise.all([run('lsof', ['-a', '-d', 'cwd', '-p', pids, '-Fn']), run('ps', ['-o', 'pid=,etime=,command=', '-p', pids])]);
+  const [cwds, procs] = await Promise.all([
+    run('lsof', ['-a', '-d', 'cwd', '-p', pids, '-Fn']),
+    run('ps', ['-o', 'pid=,etime=,command=', '-p', pids]),
+  ]);
   return { listening, cwds: parseCwds(cwds), procs: parsePs(procs) };
 }
 
-function rootOrError(cwd: unknown) {
+function rootOrError(cwd: string) {
   try {
     return resolveCwd(cwd);
   } catch (error) {
@@ -66,9 +88,10 @@ function rootOrError(cwd: unknown) {
 // lsof exits 1 when some PIDs vanished mid-scan or nothing matched; its stdout is still the answer.
 async function run(file: string, args: string[]) {
   try {
-    return (await exec(file, args, { maxBuffer: 8 * 1024 * 1024 })).stdout;
-  } catch (error) {
-    return (error as { stdout?: string }).stdout ?? '';
+    return (await runCommand(file, args, { okCodes: [0, 1], timeout: 10_000 }))
+      .stdout;
+  } catch {
+    return '';
   }
 }
 
@@ -82,7 +105,11 @@ export function isFree(port: number) {
 function runnerFor(dir: string) {
   if (existsSync(path.join(dir, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(path.join(dir, 'yarn.lock'))) return 'yarn';
-  if (existsSync(path.join(dir, 'bun.lock')) || existsSync(path.join(dir, 'bun.lockb'))) return 'bun';
+  if (
+    existsSync(path.join(dir, 'bun.lock')) ||
+    existsSync(path.join(dir, 'bun.lockb'))
+  )
+    return 'bun';
   return 'npm';
 }
 

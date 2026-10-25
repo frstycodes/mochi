@@ -1,0 +1,13 @@
+{
+  "name": "@mochi/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vp test run --root ../.. packages/domain/src"
+  }
+}

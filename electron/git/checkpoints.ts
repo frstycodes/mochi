@@ -6,8 +6,16 @@ import { runGit } from './run.ts';
 
 /** `undo`: the files a rewind replaced. `turn`: the files as the agent's last turn left them, to tell its changes from anyone else's. */
 export function checkpointRef(threadId: string, n: number | 'undo' | 'turn') {
-  if (!/^[\w-]{1,64}$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
-  if (n !== 'undo' && n !== 'turn' && (!Number.isInteger(n) || n < 0 || n > 1_000_000)) throw new TypeError('checkpoint must be a non-negative integer, "undo" or "turn"');
+  if (!/^[\w-]{1,64}$/.test(threadId))
+    throw new Error('threadId must be letters, digits, - or _');
+  if (
+    n !== 'undo' &&
+    n !== 'turn' &&
+    (!Number.isInteger(n) || n < 0 || n > 1_000_000)
+  )
+    throw new TypeError(
+      'checkpoint must be a non-negative integer, "undo" or "turn"',
+    );
   return `refs/harness/checkpoints/${threadId}/${n}`;
 }
 
@@ -28,7 +36,9 @@ export async function snapshotCommit(top: string, message: string) {
     await runGit(top, ['read-tree', head], { env });
     await runGit(top, ['add', '-A', '--', '.'], { env });
     const tree = (await runGit(top, ['write-tree'], { env })).trim();
-    return (await runGit(top, ['commit-tree', tree, '-p', head, '-m', message])).trim();
+    return (
+      await runGit(top, ['commit-tree', tree, '-p', head, '-m', message])
+    ).trim();
   } finally {
     await rm(index, { force: true });
   }
@@ -52,23 +62,64 @@ export async function applyFiles(top: string, commit: string) {
  * Puts only `paths` back to how the commit held them: files it had are checked out (and left unstaged), files it didn't have
  * are deleted. Every other file stays as it is. `paths` are relative to `top`.
  */
-export async function restorePaths(top: string, commit: string, paths: string[]) {
+export async function restorePaths(
+  top: string,
+  commit: string,
+  paths: string[],
+) {
   // Agents name files, not patterns: a path like `app/[id].tsx` must not match as a glob.
-  const held = new Set((await runGit(top, ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', commit, '--', ...paths])).split('\0').filter(Boolean));
+  const held = new Set(
+    (
+      await runGit(top, [
+        '--literal-pathspecs',
+        'ls-tree',
+        '-r',
+        '-z',
+        '--name-only',
+        commit,
+        '--',
+        ...paths,
+      ])
+    )
+      .split('\0')
+      .filter(Boolean),
+  );
   const back = paths.filter((p) => held.has(p));
   if (back.length) {
-    await runGit(top, ['--literal-pathspecs', 'checkout', commit, '--', ...back]);
-    await runGit(top, ['--literal-pathspecs', 'reset', '--quiet', '--', ...back]);
+    await runGit(top, [
+      '--literal-pathspecs',
+      'checkout',
+      commit,
+      '--',
+      ...back,
+    ]);
+    await runGit(top, [
+      '--literal-pathspecs',
+      'reset',
+      '--quiet',
+      '--',
+      ...back,
+    ]);
   }
-  await Promise.all(paths.filter((p) => !held.has(p)).map((p) => rm(join(top, p), { force: true })));
+  await Promise.all(
+    paths
+      .filter((p) => !held.has(p))
+      .map((p) => rm(join(top, p), { force: true })),
+  );
 }
 
 export async function resolveCommit(top: string, ref: string) {
   // --quiet exits 1 for a missing ref: that's an answer (''), not a failure.
-  return (await runGit(top, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { okCodes: [1] })).trim();
+  return (
+    await runGit(top, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], {
+      okCodes: [1],
+    })
+  ).trim();
 }
 
 /** Paths whose content differs between two commits' trees. */
 export async function changedPaths(top: string, from: string, to: string) {
-  return (await runGit(top, ['diff', '--name-only', '-z', from, to])).split('\0').filter(Boolean);
+  return (await runGit(top, ['diff', '--name-only', '-z', from, to]))
+    .split('\0')
+    .filter(Boolean);
 }

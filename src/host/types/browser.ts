@@ -23,12 +23,24 @@ export interface BrowserEmulation {
   reducedMotion: boolean;
 }
 
-export type BrowserCommand = 'back' | 'forward' | 'reload' | 'hard-reload' | 'stop';
+export type BrowserCommand =
+  | 'back'
+  | 'forward'
+  | 'reload'
+  | 'hard-reload'
+  | 'stop';
 
 export type BrowserDevtools = 'docked' | 'detached' | 'closed';
 
 /** What the page's right-click menu asks the page itself to do, at the point it was opened. */
-export type BrowserMenuCommand = 'cut' | 'copy' | 'paste' | 'select-all' | 'copy-image' | 'save-image' | 'inspect';
+export type BrowserMenuCommand =
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'select-all'
+  | 'copy-image'
+  | 'save-image'
+  | 'inspect';
 
 export interface FindOptions {
   forward: boolean;
@@ -45,7 +57,14 @@ export interface BrowserContextMenu {
   linkText: string;
   /** The image's (or video's) source when the click was on one. */
   srcUrl: string;
-  mediaType: 'none' | 'image' | 'audio' | 'video' | 'canvas' | 'file' | 'plugin';
+  mediaType:
+    | 'none'
+    | 'image'
+    | 'audio'
+    | 'video'
+    | 'canvas'
+    | 'file'
+    | 'plugin';
   selectionText: string;
   isEditable: boolean;
   canCut: boolean;
@@ -84,7 +103,10 @@ export interface BrowserWait {
 export interface BrowserSnapshot {
   text: string;
   /** What each `[ref=gN-eN]` in `text` is, so the renderer can tell a submit button or a password field before acting. */
-  refs: Record<string, { role: string; name: string; isSubmit: boolean; isPassword: boolean }>;
+  refs: Record<
+    string,
+    { role: string; name: string; isSubmit: boolean; isPassword: boolean }
+  >;
 }
 
 export interface ScrollPosition {
@@ -115,8 +137,25 @@ export interface BrowserLog {
 }
 
 export type BrowserEvent =
-  | { id: string; type: 'state'; url: string; title: string; isLoading: boolean; canGoBack: boolean; canGoForward: boolean; error: string | null; favicon: string | null }
-  | { id: string; type: 'console'; level: 'error' | 'warning'; message: string; source: string; line: number }
+  | {
+      id: string;
+      type: 'state';
+      url: string;
+      title: string;
+      isLoading: boolean;
+      canGoBack: boolean;
+      canGoForward: boolean;
+      error: string | null;
+      favicon: string | null;
+    }
+  | {
+      id: string;
+      type: 'console';
+      level: 'error' | 'warning';
+      message: string;
+      source: string;
+      line: number;
+    }
   /** The page's `window.open` made view `viewId`, which keeps `window.opener`; it needs a tab of its own. */
   | { id: string; type: 'popup'; viewId: string; url: string }
   /** The page closed itself (`window.close()` in a popup); the view is gone. */
@@ -127,7 +166,15 @@ export type BrowserEvent =
   /** App shortcuts pressed while the page has focus: the page would swallow them otherwise. */
   | { id: string; type: 'key'; key: 'find' | 'escape' }
   /** A file the page downloaded into the Downloads folder; `progress` comes at most every 250ms, `total` is 0 when unknown. */
-  | { id: string; type: 'download'; name: string; path: string; state: 'progress' | 'done' | 'failed'; received: number; total: number }
+  | {
+      id: string;
+      type: 'download';
+      name: string;
+      path: string;
+      state: 'progress' | 'done' | 'failed';
+      received: number;
+      total: number;
+    }
   | ({ id: string; type: 'context-menu' } & BrowserContextMenu)
   /** `kind: null` once the dialog closes, however it was answered. */
   | ({ id: string; type: 'dialog' } & BrowserDialog)
@@ -143,7 +190,10 @@ export interface BrowserHost {
   setBounds(id: string, bounds: BrowserBounds | null): Promise<void>;
   setZoom(id: string, factor: number): Promise<void>;
   /** Hides the view at `viewport` CSS px and streams it as `frame` events (JPEG data URLs) until called with `null`. */
-  mirror(id: string, viewport: { width: number; height: number } | null): Promise<void>;
+  mirror(
+    id: string,
+    viewport: { width: number; height: number } | null,
+  ): Promise<void>;
   emulate(id: string, emulation: BrowserEmulation): Promise<void>;
   devtools(id: string, mode: BrowserDevtools): Promise<void>;
   /** PNG data URL of the viewport, or of the whole scrollable page. */
@@ -160,8 +210,14 @@ export interface BrowserHost {
   /** The last console messages of every level, oldest first. */
   logs(id: string): Promise<BrowserLog[]>;
   /** Runs `script` in the page's own world (top-level await allowed): the last expression's JSON, capped at 20k chars; throws the page's error. */
-  eval(id: string, script: string): Promise<{ value: string; isTruncated: boolean }>;
-  waitFor(id: string, until: BrowserWait): Promise<{ isMet: boolean; waitedMs: number }>;
+  eval(
+    id: string,
+    script: string,
+  ): Promise<{ value: string; isTruncated: boolean }>;
+  waitFor(
+    id: string,
+    until: BrowserWait,
+  ): Promise<{ isMet: boolean; waitedMs: number }>;
   /** Answers the open dialog: OK when `accept`, Cancel otherwise. Throws when none is open. */
   answerDialog(id: string, answer: { accept: boolean }): Promise<void>;
   /** Reloads the page when a file under `root` changes and the dev server didn't hot-reload it, keeping scroll per URL. `null` stops. */
@@ -169,14 +225,23 @@ export interface BrowserHost {
   /** The page's scroll position, after scrolling to `to` when given. */
   scroll(id: string, to: ScrollPosition | null): Promise<ScrollPosition>;
   /** Serves `base` (default branch when unset) of the repo at `cwd` for `threadId`; resolves once its dev server listens. */
-  compareStart(threadId: string, cwd: string, base?: string): Promise<CompareBase>;
+  compareStart(
+    threadId: string,
+    cwd: string,
+    base?: string,
+  ): Promise<CompareBase>;
   /** Stops the server and removes the temporary worktree `compareStart` made. */
   compareStop(threadId: string): Promise<void>;
   /** Highlights matches of `text` in the page; results come back as `found` events. */
   find(id: string, text: string, options: FindOptions): Promise<void>;
   stopFind(id: string): Promise<void>;
   /** Runs a context-menu command at `at` (the menu event's point); `save-image` downloads `url`. */
-  menuCommand(id: string, command: BrowserMenuCommand, at: { x: number; y: number }, url?: string): Promise<void>;
+  menuCommand(
+    id: string,
+    command: BrowserMenuCommand,
+    at: { x: number; y: number },
+    url?: string,
+  ): Promise<void>;
   /** JPEG data URL of what the view shows now, for a stand-in while an overlay covers it. */
   peek(id: string): Promise<string>;
   /** Opens an http(s) URL in the system's default browser. */

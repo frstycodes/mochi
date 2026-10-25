@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -24,11 +24,10 @@ jobs:
           node-version: '24'
           cache: true
 
-      # Lint plus type checks for src and electron (TypeScript Go via tsgolint).
+      # Lint; tsgolint supplies types to the type-aware rules but doesn't type-check (lint.options.typeCheck).
       - run: vp check
-      # `vp test` is Vitest; the suite is node:test, so run the package script.
-      - run: vp run test
-      - run: vp run build
+      # tsc-rs over every project, with the Effect diagnostics.
+      - run: pnpm typecheck
 
   # Mochi ships for macOS, Windows and Linux: the tests and an unpacked build run on each (installers are `electron-builder` without `--dir`).
   package:
@@ -37,11 +36,25 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
+      # On a pull request HEAD is the merge commit and HEAD~1 the base it merges into, so two commits are enough for `--changed`.
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
       - uses: voidzero-dev/setup-vp@v1.21.2
         with:
           node-version: '24'
           cache: true
-      - run: vp run test
-      - run: vp run electron:build
+      # A pull request runs only the tests its diff reaches (vite.config.ts `forceRerunTriggers` widens that to all); main runs every test.
+      - run: vp test run ${{ github.event_name == 'pull_request' && '--changed HEAD~1' || '' }}
+      # electron:build minus its `tsc` steps, which the check job runs.
+      - run: pnpm electron:pack
+
+      # Streams a reply into the built app; fails over the render and script budgets in tests/e2e/stream.perf.spec.ts.
+      # Ubuntu 24.04's AppArmor blocks the user namespaces Chromium's sandbox needs.
+      - if: matrix.os == 'ubuntu-latest'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # No display on the runner: Electron draws into a virtual X server.
+      - if: matrix.os == 'ubuntu-latest'
+        run: xvfb-run --auto-servernum pnpm exec playwright test -c tests/e2e

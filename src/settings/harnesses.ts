@@ -17,7 +17,11 @@ export const HARNESSES = {
     docs: 'https://code.claude.com/docs/en/setup',
     defaultModel: '',
     /** Billing override the harness reads from its environment, stored in the keychain when the user sets one. */
-    apiKey: { env: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', placeholder: 'sk-ant-…' },
+    apiKey: {
+      env: 'ANTHROPIC_API_KEY',
+      label: 'Anthropic API key',
+      placeholder: 'sk-ant-…',
+    },
   },
   codex: {
     name: 'Codex',

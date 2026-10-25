@@ -1,14 +1,43 @@
 import type { AgentPhase } from './agentShape.ts';
-import type { ActivityEntry, Thread, WebLink } from './model.ts';
+import {
+  isWorking,
+  type ActivityEntry,
+  type Thread,
+  type WebLink,
+} from './model.ts';
 import { namesNow } from './library/names.ts';
 import { HARNESSES } from './settings/harnesses.ts';
-import { parseTool, toolVerb, type ToolCall, type ToolVerb } from './summary.ts';
+import {
+  parseTool,
+  toolVerb,
+  type ToolCall,
+  type ToolVerb,
+} from './summary.ts';
 import { isTurnCall, mochiCall } from './chat/mochiCalls.ts';
 import { isSendTarget } from './chat/threadMessages.ts';
 
-const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse', Skill: 'read', Mcp: 'run' } satisfies Record<ToolVerb, AgentPhase>;
+const VERB_PHASE = {
+  Read: 'read',
+  Edit: 'edit',
+  Write: 'edit',
+  Run: 'run',
+  Browser: 'browse',
+  Search: 'browse',
+  Fetch: 'browse',
+  Skill: 'read',
+  Mcp: 'run',
+} satisfies Record<ToolVerb, AgentPhase>;
 
-export const PHASE_LABELS = { idle: 'Idle', start: 'Starting', think: 'Thinking', read: 'Reading', edit: 'Editing', run: 'Running', browse: 'Browsing', wait: 'Waiting on you' } satisfies Record<AgentPhase, string>;
+export const PHASE_LABELS = {
+  idle: 'Idle',
+  start: 'Starting',
+  think: 'Thinking',
+  read: 'Reading',
+  edit: 'Editing',
+  run: 'Running',
+  browse: 'Browsing',
+  wait: 'Waiting on you',
+} satisfies Record<AgentPhase, string>;
 
 /** What the agent is doing right now, read from its latest activity. */
 export function agentPhase(thread: Thread): AgentPhase {
@@ -16,7 +45,9 @@ export function agentPhase(thread: Thread): AgentPhase {
   if (!isWorking(thread)) return 'idle';
   const pending = pendingWork(thread);
   if (pending) return pending.phase;
-  const last = [...thread.activity].reverse().find((e) => e.kind === 'tool' || e.kind === 'reasoning');
+  const last = [...thread.activity]
+    .reverse()
+    .find((e) => e.kind === 'tool' || e.kind === 'reasoning');
   return entryPhase(last);
 }
 
@@ -26,22 +57,27 @@ export function entryPhase(entry?: ActivityEntry): AgentPhase {
 }
 
 /** The pose for a tool call's text ("Run pnpm test" → run). */
-export const toolPhase = (text: string): AgentPhase => VERB_PHASE[toolVerb(text)];
+export const toolPhase = (text: string): AgentPhase =>
+  VERB_PHASE[toolVerb(text)];
 
-/** A live thread keeps `running` between turns; only its agent knows whether it's working. Demo threads run while their status says so. */
-export function isWorking(thread: Thread) {
-  return thread.live ? thread.live.isWorking : thread.status === 'running';
-}
+export { isWorking } from './model.ts';
 
 export const SETUP_LABEL = 'Setting up worktree…';
 
 /** Between your message and the agent's first output, which would otherwise show nothing: what it's waiting on. */
-export function pendingWork(thread: Thread): { phase: AgentPhase; label: string } | undefined {
+export function pendingWork(
+  thread: Thread,
+): { phase: AgentPhase; label: string } | undefined {
   if (!thread.live?.isWorking || thread.status === 'needs-you') return;
-  if (thread.setup?.status === 'running') return { phase: 'start', label: SETUP_LABEL };
+  if (thread.setup?.status === 'running')
+    return { phase: 'start', label: SETUP_LABEL };
   const last = [...thread.activity].reverse().find((e) => e.kind !== 'event');
   if (last?.who !== 'you') return;
-  if (thread.live.starting) return { phase: 'start', label: `Starting ${HARNESSES[thread.live.starting].name}` };
+  if (thread.live.starting)
+    return {
+      phase: 'start',
+      label: `Starting ${HARNESSES[thread.live.starting].name}`,
+    };
   return { phase: 'think', label: PHASE_LABELS.think };
 }
 
@@ -63,30 +99,51 @@ export interface CurrentAction {
 export function currentAction(thread: Thread): CurrentAction | undefined {
   const isWaiting = thread.status === 'needs-you';
   if (!isWorking(thread) && !isWaiting) return;
-  if (thread.setup?.status === 'failed' && isWaiting) return { label: 'Worktree setup failed', isWaiting };
+  if (thread.setup?.status === 'failed' && isWaiting)
+    return { label: 'Worktree setup failed', isWaiting };
   const pending = pendingWork(thread);
   if (pending) return { label: pending.label };
-  const last = thread.activity.findLast((e) => (e.kind === 'tool' && !isTurnCall(e)) || e.kind === 'reasoning' || e.kind === 'message' || (isWaiting && isWaitEvent(e)));
-  const tool = thread.activity.findLast((e) => e.kind === 'tool' && !isTurnCall(e));
+  const last = thread.activity.findLast(
+    (e) =>
+      (e.kind === 'tool' && !isTurnCall(e)) ||
+      e.kind === 'reasoning' ||
+      e.kind === 'message' ||
+      (isWaiting && isWaitEvent(e)),
+  );
+  const tool = thread.activity.findLast(
+    (e) => e.kind === 'tool' && !isTurnCall(e),
+  );
   if (last && isWaitEvent(last)) {
     const call = tool && parseTool(tool.text);
-    return { label: call ? waitingLabel(call) : PHASE_LABELS.wait, call, links: tool?.links, isWaiting: true };
+    return {
+      label: call ? waitingLabel(call) : PHASE_LABELS.wait,
+      call,
+      links: tool?.links,
+      isWaiting: true,
+    };
   }
   // Waiting on something other than an approval (a failed turn, a review): the turn isn't live.
   if (!isWorking(thread)) return;
   if (last?.kind === 'tool') {
     const call = parseTool(last.text);
-    return { label: (isCommand(last.text) && last.description) || toolLabel(call), call, links: last.links };
+    return {
+      label: (isCommand(last.text) && last.description) || toolLabel(call),
+      call,
+      links: last.links,
+    };
   }
-  if (last?.kind === 'message' && last.who !== 'you') return { label: 'Replying' };
+  if (last?.kind === 'message' && last.who !== 'you')
+    return { label: 'Replying' };
   return { label: PHASE_LABELS.think };
 }
 
 // Only a command's description reads as an action in progress; Grep's and Glob's are past tense. `Run` is also the
 // verb of any tool the work log doesn't know, which logs as `Name: target`.
-const isCommand = (text: string) => toolVerb(text) === 'Run' && !/^\w+: /.test(text);
+const isCommand = (text: string) =>
+  toolVerb(text) === 'Run' && !/^\w+: /.test(text);
 
-const isWaitEvent = (e: ActivityEntry) => e.kind === 'event' && e.text.startsWith('Waiting on you:');
+const isWaitEvent = (e: ActivityEntry) =>
+  e.kind === 'event' && e.text.startsWith('Waiting on you:');
 
 // Claude's AskUserQuestion has no target, so its call reads as a bare tool name.
 function waitingLabel(call: ToolCall) {
@@ -119,7 +176,9 @@ export function toolLabel(call: ToolCall) {
     Search: `Searching ${call.target}`,
     Fetch: `Reading ${hostname(call.target)}`,
     Skill: `Using the ${namesNow().skill(call.target).title} skill`,
-    Mcp: isSendTarget(call) ? 'Messaging another thread' : (mochiCall(call)?.[0] ?? `Calling ${mcpLabel(call.target)}`),
+    Mcp: isSendTarget(call)
+      ? 'Messaging another thread'
+      : (mochiCall(call)?.[0] ?? `Calling ${mcpLabel(call.target)}`),
   }[call.verb];
 }
 

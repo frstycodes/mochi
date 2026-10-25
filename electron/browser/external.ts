@@ -9,7 +9,12 @@ const SUFFIX = /\.(app|exe|desktop)$/i;
  */
 export function browserLabel(reported: string, self: string) {
   const name = reported.trim().replace(SUFFIX, '');
-  if (!name || name.toLowerCase() === self.toLowerCase() || /^electron$/i.test(name)) return '';
+  if (
+    !name ||
+    name.toLowerCase() === self.toLowerCase() ||
+    /^electron$/i.test(name)
+  )
+    return '';
   if (/\s/.test(name) || /[A-Z]/.test(name)) return name;
   // A lowercase id: its last dotted part, dashes as spaces, capitalised (`google-chrome` → "Google Chrome").
   const last = name.split('.').pop()!;
@@ -30,5 +35,10 @@ const SUGGEST_LIMIT = 6;
 /** Every engine answers in the OpenSearch shape `[query, [suggestion, …], …]`; anything else is no suggestions. */
 export function parseSuggestions(body: unknown) {
   if (!Array.isArray(body) || !Array.isArray(body[1])) return [];
-  return body[1].filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length <= 200).slice(0, SUGGEST_LIMIT);
+  return body[1]
+    .filter(
+      (s): s is string =>
+        typeof s === 'string' && s.length > 0 && s.length <= 200,
+    )
+    .slice(0, SUGGEST_LIMIT);
 }

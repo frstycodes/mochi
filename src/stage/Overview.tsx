@@ -1,7 +1,14 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { Grid, X } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { Kbd } from '@/components/ui/kbd';
 import { ARROW_SIDE, neighbourInDirection, type Side } from '../layout/tree';
 import { activeThreads, pinnedThreads } from '../reorder';
@@ -24,7 +31,10 @@ export function Overview() {
 
   const close = () => dispatch({ type: 'overview-toggle', isOpen: false });
   const open = (id: string | null) => {
-    dispatch({ type: 'go', view: id ? { kind: 'thread', id } : { kind: 'new' } });
+    dispatch({
+      type: 'go',
+      view: id ? { kind: 'thread', id } : { kind: 'new' },
+    });
     close();
   };
   const groups = [
@@ -33,12 +43,25 @@ export function Overview() {
   ].filter((g) => g.snaps.length > 0);
 
   return (
-    <div role="dialog" aria-modal aria-label="All sessions" onKeyDown={moveFocus} className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background">
+    <div
+      role="dialog"
+      aria-modal
+      aria-label="All sessions"
+      onKeyDown={moveFocus}
+      className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background"
+    >
       <TitleBar className="gap-3 px-4">
         <h2 className="type-title">All sessions</h2>
-        <span className="type-meta text-subtle-foreground tabular">{pinned.length + others.length}</span>
+        <span className="type-meta text-subtle-foreground tabular">
+          {pinned.length + others.length}
+        </span>
         <span className="flex-1" />
-        <Button variant="ghost" size="sm" onClick={close} className="gap-1.5 text-muted-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={close}
+          className="gap-1.5 text-muted-foreground"
+        >
           <X />
           Close
           <Kbd>Esc</Kbd>
@@ -48,11 +71,16 @@ export function Overview() {
         {groups.length === 0 && <NoSessions onStart={() => open(null)} />}
         {groups.map((g, gi) => (
           <section key={g.label} className="flex flex-col gap-2">
-            <h3 className="type-meta font-medium text-muted-foreground">{g.label}</h3>
+            <h3 className="type-meta font-medium text-muted-foreground">
+              {g.label}
+            </h3>
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
               {g.snaps.map((snap, i) => (
                 <li key={snap.id}>
-                  <TargetContextMenu target={{ threadId: snap.id }} groups={THREAD_MENU}>
+                  <TargetContextMenu
+                    target={{ threadId: snap.id }}
+                    groups={THREAD_MENU}
+                  >
                     <button
                       ref={gi === 0 && i === 0 ? first : undefined}
                       type="button"
@@ -61,7 +89,10 @@ export function Overview() {
                       aria-label={`Open ${snap.title}`}
                       className="block h-44 w-full cursor-default rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <SnapshotCard snap={snap} className="size-full transition-[box-shadow] hover:shadow-float" />
+                      <SnapshotCard
+                        snap={snap}
+                        className="size-full transition-[box-shadow] hover:shadow-float"
+                      />
                     </button>
                   </TargetContextMenu>
                 </li>
@@ -82,7 +113,9 @@ function NoSessions({ onStart }: { onStart: () => void }) {
           <Grid />
         </EmptyMedia>
         <EmptyTitle>No sessions in this space</EmptyTitle>
-        <EmptyDescription>Every thread you start here shows up as a card you can jump to.</EmptyDescription>
+        <EmptyDescription>
+          Every thread you start here shows up as a card you can jump to.
+        </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button size="sm" onClick={onStart}>
@@ -97,23 +130,46 @@ function NoSessions({ onStart }: { onStart: () => void }) {
 function moveFocus(e: KeyboardEvent<HTMLElement>) {
   const side = ARROW_SIDE[e.key as keyof typeof ARROW_SIDE];
   if (!side || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-  const cards = [...e.currentTarget.querySelectorAll<HTMLElement>('[data-snap-id]')];
-  const current = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-snap-id]');
+  const cards = [
+    ...e.currentTarget.querySelectorAll<HTMLElement>('[data-snap-id]'),
+  ];
+  const current = (
+    document.activeElement as HTMLElement | null
+  )?.closest<HTMLElement>('[data-snap-id]');
   if (!current) return cards[0]?.focus();
-  const rects = Object.fromEntries(cards.map((c) => [c.dataset.snapId!, c.getBoundingClientRect()]));
+  const rects = Object.fromEntries(
+    cards.map((c) => [c.dataset.snapId!, c.getBoundingClientRect()]),
+  );
   // A row with fewer cards has nothing straight below the right-hand columns: up and down fall back to the nearest card that way.
   const isVertical = side === 'top' || side === 'bottom';
-  const next = neighbourInDirection(rects, current.dataset.snapId!, side) ?? (isVertical ? nearestInDirection(rects, current.dataset.snapId!, side) : undefined);
+  const next =
+    neighbourInDirection(rects, current.dataset.snapId!, side) ??
+    (isVertical
+      ? nearestInDirection(rects, current.dataset.snapId!, side)
+      : undefined);
   e.preventDefault();
   if (next) cards.find((c) => c.dataset.snapId === next)?.focus();
 }
 
-function nearestInDirection(rects: Record<string, DOMRect>, fromId: string, side: Side) {
+function nearestInDirection(
+  rects: Record<string, DOMRect>,
+  fromId: string,
+  side: Side,
+) {
   const from = rects[fromId];
-  const centre = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  const centre = (r: DOMRect) => ({
+    x: r.left + r.width / 2,
+    y: r.top + r.height / 2,
+  });
   const a = centre(from);
-  const ahead = { left: (r: DOMRect) => r.right <= from.left + 1, right: (r: DOMRect) => r.left >= from.right - 1, top: (r: DOMRect) => r.bottom <= from.top + 1, bottom: (r: DOMRect) => r.top >= from.bottom - 1 }[side];
-  const distance = (r: DOMRect) => Math.hypot(centre(r).x - a.x, centre(r).y - a.y);
+  const ahead = {
+    left: (r: DOMRect) => r.right <= from.left + 1,
+    right: (r: DOMRect) => r.left >= from.right - 1,
+    top: (r: DOMRect) => r.bottom <= from.top + 1,
+    bottom: (r: DOMRect) => r.top >= from.bottom - 1,
+  }[side];
+  const distance = (r: DOMRect) =>
+    Math.hypot(centre(r).x - a.x, centre(r).y - a.y);
   return Object.entries(rects)
     .filter(([id, r]) => id !== fromId && ahead(r))
     .sort(([, x], [, y]) => distance(x) - distance(y))[0]?.[0];

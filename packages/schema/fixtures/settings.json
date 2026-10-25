@@ -1,0 +1,235 @@
+{
+ "_source": "DEFAULT_SETTINGS (src/host/types/settings.ts) and shapes from electron/agents/config.ts; no user data",
+ "defaults": {
+  "concurrency": 6,
+  "harnesses": {
+   "claude": {
+    "path": "",
+    "model": "",
+    "secondOpinionModel": ""
+   },
+   "codex": {
+    "path": "",
+    "model": "",
+    "secondOpinionModel": ""
+   }
+  },
+  "worktreeRoot": "",
+  "shell": "",
+  "prDrafts": false,
+  "prepareWorktrees": true,
+  "worktreeInclude": ".env*",
+  "setupCommands": {},
+  "sideChatModel": {
+   "provider": "claude",
+   "model": "claude-sonnet-5-5"
+  },
+  "appIcon": "graphite",
+  "utilityModels": {
+   "title": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "outcome": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "simplify": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "commit": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "pr": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "handoff": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "audit": {
+    "provider": "claude",
+    "model": "claude-sonnet-5-5"
+   },
+   "command": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   }
+  },
+  "imageGen": "codex"
+ },
+ "file": {
+  "v": 1,
+  "concurrency": 6,
+  "harnesses": {
+   "claude": {
+    "path": "",
+    "model": "",
+    "secondOpinionModel": ""
+   },
+   "codex": {
+    "path": "",
+    "model": "",
+    "secondOpinionModel": ""
+   }
+  },
+  "worktreeRoot": "",
+  "shell": "",
+  "prDrafts": false,
+  "prepareWorktrees": true,
+  "worktreeInclude": ".env*",
+  "setupCommands": {},
+  "sideChatModel": {
+   "provider": "claude",
+   "model": "claude-sonnet-5-5"
+  },
+  "appIcon": "graphite",
+  "utilityModels": {
+   "title": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "outcome": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "simplify": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "commit": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "pr": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "handoff": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   },
+   "audit": {
+    "provider": "claude",
+    "model": "claude-sonnet-5-5"
+   },
+   "command": {
+    "provider": "claude",
+    "model": "claude-haiku-5-5"
+   }
+  },
+  "imageGen": "codex",
+  "accounts": [
+   {
+    "id": "claude-work",
+    "provider": "claude",
+    "name": "Work",
+    "configDir": "/Users/me/.mochi/accounts/claude-work"
+   }
+  ],
+  "links": {
+   "personal": {
+    "claude": "claude-work"
+   }
+  },
+  "apiKeys": {
+   "claude": "djEwAAAA"
+  },
+  "pastWorktreeRoots": [
+   "/Users/me/.harness/worktrees"
+  ]
+ },
+ "legacyFile": {
+  "concurrency": 4,
+  "sideChatModel": "claude-opus-5-5",
+  "harnesses": {
+   "claude": {
+    "path": "/opt/homebrew/bin/claude"
+   }
+  },
+  "prDrafts": true
+ },
+ "accounts": {
+  "accounts": [
+   {
+    "id": "claude",
+    "provider": "claude",
+    "name": "Claude",
+    "configDir": null
+   },
+   {
+    "id": "codex",
+    "provider": "codex",
+    "name": "Codex",
+    "configDir": null
+   }
+  ],
+  "links": {
+   "personal": {}
+  }
+ },
+ "install": {
+  "provider": "claude",
+  "accountId": "claude",
+  "path": "/usr/local/bin/claude",
+  "version": "2.1.296",
+  "login": {
+   "state": "logged-in",
+   "method": "claude.ai",
+   "plan": "Max"
+  }
+ },
+ "patches": [
+  {
+   "concurrency": 8
+  },
+  {
+   "harnesses": {
+    "codex": {
+     "model": "gpt-5.5"
+    }
+   }
+  },
+  {
+   "utilityModels": {
+    "audit": {
+     "provider": "codex",
+     "model": "gpt-5.5-mini"
+    }
+   }
+  },
+  {
+   "setupCommands": {
+    "/Users/me/dev/app": "pnpm i"
+   },
+   "worktreeRoot": "~/wt",
+   "appIcon": "riso",
+   "imageGen": "off"
+  }
+ ],
+ "changes": [
+  {
+   "kind": "mcp-set",
+   "provider": "claude",
+   "server": {
+    "name": "github",
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/"
+   }
+  },
+  {
+   "kind": "mcp-enabled",
+   "provider": "codex",
+   "name": "github",
+   "enabled": false
+  },
+  {
+   "kind": "skill-import",
+   "provider": "claude",
+   "folder": "/Users/me/skills/pdf"
+  }
+ ]
+}

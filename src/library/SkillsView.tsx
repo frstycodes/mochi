@@ -1,20 +1,50 @@
 import { useEffect, useState } from 'react';
-import { CheckBadge, Download, ExternalLink, FileText, Folder, Import, Pen, Plus } from '@/icons';
+import {
+  CheckBadge,
+  Download,
+  ExternalLink,
+  FileText,
+  Folder,
+  Import,
+  Pen,
+  Plus,
+} from '@/icons';
 import { GithubMarkIcon } from '@/icons/github';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from '@/toast/store';
 import { host } from '../host';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
-import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
+import {
+  SettingsCard,
+  SettingsRow,
+  SettingsSection,
+  SkeletonRows,
+} from '../settings/parts';
 import { ProviderMark } from '../ui';
 import { AddSkillsDialog } from './AddSkillsDialog';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { NativeSections } from './NativeSections';
 import type { NativeItem } from './nativeItems';
 import { useSkillUpload, WriteSkillDialog } from './NewSkillDialog';
-import { CatalogErrorRow, EmptyRow, EntryRow, filterBy, GroupControl, LibraryRow, PAGE, SimilarNote, useSimilarNative } from './LibraryParts';
+import {
+  CatalogErrorRow,
+  EmptyRow,
+  EntryRow,
+  filterBy,
+  GroupControl,
+  LibraryRow,
+  PAGE,
+  SimilarNote,
+  useSimilarNative,
+} from './LibraryParts';
 import { SkillGroups } from './SkillGroups';
 import { SKILLS_SH } from './skillsSh';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
@@ -26,7 +56,9 @@ export function SkillsView() {
       id="skillsLibrary"
       noun="skills"
       description="Installed once, then handed to the profiles that should have them, or written where npx skills add puts them. Library skills load in Claude Code threads as /owner:name, owner being the GitHub account they came from (mochi for your own)."
-      count={({ entries }) => entries?.filter((e) => e.kind === 'skill').length ?? 0}
+      count={({ entries }) =>
+        entries?.filter((e) => e.kind === 'skill').length ?? 0
+      }
       actions={({ library }) => (
         <>
           {host.isDesktop && <ImportMenu library={library} />}
@@ -39,8 +71,18 @@ export function SkillsView() {
   );
 }
 
-function InstalledSkills({ library, query, showDiscover }: Parameters<PagePart>[0]) {
-  const skills = library.entries && filterBy(library.entries.filter((e) => e.kind === 'skill'), query, (e) => [e.title, e.description, e.source]);
+function InstalledSkills({
+  library,
+  query,
+  showDiscover,
+}: Parameters<PagePart>[0]) {
+  const skills =
+    library.entries &&
+    filterBy(
+      library.entries.filter((e) => e.kind === 'skill'),
+      query,
+      (e) => [e.title, e.description, e.source],
+    );
   return (
     <>
       <SettingsSection title="In Mochi">
@@ -64,29 +106,53 @@ function InstalledSkills({ library, query, showDiscover }: Parameters<PagePart>[
             <SkillGroups
               entries={skills}
               row={(entry) => <EntryRow entry={entry} library={library} />}
-              control={(group) => <GroupControl entries={group.entries} name={group.repo} library={library} />}
+              control={(group) => (
+                <GroupControl
+                  entries={group.entries}
+                  name={group.repo}
+                  library={library}
+                />
+              )}
             />
           )}
         </SettingsCard>
       </SettingsSection>
-      <NativeSections kinds={['skill']} query={query} onCopy={(item) => copyToLibrary(library, item)} />
+      <NativeSections
+        kinds={['skill']}
+        query={query}
+        onCopy={(item) => copyToLibrary(library, item)}
+      />
     </>
   );
 }
 
 const PREVIEW_ROWS = 20;
-const INSTALLS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+const INSTALLS = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 
 /** skills.sh, the skills CLI's directory: its leaderboard, or its search while the page search has 2+ characters. */
 function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
   const search = useDebounced(query, 300);
   const isSearch = search.length >= 2;
-  const { state, retry } = useLoaded(isSearch ? `search:${search}` : 'popular', () => (isSearch ? host.library.searchSkillsSh(search) : host.library.popularSkillsSh()));
+  const { state, retry } = useLoaded(
+    isSearch ? `search:${search}` : 'popular',
+    () =>
+      isSearch
+        ? host.library.searchSkillsSh(search)
+        : host.library.popularSkillsSh(),
+  );
   const [limit, setLimit] = useState(PREVIEW_ROWS);
   const [adding, setAdding] = useState<string | null>(null);
   const similarTo = useSimilarNative();
   // Under two characters skills.sh won't search: the leaderboard is filtered here instead.
-  const skills = state.status === 'done' ? (isSearch ? state.value : filterBy(state.value, query, (s) => [s.name, s.source])) : [];
+  const skills =
+    state.status === 'done'
+      ? isSearch
+        ? state.value
+        : filterBy(state.value, query, (s) => [s.name, s.source])
+      : [];
   return (
     <SettingsSection
       title={isSearch ? 'On skills.sh' : 'Popular on skills.sh'}
@@ -98,50 +164,96 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
           </a>
         </Button>
       }
-      footer={!query && 'The skills CLI’s directory, ranked by installs. Anyone can list a skill: Install shows its files first. Add from GitHub takes any repository.'}
+      footer={
+        !query &&
+        'The skills CLI’s directory, ranked by installs. Anyone can list a skill: Install shows its files first. Add from GitHub takes any repository.'
+      }
     >
       <SettingsCard>
         {state.status === 'loading' && <SkeletonRows count={4} />}
-        {state.status === 'error' && <CatalogErrorRow what="skills.sh" message={state.message} onRetry={retry} />}
-        {state.status === 'done' && !skills.length && <EmptyRow text={isSearch ? `Nothing on skills.sh matches “${search}”` : 'skills.sh listed nothing'} />}
-        {skills.slice(0, limit).map((skill) => {
-          const isInstalled = !!installedEntry(library.entries, 'skill', skill.name);
-          const similar = isInstalled ? [] : similarTo(skill.name);
-          return (
-          <LibraryRow
-            key={skill.id}
-            name={skill.name}
-            icon={skill.icon}
-            meta={`${skill.source} · ${INSTALLS.format(skill.installs)} installs`}
-            status={!!similar.length && <SimilarNote similar={similar} />}
-            actions={
-              <>
-                <Button variant="ghost" size="icon-sm" asChild>
-                  <a href={skill.url} target="_blank" rel="noreferrer" aria-label={`${skill.name} on skills.sh`}>
-                    <ExternalLink />
-                  </a>
-                </Button>
-                <AddControl isInstalled={isInstalled} name={skill.name} onAdd={() => setAdding(skill.installSource)} />
-              </>
+        {state.status === 'error' && (
+          <CatalogErrorRow
+            what="skills.sh"
+            message={state.message}
+            onRetry={retry}
+          />
+        )}
+        {state.status === 'done' && !skills.length && (
+          <EmptyRow
+            text={
+              isSearch
+                ? `Nothing on skills.sh matches “${search}”`
+                : 'skills.sh listed nothing'
             }
           />
+        )}
+        {skills.slice(0, limit).map((skill) => {
+          const isInstalled = !!installedEntry(
+            library.entries,
+            'skill',
+            skill.name,
+          );
+          const similar = isInstalled ? [] : similarTo(skill.name);
+          return (
+            <LibraryRow
+              key={skill.id}
+              name={skill.name}
+              icon={skill.icon}
+              meta={`${skill.source} · ${INSTALLS.format(skill.installs)} installs`}
+              status={!!similar.length && <SimilarNote similar={similar} />}
+              actions={
+                <>
+                  <Button variant="ghost" size="icon-sm" asChild>
+                    <a
+                      href={skill.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`${skill.name} on skills.sh`}
+                    >
+                      <ExternalLink />
+                    </a>
+                  </Button>
+                  <AddControl
+                    isInstalled={isInstalled}
+                    name={skill.name}
+                    onAdd={() => setAdding(skill.installSource)}
+                  />
+                </>
+              }
+            />
           );
         })}
         {skills.length > limit && (
           <div className="px-4 py-2">
-            <Button variant="ghost" size="sm" onClick={() => setLimit((n) => n + PAGE)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLimit((n) => n + PAGE)}
+            >
               Show more
             </Button>
           </div>
         )}
       </SettingsCard>
-      <AddSkillsDialog source={adding} onClose={() => setAdding(null)} library={library} />
+      <AddSkillsDialog
+        source={adding}
+        onClose={() => setAdding(null)}
+        library={library}
+      />
     </SettingsSection>
   );
 }
 
 /** Install opens the add dialog on that one skill, so its files and destination are seen before anything is written. */
-function AddControl({ isInstalled, name, onAdd }: { isInstalled: boolean; name: string; onAdd: () => void }) {
+function AddControl({
+  isInstalled,
+  name,
+  onAdd,
+}: {
+  isInstalled: boolean;
+  name: string;
+  onAdd: () => void;
+}) {
   if (isInstalled)
     return (
       <span className="flex h-7 w-24 items-center justify-end gap-1 type-meta text-muted-foreground">
@@ -150,7 +262,13 @@ function AddControl({ isInstalled, name, onAdd }: { isInstalled: boolean; name: 
       </span>
     );
   return (
-    <Button variant="outline" size="sm" className="w-24" onClick={onAdd} aria-label={`Install ${name}`}>
+    <Button
+      variant="outline"
+      size="sm"
+      className="w-24"
+      onClick={onAdd}
+      aria-label={`Install ${name}`}
+    >
       <Download data-icon="inline-start" />
       Install
     </Button>
@@ -192,15 +310,30 @@ function AddSkillMenu({ library }: { library: Library }) {
         </DropdownMenuContent>
       </DropdownMenu>
       {upload.inputs}
-      <AddSkillsDialog source={adding} onClose={() => setAdding(null)} library={library} />
-      <WriteSkillDialog isOpen={isWriting} onClose={() => setWriting(false)} library={library} />
+      <AddSkillsDialog
+        source={adding}
+        onClose={() => setAdding(null)}
+        library={library}
+      />
+      <WriteSkillDialog
+        isOpen={isWriting}
+        onClose={() => setWriting(false)}
+        library={library}
+      />
     </>
   );
 }
 
 function copyToLibrary(library: Library, item: NativeItem) {
   void library.importFromAccount(item.provider, [item.name]).then((notes) => {
-    if (notes) toast(`Copied ${item.name} to your library`, { description: notes.join(' ') || 'On for this profile. Its copy in ' + HARNESSES[item.provider].name + ' stays as it is.' });
+    if (notes)
+      toast(`Copied ${item.name} to your library`, {
+        description:
+          notes.join(' ') ||
+          'On for this profile. Its copy in ' +
+            HARNESSES[item.provider].name +
+            ' stays as it is.',
+      });
   });
 }
 
@@ -220,7 +353,10 @@ function ImportMenu({ library }: { library: Library }) {
     setBusy(provider);
     void library.importFromAccount(provider).then((notes) => {
       setBusy(null);
-      if (notes) toast(`Imported from ${HARNESSES[provider].name}`, { description: notes.join(' ') || undefined });
+      if (notes)
+        toast(`Imported from ${HARNESSES[provider].name}`, {
+          description: notes.join(' ') || undefined,
+        });
     });
   };
   return (
@@ -233,7 +369,10 @@ function ImportMenu({ library }: { library: Library }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         {HARNESS_IDS.map((provider) => (
-          <DropdownMenuItem key={provider} onSelect={() => importFrom(provider)}>
+          <DropdownMenuItem
+            key={provider}
+            onSelect={() => importFrom(provider)}
+          >
             <ProviderMark provider={provider} size={14} />
             Skills and servers from {HARNESSES[provider].name}
           </DropdownMenuItem>

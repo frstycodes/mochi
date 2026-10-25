@@ -11,5 +11,10 @@ export function networkHosts(interfaces = networkInterfaces()): string[] {
 export function isPrivate(address: string, family: string) {
   if (family === 'IPv6') return /^f[cd][0-9a-f]{2}:/i.test(address);
   const [a, b] = address.split('.').map(Number);
-  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
 }

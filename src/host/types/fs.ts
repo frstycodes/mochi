@@ -6,16 +6,28 @@ export interface FsHost {
   list(root: string): Promise<string[]>;
   read(root: string, path: string): Promise<FileContent>;
   /** Refuses with `conflict` when the file changed on disk since `baseMtimeMs`, unless `force`. */
-  write(root: string, path: string, text: string, options: { baseMtimeMs: number; force?: boolean }): Promise<WriteResult>;
-  watch(root: string): Promise<void>;
-  unwatch(root: string): Promise<void>;
-  onChange(listener: (change: FsChange) => void): () => void;
+  write(
+    root: string,
+    path: string,
+    text: string,
+    options: { baseMtimeMs: number; force?: boolean },
+  ): Promise<WriteResult>;
   /** Searches file contents under `root` (`.gitignore` honoured), pushing each file's hits through `onSearchHits` under `id`; resolves when done or cancelled. */
-  search(root: string, id: string, pattern: string, options: SearchOptions): Promise<SearchSummary>;
+  search(
+    root: string,
+    id: string,
+    pattern: string,
+    options: SearchOptions,
+  ): Promise<SearchSummary>;
   cancelSearch(id: string): Promise<void>;
   onSearchHits(listener: (hits: SearchHits) => void): () => void;
   editors(): Promise<Editor[]>;
-  openIn(editor: Editor, root: string, path: string, line?: number): Promise<void>;
+  openIn(
+    editor: Editor,
+    root: string,
+    path: string,
+    line?: number,
+  ): Promise<void>;
   /** Selects `path` in Finder (Explorer, the file manager); an empty `path` reveals `root` itself. */
   reveal(root: string, path: string): Promise<void>;
   /** The OS folder picker, opened at `defaultPath` (`~` allowed); null when dismissed. The web build only learns the folder's name. */
@@ -23,7 +35,9 @@ export interface FsHost {
   /** The folder at `path` (`~` allowed) as an absolute path with its subfolders' names, hidden ones left out; null when it isn't a folder. */
   folders(path: string): Promise<{ path: string; names: string[] } | null>;
   /** The folder at `path` (`~` allowed) as an absolute path with its subfolders and files by name, hidden ones included; null when it isn't a folder. */
-  entries(path: string): Promise<{ path: string; dirs: string[]; files: string[] } | null>;
+  entries(
+    path: string,
+  ): Promise<{ path: string; dirs: string[]; files: string[] } | null>;
 }
 
 /** A file on disk as the fs host takes it: a folder (`~` allowed) and a path inside it, '' for the folder itself. */
@@ -32,9 +46,13 @@ export interface DiskFile {
   path: string;
 }
 
-export type FileContent = { kind: 'text'; text: string; mtimeMs: number } | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
+export type FileContent =
+  | { kind: 'text'; text: string; mtimeMs: number }
+  | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
 
-export type WriteResult = { status: 'saved'; mtimeMs: number } | { status: 'conflict'; text: string; mtimeMs: number };
+export type WriteResult =
+  | { status: 'saved'; mtimeMs: number }
+  | { status: 'conflict'; text: string; mtimeMs: number };
 
 export interface SearchOptions {
   isCaseSensitive: boolean;
@@ -64,11 +82,6 @@ export interface SearchSummary {
   isTruncated: boolean;
 }
 
-export interface FsChange {
-  root: string;
-  path: string;
-}
-
 export const EDITORS = ['vscode', 'cursor', 'zed'] as const;
 export type Editor = (typeof EDITORS)[number];
 
@@ -76,9 +89,6 @@ export const fsMethods = {
   list: 'invoke',
   read: 'invoke',
   write: 'invoke',
-  watch: 'invoke',
-  unwatch: 'invoke',
-  onChange: 'event',
   search: 'invoke',
   cancelSearch: 'invoke',
   onSearchHits: 'event',

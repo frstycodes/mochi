@@ -33,7 +33,10 @@ export interface UsageScope {
 }
 
 /** The profile's projects, one of them, or every folder on this computer (what `ccusage` counts). */
-export type UsageTarget = { kind: 'projects' } | { kind: 'project'; id: string } | { kind: 'everywhere' };
+export type UsageTarget =
+  | { kind: 'projects' }
+  | { kind: 'project'; id: string }
+  | { kind: 'everywhere' };
 
 /** The project row for sessions outside every project, when the target is everywhere. */
 export const OTHER_FOLDERS = 'other-folders';
@@ -49,18 +52,37 @@ export interface SeriesPoint {
   removed: number;
 }
 
-const emptyPoint = (key: string): SeriesPoint => ({ key, cost: { claude: 0, codex: 0 }, tokens: 0, prsMerged: 0, commits: 0, added: 0, removed: 0 });
+const emptyPoint = (key: string): SeriesPoint => ({
+  key,
+  cost: { claude: 0, codex: 0 },
+  tokens: 0,
+  prsMerged: 0,
+  commits: 0,
+  added: 0,
+  removed: 0,
+});
 
 export function usageView(report: UsageReport, scope: UsageScope) {
   const { target } = scope;
-  const inScope = (path: string) => (target.kind === 'everywhere' ? true : target.kind === 'projects' ? scope.projectOf.has(path) : scope.projectOf.get(path) === target.id);
+  const inScope = (path: string) =>
+    target.kind === 'everywhere'
+      ? true
+      : target.kind === 'projects'
+        ? scope.projectOf.has(path)
+        : scope.projectOf.get(path) === target.id;
   const tokens = report.tokens.filter((b) => inScope(b.root));
   const commits = report.commits.filter((c) => inScope(c.repo));
   const prs = report.prs.filter((p) => inScope(p.repo));
   const sessions = report.sessions.filter((s) => inScope(s.root));
 
   const start = rangeStart(scope.range, scope.now);
-  const firstDay = start !== null ? localDay(start) : [...tokens.map((b) => b.day), ...commits.map((c) => localDay(c.at))].sort()[0] ?? localDay(scope.now);
+  const firstDay =
+    start !== null
+      ? localDay(start)
+      : ([
+          ...tokens.map((b) => b.day),
+          ...commits.map((c) => localDay(c.at)),
+        ].sort()[0] ?? localDay(scope.now));
   const days = daysBetween(firstDay, localDay(scope.now));
   const isWeekly = days.length > WEEKLY_AFTER_DAYS;
   const keyOf = (day: string) => (isWeekly ? weekOf(day) : day);
@@ -70,27 +92,47 @@ export function usageView(report: UsageReport, scope: UsageScope) {
   const spend = { claude: 0, codex: 0, uncached: 0 };
   const byType = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const costByType = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-  const models = new Map<string, { model: string; harness: Provider; tokens: number; cost: number | null }>();
+  const models = new Map<
+    string,
+    { model: string; harness: Provider; tokens: number; cost: number | null }
+  >();
   const projects = new Map<string, ProjectRow>();
   const project = (path: string) => {
     const id = scope.projectOf.get(path) ?? OTHER_FOLDERS;
-    const row = projects.get(id) ?? { projectId: id, cost: 0, tokens: 0, commits: 0, prsMerged: 0, added: 0 };
+    const row = projects.get(id) ?? {
+      projectId: id,
+      cost: 0,
+      tokens: 0,
+      commits: 0,
+      prsMerged: 0,
+      added: 0,
+    };
     projects.set(id, row);
     return row;
   };
 
   for (const b of tokens) {
     const parts = b.cost;
-    const cost = parts ? parts.input + parts.output + parts.cacheRead + parts.cacheWrite : 0;
-    const total = b.input + b.output + b.cacheRead + b.cacheWrite5m + b.cacheWrite1h;
+    const cost = parts
+      ? parts.input + parts.output + parts.cacheRead + parts.cacheWrite
+      : 0;
+    const total =
+      b.input + b.output + b.cacheRead + b.cacheWrite5m + b.cacheWrite1h;
     spend[b.harness] += cost;
     spend.uncached += b.uncached ?? 0;
     byType.input += b.input;
     byType.output += b.output;
     byType.cacheRead += b.cacheRead;
     byType.cacheWrite += b.cacheWrite5m + b.cacheWrite1h;
-    if (parts) for (const k of Object.keys(costByType) as (keyof typeof costByType)[]) costByType[k] += parts[k];
-    const m = models.get(b.model) ?? { model: b.model, harness: b.harness, tokens: 0, cost: parts ? 0 : null };
+    if (parts)
+      for (const k of Object.keys(costByType) as (keyof typeof costByType)[])
+        costByType[k] += parts[k];
+    const m = models.get(b.model) ?? {
+      model: b.model,
+      harness: b.harness,
+      tokens: 0,
+      cost: parts ? 0 : null,
+    };
     m.tokens += total;
     if (m.cost !== null) m.cost += cost;
     models.set(b.model, m);
@@ -133,20 +175,34 @@ export function usageView(report: UsageReport, scope: UsageScope) {
   }
 
   const totalCost = spend.claude + spend.codex;
-  const totalTokens = byType.input + byType.output + byType.cacheRead + byType.cacheWrite;
+  const totalTokens =
+    byType.input + byType.output + byType.cacheRead + byType.cacheWrite;
   return {
     isWeekly,
     series: [...series.values()],
     spend: { ...spend, total: totalCost },
-    sessions: { claude: sessions.filter((s) => s.harness === 'claude').length, codex: sessions.filter((s) => s.harness === 'codex').length },
+    sessions: {
+      claude: sessions.filter((s) => s.harness === 'claude').length,
+      codex: sessions.filter((s) => s.harness === 'codex').length,
+    },
     tokens: { ...byType, total: totalTokens },
     costByType,
-    prs: { opened: prs.length, merged: prs.filter((p) => p.mergedAt !== null).length, closed: prs.filter((p) => p.state === 'CLOSED').length },
+    prs: {
+      opened: prs.length,
+      merged: prs.filter((p) => p.mergedAt !== null).length,
+      closed: prs.filter((p) => p.state === 'CLOSED').length,
+    },
     commits: commitTotals,
     heatmap,
-    models: [...models.values()].sort((a, b) => (b.cost ?? -1) - (a.cost ?? -1) || b.tokens - a.tokens),
-    projects: [...projects.values()].sort((a, b) => b.cost - a.cost || b.commits - a.commits),
-    unpriced: [...models.values()].filter((m) => m.cost === null).map((m) => m.model),
+    models: [...models.values()].sort(
+      (a, b) => (b.cost ?? -1) - (a.cost ?? -1) || b.tokens - a.tokens,
+    ),
+    projects: [...projects.values()].sort(
+      (a, b) => b.cost - a.cost || b.commits - a.commits,
+    ),
+    unpriced: [...models.values()]
+      .filter((m) => m.cost === null)
+      .map((m) => m.model),
   };
 }
 

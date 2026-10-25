@@ -1,5 +1,13 @@
 import { toast } from '@/toast/store';
-import { Breadcrumb, BreadcrumbEllipsis, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import {
+  Breadcrumb,
+  BreadcrumbEllipsis,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -11,8 +19,24 @@ import {
   MenubarShortcut,
   MenubarTrigger,
 } from '@/components/ui/menubar';
-import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger, navigationMenuTriggerStyle } from '@/components/ui/navigation-menu';
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+  navigationMenuTriggerStyle,
+} from '@/components/ui/navigation-menu';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Block, Grid, Section } from '../layout';
 
@@ -20,22 +44,38 @@ const stay = (e: React.MouseEvent) => e.preventDefault();
 
 export function NavigationSection() {
   return (
-    <Section id="navigation" title="Navigation" intro="Tabs switch views in place, breadcrumbs show where a thread lives, menus hold the app commands.">
+    <Section
+      id="navigation"
+      title="Navigation"
+      intro="Tabs switch views in place, breadcrumbs show where a thread lives, menus hold the app commands."
+    >
       <Grid>
-        <Block title="Tabs" use="Segmented tabs for a small set of peer views; line tabs inside panels.">
+        <Block
+          title="Tabs"
+          use="Segmented tabs for a small set of peer views; line tabs inside panels."
+        >
           <Tabs defaultValue="changes">
             <TabsList>
               <TabsTrigger value="changes">Changes</TabsTrigger>
               <TabsTrigger value="browser">Browser</TabsTrigger>
               <TabsTrigger value="terminal">Terminal</TabsTrigger>
             </TabsList>
-            <TabsContent value="changes" className="type-meta text-muted-foreground">
+            <TabsContent
+              value="changes"
+              className="type-meta text-muted-foreground"
+            >
               14 files, +612 −389
             </TabsContent>
-            <TabsContent value="browser" className="type-meta text-muted-foreground">
+            <TabsContent
+              value="browser"
+              className="type-meta text-muted-foreground"
+            >
               localhost:3000/admin/usage
             </TabsContent>
-            <TabsContent value="terminal" className="type-meta text-muted-foreground">
+            <TabsContent
+              value="terminal"
+              className="type-meta text-muted-foreground"
+            >
               pnpm dev is running
             </TabsContent>
           </Tabs>
@@ -47,7 +87,10 @@ export function NavigationSection() {
             </TabsList>
           </Tabs>
         </Block>
-        <Block title="Breadcrumb" use="Space, project and thread. Long trails collapse into an ellipsis.">
+        <Block
+          title="Breadcrumb"
+          use="Space, project and thread. Long trails collapse into an ellipsis."
+        >
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
@@ -67,12 +110,18 @@ export function NavigationSection() {
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem className="min-w-0">
-                <BreadcrumbPage className="truncate">Migrate auth to Better Auth and keep every existing session alive</BreadcrumbPage>
+                <BreadcrumbPage className="truncate">
+                  Migrate auth to Better Auth and keep every existing session
+                  alive
+                </BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </Block>
-        <Block title="Pagination" use="Long histories: run logs, settled threads.">
+        <Block
+          title="Pagination"
+          use="Long histories: run logs, settled threads."
+        >
           <Pagination>
             <PaginationContent>
               <PaginationItem>
@@ -102,7 +151,10 @@ export function NavigationSection() {
             </PaginationContent>
           </Pagination>
         </Block>
-        <Block title="Menubar" use="The desktop app's menu: File, Thread, View.">
+        <Block
+          title="Menubar"
+          use="The desktop app's menu: File, Thread, View."
+        >
           <Menubar className="w-fit">
             <MenubarMenu>
               <MenubarTrigger>Thread</MenubarTrigger>
@@ -113,7 +165,9 @@ export function NavigationSection() {
                   </MenubarItem>
                   <MenubarItem>Second opinion</MenubarItem>
                   <MenubarSeparator />
-                  <MenubarItem variant="destructive">Archive thread</MenubarItem>
+                  <MenubarItem variant="destructive">
+                    Archive thread
+                  </MenubarItem>
                 </MenubarGroup>
               </MenubarContent>
             </MenubarMenu>
@@ -121,14 +175,20 @@ export function NavigationSection() {
               <MenubarTrigger>View</MenubarTrigger>
               <MenubarContent>
                 <MenubarGroup>
-                  <MenubarCheckboxItem checked>Summary panel</MenubarCheckboxItem>
+                  <MenubarCheckboxItem checked>
+                    Summary panel
+                  </MenubarCheckboxItem>
                   <MenubarCheckboxItem>Floating previews</MenubarCheckboxItem>
                 </MenubarGroup>
               </MenubarContent>
             </MenubarMenu>
           </Menubar>
         </Block>
-        <Block title="Navigation menu" use="Top-level navigation with rich dropdowns, for the marketing site and docs." wide>
+        <Block
+          title="Navigation menu"
+          use="Top-level navigation with rich dropdowns, for the marketing site and docs."
+          wide
+        >
           <div className="pb-48">
             <NavigationMenu>
               <NavigationMenuList>
@@ -144,7 +204,9 @@ export function NavigationSection() {
                         <li key={title}>
                           <NavigationMenuLink href="#" onClick={stay}>
                             <span className="font-medium">{title}</span>
-                            <span className="type-caption text-muted-foreground">{body}</span>
+                            <span className="type-caption text-muted-foreground">
+                              {body}
+                            </span>
                           </NavigationMenuLink>
                         </li>
                       ))}
@@ -152,7 +214,11 @@ export function NavigationSection() {
                   </NavigationMenuContent>
                 </NavigationMenuItem>
                 <NavigationMenuItem>
-                  <NavigationMenuLink href="#" onClick={stay} className={navigationMenuTriggerStyle()}>
+                  <NavigationMenuLink
+                    href="#"
+                    onClick={stay}
+                    className={navigationMenuTriggerStyle()}
+                  >
                     Docs
                   </NavigationMenuLink>
                 </NavigationMenuItem>

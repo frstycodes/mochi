@@ -11,7 +11,7 @@ import { CheckList, ChecksSummary } from './Checks';
 import type { Thread } from '../model';
 import { useProfiles } from '../profiles';
 import type { ConfirmRequest } from './useConfirm';
-import { usePr } from './useGit';
+import { refreshGithub, useBranchPr } from './githubWatch';
 import { isMod } from '../keys';
 import { TooltipIconButton } from '../ui';
 import { commitPrompt, localCommit, parseCommit } from '../utility/prompts';
@@ -32,13 +32,21 @@ interface ShipBarProps {
 }
 
 /** Commit staged changes, push the branch, open a PR and watch its checks. Push and PR ask first: both are visible to others. */
-export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarProps) {
+export function ShipBar({
+  thread,
+  cwd,
+  diff,
+  canCommit,
+  run,
+  confirm,
+}: ShipBarProps) {
   const [message, setMessage] = useState('');
   const [isChecksOpen, setChecksOpen] = useState(false);
-  const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
-  const prQuery = usePr(cwd, githubUser);
+  const githubUser =
+    useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
+  const prQuery = useBranchPr(cwd, githubUser);
   const dispatch = useDispatch();
-  const pr = prQuery.data;
+  const { pr } = prQuery;
   const stagedCount = diff.files.filter((f) => f.staged).length;
 
   const commit = async () => {
@@ -57,7 +65,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
     });
     if (!ok) return;
     await run('Push', () => host.git.push(cwd, githubUser));
-    await prQuery.refresh();
+    refreshGithub({ cwd, githubUser, isPush: true });
   };
 
   const [isPrOpen, setPrOpen] = useState(false);
@@ -66,7 +74,9 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
     const staged = diff.files.filter((f) => f.staged);
     const text = await commitDraft.draft(commitPrompt(staged));
     // What you typed while it drafted wins.
-    setMessage((typed) => typed || (text && parseCommit(text)) || localCommit(staged));
+    setMessage(
+      (typed) => typed || (text && parseCommit(text)) || localCommit(staged),
+    );
   };
 
   return (
@@ -82,37 +92,100 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && isMod(e) && e.currentTarget.form?.requestSubmit()}
-            placeholder={commitDraft.isDrafting ? 'Drafting from the staged changes…' : stagedCount ? 'Commit message' : 'Stage changes to commit them'}
+            onKeyDown={(e) =>
+              e.key === 'Enter' &&
+              isMod(e) &&
+              e.currentTarget.form?.requestSubmit()
+            }
+            placeholder={
+              commitDraft.isDrafting
+                ? 'Drafting from the staged changes…'
+                : stagedCount
+                  ? 'Commit message'
+                  : 'Stage changes to commit them'
+            }
             aria-label="Commit message"
             className="min-h-14 resize-none text-sm"
           />
           <div className="flex items-center gap-2">
-            <span className="flex-1 type-caption text-subtle-foreground tabular">{stagedCount ? `${stagedCount} staged` : 'Nothing staged'}</span>
-            <TooltipIconButton label="Draft a message" hint={stagedCount ? 'Written from the staged changes on your Background tasks model. Edit it before you commit.' : 'Stage changes first.'} disabled={!stagedCount || commitDraft.isDrafting} onClick={draftCommit}>
+            <span className="flex-1 type-caption text-subtle-foreground tabular">
+              {stagedCount ? `${stagedCount} staged` : 'Nothing staged'}
+            </span>
+            <TooltipIconButton
+              label="Draft a message"
+              hint={
+                stagedCount
+                  ? 'Written from the staged changes on your Background tasks model. Edit it before you commit.'
+                  : 'Stage changes first.'
+              }
+              disabled={!stagedCount || commitDraft.isDrafting}
+              onClick={draftCommit}
+            >
               <Sparkles />
             </TooltipIconButton>
-            <Button type="submit" size="sm" disabled={!stagedCount || !message.trim()}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!stagedCount || !message.trim()}
+            >
               Commit
             </Button>
           </div>
         </form>
       )}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={push} className="text-muted-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={push}
+          className="text-muted-foreground"
+        >
           <ArrowUp data-icon="inline-start" />
           Push
         </Button>
         {!!pr && (
-          <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind: 'pr' })} className="text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              dispatch({
+                type: 'pane-open-tab',
+                threadId: thread.id,
+                kind: 'pr',
+              })
+            }
+            className="text-muted-foreground"
+          >
             Review
           </Button>
         )}
-        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading} className="text-muted-foreground">Create pull request</Button>}
-        {!!pr && pr.checks.length > 0 && <ChecksSummary checks={pr.checks} isOpen={isChecksOpen} onToggle={() => setChecksOpen((o) => !o)} />}
+        {pr ? (
+          <PrLink thread={thread} pr={pr} />
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPrOpen(true)}
+            disabled={prQuery.isPending}
+            className="text-muted-foreground"
+          >
+            Create pull request
+          </Button>
+        )}
+        {!!pr && pr.checks.length > 0 && (
+          <ChecksSummary
+            checks={pr.checks}
+            isOpen={isChecksOpen}
+            onToggle={() => setChecksOpen((o) => !o)}
+          />
+        )}
       </div>
       {!!pr && isChecksOpen && <CheckList checks={pr.checks} />}
-      {!!prQuery.error && <p className="type-caption text-subtle-foreground">PR status unavailable: {prQuery.error}</p>}
+      {!!prQuery.error && (
+        <p className="type-caption text-subtle-foreground">
+          PR status unavailable: {prQuery.error}
+        </p>
+      )}
       {isPrOpen && (
         <PrDialog
           thread={thread}
@@ -120,11 +193,18 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
           diff={diff}
           githubUser={githubUser}
           onCreate={async (pr) => {
-            const url = await run('Create pull request', () => host.git.createPr(cwd, pr, githubUser));
+            const url = await run('Create pull request', () =>
+              host.git.createPr(cwd, pr, githubUser),
+            );
             const opened = url && openedPr(url, pr.title);
-            if (opened) dispatch({ type: 'prs-seen', threadId: thread.id, prs: [opened] });
+            if (opened)
+              dispatch({
+                type: 'prs-seen',
+                threadId: thread.id,
+                prs: [opened],
+              });
             if (url) toast.success('Pull request opened', { description: url });
-            await prQuery.refresh();
+            refreshGithub({ cwd, githubUser, isPush: true });
           }}
           onClose={() => setPrOpen(false)}
         />
@@ -133,21 +213,34 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   );
 }
 
-const PR_STATUS: Record<string, RefStatus | undefined> = { OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' };
+const PR_STATUS: Record<string, RefStatus | undefined> = {
+  OPEN: 'open',
+  MERGED: 'merged',
+  CLOSED: 'closed',
+};
 
 function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
-  const item = useThreadPr(thread, { number: pr.number, state: pr.state === 'MERGED' ? 'merged' : 'open', title: pr.title, url: pr.url });
+  const item = useThreadPr(thread, {
+    number: pr.number,
+    state: pr.state === 'MERGED' ? 'merged' : 'open',
+    title: pr.title,
+    url: pr.url,
+  });
   return (
     <RefHoverCard item={item}>
       <Button variant="ghost" size="sm" asChild className="min-w-0">
         <a href={pr.url} target="_blank" rel="noreferrer">
           <PrStateIcon state={PR_STATUS[pr.state] ?? 'unknown'} />
           <span className="tabular">#{pr.number}</span>
-          <span className="truncate text-muted-foreground lowercase">{pr.state}</span>
-          <ArrowUpRight data-icon="inline-end" className="text-subtle-foreground" />
+          <span className="truncate text-muted-foreground lowercase">
+            {pr.state}
+          </span>
+          <ArrowUpRight
+            data-icon="inline-end"
+            className="text-subtle-foreground"
+          />
         </a>
       </Button>
     </RefHoverCard>
   );
 }
-

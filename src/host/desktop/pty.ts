@@ -1,4 +1,4 @@
 import type { PtyHost } from '../types/pty.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const pty = (): PtyHost => bridge().pty;
+export const pty = (): PtyHost => desktopNamespace('pty');

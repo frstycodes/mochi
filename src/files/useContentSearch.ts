@@ -1,59 +1,97 @@
 import { useEffect, useState } from 'react';
+import { hashKey, useQuery } from '@tanstack/react-query';
 import { host } from '@/host';
 import type { SearchHits, SearchOptions } from '@/host/types/fs';
+import { useDebounced } from '../hooks/useDebounced';
 import { compileQuery } from './search';
 
-const DEBOUNCE_MS = 150;
+type SearchState =
+  | { files: SearchHits[]; status: 'idle' | 'searching' | 'done' | 'truncated' }
+  | { files: []; status: 'error'; error: string };
 
-type SearchState = { files: SearchHits[]; status: 'idle' | 'searching' | 'done' | 'truncated' } | { files: []; status: 'error'; error: string };
-
-const IDLE: SearchState = { files: [], status: 'idle' };
-
-/** Content hits for `pattern` under `root`, appended as the main process streams them; a new pattern or option cancels the last search. */
-export function useContentSearch(root: string, pattern: string, options: SearchOptions) {
-  const [state, setState] = useState<SearchState>(IDLE);
+export function useContentSearch(
+  root: string,
+  pattern: string,
+  options: SearchOptions,
+): SearchState {
+  const settled = useDebounced(pattern, 150);
   const { isCaseSensitive, isRegex, isWholeWord } = options;
+  const queryKey = [
+    'content-search',
+    root,
+    settled,
+    isCaseSensitive,
+    isRegex,
+    isWholeWord,
+  ];
+  const id = hashKey(queryKey);
+  const [stream, setStream] = useState<{ id: string; files: SearchHits[] }>({
+    id,
+    files: [],
+  });
+  const searchQuery = useQuery({
+    queryKey,
+    enabled: !!settled,
+    gcTime: 0,
+    queryFn: async ({ signal }) => {
+      try {
+        compileQuery(settled, { isCaseSensitive, isRegex, isWholeWord });
+      } catch {
+        throw new Error('Invalid regular expression');
+      }
+      const files: SearchHits[] = [];
+      const off = host.fs.onSearchHits((hits) => {
+        if (hits.id === id) files.push(hits);
+      });
+      const cancel = () => {
+        void host.fs.cancelSearch(id);
+      };
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const { isTruncated } = await host.fs.search(root, id, settled, {
+          isCaseSensitive,
+          isRegex,
+          isWholeWord,
+        });
+        return {
+          files,
+          status: isTruncated ? ('truncated' as const) : ('done' as const),
+        };
+      } finally {
+        off();
+        signal.removeEventListener('abort', cancel);
+      }
+    },
+  });
   useEffect(() => {
-    if (!pattern) return setState(IDLE);
-    try {
-      compileQuery(pattern, { isCaseSensitive, isRegex, isWholeWord });
-    } catch {
-      return setState({ files: [], status: 'error', error: 'Invalid regular expression' });
-    }
-    const id = crypto.randomUUID();
-    let isCurrent = true;
     let pending: SearchHits[] = [];
     let frame = 0;
-    // One render per frame, not per file: a broad query streams hundreds of files in a burst.
-    const flush = () => {
-      frame = 0;
-      const batch = pending;
-      pending = [];
-      setState((prev) => (prev.status === 'error' ? prev : { ...prev, files: [...prev.files, ...batch] }));
-    };
     const off = host.fs.onSearchHits((hits) => {
       if (hits.id !== id) return;
       pending.push(hits);
-      frame ||= requestAnimationFrame(flush);
+      frame ||= requestAnimationFrame(() => {
+        frame = 0;
+        const batch = pending;
+        pending = [];
+        setStream((current) => ({
+          id,
+          files: [...(current.id === id ? current.files : []), ...batch],
+        }));
+      });
     });
-    setState({ files: [], status: 'searching' });
-    const timer = setTimeout(() => {
-      host.fs.search(root, id, pattern, { isCaseSensitive, isRegex, isWholeWord }).then(
-        ({ isTruncated }) => {
-          if (!isCurrent) return;
-          flush();
-          setState((prev) => (prev.status === 'error' ? prev : { ...prev, status: isTruncated ? 'truncated' : 'done' }));
-        },
-        (e: Error) => isCurrent && setState({ files: [], status: 'error', error: e.message }),
-      );
-    }, DEBOUNCE_MS);
     return () => {
-      isCurrent = false;
-      clearTimeout(timer);
-      cancelAnimationFrame(frame);
       off();
-      void host.fs.cancelSearch(id);
+      cancelAnimationFrame(frame);
     };
-  }, [root, pattern, isCaseSensitive, isRegex, isWholeWord]);
-  return state;
+  }, [id]);
+  if (!pattern) return { files: [], status: 'idle' };
+  if (settled !== pattern) return { files: [], status: 'searching' };
+  if (searchQuery.error)
+    return { files: [], status: 'error', error: searchQuery.error.message };
+  return (
+    searchQuery.data ?? {
+      files: stream.id === id ? stream.files : [],
+      status: 'searching',
+    }
+  );
 }

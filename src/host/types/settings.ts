@@ -1,8 +1,16 @@
 import type { AgentCommand, Provider } from '../../model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../settings/harnesses.ts';
-import type { ConfigChange, McpEntry, SkillEntry } from '../../settings/agentConfig.ts';
+import type {
+  ConfigChange,
+  McpEntry,
+  SkillEntry,
+} from '../../settings/agentConfig.ts';
 import type { ProfileFolder } from '../../settings/instructionFiles.ts';
-import { CHEAP_MODELS, UTILITY_TASKS, type UtilityTask } from '../../utility/prompts.ts';
+import {
+  CHEAP_MODELS,
+  UTILITY_TASKS,
+  type UtilityTask,
+} from '../../utility/prompts.ts';
 import type { AppIcon } from '../../settings/settingOptions.ts';
 import type { Manifest } from './manifest.ts';
 
@@ -63,7 +71,12 @@ export interface ModelChoice {
 }
 
 /** What `set` takes: any top-level field, per harness any of its fields, and any task's model. */
-export type AgentSettingsPatch = Partial<Omit<AgentSettings, 'harnesses' | 'utilityModels'>> & { harnesses?: Partial<Record<Provider, Partial<HarnessSettings>>>; utilityModels?: Partial<Record<UtilityTask, ModelChoice>> };
+export type AgentSettingsPatch = Partial<
+  Omit<AgentSettings, 'harnesses' | 'utilityModels'>
+> & {
+  harnesses?: Partial<Record<Provider, Partial<HarnessSettings>>>;
+  utilityModels?: Partial<Record<UtilityTask, ModelChoice>>;
+};
 
 /** The renderer only ever learns whether a key is stored and its last four characters. */
 export interface ApiKeyState {
@@ -107,7 +120,11 @@ export interface SettingsHost {
   renameAccount(id: AccountId, name: string): Promise<AccountsState>;
   /** Refused for a default account and for one any profile links. The folder (and the login in it) stays on disk. */
   removeAccount(id: AccountId): Promise<AccountsState>;
-  linkAccount(spaceId: string, provider: Provider, id: AccountId): Promise<AccountsState>;
+  linkAccount(
+    spaceId: string,
+    provider: Provider,
+    id: AccountId,
+  ): Promise<AccountsState>;
   /** Only for harnesses with an `apiKey` entry in the registry. */
   apiKey(provider: Provider): Promise<ApiKeyState>;
   /** Pass null to remove the stored key. */
@@ -119,11 +136,22 @@ export interface SettingsHost {
   /** What each of the profile's accounts carries in its own config folder; `projectRoot` adds that project's `.mcp.json`. */
   agentConfig(spaceId: string, projectRoot?: string): Promise<ProfileConfig>;
   /** The file edits `changes` would make, for the user to review; nothing is written. */
-  previewConfig(spaceId: string, changes: ConfigChange[]): Promise<ConfigPreview>;
+  previewConfig(
+    spaceId: string,
+    changes: ConfigChange[],
+  ): Promise<ConfigPreview>;
   /** Writes what `previewConfig` showed, after backing the files up; refused when a file changed since (`befores` by path). */
-  applyConfig(spaceId: string, changes: ConfigChange[], befores: Record<string, string>): Promise<{ backupDir: string | null }>;
+  applyConfig(
+    spaceId: string,
+    changes: ConfigChange[],
+    befores: Record<string, string>,
+  ): Promise<{ backupDir: string | null }>;
   /** Starts one of the account's servers the way the tool would and lists its tools. */
-  testMcp(spaceId: string, provider: Provider, name: string): Promise<{ tools: string[] }>;
+  testMcp(
+    spaceId: string,
+    provider: Provider,
+    name: string,
+  ): Promise<{ tools: string[] }>;
 }
 
 /** One account's instructions, servers and skills, as its tool will load them. */
@@ -185,7 +213,12 @@ export const settingsMethods = {
 
 export const DEFAULT_SETTINGS: AgentSettings = {
   concurrency: 6,
-  harnesses: Object.fromEntries(HARNESS_IDS.map((id) => [id, { path: '', model: HARNESSES[id].defaultModel, secondOpinionModel: '' }])) as AgentSettings['harnesses'],
+  harnesses: Object.fromEntries(
+    HARNESS_IDS.map((id) => [
+      id,
+      { path: '', model: HARNESSES[id].defaultModel, secondOpinionModel: '' },
+    ]),
+  ) as AgentSettings['harnesses'],
   worktreeRoot: '',
   shell: '',
   prDrafts: false,
@@ -195,7 +228,12 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   sideChatModel: { provider: 'claude', model: 'claude-sonnet-5-5' },
   appIcon: 'graphite',
   utilityModels: {
-    ...(Object.fromEntries(UTILITY_TASKS.map((task) => [task, { provider: 'claude', model: CHEAP_MODELS.claude }])) as AgentSettings['utilityModels']),
+    ...(Object.fromEntries(
+      UTILITY_TASKS.map((task) => [
+        task,
+        { provider: 'claude', model: CHEAP_MODELS.claude },
+      ]),
+    ) as AgentSettings['utilityModels']),
     // Measured on 20 finished turns: Haiku flagged things the agent never said it skipped (54 gaps, 10+ false); Sonnet 38, none false.
     audit: { provider: 'claude', model: 'claude-sonnet-5-5' },
   },
@@ -203,17 +241,31 @@ export const DEFAULT_SETTINGS: AgentSettings = {
 };
 
 /** Saved settings from before side chat could run on Codex held a bare Claude model id. */
-export function migrateSettings(saved: Record<string, unknown>): Partial<AgentSettings> {
+export function migrateSettings(
+  saved: Record<string, unknown>,
+): Partial<AgentSettings> {
   const { sideChatModel } = saved;
-  return typeof sideChatModel === 'string' ? { ...saved, sideChatModel: { provider: 'claude', model: sideChatModel } } : saved;
+  return typeof sideChatModel === 'string'
+    ? { ...saved, sideChatModel: { provider: 'claude', model: sideChatModel } }
+    : saved;
 }
 
 /** Deep enough for this shape: harness entries merge field by field and tasks one by one, so a patch never drops a sibling. */
-export function mergeSettings(base: AgentSettings, patch: AgentSettingsPatch): AgentSettings {
+export function mergeSettings(
+  base: AgentSettings,
+  patch: AgentSettingsPatch,
+): AgentSettings {
   const harnesses = { ...base.harnesses };
-  for (const id of HARNESS_IDS) if (patch.harnesses?.[id]) harnesses[id] = { ...harnesses[id], ...patch.harnesses[id] };
+  for (const id of HARNESS_IDS)
+    if (patch.harnesses?.[id])
+      harnesses[id] = { ...harnesses[id], ...patch.harnesses[id] };
   const { harnesses: _, utilityModels, ...rest } = patch;
-  return { ...base, ...rest, harnesses, utilityModels: { ...base.utilityModels, ...utilityModels } };
+  return {
+    ...base,
+    ...rest,
+    harnesses,
+    utilityModels: { ...base.utilityModels, ...utilityModels },
+  };
 }
 
 export const CONCURRENCY_RANGE = { min: 1, max: 16 } as const;

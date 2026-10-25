@@ -5,7 +5,18 @@
  * code is useless without the PKCE verifier Mochi holds.
  */
 export function oauthBounce(url: URL): Response {
-  const port = Number(/^(\d{2,5})-[a-f0-9]{16,64}$/.exec(url.searchParams.get('state') ?? '')?.[1]);
-  if (!port || port > 65535) return new Response('This sign-in link is broken. Start again from Mochi.', { status: 400 });
-  return Response.redirect(`http://127.0.0.1:${port}/oauth-callback${url.search}`, 302);
+  const port = Number(
+    /^(\d{2,5})-[a-f0-9]{16,64}$/.exec(
+      url.searchParams.get('state') ?? '',
+    )?.[1],
+  );
+  if (!port || port > 65535)
+    return new Response(
+      'This sign-in link is broken. Start again from Mochi.',
+      { status: 400 },
+    );
+  return Response.redirect(
+    `http://127.0.0.1:${port}/oauth-callback${url.search}`,
+    302,
+  );
 }

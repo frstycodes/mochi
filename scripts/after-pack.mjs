@@ -4,5 +4,9 @@ import { chmodSync, globSync } from 'node:fs';
 
 export default function afterPack({ appOutDir, packager }) {
   const resources = packager.getResourcesDir(appOutDir);
-  for (const helper of globSync('app.asar.unpacked/node_modules/node-pty/prebuilds/*/spawn-helper', { cwd: resources })) chmodSync(`${resources}/${helper}`, 0o755);
+  for (const helper of globSync(
+    'app.asar.unpacked/node_modules/node-pty/prebuilds/*/spawn-helper',
+    { cwd: resources },
+  ))
+    chmodSync(`${resources}/${helper}`, 0o755);
 }

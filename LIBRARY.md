@@ -19,15 +19,15 @@ Status labels as in RUNTIME.md: **verified** = read in this repo, `~/liane` or `
 
 ## Port map from Liane
 
-| Liane | Mochi | Notes |
-|---|---|---|
-| `src/shared/skill-md.ts`, `src/shared/plugin-bundle.ts` | `src/library/` | Pure. `scripts/check-plugin-bundle.ts` becomes `plugin-bundle.test.ts` (`pnpm test`). |
-| `src/catalog.ts` (GitHub tarball, `readTar`, marketplace reader) | `electron/library/catalog.ts` | Node has web streams, so `readTar` ports as is. Replace the Cache API with a disk cache in `userData`, cached for an hour. |
-| `src/plugin-install.ts` | `electron/library/install.ts` | Writes to the local store instead of D1. Reinstall replaces parts and keeps the id. |
-| `src/upstream.ts` (MCP OAuth client, `authorizeIfNeeded`) | `electron/library/connectors.ts` | `@modelcontextprotocol/sdk` is already a dependency. Redirect to a loopback port. The `CfWorkerJsonSchemaValidator` workaround is Workers-only, so it is dropped. |
-| `src/shared/oauth-providers.ts`, `app/lib/connectors.ts` | `src/library/` | Curated directory and per-provider OAuth apps. |
-| D1 tables (`skills`, `local_servers`, `plugins`, `subagents`, `hooks`, `marketplaces`, `connections`, `profile_resources`) | `userData/library.json` + `~/.mochi/library/items/` | One JSON index (atomic write, like `agent-settings.json`), with item files on disk. Secrets (server env, tokens) are sealed with `safeStorage`. |
-| `app/pages/discover.tsx`, `library.tsx`, `accounts.tsx` | Settings › Profiles › Library | Rebuilt with Mochi's components. Liane's are a reference for layout, not copied. |
+| Liane                                                                                                                      | Mochi                                               | Notes                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/shared/skill-md.ts`, `src/shared/plugin-bundle.ts`                                                                    | `src/library/`                                      | Pure. `scripts/check-plugin-bundle.ts` becomes `plugin-bundle.test.ts` (`pnpm test`).                                                                             |
+| `src/catalog.ts` (GitHub tarball, `readTar`, marketplace reader)                                                           | `electron/library/catalog.ts`                       | Node has web streams, so `readTar` ports as is. Replace the Cache API with a disk cache in `userData`, cached for an hour.                                        |
+| `src/plugin-install.ts`                                                                                                    | `electron/library/install.ts`                       | Writes to the local store instead of D1. Reinstall replaces parts and keeps the id.                                                                               |
+| `src/upstream.ts` (MCP OAuth client, `authorizeIfNeeded`)                                                                  | `electron/library/connectors.ts`                    | `@modelcontextprotocol/sdk` is already a dependency. Redirect to a loopback port. The `CfWorkerJsonSchemaValidator` workaround is Workers-only, so it is dropped. |
+| `src/shared/oauth-providers.ts`, `app/lib/connectors.ts`                                                                   | `src/library/`                                      | Curated directory and per-provider OAuth apps.                                                                                                                    |
+| D1 tables (`skills`, `local_servers`, `plugins`, `subagents`, `hooks`, `marketplaces`, `connections`, `profile_resources`) | `userData/library.json` + `~/.mochi/library/items/` | One JSON index (atomic write, like `agent-settings.json`), with item files on disk. Secrets (server env, tokens) are sealed with `safeStorage`.                   |
+| `app/pages/discover.tsx`, `library.tsx`, `accounts.tsx`                                                                    | Settings › Profiles › Library                       | Rebuilt with Mochi's components. Liane's are a reference for layout, not copied.                                                                                  |
 
 ## Phase 1: library store and session injection (built)
 

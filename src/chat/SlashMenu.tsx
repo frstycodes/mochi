@@ -1,10 +1,10 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useId, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
-import { revealIn } from '@/lib/revealIn';
+import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { host } from '../host';
-import type { ProfileConfig } from '../host/types/settings';
 import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
 import { offItems } from '../library/nativeOverrides';
 import { useProfiles } from '../profiles';
@@ -12,19 +12,24 @@ import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { isAbsolutePath } from '../projects';
 import type { Caret } from './ComposerEditor';
+import { CaretMenu, forwardKey } from './CaretMenu';
 import { SkillFallback } from './MentionMenu';
 import { SkillMark } from './McpIcon';
-import { bySlashGroup, configuredCommands, insertToken, slashGroup, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
+import {
+  bySlashGroup,
+  configuredCommands,
+  insertToken,
+  slashGroup,
+  slashItems,
+  slashMatches,
+  slashQueryAt,
+  type SlashItem,
+} from './slash';
+import { queryKeys } from '../queryKeys';
+import { libraryQuery } from '../library/queries';
 
-/** Above the composer while the caret ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
+/** Above the caret while it ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
 export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
-  const list = useRef<HTMLDivElement>(null);
-  const current = menu.isOpen ? menu.matches[menu.active] : undefined;
-  useEffect(() => {
-    const row = current && list.current?.querySelector(`[data-name="${CSS.escape(current.name)}"]`);
-    if (row) revealIn(list.current!, row);
-  }, [current]);
-  if (!menu.isOpen) return null;
   // `matches` arrive with each section's rows together (`bySlashGroup`), so a section is a run of one group.
   const groups = menu.matches.reduce<SlashItem[][]>((runs, item) => {
     const last = runs.at(-1);
@@ -33,47 +38,67 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
     return runs;
   }, []);
   return (
-    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-overlay">
+    <CaretMenu
+      isOpen={menu.isOpen}
+      editor={menu.editor}
+      listRef={menu.listRef}
+      listId={menu.listId}
+      label="Commands and skills"
+      value={menu.activeKey}
+      onValueChange={menu.setActiveKey}
+      onDismiss={menu.dismiss}
+    >
       {groups.map((group) => (
-        <div key={slashGroup(group[0])} role="group" aria-label={groupName(group[0])} className="flex flex-col gap-0.5">
-          <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
-            {groupName(group[0])}
-          </div>
+        <CommandGroup key={slashGroup(group[0])} heading={groupName(group[0])}>
           {group.map((item) => (
-            <div
-              key={item.name}
-              data-name={item.name}
-              id={optionId(menu.listId, item)}
-              role="option"
-              aria-selected={item === current}
-              onPointerDown={(e) => e.preventDefault()}
+            <CommandItem
+              key={itemKey(item)}
+              value={itemKey(item)}
               aria-disabled={!!item.disabledReason || undefined}
-              onClick={() => menu.choose(item)}
-              className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:aria-selected:bg-accent/60"
+              onSelect={() => menu.choose(item)}
+              className="h-8 rounded-md type-body aria-disabled:text-muted-foreground aria-disabled:data-selected:bg-accent/60"
             >
               <SlashIcon item={item} />
               <span className="shrink-0 font-medium">/{item.name}</span>
-              {!!item.argumentHint && <span className="shrink-0 text-subtle-foreground max-sm:hidden">{item.argumentHint}</span>}
-              <span className="min-w-0 truncate text-muted-foreground">{item.description}</span>
-              {item.disabledReason ? (
-                <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.disabledReason}</span>
-              ) : (
-                menu.isMidText && !item.isSkill && <span className="ml-auto shrink-0 type-caption text-warning">Runs only at the start of a message</span>
+              {!!item.argumentHint && (
+                <span className="shrink-0 text-subtle-foreground max-sm:hidden">
+                  {item.argumentHint}
+                </span>
               )}
-            </div>
+              <span className="min-w-0 truncate text-muted-foreground">
+                {item.description}
+              </span>
+              {item.disabledReason ? (
+                <span className="ml-auto shrink-0 type-caption text-subtle-foreground">
+                  {item.disabledReason}
+                </span>
+              ) : (
+                menu.isMidText &&
+                !item.isSkill && (
+                  <span className="ml-auto shrink-0 type-caption text-warning">
+                    Runs only at the start of a message
+                  </span>
+                )
+              )}
+            </CommandItem>
           ))}
-        </div>
+        </CommandGroup>
       ))}
-    </div>
+    </CaretMenu>
   );
 }
 
-const MOCHI_ICONS = { side: MessageQuestion, compact: Minimize } satisfies Record<string, typeof MessageQuestion>;
+const MOCHI_ICONS = {
+  side: MessageQuestion,
+  compact: Minimize,
+} satisfies Record<string, typeof MessageQuestion>;
 
 /** A harness item's own icon (its skill's, else its plugin's, from the library), else the skill lightbulb. */
 function SlashIcon({ item }: { item: SlashItem }) {
-  if (item.source !== 'mochi') return <SkillMark skill={item.name} fallback={<SkillFallback />} />;
-  const Icon = MOCHI_ICONS[item.name as keyof typeof MOCHI_ICONS] ?? MessageQuestion;
+  if (item.source !== 'mochi')
+    return <SkillMark skill={item.name} fallback={<SkillFallback />} />;
+  const Icon =
+    MOCHI_ICONS[item.name as keyof typeof MOCHI_ICONS] ?? MessageQuestion;
   return <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
@@ -83,17 +108,18 @@ const groupName = (item: SlashItem) => {
   const group = slashGroup(item);
   return group === item.source ? HARNESSES[item.source].name : group;
 };
-const optionId = (listId: string, item: SlashItem) => `${listId}-${item.source}-${item.name.replace(/\W/g, '_')}`;
+const itemKey = (item: SlashItem) => `${item.source}:${item.name}`;
 
 /**
- * The menu's state and the editor props that drive it: arrows move, Enter or Tab picks, Esc closes until the text changes.
+ * The menu's state and the editor props that drive it: arrows move (cmdk does the moving), Enter or Tab picks, Esc (the popover's) closes until the text changes.
  * Picking puts the name where it was typed, nothing else moves. Needs the composer's `PromptInputProvider`.
  */
 export function useSlashMenu(items: SlashItem[]) {
   const listId = useId();
   const { textInput } = usePromptInputController();
   const text = textInput.value;
-  const [active, setActive] = useState(0);
+  const [activeKey, setActiveKey] = useState<string>();
+  const listRef = useRef<HTMLDivElement>(null);
   const [dismissedAt, setDismissedAt] = useState<string>();
   // The caret as of the text it was read with; a programmatic change (send, pick) puts it at the end.
   const [caret, setCaret] = useState<Caret>();
@@ -102,17 +128,23 @@ export function useSlashMenu(items: SlashItem[]) {
   const range = at === null ? null : slashQueryAt(text, at);
   const matches = range ? bySlashGroup(slashMatches(range.query, items)) : [];
   const isOpen = matches.length > 0 && dismissedAt !== text;
-  const index = Math.min(active, matches.length - 1);
+  const index = Math.max(
+    0,
+    matches.findIndex((m) => itemKey(m) === activeKey),
+  );
 
   const choose = (item: SlashItem) => {
     if (!range || item.disabledReason) return;
     const next = insertToken(text, range, item);
-    setActive(0);
+    setActiveKey(undefined);
     // With text right after it, the caret ends the full name and would reopen the menu on it.
     setDismissedAt(next.text);
     const view = editor.current;
     if (!view) return textInput.setInput(next.text);
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next.text }, selection: { anchor: next.caret } });
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: next.text },
+      selection: { anchor: next.caret },
+    });
     view.focus();
   };
 
@@ -124,11 +156,10 @@ export function useSlashMenu(items: SlashItem[]) {
   const onKeyDown = (e: KeyboardEvent, view: EditorView) => {
     editor.current = view;
     if (!isOpen) return;
-    const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
-    if (step) setActive((index + step + matches.length) % matches.length);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp')
+      forwardKey(listRef.current, e);
     else if (e.key === 'Enter' || e.key === 'Tab') choose(matches[index]);
-    else if (e.key === 'Escape') setDismissedAt(text);
-    else return setActive(0);
+    else return setActiveKey(undefined);
     e.preventDefault();
     e.stopPropagation();
   };
@@ -136,23 +167,58 @@ export function useSlashMenu(items: SlashItem[]) {
   const editorProps = {
     onKeyDown,
     onCaret,
-    attributes: { 'aria-autocomplete': 'list', 'aria-controls': isOpen ? listId : undefined, 'aria-activedescendant': isOpen ? optionId(listId, matches[index]) : undefined },
+    attributes: {
+      'aria-autocomplete': 'list',
+      'aria-controls': isOpen ? listId : undefined,
+    },
   };
-  return { listId, matches, active: index, isOpen, isMidText: !!range && range.start > 0, choose, editorProps };
+  return {
+    listId,
+    matches,
+    activeKey: matches[index] && itemKey(matches[index]),
+    setActiveKey,
+    dismiss: () => setDismissedAt(text),
+    editor,
+    listRef,
+    isOpen,
+    isMidText: !!range && range.start > 0,
+    choose,
+    editorProps,
+  };
 }
 
 /**
  * What `/` offers for a thread on `provider`: the live agent's own list once it reported one, else what the profile's account,
  * the project at `projectRoot` and enabled plugins carry on disk, so the menu works before the agent starts.
  */
-export function useSlashItems(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo) {
-  const { commands, skills } = useAgentCommands(provider, spaceId, projectRoot, agent);
+export function useSlashItems(
+  provider: Provider,
+  spaceId: string,
+  projectRoot: string | null,
+  agent?: AgentInfo,
+) {
+  const { commands, skills } = useAgentCommands(
+    provider,
+    spaceId,
+    projectRoot,
+    agent,
+  );
   return slashItems(commands, provider, skills);
 }
 
 /** The thread's harness skills for `@`: the live agent's (its skill names picked out of its commands) or those on disk. */
-export function useThreadSkills(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): AgentCommand[] {
-  const { commands, skills } = useAgentCommands(provider, spaceId, projectRoot, agent);
+export function useThreadSkills(
+  provider: Provider,
+  spaceId: string,
+  projectRoot: string | null,
+  agent?: AgentInfo,
+): AgentCommand[] {
+  const { commands, skills } = useAgentCommands(
+    provider,
+    spaceId,
+    projectRoot,
+    agent,
+  );
   const names = skills && new Set(skills);
   return names ? commands.filter((c) => names.has(c.name)) : commands;
 }
@@ -162,89 +228,124 @@ export function useThreadSkills(provider: Provider, spaceId: string, projectRoot
  * reported one. Before the profile config is read (or in a build without one) the live agent's own list stands in. Mochi's
  * own server is never offered, nor one the profile turned off.
  */
-export function useThreadServers(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): McpServer[] {
+export function useThreadServers(
+  provider: Provider,
+  spaceId: string,
+  projectRoot: string | null,
+  agent?: AgentInfo,
+): McpServer[] {
   const config = useProfileConfig(spaceId, projectRoot);
-  const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff ?? [];
+  const nativeOff =
+    useProfiles().find((p) => p.id === spaceId)?.nativeOff ?? [];
   const live = new Map((agent?.mcpServers ?? []).map((s) => [s.name, s]));
-  const off = new Set(config ? offItems(config[provider], nativeOff).flatMap((i) => (i.kind === 'server' || i.kind === 'connector' ? [i.name] : [])) : []);
-  const pending = (name: string) => live.get(name) ?? { name, status: 'pending' as const };
+  const off = new Set(
+    config
+      ? offItems(config[provider], nativeOff).flatMap((i) =>
+          i.kind === 'server' || i.kind === 'connector' ? [i.name] : [],
+        )
+      : [],
+  );
+  const pending = (name: string) =>
+    live.get(name) ?? { name, status: 'pending' as const };
   const servers = config
-    ? [...config[provider].mcpServers.filter((m) => m.enabled && !off.has(m.def.name)).map(({ def }) => pending(def.name)), ...(config[provider].claudeAiConnectors ?? []).filter((name) => !off.has(name)).map(pending)]
+    ? [
+        ...config[provider].mcpServers
+          .filter((m) => m.enabled && !off.has(m.def.name))
+          .map(({ def }) => pending(def.name)),
+        ...(config[provider].claudeAiConnectors ?? [])
+          .filter((name) => !off.has(name))
+          .map(pending),
+      ]
     : [...live.values()];
-  return servers.filter((s) => s.name !== MOCHI_SERVER && s.status !== 'disabled');
+  return servers.filter(
+    (s) => s.name !== MOCHI_SERVER && s.status !== 'disabled',
+  );
 }
 
 /**
  * The plugins `@` offers, by the name their skills are prefixed with: the live agent's own, else the account's enabled ones the
  * profile didn't turn off and the library's plugins on for the profile (Claude loads both; Codex threads get no plugin folders).
  */
-export function useThreadPlugins(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): string[] {
-  const config = useProfileConfig(agent?.plugins ? undefined : spaceId, projectRoot);
+export function useThreadPlugins(
+  provider: Provider,
+  spaceId: string,
+  projectRoot: string | null,
+  agent?: AgentInfo,
+): string[] {
+  const config = useProfileConfig(
+    agent?.plugins ? undefined : spaceId,
+    projectRoot,
+  );
   const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
-  const library = useLibraryPlugins(agent?.plugins || provider !== 'claude' ? undefined : spaceId);
-  return useMemo(() => {
-    if (agent?.plugins) return agent.plugins.map((p) => p.name);
-    if (!config) return [];
-    const off = new Set(offItems(config[provider], nativeOff ?? []).map((i) => i.name));
-    const native = config[provider].plugins.filter((id) => !off.has(id)).map((id) => id.split('@')[0]);
-    return [...new Set([...native, ...library])];
-  }, [agent?.plugins, config, provider, nativeOff, library]);
+  const library = useLibraryPlugins(
+    agent?.plugins || provider !== 'claude' ? undefined : spaceId,
+  );
+  if (agent?.plugins) return agent.plugins.map((p) => p.name);
+  if (!config) return [];
+  const off = new Set(
+    offItems(config[provider], nativeOff ?? []).map((i) => i.name),
+  );
+  const native = config[provider].plugins
+    .filter((id) => !off.has(id))
+    .map((id) => id.split('@')[0]);
+  return [...new Set([...native, ...library])];
 }
 
 function useLibraryPlugins(spaceId: string | undefined) {
-  const [names, setNames] = useState<string[]>([]);
-  useEffect(() => {
-    if (!spaceId) return;
-    let isCurrent = true;
-    host.library.list(spaceId).then(
-      (entries) => isCurrent && setNames(entries.filter((e) => e.kind === 'plugin' && e.isEnabled).map((e) => e.name)),
-      () => isCurrent && setNames([]),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
-  return names;
+  const entriesQuery = useQuery({
+    ...libraryQuery(spaceId ?? ''),
+    enabled: !!spaceId,
+  });
+  return (entriesQuery.data ?? [])
+    .filter((e) => e.kind === 'plugin' && e.isEnabled)
+    .map((e) => e.name);
 }
 
-function useAgentCommands(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): { commands: AgentCommand[]; skills?: string[] } {
-  const configured = useConfiguredCommands(provider, spaceId, projectRoot, !agent?.commands);
-  return agent?.commands ? { commands: agent.commands, skills: agent.skills } : configured;
+function useAgentCommands(
+  provider: Provider,
+  spaceId: string,
+  projectRoot: string | null,
+  agent?: AgentInfo,
+): { commands: AgentCommand[]; skills?: string[] } {
+  const configured = useConfiguredCommands(
+    provider,
+    spaceId,
+    projectRoot,
+    !agent?.commands,
+  );
+  return agent?.commands
+    ? { commands: agent.commands, skills: agent.skills }
+    : configured;
 }
 
 /** Leaves out what the Skills tab turned off for the profile, as the session will once it starts. */
-function useConfiguredCommands(provider: Provider, spaceId: string, projectRoot: string | null, isNeeded: boolean) {
+function useConfiguredCommands(
+  provider: Provider,
+  spaceId: string,
+  projectRoot: string | null,
+  isNeeded: boolean,
+) {
   const config = useProfileConfig(isNeeded ? spaceId : undefined, projectRoot);
   const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
   // Stable per config read: the menu reveals its current row when that row changes.
-  return useMemo(() => (config ? configuredCommands(config[provider], offItems(config[provider], nativeOff ?? [])) : { commands: [], skills: [] }), [config, provider, nativeOff]);
+  return config
+    ? configuredCommands(
+        config[provider],
+        offItems(config[provider], nativeOff ?? []),
+      )
+    : { commands: [], skills: [] };
 }
 
-function useProfileConfig(spaceId: string | undefined, projectRoot: string | null) {
-  const key = spaceId && configKey(spaceId, projectRoot);
-  const [config, setConfig] = useState<{ key: string; value?: ProfileConfig }>();
-  useEffect(() => {
-    if (!spaceId || !key) return;
-    let isCurrent = true;
-    configFor(spaceId, projectRoot).then(
-      (value) => isCurrent && setConfig({ key, value }),
-      () => isCurrent && setConfig({ key }),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId, projectRoot, key]);
-  return config && config.key === key ? config.value : undefined;
+function useProfileConfig(
+  spaceId: string | undefined,
+  projectRoot: string | null,
+) {
+  const root =
+    projectRoot && isAbsolutePath(projectRoot) ? projectRoot : undefined;
+  const configQuery = useQuery({
+    queryKey: queryKeys.profile.config.root(spaceId, root),
+    queryFn: () => host.settings.agentConfig(spaceId!, root),
+    enabled: !!spaceId,
+  });
+  return configQuery.data;
 }
-
-// GAP: one read per profile and project per launch; a skill added while Mochi runs shows once the agent reports it, or after a restart.
-const configs = new Map<string, ReturnType<typeof host.settings.agentConfig>>();
-function configFor(spaceId: string, projectRoot: string | null) {
-  const key = configKey(spaceId, projectRoot);
-  // The web build's fixture projects are bare names, not folders to read.
-  const root = projectRoot && isAbsolutePath(projectRoot) ? projectRoot : undefined;
-  if (!configs.has(key)) configs.set(key, host.settings.agentConfig(spaceId, root).catch((error) => (configs.delete(key), Promise.reject(error))));
-  return configs.get(key)!;
-}
-
-const configKey = (spaceId: string, projectRoot: string | null) => `${spaceId}\n${projectRoot ?? ''}`;

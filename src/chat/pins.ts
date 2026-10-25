@@ -1,4 +1,6 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
+import { setAmbientPins } from '../store/context.ts';
 
 /** A pinned message, or a passage inside one, kept per thread so it can be found again from the chat's outline rail. */
 export interface Pin {
@@ -12,12 +14,15 @@ export interface Pin {
 export const PINS_STORAGE_KEY = 'harness.pins.v1';
 export type Pins = Record<string, Pin[]>;
 
-let pins: Pins = load();
+const pinsSlice = persistedSlice<Pins>(PINS_STORAGE_KEY, {});
+let pins: Pins = pinsSlice.getState().value;
 const listeners = new Set<() => void>();
 const EMPTY: Pin[] = [];
 
-/** Outside React: the store reads them when a compaction starts or ends. */
+/** Outside React. */
 export const getThreadPins = (threadId: string) => pins[threadId] ?? EMPTY;
+
+setAmbientPins(() => pins);
 
 export function useThreadPins(threadId: string) {
   return useSyncExternalStore(subscribe, () => pins[threadId] ?? EMPTY);
@@ -28,12 +33,22 @@ export function togglePin(threadId: string, index: number, text = '') {
   const list = pins[threadId] ?? [];
   const passage = normalise(text);
   const existing = list.find((p) => p.index === index && p.text === passage);
-  set(threadId, existing ? list.filter((p) => p !== existing) : [...list, { id: `${index}:${Date.now()}`, index, text: passage }].sort((a, b) => a.index - b.index));
+  set(
+    threadId,
+    existing
+      ? list.filter((p) => p !== existing)
+      : [...list, { id: `${index}:${Date.now()}`, index, text: passage }].sort(
+          (a, b) => a.index - b.index,
+        ),
+  );
   return !existing;
 }
 
 export function unpin(threadId: string, id: string) {
-  set(threadId, (pins[threadId] ?? []).filter((p) => p.id !== id));
+  set(
+    threadId,
+    (pins[threadId] ?? []).filter((p) => p.id !== id),
+  );
 }
 
 let pruned: { threadId: string; list: Pin[] } | null = null;
@@ -77,20 +92,8 @@ function set(threadId: string, list: Pin[]) {
 
 function write(next: Pins) {
   pins = next;
-  try {
-    localStorage.setItem(PINS_STORAGE_KEY, JSON.stringify(pins));
-  } catch {
-    // Private windows and blocked storage: pins still work for this session.
-  }
+  pinsSlice.setState({ value: pins });
   listeners.forEach((l) => l());
-}
-
-function load(): Pins {
-  try {
-    return JSON.parse(localStorage.getItem(PINS_STORAGE_KEY) ?? '{}') as Pins;
-  } catch {
-    return {};
-  }
 }
 
 function subscribe(listener: () => void) {

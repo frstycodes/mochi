@@ -5,7 +5,9 @@ import { parseTool } from '../summary.ts';
 import { mochiCall } from './mochiCalls.ts';
 
 /** A tool call as a plain sentence for its work-group row: the agent's own description when it sent one (Claude's Bash), else one derived from the call. */
-export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description' | 'sent' | 'mcp'>) {
+export function describeCall(
+  entry: Pick<ActivityEntry, 'text' | 'description' | 'sent' | 'mcp'>,
+) {
   if (entry.description) return entry.description;
   if (entry.sent) return `Messaging ${entry.sent.title}`;
   const call = parseTool(entry.text);
@@ -29,7 +31,9 @@ export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description' |
       const mochi = mochiCall(call);
       if (mochi) return mochi[1];
       const [server, tool] = call.target.split(': ');
-      return tool ? `Called ${namesNow().call(server, tool, entry.mcp?.account)}` : `Called ${namesNow().server(server).title}`;
+      return tool
+        ? `Called ${namesNow().call(server, tool, entry.mcp?.account)}`
+        : `Called ${namesNow().server(server).title}`;
     }
     case 'Run':
       return describeCommand(call.target);
@@ -43,14 +47,20 @@ export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description' |
 export function describeCommand(command: string) {
   const raw = unwrapShell(command.trim());
   // Redirections (`2>&1`, `> out.log`) aren't operands.
-  const segments = commands(raw.replace(/\s\d*>&\d/g, '').replace(/\s\d*>{1,2}\s*\S+/g, '')).map(dropEnv).filter((t) => t.length > 0);
+  const segments = commands(
+    raw.replace(/\s\d*>&\d/g, '').replace(/\s\d*>{1,2}\s*\S+/g, ''),
+  )
+    .map(dropEnv)
+    .filter((t) => t.length > 0);
   const first = segments.find((t) => t[0] !== 'cd') ?? segments[0];
   return (first && describeArgs(first)) ?? (raw.split('\n')[0] || command);
 }
 
 // Codex runs every command as `/bin/zsh -lc '<command>'`.
 function unwrapShell(command: string) {
-  const match = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+(['"])([\s\S]*)\1$/.exec(command);
+  const match = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+(['"])([\s\S]*)\1$/.exec(
+    command,
+  );
   return match ? match[2] : command;
 }
 
@@ -92,7 +102,11 @@ function describeArgs(args: string[]): string | undefined {
     case 'bat':
       return file ? `Read ${base(file)}` : undefined;
     case 'sed':
-      return rest.includes('-i') ? `Edited ${base(file)}` : file ? `Read part of ${base(file)}` : undefined;
+      return rest.includes('-i')
+        ? `Edited ${base(file)}`
+        : file
+          ? `Read part of ${base(file)}`
+          : undefined;
     case 'grep':
     case 'rg':
     case 'ag': {
@@ -102,7 +116,9 @@ function describeArgs(args: string[]): string | undefined {
     }
     case 'find':
     case 'fd':
-      return operands[0] && operands[0] !== '.' ? `Looked for files in ${base(operands[0])}` : 'Looked for files';
+      return operands[0] && operands[0] !== '.'
+        ? `Looked for files in ${base(operands[0])}`
+        : 'Looked for files';
     case 'wc':
       return file ? `Counted lines in ${base(file)}` : undefined;
     case 'mkdir':
@@ -133,7 +149,8 @@ function describeArgs(args: string[]): string | undefined {
     case 'python3':
     case 'tsx':
     case 'deno': {
-      if (rest.some((a) => a === '-e' || a === '-c' || a === '--eval')) return `Ran a ${cmd.startsWith('python') ? 'Python' : 'JavaScript'} snippet`;
+      if (rest.some((a) => a === '-e' || a === '-c' || a === '--eval'))
+        return `Ran a ${cmd.startsWith('python') ? 'Python' : 'JavaScript'} snippet`;
       return file && /\.\w+$/.test(file) ? `Ran ${base(file)}` : undefined;
     }
   }
@@ -164,8 +181,12 @@ function describeGit(args: string[]) {
   const sub = args.find((a, i) => !a.startsWith('-') && args[i - 1] !== '-C');
   if (!sub) return undefined;
   if (sub === 'diff') {
-    const path = args.slice(args.indexOf(sub) + 1).find((a) => !a.startsWith('-') && a.includes('.'));
-    return path ? `Looked at the diff of ${path.split('/').pop()}` : 'Looked at the diff';
+    const path = args
+      .slice(args.indexOf(sub) + 1)
+      .find((a) => !a.startsWith('-') && a.includes('.'));
+    return path
+      ? `Looked at the diff of ${path.split('/').pop()}`
+      : 'Looked at the diff';
   }
   return GIT[sub as keyof typeof GIT] ?? `Ran git ${sub}`;
 }
@@ -181,16 +202,23 @@ const SCRIPTS = {
 } satisfies Record<string, string>;
 
 function describePackageManager(args: string[]): string | undefined {
-  const filter = args.find((_, i) => args[i - 1] === '--filter' || args[i - 1] === '-F');
+  const filter = args.find(
+    (_, i) => args[i - 1] === '--filter' || args[i - 1] === '-F',
+  );
   const words = args.filter((a) => !a.startsWith('-') && a !== filter);
   const [sub, ...rest] = words[0] === 'run' ? words.slice(1) : words;
   if (!sub) return undefined;
   const scope = filter ? ` in ${filter}` : '';
-  if (sub === 'install' || sub === 'i' || sub === 'ci') return `Installed dependencies${scope}`;
-  if (sub === 'add') return rest.length ? `Added ${rest.join(', ')}${scope}` : undefined;
-  if (sub === 'remove' || sub === 'rm') return rest.length ? `Removed ${rest.join(', ')}${scope}` : undefined;
+  if (sub === 'install' || sub === 'i' || sub === 'ci')
+    return `Installed dependencies${scope}`;
+  if (sub === 'add')
+    return rest.length ? `Added ${rest.join(', ')}${scope}` : undefined;
+  if (sub === 'remove' || sub === 'rm')
+    return rest.length ? `Removed ${rest.join(', ')}${scope}` : undefined;
   if (sub === 'exec' || sub === 'dlx' || sub === 'x') return describeArgs(rest);
-  const known = SCRIPTS[sub as keyof typeof SCRIPTS] ?? (sub === 'tsc' ? SCRIPTS.typecheck : undefined);
+  const known =
+    SCRIPTS[sub as keyof typeof SCRIPTS] ??
+    (sub === 'tsc' ? SCRIPTS.typecheck : undefined);
   if (known) return `${known}${scope}`;
   return `Ran the ${sub} script${scope}`;
 }
@@ -218,7 +246,9 @@ function describeGh(args: string[]) {
     if (action === 'create') return 'Opened an issue';
   }
   if (area === 'api') return 'Called the GitHub API';
-  return area ? `Ran gh ${[area, action].filter(Boolean).join(' ')}` : undefined;
+  return area
+    ? `Ran gh ${[area, action].filter(Boolean).join(' ')}`
+    : undefined;
 }
 
 function dropEnv(tokens: string[]) {
@@ -229,7 +259,9 @@ function dropEnv(tokens: string[]) {
 /** The simple commands in a command line, each as its words with quotes dropped; `&&`, `||`, `|`, `;` and newlines outside quotes split them. */
 function commands(line: string) {
   const result: string[][] = [[]];
-  for (const m of line.matchAll(/"((?:\\.|[^"])*)"|'([^']*)'|(&&|\|\||[|;\n])|([^\s"'|;&]+|&)/g)) {
+  for (const m of line.matchAll(
+    /"((?:\\.|[^"])*)"|'([^']*)'|(&&|\|\||[|;\n])|([^\s"'|;&]+|&)/g,
+  )) {
     if (m[3]) result.push([]);
     else result.at(-1)!.push(m[1] ?? m[2] ?? m[4]);
   }

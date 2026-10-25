@@ -8,16 +8,16 @@ Replaces the handoff (`src/rewind/handoff.ts`, `runHandoff.ts`, the `handoff*` r
 
 **T3 Code** (read at `d53873b6`) does better on bookkeeping and worse on content:
 
-| | T3 | Problem |
-|---|---|---|
-| "Summary" | Raw recent items, newest first, plus the first user message (`ContextHandoffService.ts:475`) | Not a summary: on a long thread the middle, where decisions were made, is gone |
-| Budget | 16 k "tokens" counted as JSON bytes, 64 k byte ceiling (`handoffBudget.ts:109-136`) | Roughly 4–5 k real tokens of context (estimate, not measured) |
-| Oversized items | Dropped whole (`tryAdd`), smaller older ones fill the gap | The long reply or big command output that held the result is the usual casualty |
-| Tool structure | Only messages, commands, file names, errors, plans survive; `file_change` has no diff; subagents, searches, reasoning, todos, approvals dropped | The new agent can't see what was tried |
-| Delivery | History prepended to the user's message for every provider but Codex | Past assistant text sits in the user role, permanently, in the new native transcript |
-| Older context | `t3_thread_read` MCP tool, mentioned once | Nothing points the agent at the specific thing it's missing |
-| Full target | Budget 0 → the turn fails | Switching back to a busy session errors instead of degrading |
-| Unclear inject | Delivery stays `pending` → native thread thrown away next turn | One transport hiccup loses the target's whole context |
+|                 | T3                                                                                                                                              | Problem                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| "Summary"       | Raw recent items, newest first, plus the first user message (`ContextHandoffService.ts:475`)                                                    | Not a summary: on a long thread the middle, where decisions were made, is gone       |
+| Budget          | 16 k "tokens" counted as JSON bytes, 64 k byte ceiling (`handoffBudget.ts:109-136`)                                                             | Roughly 4–5 k real tokens of context (estimate, not measured)                        |
+| Oversized items | Dropped whole (`tryAdd`), smaller older ones fill the gap                                                                                       | The long reply or big command output that held the result is the usual casualty      |
+| Tool structure  | Only messages, commands, file names, errors, plans survive; `file_change` has no diff; subagents, searches, reasoning, todos, approvals dropped | The new agent can't see what was tried                                               |
+| Delivery        | History prepended to the user's message for every provider but Codex                                                                            | Past assistant text sits in the user role, permanently, in the new native transcript |
+| Older context   | `t3_thread_read` MCP tool, mentioned once                                                                                                       | Nothing points the agent at the specific thing it's missing                          |
+| Full target     | Budget 0 → the turn fails                                                                                                                       | Switching back to a busy session errors instead of degrading                         |
+| Unclear inject  | Delivery stays `pending` → native thread thrown away next turn                                                                                  | One transport hiccup loses the target's whole context                                |
 
 What T3 gets right, and we keep: per-target delta tracking (switching back sends only what's new), a delivery ledger, explicitly detaching old sessions, a lazy switch applied on the next send.
 
@@ -67,20 +67,20 @@ Budget in real tokens: an estimate (chars/4) calibrated per provider against the
 
 A read-only Core procedure over `events`, served as `mcp__mochi__thread_history` (beside the existing `mcp__mochi__*` tools), scoped to the thread:
 
-| op | returns |
-|---|---|
-| `outline` | the brief's chapters with seq ranges |
-| `read {fromSeq, toSeq}` | events in range, paged, byte-capped, tool calls with inputs and outputs |
-| `search {query}` | FTS5 hits over message text, tool inputs and outputs: seq plus snippet |
+| op                                | returns                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| `outline`                         | the brief's chapters with seq ranges                                      |
+| `read {fromSeq, toSeq}`           | events in range, paged, byte-capped, tool calls with inputs and outputs   |
+| `search {query}`                  | FTS5 hits over message text, tool inputs and outputs: seq plus snippet    |
 | `get {seq}` or `get {toolCallId}` | one item in full: complete output, the whole diff, images as image blocks |
 
-Every pointer in the package is a `thread_history` call the agent can copy, which addresses T3's "the agent has to think of looking". Instruction line: *"Earlier work in this thread is in thread_history; check it before redoing or contradicting something."* The tool is useful on its own, before any switch: after a compaction, the same agent gets back what was compacted away.
+Every pointer in the package is a `thread_history` call the agent can copy, which addresses T3's "the agent has to think of looking". Instruction line: _"Earlier work in this thread is in thread_history; check it before redoing or contradicting something."_ The tool is useful on its own, before any switch: after a compaction, the same agent gets back what was compacted away.
 
 ### 6. The switch
 
 Core command `thread.switchProvider {threadId, provider, model}`:
 
-1. Between turns: recorded at once. Mid-turn: you choose *after this turn* (queued) or *now* (interrupts, then records it).
+1. Between turns: recorded at once. Mid-turn: you choose _after this turn_ (queued) or _now_ (interrupts, then records it).
 2. The old session is **detached**, not deleted: its binding keeps `nativeSessionId` and `lastSeenSeq`. Pending approvals are cancelled with an event row. Its running subagents finish and report to the thread as they do today.
 3. On the next send:
    - The target has a resumable binding: resume it and deliver only the delta (brief changes plus events after its `lastSeenSeq`).
@@ -91,8 +91,8 @@ Plan steps, goal and criteria are Mochi's and carry over untouched. The worktree
 
 ### 7. UI
 
-- The composer's provider and model picker stays unlocked in a live thread. Picking another provider shows *"Switches on your next message"*.
-- A divider row replaces `HandoffRow`, for example: *Switched to Codex · GPT-5.5 — brief, 6 recent turns, 11.8k tokens*. It opens to the exact package that was sent, so it's always clear what the new agent knows.
+- The composer's provider and model picker stays unlocked in a live thread. Picking another provider shows _"Switches on your next message"_.
+- A divider row replaces `HandoffRow`, for example: _Switched to Codex · GPT-5.5 — brief, 6 recent turns, 11.8k tokens_. It opens to the exact package that was sent, so it's always clear what the new agent knows.
 - Existing `entry.handoff` rows keep rendering, read as switch rows. No migration of old data.
 
 ## Phases

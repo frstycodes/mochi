@@ -9,7 +9,9 @@ export function GeneralSection() {
         title="New threads"
         footer={
           <span className="inline-flex flex-wrap items-center gap-1">
-            The composer can still change each thread. Hold <Shortcut keys={['mod']} /> while sending to do the other for that one message.
+            The composer can still change each thread. Hold{' '}
+            <Shortcut keys={['mod']} /> while sending to do the other for that
+            one message.
           </span>
         }
       >
@@ -22,7 +24,16 @@ export function GeneralSection() {
       </SettingsGroup>
       <SettingsGroup title="Running agents">
         <CatalogRow settingKey="concurrency" />
-        <SettingsRow id="usageLimit" label="When a usage limit hits" description="Continuing on an API key or another harness is your call, per thread" control={<span className="type-body text-muted-foreground">Pause until reset</span>} />
+        <SettingsRow
+          id="usageLimit"
+          label="When a usage limit hits"
+          description="Continuing on an API key or another harness is your call, per thread"
+          control={
+            <span className="type-body text-muted-foreground">
+              Pause until reset
+            </span>
+          }
+        />
       </SettingsGroup>
       <SettingsGroup title="Folders">
         <CatalogRow settingKey="projectsFolder" />

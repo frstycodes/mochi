@@ -1,6 +1,13 @@
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
 import { host } from '@/host';
-import type { BrowserContextMenu, BrowserDevtools, BrowserDialog, BrowserEmulation, CompareBase } from '@/host/types/browser';
+import type {
+  BrowserContextMenu,
+  BrowserDevtools,
+  BrowserDialog,
+  BrowserEmulation,
+  CompareBase,
+} from '@/host/types/browser';
 import { DEVICES, RESPONSIVE } from './devices';
 import { notifyDownload } from './downloads';
 import { pushHistory } from './url';
@@ -21,7 +28,11 @@ export interface FindState {
   focusAt: number;
 }
 
-export type CompareState = { mode: 'split' | 'slider' } & ({ status: 'starting' } | { status: 'ready'; base: CompareBase } | { status: 'error'; message: string });
+export type CompareState = { mode: 'split' | 'slider' } & (
+  | { status: 'starting' }
+  | { status: 'ready'; base: CompareBase }
+  | { status: 'error'; message: string }
+);
 
 /** One browser tab's page. Lives outside React so it survives tab switches, splits and pop-outs. */
 export interface Page {
@@ -68,16 +79,22 @@ const pages = new Map<string, Page>();
 const listeners = new Set<() => void>();
 const byHostId = new Map<string, string>();
 let tabListener: ((request: TabRequest) => void) | null = null;
-let history = load<string[]>(HISTORY_KEY, []);
-let titles = load<Record<string, string>>(TITLES_KEY, {});
+const historySlice = persistedSlice<string[]>(HISTORY_KEY, []);
+const titlesSlice = persistedSlice<Record<string, string>>(TITLES_KEY, {});
+let history = historySlice.getState().value;
+let titles = titlesSlice.getState().value;
 
-export const pageKey = (threadId: string, tabId: string) => `${threadId}/${tabId}`;
+export const pageKey = (threadId: string, tabId: string) =>
+  `${threadId}/${tabId}`;
 /** The base branch's page in a before/after compare lives beside its tab's page and goes with it. */
 export const basePageKey = (key: string) => `${key}~base`;
 export const tabPageKey = (key: string) => key.split('~')[0];
 
 export function usePage(key: string, url: string) {
-  return useSyncExternalStore(subscribe, () => pages.get(key) ?? seed(key, url));
+  return useSyncExternalStore(
+    subscribe,
+    () => pages.get(key) ?? seed(key, url),
+  );
 }
 
 export function useAddressHistory() {
@@ -101,7 +118,12 @@ export function replaceAddressHistory(next: string[]) {
 export function openFind(key: string) {
   const page = pages.get(key);
   if (!page) return;
-  updatePage(key, { find: { ...(page.find ?? { query: '', matchCase: false, active: 0, matches: 0 }), focusAt: Date.now() } });
+  updatePage(key, {
+    find: {
+      ...(page.find ?? { query: '', matchCase: false, active: 0, matches: 0 }),
+      focusAt: Date.now(),
+    },
+  });
 }
 
 export function closeFind(key: string) {
@@ -130,7 +152,8 @@ export function updatePage(key: string, patch: Partial<Page>) {
 export function reloadPage(key: string, hard = false) {
   const page = pages.get(key);
   if (!page) return;
-  if (page.hostId) void host.browser.command(page.hostId, hard ? 'hard-reload' : 'reload');
+  if (page.hostId)
+    void host.browser.command(page.hostId, hard ? 'hard-reload' : 'reload');
   else updatePage(key, { reloads: page.reloads + 1 });
 }
 
@@ -175,7 +198,9 @@ export function pageKeys() {
 }
 
 /** What a page asks of its pane: a tab for its popup (`key` is the opener's page), or closing its own tab. */
-export type TabRequest = { type: 'popup'; key: string; hostId: string; url: string } | { type: 'close'; key: string };
+export type TabRequest =
+  | { type: 'popup'; key: string; hostId: string; url: string }
+  | { type: 'close'; key: string };
 
 /** `window.open` and target=_blank links open a new browser tab; a popup's `window.close()` closes it. The pane store decides where. */
 export function onTabRequest(listener: (request: TabRequest) => void) {
@@ -190,14 +215,22 @@ export function adoptView(key: string, hostId: string, url: string) {
   listeners.forEach((l) => l());
 }
 
-export function emulationOf(page: Page, fit: { cssWidth: number; cssHeight: number; scale: number } | null): BrowserEmulation {
+export function emulationOf(
+  page: Page,
+  fit: { cssWidth: number; cssHeight: number; scale: number } | null,
+): BrowserEmulation {
   const device = DEVICES.find((d) => d.id === page.device);
   return {
     width: fit?.cssWidth ?? 0,
     height: fit?.cssHeight ?? 0,
     // Two decimals: the pane resizing by a pixel shouldn't re-send the emulation every frame.
     scale: fit ? Math.round(fit.scale * 100) / 100 : 1,
-    dpr: page.dpr || device?.dpr || 0, mobile: !!device?.mobile, touch: page.touch, colorScheme: page.colorScheme, reducedMotion: page.reducedMotion };
+    dpr: page.dpr || device?.dpr || 0,
+    mobile: !!device?.mobile,
+    touch: page.touch,
+    colorScheme: page.colorScheme,
+    reducedMotion: page.reducedMotion,
+  };
 }
 
 if (host.isDesktop)
@@ -205,21 +238,49 @@ if (host.isDesktop)
     const key = byHostId.get(event.id);
     if (!key) return;
     if (event.type === 'state') {
-      const { url, title, favicon, isLoading, canGoBack, canGoForward, error } = event;
+      const { url, title, favicon, isLoading, canGoBack, canGoForward, error } =
+        event;
       // The first load reports an empty URL until it commits.
-      updatePage(key, { ...(url && { url }), title, favicon, isLoading, canGoBack, canGoForward, error });
+      updatePage(key, {
+        ...(url && { url }),
+        title,
+        favicon,
+        isLoading,
+        canGoBack,
+        canGoForward,
+        error,
+      });
     } else if (event.type === 'console') {
       const { level, message, source, line } = event;
-      updatePage(key, { console: [...(pages.get(key)?.console ?? []), { level, message, source, line }].slice(-CONSOLE_LIMIT) });
-    } else if (event.type === 'devtools') updatePage(key, { devtools: event.mode });
-    else if (event.type === 'popup') tabListener?.({ type: 'popup', key, hostId: event.viewId, url: event.url });
+      updatePage(key, {
+        console: [
+          ...(pages.get(key)?.console ?? []),
+          { level, message, source, line },
+        ].slice(-CONSOLE_LIMIT),
+      });
+    } else if (event.type === 'devtools')
+      updatePage(key, { devtools: event.mode });
+    else if (event.type === 'popup')
+      tabListener?.({
+        type: 'popup',
+        key,
+        hostId: event.viewId,
+        url: event.url,
+      });
     else if (event.type === 'closed') forgetClosed(key, event.id);
     else if (event.type === 'download') notifyDownload(event);
-    else if (event.type === 'dialog') updatePage(key, { dialog: event.kind && { kind: event.kind, message: event.message } });
+    else if (event.type === 'dialog')
+      updatePage(key, {
+        dialog: event.kind && { kind: event.kind, message: event.message },
+      });
     else if (event.type === 'found') {
       const find = pages.get(key)?.find;
-      if (find) updatePage(key, { find: { ...find, active: event.active, matches: event.matches } });
-    } else if (event.type === 'key') (event.key === 'find' ? openFind : closeFind)(key);
+      if (find)
+        updatePage(key, {
+          find: { ...find, active: event.active, matches: event.matches },
+        });
+    } else if (event.type === 'key')
+      (event.key === 'find' ? openFind : closeFind)(key);
     else if (event.type === 'context-menu') {
       const { id: _, type: __, ...menu } = event;
       updatePage(key, { menu });
@@ -236,7 +297,10 @@ function forgetClosed(key: string, hostId: string) {
 const viewports = new Map<string, { width: number; height: number }>();
 
 /** The CSS size the page last had on screen; the floating window shows it at that size, scaled down. */
-export function rememberViewport(key: string, viewport: { width: number; height: number }) {
+export function rememberViewport(
+  key: string,
+  viewport: { width: number; height: number },
+) {
   viewports.set(key, viewport);
 }
 
@@ -285,21 +349,11 @@ function seed(key: string, url: string): Page {
   return page;
 }
 
-function load<T>(key: string, fallback: T): T {
-  try {
-    return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 /** Titles are kept only for URLs still in the history, so clearing it clears them too. */
 function saveHistory() {
-  titles = Object.fromEntries(history.flatMap((url) => (titles[url] ? [[url, titles[url]]] : [])));
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    localStorage.setItem(TITLES_KEY, JSON.stringify(titles));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): history lasts for the session.
-  }
+  titles = Object.fromEntries(
+    history.flatMap((url) => (titles[url] ? [[url, titles[url]]] : [])),
+  );
+  historySlice.setState({ value: history });
+  titlesSlice.setState({ value: titles });
 }

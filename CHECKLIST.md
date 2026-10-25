@@ -7,6 +7,7 @@ Status: `[x]` shipped in the prototype, `[ ]` to build. Goal items marked shippe
 Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, Side chat, Agents) as its own card beside the chat, laid out by `src/pane/layout.ts` and drawn by `src/SidePane.tsx`; pop-out PiP (`src/Browser.tsx`).
 
 ### Panel shell
+
 - [x] One pane per kind per thread, each a rounded `card` with its own header (`src/pane/PaneHeader.tsx`): title or the pane's own tabs (Preview, Side chat), the pane's actions, ⋯, Expand, Close. Contents fill the header through `PaneTitle` / `PaneActions` slots
 - [x] Launcher: pinned kinds as toggles in the thread header (pressed while open), every kind in the header's ⋮ menu with its shortcut, plus Pin to header; mod Alt + P / D / T / F / S / O / C / A toggles Preview / Changes / Terminal / Files / Simulator / Ports / Side chat / Agents
 - [x] Layout engine (`resolveLayout`, tested): a new pane opens below the focused one in its column; a column too short for its panes (240px each) splits into a second column when one fits beside the chat (chat keeps 420px), else panes fold to their header, never the focused one; the simulator takes a column of its own, or folds the rest of a shared column to headers; clicking a folded header gives it the space
@@ -23,6 +24,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - GAP: dropping a pane on another thread doesn't move it between threads
 
 ### Browser
+
 - [x] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
 - [x] Address bar with history, back / forward / reload, hard reload, zoom
 - [x] Address bar suggestions (cmdk list under the field): what you typed (go or search), the thread's other tabs (switch to), its running dev servers, history with titles and site favicons, the search engine's suggestions; arrows + Enter, inline completion of the top URL match (→ / End accepts)
@@ -44,6 +46,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - [x] Before / after compare: same URL on base branch vs thread branch, side by side or slider (More › Compare with base). Works for projects with a dev script (package.json `dev`, then `start`/`serve`/`preview`, else `.claude/launch.json`): reuses a server already running in the project folder when it's on the base, else checks the base out into a temporary worktree (borrowing the project's `node_modules`) and runs the script; closing stops it and removes the worktree. No dev script: the pane says so and the fallback is to run the base yourself and open it in a second tab. Side by side is live and scroll-synced; the slider compares full-page captures. GAP: one compare per thread; a base with different dependencies needs its own install; captures wait while Mochi's window is hidden
 
 ### Ports and previews
+
 - [x] Detect listening ports from the thread's processes (lsof / netstat on the worktree's PIDs)
 - [x] Ports list: port, process, command, uptime; open in pane, open in PiP, open in system browser, copy URL, kill
 - [x] Run dev server from `package.json` scripts / `.claude/launch.json` with one click
@@ -51,6 +54,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - [x] Per-thread port isolation so parallel worktrees don't collide (auto-assign PORT)
 
 ### Terminal
+
 - [x] Real PTY (xterm.js + node-pty), cwd = thread worktree
 - [x] Multiple terminals per thread, split within the tab
 - [x] Agent's commands mirrored read-only, user terminals separate (fed from the thread's tool activity until a real agent runtime streams output)
@@ -59,6 +63,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - [x] Persist scrollback across reloads
 
 ### iOS simulator (and Android emulator)
+
 - [x] List booted / available simulators (`xcrun simctl list`), boot, shutdown
 - [x] Live stream of the simulator screen in a pane tab (framebuffer IOSurface via a Swift helper, ~56 FPS while moving)
 - [x] Tap, swipe, type, hardware buttons (home, lock), deep link
@@ -70,11 +75,13 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - [ ] Android emulator through the same tab (`adb`, `emulator`) — later
 
 ### Side chat
+
 - [x] A throwaway chat about the current thread that doesn't touch its goal or transcript ("why did it pick Redis?"); one per side chat tab, persisted, clearable
 - [x] Reads the thread's context (goal, steps, recent activity, diff summary); can be promoted to a real message or a new thread (answers are a canned preview until `agent.ask` gets a real model)
 - [x] Ask about a selection (diff hunk, terminal output, file range)
 
 ### Diffs (Changes)
+
 - [x] Real git diff of the worktree vs base, file tree with `+/−`
 - [x] Unified / split view toggle, word-level highlighting (already on `@pierre/diffs`)
 - [ ] ~~Per-step diff: filter changes by the step that made them~~ (removed 2026-10-18: steps mirror the agent's own plan and carry no files)
@@ -83,6 +90,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - [x] Commit, push, open PR from the tab; PR checks inline (push and PR ask first; not yet run against a real remote)
 
 ### File preview / editor
+
 - [x] File tree for the worktree with search (Cmd P)
 - [x] Monaco or CodeMirror 6 editor: syntax highlight, find/replace, save, dirty state
 - [x] Image, SVG, PDF, Markdown (rendered), JSON tree previews
@@ -90,6 +98,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - [x] "Open in VS Code / Cursor / Zed" escape hatch
 
 ### Keyboard (decided 2026-10-14)
+
 - [x] One keymap (`src/keymap.ts`): every app-level shortcut a named command with a default chord; handlers look the binding up (`isCommand` / `commandOf`, `e.code`), field-local keys stay fixed and are listed
 - [x] Settings › Keyboard records chords (Esc cancels, Backspace clears), catches clashes (swap or replace), refuses reserved OS chords with the reason, resets per row and all; persisted in prefs, applied live in the palette, menus, tooltips and sidebar
 - [x] Mochi tools: `get_keybindings`, `set_keybinding` (settings widget with current → proposed, same validation)
@@ -109,6 +118,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 Principles: no assumed orientation (portrait monitors are first class), every layout reachable by keyboard and by drag, layouts are saved and named, the focused session is always obvious.
 
 ### Splits
+
 - [x] Split any session horizontally or vertically; nest splits (tiling tree, not fixed 2-up)
 - [x] Drop zones while dragging a thread or pane tab: left / right / top / bottom / center (replace)
 - [x] Resize with handles; double-click equalizes; snap to 1/3, 1/2, 2/3
@@ -122,12 +132,14 @@ Principles: no assumed orientation (portrait monitors are first class), every la
 - [x] Narrow split degrades gracefully: summary column folds into a sheet, the panes take the chat's place while shown
 
 ### Pinned tabs, made useful
+
 - [x] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the overview cards)
 - [x] Cmd 1–9 jumps to pinned N; Cmd Opt 1–9 opens pinned N in a new split
 - [x] Hover a pinned thread → live peek (transcript tail + preview thumbnail) without switching
 - [x] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (main owns the OS notifications, CI polling and dock badge, so they keep working with every window closed: `electron/notify/watch.ts`; a CI failure lands in the Queue with "Send failing log to agent")
 
 ### Pinned pager (replaced Stage Manager, decided 2026-10-13)
+
 Always on, no mode and no extra chrome: pinned threads sit side by side and the main chat slides between them.
 
 - [x] Pinned threads are full-width pages of one native horizontal scroller in pin order; CSS `scroll-snap` (`snap-mandatory`, `snap-always`) stops each gesture at the next page, no JS spring (`src/pager/PinnedPager.tsx`)
@@ -142,6 +154,7 @@ Always on, no mode and no extra chrome: pinned threads sit side by side and the 
 - [ ] Find in thread over virtualized rows (none exists yet; search the store's rows, then `scrollToIndex`)
 
 ### Decided
+
 - Pager order is pinned order, not recency: positions never move (same rule as Orbit).
 - Unpinned running threads stay off the pager; the Queue covers them.
 - No ⌥1–9: on macOS it types characters into the composer (⌥5 is `[` on a German layout). Cmd 1–9 already jumps to pinned N.
@@ -155,6 +168,7 @@ Always on, no mode and no extra chrome: pinned threads sit side by side and the 
 Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the ETA, title-based overlap and the version bump per step go away as §10 lands. Done 2026-10-18: steps are a read-only mirror of the agent's own to-do list (`applyPlan`), what done means lives in the goal's criteria, and the items marked removed below are gone.
 
 ### Goal model
+
 - [x] Each thread has a one-sentence goal and a list of steps
 - [x] Step: title, status (done / running / ready / blocked / dropped), who added it (size, progress, footprint, revision and the waiting status removed 2026-10-18)
 - [x] Goal revisions (v1, v2 …) with label, author and time; scope added mid-flight bumps the version and logs a harness event
@@ -163,12 +177,14 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
 - [x] Thread line color (chart-1…5) as identity for the goal across every view
 
 ### Sub-threads
+
 - [x] A thread can have sub-threads (2026-10-18; a tree at any depth since 2026-10-20, never under its own subtree, settling cascades down it; the sidebar shows a top-level thread's whole subtree one level under it, like Claude), each covering one of the parent's criteria when started by the agent (`create_thread` with `criterionId`), or nested by hand (drag, the row menu, the goal card's Similar row) with no criterion. A sub-thread branches from the parent's branch and opens its own PR with `gh pr create`, choosing `--base` itself (since 2026-10-21; Mochi used to default it to the parent's branch)
 - [x] The parent waits quietly while sub-threads work (verdict `waiting`, no notice); one that needs you, or is finished and waits to be handed back, makes the parent need you, and the move acts on the sub-thread (Close N gaps goes to its agent, Hand back claims the parent's criterion and posts a result row in the parent's chat); once all are back, Merge N PRs asks the parent's agent to merge them (`src/goals/verdict.ts`, `src/goals/moves.ts`, `src/store/threads.ts`)
 - [x] Sidebar tree: sub-threads under their parent on an L-shaped guide, one line each unless one asks for you; one drag reorders on a row's edges and nests after a 400ms hold over its middle; a sub-thread dragged out of its group stands alone again; Undo toasts (`dropAt` in `src/reorder.ts`, `useRowDrag` in `src/Sidebar.tsx`)
 - [ ] GAP: nesting by hand links no criterion; the hand-back result row is the only trace in the parent until a matcher picks the criterion
 
 ### Progress and pace
+
 - [x] Progress % from size-weighted steps (`progressAt`)
 - [x] Burn-up series with a scope line (`burnSeries`) and sparkline in the summary
 - [x] ETA / minutes left from pace (`minutesLeft`)
@@ -177,6 +193,7 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
 - [x] Context usage meter per thread
 
 ### Cross-thread goals
+
 - [ ] ~~Overlap detection between threads' steps (title similarity + shared footprint files) → overlap item in the Queue~~ (removed 2026-10-18)
 - [ ] ~~Four resolutions: link, extract, race, related~~ (removed 2026-10-18)
 - [ ] ~~Dependencies: `provided-by` / `provides-for`~~ (removed 2026-10-18: it reported commits cherry-picked that never were)
@@ -186,6 +203,7 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
 - [x] Metro board: one line per thread, stations per step (shared-step interchanges and overlap curves removed 2026-10-18)
 
 ### Attention and lifecycle
+
 - [x] Needs-you status and amber dot; Queue ranks items by how many steps and threads they block
 - [ ] ~~All steps done → thread goes to `review`~~ (removed 2026-10-18: ready for review is the idle verdict reading done, `isGoalMet`)
 - [x] Settle / Reactivate a thread
@@ -205,7 +223,7 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
 - [x] `on-goal` → send as normal
 - [x] `scope-add` → send as normal; the agent plans it (adding a step removed 2026-10-18). Add to goal on the off-goal card opens the goal editor
 - [x] `off-goal` → inline card above the composer, not a modal:
-  - "This looks unrelated to *Public API rate limiting*." Buttons: **New thread** (primary), **Continue here**, and **Add to goal**
+  - "This looks unrelated to _Public API rate limiting_." Buttons: **New thread** (primary), **Continue here**, and **Add to goal**
   - New thread: prefilled with the prompt, same project, branch off the current one or base (choice remembered)
   - Continue here: send, mark the message as off-goal so it doesn't skew progress
 - [x] Goal at 100% (or in `review`) and user picks New thread → settle the current thread (with its review item resolved or carried to the Queue), then create and open the new one; one undo toast for both
@@ -240,7 +258,7 @@ Ranked by how much they help running many agents at once.
 
 ## 7. Chat visualizations
 
-Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```chart ````, ```` ```svg ````, ```` ```html ````, ```` ```harness-metro ````, ```` ```harness-diff ```` (schemas in `src/viz/fence.ts`, examples in `src/viz/fixtures.ts`).
+Inline visuals in agent messages, like Claude's and Codex's. Fences: ` ```chart `, ` ```svg `, ` ```html `, ` ```harness-metro `, ` ```harness-diff ` (schemas in `src/viz/fence.ts`, examples in `src/viz/fixtures.ts`).
 
 - [x] Re-enable Streamdown plugins: syntax-highlighted code, KaTeX math, Mermaid diagrams, CJK (lazy-loaded; artifact stays under 16 MB)
 - [x] Charts from data in a message (recharts, already a dependency), using the thread line palette and both themes
@@ -271,6 +289,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 Why goals exist: you run many threads (often one coordinator plus workers) and need, at a glance, what each is for, whether it's really done, what needs you, and whether the work was already done elsewhere, without reading transcripts. A ring that lies (0% while working) is worse than none.
 
 ### Goal model
+
 - [ ] Not every thread has a goal: a task-shaped message gets one, questions and chats get none (no ring, no %, no Goal section in the summary; the header's summary pill shows a summary icon instead of the ring). A chat whose later message is task-shaped gets a goal then. "Make this a goal" / "Remove goal" override both ways
 - [ ] The goal is drafted, never copied: the background-task model writes a short outcome plus 2 to 4 criteria from the message, applied silently; the goal card at the top of the thread has Edit. Drift no longer replaces the goal with your latest message (`setGoalFrom` goes)
 - [ ] Criteria live on the goal, not on steps: checkable (a command, PR open, CI green) or judged (a sentence)
@@ -278,10 +297,12 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 - [ ] Settling keeps a record: outcome, criteria with evidence, PR, files changed, time, cost. It is the memory for duplicate detection and the archive
 
 ### Overlap
+
 - [ ] Duplicate work, checked when the goal is drafted (before the agent starts): the new outcome and criteria against active goals and settled records, word overlap to shortlist, the background model to judge same work / related / different. The goal card shows "Similar: <title>, settled 3 days ago, PR #61 merged" with Open / Continue there / Link / Ignore
 - [x] Collision, from real edits: two active threads editing the same file → a Same files item in the Queue that never pauses either agent (`src/runtime/collisions.ts`); step-title matching in `holdOverlap` and its link / extract / race / related choices removed 2026-10-18
 
 ### Report card
+
 - [ ] When a goal thread ends a turn after doing work, a report card replaces reading the reply: criteria with status and evidence, "Needs you" (the one line that asks for anything), files changed with +/−, PR and its state; the agent's reply collapsed under "Full reply". Chats get none
 - [ ] Facts come from Mochi (checks it ran, diff stats, PR); judgment (decisions, what's left, the question) from the agent's `report` tool, or extracted by the background model when the agent didn't call it, marked as summarised
 - [ ] Mochi runs checkable criteria itself in the thread's worktree when the agent claims one or goes idle; judged criteria read "claimed" until you accept them. All criteria green → Ready for review
@@ -294,11 +315,13 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 - [ ] Review uses a check/review icon, never the PR Octicon (that stays on PR chips)
 
 ### Progress
+
 - [ ] The ring shows phase plus criteria met, not a percentage: Planning → Building → Verifying → Ready for review → Settled, Needs you / Blocked over any phase; derived from events Mochi sees, not the agent's self-report. Card text "Building · 1/3"
 - [x] The plan is a mirror of the agent's own checklist (shows what it's doing), with no sizes, weights or versions: read-only from its plan events, listed at the bottom of the chat until every item is done, never in the summary (2026-10-18)
 - [ ] Remove step sizes (S/M/L), weighted progress, the ETA and the plan burn-up; the burn-up becomes a criteria timeline
 
 ### PRs
+
 1. Goals: drafting, chats without a goal, summary without a goal, the version rule, the settled record
 2. Duplicate check at drafting
 3. Report card and verification, including the review rework (ready for review as a state, Mark done, a real confirmed Merge #N)

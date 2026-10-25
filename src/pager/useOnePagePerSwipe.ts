@@ -37,7 +37,8 @@ export function useOnePagePerSwipe(ref: RefObject<HTMLElement | null>) {
       if (el.dataset.wheeling !== undefined) return;
       const width = pageSize(el, 'x');
       const left = Math.round(el.scrollLeft / width) * width;
-      if (Math.abs(el.scrollLeft - left) > 1) el.scrollTo({ left, behavior: 'smooth' });
+      if (Math.abs(el.scrollLeft - left) > 1)
+        el.scrollTo({ left, behavior: 'smooth' });
     };
     const onScroll = () => {
       if (performance.now() - lastWheel > SWIPE_TAIL_MS) return;
@@ -55,4 +56,3 @@ export function useOnePagePerSwipe(ref: RefObject<HTMLElement | null>) {
     };
   }, [ref]);
 }
-

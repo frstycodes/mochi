@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { commandOf, spaceCommand } from '../keymap';
+import { commandOf, spaceCommand, listenKeydown } from '../keymap';
 import { getProfiles } from '../profiles';
 import { useDispatch } from '../store';
 
@@ -13,13 +13,15 @@ export function useGlobalKeys(onPalette: () => void) {
       const command = commandOf(e, ['palette', 'go-new', ...SPACES]);
       if (!command) return;
       if (command === 'palette') return (e.preventDefault(), onPalette());
-      if (command === 'go-new') return (e.preventDefault(), dispatch({ type: 'go', view: { kind: 'new' } }));
+      if (command === 'go-new')
+        return (
+          e.preventDefault(), dispatch({ type: 'go', view: { kind: 'new' } })
+        );
       const profile = getProfiles()[SPACES.indexOf(command)];
       if (!profile) return;
       e.preventDefault();
       dispatch({ type: 'space', id: profile.id });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [dispatch, onPalette]);
 }

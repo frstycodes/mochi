@@ -3,14 +3,24 @@ import { getPrefs, type Prefs } from '../settings/prefs.ts';
 const HISTORY_LIMIT = 50;
 
 /** What the user typed in the address bar → a loadable URL. Bare hosts get a scheme, absolute paths become file:, anything else becomes a search. */
-export function normalizeUrl(input: string, engine: Prefs['searchEngine'] = getPrefs().searchEngine) {
+export function normalizeUrl(
+  input: string,
+  engine: Prefs['searchEngine'] = getPrefs().searchEngine,
+) {
   const text = input.trim();
   if (!text) return 'about:blank';
   if (/^(https?|about|file):/i.test(text)) return text;
   if (text.startsWith('/')) return `file://${encodeURI(text)}`;
-  if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|[\w-]+\.(localhost|test))(:\d+)?(\/|$)/i.test(text) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/|$)/.test(text)) return `http://${text}`;
+  if (
+    /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|[\w-]+\.(localhost|test))(:\d+)?(\/|$)/i.test(
+      text,
+    ) ||
+    /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/|$)/.test(text)
+  )
+    return `http://${text}`;
   if (/^:\d+(\/|$)/.test(text)) return `http://localhost${text}`;
-  if (!/\s/.test(text) && /^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(text)) return `https://${text}`;
+  if (!/\s/.test(text) && /^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(text))
+    return `https://${text}`;
   return SEARCH_ENGINES[engine].url + encodeURIComponent(text);
 }
 

@@ -1,9 +1,26 @@
 import { useState } from 'react';
 import { ChevronDown, WarningAlt } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  ButtonGroup,
+  ButtonGroupSeparator,
+} from '@/components/ui/button-group';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { host } from '../host';
 import type { Branch, ChangeStat, SwitchOptions } from '../host/types/git';
 import { projectName } from '../projects';
@@ -11,15 +28,37 @@ import { DiffStat } from '../WorkLog';
 import type { Workspace } from './WorkspacePicker';
 
 /** Picking another branch while the project folder has uncommitted changes: stash them (the default), commit them as work in progress, bring them along, or discard them. */
-export function SwitchBranchDialog({ workspace, target, onClose }: { workspace: Workspace; target: Branch | null; onClose: () => void }) {
+export function SwitchBranchDialog({
+  workspace,
+  target,
+  onClose,
+}: {
+  workspace: Workspace;
+  target: Branch | null;
+  onClose: () => void;
+}) {
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
-      {!!target && <SwitchBranchContent workspace={workspace} target={target} onClose={onClose} />}
+      {!!target && (
+        <SwitchBranchContent
+          workspace={workspace}
+          target={target}
+          onClose={onClose}
+        />
+      )}
     </Dialog>
   );
 }
 
-function SwitchBranchContent({ workspace, target, onClose }: { workspace: Workspace; target: Branch; onClose: () => void }) {
+function SwitchBranchContent({
+  workspace,
+  target,
+  onClose,
+}: {
+  workspace: Workspace;
+  target: Branch;
+  onClose: () => void;
+}) {
   const { root, draft, onChange, branches, sharers } = workspace;
   const [isConfirmingDiscard, setConfirmingDiscard] = useState(false);
   const [isPending, setPending] = useState(false);
@@ -51,14 +90,24 @@ function SwitchBranchContent({ workspace, target, onClose }: { workspace: Worksp
             Discard changes on <BranchName name={current} />?
           </DialogTitle>
           <DialogDescription>
-            The changes to {fileCount(changes.files)} in {projectName(root)} are thrown away, untracked files included, then the folder switches to <BranchName name={target.name} />. This can't be undone.
+            The changes to {fileCount(changes.files)} in {projectName(root)} are
+            thrown away, untracked files included, then the folder switches to{' '}
+            <BranchName name={target.name} />. This can't be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" disabled={isPending} onClick={() => setConfirmingDiscard(false)}>
+          <Button
+            variant="outline"
+            disabled={isPending}
+            onClick={() => setConfirmingDiscard(false)}
+          >
             Keep changes
           </Button>
-          <Button variant="danger" disabled={isPending} onClick={() => run('discard')}>
+          <Button
+            variant="danger"
+            disabled={isPending}
+            onClick={() => run('discard')}
+          >
             Discard {fileCount(changes.files)}
           </Button>
         </DialogFooter>
@@ -77,13 +126,19 @@ function SwitchBranchContent({ workspace, target, onClose }: { workspace: Worksp
       </DialogHeader>
       {sharers.length > 0 && (
         <p className="flex gap-1.5 text-foreground">
-          <WarningAlt aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <WarningAlt
+            aria-hidden
+            className="mt-0.5 size-4 shrink-0 text-warning"
+          />
           {sessionsWarning(sharers.length)}
         </p>
       )}
       <ChangeSummary changes={changes} />
       {!!error && (
-        <p role="alert" className="type-caption whitespace-pre-wrap text-destructive">
+        <p
+          role="alert"
+          className="type-caption whitespace-pre-wrap text-destructive"
+        >
           {error}
         </p>
       )}
@@ -100,7 +155,11 @@ function SwitchBranchContent({ workspace, target, onClose }: { workspace: Worksp
           <ButtonGroupSeparator className="bg-primary-foreground/20" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" disabled={isPending} aria-label="Other ways to handle the changes">
+              <Button
+                size="icon"
+                disabled={isPending}
+                aria-label="Other ways to handle the changes"
+              >
                 <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
@@ -112,7 +171,10 @@ function SwitchBranchContent({ workspace, target, onClose }: { workspace: Worksp
                 Bring changes to <BranchName name={localBranch(target)} />
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmingDiscard(true)}>
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => setConfirmingDiscard(true)}
+              >
                 Discard changes
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -137,9 +199,11 @@ function ChangeSummary({ changes }: { changes: ChangeStat }) {
 }
 
 /** `origin/feat` switches to (and creates) the local `feat`. */
-const localBranch = (b: Branch) => (b.isRemote ? b.name.slice(b.name.indexOf('/') + 1) : b.name);
+const localBranch = (b: Branch) =>
+  b.isRemote ? b.name.slice(b.name.indexOf('/') + 1) : b.name;
 
 const PLURAL = new Intl.PluralRules('en');
-const fileCount = (n: number) => (PLURAL.select(n) === 'one' ? '1 file' : `${n} files`);
+const fileCount = (n: number) =>
+  PLURAL.select(n) === 'one' ? '1 file' : `${n} files`;
 const sessionsWarning = (n: number) =>
   `${PLURAL.select(n) === 'one' ? '1 other session is' : `${n} other sessions are`} using this folder. Switching branches will affect them too.`;

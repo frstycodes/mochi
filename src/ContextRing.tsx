@@ -1,7 +1,13 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextTrigger } from '@/components/ai-elements/context';
+import {
+  Context,
+  ContextContent,
+  ContextContentBody,
+  ContextContentHeader,
+  ContextTrigger,
+} from '@/components/ai-elements/context';
 import type { Provider } from './model';
 import { ProviderMark } from './ui';
 import { LimitBars, UpdatedAt } from './usage/LimitBars';
@@ -9,9 +15,15 @@ import { hottest, TONE_COLORS, toneFor } from './usage/limits';
 import type { Usage } from './usage/model';
 import { useAccountLimits } from './usage/useAccountLimits';
 
-const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+const TOKENS = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
-const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<Provider, string>;
+const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<
+  Provider,
+  string
+>;
 
 /**
  * The thread's context window as a ring in the composer footer. Hover or focus opens the detail: context, this session's
@@ -42,9 +54,22 @@ export function ContextRing({
   const plan = top && toneFor(top.usedPct / 100) !== 'normal' ? top : undefined;
   const label = `Context ${pct}% used${plan ? `, ${plan.label.toLowerCase()} limit ${Math.round(plan.usedPct)}% used` : ''}`;
   return (
-    <Context usedTokens={context.used} maxTokens={context.max} open={isOpen} onOpenChange={open} openDelay={150} closeDelay={100}>
+    <Context
+      usedTokens={context.used}
+      maxTokens={context.max}
+      open={isOpen}
+      onOpenChange={open}
+      openDelay={150}
+      closeDelay={100}
+    >
       <ContextTrigger>
-        <Button variant="ghost" size="icon-sm" aria-label={label} className="rounded-full" onClick={() => !isOpen && open(true)}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          className="rounded-full"
+          onClick={() => !isOpen && open(true)}
+        >
           <Ring share={share} planShare={plan && plan.usedPct / 100} />
         </Button>
       </ContextTrigger>
@@ -53,13 +78,19 @@ export function ContextRing({
           <Section
             label="Context"
             aside={
-              <span className="tabular type-caption text-muted-foreground" style={{ color: tone === 'normal' ? undefined : TONE_COLORS[tone] }}>
+              <span
+                className="tabular type-caption text-muted-foreground"
+                style={{
+                  color: tone === 'normal' ? undefined : TONE_COLORS[tone],
+                }}
+              >
                 {pct}%
               </span>
             }
           >
             <p className="tabular type-caption text-muted-foreground">
-              {TOKENS.format(context.used)} of {TOKENS.format(context.max)} tokens
+              {TOKENS.format(context.used)} of {TOKENS.format(context.max)}{' '}
+              tokens
             </p>
             <Progress
               value={pct}
@@ -67,17 +98,29 @@ export function ContextRing({
               aria-label={`Context: ${pct}% used`}
               style={{ '--progress-color': TONE_COLORS[tone] } as CSSProperties}
             />
-            <p className="type-caption text-subtle-foreground">{PROVIDER_NAMES[provider]} compacts the conversation automatically near the limit.</p>
+            <p className="type-caption text-subtle-foreground">
+              {PROVIDER_NAMES[provider]} compacts the conversation automatically
+              near the limit.
+            </p>
           </Section>
         </ContextContentHeader>
         <ContextContentBody className="flex flex-col gap-4">
           {!!usage && (
             <Section
               label="This session"
-              aside={usage.costUsd !== null && <span className="tabular type-caption text-muted-foreground">{USD.format(usage.costUsd)}</span>}
+              aside={
+                usage.costUsd !== null && (
+                  <span className="tabular type-caption text-muted-foreground">
+                    {USD.format(usage.costUsd)}
+                  </span>
+                )
+              }
             >
               <p className="tabular type-caption text-muted-foreground">
-                {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)} out{usage.cached !== undefined && ` · ${TOKENS.format(usage.cached)} cached`}
+                {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)}{' '}
+                out
+                {usage.cached !== undefined &&
+                  ` · ${TOKENS.format(usage.cached)} cached`}
               </p>
             </Section>
           )}
@@ -98,7 +141,15 @@ export function ContextRing({
   );
 }
 
-function Section({ label, aside, children }: { label: ReactNode; aside?: ReactNode; children: ReactNode }) {
+function Section({
+  label,
+  aside,
+  children,
+}: {
+  label: ReactNode;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -120,7 +171,13 @@ const C = (r: number) => 2 * Math.PI * r;
 function Ring({ share, planShare }: { share: number; planShare?: number }) {
   const hasPlan = planShare !== undefined;
   return (
-    <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden className="-rotate-90">
+    <svg
+      width={SIZE}
+      height={SIZE}
+      viewBox={`0 0 ${SIZE} ${SIZE}`}
+      aria-hidden
+      className="-rotate-90"
+    >
       {hasPlan && <Arc r={7} width={1.5} share={planShare} />}
       <Arc r={hasPlan ? 3.75 : 6} width={hasPlan ? 1.75 : 2} share={share} />
     </svg>
@@ -131,8 +188,26 @@ function Arc({ r, width, share }: { r: number; width: number; share: number }) {
   const c = SIZE / 2;
   return (
     <>
-      <circle cx={c} cy={c} r={r} fill="none" stroke="var(--border)" strokeWidth={width} />
-      {share > 0 && <circle cx={c} cy={c} r={r} fill="none" stroke={TONE_COLORS[toneFor(share)]} strokeWidth={width} strokeLinecap="round" strokeDasharray={`${C(r) * Math.min(1, share)} ${C(r)}`} />}
+      <circle
+        cx={c}
+        cy={c}
+        r={r}
+        fill="none"
+        stroke="var(--border)"
+        strokeWidth={width}
+      />
+      {share > 0 && (
+        <circle
+          cx={c}
+          cy={c}
+          r={r}
+          fill="none"
+          stroke={TONE_COLORS[toneFor(share)]}
+          strokeWidth={width}
+          strokeLinecap="round"
+          strokeDasharray={`${C(r) * Math.min(1, share)} ${C(r)}`}
+        />
+      )}
     </>
   );
 }

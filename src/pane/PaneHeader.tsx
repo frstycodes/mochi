@@ -1,9 +1,25 @@
-import { createContext, useContext, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { ExitFullscreen, Fullscreen, X } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ActionItems } from '../menus/ActionItems';
 import { BROWSER_PANE_MENU, PANE_MENU } from '../menus/menus';
 import { IconSwap, OverflowIcon, TooltipIconButton } from '../ui';
@@ -40,7 +56,9 @@ export function PaneSlots({ children }: { children: ReactNode }) {
     claimTitle: (delta: 1 | -1) => setTitleClaims((n) => n + delta),
     claimMenu: (delta: 1 | -1) => setMenuClaims((n) => n + delta),
   };
-  return <SlotsContext.Provider value={value}>{children}</SlotsContext.Provider>;
+  return (
+    <SlotsContext.Provider value={value}>{children}</SlotsContext.Provider>
+  );
 }
 
 /**
@@ -55,7 +73,7 @@ export function PaneHeader({
   isExpanded,
   onExpand,
   onClose,
-  onDragStart,
+  dragHandle,
 }: {
   kind: PaneTabKind;
   threadId: string;
@@ -63,14 +81,24 @@ export function PaneHeader({
   isExpanded: boolean;
   onExpand: () => void;
   onClose: () => void;
-  onDragStart: (e: PointerEvent) => void;
+  dragHandle: (el: HTMLElement | null) => void;
 }) {
   const { title, icon: Icon } = PANE_TABS[kind];
   const hasOwnMenu = useContext(SlotsContext)?.hasMenu;
   const header = useRef<HTMLElement>(null);
   useCaptionInset(header);
+  const ref = (el: HTMLElement | null) => {
+    header.current = el;
+    dragHandle(el);
+  };
   return (
-    <header ref={header} data-pane-header onPointerDown={onDragStart} className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
+    // Pressing here starts a drag (dnd-kit stops the moves reaching Orbit), so a long press must not open Orbit.
+    <header
+      ref={ref}
+      data-pane-header
+      data-no-orbit
+      className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none"
+    >
       <PaneTitleSlot>
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <h2 className="truncate type-meta font-medium">{title}</h2>
@@ -81,7 +109,12 @@ export function PaneHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={`More ${title} actions`} className="text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`More ${title} actions`}
+                  className="text-muted-foreground"
+                >
                   <OverflowIcon />
                 </Button>
               </DropdownMenuTrigger>
@@ -93,10 +126,27 @@ export function PaneHeader({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <TooltipIconButton label={isExpanded ? 'Exit full size' : 'Expand'} hint={isExpanded ? 'Back beside the chat (Esc)' : 'Fill the thread, over the chat'} aria-pressed={isExpanded} onClick={onExpand} className="text-muted-foreground">
-        <IconSwap id={isExpanded ? 'exit' : 'expand'}>{isExpanded ? <ExitFullscreen /> : <Fullscreen />}</IconSwap>
+      <TooltipIconButton
+        label={isExpanded ? 'Exit full size' : 'Expand'}
+        hint={
+          isExpanded
+            ? 'Back beside the chat (Esc)'
+            : 'Fill the thread, over the chat'
+        }
+        aria-pressed={isExpanded}
+        onClick={onExpand}
+        className="text-muted-foreground"
+      >
+        <IconSwap id={isExpanded ? 'exit' : 'expand'}>
+          {isExpanded ? <ExitFullscreen /> : <Fullscreen />}
+        </IconSwap>
       </TooltipIconButton>
-      <TooltipIconButton label={`Close ${title}`} hint="It opens again where you left it" onClick={onClose} className="text-muted-foreground">
+      <TooltipIconButton
+        label={`Close ${title}`}
+        hint="It opens again where you left it"
+        onClick={onClose}
+        className="text-muted-foreground"
+      >
         <X />
       </TooltipIconButton>
     </header>
@@ -105,16 +155,22 @@ export function PaneHeader({
 
 /** Where `PaneTitle` lands; shows `children` (the pane's name) while nothing claims it. Popped-out panes and splits place their own. */
 export function PaneTitleSlot({ children }: { children?: ReactNode }) {
-  const slots = useContext(SlotsContext)!;
+  const { setTitle, hasTitle } = useContext(SlotsContext)!;
   return (
-    <div ref={slots.setTitle} className="flex h-full min-w-0 flex-1 items-center gap-1.5">
-      {!slots.hasTitle && children}
+    <div
+      ref={setTitle}
+      className="flex h-full min-w-0 flex-1 items-center gap-1.5"
+    >
+      {!hasTitle && children}
     </div>
   );
 }
 
 export function PaneActionsSlot() {
-  return <div ref={useContext(SlotsContext)!.setActions} className="flex shrink-0 items-center gap-0.5" />;
+  const { setActions } = useContext(SlotsContext)!;
+  return (
+    <div ref={setActions} className="flex shrink-0 items-center gap-0.5" />
+  );
 }
 
 /** The slots alone, for a pane shown outside its card (in a split, popped out): what the pane put in its header still shows, and nothing at all when it put nothing there. */
@@ -122,7 +178,11 @@ export function PaneSlotBar() {
   const bar = useRef<HTMLDivElement>(null);
   useCaptionInset(bar);
   return (
-    <div ref={bar} data-pane-header className="flex h-9 shrink-0 items-center gap-0.5 pr-1.5 pl-3 not-has-[>*>*]:hidden">
+    <div
+      ref={bar}
+      data-pane-header
+      className="flex h-9 shrink-0 items-center gap-0.5 pr-1.5 pl-3 not-has-[>*>*]:hidden"
+    >
       <PaneTitleSlot />
       <PaneActionsSlot />
     </div>
@@ -143,16 +203,32 @@ export function PaneTitle({ children }: { children: ReactNode }) {
 }
 
 /** The header's own ⋯ items, for a pane that has a ⋯ of its own (`usePaneMenu`) and puts them at the end of it. */
-export function PaneMenuItems({ kind, threadId, tabId }: { kind: PaneTabKind; threadId: string; tabId: string }) {
+export function PaneMenuItems({
+  kind,
+  threadId,
+  tabId,
+}: {
+  kind: PaneTabKind;
+  threadId: string;
+  tabId: string;
+}) {
   return (
     <>
       {kind === 'browser' && (
         <>
-          <ActionItems target={{ threadId, tabId }} groups={BROWSER_PANE_MENU} menu="dropdown" />
+          <ActionItems
+            target={{ threadId, tabId }}
+            groups={BROWSER_PANE_MENU}
+            menu="dropdown"
+          />
           <DropdownMenuSeparator />
         </>
       )}
-      <ActionItems target={{ threadId, tabId }} groups={PANE_MENU} menu="dropdown" />
+      <ActionItems
+        target={{ threadId, tabId }}
+        groups={PANE_MENU}
+        menu="dropdown"
+      />
     </>
   );
 }

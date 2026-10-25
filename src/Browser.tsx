@@ -1,6 +1,19 @@
-import { useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { animate, motion, useDragControls, useMotionValue, type PanInfo } from 'motion/react';
+import {
+  animate,
+  motion,
+  useDragControls,
+  useMotionValue,
+  type PanInfo,
+} from 'motion/react';
 import { ChevronLeft, ChevronRight, ExitPip, X } from '@/icons';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
@@ -9,7 +22,20 @@ import { ComparePane } from './browser/Compare';
 import { RESPONSIVE } from './browser/devices';
 import { deviceSize, PageSurface, useSize } from './browser/PageSurface';
 import { FindBar } from './browser/FindBar';
-import { adoptView, destroyPage, ensureView, getPage, onTabRequest, openFind, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
+import {
+  adoptView,
+  destroyPage,
+  ensureView,
+  getPage,
+  onTabRequest,
+  openFind,
+  pageKey,
+  pageKeys,
+  tabPageKey,
+  usePage,
+  viewportOf,
+  type Page,
+} from './browser/pages';
 import { BrowserToolbar, DeviceBar, DriveBar } from './browser/Toolbar';
 import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
@@ -34,7 +60,15 @@ const TUCK_TAB = 28;
 // Matches the layer's inset-3: the clip sits 12px outside the snap bounds.
 const LAYER_INSET = 12;
 
-export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: PaneTab; isDriving: boolean }) {
+export function BrowserView({
+  thread,
+  tab,
+  isDriving,
+}: {
+  thread: Thread;
+  tab: PaneTab;
+  isDriving: boolean;
+}) {
   const pageId = pageKey(thread.id, tab.id);
   const page = usePage(pageId, initialUrl(tab));
   useTabSync(thread.id, tab, page);
@@ -51,14 +85,36 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
       <BrowserToolbar thread={thread} pageId={pageId} page={page} />
       {page.device !== RESPONSIVE && <DeviceBar pageId={pageId} page={page} />}
       {!!page.find && <FindBar pageId={pageId} page={page} find={page.find} />}
-      {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} handoff={page.handoff} />}
+      {isDriving && (
+        <DriveBar
+          thread={thread}
+          pageId={pageId}
+          hasTakenOver={page.hasTakenOver}
+          handoff={page.handoff}
+        />
+      )}
       <div className="min-h-0 flex-1">
         {page.annotating ? (
-          <Annotator thread={thread} pageId={pageId} image={page.annotating.image} name={page.annotating.name} />
+          <Annotator
+            thread={thread}
+            pageId={pageId}
+            image={page.annotating.image}
+            name={page.annotating.name}
+          />
         ) : page.compare ? (
-          <ComparePane thread={thread} pageId={pageId} page={page} compare={page.compare} />
+          <ComparePane
+            thread={thread}
+            pageId={pageId}
+            page={page}
+            compare={page.compare}
+          />
         ) : (
-          <PageSurface thread={thread} pageId={pageId} page={page} isDriving={isDriving && !page.hasTakenOver} />
+          <PageSurface
+            thread={thread}
+            pageId={pageId}
+            page={page}
+            isDriving={isDriving && !page.hasTakenOver}
+          />
         )}
       </div>
     </div>
@@ -66,7 +122,9 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
 }
 
 function initialUrl(tab: PaneTab) {
-  return host.isDesktop ? normalizeUrl(tab.url ?? '') : (tab.url ?? 'about:blank');
+  return host.isDesktop
+    ? normalizeUrl(tab.url ?? '')
+    : (tab.url ?? 'about:blank');
 }
 
 /** The pane tab persists the page's URL and shows its title. */
@@ -75,7 +133,12 @@ function useTabSync(threadId: string, tab: PaneTab, page: Page) {
   const title = page.title || tab.title;
   useEffect(() => {
     if (page.url === tab.url && title === tab.title) return;
-    dispatch({ type: 'pane-update-tab', threadId, tabId: tab.id, patch: { url: page.url, title } });
+    dispatch({
+      type: 'pane-update-tab',
+      threadId,
+      tabId: tab.id,
+      patch: { url: page.url, title },
+    });
   }, [dispatch, threadId, tab.id, tab.url, tab.title, page.url, title]);
 }
 
@@ -86,16 +149,25 @@ function useBrowserHousekeeping() {
     () =>
       onTabRequest((request) => {
         const [threadId, tabId] = tabPageKey(request.key).split('/');
-        if (request.type === 'close') return dispatch({ type: 'pane-close-tab', threadId, tabId });
+        if (request.type === 'close')
+          return dispatch({ type: 'pane-close-tab', threadId, tabId });
         // Named here, not by the reducer: two popups opened before a re-render would both get the next free id.
         const popupTabId = `popup_${request.hostId}`;
         adoptView(pageKey(threadId, popupTabId), request.hostId, request.url);
-        dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url: request.url, tabId: popupTabId });
+        dispatch({
+          type: 'pane-open-tab',
+          threadId,
+          kind: 'browser',
+          url: request.url,
+          tabId: popupTabId,
+        });
       }),
     [dispatch],
   );
   useEffect(() => {
-    const live = new Set(state.panes.flatMap((p) => p.tabs.map((t) => pageKey(p.threadId, t.id))));
+    const live = new Set(
+      state.panes.flatMap((p) => p.tabs.map((t) => pageKey(p.threadId, t.id))),
+    );
     pageKeys()
       .filter((key) => !live.has(tabPageKey(key)))
       .forEach(destroyPage);
@@ -108,24 +180,57 @@ export function PipLayer({ thread }: { thread: Thread }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const previewSize = useSize(layerRef);
   const isPreview = useContext(PreviewContext);
-  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === thread.id));
+  const pane = useHarnessSelector((s) =>
+    s.panes.find((p) => p.threadId === thread.id),
+  );
   const floating = pane ? floatingTabs(thread, pane) : [];
   const rect = useTrackedRect(anchorRef, floating.length > 0 && !isPreview);
-  const bounds = isPreview ? previewSize : { w: Math.max(0, (rect?.width ?? 0) - 2 * LAYER_INSET), h: Math.max(0, (rect?.height ?? 0) - 2 * LAYER_INSET) };
+  const bounds = isPreview
+    ? previewSize
+    : {
+        w: Math.max(0, (rect?.width ?? 0) - 2 * LAYER_INSET),
+        h: Math.max(0, (rect?.height ?? 0) - 2 * LAYER_INSET),
+      };
 
   const layer = (
-    <div ref={isPreview ? layerRef : undefined} className="pointer-events-none absolute inset-3 isolate">
-      {bounds.w > 0 && !!pane && floating.map((tab) => <PipWindow key={tab.id} thread={thread} pane={pane} tab={tab} bounds={bounds} />)}
+    <div
+      ref={isPreview ? layerRef : undefined}
+      className="pointer-events-none absolute inset-3 isolate"
+    >
+      {bounds.w > 0 &&
+        !!pane &&
+        floating.map((tab) => (
+          <PipWindow
+            key={tab.id}
+            thread={thread}
+            pane={pane}
+            tab={tab}
+            bounds={bounds}
+          />
+        ))}
     </div>
   );
   // Previews (Stage, swipe neighbours) stay clipped in place; the live thread's windows sit above the whole app so the hover
   // blur isn't cut off by the header or sidebar. The clip only returns to hide a tucked window.
-  if (isPreview) return <div className="pointer-events-none absolute inset-0 overflow-hidden">{layer}</div>;
+  if (isPreview)
+    return (
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {layer}
+      </div>
+    );
   return (
     <div ref={anchorRef} className="pointer-events-none absolute inset-0">
       {!!rect &&
         createPortal(
-          <div className="pointer-events-none fixed z-40 has-[[data-tucked]]:overflow-hidden" style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}>
+          <div
+            className="pointer-events-none fixed z-40 has-[[data-tucked]]:overflow-hidden"
+            style={{
+              left: rect.x,
+              top: rect.y,
+              width: rect.width,
+              height: rect.height,
+            }}
+          >
             {layer}
           </div>,
           document.body,
@@ -136,22 +241,33 @@ export function PipLayer({ thread }: { thread: Thread }) {
 
 /** The element's viewport rect, followed every frame while `isOn`: it moves with the sidebar, splits and the side pane. */
 function useTrackedRect(ref: RefObject<HTMLElement | null>, isOn: boolean) {
-  const [rect, setRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [rect, setRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   useEffect(() => {
-    if (!isOn) return setRect(null);
+    if (!isOn) return;
     let frame = 0;
     let last = '';
     const tick = () => {
       frame = requestAnimationFrame(tick);
       const r = ref.current?.getBoundingClientRect();
-      const next = r && r.width > 0 ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
+      const next =
+        r && r.width > 0
+          ? { x: r.x, y: r.y, width: r.width, height: r.height }
+          : null;
       const key = JSON.stringify(next);
       if (key === last) return;
       last = key;
       setRect(next);
     };
     tick();
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      setRect(null);
+    };
   }, [ref, isOn]);
   return rect;
 }
@@ -166,21 +282,47 @@ export function drivenTab(thread: Thread, pane: Pane) {
 function floatingTabs(thread: Thread, pane: Pane) {
   const driven = drivenTab(thread, pane);
   const isDrivenHidden = !!driven && !isTabOnScreen(pane, driven);
-  return pane.tabs.filter((t) => (t.isPopped && t.kind !== 'browser') || (isDrivenHidden && t === driven));
+  return pane.tabs.filter(
+    (t) =>
+      (t.isPopped && t.kind !== 'browser') || (isDrivenHidden && t === driven),
+  );
 }
 
-function anchorFor(corner: Corner, w: number, h: number, bounds: { w: number; h: number }) {
-  return { x: corner[1] === 'r' ? bounds.w - w : 0, y: corner[0] === 'b' ? bounds.h - h : 0 };
+function anchorFor(
+  corner: Corner,
+  w: number,
+  h: number,
+  bounds: { w: number; h: number },
+) {
+  return {
+    x: corner[1] === 'r' ? bounds.w - w : 0,
+    y: corner[0] === 'b' ? bounds.h - h : 0,
+  };
 }
 
 /** Width and height inside the layer; a mirrored page keeps its viewport's aspect ratio. */
-function fitWindow(size: { w: number; h: number }, aspect: number | null, bounds: { w: number; h: number }) {
-  if (!aspect) return { w: Math.min(size.w, bounds.w), h: Math.min(size.h, bounds.h) };
+function fitWindow(
+  size: { w: number; h: number },
+  aspect: number | null,
+  bounds: { w: number; h: number },
+) {
+  if (!aspect)
+    return { w: Math.min(size.w, bounds.w), h: Math.min(size.h, bounds.h) };
   const w = Math.min(size.w, bounds.w, bounds.h / aspect);
   return { w, h: w * aspect };
 }
 
-function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; tab: PaneTab; bounds: { w: number; h: number } }) {
+function PipWindow({
+  thread,
+  pane,
+  tab,
+  bounds,
+}: {
+  thread: Thread;
+  pane: Pane;
+  tab: PaneTab;
+  bounds: { w: number; h: number };
+}) {
   const dispatch = useDispatch();
   const [corner, setCorner] = useState<Corner>('br');
   const [size, setSize] = useState(PIP);
@@ -190,7 +332,11 @@ function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; 
   const y = useMotionValue(0);
   const isBrowser = tab.kind === 'browser';
   const viewport = mirrorViewport(thread, tab);
-  const { w, h } = fitWindow(size, viewport && viewport.height / viewport.width, bounds);
+  const { w, h } = fitWindow(
+    size,
+    viewport && viewport.height / viewport.width,
+    bounds,
+  );
   const anchor = anchorFor(corner, w, h, bounds);
   const tuckSide = corner[1] === 'r' ? 1 : -1;
   const tuckOffset = isTucked ? tuckSide * (w - TUCK_TAB + LAYER_INSET) : 0;
@@ -201,9 +347,12 @@ function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; 
   }, [tuckOffset, isTucked, x, y]);
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
-    const cx = anchor.x + x.get() + info.velocity.x * VELOCITY_PROJECTION + w / 2;
-    const cy = anchor.y + y.get() + info.velocity.y * VELOCITY_PROJECTION + h / 2;
-    const next = `${cy < bounds.h / 2 ? 't' : 'b'}${cx < bounds.w / 2 ? 'l' : 'r'}` as Corner;
+    const cx =
+      anchor.x + x.get() + info.velocity.x * VELOCITY_PROJECTION + w / 2;
+    const cy =
+      anchor.y + y.get() + info.velocity.y * VELOCITY_PROJECTION + h / 2;
+    const next =
+      `${cy < bounds.h / 2 ? 't' : 'b'}${cx < bounds.w / 2 ? 'l' : 'r'}` as Corner;
     // The throw picks the corner; only the window's own position past an edge tucks it, so a flick never overshoots into a tuck.
     const at = anchor.x + x.get() + w / 2;
     const tuck = at < 0 || at > bounds.w;
@@ -224,7 +373,14 @@ function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; 
     e.preventDefault();
     controls.start(e);
   };
-  const close = () => (isBrowser ? dispatch({ type: 'pane-drive', threadId: thread.id, tabId: undefined }) : dispatch({ type: 'pane-close-tab', threadId: thread.id, tabId: tab.id }));
+  const close = () =>
+    isBrowser
+      ? dispatch({ type: 'pane-drive', threadId: thread.id, tabId: undefined })
+      : dispatch({
+          type: 'pane-close-tab',
+          threadId: thread.id,
+          tabId: tab.id,
+        });
 
   return (
     <motion.section
@@ -241,18 +397,39 @@ function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; 
       initial={{ opacity: 0, scale: 0.92 }}
       animate={{ opacity: 1, scale: 1 }}
       whileDrag={{ scale: 1.03 }}
-      transition={{ opacity: { duration: 0.18, ease: [0.23, 1, 0.32, 1] }, scale: { type: 'spring', visualDuration: 0.3, bounce: 0.15 } }}
+      transition={{
+        opacity: { duration: 0.18, ease: [0.23, 1, 0.32, 1] },
+        scale: { type: 'spring', visualDuration: 0.3, bounce: 0.15 },
+      }}
       style={{ left: anchor.x, top: anchor.y, width: w, height: h, x, y }}
-      className={cn('group/pip pointer-events-auto absolute rounded-2xl bg-background shadow-[0_0_0_1px_var(--border),0_32px_80px_-16px_oklch(0_0_0/0.45),0_12px_28px_-10px_oklch(0_0_0/0.3)]', !isTucked && 'cursor-grab active:cursor-grabbing')}
+      className={cn(
+        'group/pip pointer-events-auto absolute rounded-2xl bg-background shadow-[0_0_0_1px_var(--border),0_32px_80px_-16px_oklch(0_0_0/0.45),0_12px_28px_-10px_oklch(0_0_0/0.3)]',
+        !isTucked && 'cursor-grab active:cursor-grabbing',
+      )}
     >
       {/* Clip here, not on the section: Chromium drops a backdrop-filter's mask under a rounded overflow clip. */}
-      <div inert={isTucked || undefined} className="h-full overflow-hidden rounded-[inherit]">
-        {viewport ? <MirroredPage thread={thread} tab={tab} viewport={viewport} width={w} /> : <PoppedTab thread={thread} pane={pane} tab={tab} />}
+      <div
+        inert={isTucked || undefined}
+        className="h-full overflow-hidden rounded-[inherit]"
+      >
+        {viewport ? (
+          <MirroredPage
+            thread={thread}
+            tab={tab}
+            viewport={viewport}
+            width={w}
+          />
+        ) : (
+          <PoppedTab thread={thread} pane={pane} tab={tab} />
+        )}
       </div>
 
       {!isTucked && (
         // Sticks out past the corner like Codex. A sibling of the buttons, not inside their fade: under opacity < 1 a backdrop blur goes black.
-        <span aria-hidden className="pip-scrim pointer-events-none absolute -top-8 -left-14 h-28 w-48">
+        <span
+          aria-hidden
+          className="pip-scrim pointer-events-none absolute -top-8 -left-14 h-28 w-48"
+        >
           <span />
           <span />
           <span />
@@ -260,10 +437,27 @@ function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; 
       )}
       {!isTucked && (
         <div className="pointer-events-none absolute top-0 left-0 flex items-start gap-1 p-2 opacity-0 transition-opacity duration-150 group-focus-within/pip:pointer-events-auto group-focus-within/pip:opacity-100 group-hover/pip:pointer-events-auto group-hover/pip:opacity-100">
-          <PipButton label={isBrowser ? 'Hide until the agent browses again' : `Close ${tabTitle(tab)}`} onClick={close}>
+          <PipButton
+            label={
+              isBrowser
+                ? 'Hide until the agent browses again'
+                : `Close ${tabTitle(tab)}`
+            }
+            onClick={close}
+          >
             <X />
           </PipButton>
-          <PipButton label="Open in the side pane" onClick={() => dispatch({ type: 'pane-pop', threadId: thread.id, tabId: tab.id, isPopped: false })}>
+          <PipButton
+            label="Open in the side pane"
+            onClick={() =>
+              dispatch({
+                type: 'pane-pop',
+                threadId: thread.id,
+                tabId: tab.id,
+                isPopped: false,
+              })
+            }
+          >
             <ExitPip />
           </PipButton>
         </div>
@@ -274,13 +468,33 @@ function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; 
           type="button"
           aria-label={`Show ${tabTitle(tab)}`}
           onClick={() => setTucked(false)}
-          className={cn('absolute inset-y-0 z-10 flex items-center justify-center bg-popover text-muted-foreground hover:text-foreground', tuckSide === 1 ? 'left-0 rounded-l-[inherit]' : 'right-0 rounded-r-[inherit]')}
+          className={cn(
+            'absolute inset-y-0 z-10 flex items-center justify-center bg-popover text-muted-foreground hover:text-foreground',
+            tuckSide === 1
+              ? 'left-0 rounded-l-[inherit]'
+              : 'right-0 rounded-r-[inherit]',
+          )}
           style={{ width: TUCK_TAB }}
         >
-          {tuckSide === 1 ? <ChevronLeft className="size-4" /> : <ChevronRight className="size-4" />}
+          {tuckSide === 1 ? (
+            <ChevronLeft className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
         </button>
       )}
-      {!isTucked && <ResizeHandle corner={corner} start={{ w, h }} onResize={(nw, nh) => setSize({ w: clamp(nw, MIN.w, bounds.w), h: clamp(nh, MIN.h, bounds.h) })} />}
+      {!isTucked && (
+        <ResizeHandle
+          corner={corner}
+          start={{ w, h }}
+          onResize={(nw, nh) =>
+            setSize({
+              w: clamp(nw, MIN.w, bounds.w),
+              h: clamp(nh, MIN.h, bounds.h),
+            })
+          }
+        />
+      )}
     </motion.section>
   );
 }
@@ -292,30 +506,74 @@ function mirrorViewport(thread: Thread, tab: PaneTab): Viewport | null {
   const page = getPage(pageId);
   const device = page && deviceSize(page);
   if (!device) return viewportOf(pageId) ?? DEFAULT_VIEWPORT;
-  return page.isRotated ? { width: device.height, height: device.width } : device;
+  return page.isRotated
+    ? { width: device.height, height: device.width }
+    : device;
 }
 
 /** The agent's page at its real viewport, scaled down to the window and out of reach: you watch, the agent drives. */
-function MirroredPage({ thread, tab, viewport, width }: { thread: Thread; tab: PaneTab; viewport: Viewport; width: number }) {
+function MirroredPage({
+  thread,
+  tab,
+  viewport,
+  width,
+}: {
+  thread: Thread;
+  tab: PaneTab;
+  viewport: Viewport;
+  width: number;
+}) {
   const pageId = pageKey(thread.id, tab.id);
   const page = usePage(pageId, initialUrl(tab));
-  if (host.isDesktop) return <FrameStream pageId={pageId} hostId={page.hostId} spaceId={thread.spaceId} viewport={viewport} />;
+  if (host.isDesktop)
+    return (
+      <FrameStream
+        pageId={pageId}
+        hostId={page.hostId}
+        spaceId={thread.spaceId}
+        viewport={viewport}
+      />
+    );
   return (
-    <div inert className="pointer-events-none origin-top-left" style={{ width: viewport.width, height: viewport.height, transform: `scale(${width / viewport.width})` }}>
-      <PageSurface thread={thread} pageId={pageId} page={page} isDriving={false} />
+    <div
+      inert
+      className="pointer-events-none origin-top-left"
+      style={{
+        width: viewport.width,
+        height: viewport.height,
+        transform: `scale(${width / viewport.width})`,
+      }}
+    >
+      <PageSurface
+        thread={thread}
+        pageId={pageId}
+        page={page}
+        isDriving={false}
+      />
     </div>
   );
 }
 
 /** The native view can't sit under DOM, so the window shows frames of it instead, written straight to the img. */
-function FrameStream({ pageId, hostId, spaceId, viewport: { width, height } }: { pageId: string; hostId: string | null; spaceId: string; viewport: Viewport }) {
+function FrameStream({
+  pageId,
+  hostId,
+  spaceId,
+  viewport: { width, height },
+}: {
+  pageId: string;
+  hostId: string | null;
+  spaceId: string;
+  viewport: Viewport;
+}) {
   const imgRef = useRef<HTMLImageElement>(null);
   const isPreview = useContext(PreviewContext);
   useEffect(() => void ensureView(pageId, spaceId), [pageId, spaceId]);
   useEffect(() => {
     if (!hostId || isPreview) return;
     const off = host.browser.onEvent((e) => {
-      if (e.id === hostId && e.type === 'frame' && imgRef.current) imgRef.current.src = e.data;
+      if (e.id === hostId && e.type === 'frame' && imgRef.current)
+        imgRef.current.src = e.data;
     });
     void host.browser.mirror(hostId, { width, height });
     return () => {
@@ -323,10 +581,25 @@ function FrameStream({ pageId, hostId, spaceId, viewport: { width, height } }: {
       void host.browser.mirror(hostId, null).catch(() => {});
     };
   }, [hostId, isPreview, width, height]);
-  return <img ref={imgRef} alt="" draggable={false} className="size-full bg-white object-cover object-top" />;
+  return (
+    <img
+      ref={imgRef}
+      alt=""
+      draggable={false}
+      className="size-full bg-white object-cover object-top"
+    />
+  );
 }
 
-function PoppedTab({ thread, pane, tab }: { thread: Thread; pane: Pane; tab: PaneTab }) {
+function PoppedTab({
+  thread,
+  pane,
+  tab,
+}: {
+  thread: Thread;
+  pane: Pane;
+  tab: PaneTab;
+}) {
   const Content = PANE_TABS[tab.kind].component;
   return (
     <div className="flex h-full flex-col bg-card">
@@ -340,7 +613,17 @@ function PoppedTab({ thread, pane, tab }: { thread: Thread; pane: Pane; tab: Pan
   );
 }
 
-function PipButton({ label, pressed, onClick, children }: { label: string; pressed?: boolean; onClick: () => void; children: React.ReactNode }) {
+function PipButton({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -349,31 +632,61 @@ function PipButton({ label, pressed, onClick, children }: { label: string; press
       title={label}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      className={cn('flex size-8 cursor-default items-center justify-center rounded-full text-white/90 drop-shadow-[0_1px_3px_oklch(0_0_0/0.6)] hover:bg-white/15 hover:text-white [&_svg]:size-5', pressed && 'bg-white/20')}
+      className={cn(
+        'flex size-8 cursor-default items-center justify-center rounded-full text-white/90 drop-shadow-[0_1px_3px_oklch(0_0_0/0.6)] hover:bg-white/15 hover:text-white [&_svg]:size-5',
+        pressed && 'bg-white/20',
+      )}
     >
       {children}
     </button>
   );
 }
 
-function ResizeHandle({ corner, start, onResize }: { corner: Corner; start: { w: number; h: number }; onResize: (w: number, h: number) => void }) {
+function ResizeHandle({
+  corner,
+  start,
+  onResize,
+}: {
+  corner: Corner;
+  start: { w: number; h: number };
+  onResize: (w: number, h: number) => void;
+}) {
   const sx = corner[1] === 'r' ? -1 : 1;
   const sy = corner[0] === 'b' ? -1 : 1;
-  const origin = useRef<{ px: number; py: number; w: number; h: number } | null>(null);
+  const origin = useRef<{
+    px: number;
+    py: number;
+    w: number;
+    h: number;
+  } | null>(null);
   return (
     <span
       aria-hidden
       onPointerDown={(e) => {
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
-        origin.current = { px: e.clientX, py: e.clientY, w: start.w, h: start.h };
+        origin.current = {
+          px: e.clientX,
+          py: e.clientY,
+          w: start.w,
+          h: start.h,
+        };
       }}
       onPointerMove={(e) => {
         const o = origin.current;
-        if (o) onResize(o.w + sx * (e.clientX - o.px), o.h + sy * (e.clientY - o.py));
+        if (o)
+          onResize(
+            o.w + sx * (e.clientX - o.px),
+            o.h + sy * (e.clientY - o.py),
+          );
       }}
       onPointerUp={() => (origin.current = null)}
-      className={cn('absolute size-5 touch-none', sx === -1 ? 'left-0' : 'right-0', sy === -1 ? 'top-0' : 'bottom-0', sx === sy ? 'cursor-nwse-resize' : 'cursor-nesw-resize')}
+      className={cn(
+        'absolute size-5 touch-none',
+        sx === -1 ? 'left-0' : 'right-0',
+        sy === -1 ? 'top-0' : 'bottom-0',
+        sx === sy ? 'cursor-nwse-resize' : 'cursor-nesw-resize',
+      )}
     />
   );
 }

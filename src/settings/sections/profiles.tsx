@@ -1,19 +1,36 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Fragment, useEffect, useEffectEvent, useState } from 'react';
 import { ChevronRight, Plus } from '@/icons';
 import { toast } from '@/toast/store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { formatGithubAccount, GITHUB_COM } from '../../git/github';
 import { gitError } from '../../git/useGit';
 import type { GhAccount } from '../../host/types/git';
 import { host } from '../../host';
 import { keyName } from '../../keys';
-import { SPACE_ICON_NAMES, type Provider, type Space, type SpaceIconName } from '../../model';
+import {
+  SPACE_ICON_NAMES,
+  type Provider,
+  type Space,
+  type SpaceIconName,
+} from '../../model';
 import { addProfile, MAX_PROFILES, useProfiles } from '../../profiles';
 import { useHarness, useDispatch } from '../../store';
 import { ProviderMark, SPACE_ICONS, SpaceIcon } from '../../ui';
@@ -22,8 +39,9 @@ import { useLibrary } from '../../library/useLibrary';
 import { linkedAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS } from '../harnesses';
-import { openSubpage, useSettingsRoute } from '../open';
+import { openSubpage, useSettingsRoute } from '../../routes/nav';
 import { SettingsCard, SettingsSection, SettingsSelect } from '../parts';
+import { queryKeys } from '../../queryKeys';
 
 /** Settings › Profiles: every profile as a row opening its own page (Settings › Profiles › <profile>), and a way to add one. */
 export function ProfilesSection() {
@@ -34,13 +52,28 @@ export function ProfilesSection() {
   return (
     <div className="flex flex-col gap-10">
       <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-start sm:justify-between">
-        <p className="type-meta text-pretty text-muted-foreground">Each profile is a space in the sidebar with its own threads, agent accounts, skills and browser logins. Switch with the icons at the bottom of the sidebar.</p>
-        <Button size="xs" className="shrink-0" disabled={isFull} onClick={() => setAdding(true)}>
+        <p className="type-meta text-pretty text-muted-foreground">
+          Each profile is a space in the sidebar with its own threads, agent
+          accounts, skills and browser logins. Switch with the icons at the
+          bottom of the sidebar.
+        </p>
+        <Button
+          size="xs"
+          className="shrink-0"
+          disabled={isFull}
+          onClick={() => setAdding(true)}
+        >
           <Plus />
           Add profile
         </Button>
       </div>
-      <SettingsSection id="addProfile" footer={isFull && `Mochi holds up to ${MAX_PROFILES} profiles, one per ${keyName('nav')} + number shortcut.`}>
+      <SettingsSection
+        id="addProfile"
+        footer={
+          isFull &&
+          `Mochi holds up to ${MAX_PROFILES} profiles, one per ${keyName('nav')} + number shortcut.`
+        }
+      >
         <SettingsCard>
           {profiles.map((profile) => (
             <ProfileListRow key={profile.id} profile={profile} />
@@ -55,10 +88,13 @@ export function ProfilesSection() {
 /** A deep link to one profile's row (`<profileId>-<row>`, from search or a thread) opens that profile's page on it. */
 function useOpenLinkedProfile(profiles: Space[]) {
   const route = useSettingsRoute();
+  const openLinked = useEffectEvent((settingId: string) => {
+    const linked = profiles.find((p) => settingId.startsWith(`${p.id}-`));
+    if (linked) openSubpage('profiles', linked.id, settingId, true);
+  });
   useEffect(() => {
-    const settingId = route?.settingId;
-    const linked = settingId && profiles.find((p) => settingId.startsWith(`${p.id}-`));
-    if (linked) openSubpage('profiles', linked.id, settingId);
+    if (route?.settingId) openLinked(route.settingId);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `nonce` re-runs it when the same setting is deep-linked twice
   }, [route?.nonce, route?.settingId]);
 }
 
@@ -72,24 +108,34 @@ function ProfileListRow({ profile }: { profile: Space }) {
       onClick={() => openSubpage('profiles', profile.id)}
       className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
     >
-      <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background">
+      <span
+        aria-hidden
+        className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background"
+      >
         <SpaceIcon space={profile} className="size-5" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate type-body font-medium">{profile.name}</span>
-          {state.spaceId === profile.id && <Badge variant="secondary">Current</Badge>}
+          {state.spaceId === profile.id && (
+            <Badge variant="secondary">Current</Badge>
+          )}
         </span>
         <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 type-caption text-subtle-foreground">
           {meta.map((part, i) => (
             <Fragment key={i}>
               {i > 0 && <span aria-hidden>·</span>}
-              <span className="flex items-center gap-1 whitespace-nowrap">{part}</span>
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                {part}
+              </span>
             </Fragment>
           ))}
         </span>
       </span>
-      <ChevronRight aria-hidden className="size-4 shrink-0 text-subtle-foreground" />
+      <ChevronRight
+        aria-hidden
+        className="size-4 shrink-0 text-subtle-foreground"
+      />
     </button>
   );
 }
@@ -98,11 +144,16 @@ function ProfileListRow({ profile }: { profile: Space }) {
 function useProfileMeta(profile: Space) {
   const { accounts } = useAgentSettings();
   const { entries } = useLibrary(profile.id);
-  const loaded = entries?.filter((e) => e.profileIds.includes(profile.id)).length;
+  const loaded = entries?.filter((e) =>
+    e.profileIds.includes(profile.id),
+  ).length;
   const { state } = useHarness();
-  const threadCount = state.threads.filter((t) => t.spaceId === profile.id).length;
+  const threadCount = state.threads.filter(
+    (t) => t.spaceId === profile.id,
+  ).length;
   const accountNames = HARNESS_IDS.flatMap((provider) => {
-    const id = accounts && linkedAccountId(accounts.links, profile.id, provider);
+    const id =
+      accounts && linkedAccountId(accounts.links, profile.id, provider);
     const name = accounts?.accounts.find((a) => a.id === id)?.name;
     return name ? [{ provider, name }] : [];
   });
@@ -113,7 +164,9 @@ function useProfileMeta(profile: Space) {
         {name}
       </>
     )),
-    ...(loaded === undefined ? [] : [`${countOf(loaded, 'item')} from the library`]),
+    ...(loaded === undefined
+      ? []
+      : [`${countOf(loaded, 'item')} from the library`]),
     countOf(threadCount, 'thread'),
   ];
   return meta;
@@ -126,16 +179,32 @@ const EMPTY = 'empty';
  * Adds a profile, empty or as a copy of another (`from` starts it there, the page's Duplicate). A copy takes the source's
  * agent accounts, GitHub login, library items and native choices; threads and browser logins stay where they are.
  */
-export function NewProfileDialog({ open, from, onClose }: { open: boolean; from?: Space; onClose: () => void }) {
+export function NewProfileDialog({
+  open,
+  from,
+  onClose,
+}: {
+  open: boolean;
+  from?: Space;
+  onClose: () => void;
+}) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-md">{open && <NewProfileForm from={from} onDone={onClose} />}</DialogContent>
+      <DialogContent className="sm:max-w-md">
+        {open && <NewProfileForm from={from} onDone={onClose} />}
+      </DialogContent>
     </Dialog>
   );
 }
 
 // Inside the dialog's content, which unmounts on close, so each opening starts fresh.
-function NewProfileForm({ from, onDone }: { from?: Space; onDone: () => void }) {
+function NewProfileForm({
+  from,
+  onDone,
+}: {
+  from?: Space;
+  onDone: () => void;
+}) {
   const profiles = useProfiles();
   const dispatch = useDispatch();
   const copyProfile = useCopyProfile();
@@ -146,10 +215,20 @@ function NewProfileForm({ from, onDone }: { from?: Space; onDone: () => void }) 
   const create = async () => {
     setBusy(true);
     const profile = addProfile(name.trim(), source);
-    if (source) await copyProfile(source, profile).catch((error: Error) => toast.error(`Not everything was copied from ${source.name}`, { description: error.message }));
+    if (source)
+      await copyProfile(source, profile).catch((error: Error) =>
+        toast.error(`Not everything was copied from ${source.name}`, {
+          description: error.message,
+        }),
+      );
     onDone();
     openSubpage('profiles', profile.id);
-    toast(`${profile.name} added`, { action: { label: 'Switch to it', onClick: () => dispatch({ type: 'space', id: profile.id }) } });
+    toast(`${profile.name} added`, {
+      action: {
+        label: 'Switch to it',
+        onClick: () => dispatch({ type: 'space', id: profile.id }),
+      },
+    });
   };
   return (
     <form
@@ -160,16 +239,39 @@ function NewProfileForm({ from, onDone }: { from?: Space; onDone: () => void }) 
       }}
     >
       <DialogHeader>
-        <DialogTitle>{from ? `Duplicate ${from.name}` : 'Add profile'}</DialogTitle>
-        <DialogDescription>A space in the sidebar with its own threads and a fresh browser session.</DialogDescription>
+        <DialogTitle>
+          {from ? `Duplicate ${from.name}` : 'Add profile'}
+        </DialogTitle>
+        <DialogDescription>
+          A space in the sidebar with its own threads and a fresh browser
+          session.
+        </DialogDescription>
       </DialogHeader>
       <Field>
         <FieldLabel htmlFor="new-profile-name">Name</FieldLabel>
-        <Input id="new-profile-name" autoFocus placeholder="Side project" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input
+          id="new-profile-name"
+          autoFocus
+          placeholder="Side project"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </Field>
       <Field>
         <FieldLabel htmlFor="new-profile-from">Start from</FieldLabel>
-        <SettingsSelect id="new-profile-from" value={sourceId} options={[{ value: EMPTY, label: 'An empty profile' }, ...profiles.map((p) => ({ value: p.id, label: `A copy of ${p.name}` }))]} onChange={setSourceId} className="w-full" />
+        <SettingsSelect
+          id="new-profile-from"
+          value={sourceId}
+          options={[
+            { value: EMPTY, label: 'An empty profile' },
+            ...profiles.map((p) => ({
+              value: p.id,
+              label: `A copy of ${p.name}`,
+            })),
+          ]}
+          onChange={setSourceId}
+          className="w-full"
+        />
         <FieldDescription>
           {source
             ? `Copies ${source.name}’s agent accounts, GitHub login, instructions, skills, plugins and connectors, and what it turns off from Claude Code and Codex. Threads and browser logins stay with ${source.name}.`
@@ -195,11 +297,14 @@ function useCopyProfile() {
     if (accounts)
       for (const provider of HARNESS_IDS) {
         const id = linkedAccountId(accounts.links, from.id, provider);
-        if (id !== linkedAccountId(accounts.links, to.id, provider)) await linkAccount(to.id, provider, id);
+        if (id !== linkedAccountId(accounts.links, to.id, provider))
+          await linkAccount(to.id, provider, id);
       }
     await host.settings.copyProfileFolder(from.id, to.id);
     const entries = await host.library.list(from.id);
-    for (const entry of entries) if (entry.profileIds.includes(from.id)) await host.library.setEnabled(to.id, entry.id, true);
+    for (const entry of entries)
+      if (entry.profileIds.includes(from.id))
+        await host.library.setEnabled(to.id, entry.id, true);
   };
 }
 
@@ -207,39 +312,85 @@ export type GhAccountsState = { accounts?: GhAccount[]; error?: string };
 
 /** gh's logins, read when the page opens and again when the window regains focus (after a `gh auth login` in a terminal). */
 export function useGhAccounts(isNeeded = true): GhAccountsState {
-  const [state, setState] = useState<GhAccountsState>({});
-  useEffect(() => {
-    if (!host.isDesktop || !isNeeded) return;
-    const load = () => host.git.ghAccounts().then((accounts) => setState({ accounts }), (error: Error) => setState({ error: gitError(error) }));
-    load();
-    addEventListener('focus', load);
-    return () => removeEventListener('focus', load);
-  }, [isNeeded]);
-  return state;
+  const accountsQuery = useQuery({
+    queryKey: queryKeys.profile.githubAccounts(),
+    queryFn: () => host.git.ghAccounts(),
+    enabled: host.isDesktop && isNeeded,
+    staleTime: 0,
+  });
+  return {
+    accounts: accountsQuery.data,
+    error: accountsQuery.error ? gitError(accountsQuery.error) : undefined,
+  };
 }
 
 // Radix Select can't hold '' (the profile's "use gh's active account").
 const ACTIVE = 'gh-active';
 
 /** gh's working logins plus "Active account" (stored as ''); pass `gh` when the caller already reads them. */
-export function GitHubAccountSelect({ id, value, gh: given, onChange }: { id: string; value: string; gh?: GhAccountsState; onChange: (github: string) => void }) {
+export function GitHubAccountSelect({
+  id,
+  value,
+  gh: given,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  gh?: GhAccountsState;
+  onChange: (github: string) => void;
+}) {
   const own = useGhAccounts(!given);
   const gh = given ?? own;
   const working = gh.accounts?.filter((a) => a.isValid) ?? [];
   const active = gh.accounts?.find((a) => a.isActive && a.host === GITHUB_COM);
-  const isMissing = !!value && !!gh.accounts && !working.some((a) => formatGithubAccount(a) === value);
+  const isMissing =
+    !!value &&
+    !!gh.accounts &&
+    !working.some((a) => formatGithubAccount(a) === value);
   const options = [
-    { value: ACTIVE, label: active ? `Active account (${active.login})` : 'Active account' },
-    ...working.map((a) => ({ value: formatGithubAccount(a), label: a.host === GITHUB_COM ? a.login : `${a.login} (${a.host})` })),
+    {
+      value: ACTIVE,
+      label: active ? `Active account (${active.login})` : 'Active account',
+    },
+    ...working.map((a) => ({
+      value: formatGithubAccount(a),
+      label: a.host === GITHUB_COM ? a.login : `${a.login} (${a.host})`,
+    })),
     ...(isMissing ? [{ value, label: `${value} (signed out)` }] : []),
   ];
-  return <SettingsSelect id={id} value={value || ACTIVE} options={options} onChange={(v) => onChange(v === ACTIVE ? '' : v)} disabled={!gh.accounts} className="w-56" />;
+  return (
+    <SettingsSelect
+      id={id}
+      value={value || ACTIVE}
+      options={options}
+      onChange={(v) => onChange(v === ACTIVE ? '' : v)}
+      disabled={!gh.accounts}
+      className="w-56"
+    />
+  );
 }
 
-const ICON_LABELS = { work: 'Briefcase', home: 'Home', layers: 'Layers', code: 'Code', book: 'Book', rocket: 'Rocket', coffee: 'Coffee', star: 'Star' } satisfies Record<SpaceIconName, string>;
+const ICON_LABELS = {
+  work: 'Briefcase',
+  home: 'Home',
+  layers: 'Layers',
+  code: 'Code',
+  book: 'Book',
+  rocket: 'Rocket',
+  coffee: 'Coffee',
+  star: 'Star',
+} satisfies Record<SpaceIconName, string>;
 
 /** Profiles are told apart by icon, not colour, so each icon is one tap away. */
-export function IconPicker({ id, value, onChange }: { id: string; value: string; onChange: (icon: string) => void }) {
+export function IconPicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (icon: string) => void;
+}) {
   return (
     <ToggleGroup
       id={id}
@@ -258,7 +409,11 @@ export function IconPicker({ id, value, onChange }: { id: string; value: string;
             {/* On a wrapper: as the trigger itself, the tooltip's data-state="closed" would overwrite the toggle's data-state="on". */}
             <TooltipTrigger asChild>
               <span className="inline-flex">
-                <ToggleGroupItem value={name} aria-label={ICON_LABELS[name]} className="size-7 px-0">
+                <ToggleGroupItem
+                  value={name}
+                  aria-label={ICON_LABELS[name]}
+                  className="size-7 px-0"
+                >
                   <Icon aria-hidden />
                 </ToggleGroupItem>
               </span>
@@ -272,9 +427,26 @@ export function IconPicker({ id, value, onChange }: { id: string; value: string;
 }
 
 /** The harness's accounts; one serves several profiles. */
-export function AccountSelect({ id, provider, value, onChange }: { id: string; provider: Provider; value: string; onChange: (accountId: string) => void }) {
+export function AccountSelect({
+  id,
+  provider,
+  value,
+  onChange,
+}: {
+  id: string;
+  provider: Provider;
+  value: string;
+  onChange: (accountId: string) => void;
+}) {
   const { accounts } = useAgentSettings();
   const own = accounts?.accounts.filter((a) => a.provider === provider) ?? [];
-  return <SettingsSelect id={id} value={value} options={own.map((a) => ({ value: a.id, label: a.name }))} onChange={onChange} disabled={!accounts} />;
+  return (
+    <SettingsSelect
+      id={id}
+      value={value}
+      options={own.map((a) => ({ value: a.id, label: a.name }))}
+      onChange={onChange}
+      disabled={!accounts}
+    />
+  );
 }
-

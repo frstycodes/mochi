@@ -1,7 +1,7 @@
 /**
  * What a composer holds before it's sent: per thread (`threadDraftKey`) and per profile's new-thread page (`newThreadDraftKey`).
  * Read from memory, so switching threads restores at once; written to IndexedDB in userData (debounced) for relaunches.
- * IndexedDB stores the attachment Blobs as files on disk, not as base64 in localStorage.
+ * IndexedDB stores the attachment Blobs as files on disk, not as base64 in browser storage.
  */
 export interface DraftFile {
   filename?: string;
@@ -25,7 +25,8 @@ export interface DraftStore {
 export const threadDraftKey = (threadId: string) => `thread:${threadId}`;
 export const newThreadDraftKey = (spaceId: string) => `new:${spaceId}`;
 /** Before the profile's settings chat exists, and what `open_settings_chat` drafts into it. */
-export const settingsChatDraftKey = (spaceId: string) => `settings-chat:${spaceId}`;
+export const settingsChatDraftKey = (spaceId: string) =>
+  `settings-chat:${spaceId}`;
 
 const SAVE_DELAY_MS = 400;
 // Attachments past this stay in the composer but aren't kept across a relaunch.
@@ -63,10 +64,6 @@ export function clearDraft(key: string) {
 }
 
 /** Drops the drafts of threads that no longer exist. */
-export function pruneDrafts(threadIds: Set<string>) {
-  for (const key of drafts.keys()) if (key.startsWith('thread:') && !threadIds.has(key.slice('thread:'.length))) clearDraft(key);
-}
-
 export function flushDrafts() {
   for (const key of timers.keys()) {
     clearTimeout(timers.get(key));
@@ -89,7 +86,9 @@ function schedule(key: string) {
 // Writes whatever memory holds when the timer fires, so a put and a delete for one key can't land out of order.
 function write(key: string) {
   const draft = drafts.get(key);
-  (draft ? getStore().put(key, draft) : getStore().delete(key)).catch((error: unknown) => console.error('Saving a composer draft failed', error));
+  (draft ? getStore().put(key, draft) : getStore().delete(key)).catch(
+    (error: unknown) => console.error('Saving a composer draft failed', error),
+  );
 }
 
 function isEmpty(draft: Draft) {
@@ -98,7 +97,9 @@ function isEmpty(draft: Draft) {
 
 function withinCap(draft: Draft): Draft {
   let total = 0;
-  const files = draft.files.filter((f) => (total += f.blob.size) <= MAX_DRAFT_BYTES);
+  const files = draft.files.filter(
+    (f) => (total += f.blob.size) <= MAX_DRAFT_BYTES,
+  );
   return files.length === draft.files.length ? draft : { ...draft, files };
 }
 
@@ -109,23 +110,34 @@ function indexedDbStore(): DraftStore {
     open.onsuccess = () => resolve(open.result);
     open.onerror = () => reject(open.error);
   });
-  const run = <T>(mode: IDBTransactionMode, request: (s: IDBObjectStore) => IDBRequest<T>) =>
+  const run = <T>(
+    mode: IDBTransactionMode,
+    request: (s: IDBObjectStore) => IDBRequest<T>,
+  ) =>
     db.then(
       (d) =>
         new Promise<T>((resolve, reject) => {
-          const r = request(d.transaction('drafts', mode).objectStore('drafts'));
+          const r = request(
+            d.transaction('drafts', mode).objectStore('drafts'),
+          );
           r.onsuccess = () => resolve(r.result);
           r.onerror = () => reject(r.error);
         }),
     );
   return {
     async getAll() {
-      const [keys, values] = await Promise.all([run('readonly', (s) => s.getAllKeys()), run('readonly', (s) => s.getAll() as IDBRequest<Draft[]>)]);
+      const [keys, values] = await Promise.all([
+        run('readonly', (s) => s.getAllKeys()),
+        run('readonly', (s) => s.getAll() as IDBRequest<Draft[]>),
+      ]);
       return keys.map((k, i) => [k as string, values[i]]);
     },
-    put: (key, draft) => run('readwrite', (s) => s.put(draft, key)).then(() => undefined),
-    delete: (key) => run('readwrite', (s) => s.delete(key)).then(() => undefined),
+    put: (key, draft) =>
+      run('readwrite', (s) => s.put(draft, key)).then(() => undefined),
+    delete: (key) =>
+      run('readwrite', (s) => s.delete(key)).then(() => undefined),
   };
 }
 
-if (typeof window !== 'undefined') window.addEventListener('beforeunload', flushDrafts);
+if (typeof window !== 'undefined')
+  window.addEventListener('beforeunload', flushDrafts);

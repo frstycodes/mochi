@@ -1,5 +1,15 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Thread, ThreadRef, WebLink } from '../../model.ts';
+import type {
+  AgentInfo,
+  GeneratedImage,
+  McpCall,
+  McpWidget,
+  McpWidgetResource,
+  Provider,
+  Thread,
+  ThreadRef,
+  WebLink,
+} from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
@@ -66,21 +76,74 @@ export type AgentEvent =
    * `command`: the shell command a call runs when its agent sent no `description` (Codex always, Claude sometimes), for main to describe.
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; command?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage; /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget }
+  | {
+      threadId: string;
+      type: 'tool';
+      id: string;
+      phase: 'start' | 'end';
+      text: string;
+      description?: string;
+      command?: string;
+      files?: string[];
+      exitCode?: number;
+      output?: string;
+      patch?: string;
+      links?: WebLink[];
+      skill?: string;
+      mcp?: McpCall;
+      /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & {
+        text: string;
+      };
+      /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[];
+      /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage;
+      /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget;
+    }
   /** A plain-language line for a call that started without one, from the background model. */
-  | { threadId: string; type: 'tool-description'; id: string; description: string }
+  | {
+      threadId: string;
+      type: 'tool-description';
+      id: string;
+      description: string;
+    }
   /** `items` is the whole plan. `isFresh`: a new request's plan, so none of the previous plan's steps carry over. */
-  | { threadId: string; type: 'plan'; items: AgentPlanItem[]; isFresh?: boolean }
+  | {
+      threadId: string;
+      type: 'plan';
+      items: AgentPlanItem[];
+      isFresh?: boolean;
+    }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
   /** A command (or workflow, monitor) the agent left running in the background: Claude's `run_in_background` Bash and its other non-agent tasks, a Codex background terminal. */
   | AgentTaskEvent
-  | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
-  | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
+  | {
+      threadId: string;
+      type: 'approval';
+      requestId: string;
+      kind: 'command' | 'edit' | 'tool';
+      title: string;
+      detail: string;
+      code?: string;
+    }
+  | {
+      threadId: string;
+      type: 'question';
+      requestId: string;
+      questions: AgentQuestion[];
+    }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
   | { threadId: string; type: 'resolved'; requestId: string }
   /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
-  | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  | {
+      threadId: string;
+      type: 'usage';
+      inputTokens: number;
+      outputTokens: number;
+      cachedTokens?: number;
+      costUsd?: number;
+      contextUsed?: number;
+      contextMax?: number;
+    }
   /** What the harness itself says about the account's usage as it goes (Claude's limit warning, its switch to extra usage); a line in the transcript, nothing more. */
   | { threadId: string; type: 'limit-notice'; text: string }
   /** What the harness did on its own to keep the thread going (a fork it couldn't make); a line in the transcript. */
@@ -89,7 +152,13 @@ export type AgentEvent =
    * The account hit a plan window's limit. `label` names the window ("5-hour"). `isTurnHeld`: the harness keeps the turn and
    * continues it at the reset (Claude Code); otherwise the turn ended (Codex).
    */
-  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string; isTurnHeld?: boolean }
+  | {
+      threadId: string;
+      type: 'limit';
+      resetsAt?: string;
+      label?: string;
+      isTurnHeld?: boolean;
+    }
   /** The harness reports the window open again while it held the turn: the turn goes on. */
   | { threadId: string; type: 'limit-cleared' }
   /**
@@ -97,8 +166,22 @@ export type AgentEvent =
    * `start` while it summarizes, `end` once done (token counts where the harness reports them), `summary` when it hands the
    * summary over (Claude's PostCompact hook; Codex shows none).
    */
-  | { threadId: string; type: 'compaction'; phase: 'start' | 'end' | 'summary'; trigger?: 'manual' | 'auto'; preTokens?: number; postTokens?: number; summary?: string; error?: string }
-  | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
+  | {
+      threadId: string;
+      type: 'compaction';
+      phase: 'start' | 'end' | 'summary';
+      trigger?: 'manual' | 'auto';
+      preTokens?: number;
+      postTokens?: number;
+      summary?: string;
+      error?: string;
+    }
+  | {
+      threadId: string;
+      type: 'turn-end';
+      status: 'done' | 'interrupted' | 'failed';
+      error?: string;
+    };
 
 /** One plan rate-limit window of an account, as the provider reported it. */
 export interface LimitWindow {
@@ -159,7 +242,16 @@ export interface AgentSubagentEvent {
   activity?: string;
   /** One of its own tool calls. */
   /** One of its tool calls, with the same extras as the thread's own (`description` on start; `output`, `patch` on end). */
-  step?: { id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string };
+  step?: {
+    id: string;
+    phase: 'start' | 'end';
+    text: string;
+    description?: string;
+    files?: string[];
+    exitCode?: number;
+    output?: string;
+    patch?: string;
+  };
   /** Its latest message; `isDelta` appends to the one before. */
   message?: string;
   isDelta?: boolean;
@@ -225,7 +317,9 @@ export interface AgentImage {
 }
 
 /** What an adapter gets once main has resolved and checked the folder. */
-export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'workspace'> & { cwd: string };
+export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'workspace'> & {
+  cwd: string;
+};
 
 /** You can always type your own answer too, so `options` may be empty. */
 export interface AgentQuestion {
@@ -241,7 +335,10 @@ export interface AgentPlanItem {
 }
 
 /** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. `answers` holds each question's picked labels and typed text, in question order; empty means skipped. */
-export type AgentDecision = { kind: 'allow'; forSession?: boolean } | { kind: 'deny'; message?: string; interrupt?: boolean } | { kind: 'answer'; answers: string[][] };
+export type AgentDecision =
+  | { kind: 'allow'; forSession?: boolean }
+  | { kind: 'deny'; message?: string; interrupt?: boolean }
+  | { kind: 'answer'; answers: string[][] };
 
 /** Side chat's answer stream, separate from thread events: `id` is the one `ask` returned. */
 export interface AgentAskEvent {
@@ -305,7 +402,10 @@ export interface AgentReviewRequest {
 }
 
 /** A review's stream under the id `review` returned: what it is doing (`step`), then one `done` with its answer (structured output or text) or one `error`. */
-export type AgentReviewEvent = { id: string; type: 'step'; text: string } | { id: string; type: 'done'; result: unknown } | { id: string; type: 'error'; text: string };
+export type AgentReviewEvent =
+  | { id: string; type: 'step'; text: string }
+  | { id: string; type: 'done'; result: unknown }
+  | { id: string; type: 'error'; text: string };
 
 /** A Mochi tool an agent called (`electron/mcp`); the renderer runs it on the store and answers with `toolResult`. */
 export interface AgentToolCall {
@@ -329,7 +429,15 @@ export interface AgentHost {
    * `steer`: the turn in flight takes the message at its next step instead of a new turn starting after it (Claude `priority: 'next'`, Codex `turn/steer`).
    * `steerId`: names a steered message, so `steer-read` reports when the agent took it and `unsteer` can take it back until then.
    */
-  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean, steerId?: string): Promise<void>;
+  send(
+    threadId: string,
+    text: string,
+    images?: AgentImage[],
+    skills?: string[],
+    speed?: string,
+    steer?: boolean,
+    steerId?: string,
+  ): Promise<void>;
   /** Takes back a steered message the agent hasn't read; false once it can't (it was read, or is being read now). */
   unsteer(threadId: string, steerId: string): Promise<boolean>;
   /** Compacts the live session now with the harness's own compaction; `focus` is what you typed after `/compact` (Claude only). */
@@ -350,17 +458,27 @@ export interface AgentHost {
    * Of `threads`, those whose agent is still running in main, e.g. across a window reload: `isWorking` while a turn is in flight, and
    * with `after` (the last `seq` the window applied), the events sent since, which the reload missed.
    */
-  attached(threads: { threadId: string; after?: number }[]): Promise<AttachedAgent[]>;
+  attached(
+    threads: { threadId: string; after?: number }[],
+  ): Promise<AttachedAgent[]>;
   /** `seq`: rises with every event this run of main sends, so a reloaded window asks `attached` for what came after its last. */
   onEvent(listener: (event: SeqAgentEvent) => void): () => void;
   /** Streams the answer from `model` on the profile's account as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
-  ask(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel): Promise<{ id: string }>;
+  ask(
+    context: AgentAskContext,
+    messages: AgentAskMessage[],
+    model: AgentAskModel,
+  ): Promise<{ id: string }>;
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
   /** Starts a review run beside the thread's agent, never touching its session. Events arrive on `onReviewEvent`. */
   review(request: AgentReviewRequest): Promise<{ id: string }>;
   onReviewEvent(listener: (event: AgentReviewEvent) => void): () => void;
   /** A background task's raw answer (prompt from `src/utility/prompts.ts`) on its Settings model, then the cheapest ones; null when none answers in time. */
-  utility(task: UtilityTask, spaceId: string, prompt: string): Promise<string | null>;
+  utility(
+    task: UtilityTask,
+    spaceId: string,
+    prompt: string,
+  ): Promise<string | null>;
   /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
@@ -368,7 +486,11 @@ export interface AgentHost {
   /** Where the thread's live session stood just before `text` was sent, for `forkAt`: Claude's last chain entry, Codex's previous turn. Null when this run doesn't know (restarted, or it was the session's first message). */
   rewindPoint(threadId: string, text: string): Promise<string | null>;
   /** A tool's MCP App view (`ui://`), read through a live Claude session's own connection to `server`; the last read is kept on disk for when none is live. */
-  readWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource>;
+  readWidget(
+    threadId: string,
+    server: string,
+    uri: string,
+  ): Promise<McpWidgetResource>;
   /** Stops one of a thread's native background tasks (a Claude subagent or shell task, a Codex spawned agent or background terminal); it ends with status `stopped`. */
   stopTask(threadId: string, taskId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
@@ -376,7 +498,11 @@ export interface AgentHost {
   /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
   models(provider: Provider, spaceId: string): Promise<AgentModel[]>;
   /** The latest plan windows main keeps for the profile's `provider` account; `refresh` reads them from the provider first (throttled). */
-  limits(provider: Provider, spaceId: string, refresh?: boolean): Promise<AccountLimits>;
+  limits(
+    provider: Provider,
+    spaceId: string,
+    refresh?: boolean,
+  ): Promise<AccountLimits>;
   onLimits(listener: (limits: AccountLimits) => void): () => void;
   onToolCall(listener: (call: AgentToolCall) => void): () => void;
   /** After a window reload: the tool calls the old page was running, still waiting in main, each returned once. */
@@ -421,4 +547,5 @@ export const agentMethods = {
 export const NO_AGENT_PROCESS = 'This thread has no running agent process';
 
 /** What main throws for an answer to a request the agent no longer waits on (it withdrew it, or the process ended). */
-export const NO_PENDING_REQUEST = 'The agent is no longer waiting on this request';
+export const NO_PENDING_REQUEST =
+  'The agent is no longer waiting on this request';

@@ -21,7 +21,14 @@ export type ThemeSlot = 'light' | 'dark';
 
 export type ThemeSource =
   | { kind: 'mochi' }
-  | { kind: 'marketplace'; namespace: string; name: string; version: string; displayName: string; publisher: string }
+  | {
+      kind: 'marketplace';
+      namespace: string;
+      name: string;
+      version: string;
+      displayName: string;
+      publisher: string;
+    }
   | { kind: 'custom'; file: string };
 
 export interface ColorTheme {
@@ -35,7 +42,8 @@ export interface ColorTheme {
 
 export const MOCHI_THEME_ID = 'mochi';
 
-export const slotOf = (kind: ThemeKind): ThemeSlot => (kind === 'light' || kind === 'hc-light' ? 'light' : 'dark');
+export const slotOf = (kind: ThemeKind): ThemeSlot =>
+  kind === 'light' || kind === 'hc-light' ? 'light' : 'dark';
 
 /** `uiTheme` in package.json (`vs`, `vs-dark`, `hc-black`, `hc-light`) or a theme file's `type` (`light`, `dark`, `hc`, `hcLight`). */
 export function kindOf(uiTheme: unknown, type?: unknown): ThemeKind {
@@ -47,4 +55,8 @@ export function kindOf(uiTheme: unknown, type?: unknown): ThemeKind {
   return 'dark';
 }
 
-export const marketplaceThemeId = (namespace: string, name: string, label: string) => `ext:${namespace}.${name}:${label}`;
+export const marketplaceThemeId = (
+  namespace: string,
+  name: string,
+  label: string,
+) => `ext:${namespace}.${name}:${label}`;

@@ -1,15 +1,40 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { DOCK_DRAG_RATIO, DOCK_WHEEL_RATIO, EFFORT_STEP_PX, dockDragOffset, dragSteps, wheelPx, wheelStep } from './scrub.ts';
+import { test } from 'vite-plus/test';
+import {
+  DOCK_DRAG_RATIO,
+  DOCK_WHEEL_RATIO,
+  EFFORT_STEP_PX,
+  dockDragOffset,
+  dragSteps,
+  wheelPx,
+  wheelStep,
+} from './scrub.ts';
 
 // GAP: synthetic, not a recorded device trace. A medium trackpad swipe: 10 tracking events, then momentum decaying 0.88 a frame (275px).
-const SWIPE = [4, 9, 14, 18, 20, 20, 19, 17, 15, 13, ...Array.from({ length: 24 }, (_, i) => Math.round(16 * 0.88 ** i))].filter((d) => d > 0);
+const SWIPE = [
+  4,
+  9,
+  14,
+  18,
+  20,
+  20,
+  19,
+  17,
+  15,
+  13,
+  ...Array.from({ length: 24 }, (_, i) => Math.round(16 * 0.88 ** i)),
+].filter((d) => d > 0);
 const NOTCH = [100];
 const DOCK_SPACING = 46;
 const LOG = process.env.SCRUB_LOG === '1';
 
 /** Levels a stepper of `count` values moves from `from` over one gesture. */
-function stepsFor(deltas: number[], count: number, from: number, stepPx: number) {
+function stepsFor(
+  deltas: number[],
+  count: number,
+  from: number,
+  stepPx: number,
+) {
   let acc = 0;
   let at = from;
   for (const d of deltas) {
@@ -20,20 +45,29 @@ function stepsFor(deltas: number[], count: number, from: number, stepPx: number)
   return at - from;
 }
 
-const dockItems = (deltas: number[], ratio: number) => Math.round(deltas.reduce((a, b) => a + b, 0) * ratio / DOCK_SPACING);
+const dockItems = (deltas: number[], ratio: number) =>
+  Math.round((deltas.reduce((a, b) => a + b, 0) * ratio) / DOCK_SPACING);
 
 test('effort steps once per 64px and at most once per wheel event', () => {
   assert.equal(EFFORT_STEP_PX, 64);
   assert.deepEqual(wheelStep(0, 63, 2, 5), { acc: 63, step: 0 });
   assert.deepEqual(wheelStep(63, 1, 2, 5), { acc: 0, step: 1 });
-  assert.deepEqual(wheelStep(0, 500, 0, 5), { acc: 0, step: 1 }, 'one huge event is still one level');
+  assert.deepEqual(
+    wheelStep(0, 500, 0, 5),
+    { acc: 0, step: 1 },
+    'one huge event is still one level',
+  );
   assert.deepEqual(wheelStep(0, -40, 2, 5), { acc: -40, step: 0 });
 });
 
 test('effort banks no distance past either end', () => {
   assert.deepEqual(wheelStep(0, 50, 4, 5), { acc: 0, step: 0 });
   assert.deepEqual(wheelStep(0, -50, 0, 5), { acc: 0, step: 0 });
-  assert.equal(stepsFor([...Array(20).fill(30), -64], 5, 3, EFFORT_STEP_PX), 0, 'pinned at the top, the first 64px back steps down');
+  assert.equal(
+    stepsFor([...Array(20).fill(30), -64], 5, 3, EFFORT_STEP_PX),
+    0,
+    'pinned at the top, the first 64px back steps down',
+  );
 });
 
 test('a trackpad swipe moves effort half as far as before, a mouse notch stays one level', () => {

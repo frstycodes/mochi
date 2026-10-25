@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
 import { imageMime } from '../files/previews';
+import { queryKeys } from '../queryKeys';
 
 // A URL has a scheme (`data:`, `https:`, `blob:`); a Windows drive (`C:\`) looks like one, so it's checked first.
-const isUrl = (src: string) => !/^[a-z]:[\\/]/i.test(src) && /^[a-z][a-z\d+.-]*:/i.test(src);
+const isUrl = (src: string) =>
+  !/^[a-z]:[\\/]/i.test(src) && /^[a-z][a-z\d+.-]*:/i.test(src);
 
 /** A path on this computer rather than a URL the page can load as is. */
 export const isFilePath = (src: string) => !isUrl(src);
@@ -13,28 +16,44 @@ export const isFilePath = (src: string) => !isUrl(src);
  * URLs (revoked when the sources change or the caller goes). Per source: the URL, `undefined` while it loads, `null` when it can't be read.
  */
 export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
-  const key = srcs.join('\n');
-  const [read, setRead] = useState<Record<string, string | null>>({});
+  const images = useQueries({
+    queries: srcs.map((src) => ({
+      queryKey: queryKeys.chat.imageBlob(src),
+      queryFn: () => readImage(src),
+      enabled: !!src && isFilePath(src),
+      structuralSharing: false,
+    })),
+    combine: (results) =>
+      results.map((result) => ({ blob: result.data, isError: result.isError })),
+  });
+  const urls = useObjectUrls(images.map(({ blob }) => blob));
+  return srcs.map((src, i) => {
+    if (!isFilePath(src)) return src;
+    const blob = images[i].blob;
+    return (blob && urls.get(blob)) ?? (images[i].isError ? null : undefined);
+  });
+}
+
+/** One object URL per loaded blob, made and revoked by an effect so StrictMode's re-run gets live ones. */
+function useObjectUrls(blobs: (Blob | undefined)[]) {
+  const [shown, setShown] = useState(blobs);
+  if (
+    blobs.length !== shown.length ||
+    blobs.some((blob, i) => blob !== shown[i])
+  )
+    setShown(blobs);
+  const [urls, setUrls] = useState(() => new Map<Blob, string>());
   useEffect(() => {
-    let isCurrent = true;
-    const made: string[] = [];
-    for (const src of new Set(key.split('\n'))) {
-      if (!src || !isFilePath(src)) continue;
-      readImage(src).then(
-        (url) => {
-          made.push(url);
-          if (isCurrent) setRead((r) => ({ ...r, [src]: url }));
-          else URL.revokeObjectURL(url);
-        },
-        () => isCurrent && setRead((r) => ({ ...r, [src]: null })),
-      );
-    }
-    return () => {
-      isCurrent = false;
-      made.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [key]);
-  return srcs.map((src) => (isFilePath(src) ? read[src] : src));
+    const made = new Map(
+      shown.flatMap((blob) =>
+        blob ? [[blob, URL.createObjectURL(blob)] as const] : [],
+      ),
+    );
+    // oxlint-disable-next-line react/set-state-in-effect -- an object URL is an external resource: made and revoked by this effect
+    setUrls(made);
+    return () => made.forEach((url) => URL.revokeObjectURL(url));
+  }, [shown]);
+  return urls;
 }
 
 /** Selects the file in Finder (Explorer, the file manager). */
@@ -47,11 +66,17 @@ async function readImage(path: string) {
   const { dir, name } = splitPath(path);
   const content = await host.fs.read(dir, name);
   const type = /\.svg$/i.test(path) ? 'image/svg+xml' : imageMime(path);
-  return URL.createObjectURL(new Blob([(content.kind === 'text' ? content.text : content.bytes) as BlobPart], { type }));
+  return new Blob(
+    [(content.kind === 'text' ? content.text : content.bytes) as BlobPart],
+    { type },
+  );
 }
 
 // The file host reads paths relative to a root, so a file is read from its own folder.
 export function splitPath(path: string) {
   const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-  return { dir: cut < 0 ? '' : path.slice(0, cut) || '/', name: path.slice(cut + 1) };
+  return {
+    dir: cut < 0 ? '' : path.slice(0, cut) || '/',
+    name: path.slice(cut + 1),
+  };
 }

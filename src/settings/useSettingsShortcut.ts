@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { isCommand } from '../keymap';
-import { openSettings } from './open';
+import { isCommand, listenKeydown } from '../keymap';
+import { openSettings } from '../routes/nav';
 
 /** Settings' command (mod , by default, like every macOS app's Preferences). */
 export function useSettingsShortcut() {
@@ -10,7 +10,6 @@ export function useSettingsShortcut() {
       e.preventDefault();
       openSettings();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, []);
 }

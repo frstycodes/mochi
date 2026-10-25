@@ -1,6 +1,7 @@
 import type { Photo } from '../photo/photos';
 
-const svg = (w: number, h: number, body: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`)}`;
+const svg = (w: number, h: number, body: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`)}`;
 
 const DUNES = svg(
   1200,
@@ -57,4 +58,7 @@ export const DEMO_PHOTOS = {
   mochi: { src: MOCHI, name: 'mochi-sticker.png' },
 } satisfies Record<string, Photo>;
 
-export const BROKEN_PHOTO: Photo = { src: 'mochi-missing://shot.png', name: '/tmp/playwright/shot-3.png' };
+export const BROKEN_PHOTO: Photo = {
+  src: 'mochi-missing://shot.png',
+  name: '/tmp/playwright/shot-3.png',
+};

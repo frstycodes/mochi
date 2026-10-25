@@ -7,7 +7,11 @@ import { connectorFor } from './connectors.ts';
  */
 export type ToolPermission = 'off' | 'ask' | 'allow';
 
-export const TOOL_PERMISSIONS = ['allow', 'ask', 'off'] as const satisfies ToolPermission[];
+export const TOOL_PERMISSIONS = [
+  'allow',
+  'ask',
+  'off',
+] as const satisfies ToolPermission[];
 
 /** One tool as the server's `tools/list` describes it. */
 export interface ConnectorTool {
@@ -33,11 +37,16 @@ export interface ConnectorSettings {
 }
 
 /** Read-only tools run on their own; anything else (destructive, or unannotated) asks first. */
-export function defaultPermission(tool: Pick<ConnectorTool, 'isReadOnly'>): ToolPermission {
+export function defaultPermission(
+  tool: Pick<ConnectorTool, 'isReadOnly'>,
+): ToolPermission {
   return tool.isReadOnly ? 'allow' : 'ask';
 }
 
-export function toolPermission(settings: ConnectorSettings | undefined, tool: ConnectorTool): { permission: ToolPermission; isChosen: boolean } {
+export function toolPermission(
+  settings: ConnectorSettings | undefined,
+  tool: ConnectorTool,
+): { permission: ToolPermission; isChosen: boolean } {
   const chosen = settings?.tools?.[tool.name];
   if (chosen) return { permission: chosen, isChosen: true };
   return { permission: defaultPermission(tool), isChosen: false };
@@ -52,14 +61,29 @@ export function toolGroups(tools: ConnectorTool[]) {
 }
 
 /** The one permission every tool in a group has, or null when they differ. */
-export function groupPermission(settings: ConnectorSettings | undefined, tools: ConnectorTool[]): ToolPermission | null {
-  const permissions = new Set(tools.map((tool) => toolPermission(settings, tool).permission));
+export function groupPermission(
+  settings: ConnectorSettings | undefined,
+  tools: ConnectorTool[],
+): ToolPermission | null {
+  const permissions = new Set(
+    tools.map((tool) => toolPermission(settings, tool).permission),
+  );
   return permissions.size === 1 ? [...permissions][0] : null;
 }
 
 /** Gives every tool in the group the same permission. */
-export function setTools(settings: ConnectorSettings, tools: ConnectorTool[], permission: ToolPermission): ConnectorSettings {
-  return { ...settings, tools: { ...settings.tools, ...Object.fromEntries(tools.map((t) => [t.name, permission])) } };
+export function setTools(
+  settings: ConnectorSettings,
+  tools: ConnectorTool[],
+  permission: ToolPermission,
+): ConnectorSettings {
+  return {
+    ...settings,
+    tools: {
+      ...settings.tools,
+      ...Object.fromEntries(tools.map((t) => [t.name, permission])),
+    },
+  };
 }
 
 export type ToolRules = Record<ToolPermission, string[]>;
@@ -69,9 +93,18 @@ export function toolRules(settings: ConnectorSettings | undefined): ToolRules {
   const rules: ToolRules = { allow: [], ask: [], off: [] };
   if (!settings || settings.isOff) return rules;
   const listed = settings.toolList?.tools ?? [];
-  const names = new Set([...listed.map((t) => t.name), ...Object.keys(settings.tools ?? {})]);
+  const names = new Set([
+    ...listed.map((t) => t.name),
+    ...Object.keys(settings.tools ?? {}),
+  ]);
   for (const name of names) {
-    const tool = listed.find((t) => t.name === name) ?? { name, title: null, description: '', isReadOnly: false, isDestructive: false };
+    const tool = listed.find((t) => t.name === name) ?? {
+      name,
+      title: null,
+      description: '',
+      isReadOnly: false,
+      isDestructive: false,
+    };
     rules[toolPermission(settings, tool).permission].push(name);
   }
   return rules;
@@ -82,9 +115,14 @@ export function toolRules(settings: ConnectorSettings | undefined): ToolRules {
  * Not verified: Claude's normalization of tool names (believed `[^a-zA-Z0-9_-]` → `_`); MCP tool names rarely carry others.
  */
 export function claudePermissions(rulesByKey: Record<string, ToolRules>) {
-  const permissions = { allow: [] as string[], ask: [] as string[], deny: [] as string[] };
+  const permissions = {
+    allow: [] as string[],
+    ask: [] as string[],
+    deny: [] as string[],
+  };
   for (const [key, rules] of Object.entries(rulesByKey)) {
-    const rule = (tool: string) => `mcp__${key}__${tool.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    const rule = (tool: string) =>
+      `mcp__${key}__${tool.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
     permissions.allow.push(...rules.allow.map(rule));
     permissions.ask.push(...rules.ask.map(rule));
     permissions.deny.push(...rules.off.map(rule));
@@ -97,15 +135,33 @@ export function claudePermissions(rulesByKey: Record<string, ToolRules>) {
  * `prompt` (asks). Checked against codex-cli 0.163.0 with `-c … mcp get`: it parses both and rejects unknown modes.
  * `tools` goes as one table so a tool name with a dot can't split the dotted path.
  */
-export function codexToolConfig(key: string, rules: ToolRules): Record<string, unknown> {
-  const tools = Object.fromEntries([...rules.allow.map((t) => [t, { approval_mode: 'approve' }]), ...rules.ask.map((t) => [t, { approval_mode: 'prompt' }])]);
+export function codexToolConfig(
+  key: string,
+  rules: ToolRules,
+): Record<string, unknown> {
+  const tools = Object.fromEntries([
+    ...rules.allow.map((t) => [t, { approval_mode: 'approve' }]),
+    ...rules.ask.map((t) => [t, { approval_mode: 'prompt' }]),
+  ]);
   return {
-    ...(rules.off.length && { [`mcp_servers.${key}.disabled_tools`]: rules.off }),
+    ...(rules.off.length && {
+      [`mcp_servers.${key}.disabled_tools`]: rules.off,
+    }),
     ...(Object.keys(tools).length && { [`mcp_servers.${key}.tools`]: tools }),
   };
 }
 
 /** A connector's name: what you typed, else the directory's, else what the server calls itself, else its host. */
-export function connectorName(url: string, given?: string, serverInfo?: { name?: string; title?: string }) {
-  return given?.trim() || connectorFor(url)?.name || serverInfo?.title?.trim() || serverInfo?.name?.trim() || new URL(url).hostname;
+export function connectorName(
+  url: string,
+  given?: string,
+  serverInfo?: { name?: string; title?: string },
+) {
+  return (
+    given?.trim() ||
+    connectorFor(url)?.name ||
+    serverInfo?.title?.trim() ||
+    serverInfo?.name?.trim() ||
+    new URL(url).hostname
+  );
 }

@@ -4,7 +4,11 @@ import type { AddressInfo } from 'node:net';
 import { WebSocketServer } from 'ws';
 
 export interface CdpRelayTarget {
-  readonly send: (method: string, params: Record<string, unknown>, sessionId: string | undefined) => Promise<unknown>;
+  readonly send: (
+    method: string,
+    params: Record<string, unknown>,
+    sessionId: string | undefined,
+  ) => Promise<unknown>;
   readonly targetId: () => Promise<string>;
   readonly url: () => string;
   readonly title: () => string;
@@ -13,7 +17,11 @@ export interface CdpRelayTarget {
 
 export interface CdpRelayConnection {
   readonly receive: (raw: string) => void;
-  readonly event: (method: string, params: unknown, sessionId: string | undefined) => void;
+  readonly event: (
+    method: string,
+    params: unknown,
+    sessionId: string | undefined,
+  ) => void;
 }
 
 interface CdpCommand {
@@ -34,13 +42,25 @@ const ANNOUNCE = Symbol('announce');
 const PAGE_SESSION_ID = 'mochi-page';
 
 // Electron's `will-download` owns downloads, so Playwright's download settings are accepted and ignored.
-const ACKNOWLEDGED = new Set(['Target.setDiscoverTargets', 'Browser.grantPermissions', 'Browser.resetPermissions', 'Browser.setDownloadBehavior', 'Browser.cancelDownload']);
+const ACKNOWLEDGED = new Set([
+  'Target.setDiscoverTargets',
+  'Browser.grantPermissions',
+  'Browser.resetPermissions',
+  'Browser.setDownloadBehavior',
+  'Browser.cancelDownload',
+]);
 
 /** Electron allows one debugger client per webContents, so this relay shares the existing attach. */
-export function createCdpRelayConnection(target: CdpRelayTarget, write: (message: string) => void): CdpRelayConnection {
-  const send = (message: Record<string, unknown>) => write(JSON.stringify(message));
+export function createCdpRelayConnection(
+  target: CdpRelayTarget,
+  write: (message: string) => void,
+): CdpRelayConnection {
+  const send = (message: Record<string, unknown>) =>
+    write(JSON.stringify(message));
   let attached = false;
-  const sessions = new Map<string, 'browser' | 'page'>([[PAGE_SESSION_ID, 'page']]);
+  const sessions = new Map<string, 'browser' | 'page'>([
+    [PAGE_SESSION_ID, 'page'],
+  ]);
   let sessionSequence = 0;
   const newSession = (kind: 'browser' | 'page') => {
     const sessionId = `mochi-${kind}-${++sessionSequence}`;
@@ -87,12 +107,14 @@ export function createCdpRelayConnection(target: CdpRelayTarget, write: (message
         return { sessionId: newSession('browser') };
       case 'Target.attachToTarget': {
         const targetId = command.params?.['targetId'];
-        if (targetId !== (await target.targetId())) throw new Error("Only this browser tab's page can be attached.");
+        if (targetId !== (await target.targetId()))
+          throw new Error("Only this browser tab's page can be attached.");
         return { sessionId: newSession('page') };
       }
       case 'Target.detachFromTarget': {
         const sessionId = command.params?.['sessionId'];
-        if (typeof sessionId === 'string' && sessionId !== PAGE_SESSION_ID) sessions.delete(sessionId);
+        if (typeof sessionId === 'string' && sessionId !== PAGE_SESSION_ID)
+          sessions.delete(sessionId);
         return {};
       }
       case 'Target.setAutoAttach': {
@@ -102,20 +124,33 @@ export function createCdpRelayConnection(target: CdpRelayTarget, write: (message
         return {
           [ANNOUNCE]: {
             method: 'Target.attachedToTarget',
-            params: { sessionId: PAGE_SESSION_ID, targetInfo: info, waitingForDebugger: false },
+            params: {
+              sessionId: PAGE_SESSION_ID,
+              targetInfo: info,
+              waitingForDebugger: false,
+            },
           },
         };
       }
       default:
-        throw new Error(`Not supported for a desktop browser tab: ${command.method}`);
+        throw new Error(
+          `Not supported for a desktop browser tab: ${command.method}`,
+        );
     }
   };
 
   const pageCommand = (command: CdpCommand): Promise<unknown> => {
-    const child = sessions.get(command.sessionId!) === 'page' ? undefined : command.sessionId;
+    const child =
+      sessions.get(command.sessionId!) === 'page'
+        ? undefined
+        : command.sessionId;
     // The page's own session is already running and is answered here. Child frames are paused by
     // waitForDebuggerOnStart, so the forwarded command is what resumes them.
-    if (command.method === 'Runtime.runIfWaitingForDebugger' && child === undefined) return Promise.resolve({});
+    if (
+      command.method === 'Runtime.runIfWaitingForDebugger' &&
+      child === undefined
+    )
+      return Promise.resolve({});
     return target.send(command.method, command.params ?? {}, child);
   };
 
@@ -129,8 +164,12 @@ export function createCdpRelayConnection(target: CdpRelayTarget, write: (message
       }
       if (!isCommand(command)) return;
       const result =
-        command.sessionId === undefined || sessions.get(command.sessionId) === 'browser' ? browserCommand(command) : pageCommand(command);
-      const route = command.sessionId === undefined ? {} : { sessionId: command.sessionId };
+        command.sessionId === undefined ||
+        sessions.get(command.sessionId) === 'browser'
+          ? browserCommand(command)
+          : pageCommand(command);
+      const route =
+        command.sessionId === undefined ? {} : { sessionId: command.sessionId };
       // Replies leave as commands finish, so a slow command never holds up the ones behind it.
       void result.then(
         (value) => {
@@ -138,7 +177,11 @@ export function createCdpRelayConnection(target: CdpRelayTarget, write: (message
             typeof value === 'object' && value !== null && ANNOUNCE in value
               ? (value as { [ANNOUNCE]: Record<string, unknown> })[ANNOUNCE]
               : undefined;
-          send({ id: command.id, result: announce ? {} : (value ?? {}), ...route });
+          send({
+            id: command.id,
+            result: announce ? {} : (value ?? {}),
+            ...route,
+          });
           if (announce) send(announce);
         },
         (cause: unknown) =>
@@ -164,14 +207,17 @@ export function createCdpRelayConnection(target: CdpRelayTarget, write: (message
         send({ method, params, sessionId });
         return;
       }
-      for (const [id, kind] of sessions) if (kind === 'page') send({ method, params, sessionId: id });
+      for (const [id, kind] of sessions)
+        if (kind === 'page') send({ method, params, sessionId: id });
     },
   };
 }
 
-export async function serveRelay(
-  target: CdpRelayTarget,
-): Promise<{ endpoint: string; close: () => void; event: CdpRelayConnection['event'] }> {
+export async function serveRelay(target: CdpRelayTarget): Promise<{
+  endpoint: string;
+  close: () => void;
+  event: CdpRelayConnection['event'];
+}> {
   const path = `/${randomBytes(16).toString('hex')}`;
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0, path });
   await once(server, 'listening');
@@ -179,9 +225,13 @@ export async function serveRelay(
   let relay: CdpRelayConnection | undefined;
   server.on('connection', (socket) => {
     if (relay) return socket.close(1008);
-    const connection = createCdpRelayConnection(target, (message) => socket.send(message));
+    const connection = createCdpRelayConnection(target, (message) =>
+      socket.send(message),
+    );
     relay = connection;
-    socket.on('message', (data) => connection.receive((data as Buffer).toString()));
+    socket.on('message', (data) =>
+      connection.receive((data as Buffer).toString()),
+    );
   });
   return {
     endpoint: `ws://127.0.0.1:${port}${path}`,
@@ -189,6 +239,7 @@ export async function serveRelay(
       for (const client of server.clients) client.close();
       server.close();
     },
-    event: (method, params, sessionId) => relay?.event(method, params, sessionId),
+    event: (method, params, sessionId) =>
+      relay?.event(method, params, sessionId),
   };
 }

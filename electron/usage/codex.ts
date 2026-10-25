@@ -1,16 +1,36 @@
 import { join } from 'node:path';
-import { fileRecords, jsonlFiles, rootOf, type UsageRecord } from './records.ts';
+import {
+  fileRecords,
+  jsonlFiles,
+  rootOf,
+  type UsageRecord,
+} from './records.ts';
 
 /**
  * Codex's rollouts: `<CODEX_HOME>/sessions/YYYY/MM/DD/*.jsonl`, and the ones it archived, zstd-compressed, in
  * `archived_sessions/`. The first line is `session_meta` with the cwd; `turn_context` names the model; each `token_count`
  * event carries the running total and the last response's tokens.
  */
-export async function codexRecords(homes: string[], roots: string[], since: number | null): Promise<UsageRecord[]> {
-  const dirs = homes.flatMap((home) => [join(home, 'sessions'), join(home, 'archived_sessions')]);
-  const files = (await Promise.all(dirs.map((dir) => jsonlFiles(dir, since)))).flat();
-  const all = await Promise.all(files.map((f) => fileRecords(f, parseCodexLog)));
-  return all.filter((records) => records.length > 0 && rootOf(records[0].cwd, roots) !== null).flat();
+export async function codexRecords(
+  homes: string[],
+  roots: string[],
+  since: number | null,
+): Promise<UsageRecord[]> {
+  const dirs = homes.flatMap((home) => [
+    join(home, 'sessions'),
+    join(home, 'archived_sessions'),
+  ]);
+  const files = (
+    await Promise.all(dirs.map((dir) => jsonlFiles(dir, since)))
+  ).flat();
+  const all = await Promise.all(
+    files.map((f) => fileRecords(f, parseCodexLog)),
+  );
+  return all
+    .filter(
+      (records) => records.length > 0 && rootOf(records[0].cwd, roots) !== null,
+    )
+    .flat();
 }
 
 /**
@@ -25,7 +45,11 @@ export async function parseCodexLog(lines: AsyncIterable<string>) {
   let sessionId = '';
   let model = '';
   let lastTotal = '';
-  const usage = (at: string, key: string | null, u: TokenUsage): UsageRecord => {
+  const usage = (
+    at: string,
+    key: string | null,
+    u: TokenUsage,
+  ): UsageRecord => {
     const cached = u.cached_input_tokens ?? 0;
     return {
       key,
@@ -55,9 +79,25 @@ export async function parseCodexLog(lines: AsyncIterable<string>) {
       sessionId = p.id ?? '';
     } else if (entry.type === 'turn_context') {
       model = p.model ?? model;
-    } else if (entry.type === 'token_usage_record' && p.usage && entry.timestamp && p.thread_id === sessionId) {
-      fromRecords.push(usage(entry.timestamp, p.response_id ? `codex\u0000${p.response_id}` : null, p.usage));
-    } else if (entry.type === 'event_msg' && p.type === 'token_count' && p.info?.last_token_usage && entry.timestamp) {
+    } else if (
+      entry.type === 'token_usage_record' &&
+      p.usage &&
+      entry.timestamp &&
+      p.thread_id === sessionId
+    ) {
+      fromRecords.push(
+        usage(
+          entry.timestamp,
+          p.response_id ? `codex\u0000${p.response_id}` : null,
+          p.usage,
+        ),
+      );
+    } else if (
+      entry.type === 'event_msg' &&
+      p.type === 'token_count' &&
+      p.info?.last_token_usage &&
+      entry.timestamp
+    ) {
       // Codex repeats the event with an unchanged total (rate-limit refreshes); only a new total is a new response.
       const total = JSON.stringify(p.info.total_token_usage);
       if (total === lastTotal) continue;
@@ -86,6 +126,9 @@ interface CodexLine {
     thread_id?: string;
     response_id?: string;
     usage?: TokenUsage;
-    info?: { total_token_usage?: unknown; last_token_usage?: TokenUsage } | null;
+    info?: {
+      total_token_usage?: unknown;
+      last_token_usage?: TokenUsage;
+    } | null;
   };
 }

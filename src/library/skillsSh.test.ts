@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { parseLeaderboard } from './skillsSh.ts';
 
 test('parseLeaderboard reads the escaped initialSkills the skills.sh front page embeds', () => {
@@ -8,9 +8,22 @@ test('parseLeaderboard reads the escaped initialSkills the skills.sh front page 
   assert.deepEqual(
     skills.map((s) => [s.id, s.installs, s.installSource, s.url]),
     [
-      ['vercel-labs/skills/find-skills', 3927274, 'vercel-labs/skills@find-skills', 'https://skills.sh/vercel-labs/skills/find-skills'],
-      ['mattpocock/skills/grill-me', 1387557, 'mattpocock/skills@grill-me', 'https://skills.sh/mattpocock/skills/grill-me'],
+      [
+        'vercel-labs/skills/find-skills',
+        3927274,
+        'vercel-labs/skills@find-skills',
+        'https://skills.sh/vercel-labs/skills/find-skills',
+      ],
+      [
+        'mattpocock/skills/grill-me',
+        1387557,
+        'mattpocock/skills@grill-me',
+        'https://skills.sh/mattpocock/skills/grill-me',
+      ],
     ],
   );
-  assert.throws(() => parseLeaderboard('<html>changed</html>'), /search still works/);
+  assert.throws(
+    () => parseLeaderboard('<html>changed</html>'),
+    /search still works/,
+  );
 });

@@ -1,20 +1,27 @@
 import { isMet, type Step, type StepStatus, type Thread } from './model.ts';
 import { summarize } from './summary.ts';
-import { getPrefs } from './settings/prefs.ts';
+import { prefsNow } from './store/context.ts';
 
 export function statusAt(step: Step, t: number): StepStatus | null {
   if (step.addedAt > t) return null;
   if (step.droppedAt !== undefined && step.droppedAt <= t) return 'dropped';
   if (step.doneAt !== undefined && step.doneAt <= t) return 'done';
   const finishedLater = step.status === 'done' || step.status === 'dropped';
-  if (step.startedAt !== undefined && step.startedAt <= t) return finishedLater ? 'running' : step.status;
+  if (step.startedAt !== undefined && step.startedAt <= t)
+    return finishedLater ? 'running' : step.status;
   if (finishedLater || step.status === 'running') return 'ready';
   return step.status;
 }
 
 export type Phase = 'planning' | 'building' | 'verifying' | 'ready' | 'settled';
 
-export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Archived' } satisfies Record<Phase, string>;
+export const GOAL_PHASE_LABELS = {
+  planning: 'Planning',
+  building: 'Building',
+  verifying: 'Verifying',
+  ready: 'Ready for review',
+  settled: 'Archived',
+} satisfies Record<Phase, string>;
 
 /**
  * The ring: criteria met out of the goal's criteria (what done means); no criteria, no count. Steps never count: they aren't
@@ -22,9 +29,13 @@ export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', v
  * checks), never from the agent's own percentage.
  */
 export function goalProgress(thread: Thread) {
-  const criteria = getPrefs().goals ? (thread.criteria ?? []) : [];
+  const criteria = prefsNow().goals ? (thread.criteria ?? []) : [];
   const met = criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length;
-  return { met, total: criteria.length, phase: phaseOf(thread, criteria.length > 0 && met === criteria.length) };
+  return {
+    met,
+    total: criteria.length,
+    phase: phaseOf(thread, criteria.length > 0 && met === criteria.length),
+  };
 }
 
 function phaseOf(thread: Thread, isAllMet: boolean): Phase {
@@ -32,18 +43,26 @@ function phaseOf(thread: Thread, isAllMet: boolean): Phase {
   // `review` is a status only threads saved before the verdict decided readiness still carry (and the demo's).
   if (isAllMet || thread.status === 'review') return 'ready';
   if (thread.criteria?.some((c) => c.claim || c.check)) return 'verifying';
-  if (thread.steps.some((s) => s.status === 'done' || s.status === 'running') || summarize(thread.activity).files.length) return 'building';
+  if (
+    thread.steps.some((s) => s.status === 'done' || s.status === 'running') ||
+    summarize(thread.activity).files.length
+  )
+    return 'building';
   return 'planning';
 }
 
 /** "Building · 1/3" with criteria, "Building" without. */
 export function progressLabel(p: ReturnType<typeof goalProgress>) {
-  return p.total ? `${GOAL_PHASE_LABELS[p.phase]} · ${p.met}/${p.total}` : GOAL_PHASE_LABELS[p.phase];
+  return p.total
+    ? `${GOAL_PHASE_LABELS[p.phase]} · ${p.met}/${p.total}`
+    : GOAL_PHASE_LABELS[p.phase];
 }
 
 /** Each step's column on the board: its place in its thread's plan. */
 export function boardColumns(lines: Step[][]): Map<string, number> {
-  return new Map(lines.flatMap((steps) => steps.map((s, i) => [s.id, i] as const)));
+  return new Map(
+    lines.flatMap((steps) => steps.map((s, i) => [s.id, i] as const)),
+  );
 }
 
 export function clock(minutes: number) {
@@ -53,18 +72,37 @@ export function clock(minutes: number) {
 }
 
 export function duration(minutes: number) {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
+  return formatElapsed(minutes * 60_000, 'minutes');
 }
 
-export function formatElapsed(ms: number) {
+export function shortElapsed(ms: number) {
+  return formatElapsed(ms, 'short');
+}
+
+export function planDuration(ms: number, isRunning: boolean) {
+  return isRunning || ms < 60_000
+    ? formatElapsed(ms)
+    : duration(Math.floor(ms / 60_000));
+}
+
+export function formatElapsed(
+  ms: number,
+  style: 'clock' | 'minutes' | 'short' | 'precise' = 'clock',
+) {
   const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+  const m = style === 'minutes' ? ms / 60_000 : Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (style === 'precise')
+    return ms < 60_000
+      ? `${(ms / 1000).toFixed(1)}s`
+      : `${m}m ${Math.round((ms % 60_000) / 1000)}s`;
+  if (style !== 'minutes' && s < 60) return `${s}s`;
+  if (style === 'short') return m < 60 ? `${m}m` : `${h}h`;
+  if (style === 'minutes')
+    return m < 60 ? `${m}m` : m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+  return m < 60
+    ? `${m}m ${String(s % 60).padStart(2, '0')}s`
+    : `${h}h ${m % 60}m`;
 }
 
 const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
@@ -73,11 +111,23 @@ const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 export function timeAgo(minutes: number) {
   if (minutes < 1) return 'just now';
   if (minutes < 60) return RELATIVE.format(-Math.round(minutes), 'minute');
-  if (minutes < 24 * 60) return RELATIVE.format(-Math.round(minutes / 60), 'hour');
+  if (minutes < 24 * 60)
+    return RELATIVE.format(-Math.round(minutes / 60), 'hour');
   return RELATIVE.format(-Math.round(minutes / (24 * 60)), 'day');
 }
 
-const STOP = new Set(['the', 'and', 'for', 'with', 'into', 'add', 'from', 'that', 'this', 'per']);
+const STOP = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'into',
+  'add',
+  'from',
+  'that',
+  'this',
+  'per',
+]);
 
 export function tokens(text: string) {
   return new Set(

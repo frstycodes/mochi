@@ -1,5 +1,12 @@
 import { Edit, Flag } from '@/icons';
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import type { Thread } from '../model';
 import { TooltipIconButton } from '../ui';
 import { CriteriaList } from './CriteriaList';
@@ -18,7 +25,11 @@ export function GoalCard({ thread }: { thread: Thread }) {
         </CardDescription>
         <CardTitle className="text-pretty">{thread.goal}</CardTitle>
         <CardAction>
-          <TooltipIconButton label="Edit goal" hint="Change the outcome or what done means" onClick={() => openGoalEditor(thread.id)}>
+          <TooltipIconButton
+            label="Edit goal"
+            hint="Change the outcome or what done means"
+            onClick={() => openGoalEditor(thread.id)}
+          >
             <Edit />
           </TooltipIconButton>
         </CardAction>

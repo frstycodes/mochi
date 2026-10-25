@@ -1,11 +1,32 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { listenKeydown } from '../keymap';
+import {
+  Fragment,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { createPortal } from 'react-dom';
+import { ErrorBoundary } from 'react-error-boundary';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
 import { Edit, Folder, Ban, Inbox, Route, Chart } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { ErrorFallback } from '@/components/ErrorFallback';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
 import { COMPOSER_EDITABLE } from '../chat/ComposerEditor';
 import { BoardView } from '../BoardView';
@@ -19,11 +40,22 @@ import { useDispatch, useHarnessSelector, useThread } from '../store';
 import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
-import { useSplitTabDrag } from './useSplitTabDrag';
+import { SplitTabHandle } from './SplitTabHandle';
 import { PaneSlotBar, PaneSlots } from '../pane/PaneHeader';
 import { LeafBar } from './SplitControls';
 import { PreviewContext, SplitContext } from './SplitContext';
-import { displayRoot, equalSizes, findLeaf, leaves, snapSizes, type Leaf, type LayoutNode, type Split, type View, type Zone } from './tree';
+import {
+  displayRoot,
+  equalSizes,
+  findLeaf,
+  leaves,
+  snapSizes,
+  type Leaf,
+  type LayoutNode,
+  type Split,
+  type View,
+  type Zone,
+} from './tree';
 import { useLayoutKeys } from './useLayoutKeys';
 import { useWatchToasts } from './useWatchToasts';
 
@@ -42,7 +74,11 @@ export function Workspace() {
 
   return (
     <div className={cn('h-full min-h-0', isMulti && 'bg-sidebar p-1.5')}>
-      {zoomed ? <LeafView leaf={zoomed} isMulti isZoomed isFirst /> : <NodeView node={root} isMulti={isMulti} firstId={all[0].id} />}
+      {zoomed ? (
+        <LeafView leaf={zoomed} isMulti isZoomed isFirst />
+      ) : (
+        <NodeView node={root} isMulti={isMulti} firstId={all[0].id} />
+      )}
     </div>
   );
 }
@@ -56,8 +92,24 @@ export function WorkspaceEffects() {
   return <DragChip />;
 }
 
-function NodeView({ node, isMulti, firstId }: { node: LayoutNode; isMulti: boolean; firstId: string }) {
-  if (node.kind === 'leaf') return <LeafView leaf={node} isMulti={isMulti} isZoomed={false} isFirst={node.id === firstId} />;
+function NodeView({
+  node,
+  isMulti,
+  firstId,
+}: {
+  node: LayoutNode;
+  isMulti: boolean;
+  firstId: string;
+}) {
+  if (node.kind === 'leaf')
+    return (
+      <LeafView
+        leaf={node}
+        isMulti={isMulti}
+        isZoomed={false}
+        isFirst={node.id === firstId}
+      />
+    );
   return <SplitView split={node} firstId={firstId} />;
 }
 
@@ -65,7 +117,8 @@ function SplitView({ split, firstId }: { split: Split; firstId: string }) {
   const dispatch = useDispatch();
   const group = useRef<GroupImperativeHandle | null>(null);
   const ids = split.children.map((c) => c.id);
-  const toLayout = (sizes: number[]) => Object.fromEntries(ids.map((id, i) => [id, sizes[i]]));
+  const toLayout = (sizes: number[]) =>
+    Object.fromEntries(ids.map((id, i) => [id, sizes[i]]));
   const equalize = () => {
     group.current?.setLayout(toLayout(equalSizes(ids.length)));
     dispatch({ type: 'layout-equalize', splitId: split.id });
@@ -107,30 +160,58 @@ function SplitView({ split, firstId }: { split: Split; firstId: string }) {
  * `isPreview`: a pinned page beside the one in view, drawn the way a lone split draws it but read-only (`inert`, no native overlays, not a
  * drop or focus target). Same element tree either way, so landing on it only flips these props and never remounts the thread.
  */
-export function LeafView({ leaf, isMulti, isZoomed, isFirst, isPreview = false }: { leaf: Leaf; isMulti: boolean; isZoomed: boolean; isFirst: boolean; isPreview?: boolean }) {
+export function LeafView({
+  leaf,
+  isMulti,
+  isZoomed,
+  isFirst,
+  isPreview = false,
+}: {
+  leaf: Leaf;
+  isMulti: boolean;
+  isZoomed: boolean;
+  isFirst: boolean;
+  isPreview?: boolean;
+}) {
   const dispatch = useDispatch();
   const ref = useRef<HTMLElement>(null);
   const isWide = useIsWider(ref, WIDE_SPLIT_PX);
-  const isFocused = useHarnessSelector((s) => !isPreview && s.layouts[s.spaceId].focusId === leaf.id);
+  const isFocused = useHarnessSelector(
+    (s) => !isPreview && s.layouts[s.spaceId].focusId === leaf.id,
+  );
   useFocusFollows(ref, isFocused && isMulti);
-  const focus = () => !isPreview && dispatch({ type: 'layout-focus', leafId: leaf.id });
+  const focus = () =>
+    !isPreview && dispatch({ type: 'layout-focus', leafId: leaf.id });
 
   return (
-    <SplitContext.Provider value={{ leafId: leaf.id, isFocused, isMulti, isZoomed, isFirst, isWide }}>
+    <SplitContext.Provider
+      value={{ leafId: leaf.id, isFocused, isMulti, isZoomed, isFirst, isWide }}
+    >
       <PreviewContext.Provider value={isPreview}>
         <section
           ref={ref}
           data-leaf-id={isPreview ? undefined : leaf.id}
           inert={isPreview}
           aria-hidden={isPreview || undefined}
-          aria-label={isMulti ? `Split${isFocused ? ', focused' : ''}` : undefined}
+          aria-label={
+            isMulti ? `Split${isFocused ? ', focused' : ''}` : undefined
+          }
           tabIndex={-1}
           // Primary button only: right-clicking a split's tab or header opens its menu without focusing the split.
           onPointerDownCapture={(e) => e.button === 0 && focus()}
           onFocusCapture={() => isTabbing() && focus()}
-          className={cn('relative h-full min-h-0 min-w-0 bg-background outline-none', isMulti && 'overflow-hidden rounded-xl border border-transparent', isMulti && isFocused && 'border-foreground/20')}
+          className={cn(
+            'relative h-full min-h-0 min-w-0 bg-background outline-none',
+            isMulti && 'overflow-hidden rounded-xl border border-transparent',
+            isMulti && isFocused && 'border-foreground/20',
+          )}
         >
-          <LeafContent leafId={leaf.id} view={leaf.view} />
+          <ErrorBoundary
+            FallbackComponent={ErrorFallback}
+            resetKeys={[JSON.stringify(leaf.view)]}
+          >
+            <LeafContent leafId={leaf.id} view={leaf.view} />
+          </ErrorBoundary>
           <DropZone leafId={leaf.id} />
         </section>
       </PreviewContext.Provider>
@@ -140,7 +221,8 @@ export function LeafView({ leaf, isMulti, isZoomed, isFirst, isPreview = false }
 
 function LeafContent({ leafId, view }: { leafId: string; view: View }) {
   const thread = useThread(view.kind === 'thread' ? view.id : '');
-  if (view.kind === 'tab') return <TabLeaf threadId={view.threadId} tabId={view.tabId} />;
+  if (view.kind === 'tab')
+    return <TabLeaf threadId={view.threadId} tabId={view.tabId} />;
   // A thread or tab that no longer exists (deleted, or saved by a launch that showed demo data) opens a new thread.
   const kind = view.kind in PAGES ? (view.kind as PageKind) : 'new';
   const { icon: Icon, title, component: Page } = PAGES[kind];
@@ -177,12 +259,23 @@ const PAGES = {
 
 type PageKind = keyof typeof PAGES;
 
-const PAGE_EXIT = { leave: (isHandoff: boolean) => ({ opacity: 0, transition: isHandoff ? HANDOFF_TRANSITION : { duration: 0 } }) };
+const PAGE_EXIT = {
+  leave: (isHandoff: boolean) => ({
+    opacity: 0,
+    transition: isHandoff ? HANDOFF_TRANSITION : { duration: 0 },
+  }),
+};
 
 function PageLeaf({ children }: { children: ReactNode }) {
   const isPresent = useIsPresent();
   return (
-    <motion.div variants={PAGE_EXIT} exit="leave" inert={!isPresent} data-exiting={!isPresent || undefined} className="absolute inset-0 flex min-h-0 flex-col">
+    <motion.div
+      variants={PAGE_EXIT}
+      exit="leave"
+      inert={!isPresent}
+      data-exiting={!isPresent || undefined}
+      className="absolute inset-0 flex min-h-0 flex-col"
+    >
       {children}
     </motion.div>
   );
@@ -192,20 +285,32 @@ function PageLeaf({ children }: { children: ReactNode }) {
 function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
   const dispatch = useDispatch();
   const thread = useThread(threadId);
-  const pane = useHarnessSelector((s) => s.panes.find((p) => p.threadId === threadId));
+  const pane = useHarnessSelector((s) =>
+    s.panes.find((p) => p.threadId === threadId),
+  );
   const tab = pane?.tabs.find((t) => t.id === tabId);
-  const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind, tab ? tabTitle(tab) : '');
   if (!thread || !pane || !tab) return <ClosedTab />;
   const { icon: Icon, component: Content } = PANE_TABS[tab.kind];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <LeafBar>
-        <span onPointerDown={onDragHandle} className="app-no-drag flex min-w-0 cursor-grab items-center gap-2 select-none active:cursor-grabbing">
+        <SplitTabHandle
+          threadId={threadId}
+          tabId={tabId}
+          kind={tab.kind}
+          label={tabTitle(tab)}
+        >
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{tabTitle(tab)}</span>
-        </span>
-        <button type="button" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })} className="min-w-0 cursor-default truncate font-normal text-subtle-foreground hover:text-foreground">
+        </SplitTabHandle>
+        <button
+          type="button"
+          onClick={() =>
+            dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })
+          }
+          className="min-w-0 cursor-default truncate font-normal text-subtle-foreground hover:text-foreground"
+        >
           {thread.title}
         </button>
       </LeafBar>
@@ -227,9 +332,15 @@ function ClosedTab() {
       <Empty className="flex-1">
         <EmptyHeader>
           <EmptyTitle>This tab was closed</EmptyTitle>
-          <EmptyDescription>Its thread closed it, or the thread is gone. Open the Queue here or close the split.</EmptyDescription>
+          <EmptyDescription>
+            Its thread closed it, or the thread is gone. Open the Queue here or
+            close the split.
+          </EmptyDescription>
         </EmptyHeader>
-        <Button size="sm" onClick={() => dispatch({ type: 'go', view: { kind: 'queue' } })}>
+        <Button
+          size="sm"
+          onClick={() => dispatch({ type: 'go', view: { kind: 'queue' } })}
+        >
           Open the Queue
         </Button>
       </Empty>
@@ -245,7 +356,13 @@ const ZONE_RECT = {
   center: 'inset-1.5',
 } satisfies Record<Zone, string>;
 
-const ZONE_LABEL = { left: 'Open on the left', right: 'Open on the right', top: 'Open above', bottom: 'Open below', center: 'Replace this split' } satisfies Record<Zone, string>;
+const ZONE_LABEL = {
+  left: 'Open on the left',
+  right: 'Open on the right',
+  top: 'Open above',
+  bottom: 'Open below',
+  center: 'Replace this split',
+} satisfies Record<Zone, string>;
 
 /** While something is dragged over this split, shows the region it would take, or why it can't open here. */
 function DropZone({ leafId }: { leafId: string }) {
@@ -254,9 +371,19 @@ function DropZone({ leafId }: { leafId: string }) {
   if (!hit) return null;
   if (drag?.refusal) return <RefusedZone reason={drag.refusal} />;
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 z-50 bg-background/40">
-      <div className={cn('absolute flex items-center justify-center rounded-xl border border-foreground/25 bg-foreground/8', ZONE_RECT[hit.zone])}>
-        <span className="rounded-full bg-popover px-2.5 py-1 type-caption text-foreground shadow-popover">{ZONE_LABEL[hit.zone]}</span>
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 z-50 bg-background/40"
+    >
+      <div
+        className={cn(
+          'absolute flex items-center justify-center rounded-xl border border-foreground/25 bg-foreground/8',
+          ZONE_RECT[hit.zone],
+        )}
+      >
+        <span className="rounded-full bg-popover px-2.5 py-1 type-caption text-foreground shadow-popover">
+          {ZONE_LABEL[hit.zone]}
+        </span>
       </div>
     </div>
   );
@@ -264,7 +391,10 @@ function DropZone({ leafId }: { leafId: string }) {
 
 function RefusedZone({ reason }: { reason: string }) {
   return (
-    <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/40 p-4">
+    <div
+      role="status"
+      className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/40 p-4"
+    >
       <span className="flex max-w-72 items-center gap-1.5 rounded-xl bg-popover px-3 py-2 type-caption text-foreground shadow-popover">
         <Ban className="size-3.5 shrink-0 text-muted-foreground" />
         {reason}
@@ -277,7 +407,11 @@ function DragChip() {
   const drag = useDragSession();
   if (!drag || drag.hasOwnGhost) return null;
   return createPortal(
-    <div aria-hidden className="pointer-events-none fixed z-[600] rounded-lg bg-popover px-2.5 py-1 type-meta text-foreground shadow-float" style={{ left: drag.x + 12, top: drag.y + 12 }}>
+    <div
+      aria-hidden
+      className="pointer-events-none fixed z-[600] rounded-lg bg-popover px-2.5 py-1 type-meta text-foreground shadow-float"
+      style={{ left: drag.x + 12, top: drag.y + 12 }}
+    >
       {drag.label}
     </div>,
     document.body,
@@ -298,19 +432,28 @@ function useIsWider(ref: RefObject<HTMLElement | null>, px: number) {
 }
 
 /** Keyboard focus moves (mod [ ], nav arrows, a preset) also move the caret into the newly focused split's composer. */
-function useFocusFollows(ref: RefObject<HTMLElement | null>, isFocused: boolean) {
+function useFocusFollows(
+  ref: RefObject<HTMLElement | null>,
+  isFocused: boolean,
+) {
   const wasFocused = useRef(isFocused);
   useEffect(() => {
     const el = ref.current;
     const becameFocused = isFocused && !wasFocused.current;
     wasFocused.current = isFocused;
     if (!el || !becameFocused || el.contains(document.activeElement)) return;
-    (el.querySelector<HTMLElement>(COMPOSER_EDITABLE) ?? el).focus({ preventScroll: true });
+    (el.querySelector<HTMLElement>(COMPOSER_EDITABLE) ?? el).focus({
+      preventScroll: true,
+    });
   }, [ref, isFocused]);
 }
 
 let lastTabAt = 0;
-if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => e.key === 'Tab' && (lastTabAt = performance.now()), true);
+if (typeof window !== 'undefined')
+  listenKeydown(
+    (e) => e.key === 'Tab' && (lastTabAt = performance.now()),
+    true,
+  );
 
 /** Tabbing into a split focuses it; programmatic focus (a composer autofocusing on mount) must not. */
 function isTabbing() {
@@ -318,21 +461,34 @@ function isTabbing() {
 }
 
 /** After the set of splits changes, composers have autofocused in mount order; put the caret back in the focused split. Parent effects run after children's, so this wins. */
-function useCaretInFocusedSplit(structure: string, focusId: string, isMulti: boolean) {
-  const latestFocus = useRef(focusId);
-  latestFocus.current = focusId;
-  useEffect(() => {
-    if (!isMulti) return;
-    const el = document.querySelector<HTMLElement>(`[data-leaf-id="${latestFocus.current}"]`);
+function useCaretInFocusedSplit(
+  structure: string,
+  focusId: string,
+  isMulti: boolean,
+) {
+  const focusCaret = useEffectEvent(() => {
+    const el = document.querySelector<HTMLElement>(
+      `[data-leaf-id="${focusId}"]`,
+    );
     if (!el || el.contains(document.activeElement)) return;
-    (el.querySelector<HTMLElement>(COMPOSER_EDITABLE) ?? el).focus({ preventScroll: true });
+    (el.querySelector<HTMLElement>(COMPOSER_EDITABLE) ?? el).focus({
+      preventScroll: true,
+    });
+  });
+  useEffect(() => {
+    if (isMulti) focusCaret();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `structure` is the trigger: the caret moves back each time the set of splits changes
   }, [structure, isMulti]);
 }
 
 function useWindowOrientation() {
   const dispatch = useDispatch();
   useEffect(() => {
-    const onResize = () => dispatch({ type: 'layout-aspect', orientation: window.innerWidth >= window.innerHeight ? 'row' : 'column' });
+    const onResize = () =>
+      dispatch({
+        type: 'layout-aspect',
+        orientation: window.innerWidth >= window.innerHeight ? 'row' : 'column',
+      });
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
