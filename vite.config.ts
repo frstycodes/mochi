@@ -13,9 +13,7 @@ const VENDORED = ['src/components/ui/**', 'src/components/ai-elements/**'];
 
 export default defineConfig(({ mode }) => ({
   base: './',
-  fmt: { singleQuote: true, printWidth: 160 },
-  // GAP: format check is off until in-flight branches land; turning it on reformats ~210 files in one commit.
-  check: { fmt: false },
+  fmt: { singleQuote: true, printWidth: 80, ignorePatterns: [...VENDORED, '**/fixtures/**', '.claude/**'] },
   lint: {
     plugins: ['eslint', 'typescript', 'unicorn', 'oxc', 'react'],
     jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }, './scripts/oxlint/index.ts', 'eslint-plugin-sonarjs'],
