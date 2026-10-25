@@ -14,7 +14,6 @@ import {
   Feedback,
   PointerActivationConstraints,
   PointerSensor,
-  type Droppable,
 } from '@dnd-kit/dom';
 import { DOMRectangle } from '@dnd-kit/dom/utilities';
 import { DragDropProvider } from '@dnd-kit/react';
@@ -184,26 +183,3 @@ const dragStarts = new WeakMap<object, DOMRectangle | undefined>();
 
 // About 40px of a full-height sidebar.
 const EDGE_SCROLL_SHARE = 0.05;
-
-/** A droppable hit only while the pointer is over the middle half of its height: the rest of the row is for reordering. */
-export const middleHalf: Droppable['collisionDetector'] = ({
-  droppable,
-  dragOperation,
-}) => {
-  // Typed over dnd-kit's abstract droppable; the DOM one, with an element, is what `useDroppable` registers. Measured live, not from
-  // `droppable.shape`: rows gliding to a new slot move by transform.
-  const rect = (
-    droppable as unknown as Droppable
-  ).element?.getBoundingClientRect();
-  const { x, y } = dragOperation.position.current;
-  if (
-    !rect ||
-    x < rect.left ||
-    x > rect.right ||
-    y < rect.top + rect.height / 4 ||
-    y > rect.bottom - rect.height / 4
-  )
-    return null;
-  // Type 2 is CollisionType.PointerIntersection and priority 2 is CollisionPriority.Normal; both enums live in @dnd-kit/abstract.
-  return { id: droppable.id, value: 1, type: 2, priority: 2 };
-};

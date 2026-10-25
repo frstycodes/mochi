@@ -108,6 +108,7 @@ import { SummaryGoalBlock } from './sections/summary-goal';
 import { ThreadRowVariantsBlock } from './sections/thread-rows';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { SubThreadGroupingBlock } from './sections/sub-thread-grouping';
+import { TiltedDragBlock } from './sections/tilted-drag';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
 import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
@@ -1184,6 +1185,7 @@ function Recipes() {
         <ThreadRowVariantsBlock rl={rl} />
         <SubThreadsBlock rl={rl} />
         <SubThreadGroupingBlock rl={rl} />
+        <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
         {verdictFixtures(rl).map(({ label, thread }) => (
           <Block
