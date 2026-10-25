@@ -12,7 +12,7 @@ export const PACKAGE_TOKENS = 24_000;
 const MAX_DETAIL = 2_000;
 
 const HISTORY_LINE =
-  'Earlier work in this thread is in the mcp__mochi__thread_history tool; check it before redoing or contradicting something. Every [seq] below is an address it takes.';
+  "Earlier work in this thread is in Mochi's thread_history tool; check it before redoing or contradicting something. Every [seq] below is an address it takes.";
 
 export interface PackageInput {
   readonly from: Provider;

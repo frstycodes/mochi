@@ -18,9 +18,11 @@ import {
   type Push,
   type SeqEvent,
 } from './events.ts';
-import { disposeAgents, useAgentServices } from './handlers.ts';
+import type { HistoryArgs } from '../switch/history.ts';
+import { disposeAgents, threadHistory, useAgentServices } from './handlers.ts';
 import { useLimitDocs } from './limits.ts';
 import { useMain } from './main.ts';
+import { setThreadHistory } from './mochiTools.ts';
 import { noteLogin } from './models.ts';
 import { setDataDir } from './paths.ts';
 import { setImageDir } from './images.ts';
@@ -120,6 +122,7 @@ export const layerAgents = (userData: string | undefined) =>
           Effect.runPromise(store.setDoc('limits', accountId, limits)),
       });
       useAgentServices({ turns, queue, context });
+      setThreadHistory(threadHistory);
       yield* Effect.addFinalizer(() => Effect.sync(disposeAgents));
     }),
   );
@@ -142,6 +145,13 @@ export const agentRpcHandlers = {
     ),
   agentEmit: ({ event }: { event: unknown }) =>
     Effect.sync(() => emitAgentEvent(event as AgentEvent)),
+  agentThreadHistory: ({
+    threadId,
+    args,
+  }: {
+    threadId: string;
+    args: unknown;
+  }) => Effect.promise(() => threadHistory(threadId, args as HistoryArgs)),
   agentNoteLogin: ({
     accountId,
     login,

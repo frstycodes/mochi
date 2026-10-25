@@ -8,6 +8,7 @@ import { Run } from '../run.ts';
 import { Projection } from '../store/projection.ts';
 import { PRIORITY, UtilityQueue } from '../utility/queue.ts';
 import { BRIEF_EVERY, briefRequest, parseBrief } from './brief.ts';
+import { historyAnswer, type HistoryArgs } from './history.ts';
 import { contextPackage, PACKAGE_TOKENS } from './package.ts';
 import { transcriptOf } from './transcript.ts';
 
@@ -195,7 +196,14 @@ export class ThreadContext extends Context.Service<ThreadContext>()(
               ON CONFLICT (thread_id) DO UPDATE SET through_seq = excluded.through_seq, brief_json = excluded.brief_json, updated_at = excluded.updated_at`;
           });
 
-        return { prepare, updateBrief, briefOf, eventsOf };
+        /** A `thread_history` call, scoped to its thread. */
+        const history = (threadId: string, args: HistoryArgs) =>
+          Effect.gen(function* () {
+            const items = transcriptOf(yield* eventsOf(threadId, 0));
+            return historyAnswer(args, items, yield* briefOf(threadId));
+          });
+
+        return { prepare, updateBrief, history, briefOf };
       }),
   },
 ) {

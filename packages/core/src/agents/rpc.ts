@@ -13,6 +13,11 @@ export class AgentRpcs extends RpcGroup.make(
   }),
   /** An event main made (a notification's Allow/Deny resolved a request), logged and sent like the agents' own. */
   Rpc.make('agentEmit', { payload: { event: Schema.Unknown } }),
+  /** Codex's `thread_history` call, which main's loopback MCP server takes; answered from Core's log. */
+  Rpc.make('agentThreadHistory', {
+    payload: { threadId: Schema.String, args: Schema.Unknown },
+    success: Schema.Unknown,
+  }),
   /** Main's detection saw this account's login. */
   Rpc.make('agentNoteLogin', {
     payload: { accountId: Schema.String, login: Schema.Unknown },

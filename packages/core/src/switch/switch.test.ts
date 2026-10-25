@@ -25,6 +25,7 @@ import { Projection } from '../store/projection.ts';
 import { Store } from '../store/store.ts';
 import { UtilityQueue } from '../utility/queue.ts';
 import { ThreadContext } from './context.ts';
+import type { HistoryArgs } from './history.ts';
 import { launchSession } from './launch.ts';
 
 const THREAD = 'new-1';
@@ -303,6 +304,29 @@ it.live(
       assert.match(
         row.contents ?? '',
         /^brief, 2 recent turns, [\d.]+k tokens$/,
+      );
+
+      // What the package cut, Codex gets back from the event log.
+      const ask_ = (args: HistoryArgs) =>
+        Effect.map(context.history(THREAD, args), (r) =>
+          r.content.map((c) => (c.type === 'text' ? c.text : '')).join(''),
+        );
+      const pointer = Number(/thread_history get seq=(\d+)/.exec(sent)![1]);
+      const full = yield* ask_({ op: 'get', seq: pointer });
+      assert.equal(full.match(/^ok$/gm)?.length, 4000, 'the whole output');
+      assert.equal(yield* ask_({ op: 'get', toolCallId: 't1' }), full);
+      assert.match(
+        yield* ask_({ op: 'outline' }),
+        /Goal: Rate-limit the public API, tests green\n1–9 · added the limiter, tests red/,
+      );
+      const hits = yield* ask_({ op: 'search', query: 'no new dependencies' });
+      assert.match(hits, /^\[\d+\] you: …No new dependencies, please…$/);
+      const first = yield* ask_({ op: 'read', fromSeq: 0, toSeq: pointer - 1 });
+      assert.match(first, /User: Add a rate limiter to the API/);
+      assert.doesNotMatch(
+        first,
+        /pnpm test|Run the tests/,
+        'the range ends before the tool',
       );
 
       // Codex's part, then back to Claude: its own session resumes with what it missed, not the thread again.
