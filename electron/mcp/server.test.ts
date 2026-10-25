@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { Server } from 'node:http';
 import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import {
+  Client,
+  InMemoryTransport,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
 import {
   CODEX_BROWSER_PLUGINS_OFF,
   mochiInstructions,
