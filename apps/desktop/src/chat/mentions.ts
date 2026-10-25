@@ -56,7 +56,10 @@ export function withoutQuery(text: string) {
   return text.replace(/(^|\s)@[^\s@]*$/, '$1');
 }
 
-/** Threads (not `selfId`, none settled), windows, skills, connectors, then plugins whose name contains the query, at most six of each. */
+/**
+ * Threads (not `selfId`, none settled), windows, skills, connectors, then plugins whose name contains the query, at most six of
+ * each. Spaces are ignored on both sides, since the query ends at the first one: `greetingtheuser` finds "Greeting the user".
+ */
 export function mentionOptions(
   query: string,
   threads: Thread[],
@@ -66,8 +69,8 @@ export function mentionOptions(
   servers: McpServer[] = [],
   plugins: string[] = [],
 ): MentionOption[] {
-  const q = query.toLowerCase();
-  const hit = (title: string) => title.toLowerCase().includes(q);
+  const q = squash(query);
+  const hit = (title: string) => squash(title).includes(q);
   return [
     ...threads
       .filter((t) => t.id !== selfId && t.status !== 'settled' && hit(t.title))
@@ -91,6 +94,8 @@ export function mentionOptions(
       .map((plugin) => ({ kind: 'plugin' as const, plugin })),
   ];
 }
+
+const squash = (s: string) => s.replace(/\s+/g, '').toLowerCase();
 
 const MENTION_GROUPS = [
   { kind: 'file', label: 'Files' },
