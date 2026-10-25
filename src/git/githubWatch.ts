@@ -64,7 +64,7 @@ export function useBranchPr(cwd: string, githubUser: string | undefined) {
 /** The worktree's branch PRs (ShipBar, PR sync). The web build has no Core: it reads `host.git.pr` once. */
 export function branchPrsQuery(cwd: string, githubUser: string | undefined) {
   const queryKey = queryKeys.git.branchPrs(cwd, githubUser);
-  if (!host.isDesktop)
+  if (!host.hasCore)
     return {
       queryKey,
       queryFn: async (): Promise<BranchPrs | null> =>
@@ -99,7 +99,7 @@ export function refreshGithub(target: {
   githubUser?: string;
   isPush: boolean;
 }) {
-  if (!host.isDesktop) return;
+  if (!host.hasCore) return;
   void coreClient().then((client) =>
     Effect.runPromise(client['github.refresh'](target)),
   );

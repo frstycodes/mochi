@@ -7,7 +7,7 @@ import type { UtilityTask } from './prompts.ts';
 /** Where the calls go: Core on desktop, nothing on web. Tests swap `call`. */
 export const utilityCore = {
   call: <T>(tag: string, payload: unknown) =>
-    host.isDesktop ? callCore<T>(tag, payload) : Promise.resolve(null as T),
+    host.hasCore ? callCore<T>(tag, payload) : Promise.resolve(null as T),
 };
 
 /**
@@ -34,7 +34,7 @@ export async function classifyInCore(
   prompt: string,
   thread: Thread,
 ): Promise<DriftVerdict> {
-  if (!host.isDesktop) return host.agent.classify(prompt, thread);
+  if (!host.hasCore) return host.agent.classify(prompt, thread);
   return (
     (await utilityCore.call<DriftVerdict | null>('utility.classify', {
       prompt,
