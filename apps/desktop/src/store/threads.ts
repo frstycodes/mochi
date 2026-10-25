@@ -308,7 +308,7 @@ export type ThreadsAction =
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
   | { type: 'fork-keep'; keepId: string; dropId: string }
-  /** Opens the handoff row while the prompt drafts (`src/rewind/runHandoff.ts`); `handoff` then moves the thread. */
+  /** Legacy: a drafting handoff row, kept so logged events still fold; `provider-switch` replaced it. `handoff` then moved the thread. */
   | { type: 'handoff-draft'; threadId: string; to: Provider }
   | {
       type: 'handoff';

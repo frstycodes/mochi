@@ -1,21 +1,34 @@
 import { useState } from 'react';
-import { ChevronRight, Transfer } from '@/icons';
+import { ArrowRight, ChevronRight, Transfer } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
-import type { Handoff } from '../model';
+import type { Handoff, Provider } from '../model';
 import { clock } from '../progress';
+import { useModels } from '../ModelControls';
 import { PROVIDER_NAME } from '../rewind/handoff';
-import { DRAFT_TIMEOUT_MS } from '../rewind/runHandoff';
+import { optionFor } from '../runtime/models';
+import { ProviderMark } from '../ui';
 import { Expand } from '../WorkLog';
 
 const FALLBACK_NOTE = {
-  timeout: `drafting took over ${DRAFT_TIMEOUT_MS / 1000}s, so this is Mochi’s own summary`,
+  timeout: 'drafting took too long, so this is Mochi’s own summary',
   error: 'drafting failed, so this is Mochi’s own summary',
 } satisfies Record<NonNullable<Handoff['fallback']>, string>;
 
-/** A handoff as one log line like a compaction: drafting while a model writes the prompt, then who took over; open, the prompt they started from. */
-export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
+/**
+ * A handoff or provider switch as one log line like a compaction: a switch waits for your next message, then names what the
+ * new provider got; open, the exact context it got (a switch) or the prompt it started from (an older handoff).
+ */
+export function HandoffRow({
+  handoff,
+  at,
+  spaceId,
+}: {
+  handoff: Handoff;
+  at: number;
+  spaceId: string;
+}) {
   const [isOpen, setOpen] = useState(false);
   const hasBody = handoff.status === 'started' && !!handoff.prompt;
   return (
@@ -35,8 +48,14 @@ export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
             className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2"
           />
         )}
-        <Transfer aria-hidden className="size-4 shrink-0" />
-        <HandoffLine handoff={handoff} />
+        {isSwitch(handoff) ? (
+          <SwitchLine handoff={handoff} spaceId={spaceId} />
+        ) : (
+          <>
+            <Transfer aria-hidden className="size-4 shrink-0" />
+            <HandoffLine handoff={handoff} />
+          </>
+        )}
         {hasBody && (
           <ChevronRight
             aria-hidden
@@ -58,7 +77,9 @@ export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
             </MessageResponse>
             <p className="type-caption text-subtle-foreground">
               {[
-                `${PROVIDER_NAME[handoff.to]} started from this at ${clock(at)}`,
+                isSwitch(handoff)
+                  ? `${PROVIDER_NAME[handoff.to]} got this as context at ${clock(at)}; your message went as you typed it`
+                  : `${PROVIDER_NAME[handoff.to]} started from this at ${clock(at)}`,
                 handoff.fallback && FALLBACK_NOTE[handoff.fallback],
               ]
                 .filter(Boolean)
@@ -68,6 +89,71 @@ export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
         </Expand>
       )}
     </div>
+  );
+}
+
+const isSwitch = (handoff: Handoff) => !!handoff.isSwitch;
+
+/**
+ * `[Claude] Opus 5.5 → [Codex] GPT-5.5 on your next message`, `writing the handoff…` once that message starts it, then the same
+ * pair and what the package held. Each side is its
+ * provider's mark and the model's name from the catalog (the id until that loads); a row from before `fromModel` was recorded
+ * names the provider alone.
+ */
+function SwitchLine({
+  handoff,
+  spaceId,
+}: {
+  handoff: Handoff;
+  spaceId: string;
+}) {
+  const catalog = useModels(spaceId);
+  const nameOf = (provider: Provider, model: string | undefined) =>
+    model === undefined
+      ? PROVIDER_NAME[provider]
+      : optionFor(catalog[provider], model, provider).name;
+  const isPending = handoff.status !== 'started';
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="sr-only">
+        {isPending ? 'Switches from' : 'Switched from'}
+      </span>
+      <ModelName
+        provider={handoff.from}
+        name={nameOf(handoff.from, handoff.fromModel)}
+      />
+      <ArrowRight aria-hidden className="size-3 shrink-0" />
+      <span className="sr-only">to</span>
+      <ModelName
+        provider={handoff.to}
+        name={nameOf(handoff.to, handoff.model ?? '')}
+      />
+      <SwitchTail handoff={handoff} />
+    </span>
+  );
+}
+
+/** What the switch is waiting on, or what the new session got. */
+function SwitchTail({ handoff }: { handoff: Handoff }) {
+  if (handoff.status === 'drafting')
+    return (
+      <Shimmer as="span" className="min-w-0 truncate">
+        writing the handoff…
+      </Shimmer>
+    );
+  return (
+    <span className="min-w-0 truncate text-subtle-foreground">
+      {handoff.status === 'pending' ? 'on your next message' : handoff.contents}
+    </span>
+  );
+}
+
+function ModelName({ provider, name }: { provider: Provider; name: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <ProviderMark provider={provider} size={14} />
+      {name}
+    </span>
   );
 }
 

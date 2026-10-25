@@ -205,19 +205,13 @@ test('send goes out now to an idle agent and queues behind a working one, like t
 test('operate and manage commands dispatch the same actions the UI does, and the reducer applies them', async () => {
   const { state, threadId } = machine();
   const dispatched: Action[] = [];
-  let handOff = () => {};
-  const handedOff = new Promise<void>((resolve) => (handOff = resolve));
-  const env = {
-    ...device(state, 'Laptop', dispatched),
-    dispatch: (a: Action) =>
-      void (dispatched.push(a), a.type === 'handoff' && handOff()),
-  };
+  const env = device(state, 'Laptop', dispatched);
   for (const command of [
     { type: 'rename', threadId, title: 'Ship the login fix' },
     { type: 'edit-goal', threadId, goal: 'Login works with SSO' },
     { type: 'pin', threadId, isPinned: true },
     { type: 'fork', threadId, point: { kind: 'message', index: 0 } },
-    // A live thread handed off starts working again, so settling comes after.
+    // A handoff switches the thread from its next message on.
     { type: 'handoff', threadId, to: 'codex' },
     { type: 'settle', threadId, isSettled: true },
     {
@@ -232,8 +226,6 @@ test('operate and manage commands dispatch the same actions the UI does, and the
       { isOk: true },
       command.type,
     );
-    // The handoff drafts its prompt first, as a click here does; it lands before the next command.
-    if (command.type === 'handoff') await handedOff;
   }
   assert.deepEqual(
     dispatched.map((a) => a.type),
@@ -242,8 +234,7 @@ test('operate and manage commands dispatch the same actions the UI does, and the
       'edit-goal',
       'reorder',
       'fork',
-      'handoff-draft',
-      'handoff',
+      'provider-switch',
       'settle',
       'create',
     ],

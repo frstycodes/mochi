@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, test, vi } from 'vite-plus/test';
+import { test } from 'vite-plus/test';
 import type { State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, mapThread, threadsReducer } from '../store/threads.ts';
@@ -8,12 +8,9 @@ import { applyAgentEvent } from '../runtime/apply.ts';
 import { agentCalls, resumeAfterLostProcess } from '../runtime/live.ts';
 import { rewindBlockedReason, threadAt } from './checkpoints.ts';
 import { forkRelatives } from './fork.ts';
-import { failDrafts, handoffSummary } from './handoff.ts';
-import { draftHandoff } from './runHandoff.ts';
-import { host } from '../host/index.ts';
-import { utilityCore } from '../utility/runUtility.ts';
-
-afterEach(() => vi.restoreAllMocks());
+import { failDrafts } from './handoff.ts';
+// Sets the start env the agent calls read (a thread's folder).
+import '../host/cwd.ts';
 
 const base = () =>
   ({
@@ -187,14 +184,7 @@ test('fork from a checkpoint names it for the worktree only once its files were 
 test('handoff moves the thread and logs one handoff row with its prompt, not a message or a revision', () => {
   let s = base();
   const rl = thread(s, 'rl');
-  const summary = handoffSummary(rl, 'codex', {
-    files: 3,
-    added: 40,
-    removed: 6,
-  });
-  assert.match(summary, /Goal:\*\* Every public API key/);
-  assert.match(summary, /Add Redis client \(running\)/);
-  assert.match(summary, /3 files, \+40 −6/);
+  const summary = '**Goal:** Every public API key is rate limited';
 
   s = threadsReducer(s, {
     type: 'handoff',
@@ -362,25 +352,6 @@ test('a draft that throws or outlives the window fails its row', () => {
   });
   const done = thread(base(), 'rl').activity;
   assert.equal(failDrafts(done, 'x'), done, 'nothing open, same array');
-});
-
-test('draftHandoff uses the model draft, else the local summary on an error or past the timeout', async () => {
-  const rl = thread(base(), 'rl');
-  vi.spyOn(host.git, 'diff').mockImplementation(async () => ({
-    branch: '',
-    base: '',
-    files: [],
-  }));
-  const utility = vi
-    .spyOn(utilityCore, 'call')
-    .mockImplementation(async () => '```\nDrafted\n```' as never);
-  assert.deepEqual(await draftHandoff(rl, 'codex'), { prompt: 'Drafted' });
-  utility.mockImplementation(async () => null as never);
-  const failed = await draftHandoff(rl, 'codex');
-  assert.equal(failed.fallback, 'error');
-  assert.match(failed.prompt, /\*\*Handoff to Codex\*\*/);
-  utility.mockImplementation(() => new Promise<never>(() => {}));
-  assert.equal((await draftHandoff(rl, 'codex', 5)).fallback, 'timeout');
 });
 
 test('rewinding to a message drops it and everything after, keeps what came before, and undoes in one step', () => {
@@ -714,4 +685,87 @@ test('undo brings back chat and files for either mode and resumes the original s
       'the original session, whole',
     );
   }
+});
+
+test('a provider switch waits for the next message; picking again replaces it, picking the old provider drops it', () => {
+  const live = (s: State): State => ({
+    ...s,
+    threads: mapThread(s.threads, 'rl', (t) => ({
+      ...t,
+      providers: ['claude', 'codex'],
+      session: { provider: 'claude', id: 'claude-1' },
+      live: { isWorking: false },
+    })),
+  });
+  const switchTo = (s: State, to: 'claude' | 'codex', model?: string) =>
+    threadsReducer(s, { type: 'provider-switch', threadId: 'rl', to, model });
+  const pending = (s: State) =>
+    thread(s, 'rl').activity.filter((e) => e.handoff?.status === 'pending');
+
+  const before = live(base());
+  let s = switchTo(before, 'codex', 'gpt-6');
+  const t = thread(s, 'rl');
+  assert.deepEqual(t.providers, ['codex', 'claude']);
+  assert.equal(t.session?.id, 'claude-1', 'kept until the start takes it up');
+  assert.equal(t.controls?.model, 'gpt-6');
+  assert.deepEqual(t.live?.restart, { switchFrom: { provider: 'claude' } });
+  assert.equal(pending(s).length, 1);
+  assert.deepEqual(
+    calls(before, { type: 'provider-switch', threadId: 'rl', to: 'codex' }),
+    [],
+    'the old session stays until then',
+  );
+
+  s = switchTo(s, 'codex', 'gpt-6-luna');
+  assert.equal(pending(s).length, 1, 'one row, replaced');
+  assert.equal(pending(s)[0].handoff?.model, 'gpt-6-luna');
+
+  s = switchTo(s, 'claude');
+  assert.equal(pending(s).length, 0, 'back where it was: no row');
+  assert.equal(
+    thread(s, 'rl').activity.length,
+    thread(before, 'rl').activity.length,
+  );
+  assert.equal(thread(s, 'rl').live?.restart, undefined);
+  assert.deepEqual(
+    calls(s, { type: 'send', threadId: 'rl', text: 'Go on', reason: '' }).map(
+      (c) => c.method,
+    ),
+    ['send'],
+    'its own session takes the message, nothing restarts',
+  );
+
+  // The send that takes up a switch starts the new provider and leaves the old session.
+  const switched = switchTo(before, 'codex');
+  const sent = threadsReducer(switched, {
+    type: 'send',
+    threadId: 'rl',
+    text: 'Go on',
+    reason: '',
+  });
+  assert.equal(thread(sent, 'rl').session, undefined);
+  assert.equal(thread(sent, 'rl').providers[0], 'codex');
+
+  // Another Claude model is no switch; after a usage limit it is, to a fresh session.
+  assert.equal(
+    pending(switchTo(before, 'claude', 'claude-sonnet-5-5')).length,
+    0,
+  );
+  const limited: State = {
+    ...before,
+    threads: mapThread(before.threads, 'rl', (t) => ({
+      ...t,
+      live: { ...t.live!, limit: { label: 'Weekly' } },
+    })),
+  };
+  const fresh = switchTo(limited, 'claude', 'claude-sonnet-5-5');
+  assert.equal(pending(fresh).length, 1);
+  assert.deepEqual(thread(fresh, 'rl').live?.restart, {
+    switchFrom: { provider: 'claude', isLimited: true },
+  });
+  assert.equal(
+    thread(switchTo(before, 'claude'), 'rl'),
+    thread(before, 'rl'),
+    'already on Claude',
+  );
 });

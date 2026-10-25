@@ -145,6 +145,7 @@ import type { Mention } from './chat/mentions';
 import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
+import type { ModelOption } from './runtime/models';
 import { SubagentGroup } from './agents/SubagentRow';
 import {
   rememberedScroll,
@@ -466,7 +467,13 @@ const ChatRowView = memo(function ChatRowView({
   if (row.kind === 'event' && row.entry.proposals)
     return <ProposalEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.handoff)
-    return <HandoffRow handoff={row.entry.handoff} at={row.entry.at} />;
+    return (
+      <HandoffRow
+        handoff={row.entry.handoff}
+        at={row.entry.at}
+        spaceId={thread.spaceId}
+      />
+    );
   if (row.kind === 'event' && row.entry.compaction)
     return (
       <CompactionRow
@@ -762,9 +769,23 @@ const Composer = memo(function Composer({
   const editor = useRef<EditorView>(null);
   const controls = controlsOf(thread);
   const workspace = useThreadWorkspace(thread);
-  const setControls = (next: typeof controls) =>
-    dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
+  // A model of another provider switches the thread to it from your next message (`provider-switch`); so does another model
+  // of the same provider once the session ran out of usage, to start fresh from a handoff instead of the full context.
+  const setControls = (next: typeof controls, model?: ModelOption) => {
+    const isSwitch =
+      !!model &&
+      (model.harness !== provider ||
+        (!!thread.live?.limit && model.id !== controls.model));
+    if (model && isSwitch)
+      return dispatch({
+        type: 'provider-switch',
+        threadId: thread.id,
+        to: model.harness,
+        model: next.model,
+      });
+    dispatch({ type: 'controls', threadId: thread.id, controls: next });
+  };
   const root = projectRef(thread.repo);
   const mention = useMentionMenu(
     thread.id,
@@ -876,7 +897,7 @@ const Composer = memo(function Composer({
               draftExtra={draftExtra}
               controls={controls}
               provider={provider}
-              isLocked={!!thread.live}
+              isLocked={thread.isSettingsChat}
               isModelOnly={thread.isSettingsChat}
               onControlsChange={setControls}
               slashItems={items}

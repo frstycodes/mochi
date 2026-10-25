@@ -1,47 +1,11 @@
-import type {
-  ActivityEntry,
-  Handoff,
-  Provider,
-  Step,
-  Thread,
-} from '../model.ts';
+import type { ActivityEntry, Handoff, Provider, Thread } from '../model.ts';
 import { log, mapThread } from '../store/threads.ts';
 import type { State } from '../store/types.ts';
-
-export interface DiffStat {
-  files: number;
-  added: number;
-  removed: number;
-}
 
 export const PROVIDER_NAME = {
   claude: 'Claude',
   codex: 'Codex',
 } satisfies Record<Provider, string>;
-
-const RECENT_DECISIONS = 3;
-
-/** The context the receiving agent starts from: goal, done and open steps, your latest decisions and the diff so far. */
-export function handoffSummary(
-  thread: Thread,
-  to: Provider,
-  diff: DiffStat | null,
-) {
-  const isOpen = (s: Step) => s.status !== 'done' && s.status !== 'dropped';
-  const decisions = thread.activity
-    .filter((a) => a.who === 'you' && a.kind === 'message')
-    .slice(-RECENT_DECISIONS);
-  const list = (lines: string[]) =>
-    lines.length ? lines.map((l) => `- ${l}`).join('\n') : '- None yet';
-  return [
-    `**Handoff to ${PROVIDER_NAME[to]}**`,
-    `**Goal:** ${thread.goal}`,
-    `**Done**\n${list(thread.steps.filter((s) => s.status === 'done').map((s) => s.title))}`,
-    `**Open**\n${list(thread.steps.filter(isOpen).map((s) => `${s.title} (${s.status})`))}`,
-    `**Recent decisions**\n${list(decisions.map((d) => (d.text.length > 140 ? `${d.text.slice(0, 139)}…` : d.text)))}`,
-    `**Diff so far:** ${diff ? `${diff.files} files, +${diff.added} −${diff.removed}` : 'not read'}`,
-  ].join('\n\n');
-}
 
 const VERB = {
   drafting: 'Handing off',

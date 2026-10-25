@@ -97,10 +97,6 @@ export const outcomePrompt = (
 export const auditPrompt = (request: string, replies: string[]) =>
   cap(`User asked: ${request}\n\nAgent wrote:\n${replies.join('\n\n')}`);
 
-/** `context`: the local handoff template; `transcript`: the thread's recent messages, oldest first. */
-export const handoffPrompt = (context: string, transcript: string[]) =>
-  cap(`${context}\n\nRecent transcript:\n${transcript.join('\n\n')}`);
-
 /** First line, without quotes, heading marks or a trailing period; '' when nothing usable came back. */
 export function parseTitle(text: string) {
   const line =
@@ -125,8 +121,6 @@ export function parsePr(text: string) {
     body: rest.join('\n').trim(),
   };
 }
-
-export const parseHandoff = (text: string) => unfence(text);
 
 /** The `outcome` answer; null when it isn't the JSON asked for, so the caller falls back. */
 export function parseOutcome(text: string): {
