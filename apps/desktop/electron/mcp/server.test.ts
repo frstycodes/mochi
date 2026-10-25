@@ -115,6 +115,15 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
     serverTransport,
   );
   await claude.connect(clientTransport);
+  const loaded = (await claude.listTools()).tools
+    .filter((tool) => tool._meta?.['anthropic/alwaysLoad'])
+    .map((tool) => tool.name)
+    .sort();
+  assert.deepEqual(
+    loaded,
+    ['delegate_task', 'report_turn', 'update_plan'],
+    'Claude sees delegate_task without tool search',
+  );
   await codex.connect(
     new StreamableHTTPClientTransport(new URL(await codexUrl('codex-thread'))),
   );
