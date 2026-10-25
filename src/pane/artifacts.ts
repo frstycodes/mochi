@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import type { ActivityEntry, Thread } from '../model.ts';
 import { parseTool } from '../summary.ts';
 import { metaTitle, parseFence, VIZ_LANGUAGES, type VizLanguage } from '../viz/fence.ts';
@@ -29,8 +28,8 @@ const LABELS = {
   'harness-diff': 'Diff summary',
 } satisfies Record<VizLanguage, string>;
 
-export function useArtifacts(thread: Thread, outputRoot: string | null) {
-  return useMemo(() => ({ files: fileArtifacts(thread.activity, outputRoot), visuals: visualArtifacts(thread.activity) }), [thread.activity, outputRoot]);
+export function artifactsOf(thread: Thread, outputRoot: string | null) {
+  return { files: fileArtifacts(thread.activity, outputRoot), visuals: visualArtifacts(thread.activity) };
 }
 
 /**

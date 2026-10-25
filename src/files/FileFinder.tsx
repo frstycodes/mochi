@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Search } from '@/icons';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,9 +28,8 @@ export function FileFinder({ root, files, selected, query, onQueryChange, focusK
   const [options, setOptions] = useState<SearchOptions>({ isCaseSensitive: false, isRegex: false, isWholeWord: false });
   const tree = useTreeFilter(files, isContentSearch ? '' : query, selected);
   const search = useContentSearch(root, isContentSearch ? query.slice(SEARCH_PREFIX.length) : '', options);
-  const hits = useMemo(() => contentHits(search.files), [search.files]);
-  const [activeHit, setActiveHit] = useState(0);
-  useEffect(() => setActiveHit(0), [query, options]);
+  const hits = contentHits(search.files);
+  const [activeHit, moveHit] = useActiveHit(query, options);
   useEffect(() => {
     if (focusKey) input.current?.select();
   }, [focusKey]);
@@ -50,7 +49,7 @@ export function FileFinder({ root, files, selected, query, onQueryChange, focusK
     e.preventDefault();
     const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
     if (isContentSearch) {
-      if (step) return setActiveHit((i) => clamp(i + step, hits.length));
+      if (step) return moveHit(step, hits.length);
       const hit = hits[activeHit];
       return hit && onOpen({ path: hit.path, line: hit.line.line, column: hit.line.column });
     }
@@ -103,18 +102,21 @@ function OptionToggle({ label, text, pressed, onPressedChange }: { label: string
 
 /** Tree rows for the name filter: matches only with their folders open while filtering, the user's own expansion otherwise. */
 function useTreeFilter(files: string[], query: string, selected: string | null) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [active, setActive] = useState<string | null>(selected);
-  const filtered = useMemo(() => (query ? filterFiles(files, query) : null), [files, query]);
-  const rows = useMemo(() => visibleRows(buildTree(filtered?.files ?? files), filtered ? 'all' : expanded), [files, filtered, expanded]);
-  useEffect(() => {
-    if (filtered) setActive(filtered.best);
-  }, [filtered]);
-  useEffect(() => {
-    if (!selected) return;
-    setExpanded((prev) => new Set([...prev, ...ancestors(selected)]));
-    setActive(selected);
-  }, [selected]);
+  const filtered = query ? filterFiles(files, query) : null;
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(selected ? ancestors(selected) : []));
+  const [active, setActive] = useState<string | null>(() => selected ?? filtered?.best ?? null);
+  const best = filtered?.best;
+  const [seen, setSeen] = useState({ best, selected });
+  const rows = visibleRows(buildTree(filtered?.files ?? files), filtered ? 'all' : expanded);
+  // A filter with a new best match puts it active; a new selection opens its folders and wins over the filter's pick.
+  if (seen.best !== best || seen.selected !== selected) {
+    setSeen({ best, selected });
+    if (seen.best !== best && filtered) setActive(filtered.best);
+    if (seen.selected !== selected && selected) {
+      setExpanded((prev) => new Set([...prev, ...ancestors(selected)]));
+      setActive(selected);
+    }
+  }
   const toggle = (path: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -132,6 +134,14 @@ function useTreeFilter(files: string[], query: string, selected: string | null) 
     if (!filtered) toggle(path);
   };
   return { rows, active, highlights: filtered?.highlights, isExpanded: (path: string) => !!filtered || expanded.has(path), toggle, move, activate };
+}
+
+/** The highlighted content hit, back to the first whenever the query or the search options change. */
+function useActiveHit(query: string, options: SearchOptions) {
+  const [hit, setHit] = useState({ query, options, at: 0 });
+  const activeHit = hit.query === query && hit.options === options ? hit.at : 0;
+  const moveHit = (step: number, count: number) => setHit({ query, options, at: clamp(activeHit + step, count) });
+  return [activeHit, moveHit] as const;
 }
 
 function clamp(i: number, length: number) {

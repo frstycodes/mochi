@@ -13,12 +13,12 @@ import { timeAgo } from '../progress';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
 import type { VizLanguage } from '../viz/fence';
-import { useArtifacts, type FileArtifact, type VisualArtifact } from './artifacts';
+import { artifactsOf, type FileArtifact, type VisualArtifact } from './artifacts';
 import { PaneList, PaneListItem, PaneListItemTrail, PaneSection, PaneSectionHeader, PaneSectionTitle } from './PaneList';
 import type { PaneTabProps } from './tabs';
 
 export function ArtifactsTab({ thread }: PaneTabProps) {
-  const { files, visuals } = useArtifacts(thread, thread.repo ? null : threadCwd(thread));
+  const { files, visuals } = artifactsOf(thread, thread.repo ? null : threadCwd(thread));
   const { state, dispatch } = useHarness();
   const [openPath, setOpenPath] = useState<string | null>(null);
   const openVisual = (visual: VisualArtifact, isPopped: boolean) => () =>

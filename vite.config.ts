@@ -38,7 +38,22 @@ export default defineConfig(({ mode }) => ({
         rules: { 'mochi/no-em-dash-copy': 'error' },
       },
       // The React Compiler builds the renderer only; Core's `use*` setters are not hooks.
-      { files: ['src/**/*.{ts,tsx}'], rules: { 'react/hooks': 'error', 'mochi/no-hookless-use-function': 'error' } },
+      {
+        files: ['src/**/*.{ts,tsx}'],
+        excludeFiles: VENDORED,
+        rules: {
+          'react/hooks': 'error',
+          'mochi/no-hookless-use-function': 'error',
+          'react/refs': 'error',
+          'react/set-state-in-effect': 'error',
+          'react/purity': 'error',
+          'react/immutability': 'error',
+          'react/static-components': 'error',
+          'react/preserve-manual-memoization': 'error',
+          'react/exhaustive-effect-dependencies': 'error',
+          'mochi/no-manual-memo': 'error',
+        },
+      },
     ],
     // `pnpm typecheck` (tsc-rs) is the type check; tsgolint only supplies types to the type-aware rules.
     options: { typeAware: true, typeCheck: false },

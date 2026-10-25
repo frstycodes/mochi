@@ -267,6 +267,7 @@ function AgentPrompt({ prompt }: { prompt: string }) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (el && !isOpen) setClamped(el.scrollHeight > el.clientHeight);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `prompt` is the trigger: new text is measured again once it has laid out
   }, [prompt, isOpen]);
   return (
     <div className="flex flex-col gap-1 rounded-xl bg-muted/60 px-3 py-2.5">

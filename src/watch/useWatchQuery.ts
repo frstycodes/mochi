@@ -22,7 +22,7 @@ export function useWatchQuery<K extends Tag, T>(queryKey: QueryKey, key: KeyOf<K
   useEffect(() => {
     if (!key) return;
     return follow(id, queryKey, key, pick as (value: WatchValue) => unknown);
-    // `id` stands for `queryKey`, and a watch key is a function of its query key; `pick` is per call site, not per render.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `id` stands for `queryKey`, and a watch key is a function of its query key; `pick` is per call site, not per render
   }, [id]);
   const query = useQuery({ queryKey, queryFn: read, enabled: !!key && !host.isDesktop, staleTime: host.isDesktop ? Infinity : undefined });
   const refresh = async () => {

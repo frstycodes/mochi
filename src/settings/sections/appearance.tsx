@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown, ClipboardText, Download, Pencil, Import, SearchAlt, Star, CheckBadge, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import { useLinkedTab } from '../../routes/nav';
 import { ListIcon, SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId, SkeletonRows } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
 import { ANIMATIONS, type AnimationArea } from '../settingOptions';
-import { ThemePicker, ThemeSwatch, useChosenTheme, useThemeColors } from '../ThemePicker';
+import { ThemePicker, ThemeSwatch, useChosenTheme, themeColorsOf } from '../ThemePicker';
 
 export function AppearanceSection() {
   // Leaving the page mid-hover must not leave a preview painted.
@@ -111,7 +111,7 @@ function SlotCard({ slot }: { slot: ThemeSlot }) {
 
 /** A theme painted as a tiny Mochi window: sidebar, a message, a line of prose, a line of code and the send button. */
 function ThemeMock({ theme, slot }: { theme: ColorTheme | null; slot: ThemeSlot }) {
-  const c = useThemeColors(theme, slot);
+  const c = themeColorsOf(theme, slot);
   return (
     <span aria-hidden className="flex h-24 overflow-hidden rounded-lg shadow-[inset_0_0_0_1px_var(--border)]" style={{ background: c.background }}>
       <span className="flex w-1/4 flex-col gap-1.5 p-2.5" style={{ background: c.sidebar }}>
@@ -170,7 +170,7 @@ const FILTER_FROM = 5;
 function Library() {
   const { installed, isLoaded } = useThemesState();
   const [query, setQuery] = useState('');
-  const { packages, custom } = useMemo(() => groupThemes(installed), [installed]);
+  const { packages, custom } = groupThemes(installed);
   const q = query.trim().toLowerCase();
   const matches = (text: string) => text.toLowerCase().includes(q);
   const shownPackages = filterPackages(packages, query);

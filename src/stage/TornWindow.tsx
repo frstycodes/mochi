@@ -22,9 +22,10 @@ export function TornWindow({ threadId }: { threadId: string }) {
 function TornThread({ threadId }: { threadId: string }) {
   const thread = useThread(threadId);
   useLibraryNamesLoader(thread?.spaceId);
+  const title = thread?.title;
   useEffect(() => {
-    if (thread) document.title = thread.title;
-  }, [thread?.title]); // eslint-disable-line react-hooks/exhaustive-deps -- only the title is read
+    if (title !== undefined) document.title = title;
+  }, [title]);
   if (!thread) return <Gone />;
   return (
     // Desktop windows hide the title bar: with no sidebar here, the header clears the traffic lights itself.

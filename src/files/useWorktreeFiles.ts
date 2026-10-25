@@ -1,4 +1,4 @@
-import { createContext, useMemo } from 'react';
+import { createContext } from 'react';
 import { useFileList } from './useFiles';
 
 /**
@@ -10,5 +10,5 @@ export const RemoteFilesContext = createContext<ReadonlySet<string> | null>(null
 /** The folder's files (`.gitignore` honoured) as a set for existence checks; null until listed or when listing failed. */
 export function useWorktreeFiles(root: string | null) {
   const { files } = useFileList(root);
-  return useMemo(() => (files ? new Set(files) : null), [files]);
+  return files ? new Set(files) : null;
 }

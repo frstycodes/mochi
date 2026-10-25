@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
+import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
@@ -94,8 +94,7 @@ const GAP_CHECK_SETTLE_MS = 250;
 
 /** Dev only: once scrolling and resizing settle, reports any part of the visible list the mounted rows don't cover, with how far rows sit from where the virtualizer placed them. */
 function useGapCheck(list: RefObject<HTMLElement | null>, scrollRef: RefObject<HTMLElement | null>, contentRef: RefObject<HTMLElement | null>, virtualizer: Virtualizer) {
-  const latest = useRef(virtualizer);
-  latest.current = virtualizer;
+  const rowStarts = useEffectEvent(() => new Map(virtualizer.getVirtualItems().map((item) => [item.index, item.start])));
   useEffect(() => {
     const el = list.current;
     const scroller = scrollRef.current;
@@ -108,7 +107,7 @@ function useGapCheck(list: RefObject<HTMLElement | null>, scrollRef: RefObject<H
       const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
       const span = (box: DOMRect) => ({ top: box.top - origin, bottom: box.bottom - origin });
       const rendered = [...el.querySelectorAll<HTMLElement>('[data-chat-row]')];
-      const starts = new Map(latest.current.getVirtualItems().map((item) => [item.index, item.start]));
+      const starts = rowStarts();
       const listBox = span(el.getBoundingClientRect());
       const view = { top: Math.max(listBox.top, scroller.scrollTop), bottom: Math.min(listBox.bottom, scroller.scrollTop + scroller.clientHeight) };
       const gaps = transcriptGaps(
@@ -136,15 +135,10 @@ function useGapCheck(list: RefObject<HTMLElement | null>, scrollRef: RefObject<H
 }
 
 function useRememberScroll(threadId: string, virtualizer: Virtualizer, isAtBottom: boolean) {
-  const latest = useRef({ virtualizer, isAtBottom });
-  latest.current = { virtualizer, isAtBottom };
-  useEffect(
-    () => () => {
-      const { virtualizer: v, isAtBottom: atBottom } = latest.current;
-      rememberedScroll.set(threadId, { offset: v.scrollOffset ?? 0, isAtBottom: atBottom, measurements: v.takeSnapshot() });
-    },
-    [threadId],
-  );
+  const remember = useEffectEvent((id: string) => {
+    rememberedScroll.set(id, { offset: virtualizer.scrollOffset ?? 0, isAtBottom, measurements: virtualizer.takeSnapshot() });
+  });
+  useEffect(() => () => remember(threadId), [threadId]);
 }
 
 const REVEAL_CARD = 'chat-reveal-card';

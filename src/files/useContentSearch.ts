@@ -25,7 +25,6 @@ export function useContentSearch(root: string, pattern: string, options: SearchO
     } finally { off(); signal.removeEventListener('abort', cancel); }
   } });
   useEffect(() => {
-    setStream({ id, files: [] });
     let pending: SearchHits[] = [];
     let frame = 0;
     const off = host.fs.onSearchHits((hits) => {
@@ -35,11 +34,11 @@ export function useContentSearch(root: string, pattern: string, options: SearchO
         frame = 0;
         const batch = pending;
         pending = [];
-        setStream((current) => ({ id, files: [...current.files, ...batch] }));
+        setStream((current) => ({ id, files: [...(current.id === id ? current.files : []), ...batch] }));
       });
     });
     return () => { off(); cancelAnimationFrame(frame); };
-  }, [id, searchQuery.isFetching]);
+  }, [id]);
   if (!pattern) return { files: [], status: 'idle' };
   if (settled !== pattern) return { files: [], status: 'searching' };
   if (searchQuery.error) return { files: [], status: 'error', error: searchQuery.error.message };

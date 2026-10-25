@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,7 @@ export interface ConfirmRequest {
 /** `await confirm({...})` resolves true only when the user picks the confirm action; render `dialog` once. */
 export function useConfirm() {
   const [request, setRequest] = useState<(ConfirmRequest & { resolve: (ok: boolean) => void }) | null>(null);
-  const confirm = useCallback((r: ConfirmRequest) => new Promise<boolean>((resolve) => setRequest({ ...r, resolve })), []);
+  const confirm = (r: ConfirmRequest) => new Promise<boolean>((resolve) => setRequest({ ...r, resolve }));
   const settle = (ok: boolean) => {
     request?.resolve(ok);
     setRequest(null);

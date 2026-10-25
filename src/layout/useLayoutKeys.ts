@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { toast } from '../toast/store.ts';
 import { pinnedThreads, togglePin } from '../reorder';
 import { useHarness, type State } from '../store';
@@ -15,56 +15,50 @@ const COMMANDS = [...(Object.keys(FOCUS) as (keyof typeof FOCUS)[]), 'split-focu
 /** Split and pin commands (`src/keymap.ts`): move focus between splits, zoom, split, pin or rename the focused thread, jump to pinned N here or in a new split. */
 export function useLayoutKeys() {
   const { state, dispatch } = useHarness();
-  const latest = useRef(state);
-  latest.current = state;
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.defaultPrevented) return;
+    const command = commandOf(e, COMMANDS);
+    if (!command) return;
+    const layout = state.layouts[state.spaceId];
+    const handled = () => e.preventDefault();
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      const command = commandOf(e, COMMANDS);
-      if (!command) return;
-      const s = latest.current;
-      const layout = s.layouts[s.spaceId];
-      const handled = () => e.preventDefault();
-
-      if (command in FOCUS) {
-        const to = neighbourInDirection(leafRects(), layout.focusId, ARROW_SIDE[FOCUS[command as keyof typeof FOCUS]]);
-        if (!to) return;
-        handled();
-        return dispatch({ type: 'layout-focus', leafId: to });
-      }
-      if (command === 'split-focus-previous' || command === 'split-focus-next') {
-        handled();
-        return dispatch({ type: 'layout-focus-step', step: command === 'split-focus-previous' ? -1 : 1 });
-      }
-      if (command === 'layout-zoom') {
-        handled();
-        return dispatch({ type: 'layout-zoom' });
-      }
-      if (command === 'layout-split') {
-        handled();
-        return dispatch({ type: 'layout-split', view: { kind: 'new' } });
-      }
-      if (command === 'thread-pin') {
-        handled();
-        return pinFocused(s, dispatch);
-      }
-      if (command === 'thread-rename') {
-        const rowId = e.target instanceof Element ? e.target.closest('[data-thread-row]')?.getAttribute('data-thread-row') : undefined;
-        const id = rowId ?? focusedThreadId(s);
-        if (!id) return;
-        handled();
-        return startRename(id, rowId ? 'row' : 'dialog');
-      }
-      const index = PINNED.indexOf(command);
-      const thread = pinnedThreads(s.threads, s.spaceId)[Math.floor(index / 2)];
-      if (!thread) return;
+    if (command in FOCUS) {
+      const to = neighbourInDirection(leafRects(), layout.focusId, ARROW_SIDE[FOCUS[command as keyof typeof FOCUS]]);
+      if (!to) return;
       handled();
-      const view = { kind: 'thread', id: thread.id } as const;
-      dispatch(index % 2 ? { type: 'layout-split', view } : { type: 'go', view });
-    };
-    return listenKeydown(onKey);
-  }, [dispatch]);
+      return dispatch({ type: 'layout-focus', leafId: to });
+    }
+    if (command === 'split-focus-previous' || command === 'split-focus-next') {
+      handled();
+      return dispatch({ type: 'layout-focus-step', step: command === 'split-focus-previous' ? -1 : 1 });
+    }
+    if (command === 'layout-zoom') {
+      handled();
+      return dispatch({ type: 'layout-zoom' });
+    }
+    if (command === 'layout-split') {
+      handled();
+      return dispatch({ type: 'layout-split', view: { kind: 'new' } });
+    }
+    if (command === 'thread-pin') {
+      handled();
+      return pinFocused(state, dispatch);
+    }
+    if (command === 'thread-rename') {
+      const rowId = e.target instanceof Element ? e.target.closest('[data-thread-row]')?.getAttribute('data-thread-row') : undefined;
+      const id = rowId ?? focusedThreadId(state);
+      if (!id) return;
+      handled();
+      return startRename(id, rowId ? 'row' : 'dialog');
+    }
+    const index = PINNED.indexOf(command);
+    const thread = pinnedThreads(state.threads, state.spaceId)[Math.floor(index / 2)];
+    if (!thread) return;
+    handled();
+    const view = { kind: 'thread', id: thread.id } as const;
+    dispatch(index % 2 ? { type: 'layout-split', view } : { type: 'go', view });
+  });
+  useEffect(() => listenKeydown((e) => onKey(e)), []);
 }
 
 function leafRects() {

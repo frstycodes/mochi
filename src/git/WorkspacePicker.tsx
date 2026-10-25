@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useDebounced } from '../hooks/useDebounced';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown, Hierarchy2, WarningAlt } from '@/icons';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -220,7 +220,11 @@ function WorktreeFooter({ workspace }: { workspace: Workspace }) {
 /** Commits on blur or Enter, so a half-typed name is never checked or used. */
 function BranchNameInput({ id, value, isInvalid, describedBy, onCommit }: { id: string; value: string; isInvalid: boolean; describedBy: string; onCommit: (name: string) => void }) {
   const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
+  const [synced, setSynced] = useState(value);
+  if (value !== synced) {
+    setSynced(value);
+    setText(value);
+  }
   const commit = () => text.trim() !== value && onCommit(text.trim());
   return (
     <Input

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QueryProvider } from './QueryProvider';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
@@ -122,7 +122,7 @@ function useHashRoute() {
 function Shell() {
   const [isSearchOpen, setSearchOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
-  const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
+  const toggleSearch = () => setSearchOpen((o) => !o);
   useGlobalKeys(toggleSearch);
   const isSettingsOpen = !!useSettingsRoute();
   const pathname = usePathname();

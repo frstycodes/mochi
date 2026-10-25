@@ -15,6 +15,7 @@ export function FindBar({ pageId, page, find }: { pageId: string; page: Page; fi
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- focusAt is the ⌘F request: each one refocuses the field
   }, [find.focusAt]);
 
   useEffect(() => {

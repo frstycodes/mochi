@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import type { FileContent } from '@/host/types/fs';
@@ -31,7 +30,7 @@ export function useThreadFiles(): ThreadFiles | null {
   const thread = useThread(threadId);
   const root = thread && threadCwd(thread);
   // Stable while the folder is, so effects keyed on it (a row loading its file) don't restart on every thread update.
-  return useMemo(() => (root ? { threadId, root } : null), [threadId, root]);
+  return root ? { threadId, root } : null;
 }
 
 /** Every `[data-file-link]` in the same `[data-file-scope]` (one message, one work log) is one set, in reading order. */

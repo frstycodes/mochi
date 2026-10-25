@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore, type Dispatch } from 'react';
+import { useSyncExternalStore, type Dispatch } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { Thread } from '../model';
@@ -16,11 +16,7 @@ const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.del
 export const useIsSimplifying = (threadId: string, index: number) => useSyncExternalStore(subscribe, () => pending.has(`${threadId}:${index}`));
 
 /** Shows a reply's stored simplified version, or makes them with the Simplify settings when there are none or they're out of date. */
-export function useSimplify(dispatch: Dispatch<Action>) {
-  return useCallback((thread: Thread, index: number) => simplify(thread, index, dispatch), [dispatch]);
-}
-
-async function simplify(thread: Thread, index: number, dispatch: Dispatch<Action>) {
+export async function simplify(thread: Thread, index: number, dispatch: Dispatch<Action>) {
   const entry = thread.activity[index];
   const key = `${thread.id}:${index}`;
   if (!entry || pending.has(key)) return;

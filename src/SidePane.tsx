@@ -1,4 +1,4 @@
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { Reorder } from 'motion/react';
 import { useDraggable } from '@dnd-kit/react';
 import { Globe, Plus, X } from '@/icons';
@@ -106,7 +106,7 @@ function belowTopGap(resolved: ResolvedLayout): ResolvedLayout {
 /** Tabs dragged out into their own split live there, not in a pane, until they're dropped back or their split closes. */
 export function useSplitTabIds(threadId: string) {
   const layouts = useHarnessSelector((s) => s.layouts);
-  return useMemo(() => splitTabIds(Object.values(layouts), threadId), [layouts, threadId]);
+  return splitTabIds(Object.values(layouts), threadId);
 }
 
 /** The stored layout minus panes with nothing to show here (popped out, moved to a split), and nothing while the pane is hidden. */
@@ -123,17 +123,18 @@ function useVisibleLayout(threadId: string, pane: Pane): PaneLayout {
 function useLayoutAnimation(layout: PaneLayout, isOpen: boolean) {
   const shape = JSON.stringify([isOpen, layout.columns, layout.expanded]);
   const [last, setLast] = useState(shape);
-  const [isAnimating, setAnimating] = useState(false);
+  // The shape being animated to: a change mid-animation restarts the timer.
+  const [animating, setAnimating] = useState<string | null>(null);
   if (shape !== last) {
     setLast(shape);
-    setAnimating(true);
+    setAnimating(shape);
   }
   useEffect(() => {
-    if (!isAnimating) return;
-    const t = window.setTimeout(() => setAnimating(false), LAYOUT_ANIMATION_MS);
+    if (animating === null) return;
+    const t = window.setTimeout(() => setAnimating(null), LAYOUT_ANIMATION_MS);
     return () => window.clearTimeout(t);
-  }, [isAnimating, shape]);
-  return isAnimating;
+  }, [animating]);
+  return animating !== null;
 }
 
 /**
@@ -258,11 +259,12 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
   const listRef = useRef<HTMLDivElement>(null);
   const tabs = pane.tabs.filter((t) => t.kind === kind && !t.isPopped);
   const order = tabs.map((t) => t.id);
+  const shownId = shown?.id;
   useEffect(() => {
     const list = listRef.current;
-    const el = list?.querySelector('[aria-selected=true]');
+    const el = shownId !== undefined && list?.querySelector('[aria-selected=true]');
     if (list && el) revealIn(list, el);
-  }, [shown?.id]);
+  }, [shownId]);
   const reorder = (next: string[]) => dispatch({ type: 'pane-reorder', threadId: thread.id, order: next });
   const step = (id: string, by: 1 | -1) => {
     const from = order.indexOf(id);

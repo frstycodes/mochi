@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
 import { toast } from '@/toast/store';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { host } from '../host';
+import { useLatest } from '../useLatest';
 import type { CommandData, CommandResult, FollowedMachine, RemoteCommand } from '../host/types/remote';
 import { StoreScope, type Action, type State } from '../store';
 import { commandFor } from './actions';
@@ -51,17 +52,18 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!cachedQuery.data) return;
+  const [mergedCache, setMergedCache] = useState(cachedQuery.data);
+  if (cachedQuery.data && cachedQuery.data !== mergedCache) {
+    const list = cachedQuery.data;
+    setMergedCache(list);
     // Each cached thread file is decoded again here (`cachedMirror`), as a streamed one is.
-    setMirrors((all) => cachedQuery.data.reduce((next, { machineId, saved }) => (next[machineId] ? next : { ...next, [machineId]: cached(cachedMirror(JSON.parse(saved))) }), all));
-  }, [cachedQuery.data]);
+    setMirrors((all) => list.reduce((next, { machineId, saved }) => (next[machineId] ? next : { ...next, [machineId]: cached(cachedMirror(JSON.parse(saved))) }), all));
+  }
   useMirrorCache(mirrors);
-  const machines = useMemo(() => followed.map((machine) => ({ machine, state: mirrors[machine.id]?.state })), [followed, mirrors]);
-  const latest = useRef(machines);
-  latest.current = machines;
+  const machines = followed.map((machine) => ({ machine, state: mirrors[machine.id]?.state }));
+  const latest = useLatest(machines);
 
-  const run = useCallback(async (machineId: string, command: RemoteCommand) => {
+  const run = async (machineId: string, command: RemoteCommand) => {
     const machineName = latest.current.find((m) => m.machine.id === machineId)?.machine.name ?? 'That computer';
     if (command.type === 'push' || command.type === 'open-pr') {
       const isSent = await new Promise<boolean>((answer) => setAsking({ machineName, command, answer }));
@@ -71,13 +73,13 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     if (!result.isOk) toast.error(`Couldn’t ${COMMAND_VERBS[command.type]} on ${machineName}`, { description: result.error });
     else if (result.detail) toast.success(`${SUCCESS[command.type] ?? 'Done'} on ${machineName}`, { description: result.detail });
     return result;
-  }, []);
+  };
 
-  const ask = useCallback(async <T extends RemoteCommand['type']>(machineId: string, command: Extract<RemoteCommand, { type: T }>) => {
+  const ask = async <T extends RemoteCommand['type']>(machineId: string, command: Extract<RemoteCommand, { type: T }>) => {
     const result = await host.remote.command(machineId, command);
     if (!result.isOk) throw new Error(result.error);
     return result.data as DataOf<T>;
-  }, []);
+  };
 
   const answer = (isSent: boolean) => {
     asking?.answer(isSent);
@@ -85,7 +87,7 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <MachinesContext.Provider value={useMemo(() => ({ machines, run, ask }), [machines, run, ask])}>
+    <MachinesContext.Provider value={{ machines, run, ask }}>
       {children}
       <AlertDialog open={!!asking} onOpenChange={(open) => !open && answer(false)}>
         {!!asking && (
@@ -117,19 +119,19 @@ const cached = (mirror: Mirror) => (fromCache.add(mirror), mirror);
 
 /** Saves each mirror that changed, at most every few seconds; a busy stream still gets saved while it runs. */
 function useMirrorCache(mirrors: Record<string, Mirror | undefined>) {
-  const latest = useRef(mirrors);
-  latest.current = mirrors;
   const saved = useRef(new Map<string, Mirror>());
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveChanged = useEffectEvent(() => {
+    for (const [machineId, mirror] of unsaved(mirrors, saved.current)) {
+      saved.current.set(machineId, mirror);
+      host.remote.cacheMachine(machineId, JSON.stringify(mirror.threads)).catch((error: unknown) => console.error('Saving another computer’s threads failed', error));
+    }
+  });
   useEffect(() => {
-    if (timer.current) return;
+    if (timer.current || unsaved(mirrors, saved.current).length === 0) return;
     timer.current = setTimeout(() => {
       timer.current = undefined;
-      for (const [machineId, mirror] of Object.entries(latest.current)) {
-        if (!mirror || fromCache.has(mirror) || saved.current.get(machineId) === mirror) continue;
-        saved.current.set(machineId, mirror);
-        host.remote.cacheMachine(machineId, JSON.stringify(mirror.threads)).catch((error: unknown) => console.error('Saving another computer’s threads failed', error));
-      }
+      saveChanged();
     }, CACHE_EVERY_MS);
   }, [mirrors]);
   useEffect(
@@ -139,6 +141,10 @@ function useMirrorCache(mirrors: Record<string, Mirror | undefined>) {
     },
     [],
   );
+}
+
+function unsaved(mirrors: Record<string, Mirror | undefined>, saved: Map<string, Mirror>) {
+  return Object.entries(mirrors).filter((entry): entry is [string, Mirror] => !!entry[1] && !fromCache.has(entry[1]) && saved.get(entry[0]) !== entry[1]);
 }
 
 export function useMachines() {
@@ -163,19 +169,16 @@ export function useMachineCatalog(machine: FollowedMachine | undefined) {
  */
 export function RemoteScope({ machine, state, onOpenTab, children }: { machine: FollowedMachine; state: State; onOpenTab?: (action: Extract<Action, { type: 'pane-open-tab' }>) => void; children: ReactNode }) {
   const { run, ask } = useMachines();
-  const dispatch = useCallback(
-    (action: Action) => {
-      // A link in its transcript: the thread view opens its own pane, reading from that computer.
-      if (action.type === 'pane-open-tab' && onOpenTab) return onOpenTab(action);
-      const command = commandFor(action);
-      if (!command) return void toast(`Do this on ${machine.name} itself for now`);
-      if (command.type === 'open') return openRemoteThread({ machineId: machine.id, threadId: command.threadId });
-      // Read state is no reason to toast: offline, or without operate, it just stays unread there.
-      if (command.type === 'seen') return void ask(machine.id, command).catch(() => undefined);
-      void run(machine.id, command);
-    },
-    [machine.id, machine.name, run, ask, onOpenTab],
-  );
+  const dispatch = (action: Action) => {
+    // A link in its transcript: the thread view opens its own pane, reading from that computer.
+    if (action.type === 'pane-open-tab' && onOpenTab) return onOpenTab(action);
+    const command = commandFor(action);
+    if (!command) return void toast(`Do this on ${machine.name} itself for now`);
+    if (command.type === 'open') return openRemoteThread({ machineId: machine.id, threadId: command.threadId });
+    // Read state is no reason to toast: offline, or without operate, it just stays unread there.
+    if (command.type === 'seen') return void ask(machine.id, command).catch(() => undefined);
+    void run(machine.id, command);
+  };
   return <StoreScope state={state} dispatch={dispatch}>{children}</StoreScope>;
 }
 

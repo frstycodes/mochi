@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 /** A shared wall clock per granularity, stopped while hidden or unused. Null leaves the clock idle. */
 export function useNow(granularity: number | null = 1000) {
   const clock = clockFor(granularity);
+  // oxlint-disable-next-line react/purity -- an idle clock (null) reads the time whenever its caller renders for another reason
   return useSyncExternalStore(clock.subscribe, clock.getSnapshot) ?? Date.now();
 }
 

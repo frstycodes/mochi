@@ -28,7 +28,7 @@ export function McpAppCard({ threadId, widget }: { threadId: string; widget: Mcp
   if (error) return <WidgetError title={title} error={error} />;
   return (
     <EmbedFrame icon={Grid} title={title}>
-      {resource ? <McpAppFrame widget={widget} resource={resource} /> : <Skeleton style={{ height: START_HEIGHT }} className="w-full rounded-none" />}
+      {resource ? <McpAppFrame key={resource.html} widget={widget} resource={resource} /> : <Skeleton style={{ height: START_HEIGHT }} className="w-full rounded-none" />}
     </EmbedFrame>
   );
 }
@@ -67,7 +67,7 @@ export function McpAppFrame({ widget, resource }: { widget: McpWidget; resource:
       bridge.current = null;
       void b.close();
     };
-  }, [widget, resource]);
+  }, [widget]);
 
   useEffect(() => bridge.current?.setHostContext(hostContext(mode)), [mode]);
   const frameDocument = useFrameDocument(frame, 'mcpApp', withCsp(resource.html, ui?.csp));

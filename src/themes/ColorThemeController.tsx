@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { host } from '@/host';
 import { APPEARANCES, type Appearance } from '@/host/types/windows';
@@ -13,7 +13,7 @@ import { queryKeys } from '../queryKeys';
  */
 export function ColorThemeController() {
   const { mode, theme } = useColorTheme();
-  const tokens = useMemo(() => (theme ? themeTokens(theme.theme, theme.kind) : {}), [theme]);
+  const tokens = theme ? themeTokens(theme.theme, theme.kind) : {};
   const applied = useRef<string[]>([]);
   const { theme: appearance } = useTheme();
 

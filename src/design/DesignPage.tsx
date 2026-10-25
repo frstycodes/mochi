@@ -705,9 +705,9 @@ function Conversation() {
         </Block>
         <Block title="Action lines" use="An agent's browser actions in a thread: an icon for the kind of action and the page as its favicon and host, never the full URL.">
           <div className="flex flex-col gap-2">
-            <EventLine text='Claude clicked "Sandesh Pandey sandesh@withp…"' glyph="click" site="https://accounts.google.com/signin/oauth/error?authError=x" at={Date.now()} />
-            <EventLine text='Claude typed into "Text field for emails" and pressed Enter' glyph="type" site="https://console.cloud.google.com/auth/audience" at={Date.now()} />
-            <EventLine text="Claude opened a page outside your machine" glyph="browse" site="https://api.slack.com/apps" at={Date.now()} />
+            <EventLine text='Claude clicked "Sandesh Pandey sandesh@withp…"' glyph="click" site="https://accounts.google.com/signin/oauth/error?authError=x" at={AGO} />
+            <EventLine text='Claude typed into "Text field for emails" and pressed Enter' glyph="type" site="https://console.cloud.google.com/auth/audience" at={AGO} />
+            <EventLine text="Claude opened a page outside your machine" glyph="browse" site="https://api.slack.com/apps" at={AGO} />
           </div>
         </Block>
         <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, handoffs.">

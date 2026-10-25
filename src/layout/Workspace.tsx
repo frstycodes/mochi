@@ -1,5 +1,5 @@
 import { listenKeydown } from '../keymap';
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ErrorBoundary } from 'react-error-boundary';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
@@ -323,13 +323,14 @@ function isTabbing() {
 
 /** After the set of splits changes, composers have autofocused in mount order; put the caret back in the focused split. Parent effects run after children's, so this wins. */
 function useCaretInFocusedSplit(structure: string, focusId: string, isMulti: boolean) {
-  const latestFocus = useRef(focusId);
-  latestFocus.current = focusId;
-  useEffect(() => {
-    if (!isMulti) return;
-    const el = document.querySelector<HTMLElement>(`[data-leaf-id="${latestFocus.current}"]`);
+  const focusCaret = useEffectEvent(() => {
+    const el = document.querySelector<HTMLElement>(`[data-leaf-id="${focusId}"]`);
     if (!el || el.contains(document.activeElement)) return;
     (el.querySelector<HTMLElement>(COMPOSER_EDITABLE) ?? el).focus({ preventScroll: true });
+  });
+  useEffect(() => {
+    if (isMulti) focusCaret();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `structure` is the trigger: the caret moves back each time the set of splits changes
   }, [structure, isMulti]);
 }
 

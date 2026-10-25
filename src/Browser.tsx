@@ -138,7 +138,7 @@ export function PipLayer({ thread }: { thread: Thread }) {
 function useTrackedRect(ref: RefObject<HTMLElement | null>, isOn: boolean) {
   const [rect, setRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   useEffect(() => {
-    if (!isOn) return setRect(null);
+    if (!isOn) return;
     let frame = 0;
     let last = '';
     const tick = () => {
@@ -151,7 +151,10 @@ function useTrackedRect(ref: RefObject<HTMLElement | null>, isOn: boolean) {
       setRect(next);
     };
     tick();
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      setRect(null);
+    };
   }, [ref, isOn]);
   return rect;
 }

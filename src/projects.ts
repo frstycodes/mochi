@@ -1,5 +1,5 @@
 import { persistedSlice } from './lib/uiStorage.ts';
-import { useMemo, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { queryClient } from './query.ts';
 import { queryKeys } from './queryKeys.ts';
@@ -16,7 +16,7 @@ export { isAbsolutePath, projectName, projectRef, repoFor } from './projectRef.t
 export function useProjects(spaceId: string, threads: readonly Thread[]): Project[] | null {
   const projectsQuery = useQuery(projectsQueryOptions(spaceId, threads));
   const projects = projectsQuery.data ?? null;
-  return useMemo(() => projects && byRecentUse(projects, threads), [projects, threads]);
+  return projects && byRecentUse(projects, threads);
 }
 
 /** The registry's entry for a folder, from what's already loaded; it starts no read of its own. */

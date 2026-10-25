@@ -17,7 +17,11 @@ const STEP = 1.5;
 export function PhotoViewer() {
   const request = usePhotoRequest();
   const [index, setIndex] = useState(0);
-  useEffect(() => setIndex(request?.index ?? 0), [request]);
+  const [indexedRequest, setIndexedRequest] = useState(request);
+  if (request !== indexedRequest) {
+    setIndexedRequest(request);
+    setIndex(request?.index ?? 0);
+  }
   const photos = request?.photos ?? [];
   const photo = photos[index];
   const go = (step: number) => photos.length > 1 && setIndex((i) => (i + step + photos.length) % photos.length);

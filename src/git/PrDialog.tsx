@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Shimmer } from '@/components/ai-elements/shimmer';
@@ -21,10 +21,13 @@ export function PrDialog({ thread, cwd, diff, githubUser, onCreate, onClose }: {
   const { draft, isDrafting } = useDraft('pr', thread.spaceId);
   const base = diff.base.replace(/^origin\//, '');
 
+  const draftPr = useEffectEvent(() => {
+    const branchFiles = host.git.diff(cwd, 'branch', diff.base).then((d) => d.files, () => diff.files);
+    return draft(branchFiles.then((files) => prPrompt(thread.title, thread.goal, files)));
+  });
   useEffect(() => {
     let isCurrent = true;
-    const branchFiles = host.git.diff(cwd, 'branch', diff.base).then((d) => d.files, () => diff.files);
-    void draft(branchFiles.then((files) => prPrompt(thread.title, thread.goal, files))).then((text) => {
+    void draftPr().then((text) => {
       const pr = isCurrent && text ? parsePr(text) : null;
       if (!pr?.title) return;
       setTitle((t) => (t.isEdited ? t : { text: pr.title }));
@@ -33,7 +36,7 @@ export function PrDialog({ thread, cwd, diff, githubUser, onCreate, onClose }: {
     return () => {
       isCurrent = false;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- drafted once per opening
+  }, []);
 
   const create = async () => {
     onClose();

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { useDispatch, useGetState } from '../store';
 import { markSeen, type SeenAction } from '../store/seen';
 
@@ -11,17 +11,15 @@ type Target = Omit<SeenAction, 'type'>;
 export function useSeen(target: Target, when: 'open-and-leave' | 'leave') {
   const dispatch = useDispatch();
   const getState = useGetState();
-  const latest = useRef({ getState, dispatch, target });
-  latest.current = { getState, dispatch, target };
   const { threadId } = target;
+  const markRead = useEffectEvent((opened: typeof threadId) => {
+    const state = getState();
+    const marked = { type: 'seen' as const, ...(opened ? { threadId: opened } : target) };
+    if (markSeen(state, marked) !== state) dispatch(marked);
+  });
   useEffect(() => {
-    // The thread this effect opened, not the one `latest` already holds when the route moves on.
-    const mark = () => {
-      const { getState, dispatch, target } = latest.current;
-      const state = getState();
-      const marked = { type: 'seen' as const, ...(threadId ? { threadId } : target) };
-      if (markSeen(state, marked) !== state) dispatch(marked);
-    };
+    // The thread this effect opened, not the one the route has already moved on to.
+    const mark = () => markRead(threadId);
     if (when === 'open-and-leave') mark();
     return mark;
   }, [threadId, when]);

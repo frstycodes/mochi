@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, SearchAlt } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -16,7 +16,11 @@ export function AccessSection() {
   const [query, setQuery] = useState('');
   const route = useSettingsRoute();
   // A deep link to a tool row has to find it, whatever the filter hid.
-  useEffect(() => setQuery(''), [route?.nonce]);
+  const [linkNonce, setLinkNonce] = useState(route?.nonce);
+  if (linkNonce !== route?.nonce) {
+    setLinkNonce(route?.nonce);
+    setQuery('');
+  }
   const groups = groupTools(query);
   return (
     <div className="flex flex-col gap-10">

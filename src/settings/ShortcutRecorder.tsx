@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { RotateLeft } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -105,8 +105,7 @@ function Conflict({ keys, next, holder, onCancel, onSettle }: { keys: Key[] | nu
 
 /** While recording, every key press is the recorder's: captured on `window` before the app's own shortcuts and Radix's Esc. */
 export function useRecording(isRecording: boolean, on: { onCancel: () => void; onClear: () => void; onChord: (keys: Key[]) => void }) {
-  const latest = useRef(on);
-  latest.current = on;
+  const handlers = useEffectEvent(() => on);
   useEffect(() => {
     if (!isRecording) return;
     let isAltOnly = false;
@@ -114,18 +113,18 @@ export function useRecording(isRecording: boolean, on: { onCancel: () => void; o
       e.preventDefault();
       e.stopImmediatePropagation();
       const isBare = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
-      if (isBare && e.key === 'Escape') return latest.current.onCancel();
-      if (isBare && e.key === 'Backspace') return latest.current.onClear();
+      if (isBare && e.key === 'Escape') return handlers().onCancel();
+      if (isBare && e.key === 'Backspace') return handlers().onClear();
       isAltOnly = e.key === 'Alt' && !e.metaKey && !e.ctrlKey && !e.shiftKey;
       const chord = chordOf(e);
-      if (chord) latest.current.onChord(chord);
+      if (chord) handlers().onChord(chord);
     };
     const stop = listenKeydown(onKey, true);
     const onKeyUp = (e: KeyboardEvent) => {
       if (!isAltOnly || e.key !== 'Alt') return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      latest.current.onChord(['alt']);
+      handlers().onChord(['alt']);
     };
     window.addEventListener('keyup', onKeyUp, true);
     return () => {

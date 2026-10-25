@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ExitFullscreen, Fullscreen, X } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -69,13 +69,10 @@ export function PaneHeader({
   const hasOwnMenu = useContext(SlotsContext)?.hasMenu;
   const header = useRef<HTMLElement>(null);
   useCaptionInset(header);
-  const ref = useCallback(
-    (el: HTMLElement | null) => {
-      header.current = el;
-      dragHandle(el);
-    },
-    [dragHandle],
-  );
+  const ref = (el: HTMLElement | null) => {
+    header.current = el;
+    dragHandle(el);
+  };
   return (
     // Pressing here starts a drag (dnd-kit stops the moves reaching Orbit), so a long press must not open Orbit.
     <header ref={ref} data-pane-header data-no-orbit className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
@@ -113,16 +110,17 @@ export function PaneHeader({
 
 /** Where `PaneTitle` lands; shows `children` (the pane's name) while nothing claims it. Popped-out panes and splits place their own. */
 export function PaneTitleSlot({ children }: { children?: ReactNode }) {
-  const slots = useContext(SlotsContext)!;
+  const { setTitle, hasTitle } = useContext(SlotsContext)!;
   return (
-    <div ref={slots.setTitle} className="flex h-full min-w-0 flex-1 items-center gap-1.5">
-      {!slots.hasTitle && children}
+    <div ref={setTitle} className="flex h-full min-w-0 flex-1 items-center gap-1.5">
+      {!hasTitle && children}
     </div>
   );
 }
 
 export function PaneActionsSlot() {
-  return <div ref={useContext(SlotsContext)!.setActions} className="flex shrink-0 items-center gap-0.5" />;
+  const { setActions } = useContext(SlotsContext)!;
+  return <div ref={setActions} className="flex shrink-0 items-center gap-0.5" />;
 }
 
 /** The slots alone, for a pane shown outside its card (in a split, popped out): what the pane put in its header still shows, and nothing at all when it put nothing there. */

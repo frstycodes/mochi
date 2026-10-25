@@ -265,8 +265,12 @@ function useOwnAppRedirect() {
 /** The one-time code a device sign-in for `url` is waiting on; null until main sends one, or when nothing is signing in. */
 function useDeviceCode(url: string | null) {
   const [code, setCode] = useState<DeviceCode | null>(null);
-  useEffect(() => {
+  const [codeUrl, setCodeUrl] = useState(url);
+  if (url !== codeUrl) {
+    setCodeUrl(url);
     setCode(null);
+  }
+  useEffect(() => {
     if (!url) return;
     return host.library.onDeviceCode((next) => next.url === url && setCode(next));
   }, [url]);

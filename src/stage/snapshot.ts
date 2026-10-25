@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useLatest } from '../useLatest.ts';
 import { useQueries } from '@tanstack/react-query';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
 import { goalProgress } from '../progress';
@@ -26,8 +26,7 @@ const REFRESH_MS = 1000;
 /** Snapshots for `ids`, each refreshed at most once a second and kept identical while nothing on it changed, so memoized cards skip re-rendering. */
 export function useThreadSnapshots(ids: string[]) {
   const { state } = useHarness();
-  const latest = useRef(state);
-  latest.current = state;
+  const latest = useLatest(state);
   const snapshotsQueries = useQueries({ queries: ids.map((id) => ({
     queryKey: queryKeys.stage.threadSnapshot(id),
     queryFn: () => { const thread = latest.current.threads.find((t) => t.id === id); return thread ? snapshotOf(thread, latest.current) : null; },
