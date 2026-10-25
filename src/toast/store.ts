@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 
 export type ToastType =
   | 'default'
@@ -42,21 +44,16 @@ const DURATION = {
   loading: Infinity,
 } satisfies Record<ToastType, number>;
 
-let toasts: Toast[] = [];
+const toastStore = createStore<{ toasts: Toast[] }>(() => ({ toasts: [] }));
 let nextId = 0;
-const listeners = new Set<() => void>();
 
 function set(next: Toast[]) {
-  toasts = next;
-  for (const listener of listeners) listener();
+  toastStore.setState({ toasts: next });
 }
 
-export function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-}
+export const getToasts = () => toastStore.getState().toasts;
 
-export const getToasts = () => toasts;
+export const useToasts = () => useStore(toastStore, (s) => s.toasts);
 
 function show(type: ToastType, title: ReactNode, options: ToastOptions = {}) {
   const { id = autoId(type, title, options.description), ...rest } = options;
@@ -68,11 +65,11 @@ function show(type: ToastType, title: ReactNode, options: ToastOptions = {}) {
     expand: rest.expand,
     duration: rest.duration ?? DURATION[type],
   };
-  const live = toasts.find((t) => t.id === id && !t.isLeaving);
+  const live = getToasts().find((t) => t.id === id && !t.isLeaving);
   if (!live) {
     set([
       { id, ...fields, count: 1, version: 0, isLeaving: false },
-      ...toasts.filter((t) => t.id !== id),
+      ...getToasts().filter((t) => t.id !== id),
     ]);
     return id;
   }
@@ -81,7 +78,7 @@ function show(type: ToastType, title: ReactNode, options: ToastOptions = {}) {
     live.title === title &&
     live.description === rest.description;
   set(
-    toasts.map((t) =>
+    getToasts().map((t) =>
       t === live
         ? {
             ...t,
@@ -106,15 +103,19 @@ function autoId(type: ToastType, title: ReactNode, description: ReactNode) {
 }
 
 export function dismiss(id?: string) {
-  const leaving = toasts.filter(
+  const leaving = getToasts().filter(
     (t) => !t.isLeaving && (id === undefined || t.id === id),
   );
   if (!leaving.length) return;
-  set(toasts.map((t) => (leaving.includes(t) ? { ...t, isLeaving: true } : t)));
+  set(
+    getToasts().map((t) =>
+      leaving.includes(t) ? { ...t, isLeaving: true } : t,
+    ),
+  );
   setTimeout(
     () =>
       set(
-        toasts.filter(
+        getToasts().filter(
           (t) => !(t.isLeaving && leaving.some((l) => l.id === t.id)),
         ),
       ),

@@ -1,7 +1,8 @@
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import {
   createElement,
   useState,
-  useSyncExternalStore,
   type ComponentProps,
   type ReactNode,
 } from 'react';
@@ -31,12 +32,12 @@ export interface DragSession {
   hit: { leafId: string; zone: Zone } | null;
 }
 
-let session: DragSession | null = null;
-const listeners = new Set<() => void>();
+const dragStore = createStore<{ session: DragSession | null }>(() => ({
+  session: null,
+}));
 
 function emit(next: DragSession | null) {
-  session = next;
-  for (const l of listeners) l();
+  dragStore.setState({ session: next });
 }
 
 type DragOptions = Partial<Pick<DragSession, 'hasOwnGhost' | 'refusal'>>;
@@ -52,11 +53,13 @@ export function startDrag(
 }
 
 export function moveDrag(x: number, y: number) {
+  const { session } = dragStore.getState();
   if (session) emit({ ...session, x, y, hit: hitLeaf(x, y, session.view) });
 }
 
 /** Ends the drag and returns where it landed on a split, if anywhere. */
 export function endDrag() {
+  const { session } = dragStore.getState();
   const landed =
     session?.hit && !session.refusal
       ? { ...session.hit, view: session.view }
@@ -76,13 +79,7 @@ export function useDragSession() {
 
 /** Re-renders only when `select`'s result changes, not on every pointer move. `select` must return a primitive or a stable reference. */
 export function useDragSelector<T>(select: (s: DragSession | null) => T) {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    () => select(session),
-  );
+  return useStore(dragStore, (s) => select(s.session));
 }
 
 /** A composer marks itself `data-mention-drop`; a thread released over it is mentioned there (`MENTION_DROP_EVENT`), never opened in a split. */

@@ -1,41 +1,39 @@
-import { useSyncExternalStore } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
 import type { Trigger } from '../host/types/schedule.ts';
+import { queryClient } from '../query.ts';
+import { queryKeys } from '../queryKeys.ts';
 import { nextRun } from './cron.ts';
 
+const NONE: Trigger[] = [];
+let isWatching = false;
+
 // Core owns the triggers; every window mirrors them from `list` and `onChange`.
-let triggers: Trigger[] = [];
-const listeners = new Set<() => void>();
-let isLoaded = false;
-
-function load() {
-  if (isLoaded) return;
-  isLoaded = true;
-  host.schedule.onChange((next) => set(next));
-  host.schedule
-    .list()
-    .then(set, (error: unknown) =>
-      console.error('Loading schedules failed', error),
+function listTriggers() {
+  if (!isWatching) {
+    isWatching = true;
+    host.schedule.onChange((next) =>
+      queryClient.setQueryData(queryKeys.schedules(), next),
     );
+  }
+  return host.schedule.list();
 }
 
-function set(next: Trigger[]) {
-  triggers = next;
-  listeners.forEach((l) => l());
-}
-
-function subscribe(listener: () => void) {
-  load();
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-}
+const schedulesOptions = {
+  queryKey: queryKeys.schedules(),
+  queryFn: listTriggers,
+  staleTime: Infinity,
+};
 
 export function useSchedules() {
-  return useSyncExternalStore(subscribe, () => triggers);
+  return useQuery(schedulesOptions).data ?? NONE;
 }
 
 export function useTrigger(threadId: string) {
-  return useSchedules().find((t) => t.threadId === threadId);
+  return useQuery({
+    ...schedulesOptions,
+    select: (all) => all.find((t) => t.threadId === threadId),
+  }).data;
 }
 
 /** Null for PR triggers (they fire on events) and paused ones. */

@@ -1,5 +1,6 @@
 import { persistedSlice } from './lib/uiStorage.ts';
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { queryClient } from './query.ts';
 import { queryKeys } from './queryKeys.ts';
@@ -59,29 +60,22 @@ export function projectUsage(threads: readonly Thread[]) {
   return usage;
 }
 
-let requested: string | null = null;
-const requestListeners = new Set<() => void>();
+const requestedStore = createStore<{ ref: string | null }>(() => ({
+  ref: null,
+}));
 
 /** Opens the new-thread page on this project (the sidebar's Projects); the page takes it once (`takeRequestedProject`). */
 export function requestNewThreadIn(ref: string) {
-  requested = ref;
-  requestListeners.forEach((l) => l());
+  requestedStore.setState({ ref });
 }
 
 export function useRequestedProject() {
-  return useSyncExternalStore(
-    (listener) => {
-      requestListeners.add(listener);
-      return () => void requestListeners.delete(listener);
-    },
-    () => requested,
-  );
+  return useStore(requestedStore, (s) => s.ref);
 }
 
 export function takeRequestedProject() {
-  const ref = requested;
-  requested = null;
-  requestListeners.forEach((l) => l());
+  const { ref } = requestedStore.getState();
+  requestedStore.setState({ ref: null });
   return ref;
 }
 

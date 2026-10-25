@@ -5,7 +5,8 @@ import {
 } from '../lib/uiStorage.ts';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
@@ -76,17 +77,19 @@ const FAILURE_OUTPUT_LINES = 80;
 // 130 is Ctrl C, 143 SIGTERM (the Ports tab's stop): the user ended it, nothing to fix.
 const IGNORED_EXIT_CODES = [0, 130, 143];
 
-const groups = new Map<string, TerminalGroup>();
+const groupsStore = createStore<{ groups: ReadonlyMap<string, TerminalGroup> }>(
+  () => ({ groups: new Map() }),
+);
+const groups = () => groupsStore.getState().groups;
 const contexts = new Map<string, GroupContext>();
 const byPty = new Map<string, TerminalSession>();
 // Output can beat the spawn reply that tells us which session a pty id belongs to.
 const earlyOutput = new Map<string, string>();
-const listeners = new Set<() => void>();
 let nextSessionId = 0;
 let isWired = false;
 
 export function useTerminalGroup(key: string) {
-  return useSyncExternalStore(subscribe, () => groups.get(key));
+  return useStore(groupsStore, (s) => s.groups.get(key));
 }
 
 /** Creates the group on first use (restoring saved scrollback) and refreshes its link handlers on every call. */
@@ -96,7 +99,7 @@ export function ensureGroup(
   firstShell: ShellOptions = {},
 ) {
   contexts.set(key, context);
-  if (groups.has(key)) return;
+  if (groups().has(key)) return;
   wireHost();
   const saved = loadGroup(key);
   if (saved) {
@@ -135,13 +138,13 @@ export function addShell(
   options: ShellOptions = {},
 ) {
   // A brand-new group runs the command in its first shell instead of opening an idle one beside it.
-  if (!groups.has(key) && !loadGroup(key))
+  if (!groups().has(key) && !loadGroup(key))
     return ensureGroup(key, context, options);
   ensureGroup(key, context);
   const session = createSession(
     key,
     'shell',
-    options.title ?? shellTitle(groups.get(key)!),
+    options.title ?? shellTitle(groups().get(key)!),
     options,
   );
   updateGroup(key, (g) => ({
@@ -161,7 +164,9 @@ export function showSession(key: string, id: string) {
 }
 
 export function closeSession(key: string, id: string) {
-  const session = groups.get(key)?.sessions.find((s) => s.id === id);
+  const session = groups()
+    .get(key)
+    ?.sessions.find((s) => s.id === id);
   if (!session) return;
   if (session.ptyId) {
     byPty.delete(session.ptyId);
@@ -185,7 +190,9 @@ export function closeSession(key: string, id: string) {
 /** The group's read-only Build session, created on first use, wiped for a new run and shown in the focused slot. */
 export function startBuildLog(key: string, context: GroupContext) {
   ensureGroup(key, context);
-  const existing = groups.get(key)!.sessions.find((s) => s.kind === 'build');
+  const existing = groups()
+    .get(key)!
+    .sessions.find((s) => s.kind === 'build');
   const session = existing ?? createSession(key, 'build', 'Build');
   if (!existing)
     updateGroup(key, (g) => ({ ...g, sessions: [...g.sessions, session] }));
@@ -384,13 +391,13 @@ function wireHost() {
   });
   onThemeChange(() => {
     const theme = terminalTheme();
-    groups.forEach((g) =>
+    groups().forEach((g) =>
       g.sessions.forEach((s) => (s.term.options.theme = theme)),
     );
   });
   subscribePrefs(() => {
     const { terminalFontSize, terminalScrollback } = getPrefs();
-    groups.forEach((g) =>
+    groups().forEach((g) =>
       g.sessions.forEach((s) => {
         if (
           s.term.options.fontSize === terminalFontSize &&
@@ -406,7 +413,7 @@ function wireHost() {
   });
   // Desktop only: the web mock replays its demo on every spawn, so restored scrollback would just repeat it.
   if (host.isDesktop)
-    addEventListener('pagehide', () => groups.forEach(saveGroup));
+    addEventListener('pagehide', () => groups().forEach(saveGroup));
 }
 
 /** Drops saved scrollback and wipes what open shells show above their prompt; the shells keep running. */
@@ -418,7 +425,7 @@ export function clearTerminalHistory() {
     });
     browserStorage.removeItem(key);
   }
-  groups.forEach((g) =>
+  groups().forEach((g) =>
     g.sessions.forEach((s) => s.kind === 'shell' && s.term.clear()),
   );
 }
@@ -468,16 +475,12 @@ function patchSession(
 }
 
 function updateGroup(key: string, fn: (group: TerminalGroup) => TerminalGroup) {
-  const group = groups.get(key);
+  const group = groups().get(key);
   if (group) setGroup(fn(group));
 }
 
 function setGroup(group: TerminalGroup) {
-  groups.set(group.key, group);
-  listeners.forEach((listener) => listener());
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
+  groupsStore.setState(({ groups }) => ({
+    groups: new Map(groups).set(group.key, group),
+  }));
 }
