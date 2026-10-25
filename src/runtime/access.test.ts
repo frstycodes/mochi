@@ -4,6 +4,8 @@ import { POLICIES } from '@mochi/core/agents/codex/adapter';
 import { permissionOptions } from '@mochi/core/agents/claude/map';
 import { ACCESS, accessOf } from './access.ts';
 import { agentOptions } from './agentOptions.ts';
+import { policyOf } from './controls.ts';
+import type { Thread } from '../model.ts';
 import { parsePrefs } from '../settings/prefs.ts';
 
 const sent = (
@@ -99,4 +101,17 @@ test('stored modes from before the rename read as the new names', () => {
     parsePrefs(JSON.stringify({ permissions: 'Plan' })).permissions,
     'Auto',
   );
+});
+
+test('a start and every later message carry the same permission mode for the thread’s access', () => {
+  for (const provider of ['claude', 'codex'] as const)
+    for (const access of ACCESS) {
+      const controls = { model: '', effort: 'high', speed: '', access };
+      const thread = { providers: [provider], controls } as unknown as Thread;
+      assert.equal(
+        agentOptions(controls, provider, 'personal').permissionMode,
+        policyOf(thread).permissionMode,
+        `${provider} ${access}`,
+      );
+    }
 });
