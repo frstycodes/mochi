@@ -27,6 +27,4 @@ export type ReactorCommand =
   | { type: 'idle.gather'; key: string; threadId: string }
   | { type: 'simplify.auto'; key: string; threadId: string }
   | { type: 'compact.instructions'; key: string; threadId: string }
-  | { type: 'pr.refresh'; key: string; threadId: string }
-  /** Folds the turn into the thread's rolling brief when enough is new (`ThreadContext.updateBrief`). */
-  | { type: 'brief.update'; key: string; threadId: string };
+  | { type: 'pr.refresh'; key: string; threadId: string };

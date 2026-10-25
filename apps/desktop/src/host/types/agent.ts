@@ -35,8 +35,8 @@ export interface AgentStartOptions {
   resume?: string;
   /** With `resume`: continue a fork of that session holding only what came up to this point (`rewindPoint`), leaving the original as it was. */
   forkAt?: string;
-  /** The thread switched to `provider` from this one: Core resumes `provider`'s own earlier session or starts one, with the thread so far. */
-  switchFrom?: Provider;
+  /** The thread switched to `provider` from this one: Core resumes `provider`'s own earlier session or starts one from a handoff. */
+  switchFrom?: SwitchFrom;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
   /** Goals are off (always, now they're retired): the session gets no goal instructions, tools or nudge. Read at session start. */
@@ -45,6 +45,16 @@ export interface AgentStartOptions {
   isSettingsChat?: boolean;
   /** The profile's turned-off Claude Code or Codex items for this harness (`NativeItem.id`); main leaves them out of this session only. Read at session start. */
   nativeOff?: string[];
+}
+
+/**
+ * Where a switched thread comes from: the provider and model it ran on, and whether that session had run out of usage (it then
+ * can't write the handoff). The same provider as the start's is a fresh session after a usage limit.
+ */
+export interface SwitchFrom {
+  provider: Provider;
+  model?: string;
+  isLimited?: boolean;
 }
 
 /** One message to a live agent. */
@@ -209,9 +219,13 @@ export type AgentEvent =
       from: Provider;
       to: Provider;
       model?: string;
+      /** Who wrote the handoff in `text`; unset when it went without one. */
+      handoffBy?: Provider;
       text: string;
       contents: string;
     }
+  /** Core is writing the handoff for the thread's next start; `context` follows. */
+  | { threadId: string; type: 'context-writing' }
   | {
       threadId: string;
       type: 'turn-end';

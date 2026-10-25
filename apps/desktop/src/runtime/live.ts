@@ -8,7 +8,7 @@ import type {
 } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
-import { providerOf } from '../rewind/switch.ts';
+import { pendingSwitch, providerOf } from '../rewind/switch.ts';
 import {
   isUnstarted,
   startWorkspace,
@@ -465,8 +465,7 @@ function reattach(
   const provider = providerOf(thread);
   const restart = thread.live?.restart;
   const seed = restart && 'seed' in restart ? restart.seed : undefined;
-  const switchFrom =
-    restart && 'switchFrom' in restart ? restart.switchFrom : undefined;
+  const switchFrom = pendingSwitch(thread);
   // A switch has no session of `provider` to resume here: Core keeps each provider's own and picks it (`ThreadContext`).
   const resume =
     seed === undefined && !switchFrom ? thread.session?.id : undefined;
@@ -496,8 +495,7 @@ function reattach(
 }
 
 /** A switch waits for your next message, which starts the new provider whether or not the old session still runs. */
-const isSwitching = (thread: Thread) =>
-  !!thread.live?.restart && 'switchFrom' in thread.live.restart;
+const isSwitching = (thread: Thread) => !!pendingSwitch(thread);
 
 /** A worktree thread whose agent ran in a worktree that's gone from the list (Settings › Git and worktrees cleanup, Clean up settled worktrees). */
 function isCleanedUp(thread: Thread) {

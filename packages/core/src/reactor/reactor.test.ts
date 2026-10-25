@@ -13,17 +13,13 @@ import { Capabilities } from '../hostServer.ts';
 import { AgentCaller, Commands } from '../store/commands.ts';
 import { Projection } from '../store/projection.ts';
 import { Store, type OutboxEffect } from '../store/store.ts';
-import { ThreadContext } from '../switch/context.ts';
 import { UtilityQueue } from '../utility/queue.ts';
 import { layerReactor } from './execute.ts';
 import { runReactor } from './reactor.ts';
 import type { Outcome } from './worker.ts';
 
-// These commands never reach GitHub, and no brief is due.
+// These commands never reach GitHub.
 const noGithub = Layer.succeed(GitHub, {} as GitHub['Service']);
-const noBriefs = Layer.succeed(ThreadContext, {
-  updateBrief: () => Effect.void,
-} as unknown as ThreadContext['Service']);
 
 const layerStore = (dir: string) =>
   Projection.layer(undefined).pipe(
@@ -195,12 +191,7 @@ it.effect(
         ),
         // No window serves anything.
         Layer.provideMerge(
-          Layer.mergeAll(
-            Capabilities.layer,
-            UtilityQueue.layer,
-            noGithub,
-            noBriefs,
-          ),
+          Layer.mergeAll(Capabilities.layer, UtilityQueue.layer, noGithub),
         ),
       );
       const thread = yield* Effect.gen(function* () {
@@ -279,12 +270,7 @@ it.effect(
         Layer.provideMerge(layerStore(dir)),
         // No window serves anything.
         Layer.provideMerge(
-          Layer.mergeAll(
-            Capabilities.layer,
-            UtilityQueue.layer,
-            noGithub,
-            noBriefs,
-          ),
+          Layer.mergeAll(Capabilities.layer, UtilityQueue.layer, noGithub),
         ),
       );
       yield* Effect.gen(function* () {

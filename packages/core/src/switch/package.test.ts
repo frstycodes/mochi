@@ -3,19 +3,6 @@ import { test } from 'vite-plus/test';
 import { contextPackage, tokensOf, type PackageInput } from './package.ts';
 import type { TranscriptItem } from './transcript.ts';
 
-const brief: NonNullable<PackageInput['brief']> = {
-  throughSeq: 1900,
-  brief: {
-    goal: 'Migrate the auth store',
-    decisions: Array.from({ length: 40 }, (_, i) => `Decision ${i}: kept`),
-    ruledOut: [],
-    state: 'tests red on refresh',
-    open: [],
-    preferences: [],
-    chapters: [{ fromSeq: 412, toSeq: 530, line: 'migrated the auth store' }],
-  },
-};
-
 const long: TranscriptItem[] = Array.from({ length: 2000 }, (_, i) => ({
   seq: i + 1,
   kind: i % 3 === 0 ? 'you' : i % 3 === 1 ? 'agent' : 'tool',
@@ -25,7 +12,8 @@ const long: TranscriptItem[] = Array.from({ length: 2000 }, (_, i) => ({
 
 const input = (over: Partial<PackageInput>): PackageInput => ({
   from: 'claude',
-  brief,
+  to: 'codex',
+  handoff: { text: '## Goal\nMigrate the auth store', by: 'claude' },
   items: long,
   sinceSeq: 0,
   ground: '',
@@ -33,11 +21,14 @@ const input = (over: Partial<PackageInput>): PackageInput => ({
   ...over,
 });
 
-test('a 2,000-event thread fits a 32k window: the brief, then the newest turns that fit', () => {
+test('a 2,000-event thread fits a 32k window: the handoff, then the newest turns that fit', () => {
   const pkg = contextPackage(input({}));
   assert.ok(pkg.tokens <= 32_000, `${pkg.tokens} tokens`);
   assert.equal(pkg.tokens, tokensOf(pkg.text));
-  assert.match(pkg.text, /Decision 39: kept/);
+  assert.match(
+    pkg.text,
+    /## Handoff \(written by Claude\)\n## Goal\nMigrate the auth store/,
+  );
   assert.match(pkg.text, /\[2000\] Agent/, 'the newest item');
   assert.doesNotMatch(
     pkg.text,
@@ -45,7 +36,14 @@ test('a 2,000-event thread fits a 32k window: the brief, then the newest turns t
     'the oldest left to thread_history',
   );
   assert.match(pkg.text, /older ones: thread_history/);
-  assert.match(pkg.contents, /^brief, \d+ recent turns, [\d.]+k tokens$/);
+  assert.match(
+    pkg.text,
+    /use the tool only when you need something it doesn't cover/,
+  );
+  assert.match(
+    pkg.contents,
+    /^handoff by Claude, \d+ recent turns, [\d.]+k tokens$/,
+  );
 });
 
 test('an oversized output is cut with a pointer, head and tail kept', () => {
@@ -61,19 +59,30 @@ test('an oversized output is cut with a pointer, head and tail kept', () => {
   assert.match(pkg.text, /\[… [\d,]+ lines, thread_history get seq=7\]/);
 });
 
-test('a zero budget degrades to the brief outline instead of failing', () => {
+test('a zero budget keeps the handoff and drops the turns instead of failing', () => {
   const pkg = contextPackage(input({ budget: 0 }));
-  assert.match(pkg.text, /\*\*Goal:\*\* Migrate the auth store/);
-  assert.match(pkg.text, /412–530 · migrated the auth store/);
-  assert.doesNotMatch(pkg.text, /Decision 0/);
-  assert.match(pkg.contents, /^brief outline, [\d.]+k tokens$/);
+  assert.match(pkg.text, /Migrate the auth store/);
+  assert.doesNotMatch(pkg.text, /Latest turns/);
+  assert.match(pkg.contents, /^handoff by Claude, [\d.]+k tokens$/);
 });
 
-test('a resumed session gets only what it missed, and the brief outline once that overflows', () => {
-  const missed = contextPackage(input({ sinceSeq: 1998 }));
-  assert.doesNotMatch(missed.text, /## Brief/);
+test('a resumed session gets only what it missed; a fresh one after a limit says so and wrote its own handoff', () => {
+  const missed = contextPackage(input({ sinceSeq: 1998, handoff: null }));
+  assert.match(
+    missed.text,
+    /You are back on this thread after it ran on Claude/,
+  );
   assert.match(missed.text, /\[1999\] User/);
   assert.doesNotMatch(missed.text, /\[1998\]/);
-  const overflow = contextPackage(input({ sinceSeq: 10, budget: 4_000 }));
-  assert.match(overflow.text, /## Brief/);
+  const fresh = contextPackage(
+    input({ to: 'claude', handoff: { text: 'Mine', by: 'claude' } }),
+  );
+  assert.match(
+    fresh.text,
+    /continues in a fresh session: the previous one ran out of usage/,
+  );
+  assert.match(
+    fresh.text,
+    /## Handoff \(written by you, from the transcript\)\nMine/,
+  );
 });

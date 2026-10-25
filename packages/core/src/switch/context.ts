@@ -1,21 +1,35 @@
-import { Context, Effect, Layer, Option, Schema } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 import { SqlClient } from 'effect/sql';
 import { COMMAND_TYPE, type LoggedEvent } from '@mochi/domain';
-import { Switch } from '@mochi/schema';
 import type { AgentEvent } from '../../../../apps/desktop/src/host/types/agent.ts';
+import type { SwitchFrom } from '../../../../apps/desktop/src/host/types/agent.ts';
 import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import { Run } from '../run.ts';
-import { Projection } from '../store/projection.ts';
-import { PRIORITY, UtilityQueue } from '../utility/queue.ts';
-import { BRIEF_EVERY, briefRequest, parseBrief } from './brief.ts';
+import { writeHandoff, type HandoffAsk } from './handoff.ts';
 import { contextPackage, PACKAGE_TOKENS } from './package.ts';
-import { transcriptOf } from './transcript.ts';
+import { transcriptOf, type TranscriptItem } from './transcript.ts';
 
-/** The utility model call a brief job makes; null when no model answered. */
-export type AskBrief = (
+/** A side turn for a thread's handoff, run in its folder on its profile. */
+export type AskThreadSession = (
+  threadId: string,
   spaceId: string,
-  prompt: string,
+  cwd: string,
+  ask: HandoffAsk,
 ) => Effect.Effect<string | null>;
+
+/** A start of `provider` on the thread; `switchFrom` set when the thread switched to it (or, the same provider, ran out of usage). */
+export interface Start {
+  readonly threadId: string;
+  readonly spaceId: string;
+  readonly provider: Provider;
+  readonly model?: string;
+  readonly cwd: string;
+  readonly switchFrom?: SwitchFrom;
+  /** The message this start sends: already in the log, so not repeated in the package. */
+  readonly prompt?: string;
+  /** Told when the handoff starts being written, so the thread can say so. */
+  readonly onWriting?: () => void;
+}
 
 /** What a start runs with after a switch: the earlier session of its provider to resume, and the package for its instructions. */
 interface Prepared {
@@ -35,24 +49,18 @@ interface Binding {
   context: string | null;
 }
 
-const decodeStoredBrief = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Switch.ThreadBrief),
-);
-
 /**
- * Each thread's provider sessions and rolling brief (`PROVIDER-SWITCH.md` §1–4, §6). A switch detaches the sessions of the
- * other providers where the log ends, each keeping its native id (its latest `session` event) and what it last saw; the
- * provider switched to resumes its own detached session with what it missed, or starts fresh with the whole package. A
- * session keeps its package for every later launch, since instructions are set per launch.
+ * Each thread's provider sessions (`PROVIDER-SWITCH.md` §1, §3, §6). Nothing happens when you pick another provider: the start
+ * your next message makes detaches the other sessions where the log ends, each keeping its native id (its latest `session`
+ * event) and what it last saw; the provider switched to resumes its own detached session with what it missed, or starts fresh
+ * from a handoff and the latest turns. A session keeps its package for every later launch, since instructions are set per launch.
  */
 export class ThreadContext extends Context.Service<ThreadContext>()(
   'mochi/core/ThreadContext',
   {
-    make: (ask: AskBrief) =>
+    make: (askSession: AskThreadSession) =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        const projection = yield* Projection;
-        const queue = yield* UtilityQueue;
         const run = yield* Run;
         const now = () => new Date().toISOString();
 
@@ -77,20 +85,6 @@ export class ThreadContext extends Context.Service<ThreadContext>()(
               })),
           );
 
-        const briefOf = (threadId: string) =>
-          Effect.map(
-            sql<{
-              through_seq: number;
-              brief_json: string;
-            }>`SELECT through_seq, brief_json FROM thread_briefs WHERE thread_id = ${threadId}`,
-            ([row]): Switch.StoredBrief | undefined => {
-              const brief = row && decodeStoredBrief(row.brief_json);
-              return brief && Option.isSome(brief)
-                ? { throughSeq: row.through_seq, brief: brief.value }
-                : undefined;
-            },
-          );
-
         const bindingOf = (threadId: string, provider: Provider) =>
           Effect.map(
             sql<Binding>`SELECT native_session_id, last_seen_seq, state, context FROM thread_sessions WHERE thread_id = ${threadId} AND provider = ${provider}`,
@@ -110,18 +104,41 @@ export class ThreadContext extends Context.Service<ThreadContext>()(
               last_seen_seq = excluded.last_seen_seq, state = 'detached', updated_at = excluded.updated_at
             WHERE thread_sessions.state = 'active'`;
 
+        /** The handoff a fresh session after a switch starts from, written now; the thread is told it is being written. */
+        const handoffFor = (
+          start: Start & { switchFrom: SwitchFrom },
+          fromSession: string | undefined,
+          items: ReadonlyArray<TranscriptItem>,
+        ) =>
+          Effect.andThen(
+            Effect.sync(() => start.onWriting?.()),
+            writeHandoff(
+              (ask) =>
+                askSession(start.threadId, start.spaceId, start.cwd, ask),
+              {
+                from: start.switchFrom.provider,
+                ...(start.switchFrom.model && {
+                  fromModel: start.switchFrom.model,
+                }),
+                fromSession,
+                to: start.provider,
+                ...(start.model && { model: start.model }),
+                isLimited:
+                  start.switchFrom.provider === start.provider ||
+                  !!start.switchFrom.isLimited,
+                items,
+              },
+            ),
+          );
+
         /**
          * What a start of `provider` on this thread runs with. After a switch, the package and the session to resume; any other
-         * start, the package its active session was given.
+         * start, the package its active session was given. The same provider switching to itself is a fresh session after a
+         * usage limit: it resumes nothing and writes its own handoff.
          */
-        const prepare = (
-          threadId: string,
-          provider: Provider,
-          model: string | undefined,
-          cwd: string | null,
-          switchFrom: Provider | undefined,
-        ): Effect.Effect<Prepared, unknown> =>
+        const prepare = (start: Start): Effect.Effect<Prepared, unknown> =>
           Effect.gen(function* () {
+            const { threadId, provider, model, switchFrom } = start;
             const target = yield* bindingOf(threadId, provider);
             if (!switchFrom)
               return target?.state === 'active' && target.context
@@ -129,19 +146,32 @@ export class ThreadContext extends Context.Service<ThreadContext>()(
                 : {};
             const events = yield* eventsOf(threadId, 0);
             const lastSeq = events.at(-1)?.sequence ?? 0;
-            for (const [other, sessionId] of latestSessions(events))
-              if (other !== provider)
+            const sessions = latestSessions(events);
+            const from = switchFrom.provider;
+            const isFresh = from === provider;
+            for (const [other, sessionId] of sessions)
+              if (other !== provider || isFresh)
                 yield* detach(threadId, other, sessionId, lastSeq);
             const resume =
-              target?.state === 'detached'
+              !isFresh && target?.state === 'detached'
                 ? (target.native_session_id ?? undefined)
                 : undefined;
+            const items = withoutPrompt(transcriptOf(events), start.prompt);
+            // A session coming back holds the thread up to where it left; what it missed goes verbatim.
+            const handoff = resume
+              ? null
+              : yield* handoffFor(
+                  { ...start, switchFrom },
+                  sessions.get(from),
+                  items,
+                );
             const pkg = contextPackage({
-              from: switchFrom,
-              brief: yield* briefOf(threadId),
-              items: transcriptOf(events),
+              from,
+              to: provider,
+              handoff,
+              items,
               sinceSeq: resume ? target!.last_seen_seq : 0,
-              ground: yield* groundOf(run, cwd),
+              ground: yield* groundOf(run, start.cwd),
               budget: PACKAGE_TOKENS,
             });
             yield* sql`INSERT INTO thread_sessions (thread_id, provider, native_session_id, model, last_seen_seq, state, context, updated_at)
@@ -152,54 +182,34 @@ export class ThreadContext extends Context.Service<ThreadContext>()(
               ...(resume && { resume }),
               context: pkg.text,
               delivered: {
-                from: switchFrom,
+                from,
                 to: provider,
                 ...(model && { model }),
+                ...(handoff && { handoffBy: handoff.by }),
                 text: pkg.text,
                 contents: pkg.contents,
               },
             };
           });
 
-        /** Folds the events after the brief into it, once at least `BRIEF_EVERY` items are new; on the utility queue. */
-        const updateBrief = (threadId: string) =>
-          Effect.gen(function* () {
-            const thread = (yield* projection.current).domain.threads.find(
-              (t) => t.id === threadId,
-            );
-            if (!thread) return;
-            const previous = yield* briefOf(threadId);
-            const events = yield* eventsOf(threadId, previous?.throughSeq ?? 0);
-            const items = transcriptOf(events);
-            if (items.length < BRIEF_EVERY) return;
-            const request = briefRequest(
-              thread,
-              previous,
-              items,
-              events.at(-1)!.sequence,
-            );
-            const answer = yield* queue.submit({
-              thread: threadId,
-              kind: 'brief',
-              priority: PRIORITY.handoff,
-              promptChars: request.prompt.length,
-              run: ask(thread.spaceId, request.prompt),
-            });
-            const brief = answer && parseBrief(answer);
-            if (!brief)
-              return yield* Effect.logWarning(
-                answer ? 'The brief model replied with no brief' : 'No brief',
-              ).pipe(Effect.annotateLogs({ source: 'switch', threadId }));
-            yield* sql`INSERT INTO thread_briefs (thread_id, through_seq, brief_json, updated_at)
-              VALUES (${threadId}, ${request.throughSeq}, ${JSON.stringify(brief)}, ${now()})
-              ON CONFLICT (thread_id) DO UPDATE SET through_seq = excluded.through_seq, brief_json = excluded.brief_json, updated_at = excluded.updated_at`;
-          });
+        /** The thread's transcript, for `thread_history`. */
+        const transcript = (threadId: string) =>
+          Effect.map(eventsOf(threadId, 0), transcriptOf);
 
-        return { prepare, updateBrief, briefOf, eventsOf };
+        return { prepare, transcript };
       }),
   },
 ) {
-  static readonly layer = (ask: AskBrief) => Layer.effect(this, this.make(ask));
+  static readonly layer = (askSession: AskThreadSession) =>
+    Layer.effect(this, this.make(askSession));
+}
+
+/** The transcript without its last item when that is the message the start is sending. */
+function withoutPrompt(items: TranscriptItem[], prompt: string | undefined) {
+  const last = items.at(-1);
+  return last?.kind === 'you' && last.text === prompt
+    ? items.slice(0, -1)
+    : items;
 }
 
 /** Each provider's latest native session id in the thread's log. */
