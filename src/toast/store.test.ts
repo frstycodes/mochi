@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { test } from 'vite-plus/test';
+import { onTestFinished, test, vi } from 'vite-plus/test';
 import { EXIT_MS, getToasts, toast } from './store.ts';
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-test('toasts stack newest first, repeat into a count, update in place, and leave on dismiss', async () => {
+test('toasts stack newest first, repeat into a count, update in place, and leave on dismiss', () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
   toast('Saved');
   toast.error('Push failed', { description: 'rejected' });
   assert.deepEqual(
@@ -28,11 +28,11 @@ test('toasts stack newest first, repeat into a count, update in place, and leave
   toast.dismiss(id);
   assert.equal(getToasts().find((t) => t.id === id)?.isLeaving, true, 'stays mounted for the exit');
   toast('Pushed again', { id });
-  await wait(EXIT_MS + 20);
+  vi.advanceTimersByTime(EXIT_MS);
   assert.equal(getToasts().find((t) => t.id === id)?.title, 'Pushed again', 'a toast reshown mid-exit survives the old removal');
 
   toast.dismiss();
-  await wait(EXIT_MS + 20);
+  vi.advanceTimersByTime(EXIT_MS);
   assert.equal(getToasts().length, 0);
 });
 

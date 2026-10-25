@@ -112,11 +112,14 @@ test('an abort stops the running command and ends the setup cancelled', async ()
   const { project, dir } = scratch();
   const { emit, last } = recorder();
   const abort = new AbortController();
-  const started = Date.now();
-  setTimeout(() => abort.abort(), 300);
-  const status = await prepareWorktree({ root: project, dir, include: '', command: 'sleep 30', emit, choose: () => Promise.resolve('skip'), signal: abort.signal });
+  // The command's first output means it is spawned and listening for the abort.
+  const emitUntilStarted = (update: WorktreeSetup) => {
+    emit(update);
+    if (update.steps.some((s) => s.id === 'script' && s.output?.includes('started'))) abort.abort();
+  };
+  const status = await prepareWorktree({ root: project, dir, include: '', command: 'echo started; sleep 30', emit: emitUntilStarted, choose: () => Promise.resolve('skip'), signal: abort.signal });
   assert.equal(status, 'cancelled');
-  assert.ok(Date.now() - started < 5000, 'the sleep was killed, not waited out');
+  assert.notEqual(last().steps.find((s) => s.id === 'script')!.exitCode, 0, 'the sleep was killed, not waited out');
   assert.equal(last().status, 'cancelled');
 });
 

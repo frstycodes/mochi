@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterAll, afterEach, test, vi } from 'vite-plus/test';
+import { afterAll, afterEach, onTestFinished, test, vi } from 'vite-plus/test';
 import { host } from '../host/index.ts';
 import { queryClient } from '../query.ts';
 import type { MachineCatalog } from '../host/types/remote.ts';
@@ -93,8 +93,9 @@ test('send goes out now to an idle agent and queues behind a working one, like t
 test('operate and manage commands dispatch the same actions the UI does, and the reducer applies them', async () => {
   const { state, threadId } = machine();
   const dispatched: Action[] = [];
-  const handedOff = Promise.withResolvers<void>();
-  const env = { ...device(state, 'Laptop', dispatched), dispatch: (a: Action) => void (dispatched.push(a), a.type === 'handoff' && handedOff.resolve()) };
+  let handOff = () => {};
+  const handedOff = new Promise<void>((resolve) => (handOff = resolve));
+  const env = { ...device(state, 'Laptop', dispatched), dispatch: (a: Action) => void (dispatched.push(a), a.type === 'handoff' && handOff()) };
   for (const command of [
     { type: 'rename', threadId, title: 'Ship the login fix' },
     { type: 'edit-goal', threadId, goal: 'Login works with SSO' },
@@ -107,7 +108,7 @@ test('operate and manage commands dispatch the same actions the UI does, and the
   ] as const) {
     assert.deepEqual(await runRemoteCommand(command, env), { isOk: true }, command.type);
     // The handoff drafts its prompt first, as a click here does; it lands before the next command.
-    if (command.type === 'handoff') await handedOff.promise;
+    if (command.type === 'handoff') await handedOff;
   }
   assert.deepEqual(dispatched.map((a) => a.type), ['rename', 'edit-goal', 'reorder', 'fork', 'handoff-draft', 'handoff', 'settle', 'create']);
 
@@ -182,6 +183,10 @@ test('code commands make the Changes and Files tabs’ host calls in the thread�
 });
 
 test('a device shell runs in the thread’s folder and is that thread’s alone; its output goes to Core in order', async () => {
+  const T0 = 1_700_000_000_000;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(T0);
+  onTestFinished(() => void vi.useRealTimers());
   const { state, threadId } = machine();
   const env = device(state, 'Laptop', []);
   vi.spyOn(host.ports, 'allocate').mockImplementation(async () => 4100);
@@ -222,13 +227,13 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
     { isOk: false, error: 'That terminal is closed' },
     'the machine’s own terminals are out of reach',
   );
-  await closeIdleShells(Date.now() + 30_000);
+  await closeIdleShells(T0 + 30_000);
   assert.equal(shellOf('pty-remote-1', threadId)?.threadId, threadId, 'a shell in use stays open');
   isWatched = true;
-  await closeIdleShells(Date.now() + 61_000);
+  await closeIdleShells(T0 + 61_000);
   assert.ok(shellOf('pty-remote-1', threadId), 'a shell a device is watching stays open');
   isWatched = false;
-  await closeIdleShells(Date.now() + 200_000);
+  await closeIdleShells(T0 + 200_000);
   assert.equal(shellOf('pty-remote-1', threadId), undefined, 'a device that left without closing it');
   assert.deepEqual(core.at(-1), ['terminal.close', { terminalId: 'pty-remote-1' }]);
 });
