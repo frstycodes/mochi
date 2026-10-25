@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { asJsonValue } from '@mochi/domain';
 import type { CoreClient } from '../client.ts';
 import type { DocTable } from './migrations.ts';
 import type { AppendInput } from './store.ts';
@@ -25,12 +26,14 @@ export function useDocsClient(client: Promise<CoreClient>) {
     list: async (table) =>
       Effect.runPromise((await client)['docs.list']({ table })),
     set: async (table, key, value) =>
-      Effect.runPromise((await client)['docs.set']({ table, key, value })),
+      Effect.runPromise(
+        (await client)['docs.set']({ table, key, value: asJsonValue(value) }),
+      ),
     append: async (input) =>
       Effect.runPromise(
         (await client)['events.append']({
           ...input,
-          payload: input.payload ?? null,
+          payload: asJsonValue(input.payload),
         }),
       ),
   });
