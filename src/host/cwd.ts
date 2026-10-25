@@ -29,5 +29,5 @@ export function projectRoot(
 setStartEnv({
   threadCwd: (thread) => threadCwd(thread),
   projectRoot: (repo) => projectRoot(repo),
-  worktreePath,
+  worktreePath: (thread) => worktreePath(thread.id),
 });

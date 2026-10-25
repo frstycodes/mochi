@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer, Queue, Stream } from 'effect';
 import { COMMAND_TYPE } from '@mochi/domain';
+import type { Space } from '../../../../src/model.ts';
 import type { AgentCall } from '../../../../src/runtime/live.ts';
 import type { Action } from '../../../../src/store/types.ts';
 import { Capabilities } from '../hostServer.ts';
@@ -214,5 +215,76 @@ it.effect(
       );
       assert.deepEqual(thread.queued, [], 'the message left the queue');
       assert.equal(thread.activity.at(-1)?.text, 'next');
+    }),
+);
+
+it.effect(
+  'with no window open, a queued message to a thread whose agent is gone starts it with the profile Core holds',
+  () =>
+    Effect.gen(function* () {
+      const dir = mkdtempSync(join(tmpdir(), 'mochi-reactor-'));
+      const profile: Space = {
+        id: 's',
+        name: 'Side',
+        icon: 'rocket',
+        plans: { claude: '', codex: '' },
+        github: '',
+        nativeOff: ['claude:claude-default:skill:user:ui', 'codex:x'],
+      };
+      // An earlier run: the thread's turn ended, and a window had moved your profiles and prefs into Core.
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const store = yield* Store;
+          const { context } = (yield* (yield* Projection).current).domain;
+          yield* command(store, {
+            type: 'context',
+            context: {
+              ...context,
+              prefs: { ...context.prefs, goals: false },
+              profiles: [profile],
+            },
+          });
+          yield* command(store, create);
+          yield* turnEnd(store);
+        }).pipe(Effect.provide(layerStore(dir))),
+      );
+
+      const calls: AgentCall[] = [];
+      const started = yield* Deferred.make<void>();
+      const agents = Layer.succeed(AgentCaller, {
+        call: (call) =>
+          Effect.andThen(
+            Effect.sync(() => calls.push(call)),
+            call.method === 'start'
+              ? Deferred.succeed(started, undefined)
+              : Effect.void,
+          ),
+        resolve: () => Effect.void,
+      });
+      const layer = layerReactor.pipe(
+        Layer.provideMerge(Commands.layer.pipe(Layer.provide(agents))),
+        Layer.provideMerge(layerStore(dir)),
+        // No window serves anything.
+        Layer.provideMerge(
+          Layer.mergeAll(Capabilities.layer, UtilityQueue.layer),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        // This run restored the thread with its agent gone (`restoredDomain`).
+        yield* command(yield* Store, queued, 'new-1');
+        yield* Deferred.await(started);
+      }).pipe(Effect.provide(layer));
+      const start = calls.find(
+        (c): c is Extract<AgentCall, { method: 'start' }> =>
+          c.method === 'start',
+      )!;
+      assert.equal(start.threadId, 'new-1');
+      assert.equal(start.options.prompt, 'next');
+      assert.equal(start.options.spaceId, 's');
+      assert.deepEqual(start.options.nativeOff, [
+        'claude:claude-default:skill:user:ui',
+      ]);
+      assert.equal(start.options.isGoalsOff, true);
+      assert.equal(start.options.permissionMode, 'auto', "the thread's Auto");
     }),
 );

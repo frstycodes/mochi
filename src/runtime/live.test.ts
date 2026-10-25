@@ -4,7 +4,8 @@ import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { applyAgentEvent } from './apply.ts';
-import { agentOptions, initialControls } from './startOptions.ts';
+import { agentOptions } from './agentOptions.ts';
+import { initialControls } from './startOptions.ts';
 import {
   agentCalls,
   CONTINUE_PROMPT,

@@ -32,11 +32,8 @@ export type ReactorCommand =
   | { type: 'pr.refresh'; key: string; threadId: string }
   | { type: 'drafts.prune'; key: string; threadId: string };
 
-/**
- * What Core still asks a window to do (any window that serves `reactor`): work that needs a window's host or storage, and a
- * command whose agent call is a start (`Applied`), which reads the window's profiles.
- */
-export type WindowCommand = Exclude<
+/** What Core still asks a window to do (any window that serves `reactor`): work that needs a window's host or storage. */
+export type WindowCommand = Extract<
   ReactorCommand,
-  { type: 'title.generate' | 'idle.mark' | 'compact.instructions' }
+  { type: 'idle.gather' | 'simplify.auto' | 'pr.refresh' | 'drafts.prune' }
 >;

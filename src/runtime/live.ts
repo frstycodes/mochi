@@ -23,6 +23,7 @@ import {
   policyOf,
   type ThreadControls,
 } from './controls.ts';
+import { agentOptions } from './agentOptions.ts';
 import { startEnv } from './startEnv.ts';
 import { WAKE_PROMPT } from './subThreadNotes.ts';
 import {
@@ -260,7 +261,7 @@ export function agentCalls(
         spaceId: thread.spaceId,
         cwd,
         prompt: backgroundPrompt(agent),
-        ...startEnv().agentOptions(controls, agent.provider, thread.spaceId),
+        ...agentOptions(controls, agent.provider, thread.spaceId),
         ...(agent.model && { model: agent.model }),
         ...(workspace && { workspace }),
       };
@@ -395,7 +396,7 @@ function start(
         spaceId: thread.spaceId,
         cwd,
         prompt,
-        ...startEnv().agentOptions(controls, provider, thread.spaceId),
+        ...agentOptions(controls, provider, thread.spaceId),
         ...(thread.isSettingsChat && { isSettingsChat: true }),
         ...extra,
       },
@@ -431,7 +432,7 @@ export function scheduledStart(
     spaceId: thread.spaceId,
     cwd,
     workspace,
-    ...startEnv().agentOptions(controlsOf(thread), provider, thread.spaceId),
+    ...agentOptions(controlsOf(thread), provider, thread.spaceId),
   };
 }
 
@@ -497,9 +498,7 @@ function isCleanedUp(thread: Thread) {
   )
     return false;
   const root = startEnv().projectRoot(thread.repo);
-  return (
-    !!root && thread.live.cwd !== root && !startEnv().worktreePath(thread.id)
-  );
+  return !!root && thread.live.cwd !== root && !startEnv().worktreePath(thread);
 }
 
 /** The project folder itself, where a worktree of a new branch is made; a folderless chat has none. */

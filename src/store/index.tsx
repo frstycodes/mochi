@@ -28,8 +28,6 @@ import {
   unsentTurns,
   type AgentCall,
 } from '../runtime/live.ts';
-// Registers the profile options an agent's start reads (`startEnv`).
-import '../runtime/startOptions.ts';
 import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
