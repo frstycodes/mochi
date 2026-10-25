@@ -11,7 +11,7 @@ import {
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import type {
   Account,
   ConfigPreview,
@@ -424,14 +424,23 @@ async function enabledPlugins(dir: string, settings: string) {
 
 async function claudePlugins(dir: string): Promise<string[]> {
   try {
-    const { plugins } = JSON.parse(
+    const { plugins } = decodeInstalledPlugins(
       await readText(join(dir, 'plugins', 'installed_plugins.json')),
-    ) as { plugins?: Record<string, unknown> };
+    );
     return Object.keys(plugins ?? {});
   } catch {
     return [];
   }
 }
+
+/** Claude Code's `plugins/installed_plugins.json`: only its plugin ids are read. */
+const decodeInstalledPlugins = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      plugins: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+    }),
+  ),
+);
 
 function codexPlugins(configToml: string): string[] {
   const plugins = parseToml(configToml).doc.plugins;
