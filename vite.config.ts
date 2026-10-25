@@ -30,6 +30,16 @@ export default defineConfig(({ mode }) => ({
         excludeFiles: [...VENDORED, '**/*.test.ts'],
         rules: { 'mochi/no-em-dash-copy': 'error' },
       },
+      {
+        files: ['**/*.test.ts'],
+        rules: {
+          'mochi/no-manual-effect-runtime-in-tests': 'error',
+          'mochi/no-polling-loop-in-tests': 'error',
+          'mochi/no-real-time-wait-in-tests': 'error',
+          'mochi/no-test-in-loop': 'error',
+          'mochi/no-wall-clock-in-tests': 'error',
+        },
+      },
       // The React Compiler builds the renderer only; Core's `use*` setters are not hooks.
       { files: ['src/**/*.{ts,tsx}'], rules: { 'react/hooks': 'error', 'mochi/no-hookless-use-function': 'error' } },
     ],
