@@ -585,19 +585,24 @@ function ThreadList({
   const pins = mergePins(pinned, remotePins);
   const pinnedIds = pinned.map((g) => g.thread.id);
   const activeIds = active.map((g) => g.thread.id);
-  // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
   const reorder = (lists: { pinned: string[]; unpinned: string[] } | null) =>
-    lists && dispatch({ type: 'reorder', ...lists, at: Date.now() });
+    lists &&
+    dispatch({
+      type: 'reorder',
+      ...lists,
+      // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
+      at: Date.now(),
+    });
   const drop = (dragged: ListRow, slot: NonNullable<RowDragState['slot']>) => {
     if (!dragged.remote && !slot.toPinned)
       return reorder(
         dropPin(pinnedIds, activeIds, dragged.thread.id, false, slot.index),
       );
     const others = pins.filter((p) => p.rowId !== dragged.rowId);
-    // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
     const order = orderBetween(
       others[slot.index - 1] && pinOrderOf(others[slot.index - 1].thread),
       others[slot.index] && pinOrderOf(others[slot.index].thread),
+      // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
       Date.now(),
     );
     if (!dragged.remote)
