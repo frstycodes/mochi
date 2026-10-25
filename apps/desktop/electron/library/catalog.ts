@@ -15,7 +15,7 @@ import {
   parseSkillSource,
 } from '@mochi/domain/library/skillSource';
 import { readTar } from '../../src/library/tar.ts';
-import { run } from '../git/run.ts';
+import { run } from '@mochi/core/git/run';
 
 /** Skills and plugins from public GitHub repos and marketplace.json files (Claude's and Codex's formats). */
 export class CatalogError extends Error {}

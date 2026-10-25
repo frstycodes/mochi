@@ -10,8 +10,8 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'vite-plus/test';
-import { resolveInside } from '../../electron/fs/contain.ts';
-import { listFiles } from '../../electron/fs/list.ts';
+import { resolveInside } from '@mochi/core/fs/contain';
+import { listFiles } from '@mochi/core/fs/list';
 import { fuzzyFiles } from '@mochi/domain/files/fuzzy';
 
 function fixture() {

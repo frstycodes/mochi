@@ -1,5 +1,5 @@
 import type { PtyHost } from '@mochi/domain/host/types/pty';
-import { resolveCwd } from '../pty/cwd.ts';
+import { resolveCwd } from '@mochi/core/pty/cwd';
 import { ownedSession, spawnSession } from '../pty/sessions.ts';
 import type { Handlers } from './handlers.ts';
 

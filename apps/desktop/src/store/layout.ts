@@ -71,7 +71,6 @@ const storageSlice = persistedSlice<Saved>(STORAGE_KEY, {
 const DEMO_VIEWS: Record<string, View> = {
   latitude: { kind: 'thread', id: 'adm' },
   personal: { kind: 'thread', id: 'lobby' },
-  liane: { kind: 'board' },
 };
 const NEW_THREAD: View = { kind: 'new' };
 
@@ -462,11 +461,22 @@ function loadLayouts(): Saved {
   }
 }
 
+/** Saved layouts can name a page that has since been removed; such a layout is dropped rather than drawn. */
+const VIEW_KINDS = {
+  queue: true,
+  projects: true,
+  usage: true,
+  new: true,
+  thread: true,
+  tab: true,
+} satisfies Record<View['kind'], true>;
+
 function isValidLayout(l: unknown): l is SpaceLayout {
   const layout = l as SpaceLayout;
   return (
     !!layout?.root &&
     typeof layout.focusId === 'string' &&
-    !!findLeaf(layout.root, layout.focusId)
+    !!findLeaf(layout.root, layout.focusId) &&
+    leaves(layout.root).every((l) => l.view.kind in VIEW_KINDS)
   );
 }

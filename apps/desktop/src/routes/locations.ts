@@ -53,7 +53,3 @@ export function remoteRouteOf({
     threadId: decodeURIComponent(threadId),
   };
 }
-
-export function isReviewLocation({ pathname }: PageLocation) {
-  return pathname === '/review';
-}

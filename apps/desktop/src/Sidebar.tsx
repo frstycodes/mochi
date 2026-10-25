@@ -9,16 +9,7 @@ import {
 } from 'react';
 import { motion } from 'motion/react';
 import { useDraggable } from '@dnd-kit/react';
-import {
-  Archive,
-  Chat,
-  Edit,
-  Eye,
-  Menu,
-  Search,
-  TaskSquare,
-  Unarchive,
-} from '@/icons';
+import { Archive, Chat, Eye, Menu, Plus, Search, Unarchive } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -88,7 +79,6 @@ import { SidebarResizer } from './SidebarResizer';
 import { NavItem, SidebarNav } from './SidebarNav';
 import { useSettle } from './useSettle';
 import { NextRunBadge } from './schedule/NextRunBadge';
-import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
 import {
@@ -279,6 +269,8 @@ function SpaceHeader() {
             .join(' · ') || `${space.name} profile`}
         </TooltipContent>
       </Tooltip>
+      <span className="ml-auto" />
+      <NotificationBell spaceId={space.id} />
     </SidebarHeader>
   );
 }
@@ -333,7 +325,6 @@ function SpaceNav({
     (n, m) => n + (m.state ? remoteDecisions(m.state).length : 0),
     0,
   );
-  const review = useReviewEntry(spaceId);
   const { setOpenMobile } = useSidebar();
   const go = (v: View) => {
     dispatch({ type: 'go', view: v });
@@ -366,9 +357,21 @@ function SpaceNav({
 
   return (
     <>
-      <SidebarGroup>
+      <SidebarGroup className="pt-3">
         <SidebarGroupContent>
           <SidebarMenu>
+            <NavItem
+              icon={<Plus />}
+              label="New"
+              isActive={view.kind === 'new'}
+              onClick={() => go({ kind: 'new' })}
+              trailing={
+                <BoundShortcut
+                  command="go-new"
+                  className="hidden md:inline-flex"
+                />
+              }
+            />
             <NavItem
               icon={<Search />}
               label="Search"
@@ -380,28 +383,6 @@ function SpaceNav({
                 />
               }
             />
-            <NavItem
-              icon={<Edit />}
-              label="New thread"
-              isActive={view.kind === 'new'}
-              onClick={() => go({ kind: 'new' })}
-              trailing={
-                <BoundShortcut
-                  command="go-new"
-                  className="hidden md:inline-flex"
-                />
-              }
-            />
-            {review.count > 0 && (
-              <NavItem
-                icon={<TaskSquare />}
-                label="Review"
-                isActive={review.isOpen}
-                onClick={review.open}
-                badge={review.count}
-              />
-            )}
-            <NotificationBell spaceId={spaceId} />
             <SidebarNav
               view={view}
               go={go}
