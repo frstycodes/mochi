@@ -18,7 +18,28 @@ export default defineConfig(({ mode }) => ({
       test: {
         command: 'vp test run',
         // Tests spawn `sh` and git; a clean task env drops the Windows variables they need (SystemRoot, TEMP, ...).
-        cache: { untrackedEnv: ['*'] },
+        cache: {
+          untrackedEnv: [
+            '*',
+            'SystemRoot',
+            'SYSTEMROOT',
+            'SystemDrive',
+            'windir',
+            'ComSpec',
+            'PATHEXT',
+            'TEMP',
+            'TMP',
+            'USERPROFILE',
+            'APPDATA',
+            'LOCALAPPDATA',
+            'ProgramData',
+            'ProgramFiles*',
+            'CommonProgramFiles*',
+            'PROCESSOR_*',
+            'NUMBER_OF_PROCESSORS',
+            'OS',
+          ],
+        },
       },
       typecheck: {
         command:
