@@ -1,7 +1,7 @@
 import { app, shell } from 'electron';
 import { canStore, open, seal } from '../secrets';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   auth,
@@ -27,6 +27,7 @@ import {
   type OAuthProviderId,
 } from '../../src/library/connectors.ts';
 import { RELAY_URL } from '@mochi/core/remote/relayClient';
+import { writeFileAtomic } from '@mochi/core/utility/atomicWrite';
 import { mochiOAuthApp } from './oauthApps.ts';
 import { ensureLocalServer, saveGoogleClient } from './googleWorkspace.ts';
 import {
@@ -93,9 +94,7 @@ export function saveSecrets(
     if (patch === null) delete all[id];
     else
       all[id] = seal(JSON.stringify({ ...(await readSecrets(id)), ...patch }));
-    const tmp = `${secretsFile()}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify(all), { mode: 0o600 });
-    await rename(tmp, secretsFile());
+    await writeFileAtomic(secretsFile(), JSON.stringify(all), 0o600);
   });
   writes = next.catch(() => {});
   return next;

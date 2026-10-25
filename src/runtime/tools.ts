@@ -62,6 +62,7 @@ import {
 } from './toolTable.ts';
 import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
+import { plural } from '../lib/format.ts';
 
 /** What the store and the app give a tool run. The renderer wires the real ones (`store/index.tsx`); tests pass stubs. */
 export interface ToolEnv {
@@ -860,16 +861,17 @@ const THREAD_SPECS = {
       const names = threads.map((t) => `"${t.title}"`).join(', ');
       const withTrees = threads.filter((t) => t.repo);
       return {
-        title:
-          threads.length === 1
-            ? `Delete ${names}?`
-            : `Delete ${threads.length} threads?`,
-        detail: `${threads.length > 1 ? `${names}. ` : ''}Stops ${threads.length === 1 ? 'its agent' : 'their agents'} and removes ${threads.length === 1 ? 'its' : 'their'} history from Mochi. This can't be undone.`,
+        title: plural(
+          threads.length,
+          `Delete ${names}?`,
+          `Delete ${threads.length} threads?`,
+        ),
+        detail: `${threads.length > 1 ? `${names}. ` : ''}Stops ${plural(threads.length, 'its agent', 'their agents')} and removes ${plural(threads.length, 'its', 'their')} history from Mochi. This can't be undone.`,
         options: withTrees.length
           ? [
               {
                 id: 'removeWorktree',
-                label: `Also remove ${withTrees.length === 1 ? 'its worktree' : 'their worktrees'}: ${withTrees.map((t) => env.cwdOf(t) ?? t.repo!.branch).join(', ')}`,
+                label: `Also remove ${plural(withTrees.length, 'its worktree', 'their worktrees')}: ${withTrees.map((t) => env.cwdOf(t) ?? t.repo!.branch).join(', ')}`,
               },
             ]
           : undefined,
@@ -893,7 +895,7 @@ const THREAD_SPECS = {
             ),
           );
       const trees = removing.length
-        ? ` and ${removing.length - failed.length === 1 ? 'its worktree' : `${removing.length - failed.length} worktrees`}`
+        ? ` and ${plural(removing.length - failed.length, 'its worktree', `${removing.length - failed.length} worktrees`)}`
         : '';
       return {
         changed: `deleted ${count(threads)}${trees}`,

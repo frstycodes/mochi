@@ -12,6 +12,7 @@ import {
   type Page,
 } from './pages';
 import { displayUrl } from './url';
+import { plural } from '@/lib/format';
 
 /** Desktop: the next click in the page picks an element. Web demo page: toggles its own comment mode. */
 export async function togglePick(key: string, page: Page, thread: Thread) {
@@ -141,7 +142,7 @@ export function consoleReport(page: Page) {
     (c) =>
       `${c.level}: ${c.message}${c.source ? ` (${displayUrl(c.source)}:${c.line})` : ''}`,
   );
-  return `The preview at ${displayUrl(page.url)} logged ${page.console.length === 1 ? 'this' : 'these'} in the console. Can you fix ${page.console.length === 1 ? 'it' : 'them'}?\n\n\`\`\`\n${lines.join('\n')}\n\`\`\``;
+  return `The preview at ${displayUrl(page.url)} logged ${plural(page.console.length, 'this', 'these')} in the console. Can you fix ${plural(page.console.length, 'it', 'them')}?\n\n\`\`\`\n${lines.join('\n')}\n\`\`\``;
 }
 
 function deliver(thread: Thread, text: string, files: File[], success: string) {

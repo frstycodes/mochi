@@ -13,6 +13,7 @@ import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { CallList } from '../WorkLog';
 import { openGoalEditor } from './GoalEditor';
+import { plural } from '@/lib/format';
 
 /**
  * The goal the agent wrote after its first look. Waiting: the draft it replaces struck through, the new outcome, its criteria
@@ -138,7 +139,7 @@ function AppliedProposal({
       <span className="min-w-0 flex-1 truncate">
         {`${authorName(proposal.by)} set the goal: `}
         <span className="text-foreground">{proposal.goal}</span>
-        {` · ${proposal.criteria.length} ${proposal.criteria.length === 1 ? 'criterion' : 'criteria'}`}
+        {` · ${proposal.criteria.length} ${plural(proposal.criteria.length, 'criterion', 'criteria')}`}
       </span>
       <Button
         size="sm"

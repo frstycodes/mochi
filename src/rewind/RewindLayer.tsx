@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { plural } from '@/lib/format';
 import {
   Dialog,
   DialogContent,
@@ -331,7 +332,7 @@ function FilesPreview({
         </p>
       ) : (
         <FileList
-          title={`${countLabel(files.length, 'file')} ${PLURAL.select(files.length) === 'one' ? 'goes' : 'go'} back`}
+          title={`${countLabel(files.length, 'file')} ${plural(files.length, 'goes', 'go')} back`}
           paths={files}
         />
       )}
@@ -425,10 +426,8 @@ function useRewindPreview(
   return { data: previewQuery.data, error: previewQuery.error?.message };
 }
 
-const PLURAL = new Intl.PluralRules('en');
-
 export function countLabel(count: number, noun: string) {
-  return `${count} ${noun}${PLURAL.select(count) === 'one' ? '' : 's'}`;
+  return `${count} ${noun}${plural(count, '', 's')}`;
 }
 
 function filesNote(cwd: string | undefined, checkpoint: Checkpoint) {
