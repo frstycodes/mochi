@@ -147,7 +147,9 @@
       "enableNodeOptionsEnvironmentVariable": false,
       "enableNodeCliInspectArguments": false,
       "onlyLoadAppFromAsar": true,
-      "enableCookieEncryption": true
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "enableCookieEncryption": true,
+      "resetAdHocDarwinSignature": true
     },
     "npmRebuild": false,
     "asarUnpack": [
