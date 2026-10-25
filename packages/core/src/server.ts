@@ -2,7 +2,12 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { Context, Effect, Layer, Schedule, Schema, Stream } from 'effect';
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
+import {
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+  HttpStaticServer,
+} from 'effect/http';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { NodeHttpServer } from '@effect/platform-node';
 import { Capabilities as Contract, definitionOf, Relay } from '@mochi/schema';
@@ -48,6 +53,8 @@ export interface ServerOptions {
   readonly origins: ReadonlyArray<string>;
   /** Mochi's data folder: the store's `mochi.db`, and the JSON files it imports once. Unset: an in-memory store (tests). */
   readonly userData?: string;
+  /** The built renderer (`dist/`), served at `/` for a browser (`mochi serve`). Unset: only the socket. */
+  readonly ui?: string;
 }
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
@@ -119,10 +126,17 @@ type Services =
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
-    Layer.unwrap(
-      Effect.map(Effect.context<Services>(), (services) =>
-        HttpRouter.add('GET', '/ws', connect(options, services)),
+    Layer.mergeAll(
+      Layer.unwrap(
+        Effect.map(Effect.context<Services>(), (services) =>
+          HttpRouter.add('GET', '/ws', connect(options, services)),
+        ),
       ),
+      options.ui
+        ? HttpStaticServer.layer({ root: options.ui, spa: true }).pipe(
+            Layer.orDie,
+          )
+        : Layer.empty,
     ),
     { disableLogger: true, disableListenLog: true },
   );

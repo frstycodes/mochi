@@ -63,6 +63,8 @@ const serve = Command.make(
         tokens: auth.tokens,
         origins: auth.origins,
         userData: flags.data,
+        // Built beside this file: dist-electron/serve.js and the renderer's dist/.
+        ui: path.join(import.meta.dirname, '..', 'dist'),
         logFile: path.join(flags.data, 'logs', 'mochi.log'),
         otlpUrl: yield* Config.option(Config.URL('MOCHI_OTLP_URL')),
       });

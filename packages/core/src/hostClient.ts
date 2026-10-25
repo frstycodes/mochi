@@ -1,5 +1,5 @@
 import { Cause, Effect, Exit, Schedule, Stream } from 'effect';
-import type { Capabilities } from '@mochi/schema';
+import { Capabilities } from '@mochi/schema';
 import type { CoreClient } from './client.ts';
 
 type HostClient = Record<
@@ -14,14 +14,20 @@ const messageOf = (error: unknown) =>
       ? error.message
       : String(error);
 
-/** Calls `<namespace>.<method>` on Core: `host.*` take their argument list, Core's own procedures their payload. A failure rejects with an `Error` carrying the handler's message. */
+/**
+ * Calls `<namespace>.<method>` on Core: `host.*` take their argument list, Core's own procedures their payload. A failure
+ * rejects with an `Error` carrying the handler's message, or with `CapabilityUnavailable` when no client serves it.
+ */
 export const makeHostCaller =
   (client: CoreClient) => async (tag: string, args: unknown) => {
     const exit = await Effect.runPromiseExit(
       (client as unknown as HostClient)[tag]!(args),
     );
     if (Exit.isSuccess(exit)) return exit.value;
-    throw new Error(messageOf(Cause.squash(exit.cause)));
+    const error = Cause.squash(exit.cause);
+    throw error instanceof Capabilities.CapabilityUnavailable
+      ? error
+      : new Error(messageOf(error));
   };
 
 /** Answers one capability call; a rejection reaches Core as its message. */

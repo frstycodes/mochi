@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
 import { agentRpc } from './agent.ts';
+import { CapabilityUnavailable } from './capabilities.ts';
 import { accountRpc } from './ipc/account.ts';
 import { browserRpc } from './ipc/browser.ts';
 import { dataRpc } from './ipc/data.ts';
@@ -60,13 +61,13 @@ export const definitionOf = (tag: string) => {
   return (hostMethods[namespace] as Record<string, object>)[method] as Invoke;
 };
 
-/** A failure crosses the socket as its message: the renderer rethrows it as an `Error` (`src/host/desktop/rpc.ts`). */
+/** A failure crosses the socket as its message, or typed when the capability is unavailable: the renderer rethrows it (`src/host/desktop/rpc.ts`). */
 export class HostRpcs extends RpcGroup.make(
   ...hostTags.map((tag) =>
     Rpc.make(tag, {
       payload: definitionOf(tag).input,
       success: definitionOf(tag).output,
-      error: Schema.String,
+      error: Schema.Union([Schema.String, CapabilityUnavailable]),
     }),
   ),
 ) {}

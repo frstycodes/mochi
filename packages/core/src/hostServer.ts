@@ -79,14 +79,16 @@ export class Capabilities extends Context.Service<Capabilities>()(
           );
         });
 
-      /** Fails with a message when no connected client offers `capability`; a client that leaves mid-call hands it to the next. */
-      const call = (request: Call): Effect.Effect<unknown, string> =>
+      /** Fails with `CapabilityUnavailable` when no connected client offers `capability`, else with the client's message; a client that leaves mid-call hands it to the next. */
+      const call = (
+        request: Call,
+      ): Effect.Effect<unknown, string | Contract.CapabilityUnavailable> =>
         Effect.gen(function* () {
           const queue = providers.get(request.capability)?.at(-1);
           if (!queue)
-            return yield* Effect.fail(
-              `No connected client offers ${request.capability}`,
-            );
+            return yield* new Contract.CapabilityUnavailable({
+              capability: request.capability,
+            });
           const id = nextId++;
           const deferred = yield* Deferred.make<unknown, string>();
           pending.set(id, { deferred, queue });
@@ -102,7 +104,10 @@ export class Capabilities extends Context.Service<Capabilities>()(
           ),
         );
 
-      return { serve, reply, call };
+      /** Whether a connected client serves `name` now. */
+      const offers = (name: Contract.CapabilityName) => providers.has(name);
+
+      return { serve, reply, call, offers };
     }),
   },
 ) {
@@ -135,7 +140,13 @@ export const hostHandlers = (
           return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(output))(
             value,
           );
-        }).pipe(Effect.mapError(messageOf));
+        }).pipe(
+          Effect.mapError((error) =>
+            error instanceof Contract.CapabilityUnavailable
+              ? error
+              : messageOf(error),
+          ),
+        );
       return [tag, handler];
     }),
   );
