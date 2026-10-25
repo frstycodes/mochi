@@ -132,11 +132,7 @@ export default defineConfig(({ mode }) => ({
                   },
                   build: {
                     rolldownOptions: {
-                      external: [
-                        'node-pty',
-                        '@parcel/watcher',
-                        /^playwright-core(\/|$)/,
-                      ],
+                      external: ['node-pty', /^playwright-core(\/|$)/],
                     },
                   },
                 },
