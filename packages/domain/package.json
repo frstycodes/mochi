@@ -4,10 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
   },
   "scripts": {
     "typecheck": "tsc -b",
     "test": "vp test run --root ../.. packages/domain/src"
+  },
+  "dependencies": {
+    "effect": "4.0.5",
+    "smol-toml": "^1.9.1",
+    "tldts": "^7.4.18"
   }
 }

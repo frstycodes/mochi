@@ -40,20 +40,21 @@ pnpm dev
 | --------------------- | ----------------------------------------------------------------------------------------------- |
 | `pnpm dev`            | Web build on Vite                                                                               |
 | `pnpm electron:dev`   | Desktop app with hot reload                                                                     |
-| `pnpm electron:build` | Unsigned macOS `.app` in `release/`                                                             |
-| `vp run typecheck`    | Renderer, Electron main, Core and relay, with tsc-rs and its Effect diagnostics                 |
+| `pnpm electron:build` | Unsigned macOS `.app` in `apps/desktop/release/`                                                |
+| `pnpm typecheck`      | Renderer, Electron main, Core and relay, with tsc-rs and its Effect diagnostics                 |
 | `vp run test`         | Vitest over every `*.test.ts`; `vp run test --changed <ref>` runs only the tests a diff reaches |
-| `pnpm artifact`       | Single-file HTML build in `artifact/`                                                           |
+| `pnpm artifact`       | Single-file HTML build in `apps/desktop/artifact/`                                              |
 
 ## Layout
 
 ```
-electron/     main process: window, IPC, pty, git, fs, browser views, simulator
-src/host/     typed bridge to the main process, with web mocks
-src/store/    state slices: threads, queue, panes, layout, ui
-src/pane/     side pane tabs
-src/runtime/  agent adapters (demo today; Claude Agent SDK and Codex app-server next)
-src/goals/    goal editing, templates, drift guard
+apps/desktop/electron/     main process: window, IPC, pty, git, fs, browser views, simulator
+apps/desktop/src/host/     typed bridge to the main process, with web mocks
+apps/desktop/src/store/    state slices: threads, queue, panes, layout, ui
+apps/desktop/src/pane/     side pane tabs
+apps/desktop/src/runtime/  agent adapters (demo today; Claude Agent SDK and Codex app-server next)
+apps/desktop/src/goals/    goal editing, templates, drift guard
+packages/{schema,domain,core}  wire schemas, renderer-free shared modules, Core
 ```
 
 ## Docs
@@ -74,10 +75,10 @@ MOCHI_DEV_MCP=1 MOCHI_USER_DATA=/tmp/mochi-dev pnpm electron:dev
 The app writes `/tmp/mochi-dev/dev-mcp.json` with its MCP URL and process id. Configure an external MCP client's HTTP server with that URL, or use the included client:
 
 ```bash
-node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json inspect '{}'
-node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json start_task '{"provider":"codex","prompt":"Explain why 2 + 2 is 4"}'
-node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json inspect '{"threadId":"new-1","limit":50}'
-node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json continue_task '{"threadId":"new-1","text":"Explain 3 + 3 next"}'
+node apps/desktop/scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json inspect '{}'
+node apps/desktop/scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json start_task '{"provider":"codex","prompt":"Explain why 2 + 2 is 4"}'
+node apps/desktop/scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json inspect '{"threadId":"new-1","limit":50}'
+node apps/desktop/scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json continue_task '{"threadId":"new-1","text":"Explain 3 + 3 next"}'
 ```
 
 Use the returned task id in subsequent calls. Goals start empty; the working agent proposes one after research. `accept_goal` accepts that researched proposal for a test task without verifying its criteria. `start_task` accepts an optional absolute `project` folder and uses the selected profile's account and permission defaults. `inspect` exposes paginated transcript entries, goal criteria, proposals, todos, turn reports, pending questions, verdicts and next actions. PR state is the last recorded state. Continue only idle tasks; running and settled tasks are refused.

@@ -12,14 +12,14 @@ import {
 import type {
   AgentEvent,
   StartWorkspace,
-} from '../../../../src/host/types/agent.ts';
+} from '../../../../apps/desktop/src/host/types/agent.ts';
 import type {
   ScheduleEvent,
   ScheduleRun,
   Trigger,
   TriggerInput,
-} from '../../../../src/host/types/schedule.ts';
-import { describeCron, parseCron } from '../../../../src/schedule/cron.ts';
+} from '../../../../apps/desktop/src/host/types/schedule.ts';
+import { describeCron, parseCron } from '@mochi/domain/schedule/cron';
 import {
   afterLaunch,
   cronDecision,
@@ -29,7 +29,7 @@ import {
   SUMMARY_HINT,
   triggerAfter,
   withRun,
-} from '../../../../src/schedule/due.ts';
+} from '../../../../apps/desktop/src/schedule/due.ts';
 import { isBusy, onAgentEvent } from '../agents/events.ts';
 import { agent } from '../agents/handlers.ts';
 import { keyedStreams } from '../github/client.ts';

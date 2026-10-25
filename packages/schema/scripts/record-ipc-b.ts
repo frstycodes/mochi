@@ -3,13 +3,13 @@
 // (`packages/schema/src/relay.test.ts`, `electron/ipc/*`). Run from the repo root:
 // `node --import ./scripts/test-env.ts packages/schema/scripts/record-ipc-b.ts`.
 import { writeFileSync } from 'node:fs';
-import { projects } from '../../../src/host/web/projects.ts';
-import { remote } from '../../../src/host/web/remote.ts';
-import { schedule } from '../../../src/host/web/schedule.ts';
-import { sim } from '../../../src/host/web/sim.ts';
-import { usage } from '../../../src/host/web/usage.ts';
-import { windows } from '../../../src/host/web/windows.ts';
-import { customTheme } from '../../../src/themes/custom.ts';
+import { projects } from '../../../apps/desktop/src/host/web/projects.ts';
+import { remote } from '../../../apps/desktop/src/host/web/remote.ts';
+import { schedule } from '../../../apps/desktop/src/host/web/schedule.ts';
+import { sim } from '../../../apps/desktop/src/host/web/sim.ts';
+import { usage } from '../../../apps/desktop/src/host/web/usage.ts';
+import { windows } from '../../../apps/desktop/src/host/web/windows.ts';
+import { customTheme } from '@mochi/domain/themes/custom';
 
 type Call = { input?: unknown[]; output?: unknown; event?: unknown };
 const calls: Record<string, Call[]> = {};

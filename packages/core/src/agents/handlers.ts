@@ -17,13 +17,13 @@ import {
   type AgentStartOptions,
   type AgentToolResult,
   type StartWorkspace,
-} from '../../../../src/host/types/agent.ts';
-import { classifyWithModel } from '../../../../src/drift.ts';
+} from '../../../../apps/desktop/src/host/types/agent.ts';
+import { classifyWithModel } from '../../../../apps/desktop/src/drift.ts';
 import type {
   McpWidgetResource,
   Provider,
   Thread,
-} from '../../../../src/model.ts';
+} from '../../../../apps/desktop/src/model.ts';
 import {
   askClaude,
   classifyClaude,
@@ -42,11 +42,11 @@ import type { HarnessAdapter } from './adapter.ts';
 import { reviewClaude, type ReviewUpdate } from './review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from './config.ts';
 import { limitsOf, recordLimits } from './limits.ts';
-import { claudeUsageWindows } from '../../../../src/usage/limits.ts';
-import { VERDICT_SCHEMA } from '../../../../src/secondOpinion/verdict.ts';
+import { claudeUsageWindows } from '../../../../apps/desktop/src/usage/limits.ts';
+import { VERDICT_SCHEMA } from '../../../../apps/desktop/src/secondOpinion/verdict.ts';
 import { ask as askAgent, utility } from './ask.ts';
 import { models } from './models.ts';
-import { resolveRun } from '../../../../src/runtime/models.ts';
+import { resolveRun } from '../../../../apps/desktop/src/runtime/models.ts';
 import { setImageGenerator } from './mochiTools.ts';
 import { main } from './main.ts';
 import { userData } from './paths.ts';
@@ -57,7 +57,7 @@ import {
   commandPrompt,
   parseTitle,
   type UtilityTask,
-} from '../../../../src/utility/prompts.ts';
+} from '../../../../apps/desktop/src/utility/prompts.ts';
 import {
   emitAgentEvent,
   eventsSince,
@@ -68,19 +68,22 @@ import {
   onAgentEvent,
   push,
 } from './events.ts';
-import { createWorktree } from '../../../../electron/ipc/git.ts';
-import { prepareWorktree } from '../../../../electron/git/setup.ts';
+import { createWorktree } from '../../../../apps/desktop/electron/ipc/git.ts';
+import { prepareWorktree } from '../../../../apps/desktop/electron/git/setup.ts';
 import { Starts } from './starts.ts';
 import { nameThread } from './naming.ts';
 import { threadSessions } from './settle.ts';
-import { headOf, switchBranch } from '../../../../electron/git/branches.ts';
-import { topLevel } from '../../../../electron/git/run.ts';
-import { codexToolConfig } from '../../../../src/library/connectorTools.ts';
-import { codexServerConfig } from '../../../../src/library/library.ts';
+import {
+  headOf,
+  switchBranch,
+} from '../../../../apps/desktop/electron/git/branches.ts';
+import { topLevel } from '../../../../apps/desktop/electron/git/run.ts';
+import { codexToolConfig } from '@mochi/domain/library/connectorTools';
+import { codexServerConfig } from '../../../../apps/desktop/src/library/library.ts';
 import {
   codexNativeConfig,
   offItems,
-} from '../../../../src/library/nativeOverrides.ts';
+} from '../../../../apps/desktop/src/library/nativeOverrides.ts';
 import { readProfileConfig } from './profileConfig.ts';
 import { profileInstructions } from './profileFolder.ts';
 

@@ -3,7 +3,7 @@ import { Effect, Layer } from 'effect';
 import type {
   ScheduleEvent,
   TriggerInput,
-} from '../../../../src/host/types/schedule.ts';
+} from '../../../../apps/desktop/src/host/types/schedule.ts';
 import { NodeHttpServer } from '@effect/platform-node';
 import { GitHub, GithubTransport } from '../github/service.ts';
 import { Run } from '../run.ts';

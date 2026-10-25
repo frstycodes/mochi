@@ -3,9 +3,12 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import type { Thread } from '../../../../src/model.ts';
-import { DEFAULT_CONTEXT } from '../../../../src/store/context.ts';
-import type { Action, State } from '../../../../src/store/types.ts';
+import type { Thread } from '../../../../apps/desktop/src/model.ts';
+import { DEFAULT_CONTEXT } from '../../../../apps/desktop/src/store/context.ts';
+import type {
+  Action,
+  State,
+} from '../../../../apps/desktop/src/store/types.ts';
 import type { GitHub } from '../github/service.ts';
 import { Capabilities, hostHandlers } from '../hostServer.ts';
 import { autoSimplify, gatherIdle, type HostWork } from './hostWork.ts';

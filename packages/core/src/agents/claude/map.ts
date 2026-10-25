@@ -25,7 +25,7 @@ import type {
   AgentSubagentEvent,
   AgentTaskEvent,
   BackgroundTaskKind,
-} from '../../../../../src/host/types/agent.ts';
+} from '../../../../../apps/desktop/src/host/types/agent.ts';
 import type {
   AgentInput,
   AgentOutput,
@@ -33,7 +33,7 @@ import type {
   WebSearchOutput,
 } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
-import { ACCOUNT_ARGUMENT } from '../../../../../src/library/connectors.ts';
+import { ACCOUNT_ARGUMENT } from '@mochi/domain/library/connectors';
 import type {
   AgentCommand,
   AgentInfo,
@@ -41,13 +41,16 @@ import type {
   McpServer,
   McpWidgetResult,
   WebLink,
-} from '../../../../../src/model.ts';
-import { describeApproval } from '../../../../../src/summary.ts';
-import { claudeFast } from '../../../../../src/runtime/models.ts';
-import { IMAGE_TOOL, imageCard } from '../../../../../src/runtime/imageTool.ts';
-import { MOCHI_SERVER } from '../../../../../src/runtime/toolTable.ts';
-import { claudeEventWindow } from '../../../../../src/usage/limits.ts';
-import { posixPath } from '../../../../../electron/platform.ts';
+} from '../../../../../apps/desktop/src/model.ts';
+import { describeApproval } from '../../../../../apps/desktop/src/summary.ts';
+import { claudeFast } from '../../../../../apps/desktop/src/runtime/models.ts';
+import {
+  IMAGE_TOOL,
+  imageCard,
+} from '../../../../../apps/desktop/src/runtime/imageTool.ts';
+import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
+import { claudeEventWindow } from '../../../../../apps/desktop/src/usage/limits.ts';
+import { posixPath } from '../../../../../apps/desktop/electron/platform.ts';
 import type { SaveImage } from '../images.ts';
 
 /**
