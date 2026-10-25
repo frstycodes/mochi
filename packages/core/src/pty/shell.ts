@@ -30,6 +30,8 @@ export function shellLaunch(userData: string): {
   env: Record<string, string>;
 } {
   const file = terminalShell();
+  // PowerShell and cmd.exe take `-l` as a command to run, fail it and exit; they have no login mode.
+  if (process.platform === 'win32') return { file, args: [], env: {} };
   if (path.basename(file) !== 'zsh') return { file, args: ['-l'], env: {} };
   zdotdir ??= writeZshRc(userData);
   return {
