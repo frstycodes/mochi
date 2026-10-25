@@ -5,7 +5,7 @@ import type { UsageHost, UsageReport } from '../../src/host/types/usage.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
 import { accountsState } from '@mochi/core/agents/config';
-import { githubAccount } from '../git/gh.ts';
+import { githubAccount } from '@mochi/core/git/gh';
 import { claudeRecords } from '../usage/claude.ts';
 import { codexRecords } from '../usage/codex.ts';
 import { commitStats, prStats } from '../usage/git.ts';

@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
-import { cached } from '../cache.ts';
+import { cached } from '../../../../apps/desktop/electron/cache.ts';
 
 /** Where web, app and desktop projects keep their icon, most specific first. Relative to the project's folder. */
 export const FAVICON_PATHS = [

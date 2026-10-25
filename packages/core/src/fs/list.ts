@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { runCommand } from '@mochi/core/runClient';
+import { runCommand } from '../runClient.ts';
 import { resolveRoot } from './contain.ts';
 
 const GIT_TIMEOUT_MS = 30_000;

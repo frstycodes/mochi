@@ -7,9 +7,9 @@ import type {
   Head,
   SwitchOptions,
   WorktreeOptions,
-} from '../../src/host/types/git.ts';
+} from '../../../../apps/desktop/src/host/types/git.ts';
 import { listWorktrees, runGit } from './run.ts';
-import { branchFromTitle } from '../../src/git/workspace.ts';
+import { branchFromTitle } from '../../../../apps/desktop/src/git/workspace.ts';
 
 const MAX_BRANCHES = 500;
 // Untracked files are read whole to count their lines; past this many the rest count as files only.
@@ -230,7 +230,7 @@ export async function baseRef(top: string) {
   return 'HEAD';
 }
 
-/** Makes the worktree `dir` of the repo at `top` on `branch`, as `addWorktree` (electron/ipc/git.ts) describes. */
+/** Makes the worktree `dir` of the repo at `top` on `branch`, as `addWorktree` (host.ts) describes. */
 export async function addBranchWorktree(
   top: string,
   dir: string,

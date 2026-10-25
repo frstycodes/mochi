@@ -1,6 +1,6 @@
 import { dirname, normalize, relative, resolve, sep } from 'node:path';
-import { parseWorktrees } from '../../src/git/parse.ts';
-import { runCommand, RunError, spawnCommand } from '@mochi/core/runClient';
+import { parseWorktrees } from '../../../../apps/desktop/src/git/parse.ts';
+import { runCommand, RunError, spawnCommand } from '../runClient.ts';
 
 const ENV = {
   GIT_TERMINAL_PROMPT: '0',

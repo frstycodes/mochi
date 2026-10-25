@@ -4,7 +4,7 @@ import {
   formatGithubAccount,
   type GithubAccountRef,
 } from '../../src/git/github.ts';
-import { runGit } from '../git/run.ts';
+import { runGit } from '@mochi/core/git/run';
 
 /** Generated files that would swamp the line counts. */
 const LOCKFILE =

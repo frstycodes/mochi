@@ -68,16 +68,13 @@ import {
   onAgentEvent,
   push,
 } from './events.ts';
-import { createWorktree } from '../../../../apps/desktop/electron/ipc/git.ts';
-import { prepareWorktree } from '../../../../apps/desktop/electron/git/setup.ts';
+import { createWorktree } from '../git/host.ts';
+import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from './starts.ts';
 import { nameThread } from './naming.ts';
 import { threadSessions } from './settle.ts';
-import {
-  headOf,
-  switchBranch,
-} from '../../../../apps/desktop/electron/git/branches.ts';
-import { topLevel } from '../../../../apps/desktop/electron/git/run.ts';
+import { headOf, switchBranch } from '../git/branches.ts';
+import { topLevel } from '../git/run.ts';
 import { codexToolConfig } from '@mochi/domain/library/connectorTools';
 import { codexServerConfig } from '../../../../apps/desktop/src/library/library.ts';
 import {

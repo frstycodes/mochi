@@ -4,8 +4,8 @@ import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'vite-plus/test';
-import { recoverCheckouts } from '../../src/git/recovery.ts';
-import type { Thread } from '../../src/model.ts';
+import { recoverCheckouts } from '../../../../apps/desktop/src/git/recovery.ts';
+import type { Thread } from '../../../../apps/desktop/src/model.ts';
 import { headOf } from './branches.ts';
 import { listWorktrees } from './run.ts';
 

@@ -6,8 +6,11 @@ import type {
   DiffFile,
   GitHost,
   WorktreeOptions,
-} from '../../src/host/types/git.ts';
-import { parseDiff, parseStatus } from '../../src/git/parse.ts';
+} from '../../../../apps/desktop/src/host/types/git.ts';
+import {
+  parseDiff,
+  parseStatus,
+} from '../../../../apps/desktop/src/git/parse.ts';
 import {
   applyFiles,
   changedPaths,
@@ -17,7 +20,7 @@ import {
   restorePaths,
   snapshot,
   snapshotCommit,
-} from '../git/checkpoints.ts';
+} from './checkpoints.ts';
 import {
   inside,
   listWorktrees,
@@ -25,7 +28,7 @@ import {
   run,
   runGit,
   topLevel,
-} from '../git/run.ts';
+} from './run.ts';
 import {
   addBranchWorktree,
   baseRef,
@@ -34,33 +37,29 @@ import {
   listBranches,
   renameAutoBranch,
   switchBranch,
-} from '../git/branches.ts';
-import {
-  prDrafts,
-  worktreeRoot,
-  worktreeRoots,
-} from '@mochi/core/agents/config';
-import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
+} from './branches.ts';
+import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
+import { ghAccounts, githubAccount, pushAs, runGh } from './gh.ts';
 import {
   GITHUB_COM,
   parseRemote,
   type GithubAccountRef,
-} from '../../src/git/github.ts';
-import type { Handlers } from './handlers.ts';
-import { runCheck } from '../git/check.ts';
-import { conflictedPaths } from '../git/conflicts.ts';
+} from '../../../../apps/desktop/src/git/github.ts';
+import type { HostMethods } from '../hostMethods.ts';
+import { runCheck } from './check.ts';
+import { conflictedPaths } from './conflicts.ts';
 import {
   autoMergeArgs,
   mergeArgs,
   type MergeMethods,
-} from '../../src/git/prs.ts';
+} from '../../../../apps/desktop/src/git/prs.ts';
 import {
   parsePrReview,
   prReviewQuery,
   replyThreadArgs,
   resolveThreadArgs,
   reviewArgs,
-} from '../../src/git/prReview.ts';
+} from '../../../../apps/desktop/src/git/prReview.ts';
 
 const DIFF_FLAGS = [
   '--no-color',
@@ -75,7 +74,7 @@ const MAX_UNTRACKED = 200;
 const CI_LOG_LINES = 150;
 
 export const git = {
-  async status(_sender, cwd) {
+  async status(_caller, cwd) {
     const top = await topLevel(cwd);
     const [branch, porcelain] = await Promise.all([
       currentBranch(top),
@@ -84,7 +83,7 @@ export const git = {
     return { branch, files: parseStatus(porcelain) };
   },
 
-  async diff(_sender, cwd, scope, chosenBase) {
+  async diff(_caller, cwd, scope, chosenBase) {
     const top = await topLevel(cwd);
     const [branch, base] = await Promise.all([
       currentBranch(top),
@@ -123,7 +122,7 @@ export const git = {
     };
   },
 
-  async stage(_sender, cwd, value) {
+  async stage(_caller, cwd, value) {
     const { top, target } = await change(cwd, value);
     if (target.patch)
       await runGit(top, ['apply', '--cached', '--whitespace=nowarn'], {
@@ -132,7 +131,7 @@ export const git = {
     else await runGit(top, ['add', '-A', '--', target.path]);
   },
 
-  async unstage(_sender, cwd, value) {
+  async unstage(_caller, cwd, value) {
     const { top, target } = await change(cwd, value);
     if (target.patch)
       await runGit(top, ['apply', '--cached', '-R', '--whitespace=nowarn'], {
@@ -141,7 +140,7 @@ export const git = {
     else await runGit(top, ['restore', '--staged', '--', target.path]);
   },
 
-  async revert(_sender, cwd, value) {
+  async revert(_caller, cwd, value) {
     const { top, target } = await change(cwd, value);
     if (target.staged)
       throw new Error('Unstage the change before reverting it');
@@ -154,17 +153,17 @@ export const git = {
     else await runGit(top, ['restore', '--', target.path]);
   },
 
-  async commit(_sender, cwd, message) {
+  async commit(_caller, cwd, message) {
     const top = await topLevel(cwd);
     await runGit(top, ['commit', '-m', message.trim()]);
     return (await runGit(top, ['rev-parse', '--short', 'HEAD'])).trim();
   },
 
-  async push(_sender, cwd, user) {
+  async push(_caller, cwd, user) {
     await pushAs(await topLevel(cwd), githubAccount(user));
   },
 
-  async createPr(_sender, cwd, value, user) {
+  async createPr(_caller, cwd, value, user) {
     const top = await topLevel(cwd);
     const base = value.base === undefined ? [] : ['--base', value.base];
     const args = [
@@ -180,7 +179,7 @@ export const git = {
     return (await runGh(top, args, githubAccount(user))).trim();
   },
 
-  async setAutoMerge(_sender, cwd, pr, isOn, user) {
+  async setAutoMerge(_caller, cwd, pr, isOn, user) {
     const top = await topLevel(cwd);
     const account = githubAccount(user);
     const allowed = isOn
@@ -200,7 +199,7 @@ export const git = {
     await runGh(top, autoMergeArgs(pr, allowed), account);
   },
 
-  async prReview(_sender, cwd, pr, user) {
+  async prReview(_caller, cwd, pr, user) {
     const top = await topLevel(cwd);
     const account = githubAccount(user);
     const [json, patch] = await Promise.all([
@@ -210,7 +209,7 @@ export const git = {
     return parsePrReview(json, parseDiff(patch, false));
   },
 
-  async commentPr(_sender, cwd, pr, body, user) {
+  async commentPr(_caller, cwd, pr, body, user) {
     await runGh(
       await topLevel(cwd),
       ['pr', 'comment', String(pr), '--body', body],
@@ -218,7 +217,7 @@ export const git = {
     );
   },
 
-  async replyThread(_sender, cwd, threadId, body, user) {
+  async replyThread(_caller, cwd, threadId, body, user) {
     await runGh(
       await topLevel(cwd),
       replyThreadArgs(threadId, body),
@@ -226,7 +225,7 @@ export const git = {
     );
   },
 
-  async resolveThread(_sender, cwd, threadId, isResolved, user) {
+  async resolveThread(_caller, cwd, threadId, isResolved, user) {
     await runGh(
       await topLevel(cwd),
       resolveThreadArgs(threadId, isResolved),
@@ -234,7 +233,7 @@ export const git = {
     );
   },
 
-  async reviewPr(_sender, cwd, pr, verdict, body, user) {
+  async reviewPr(_caller, cwd, pr, verdict, body, user) {
     await runGh(
       await topLevel(cwd),
       reviewArgs(pr, verdict, body),
@@ -242,7 +241,7 @@ export const git = {
     );
   },
 
-  async mergePr(_sender, cwd, pr, user) {
+  async mergePr(_caller, cwd, pr, user) {
     const top = await topLevel(cwd);
     const account = githubAccount(user);
     const allowed = JSON.parse(
@@ -260,7 +259,7 @@ export const git = {
     await runGh(top, mergeArgs(pr, allowed), account);
   },
 
-  async ciLog(_sender, cwd, link, user) {
+  async ciLog(_caller, cwd, link, user) {
     return failedLog(await topLevel(cwd), link, githubAccount(user));
   },
 
@@ -268,7 +267,7 @@ export const git = {
     return ghAccounts();
   },
 
-  async repoSlug(_sender, cwd) {
+  async repoSlug(_caller, cwd) {
     const url = await runGit(cwd, ['remote', 'get-url', 'origin']).catch(
       () => '',
     );
@@ -278,11 +277,11 @@ export const git = {
     return { owner, repo };
   },
 
-  async renameAutoBranch(_sender, cwd, expected, title) {
+  async renameAutoBranch(_caller, cwd, expected, title) {
     const dir = insideWorktreeRoot(cwd);
     return renameAutoBranch(dir, expected, title);
   },
-  async sync(_sender, cwd, chosenBase) {
+  async sync(_caller, cwd, chosenBase) {
     const top = await topLevel(cwd);
     const base = chosenBase === undefined ? await baseRef(top) : chosenBase;
     if (base.startsWith('origin/'))
@@ -297,51 +296,51 @@ export const git = {
     }
   },
 
-  async addWorktree(_sender, root, threadId, branch, options) {
+  async addWorktree(_caller, root, threadId, branch, options) {
     return addWorktree(root, threadId, branch, options);
   },
 
-  async branches(_sender, root) {
+  async branches(_caller, root) {
     return listBranches(await topLevel(root));
   },
 
-  async branchNameError(_sender, root, name) {
+  async branchNameError(_caller, root, name) {
     return branchNameError(await topLevel(root), name);
   },
 
-  async switchBranch(_sender, root, branch, options) {
+  async switchBranch(_caller, root, branch, options) {
     await switchBranch(await topLevel(root), branch, options);
   },
 
-  async worktrees(_sender, root) {
+  async worktrees(_caller, root) {
     const top = await mainRepo(root);
     return (await listWorktrees(top)).filter((w) =>
       isUnderWorktreeRoot(w.path),
     );
   },
 
-  async head(_sender, cwd) {
+  async head(_caller, cwd) {
     return headOf(await topLevel(cwd));
   },
 
-  async removeWorktree(_sender, path) {
+  async removeWorktree(_caller, path) {
     const dir = insideWorktreeRoot(path);
     await runGit(await mainRepo(dir), ['worktree', 'remove', dir]);
   },
 
-  async diskUsage(_sender, path) {
+  async diskUsage(_caller, path) {
     const top = await topLevel(path);
     return Number((await run('du', top, ['-sk', top])).split('\t')[0]) * 1024;
   },
 
   // Checkpoints and rewind only run in a Mochi worktree: resetting a branch is never done to the user's own checkout.
-  async checkpoint(_sender, cwd, threadId, n) {
+  async checkpoint(_caller, cwd, threadId, n) {
     const top = insideWorktreeRoot(await topLevel(cwd));
     const ref = checkpointRef(threadId, n);
     return snapshot(top, ref, `harness checkpoint ${ref.split('/').pop()}`);
   },
 
-  async restoreCheckpoint(_sender, cwd, threadId, n, hasUndo) {
+  async restoreCheckpoint(_caller, cwd, threadId, n, hasUndo) {
     const top = insideWorktreeRoot(await topLevel(cwd));
     const id = threadId;
     const which = n;
@@ -362,7 +361,7 @@ export const git = {
     );
   },
 
-  async restoreFiles(_sender, cwd, threadId, n, paths) {
+  async restoreFiles(_caller, cwd, threadId, n, paths) {
     const top = insideWorktreeRoot(await topLevel(cwd));
     const id = threadId;
     const which = n;
@@ -383,7 +382,7 @@ export const git = {
     );
   },
 
-  async rewindPreview(_sender, cwd, threadId, n) {
+  async rewindPreview(_caller, cwd, threadId, n) {
     const top = insideWorktreeRoot(await topLevel(cwd));
     const id = threadId;
     const index = n;
@@ -398,7 +397,7 @@ export const git = {
     };
   },
 
-  async checkpointDiff(_sender, cwd, threadId, n) {
+  async checkpointDiff(_caller, cwd, threadId, n) {
     const top = await topLevel(cwd);
     const index = n;
     const commit = await resolveCommit(top, checkpointRef(threadId, index));
@@ -421,7 +420,7 @@ export const git = {
     };
   },
 
-  async turnDiff(_sender, cwd, from, to) {
+  async turnDiff(_caller, cwd, from, to) {
     const top = await topLevel(cwd);
     const end =
       to === undefined ? await snapshotCommit(top, 'harness turn diff') : to;
@@ -431,12 +430,12 @@ export const git = {
     );
   },
 
-  async runCheck(_sender, cwd, command) {
+  async runCheck(_caller, cwd, command) {
     const top = await topLevel(cwd);
     return runCheck(top, command);
   },
 
-  async forkWorktree(_sender, cwd, threadId, branch, from) {
+  async forkWorktree(_caller, cwd, threadId, branch, from) {
     const source = await topLevel(cwd);
     const top = await mainRepo(source);
     const id = threadId;
@@ -464,9 +463,9 @@ export const git = {
     if (commit) await applyFiles(dir, commit);
     return dir;
   },
-} satisfies Handlers<Omit<GitHost, CoreServed>>;
+} satisfies HostMethods<Omit<GitHost, CoreServed>>;
 
-/** Core's GitHub service answers these (`packages/core/src/github/handlers.ts`); main never sees the call. */
+/** Core's GitHub service answers these (`../github/handlers.ts`). */
 export type CoreServed = 'pr' | 'worktreePrs' | 'refStates';
 
 /**

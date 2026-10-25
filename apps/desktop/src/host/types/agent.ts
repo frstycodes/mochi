@@ -306,7 +306,7 @@ export interface StartWorkspace {
 }
 
 /**
- * A new worktree's preparation (`electron/git/setup.ts`): copy the project's ignored local files, install dependencies, run the
+ * A new worktree's preparation (`packages/core/src/git/setup.ts`): copy the project's ignored local files, install dependencies, run the
  * project's setup command. `failed` waits for `setupChoice`; `cancelled` was stopped by an interrupt and the agent never started.
  */
 export interface WorktreeSetup {

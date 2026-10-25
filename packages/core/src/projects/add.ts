@@ -6,7 +6,7 @@ import {
   normalizeOrigin,
   repoName,
 } from '@mochi/domain/git/origin';
-import type { GithubAccountRef } from '../../src/git/github.ts';
+import type { GithubAccountRef } from '../../../../apps/desktop/src/git/github.ts';
 import type {
   CloneSource,
   GithubRepo,

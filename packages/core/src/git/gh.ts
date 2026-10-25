@@ -5,8 +5,8 @@ import {
   parseRemote,
   tokenVariable,
   type GithubAccountRef,
-} from '../../src/git/github.ts';
-import { parseGhAuthStatus } from '../../src/git/parse.ts';
+} from '../../../../apps/desktop/src/git/github.ts';
+import { parseGhAuthStatus } from '../../../../apps/desktop/src/git/parse.ts';
 import { run, runGit } from './run.ts';
 
 // Tokens stay in the main process: read from gh's own store per login, handed to one child process in its environment,
