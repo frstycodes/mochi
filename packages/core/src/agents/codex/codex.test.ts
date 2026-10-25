@@ -1582,3 +1582,20 @@ test('a steer waits in Mochi until the turn finishes a step, can be taken back u
     codex.dispose();
   }
 });
+
+test('a started subagent carries the model Codex resolved for it', () => {
+  const item = {
+    type: 'subAgentActivity',
+    id: 'call_1',
+    kind: 'started',
+    agentThreadId: 'child',
+    agentPath: '/root/echo_hi',
+    model: 'gpt-5.5-mini',
+  };
+  const [event] = mapNotification(
+    'item/completed',
+    { threadId: 't', item },
+    threadState('h1', '/x'),
+  );
+  assert.equal(event?.type === 'subagent' && event.model, 'gpt-5.5-mini');
+});

@@ -671,6 +671,8 @@ function subAgentActivity(
         phase: 'start',
         toolId: String(item.id),
         name: agentName(item.agentPath),
+        // Codex 0.164+: the model it resolved for the agent; older records leave it out.
+        ...(typeof item.model === 'string' && { model: item.model }),
         isBackground: true,
       },
     ];

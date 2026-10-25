@@ -436,11 +436,11 @@ export const TOOL_TABLE = {
       ),
     },
   },
-  delegate_task: {
+  start_subagent: {
     tier: 'change',
     quiet: true,
     description:
-      "Run a task on the other provider (Codex from a Claude thread, Claude from a Codex thread), or on a model your own subagent tool doesn't offer. Prefer your native subagent tool for same-provider work whenever it supports the model you want. The child sees only the prompt, nothing of this conversation. It runs in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new), on this profile's account. Returns at once; when it finishes, its report comes to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
+      "Start a subagent on Codex or Claude, whichever you aren't (a Codex subagent from a Claude thread, a Claude one from a Codex thread), or on a model your own subagent tool doesn't offer. Prefer your native subagent tool for same-provider work whenever it supports the model you want. The child sees only the prompt, nothing of this conversation. It runs in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new), on this profile's account. Returns at once; when it finishes, its report comes to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
     shape: {
       prompt: Schema.String.check(
         Schema.isMinLength(1),

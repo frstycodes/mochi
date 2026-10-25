@@ -4,7 +4,7 @@ import type { State } from '../store/types.ts';
 import { log, mapThread } from '../store/threads.ts';
 import { wallNow } from '../store/context.ts';
 
-/** A task a thread's agent hands to another provider (`delegate_task`), run as a Mochi background agent. */
+/** A task a thread's agent hands to another provider (`start_subagent`), run as a Mochi background agent. */
 export interface BackgroundStart {
   id: string;
   name: string;

@@ -75,9 +75,9 @@ function setup() {
   return { id, tool, event, dispatch, thread, calls, state: () => state };
 }
 
-test('delegate_task runs a session of its own, reports back into the thread, and its report steers the running turn', async () => {
+test('start_subagent runs a session of its own, reports back into the thread, and its report steers the running turn', async () => {
   const { id, tool, event, dispatch, thread, calls, state } = setup();
-  const started = await tool('delegate_task', {
+  const started = await tool('start_subagent', {
     prompt: 'Load test the limiter',
     name: 'Load test',
     provider: 'codex',
@@ -211,7 +211,7 @@ test('delegate_task runs a session of its own, reports back into the thread, and
 test("a delegated task's report starts a turn when the thread's agent is idle, and one you stop wakes nobody", async () => {
   const { id, tool, event, dispatch, thread, calls, state } = setup();
   event({ threadId: id, type: 'turn-end', status: 'done' });
-  await tool('delegate_task', {
+  await tool('start_subagent', {
     prompt: 'Review the diff',
     name: 'Review',
     provider: 'codex',
@@ -238,7 +238,7 @@ test("a delegated task's report starts a turn when the thread's agent is idle, a
     "the report is the agent's next turn",
   );
 
-  await tool('delegate_task', {
+  await tool('start_subagent', {
     prompt: 'x',
     name: 'Spike',
     provider: 'codex',
@@ -251,7 +251,7 @@ test("a delegated task's report starts a turn when the thread's agent is idle, a
 test("a delegated task in a worktree of its own branches off the thread's branch; stop ends it and its session", async () => {
   const { id, tool, event, dispatch, thread, calls } = setup();
   const branch = thread().repo!.branch;
-  await tool('delegate_task', {
+  await tool('start_subagent', {
     prompt: 'Try the Redis approach',
     name: 'Redis spike',
     worktree: 'new',
@@ -281,7 +281,7 @@ test("a delegated task in a worktree of its own branches off the thread's branch
 
 test("a delegated task's approval waits on the thread's queue, and settling the thread stops it", async () => {
   const { id, tool, event, dispatch, state, calls } = setup();
-  await tool('delegate_task', {
+  await tool('start_subagent', {
     prompt: 'x',
     name: 'Migrator',
     provider: 'codex',
