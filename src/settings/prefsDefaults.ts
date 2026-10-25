@@ -121,7 +121,7 @@ export const DEFAULT_PREFS: Prefs = {
   agent: 'claude',
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
-  sidebarItems: ['queue', 'board', 'projects', 'usage'],
+  sidebarItems: ['queue', 'board', 'usage'],
   driftGuard: true,
   whileWorking: 'steer',
   promptSuggestions: true,
