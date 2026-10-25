@@ -1,4 +1,6 @@
-import { useSyncExternalStore, type Dispatch } from 'react';
+import type { Dispatch } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import type { DriftVerdict } from '../drift.ts';
 import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
 import type { Action, State } from '../store/types.ts';
@@ -91,27 +93,20 @@ export interface DriftPending {
 }
 
 // Outside React: a queued message the store sends while its thread is closed still leaves its suggestion for when you open it.
-const pendingDrift = new Map<string, DriftPending>();
-const listeners = new Set<() => void>();
+const driftStore = createStore<Record<string, DriftPending>>(() => ({}));
 
 export function setDriftPending(
   threadId: string,
   pending: DriftPending | null,
 ) {
-  if (pending) pendingDrift.set(threadId, pending);
-  else if (!pendingDrift.delete(threadId)) return;
-  listeners.forEach((l) => l());
+  if (pending) return driftStore.setState({ [threadId]: pending });
+  if (!(threadId in driftStore.getState())) return;
+  driftStore.setState(({ [threadId]: _, ...rest }) => rest, true);
 }
 
 export function useDriftPending(threadId: string) {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    () => driftPending(threadId),
-  );
+  return useStore(driftStore, (all) => all[threadId] ?? null);
 }
 
 export const driftPending = (threadId: string) =>
-  pendingDrift.get(threadId) ?? null;
+  driftStore.getState()[threadId] ?? null;

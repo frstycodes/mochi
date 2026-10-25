@@ -1,32 +1,22 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
 
 const KEY = 'harness.worktrees';
 
 const pathsSlice = persistedSlice<Record<string, string>>(KEY, {});
-let paths = pathsSlice.getState().value;
-const listeners = new Set<() => void>();
-
 export function worktreePath(threadId: string): string | undefined {
-  return paths[threadId];
+  return pathsSlice.getState().value[threadId];
 }
 
 export function useWorktreePath(threadId: string) {
-  return useSyncExternalStore(subscribe, () => paths[threadId]);
+  return useStore(pathsSlice, (s) => s.value[threadId]);
 }
 
 export function useWorktreePaths() {
-  return useSyncExternalStore(subscribe, () => paths);
+  return useStore(pathsSlice, (s) => s.value);
 }
 
 export function setWorktreePath(threadId: string, path: string | null) {
-  const { [threadId]: _, ...rest } = paths;
-  paths = path ? { ...rest, [threadId]: path } : rest;
-  pathsSlice.setState({ value: paths });
-  listeners.forEach((l) => l());
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
+  const { [threadId]: _, ...rest } = pathsSlice.getState().value;
+  pathsSlice.setState({ value: path ? { ...rest, [threadId]: path } : rest });
 }
