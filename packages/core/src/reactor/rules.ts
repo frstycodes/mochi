@@ -158,18 +158,6 @@ export const prSync: Rule = (event) => {
   ];
 };
 
-/** A turn's end keeps the brief a provider switch starts from current; the queue keeps one job per thread, the newest. */
-export const briefUpdates: Rule = (event) =>
-  event.threadId
-    ? [
-        {
-          type: 'brief.update',
-          key: `brief:${event.sequence}`,
-          threadId: event.threadId,
-        },
-      ]
-    : [];
-
 /** Rules over the whole state, run after each fold that changed it. */
 export const STATE_RULES: ReadonlyArray<Rule> = [
   queueRunner,
@@ -182,7 +170,7 @@ export const STATE_RULES: ReadonlyArray<Rule> = [
 
 /** Rules by the event type they react to. */
 export const RULES: Readonly<Record<string, ReadonlyArray<Rule>>> = {
-  'agent.turn-end': [idleChecks, autoSimplify, briefUpdates],
+  'agent.turn-end': [idleChecks, autoSimplify],
   'agent.tool': [prSync],
 };
 

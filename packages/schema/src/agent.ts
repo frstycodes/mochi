@@ -147,9 +147,11 @@ const UnversionedAgentEvent = Schema.Union([
     from: Provider,
     to: Provider,
     model: opt(S),
+    handoffBy: opt(Provider),
     text: S,
     contents: S,
   }),
+  member('context-writing', {}),
   member('turn-end', {
     status: Schema.Literals(['done', 'interrupted', 'failed']),
     error: opt(S),
@@ -214,7 +216,9 @@ export const AgentStartOptions = Schema.Struct({
   permissionMode: opt(Short),
   resume: opt(Short),
   forkAt: opt(Short),
-  switchFrom: opt(Provider),
+  switchFrom: opt(
+    Schema.Struct({ provider: Provider, model: opt(Short), isLimited: opt(B) }),
+  ),
   useApiKey: opt(B),
   isGoalsOff: opt(B),
   isSettingsChat: opt(B),

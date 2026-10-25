@@ -92,11 +92,11 @@ export function HandoffRow({
   );
 }
 
-const isSwitch = (handoff: Handoff) =>
-  handoff.status === 'pending' || handoff.contents !== undefined;
+const isSwitch = (handoff: Handoff) => !!handoff.isSwitch;
 
 /**
- * `[Claude] Opus 5.5 → [Codex] GPT-5.5 on your next message`, then the same pair and what the package held. Each side is its
+ * `[Claude] Opus 5.5 → [Codex] GPT-5.5 on your next message`, `writing the handoff…` once that message starts it, then the same
+ * pair and what the package held. Each side is its
  * provider's mark and the model's name from the catalog (the id until that loads); a row from before `fromModel` was recorded
  * names the provider alone.
  */
@@ -112,7 +112,7 @@ function SwitchLine({
     model === undefined
       ? PROVIDER_NAME[provider]
       : optionFor(catalog[provider], model, provider).name;
-  const isPending = handoff.status === 'pending';
+  const isPending = handoff.status !== 'started';
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="sr-only">
@@ -128,9 +128,22 @@ function SwitchLine({
         provider={handoff.to}
         name={nameOf(handoff.to, handoff.model ?? '')}
       />
-      <span className="min-w-0 truncate text-subtle-foreground">
-        {isPending ? 'on your next message' : handoff.contents}
-      </span>
+      <SwitchTail handoff={handoff} />
+    </span>
+  );
+}
+
+/** What the switch is waiting on, or what the new session got. */
+function SwitchTail({ handoff }: { handoff: Handoff }) {
+  if (handoff.status === 'drafting')
+    return (
+      <Shimmer as="span" className="min-w-0 truncate">
+        writing the handoff…
+      </Shimmer>
+    );
+  return (
+    <span className="min-w-0 truncate text-subtle-foreground">
+      {handoff.status === 'pending' ? 'on your next message' : handoff.contents}
     </span>
   );
 }

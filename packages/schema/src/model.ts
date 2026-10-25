@@ -593,8 +593,10 @@ export const Handoff = Schema.Struct({
   prompt: opt(Schema.String),
   fallback: opt(Schema.Literals(['timeout', 'error'])),
   error: opt(Schema.String),
+  isSwitch: opt(Schema.Literal(true)),
   fromModel: opt(Schema.String),
   model: opt(Schema.String),
+  handoffBy: opt(Provider),
   contents: opt(Schema.String),
 });
 
@@ -766,7 +768,13 @@ export const LiveRun = Schema.Struct({
     Schema.Union([
       Schema.Struct({ forkAt: Schema.String }),
       Schema.Struct({ seed: Schema.String }),
-      Schema.Struct({ switchFrom: Provider }),
+      Schema.Struct({
+        switchFrom: Schema.Struct({
+          provider: Provider,
+          model: opt(Schema.String),
+          isLimited: opt(Schema.Boolean),
+        }),
+      }),
     ]),
   ),
 });

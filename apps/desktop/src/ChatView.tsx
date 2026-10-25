@@ -770,18 +770,22 @@ const Composer = memo(function Composer({
   const controls = controlsOf(thread);
   const workspace = useThreadWorkspace(thread);
   const provider = thread.providers[0];
-  // A model of another provider switches the thread to it from your next message (`provider-switch`).
-  const setControls = (next: typeof controls, model?: ModelOption) =>
-    dispatch(
-      model && model.harness !== provider
-        ? {
-            type: 'provider-switch',
-            threadId: thread.id,
-            to: model.harness,
-            model: next.model,
-          }
-        : { type: 'controls', threadId: thread.id, controls: next },
-    );
+  // A model of another provider switches the thread to it from your next message (`provider-switch`); so does another model
+  // of the same provider once the session ran out of usage, to start fresh from a handoff instead of the full context.
+  const setControls = (next: typeof controls, model?: ModelOption) => {
+    const isSwitch =
+      !!model &&
+      (model.harness !== provider ||
+        (!!thread.live?.limit && model.id !== controls.model));
+    if (model && isSwitch)
+      return dispatch({
+        type: 'provider-switch',
+        threadId: thread.id,
+        to: model.harness,
+        model: next.model,
+      });
+    dispatch({ type: 'controls', threadId: thread.id, controls: next });
+  };
   const root = projectRef(thread.repo);
   const mention = useMentionMenu(
     thread.id,

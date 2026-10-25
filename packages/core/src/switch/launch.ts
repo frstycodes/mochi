@@ -8,8 +8,8 @@ import { emitAgentEvent } from '../agents/events.ts';
 import type { ThreadContext } from './context.ts';
 
 /**
- * Starts the thread's session on `adapter` with what Core keeps for it: after a switch, the provider's earlier session to resume
- * and the thread so far for its instructions, recorded on the thread as a `context` event.
+ * Starts the thread's session on `adapter` with what Core keeps for it: after a switch, the provider's earlier session to resume,
+ * or the handoff written now, for its instructions; recorded on the thread as a `context` event.
  */
 export async function launchSession(
   context: ThreadContext['Service'],
@@ -20,7 +20,16 @@ export async function launchSession(
   signal?: AbortSignal,
 ) {
   const prepared = await Effect.runPromise(
-    context.prepare(threadId, run.provider, run.model, run.cwd, switchFrom),
+    context.prepare({
+      threadId,
+      spaceId: run.spaceId,
+      provider: run.provider,
+      ...(run.model && { model: run.model }),
+      cwd: run.cwd,
+      prompt: run.prompt,
+      ...(switchFrom && { switchFrom }),
+      onWriting: () => emitAgentEvent({ threadId, type: 'context-writing' }),
+    }),
   );
   if (prepared.delivered)
     emitAgentEvent({ threadId, type: 'context', ...prepared.delivered });

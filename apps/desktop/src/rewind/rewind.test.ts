@@ -706,9 +706,9 @@ test('a provider switch waits for the next message; picking again replaces it, p
   let s = switchTo(before, 'codex', 'gpt-6');
   const t = thread(s, 'rl');
   assert.deepEqual(t.providers, ['codex', 'claude']);
-  assert.equal(t.session, undefined);
+  assert.equal(t.session?.id, 'claude-1', 'kept until the start takes it up');
   assert.equal(t.controls?.model, 'gpt-6');
-  assert.deepEqual(t.live?.restart, { switchFrom: 'claude' });
+  assert.deepEqual(t.live?.restart, { switchFrom: { provider: 'claude' } });
   assert.equal(pending(s).length, 1);
   assert.deepEqual(
     calls(before, { type: 'provider-switch', threadId: 'rl', to: 'codex' }),
@@ -726,6 +726,43 @@ test('a provider switch waits for the next message; picking again replaces it, p
     thread(s, 'rl').activity.length,
     thread(before, 'rl').activity.length,
   );
+  assert.equal(thread(s, 'rl').live?.restart, undefined);
+  assert.deepEqual(
+    calls(s, { type: 'send', threadId: 'rl', text: 'Go on', reason: '' }).map(
+      (c) => c.method,
+    ),
+    ['send'],
+    'its own session takes the message, nothing restarts',
+  );
+
+  // The send that takes up a switch starts the new provider and leaves the old session.
+  const switched = switchTo(before, 'codex');
+  const sent = threadsReducer(switched, {
+    type: 'send',
+    threadId: 'rl',
+    text: 'Go on',
+    reason: '',
+  });
+  assert.equal(thread(sent, 'rl').session, undefined);
+  assert.equal(thread(sent, 'rl').providers[0], 'codex');
+
+  // Another Claude model is no switch; after a usage limit it is, to a fresh session.
+  assert.equal(
+    pending(switchTo(before, 'claude', 'claude-sonnet-5-5')).length,
+    0,
+  );
+  const limited: State = {
+    ...before,
+    threads: mapThread(before.threads, 'rl', (t) => ({
+      ...t,
+      live: { ...t.live!, limit: { label: 'Weekly' } },
+    })),
+  };
+  const fresh = switchTo(limited, 'claude', 'claude-sonnet-5-5');
+  assert.equal(pending(fresh).length, 1);
+  assert.deepEqual(thread(fresh, 'rl').live?.restart, {
+    switchFrom: { provider: 'claude', isLimited: true },
+  });
   assert.equal(
     thread(switchTo(before, 'claude'), 'rl'),
     thread(before, 'rl'),

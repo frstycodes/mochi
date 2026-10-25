@@ -36,7 +36,12 @@ import { ThreadContext } from './switch/context.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
 import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
 import { Watch } from './watch/watch.ts';
-import { agent, classify, utilityCall } from './agents/handlers.ts';
+import {
+  agent,
+  classify,
+  handoffTurn,
+  utilityCall,
+} from './agents/handlers.ts';
 import {
   agentRpcHandlers,
   agentSettingsSaved,
@@ -84,8 +89,8 @@ export const layerCore = (options: ServerOptions) =>
     Layer.provideMerge(layerAgents(options.userData)),
     Layer.provideMerge(Scheduler.layer),
     Layer.provideMerge(
-      ThreadContext.layer((spaceId, prompt) =>
-        utilityCall('handoff', spaceId, prompt),
+      ThreadContext.layer((threadId, spaceId, cwd, ask) =>
+        Effect.promise(() => handoffTurn(threadId, spaceId, cwd, ask)),
       ),
     ),
     Layer.provideMerge(Hosted.layer(options.userData)),

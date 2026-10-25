@@ -296,7 +296,7 @@ test('state rules run on a fold that changed the state, not on a streamed token 
   const due = state([thread('t1', { queued: [{ id: 'm1', draft: 'next' }] })]);
   assert.deepEqual(
     react(event('agent.turn-end', 't1'), NONE, due).map((c) => c.type),
-    ['queue.send', 'idle.mark', 'brief.update'],
+    ['queue.send', 'idle.mark'],
   );
   assert.deepEqual(
     react(event('agent.message', 't1'), NONE, due),

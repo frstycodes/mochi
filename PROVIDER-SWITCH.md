@@ -33,29 +33,27 @@ thread_sessions(threadId, provider, nativeSessionId, model, lastSeenSeq, state: 
 
 `lastSeenSeq` advances only when the provider acknowledges a turn that carried those events. That ledger is what delta delivery and retries read.
 
-### 2. A rolling brief, kept current, never made at switch time
+### 2. A handoff, written at the next message
 
-A reactor rule queues a `brief` job (utility queue, `handoff` priority) when a turn ends, debounced, if the brief is more than ~N events behind. The job folds the events after `brief.throughSeq` into the previous brief, so its cost is per turn, not per thread length. Output (schema in `packages/schema`):
+Picking another provider runs nothing: it records the switch, and the start your next message makes writes the handoff. Reasoning never crosses providers (both keep it encrypted in their own sessions, and the hidden part is never streamed), so the best author is the session that ran the thread:
 
-- goal and success criteria, as the thread currently understands them
-- decisions with their reasons, and what was ruled out
-- current state: branch, files changed and why, what's verified, what's broken
-- open questions, the plan's pending steps, user preferences stated in the thread
-- **chapters**: seq ranges with one line each (`412–530 · migrated the auth store, tests red on refresh`)
+- **Another provider, the old session has usage left**: the old native session is resumed on a side session (`<thread>--handoff`, read-only, events kept off the thread) for one turn that writes the handoff: goal and what done means, decisions and why (including reasons never written down), what was tried or ruled out, current state, open questions and next steps, the user's stated preferences.
+- **The old session ran out of usage** (another provider, or another model of the same provider): the incoming model writes its own handoff from the whole transcript, long outputs cut with pointers, and starts a fresh session from it, so it doesn't carry the full context on every turn.
+- **The transcript doesn't fit the incoming model's window** and the old session can't write: the incoming model folds it part by part, oldest first, each part into the handoff so far.
+- **Another model of the same provider, usage left**: no handoff; the session resumes on the new model.
 
-Stored as `thread_briefs(threadId, throughSeq, brief)`. At switch time it's already there: no 15 s wait, no template fallback. `/compact` uses the same brief.
+The switch row says "writing the handoff" while it runs; a failed or timed-out handoff turn never blocks the switch, the package then goes without one.
 
 ### 3. The context package
 
-Assembled in Core by a pure function `contextPackage(brief, events, target, budget)`, so it's testable on fixtures:
+Assembled in Core by a pure function `contextPackage(handoff, events, target, budget)`, so it's testable on fixtures:
 
-1. **Brief** (always included; it is the floor).
-2. **Delta since the brief**: the events after `throughSeq`, verbatim.
-3. **Recent window**: the last turns, verbatim, newest first, until the budget is spent. Large items are **cut, not dropped**: head and tail kept, the middle replaced with `[… 3,912 lines, thread_history get seq=488]`. Diffs keep their hunks up to a cap, then a pointer.
-4. **Live ground truth**, read from the worktree at assembly, not from the transcript: `git status`, `git diff --stat`, current branch and HEAD.
-5. **What changed for you**: tools, skills and MCP servers the previous provider had that this one doesn't (and the reverse).
+1. **Handoff** (always included; it is the floor).
+2. **Recent window**: the last turns, verbatim, newest first, until the budget is spent. Large items are **cut, not dropped**: head and tail kept, the middle replaced with `[… 3,912 lines, thread_history get seq=488]`. Diffs keep their hunks up to a cap, then a pointer.
+3. **Live ground truth**, read from the worktree at assembly, not from the transcript: `git status`, `git diff --stat`, current branch and HEAD.
+4. **What changed for you**: tools, skills and MCP servers the previous provider had that this one doesn't (and the reverse).
 
-Budget in real tokens: an estimate (chars/4) calibrated per provider against the `usage` each turn reports, sized to the target model's window minus a reserve for the reply and for the native transcript a resumed session already holds. If even the brief doesn't fit, send the brief's top section plus the chapter index and rely on the tool. **The turn never fails for lack of budget.**
+Budget in real tokens: an estimate (chars/4) calibrated per provider against the `usage` each turn reports, sized to the target model's window minus a reserve for the reply and for the native transcript a resumed session already holds. If the recent turns don't fit, the handoff goes alone and the tool holds the rest. **The turn never fails for lack of budget.**
 
 ### 4. Delivered as context, not as the user
 
@@ -69,12 +67,12 @@ A read-only Core procedure over `events`, served as `mcp__mochi__thread_history`
 
 | op                                | returns                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------- |
-| `outline`                         | the brief's chapters with seq ranges                                      |
+| `outline`                         | each turn's first line with its seq range                                 |
 | `read {fromSeq, toSeq}`           | events in range, paged, byte-capped, tool calls with inputs and outputs   |
 | `search {query}`                  | FTS5 hits over message text, tool inputs and outputs: seq plus snippet    |
 | `get {seq}` or `get {toolCallId}` | one item in full: complete output, the whole diff, images as image blocks |
 
-Every pointer in the package is a `thread_history` call the agent can copy, which addresses T3's "the agent has to think of looking". Instruction line: _"Earlier work in this thread is in thread_history; check it before redoing or contradicting something."_ The tool is useful on its own, before any switch: after a compaction, the same agent gets back what was compacted away.
+Every pointer in the package is a `thread_history` call the agent can copy, which addresses T3's "the agent has to think of looking". The handoff should be enough, so the instruction line says to pull history only when needed: _"What is here should be enough to go on: use the tool only when you need something it doesn't cover, such as an exact command output, a whole diff or an earlier message."_ The tool is useful on its own, before any switch: after a compaction, the same agent gets back what was compacted away.
 
 ### 6. The switch
 
@@ -83,8 +81,8 @@ Core command `thread.switchProvider {threadId, provider, model}`:
 1. Between turns: recorded at once. Mid-turn: you choose _after this turn_ (queued) or _now_ (interrupts, then records it).
 2. The old session is **detached**, not deleted: its binding keeps `nativeSessionId` and `lastSeenSeq`. Pending approvals are cancelled with an event row. Its running subagents finish and report to the thread as they do today.
 3. On the next send:
-   - The target has a resumable binding: resume it and deliver only the delta (brief changes plus events after its `lastSeenSeq`).
-   - Otherwise: a fresh session with the full package.
+   - The target has a resumable binding: resume it and deliver only the delta (the events after its `lastSeenSeq`).
+   - Otherwise: a fresh session with the handoff (§2) and the package.
 4. Ledger: `context.delivered {provider, sessionId, throughSeq, packageHash}` is written when the provider acknowledges the turn. An unclear result retries the same package once on the same session. Only after that does it fall back to a fresh session, with an event row saying so. A detached native session is never abandoned silently.
 
 Plan steps, goal and criteria are Mochi's and carry over untouched. The worktree is shared, so uncommitted edits carry over too.
@@ -92,23 +90,21 @@ Plan steps, goal and criteria are Mochi's and carry over untouched. The worktree
 ### 7. UI
 
 - The composer's provider and model picker stays unlocked in a live thread. Picking another provider shows _"Switches on your next message"_.
-- A divider row replaces `HandoffRow`, for example: _Switched to Codex · GPT-5.5 — brief, 6 recent turns, 11.8k tokens_. It opens to the exact package that was sent, so it's always clear what the new agent knows.
+- A divider row replaces `HandoffRow`, for example: _[Claude] Opus 5.5 → [Codex] GPT-5.5 · handoff by Claude, 6 recent turns, 11.8k tokens_. It opens to the exact package that was sent, so it's always clear what the new agent knows.
 - Existing `entry.handoff` rows keep rendering, read as switch rows. No migration of old data.
 
 ## Phases
 
-1. **Schema**: `thread_sessions`, `thread_briefs`, the package, `thread_history` results, `context.delivered`.
-2. **`thread_history`**, plus FTS5 over events. Ships alone; helps after compaction today.
-3. **Brief job and reactor rule.** Point `/compact` at it.
-4. **`contextPackage`, the switch command, delta delivery and the ledger.** Fixture tests:
-   - a 2,000-event thread fits a 32 k window
-   - an oversized output is cut with a pointer
-   - switching back sends only the delta
-   - a zero budget degrades to the brief instead of failing
-   - an unclear inject retries before detaching
-5. **UI, then delete the handoff code.**
+1. **Schema**: `thread_sessions`, the switch row and its `context` events, `thread_history` results.
+2. **`thread_history`**. Ships alone; helps after compaction today.
+3. **The handoff (§2), `contextPackage`, the switch command, delta delivery.** Fixture tests:
+   - the old session writes the handoff; switching back sends only the delta
+   - out of usage, the incoming model writes its own from the transcript; the same provider starts fresh
+   - a transcript past the window folds part by part
+   - an oversized output is cut with a pointer; a zero budget keeps the handoff instead of failing
+4. **UI, then delete the drafting handoff code.**
 
 ## Open questions
 
 - Should `thread_history` also reach sub-threads and the parent (read-only)? It's cheap to add and useful for coordinators; scope creep for v1.
-- How far behind the brief may run before a switch waits for it: proposed one turn, and otherwise the delta covers the gap verbatim.
+- The delivery ledger and retry (§6.4) and per-model budgets calibrated against `usage` are not built yet.
