@@ -6,6 +6,7 @@ import type { RangeId } from './usage/report.ts';
 /** Every cache key. A family's `all` is the prefix its invalidations match, so members must extend it. */
 export const queryKeys = {
   account: () => ['mochi-account'] as const,
+  schedules: () => ['schedules'] as const,
   agent: {
     settings: () => ['agent-settings'] as const,
     accounts: () => ['accounts'] as const,

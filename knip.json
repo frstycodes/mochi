@@ -4,7 +4,7 @@
     "electron/main.ts",
     "electron/preload.ts",
     "scripts/*.{ts,mjs}",
-    "tests/e2e/*.{ts,js}",
+    "tests/e2e/*.{ts,js,mjs}",
     "src/lib/{shiki-slim,no-wasm}.ts"
   ],
   "ignore": [
@@ -15,7 +15,7 @@
     "src/settings/sections/goals.tsx"
   ],
   "ignoreDependencies": ["@effect/language-service", "cloudflare"],
-  "ignoreBinaries": ["mkfifo", "screencapture"],
+  "ignoreBinaries": ["mkfifo"],
   "rules": {
     "exports": "off",
     "types": "off",

@@ -1,5 +1,5 @@
 import { browserStorage, persistedSlice } from '../lib/uiStorage.ts';
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
 import { accessOf } from '../runtime/access.ts';
 import { effortId, modelId } from '../runtime/models.ts';
 import { AGENT_CONTROLS, DEFAULT_PREFS, type Prefs } from './prefsDefaults.ts';
@@ -20,28 +20,23 @@ const LEGACY_BRANCH_FROM_KEY = 'harness.drift.branchFrom';
 const prefsSlice = persistedSlice(PREFS_KEY, DEFAULT_PREFS, (raw) =>
   parsePrefs(raw, browserStorage.getItem(LEGACY_BRANCH_FROM_KEY)),
 );
-let prefs = prefsSlice.getState().value;
-const listeners = new Set<() => void>();
-
 export function getPrefs(): Prefs {
-  return prefs;
+  return prefsSlice.getState().value;
 }
 
 setAmbientPrefs(getPrefs);
 
 export function usePrefs(): Prefs {
-  return useSyncExternalStore(subscribePrefs, getPrefs, getPrefs);
+  return useStore(prefsSlice, (s) => s.value);
 }
 
 export function setPrefs(patch: Partial<Prefs>) {
-  prefs = { ...prefs, ...patch };
-  prefsSlice.setState({ value: prefs });
-  listeners.forEach((l) => l());
+  prefsSlice.setState({ value: { ...getPrefs(), ...patch } });
 }
 
 /** Settings › Appearance's Reduce motion, falling back to the OS setting; for code outside React (scroll behaviour). */
 export function prefersReducedMotion() {
-  const { reduceMotion } = prefs;
+  const { reduceMotion } = getPrefs();
   return reduceMotion === 'system'
     ? matchMedia('(prefers-reduced-motion: reduce)').matches
     : reduceMotion === 'on';
@@ -50,13 +45,10 @@ export function prefersReducedMotion() {
 /** Re-reads storage: another window (a torn-off thread) changed a pref. */
 export function reloadPrefs() {
   void prefsSlice.persist.rehydrate();
-  prefs = prefsSlice.getState().value;
-  listeners.forEach((l) => l());
 }
 
 export function subscribePrefs(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
+  return prefsSlice.subscribe(() => listener());
 }
 
 /** Saved values win only when they have the default's type, so a stale or hand-edited entry can't break a reader. */

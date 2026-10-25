@@ -10,14 +10,12 @@ import {
   UnauthorizedError,
   type OAuthClientProvider,
   type OAuthDiscoveryState,
-} from '@modelcontextprotocol/sdk/client/auth.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import type {
-  OAuthClientInformationMixed,
-  OAuthTokens,
-} from '@modelcontextprotocol/sdk/shared/auth.js';
+  Client,
+  StreamableHTTPClientTransport,
+  type OAuthClientInformationMixed,
+  type OAuthTokens,
+} from '@modelcontextprotocol/client';
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
 import {
   connectorKey,
   GOOGLE_WORKSPACE_URL,
@@ -756,7 +754,7 @@ addLoopbackRoute(PROXY, async (req, res, [spaceId, key]) => {
     clientFor(byAlias.get(alias)!),
   );
   // Stateless, like Mochi's own tools server: each request gets a fresh server over the shared upstream clients.
-  const transport = new StreamableHTTPServerTransport({
+  const transport = new NodeStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });

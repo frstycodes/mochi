@@ -9,7 +9,7 @@ import {
 } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, resolve } from 'node:path';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   DEV_TOOL_TABLE,
@@ -153,7 +153,7 @@ function listening() {
               call: (args) => callMochi(match[2], t.name, args),
             })),
           );
-      const transport = new StreamableHTTPServerTransport({
+      const transport = new NodeStreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
       });

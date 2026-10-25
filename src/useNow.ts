@@ -1,10 +1,14 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 
 /** A shared wall clock per granularity, stopped while hidden or unused. Null leaves the clock idle. */
 export function useNow(granularity: number | null = 1000) {
   const clock = clockFor(granularity);
+  const now = useStore(clock.store, (s) => s.now);
+  useEffect(() => clock.retain(), [clock]);
   // oxlint-disable-next-line react/purity -- an idle clock (null) reads the time whenever its caller renders for another reason
-  return useSyncExternalStore(clock.subscribe, clock.getSnapshot) ?? Date.now();
+  return now ?? Date.now();
 }
 
 const clocks = new Map<number | null, ReturnType<typeof createClock>>();
@@ -19,13 +23,12 @@ export function clockFor(granularity: number | null) {
 }
 
 function createClock(granularity: number | null) {
-  let now: number | null = granularity === null ? null : Date.now();
+  const store = createStore<{ now: number | null }>(() => ({
+    now: granularity === null ? null : Date.now(),
+  }));
   let timer: ReturnType<typeof setInterval> | undefined;
-  const listeners = new Set<() => void>();
-  const tick = () => {
-    now = Date.now();
-    listeners.forEach((listener) => listener());
-  };
+  let users = 0;
+  const tick = () => store.setState({ now: Date.now() });
   const sync = () => {
     clearInterval(timer);
     if (document.hidden) return;
@@ -33,17 +36,16 @@ function createClock(granularity: number | null) {
     timer = setInterval(tick, granularity!);
   };
   return {
-    getSnapshot: () => now,
-    subscribe(this: void, listener: () => void) {
+    store,
+    /** Runs the clock until the returned release; the last release stops it. */
+    retain(this: void) {
       if (granularity === null) return () => {};
-      listeners.add(listener);
-      if (listeners.size === 1) {
+      if (++users === 1) {
         document.addEventListener('visibilitychange', sync);
         sync();
       }
       return () => {
-        listeners.delete(listener);
-        if (listeners.size) return;
+        if (--users) return;
         clearInterval(timer);
         document.removeEventListener('visibilitychange', sync);
       };
