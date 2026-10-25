@@ -30,9 +30,11 @@ export const scheduleHandlers = (scheduler: Service) => {
           )(args).pipe(
             // A void method's JSON form is null.
             Effect.flatMap((value) =>
-              Schema.decodeUnknownEffect(output)(value ?? null).pipe(
-                Effect.mapError(String),
-              ),
+              (
+                Schema.decodeUnknownEffect(output)(
+                  value ?? null,
+                ) as Effect.Effect<unknown, unknown>
+              ).pipe(Effect.mapError(String)),
             ),
           ),
       ];

@@ -149,8 +149,10 @@ export class Scheduler extends Context.Service<Scheduler>()(
 
       const fork = (effect: Effect.Effect<unknown>) =>
         Effect.runFork(Effect.forkIn(effect, scope));
-      const emit = (event: ScheduleEvent) =>
-        PubSub.publishUnsafe(changes, { type: 'event', event });
+      // As JSON: a run's outcome leaves optional fields undefined, which the socket's encoder refuses.
+      const publish = (change: Change) =>
+        PubSub.publishUnsafe(changes, JSON.parse(JSON.stringify(change)));
+      const emit = (event: ScheduleEvent) => publish({ type: 'event', event });
 
       const prStreams = keyedStreams(
         ({ cwd, isReviewRequested, githubUser }: PrWatch) =>
@@ -172,7 +174,7 @@ export class Scheduler extends Context.Service<Scheduler>()(
       function changed() {
         Queue.offerUnsafe(saves, undefined);
         prStreams(triggers.flatMap((t) => prWatch(t) ?? []));
-        PubSub.publishUnsafe(changes, { type: 'change', triggers: list() });
+        publish({ type: 'change', triggers: list() });
       }
 
       function update(threadId: string, fn: (t: Trigger) => Trigger) {
@@ -369,7 +371,9 @@ export class Scheduler extends Context.Service<Scheduler>()(
                   createdAt: old?.createdAt ?? now,
                   checkedAt: isSameWhen ? old.checkedAt : now,
                   ...(isSameWhen && old.seen && { seen: old.seen }),
-                  sessionId: input.sessionId ?? old?.sessionId,
+                  ...((input.sessionId ?? old?.sessionId) && {
+                    sessionId: input.sessionId ?? old?.sessionId,
+                  }),
                   runs: old?.runs ?? [],
                 };
                 triggers = [
@@ -461,7 +465,7 @@ let live: Scheduler['Service'] | undefined;
 export const removeSchedule = (threadId: string) =>
   live?.remove(threadId) ?? Effect.void;
 
-const strip = (t: Trigger): Trigger => ({ ...t, seen: undefined });
+const strip = ({ seen: _seen, ...trigger }: Trigger): Trigger => trigger;
 const runId = () => `run-${randomUUID()}`;
 const describe = (t: Trigger) =>
   t.when.kind === 'cron' ? describeCron(t.when.cron) : `PR ${t.when.event}`;

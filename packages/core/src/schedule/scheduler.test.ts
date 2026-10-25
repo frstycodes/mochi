@@ -8,6 +8,7 @@ import { NodeHttpServer } from '@effect/platform-node';
 import { GitHub, GithubTransport } from '../github/service.ts';
 import { Run } from '../run.ts';
 import { Store } from '../store/store.ts';
+import { scheduleHandlers } from './handlers.ts';
 import { Scheduler } from './scheduler.ts';
 
 const layer = Scheduler.layer.pipe(
@@ -67,5 +68,19 @@ it.effect(
       const events = yield* scheduler.drain;
       assert.deepStrictEqual(events, [delta('Hello')]);
       assert.strictEqual((yield* scheduler.drain).length, 0);
+    }).pipe(Effect.provide(layer)),
+);
+
+it.effect(
+  'the list a window reads passes its schema, seen PR events left out',
+  () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler;
+      yield* scheduler.set(input('0 2 * * *'));
+      const [trigger] = (yield* scheduleHandlers(scheduler)['schedule.list']!(
+        [],
+      )) as Array<{ threadId: string }>;
+      assert.strictEqual(trigger?.threadId, 't1');
+      assert.isFalse('seen' in trigger!);
     }).pipe(Effect.provide(layer)),
 );

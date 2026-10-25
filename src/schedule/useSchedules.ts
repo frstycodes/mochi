@@ -3,7 +3,7 @@ import { host } from '../host/index.ts';
 import type { Trigger } from '../host/types/schedule.ts';
 import { nextRun } from './cron.ts';
 
-// Main owns the triggers; every window mirrors them from `list` and `onChange`.
+// Core owns the triggers; every window mirrors them from `list` and `onChange`.
 let triggers: Trigger[] = [];
 const listeners = new Set<() => void>();
 let isLoaded = false;
