@@ -36,6 +36,8 @@ import {
   layerAgents,
 } from './agents/layer.ts';
 import { Turns } from './agents/turns.ts';
+import { scheduleHandlers, scheduleRpcHandlers } from './schedule/handlers.ts';
+import { Scheduler } from './schedule/scheduler.ts';
 
 export interface ServerOptions {
   readonly port: number;
@@ -71,6 +73,7 @@ export const layerCore = (options: ServerOptions) =>
     Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
     Layer.provideMerge(layerAgents(options.userData)),
+    Layer.provideMerge(Scheduler.layer),
     Layer.provide(
       Layer.mergeAll(
         GitHub.layer.pipe(Layer.provide(GithubTransport.layer)),
@@ -111,7 +114,8 @@ type Services =
   | Projection
   | Commands
   | Metrics
-  | Terminals;
+  | Terminals
+  | Scheduler;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -265,6 +269,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const stored = storeHandlers(store, projection);
       const metrics = yield* Metrics;
       const terminals = yield* Terminals;
+      const scheduler = yield* Scheduler;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) =>
@@ -399,6 +404,8 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           after: number;
         }) => terminals.output(terminalId, threadId, after),
         ...host,
+        ...scheduleHandlers(scheduler),
+        ...scheduleRpcHandlers(scheduler),
         ...agentHandlers(windowId),
         ...agentRpcHandlers,
         ...stored,

@@ -21,14 +21,13 @@ import { ports } from './ports.ts';
 import { projects } from './projects.ts';
 import { pty } from './pty.ts';
 import { remote } from './remote.ts';
-import { schedule } from './schedule.ts';
 import { settings } from './settings.ts';
 import { sim } from './sim.ts';
 import { themes } from './themes.ts';
 import { usage } from './usage.ts';
 import { windows } from './windows.ts';
 
-// `agent` is served by Core (packages/core/src/agents/handlers.ts); main never gets those calls.
+// `agent` and `schedule` are served by Core (packages/core/src/{agents,schedule}); main never gets those calls.
 const handlers = {
   pty,
   git,
@@ -40,7 +39,6 @@ const handlers = {
   windows,
   settings,
   data,
-  schedule,
   themes,
   remote,
   account,
@@ -48,7 +46,7 @@ const handlers = {
   library,
   usage,
 } satisfies {
-  [K in Exclude<Namespace, 'agent'>]: Handlers<
+  [K in Exclude<Namespace, 'agent' | 'schedule'>]: Handlers<
     K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]
   >;
 };
@@ -114,7 +112,7 @@ export const mainCapabilities = {
       mainWindow()?.webContents;
     if (!sender) throw new Error(`No window to run ${method} for`);
     const [namespace, name] = method.split('.') as [
-      Exclude<Namespace, 'agent'>,
+      Exclude<Namespace, 'agent' | 'schedule'>,
       string,
     ];
     const result = await (handlers[namespace] as Record<string, Handler>)[

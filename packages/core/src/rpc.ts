@@ -8,6 +8,7 @@ import { AgentRpcs } from './agents/rpc.ts';
 import { DeviceRpcs } from './remote/rpc.ts';
 import { MetricsRpcs } from './metrics/schema.ts';
 import { TerminalRpcs } from './remote/terminals.ts';
+import { ScheduleRpcs } from './schedule/rpc.ts';
 
 // Here rather than in run.ts so a window's client imports no node built-ins.
 export class RunError extends Schema.TaggedError<RunError>()('RunError', {
@@ -140,4 +141,5 @@ export class CoreWsRpcs extends CoreRpcs.merge(
   DeviceRpcs,
   MetricsRpcs,
   TerminalRpcs,
+  ScheduleRpcs,
 ).middleware(ScopeAuthorization) {}

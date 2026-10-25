@@ -14,7 +14,7 @@ import {
 } from '../../../../src/runtime/live.ts';
 import type { Action, State } from '../../../../src/store/types.ts';
 import { agent } from '../agents/handlers.ts';
-import { Capabilities, hostHandlers } from '../hostServer.ts';
+import { removeSchedule } from '../schedule/scheduler.ts';
 import { Projection } from './projection.ts';
 import { Store } from './store.ts';
 
@@ -61,16 +61,7 @@ export class Commands extends Context.Service<Commands>()(
       const store = yield* Store;
       const projection = yield* Projection;
       const agents = yield* AgentCaller;
-      const host = hostHandlers(yield* Capabilities, undefined) as Record<
-        string,
-        (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, string>
-      >;
       const one = yield* Semaphore.make(1);
-      const logged = (source: string) => (error: unknown) =>
-        Effect.logWarning(
-          `${source}: ${error instanceof Error ? error.message : String(error)}`,
-        ).pipe(Effect.annotateLogs({ source: 'store' }));
-
       const failed = (threadId: string, error: unknown) => {
         const event: AgentEvent = {
           threadId,
@@ -125,10 +116,7 @@ export class Commands extends Context.Service<Commands>()(
                 ),
               );
             if (action.type === 'delete')
-              for (const id of action.threadIds)
-                yield* host['schedule.remove']!([id]).pipe(
-                  Effect.catch(logged('Removing the schedule failed')),
-                );
+              for (const id of action.threadIds) yield* removeSchedule(id);
             for (const call of calls)
               yield* agents
                 .call(call)

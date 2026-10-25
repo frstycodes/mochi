@@ -12,14 +12,14 @@ const iso = (at: number | null) =>
 
 test('parses lists, ranges, steps and names, and rejects bad fields', () => {
   const c = parseCron('*/15 9-17/4 1,15 jan-mar mon-fri');
-  assert.deepEqual(c.minutes, [0, 15, 30, 45]);
-  assert.deepEqual(c.hours, [9, 13, 17]);
+  assert.deepEqual([...c.minutes], [0, 15, 30, 45]);
+  assert.deepEqual([...c.hours], [9, 13, 17]);
   assert.deepEqual([...c.months], [1, 2, 3]);
   assert.deepEqual([...c.weekdays], [1, 2, 3, 4, 5]);
   assert.deepEqual([...parseCron('0 0 * * 7').weekdays], [0]);
   assert.throws(() => parseCron('0 0 * *'), /five fields/);
   assert.throws(() => parseCron('60 0 * * *'), /minute/);
-  assert.throws(() => parseCron('0 5-2 * * *'), /backwards/);
+  assert.throws(() => parseCron('0 5-2 * * *'), /hour.*range/);
   assert.throws(() => parseCron('*/0 * * * *'), /step/);
 });
 
