@@ -67,6 +67,10 @@ export const isDomainChange = (before: Domain, after: Domain) =>
 export const COMMAND_TYPE = 'command';
 export const AGENT_PREFIX = 'agent.';
 
+/** Core's RPC takes only JSON values, so an unset optional (`undefined`) fails the whole call: drop it as JSON would. */
+export const asJsonValue = (value: unknown): unknown =>
+  value === undefined ? null : JSON.parse(JSON.stringify(value));
+
 /** The action a logged event folds as; undefined for one the projection doesn't fold (a save, a project list). */
 export function actionOf(event: LoggedEvent): Action | undefined {
   if (event.type === COMMAND_TYPE) return event.payload as Action;

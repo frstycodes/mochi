@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
+import { Schema } from 'effect';
 import { test } from 'vite-plus/test';
 import { setAmbientPrefs } from '../../../apps/desktop/src/store/context.ts';
-import { actionOf, COMMAND_TYPE, domainFrom, project } from './index.ts';
+import {
+  actionOf,
+  asJsonValue,
+  COMMAND_TYPE,
+  domainFrom,
+  project,
+} from './index.ts';
 
 const DOMAIN_SRC = join(import.meta.dirname);
 
@@ -125,4 +132,16 @@ test('logged events fold as actions: commands as sent, agent events with the tim
     actionOf({ sequence: 3, type: 'thread.saved', threadId: 't', payload: {} }),
     undefined,
   );
+});
+
+test('asJsonValue turns an action with unset optionals into a JSON value Core accepts', () => {
+  const action = {
+    type: 'start',
+    model: undefined,
+    steps: [{ note: undefined }],
+  };
+  assert.equal(Schema.is(Schema.Json)(action), false);
+  assert.equal(Schema.is(Schema.Json)(asJsonValue(action)), true);
+  assert.deepEqual(asJsonValue(action), { type: 'start', steps: [{}] });
+  assert.equal(asJsonValue(undefined), null);
 });

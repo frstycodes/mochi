@@ -1,6 +1,7 @@
 import { Effect, Stream } from 'effect';
 import {
   AGENT_PREFIX,
+  asJsonValue,
   COMMAND_TYPE,
   type LoggedEvent,
   type ReplicaItem,
@@ -32,7 +33,7 @@ export function coreLog(): ReplicaLog {
         (await coreClient())['events.append']({
           type: COMMAND_TYPE,
           threadId,
-          payload: action,
+          payload: asJsonValue(action),
           commandId,
         }),
       ),
