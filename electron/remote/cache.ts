@@ -1,4 +1,10 @@
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { isWeakStorage, type KeyStorage } from './crypto/keys.ts';
 
@@ -11,7 +17,11 @@ export class MachineCache {
   private readonly storage: KeyStorage;
   private readonly platform: NodeJS.Platform;
 
-  constructor(userData: string, storage: KeyStorage, platform: NodeJS.Platform = process.platform) {
+  constructor(
+    userData: string,
+    storage: KeyStorage,
+    platform: NodeJS.Platform = process.platform,
+  ) {
     this.dir = join(userData, 'machine-cache');
     this.storage = storage;
     this.platform = platform;
@@ -37,7 +47,9 @@ export class MachineCache {
   write(machineId: string, saved: string) {
     if (isWeakStorage(this.storage, this.platform)) return;
     mkdirSync(this.dir, { recursive: true });
-    writeFileSync(this.file(machineId), this.storage.encryptString(saved), { mode: 0o600 });
+    writeFileSync(this.file(machineId), this.storage.encryptString(saved), {
+      mode: 0o600,
+    });
   }
 
   remove(machineId: string) {
@@ -46,7 +58,8 @@ export class MachineCache {
 
   private file(machineId: string) {
     // Ids are the machine's own; one with a path in it never reaches the disk.
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(machineId)) throw new Error('Bad machine id');
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(machineId))
+      throw new Error('Bad machine id');
     return join(this.dir, machineId);
   }
 }

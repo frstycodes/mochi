@@ -1,9 +1,28 @@
 import sodium from 'libsodium-wrappers';
-import type { DeviceKind, Scope } from '../../src/host/types/remote.ts';
-import { asKind, THIS_KIND } from './protocol.ts';
-import { createHandshake, E2EError, type Session } from './crypto/session.ts';
-import type { DeviceKeys } from './crypto/keys.ts';
-import type { Link, RawLink } from './link.ts';
+import type { Link, RawLink } from '@mochi/core/remote/link';
+import {
+  createHandshake,
+  E2EError,
+  type DeviceKeys,
+  type Session,
+} from '@mochi/core/remote/session';
+import {
+  DEVICE_KINDS,
+  type DeviceKind,
+  type Scope,
+} from '../../src/host/types/remote.ts';
+
+/** This computer's kind, from its OS. */
+export const THIS_KIND: DeviceKind =
+  process.platform === 'darwin'
+    ? 'mac'
+    : process.platform === 'win32'
+      ? 'windows'
+      : 'linux';
+
+/** A kind from the other side, or undefined for one this version doesn't know. */
+export const asKind = (value: unknown): DeviceKind | undefined =>
+  DEVICE_KINDS.includes(value as never) ? (value as DeviceKind) : undefined;
 
 /**
  * Every connection opens with one pairing exchange, then carries only ciphertext (DEVICES.md › End-to-end encryption):
@@ -48,18 +67,33 @@ export interface MachineSide {
   /** "Let <name> join?" on this machine's screen, showing `code`; false on No or after `APPROVAL_TIMEOUT_MS`. */
   approve(request: { name: string; code: string }): Promise<boolean>;
   /** Vouches for the device as a member, and has the record reach the relay before the device hears it was allowed. */
-  add(device: { id: string; name: string; kind?: DeviceKind; publicKey: string }): Promise<PairedDevice | undefined>;
+  add(device: {
+    id: string;
+    name: string;
+    kind?: DeviceKind;
+    publicKey: string;
+  }): Promise<PairedDevice | undefined>;
 }
 
-export type Secured = { link: Link; device: AuthenticatedDevice } | { refusal: string };
+export type Secured =
+  | { link: Link; device: AuthenticatedDevice }
+  | { refusal: string };
 
 /** This machine's side of a connection's first exchange. A refusal is sent to the device before the caller closes the link. */
-export async function secureAsMachine(raw: RawLink, origin: Origin, side: MachineSide): Promise<Secured> {
+export async function secureAsMachine(
+  raw: RawLink,
+  origin: Origin,
+  side: MachineSide,
+): Promise<Secured> {
   await sodium.ready;
   const frame = await firstFrame(raw, PAIR_TIMEOUT_MS);
   const pair = frame && parsePair(frame);
   if (!pair) return refuse(raw, 'The first frame must be a pairing request');
-  if (pair.version !== PAIRING_VERSION) return refuse(raw, `This computer pairs with version ${PAIRING_VERSION}; update Mochi on both`);
+  if (pair.version !== PAIRING_VERSION)
+    return refuse(
+      raw,
+      `This computer pairs with version ${PAIRING_VERSION}; update Mochi on both`,
+    );
   const id = deviceId(pair.publicKey);
   const handshake = await createHandshake(side.keys, pair.publicKey, 'machine');
   let session: Session;
@@ -71,20 +105,49 @@ export async function secureAsMachine(raw: RawLink, origin: Origin, side: Machin
   }
   let device = side.find(id);
   // Another computer of yours may have let it join since this one last heard.
-  if (!device && origin === 'relay') device = await side.refresh().then(() => side.find(id), () => undefined);
+  if (!device && origin === 'relay')
+    device = await side.refresh().then(
+      () => side.find(id),
+      () => undefined,
+    );
   if (!device) {
     // On the LAN nothing vouches that the device is yours; through the relay it is signed in to your account.
-    if (origin === 'lan') return refuse(raw, 'Join your computers through your Mochi account first');
+    if (origin === 'lan')
+      return refuse(
+        raw,
+        'Join your computers through your Mochi account first',
+      );
     // Reconnecting on its own after being removed here: nobody at that device asked, so nobody here is asked either.
-    if (pair.isReturning) return refuse(raw, 'That computer doesn’t trust this one; join again');
-    const isAllowed = await side.approve({ name: pair.name, code: pairingCode(side.keys.publicKey, pair.publicKey) });
+    if (pair.isReturning)
+      return refuse(raw, 'That computer doesn’t trust this one; join again');
+    const isAllowed = await side.approve({
+      name: pair.name,
+      code: pairingCode(side.keys.publicKey, pair.publicKey),
+    });
     if (!isAllowed) return refuse(raw, 'That computer didn’t allow this one');
     if (!raw.isOpen()) return { refusal: 'The device left' };
-    device = await side.add({ id, name: pair.name, kind: pair.kind, publicKey: sodium.to_base64(pair.publicKey, sodium.base64_variants.ORIGINAL) });
-    if (!device) return refuse(raw, 'This computer couldn’t vouch for that one');
+    device = await side.add({
+      id,
+      name: pair.name,
+      kind: pair.kind,
+      publicKey: sodium.to_base64(
+        pair.publicKey,
+        sodium.base64_variants.ORIGINAL,
+      ),
+    });
+    if (!device)
+      return refuse(raw, 'This computer couldn’t vouch for that one');
   }
   sendJson(raw, { type: 'paired', hello: b64(handshake.hello) });
-  return { link: encrypted(raw, session), device: { deviceId: device.id, name: device.name, kind: pair.kind, scopes: device.scopes } };
+  return {
+    link: encrypted(raw, session),
+    device: {
+      deviceId: device.id,
+      name: device.name,
+      kind: pair.kind,
+      scopes: device.scopes,
+    },
+  };
 }
 
 /**
@@ -92,20 +155,48 @@ export async function secureAsMachine(raw: RawLink, origin: Origin, side: Machin
  * reason, as a `PairingRefused` when the machine said no. `isReturning`: following a machine it already paired with, so an
  * unknown key is refused instead of asking that machine's user again.
  */
-export async function secureAsDevice(raw: RawLink, keys: DeviceKeys, machinePublicKey: Uint8Array, name: string, isReturning = false): Promise<Link> {
+export async function secureAsDevice(
+  raw: RawLink,
+  keys: DeviceKeys,
+  machinePublicKey: Uint8Array,
+  name: string,
+  isReturning = false,
+): Promise<Link> {
   await sodium.ready;
   const handshake = await createHandshake(keys, machinePublicKey, 'device');
-  sendJson(raw, { type: 'pair', version: PAIRING_VERSION, name, kind: THIS_KIND, publicKey: b64(keys.publicKey), hello: b64(handshake.hello), ...(isReturning && { isReturning }) });
-  const frame = await firstFrame(raw, (isReturning ? 0 : APPROVAL_TIMEOUT_MS) + PAIR_TIMEOUT_MS);
+  sendJson(raw, {
+    type: 'pair',
+    version: PAIRING_VERSION,
+    name,
+    kind: THIS_KIND,
+    publicKey: b64(keys.publicKey),
+    hello: b64(handshake.hello),
+    ...(isReturning && { isReturning }),
+  });
+  const frame = await firstFrame(
+    raw,
+    (isReturning ? 0 : APPROVAL_TIMEOUT_MS) + PAIR_TIMEOUT_MS,
+  );
   const reply = frame && parseJson(frame);
-  if (reply?.type === 'refused') throw new PairingRefused(typeof reply.reason === 'string' ? reply.reason : 'Refused');
+  if (reply?.type === 'refused')
+    throw new PairingRefused(
+      typeof reply.reason === 'string' ? reply.reason : 'Refused',
+    );
   const hello = typeof reply?.hello === 'string' ? fromB64(reply.hello) : null;
-  if (reply?.type !== 'paired' || !hello) throw new Error(frame ? 'The computer answered something unexpected' : 'The computer didn’t answer');
+  if (reply?.type !== 'paired' || !hello)
+    throw new Error(
+      frame
+        ? 'The computer answered something unexpected'
+        : 'The computer didn’t answer',
+    );
   try {
     return encrypted(raw, handshake.finish(hello));
   } catch (error) {
     // The key the relay listed isn't the one answering: a stale listing, or someone in between.
-    if (error instanceof E2EError) throw new PairingRefused('That computer’s key doesn’t match; pair again from its current listing');
+    if (error instanceof E2EError)
+      throw new PairingRefused(
+        'That computer’s key doesn’t match; pair again from its current listing',
+      );
     throw error;
   }
 }
@@ -117,16 +208,28 @@ export class PairingRefused extends Error {}
  * Six digits both screens show while pairing. Derived from both public keys, so a relay that swapped either key would make
  * them differ; comparing them is what makes trusting the relay's machine list safe.
  */
-export function pairingCode(machinePublicKey: Uint8Array, devicePublicKey: Uint8Array): string {
-  const hash = sodium.crypto_generichash(8, new Uint8Array([...machinePublicKey, ...devicePublicKey]), null);
-  const n = Number(new DataView(hash.buffer, hash.byteOffset).getBigUint64(0) % 1_000_000n);
+export function pairingCode(
+  machinePublicKey: Uint8Array,
+  devicePublicKey: Uint8Array,
+): string {
+  const hash = sodium.crypto_generichash(
+    8,
+    new Uint8Array([...machinePublicKey, ...devicePublicKey]),
+    null,
+  );
+  const n = Number(
+    new DataView(hash.buffer, hash.byteOffset).getBigUint64(0) % 1_000_000n,
+  );
   const digits = String(n).padStart(6, '0');
   return `${digits.slice(0, 3)} ${digits.slice(3)}`;
 }
 
 /** A key's short, URL-safe id: what the relay and the device list call it. Derived, so a device can't pick another's id. */
 export function deviceId(publicKey: Uint8Array): string {
-  return sodium.to_base64(sodium.crypto_generichash(12, publicKey, null), sodium.base64_variants.URLSAFE_NO_PADDING);
+  return sodium.to_base64(
+    sodium.crypto_generichash(12, publicKey, null),
+    sodium.base64_variants.URLSAFE_NO_PADDING,
+  );
 }
 
 /**
@@ -143,7 +246,13 @@ function encrypted(raw: RawLink, session: Session): Link {
       const bytes = sodium.from_string(text);
       for (let at = 0; at < bytes.length; at += MAX_PIECE_BYTES) {
         const piece = bytes.subarray(at, at + MAX_PIECE_BYTES);
-        raw.send(session.encrypt(at + MAX_PIECE_BYTES < bytes.length ? concatBytes([MORE, piece]) : piece));
+        raw.send(
+          session.encrypt(
+            at + MAX_PIECE_BYTES < bytes.length
+              ? concatBytes([MORE, piece])
+              : piece,
+          ),
+        );
       }
     },
     close: (code, reason) => raw.close(code, reason),
@@ -157,7 +266,8 @@ function encrypted(raw: RawLink, session: Session): Link {
         }
         const isMore = plain[0] === 0;
         held += plain.length;
-        if (held > MAX_MESSAGE_BYTES) return raw.close(4413, 'Message too large');
+        if (held > MAX_MESSAGE_BYTES)
+          return raw.close(4413, 'Message too large');
         pieces.push(isMore ? plain.subarray(1) : plain);
         if (isMore) return;
         const message = pieces.length === 1 ? pieces[0] : concatBytes(pieces);
@@ -175,20 +285,42 @@ export const MAX_PIECE_BYTES = 512 * 1024;
 /** Past this a peer is sending garbage, not a snapshot. */
 const MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
 const MORE = new Uint8Array([0]);
-const concatBytes = (parts: Uint8Array[]) => new Uint8Array(Buffer.concat(parts));
+const concatBytes = (parts: Uint8Array[]) =>
+  new Uint8Array(Buffer.concat(parts));
 
 function parsePair(bytes: Uint8Array) {
   const frame = parseJson(bytes);
-  if (frame?.type !== 'pair' || typeof frame.name !== 'string' || typeof frame.publicKey !== 'string' || typeof frame.hello !== 'string') return null;
+  if (
+    frame?.type !== 'pair' ||
+    typeof frame.name !== 'string' ||
+    typeof frame.publicKey !== 'string' ||
+    typeof frame.hello !== 'string'
+  )
+    return null;
   const name = frame.name.trim().slice(0, MAX_NAME);
   const publicKey = fromB64(frame.publicKey);
   const hello = fromB64(frame.hello);
-  if (!name || publicKey?.length !== sodium.crypto_sign_PUBLICKEYBYTES || !hello) return null;
-  return { version: frame.version, name, kind: asKind(frame.kind), publicKey, hello, isReturning: frame.isReturning === true };
+  if (
+    !name ||
+    publicKey?.length !== sodium.crypto_sign_PUBLICKEYBYTES ||
+    !hello
+  )
+    return null;
+  return {
+    version: frame.version,
+    name,
+    kind: asKind(frame.kind),
+    publicKey,
+    hello,
+    isReturning: frame.isReturning === true,
+  };
 }
 
 /** The first frame, or null when the link closed or `timeoutMs` passed. Later frames are the encrypted link's to read. */
-function firstFrame(raw: RawLink, timeoutMs: number): Promise<Uint8Array | null> {
+function firstFrame(
+  raw: RawLink,
+  timeoutMs: number,
+): Promise<Uint8Array | null> {
   return new Promise((resolve) => {
     let isDone = false;
     const done = (value: Uint8Array | null) => {
@@ -212,8 +344,10 @@ function refuse(raw: RawLink, reason: string): Secured {
   return { refusal: reason };
 }
 
-const sendJson = (raw: RawLink, frame: object) => raw.isOpen() && raw.send(sodium.from_string(JSON.stringify(frame)));
-const b64 = (bytes: Uint8Array) => sodium.to_base64(bytes, sodium.base64_variants.ORIGINAL);
+const sendJson = (raw: RawLink, frame: object) =>
+  raw.isOpen() && raw.send(sodium.from_string(JSON.stringify(frame)));
+const b64 = (bytes: Uint8Array) =>
+  sodium.to_base64(bytes, sodium.base64_variants.ORIGINAL);
 
 function fromB64(text: string): Uint8Array | null {
   try {
@@ -226,7 +360,9 @@ function fromB64(text: string): Uint8Array | null {
 function parseJson(bytes: Uint8Array): Record<string, unknown> | null {
   try {
     const value: unknown = JSON.parse(sodium.to_string(bytes));
-    return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }

@@ -4,7 +4,10 @@ let channel: BroadcastChannel | null | undefined;
 
 // Tabs of the same origin talk over one channel, opened on first use (an open channel keeps Node's test runner alive). Without the API each tab stands alone.
 function tabs() {
-  channel ??= typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('harness.windows');
+  channel ??=
+    typeof BroadcastChannel === 'undefined'
+      ? null
+      : new BroadcastChannel('harness.windows');
   return channel;
 }
 

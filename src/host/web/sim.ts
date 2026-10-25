@@ -1,15 +1,43 @@
-import type { SimAppearance, SimContentSize, SimFrame, SimHost, SimLogLine, Simulator } from '../types/sim.ts';
+import type {
+  SimAppearance,
+  SimContentSize,
+  SimFrame,
+  SimHost,
+  SimLogLine,
+  Simulator,
+} from '../types/sim.ts';
 
 const devices: Simulator[] = [
-  { udid: 'A1B2C3D4-0000-4000-8000-000000000001', name: 'iPhone 17 Pro', runtime: 'iOS 26.2', state: 'Booted', family: 'iphone' },
-  { udid: 'A1B2C3D4-0000-4000-8000-000000000003', name: 'iPhone 17 Pro Max', runtime: 'iOS 26.2', state: 'Shutdown', family: 'iphone' },
-  { udid: 'A1B2C3D4-0000-4000-8000-000000000002', name: 'iPad Air 13-inch (M3)', runtime: 'iOS 26.2', state: 'Shutdown', family: 'ipad' },
+  {
+    udid: 'A1B2C3D4-0000-4000-8000-000000000001',
+    name: 'iPhone 17 Pro',
+    runtime: 'iOS 26.2',
+    state: 'Booted',
+    family: 'iphone',
+  },
+  {
+    udid: 'A1B2C3D4-0000-4000-8000-000000000003',
+    name: 'iPhone 17 Pro Max',
+    runtime: 'iOS 26.2',
+    state: 'Shutdown',
+    family: 'iphone',
+  },
+  {
+    udid: 'A1B2C3D4-0000-4000-8000-000000000002',
+    name: 'iPad Air 13-inch (M3)',
+    runtime: 'iOS 26.2',
+    state: 'Shutdown',
+    family: 'ipad',
+  },
 ];
 const appearances = new Map<string, SimAppearance>();
 const contentSizes = new Map<string, SimContentSize>();
 const frameListeners = new Set<(frame: SimFrame) => void>();
 const logListeners = new Set<(line: SimLogLine) => void>();
-const SIZE = { iphone: { width: 1206, height: 2622 }, ipad: { width: 2064, height: 2752 } };
+const SIZE = {
+  iphone: { width: 1206, height: 2622 },
+  ipad: { width: 2064, height: 2752 },
+};
 
 // Every call resolves like the desktop host, so the tab renders a believable device in the web build.
 export const sim: SimHost = {
@@ -58,7 +86,11 @@ export const sim: SimHost = {
     return '/tmp/simulator-recording.mp4';
   },
   async buildAndRun(udid) {
-    for (const text of ['$ xcodebuild -scheme App build', 'web preview: no Xcode here', '** BUILD SUCCEEDED **']) {
+    for (const text of [
+      '$ xcodebuild -scheme App build',
+      'web preview: no Xcode here',
+      '** BUILD SUCCEEDED **',
+    ]) {
       logListeners.forEach((l) => l({ udid, text }));
       await new Promise((resolve) => setTimeout(resolve, 600));
     }
@@ -82,8 +114,12 @@ function setState(udid: string, state: Simulator['state']) {
 
 function emitFrame(udid: string) {
   const { width, height } = SIZE[device(udid).family];
-  const data = new TextEncoder().encode(mockScreen(width, height, appearances.get(udid) ?? 'light'));
-  frameListeners.forEach((listener) => listener({ udid, data, mime: 'image/svg+xml' }));
+  const data = new TextEncoder().encode(
+    mockScreen(width, height, appearances.get(udid) ?? 'light'),
+  );
+  frameListeners.forEach((listener) =>
+    listener({ udid, data, mime: 'image/svg+xml' }),
+  );
 }
 
 /** A home screen sketch: wallpaper, a 4-column icon grid and a dock. */

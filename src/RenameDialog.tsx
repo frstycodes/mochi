@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import type { Thread } from './model';
 import { endRename, titleToSave, useDialogRename } from './rename';
@@ -32,7 +38,14 @@ function RenameDialog({ thread }: { thread: Thread }) {
           <DialogHeader>
             <DialogTitle>Rename thread</DialogTitle>
           </DialogHeader>
-          <Input autoFocus value={text} maxLength={120} aria-label="Thread title" onChange={(e) => setText(e.target.value)} onFocus={(e) => e.currentTarget.select()} />
+          <Input
+            autoFocus
+            value={text}
+            maxLength={120}
+            aria-label="Thread title"
+            onChange={(e) => setText(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+          />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={endRename}>
               Cancel

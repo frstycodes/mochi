@@ -19,11 +19,24 @@ export function groupThemes(installed: ColorTheme[]) {
     if (source.kind === 'custom') custom.push(theme);
     if (source.kind !== 'marketplace') continue;
     const id = `${source.namespace}.${source.name}`;
-    const group = packages.get(id) ?? { id, namespace: source.namespace, name: source.name, displayName: source.displayName, publisher: source.publisher, version: source.version, themes: [] };
+    const group = packages.get(id) ?? {
+      id,
+      namespace: source.namespace,
+      name: source.name,
+      displayName: source.displayName,
+      publisher: source.publisher,
+      version: source.version,
+      themes: [],
+    };
     group.themes.push(theme);
     packages.set(id, group);
   }
-  return { packages: [...packages.values()].sort((a, b) => a.displayName.localeCompare(b.displayName)), custom };
+  return {
+    packages: [...packages.values()].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName),
+    ),
+    custom,
+  };
 }
 
 /**
@@ -34,7 +47,10 @@ export function filterPackages(packages: PackageGroup[], query: string) {
   const q = query.trim().toLowerCase();
   const matches = (text: string) => text.toLowerCase().includes(q);
   return packages.flatMap((group) => {
-    const themes = !q || matches(group.displayName) ? group.themes : group.themes.filter((t) => matches(t.label));
+    const themes =
+      !q || matches(group.displayName)
+        ? group.themes
+        : group.themes.filter((t) => matches(t.label));
     return themes.length ? [{ group, themes }] : [];
   });
 }
@@ -42,10 +58,18 @@ export function filterPackages(packages: PackageGroup[], query: string) {
 /** The starred themes that are installed, in the order you starred them, and every other theme in its own order. */
 export function splitStarred(themes: ColorTheme[], starred: string[]) {
   const byId = new Map(themes.map((t) => [t.id, t]));
-  return { starred: starred.flatMap((id) => byId.get(id) ?? []), rest: themes.filter((t) => !starred.includes(t.id)) };
+  return {
+    starred: starred.flatMap((id) => byId.get(id) ?? []),
+    rest: themes.filter((t) => !starred.includes(t.id)),
+  };
 }
 
 /** The slots whose chosen theme is one of `themes`, so removing them can hand those slots back to Mochi. */
-export function slotsUsing(themes: ColorTheme[], chosen: Record<`${ThemeSlot}Theme`, string>) {
-  return themes.filter((t) => chosen[`${slotOf(t.kind)}Theme`] === t.id).map((t) => slotOf(t.kind));
+export function slotsUsing(
+  themes: ColorTheme[],
+  chosen: Record<`${ThemeSlot}Theme`, string>,
+) {
+  return themes
+    .filter((t) => chosen[`${slotOf(t.kind)}Theme`] === t.id)
+    .map((t) => slotOf(t.kind));
 }

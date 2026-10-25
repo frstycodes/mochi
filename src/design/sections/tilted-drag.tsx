@@ -1,6 +1,15 @@
-import { Fragment, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  Fragment,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { motion } from 'motion/react';
-import { SidebarMenu, SidebarMenuItem, SidebarProvider } from '@/components/ui/sidebar';
+import {
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarProvider,
+} from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../../model';
 import { dropAt, type DropAt } from '../../reorder';
@@ -26,7 +35,14 @@ export function TiltedDragBlock({ rl }: { rl: Thread }) {
   );
 }
 
-const TITLES = ['Public API rate limiting', 'Onboarding checklist copy', 'Flaky e2e on CI', 'Dark mode chart colors', 'Migrate auth to sessions', 'Weekly digest email'];
+const TITLES = [
+  'Public API rate limiting',
+  'Onboarding checklist copy',
+  'Flaky e2e on CI',
+  'Dark mode chart colors',
+  'Migrate auth to sessions',
+  'Weekly digest email',
+];
 
 interface Row {
   id: string;
@@ -45,7 +61,11 @@ interface Drag {
 }
 
 function DragList({ threads }: { threads: Thread[] }) {
-  const [rows, setRows] = useState<Row[]>(() => threads.map((t, i) => (i === 1 ? { id: t.id, parentId: threads[0].id } : { id: t.id })));
+  const [rows, setRows] = useState<Row[]>(() =>
+    threads.map((t, i) =>
+      i === 1 ? { id: t.id, parentId: threads[0].id } : { id: t.id },
+    ),
+  );
   const [drag, setDrag] = useState<Drag | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const byId = new Map(threads.map((t) => [t.id, t]));
@@ -58,15 +78,35 @@ function DragList({ threads }: { threads: Thread[] }) {
     const canNest = (parentId: string) => !hasSubs && parentId !== row.id;
     let current: Drag | null = null;
     const onMove = (ev: PointerEvent) => {
-      if (!current && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD) return;
-      const at = slotFor(listRef.current, row, ev.clientY, ev.clientX - start.x >= NEST_INDENT_PX, canNest);
-      current = { id: row.id, x: ev.clientX - (start.x - rect.left), y: ev.clientY - (start.y - rect.top), grabX: start.x - rect.left, grabY: start.y - rect.top, width: rect.width, height: rect.height, at };
+      if (
+        !current &&
+        Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD
+      )
+        return;
+      const at = slotFor(
+        listRef.current,
+        row,
+        ev.clientY,
+        ev.clientX - start.x >= NEST_INDENT_PX,
+        canNest,
+      );
+      current = {
+        id: row.id,
+        x: ev.clientX - (start.x - rect.left),
+        y: ev.clientY - (start.y - rect.top),
+        grabX: start.x - rect.left,
+        grabY: start.y - rect.top,
+        width: rect.width,
+        height: rect.height,
+        at,
+      };
       setDrag(current);
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      if (current?.at?.slot) setRows((all) => dropRow(all, row.id, current!.at!));
+      if (current?.at?.slot)
+        setRows((all) => dropRow(all, row.id, current!.at!));
       setDrag(null);
     };
     window.addEventListener('pointermove', onMove);
@@ -75,9 +115,27 @@ function DragList({ threads }: { threads: Thread[] }) {
 
   const tops = rows.filter((r) => !r.parentId && r.id !== drag?.id);
   const item = (row: Row) => (
-    <SidebarMenuItem key={row.id} asChild data-row-id={row.id} data-sub-of={row.parentId} onPointerDown={(e: ReactPointerEvent<HTMLLIElement>) => onPointerDown(e, row)} className={cn('select-none', row.parentId && 'pl-[27px]')}>
-      <motion.li layout="position" layoutId={`tilted-row-${row.id}`} transition={SLIDE}>
-        <ThreadItem thread={byId.get(row.id)!} isSub={!!row.parentId} isActive={false} onSelect={() => undefined} />
+    <SidebarMenuItem
+      key={row.id}
+      asChild
+      data-row-id={row.id}
+      data-sub-of={row.parentId}
+      onPointerDown={(e: ReactPointerEvent<HTMLLIElement>) =>
+        onPointerDown(e, row)
+      }
+      className={cn('select-none', row.parentId && 'pl-[27px]')}
+    >
+      <motion.li
+        layout="position"
+        layoutId={`tilted-row-${row.id}`}
+        transition={SLIDE}
+      >
+        <ThreadItem
+          thread={byId.get(row.id)!}
+          isSub={!!row.parentId}
+          isActive={false}
+          onSelect={() => undefined}
+        />
       </motion.li>
     </SidebarMenuItem>
   );
@@ -88,7 +146,17 @@ function DragList({ threads }: { threads: Thread[] }) {
     </Fragment>
   ));
   const slot = drag?.at?.slot;
-  if (slot) items.splice(slot.index, 0, <DropLine key="line" height={drag.height} isNested={!!drag.at!.nestUnder} glide={{ layout: 'position', transition: SLIDE }} />);
+  if (slot)
+    items.splice(
+      slot.index,
+      0,
+      <DropLine
+        key="line"
+        height={drag.height}
+        isNested={!!drag.at!.nestUnder}
+        glide={{ layout: 'position', transition: SLIDE }}
+      />,
+    );
 
   const dragged = drag && byId.get(drag.id);
   return (
@@ -98,10 +166,22 @@ function DragList({ threads }: { threads: Thread[] }) {
           {items}
         </SidebarMenu>
         {!!drag && !!dragged && (
-          <DragGhost x={drag.x} y={drag.y} width={drag.width} grabX={drag.grabX} grabY={drag.grabY} layoutId={`tilted-row-${drag.id}`} className="rounded-md bg-sidebar text-sidebar-foreground">
+          <DragGhost
+            x={drag.x}
+            y={drag.y}
+            width={drag.width}
+            grabX={drag.grabX}
+            grabY={drag.grabY}
+            layoutId={`tilted-row-${drag.id}`}
+            className="rounded-md bg-sidebar text-sidebar-foreground"
+          >
             <ul data-sidebar="menu" className="list-none">
               <SidebarMenuItem>
-                <ThreadItem thread={dragged} isActive={false} onSelect={() => undefined} />
+                <ThreadItem
+                  thread={dragged}
+                  isActive={false}
+                  onSelect={() => undefined}
+                />
               </SidebarMenuItem>
             </ul>
           </DragGhost>
@@ -112,10 +192,32 @@ function DragList({ threads }: { threads: Thread[] }) {
 }
 
 /** The real sidebar rule on the mock's rows, one section (no Pinned). */
-function slotFor(list: HTMLUListElement | null, row: Row, y: number, isIndented: boolean, canNest: (parentId: string) => boolean) {
+function slotFor(
+  list: HTMLUListElement | null,
+  row: Row,
+  y: number,
+  isIndented: boolean,
+  canNest: (parentId: string) => boolean,
+) {
   if (!list) return null;
-  const boxes = [...list.querySelectorAll<HTMLElement>('[data-row-id]')].map((el) => ({ id: el.dataset.rowId!, top: el.offsetTop, height: el.offsetHeight, isPinned: false, ...(el.dataset.subOf && { parentId: el.dataset.subOf }) }));
-  return dropAt(boxes, -1, { id: row.id, ...(row.parentId && { parentId: row.parentId }) }, y - list.getBoundingClientRect().top, isIndented, false, canNest);
+  const boxes = [...list.querySelectorAll<HTMLElement>('[data-row-id]')].map(
+    (el) => ({
+      id: el.dataset.rowId!,
+      top: el.offsetTop,
+      height: el.offsetHeight,
+      isPinned: false,
+      ...(el.dataset.subOf && { parentId: el.dataset.subOf }),
+    }),
+  );
+  return dropAt(
+    boxes,
+    -1,
+    { id: row.id, ...(row.parentId && { parentId: row.parentId }) },
+    y - list.getBoundingClientRect().top,
+    isIndented,
+    false,
+    canNest,
+  );
 }
 
 function dropRow(rows: Row[], id: string, at: DropAt) {

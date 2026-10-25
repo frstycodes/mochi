@@ -16,7 +16,9 @@ import { TONE_TEXT, useOpenThread } from './SubThreads';
  */
 export function SubThreadList({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const subs = subThreadsOf(state.threads, thread.id).filter((t) => t.status !== 'settled');
+  const subs = subThreadsOf(state.threads, thread.id).filter(
+    (t) => t.status !== 'settled',
+  );
   if (!subs.length) return null;
   return (
     <div className="flex flex-col gap-1">
@@ -39,7 +41,9 @@ function SubThreadCount({ subs }: { subs: Thread[] }) {
       <DiagramTree aria-hidden className="size-3.5 shrink-0" />
       <span className="tabular">{`${subs.length} sub-threads`}</span>
       {working > 0 && <span className="tabular">{`· ${working} working`}</span>}
-      {asks > 0 && <span className="tabular text-warning">{`· ${asks} ${ASKS.select(asks) === 'one' ? 'needs' : 'need'} you`}</span>}
+      {asks > 0 && (
+        <span className="tabular text-warning">{`· ${asks} ${ASKS.select(asks) === 'one' ? 'needs' : 'need'} you`}</span>
+      )}
     </p>
   );
 }
@@ -54,16 +58,37 @@ function SubThreadRow({ sub }: { sub: Thread }) {
   return (
     <ThreadPeek thread={sub} isDisabled={false} side="top">
       <li className="relative isolate flex min-w-0 flex-col gap-0.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
-        <button type="button" aria-label={`Open ${sub.title}`} onClick={() => open(sub)} className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2" />
+        <button
+          type="button"
+          aria-label={`Open ${sub.title}`}
+          onClick={() => open(sub)}
+          className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2"
+        />
         <span className="flex min-w-0 items-center gap-2 type-meta">
-          <span className={cn('min-w-0 flex-1 truncate', row.isUnread ? 'text-foreground' : 'text-foreground/80')}>{sub.title}</span>
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate',
+              row.isUnread ? 'text-foreground' : 'text-foreground/80',
+            )}
+          >
+            {sub.title}
+          </span>
           <ThreadStatusDot row={row} />
         </span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
           {row.isWorking ? (
-            <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer>
+            <Shimmer as="span" className="min-w-0 flex-1 truncate">
+              {row.detail}
+            </Shimmer>
           ) : (
-            <span className={cn('min-w-0 flex-1 truncate', asks && TONE_TEXT[row.tone!])}>{sub.parent?.handedBackAt ? 'Handed back' : row.detail}</span>
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate',
+                asks && TONE_TEXT[row.tone!],
+              )}
+            >
+              {sub.parent?.handedBackAt ? 'Handed back' : row.detail}
+            </span>
           )}
           {/* Above the row's open button, so its PR card opens on hover and its links take the click. */}
           <span className="relative z-10 flex">

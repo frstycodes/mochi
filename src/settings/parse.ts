@@ -5,10 +5,15 @@ export function parseVersion(stdout: string): string | null {
   return stdout.match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? null;
 }
 
-export function isNewerVersion(latest: string | null, installed: string | null): boolean {
+export function isNewerVersion(
+  latest: string | null,
+  installed: string | null,
+): boolean {
   if (!latest || !installed) return false;
   const a = latest.match(/^(\d+)\.(\d+)\.(\d+)(?:-([\w.-]+))?(?:\+[\w.-]+)?$/);
-  const b = installed.match(/^(\d+)\.(\d+)\.(\d+)(?:-([\w.-]+))?(?:\+[\w.-]+)?$/);
+  const b = installed.match(
+    /^(\d+)\.(\d+)\.(\d+)(?:-([\w.-]+))?(?:\+[\w.-]+)?$/,
+  );
   if (!a || !b) return false;
   for (let i = 1; i <= 3; i++) {
     if (+a[i]! !== +b[i]!) return +a[i]! > +b[i]!;
@@ -31,25 +36,55 @@ export function parseClaudeAuth(stdout: string): AgentLogin {
   try {
     status = JSON.parse(stdout);
   } catch {
-    return { state: 'unknown', reason: 'Claude Code printed something other than JSON' };
+    return {
+      state: 'unknown',
+      reason: 'Claude Code printed something other than JSON',
+    };
   }
-  if (typeof status !== 'object' || status === null) return { state: 'unknown', reason: 'Unexpected auth status' };
-  const { loggedIn, authMethod, apiProvider, subscriptionType } = status as Record<string, unknown>;
-  if (loggedIn !== true || authMethod === 'none') return { state: 'logged-out' };
+  if (typeof status !== 'object' || status === null)
+    return { state: 'unknown', reason: 'Unexpected auth status' };
+  const { loggedIn, authMethod, apiProvider, subscriptionType } =
+    status as Record<string, unknown>;
+  if (loggedIn !== true || authMethod === 'none')
+    return { state: 'logged-out' };
   const name = typeof authMethod === 'string' ? authMethod : 'unknown';
-  const method = authMethod === 'third_party' && typeof apiProvider === 'string' ? `Cloud provider (${apiProvider})` : (CLAUDE_METHODS[name] ?? name);
-  return { state: 'logged-in', method, plan: typeof subscriptionType === 'string' ? titleCase(subscriptionType) : undefined };
+  const method =
+    authMethod === 'third_party' && typeof apiProvider === 'string'
+      ? `Cloud provider (${apiProvider})`
+      : (CLAUDE_METHODS[name] ?? name);
+  return {
+    state: 'logged-in',
+    method,
+    plan:
+      typeof subscriptionType === 'string'
+        ? titleCase(subscriptionType)
+        : undefined,
+  };
 }
 
 /** Codex app-server `account/read` result: `{ account: { type: 'chatgpt', planType } | { type: 'apiKey' } | null, requiresOpenaiAuth }`. */
 export function parseCodexAccount(result: unknown): AgentLogin {
-  if (typeof result !== 'object' || result === null) return { state: 'unknown', reason: 'Unexpected account/read result' };
+  if (typeof result !== 'object' || result === null)
+    return { state: 'unknown', reason: 'Unexpected account/read result' };
   const { account, requiresOpenaiAuth } = result as Record<string, unknown>;
-  if (account === null || account === undefined) return requiresOpenaiAuth === false ? { state: 'logged-in', method: 'No login needed' } : { state: 'logged-out' };
-  if (typeof account !== 'object') return { state: 'unknown', reason: 'Unexpected account/read result' };
+  if (account === null || account === undefined)
+    return requiresOpenaiAuth === false
+      ? { state: 'logged-in', method: 'No login needed' }
+      : { state: 'logged-out' };
+  if (typeof account !== 'object')
+    return { state: 'unknown', reason: 'Unexpected account/read result' };
   const { type, planType } = account as Record<string, unknown>;
-  const method = type === 'chatgpt' ? 'ChatGPT' : type === 'apiKey' ? 'API key' : String(type);
-  return { state: 'logged-in', method, plan: typeof planType === 'string' ? titleCase(planType) : undefined };
+  const method =
+    type === 'chatgpt'
+      ? 'ChatGPT'
+      : type === 'apiKey'
+        ? 'API key'
+        : String(type);
+  return {
+    state: 'logged-in',
+    method,
+    plan: typeof planType === 'string' ? titleCase(planType) : undefined,
+  };
 }
 
 function titleCase(value: string) {

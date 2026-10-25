@@ -1,6 +1,23 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { queryClient } from './query.ts';
+import { queryKeys } from './queryKeys.ts';
+import {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { toast } from '@/toast/store';
-import { ArrowLeft, Bolt, ChevronDown, ChevronRight, Search, Star } from '@/icons';
+import {
+  ArrowLeft,
+  Bolt,
+  ChevronDown,
+  ChevronRight,
+  Search,
+  Star,
+} from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,17 +34,31 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
 import type { MachineCatalog } from './host/types/remote';
-import { effortFor, effortName, FAST, isNewThreadModel, listedHarnesses, optionFor, searchModels, speedFor, type ModelOption } from './runtime/models';
+import {
+  effortFor,
+  effortName,
+  FAST,
+  isNewThreadModel,
+  listedHarnesses,
+  optionFor,
+  searchModels,
+  speedFor,
+  type ModelOption,
+} from './runtime/models';
 import { setPrefs, toggleStar, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
-import type { AgentInstall, AgentSettings } from './host/types/settings';
+import type { AgentInstall } from './host/types/settings';
 import { linkedAccountId } from './settings/accounts';
 import { HARNESS_IDS, HARNESSES } from './settings/harnesses';
 import { useSpace } from './store';
@@ -37,16 +68,45 @@ import { ProviderMark } from './ui';
  * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. Only harnesses that are
  * set up and listed their models show (`useListedModels`); a stored model the account no longer offers shows as Unavailable.
  */
-export function ModelPicker({ id, value, provider, isLocked, onChange, defaults }: { id?: string; value: string; provider: Provider; isLocked?: boolean; onChange: (model: ModelOption) => void; defaults?: Defaults<ModelOption> }) {
+export function ModelPicker({
+  id,
+  value,
+  provider,
+  isLocked,
+  onChange,
+  defaults,
+}: {
+  id?: string;
+  value: string;
+  provider: Provider;
+  isLocked?: boolean;
+  onChange: (model: ModelOption) => void;
+  defaults?: Defaults<ModelOption>;
+}) {
   const space = useSpace();
-  const { catalog, harnesses } = useListedModels(space.id, HARNESS_IDS.filter((h) => !isLocked || h === provider));
+  const { catalog, harnesses } = useListedModels(
+    space.id,
+    HARNESS_IDS.filter((h) => !isLocked || h === provider),
+  );
   const harnessDefaults = useDefaultModels();
   const favorites = usePrefs().starredModels;
   const [isOpen, setOpen] = useState(false);
-  const listed = harnesses.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
+  const listed = harnesses.flatMap((h) =>
+    (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })),
+  );
   const model = optionFor(catalog[provider], value, provider);
-  const models = listed.some((m) => m.harness === model.harness && m.id === model.id) ? listed : [...listed, model];
-  const docked = models.filter((m) => m === model || (m.harness === model.harness && m.id === model.id) || (!m.isUnavailable && (favorites.includes(m.id) || harnessDefaults?.[m.harness] === m.id)));
+  const models = listed.some(
+    (m) => m.harness === model.harness && m.id === model.id,
+  )
+    ? listed
+    : [...listed, model];
+  const docked = models.filter(
+    (m) =>
+      m === model ||
+      (m.harness === model.harness && m.id === model.id) ||
+      (!m.isUnavailable &&
+        (favorites.includes(m.id) || harnessDefaults?.[m.harness] === m.id)),
+  );
 
   return (
     // Controlled: the dock keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click.
@@ -56,14 +116,28 @@ export function ModelPicker({ id, value, provider, isLocked, onChange, defaults 
         value={model.id}
         onChange={(id) => onChange(models.find((m) => m.id === id)!)}
         onTap={() => setOpen(true)}
-        items={docked.map((m) => ({ value: m.id, label: m.name, icon: <ProviderMark provider={m.harness} size={18} /> }))}
+        items={docked.map((m) => ({
+          value: m.id,
+          label: m.name,
+          icon: <ProviderMark provider={m.harness} size={18} />,
+        }))}
       >
         <DropdownMenuTrigger asChild>
-          <Button id={id} variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground">
+          <Button
+            id={id}
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 px-2 text-muted-foreground"
+          >
             <ProviderMark provider={model.harness} size={14} />
             {model.name}
-            {model.isUnavailable && <span className="type-caption text-warning">Unavailable</span>}
-            <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
+            {model.isUnavailable && (
+              <span className="type-caption text-warning">Unavailable</span>
+            )}
+            <ChevronDown
+              data-icon="inline-end"
+              className="text-subtle-foreground"
+            />
           </Button>
         </DropdownMenuTrigger>
       </ScrollDock>
@@ -74,10 +148,14 @@ export function ModelPicker({ id, value, provider, isLocked, onChange, defaults 
         isChecked={(m) => m.harness === model.harness && m.id === model.id}
         onPick={onChange}
         starred={favorites}
-        onToggleStar={(m) => setPrefs({ starredModels: toggleStar(favorites, m.id) })}
+        onToggleStar={(m) =>
+          setPrefs({ starredModels: toggleStar(favorites, m.id) })
+        }
         defaults={defaults}
       >
-        <p className="px-1.5 pt-1 pb-0.5 type-caption text-subtle-foreground">Starred models show up when you scroll over the model button.</p>
+        <p className="px-1.5 pt-1 pb-0.5 type-caption text-subtle-foreground">
+          Starred models show up when you scroll over the model button.
+        </p>
       </ModelMenu>
     </DropdownMenu>
   );
@@ -124,7 +202,10 @@ export function ModelMenu({
   const isSingle = harnesses.length === 1;
   const drilled = isSingle ? harnesses[0] : isNarrow ? page : null;
   const found = search ? searchModels(models, search) : [];
-  const starredModels = onToggleStar && !drilled ? models.filter((m) => starred?.includes(m.id)) : [];
+  const starredModels =
+    onToggleStar && !drilled
+      ? models.filter((m) => starred?.includes(m.id))
+      : [];
   const isLoading = !!pending.length && pending.length === harnesses.length;
   const ofHarness = (h: Provider) => models.filter((m) => m.harness === h);
   const items = (list: ModelOption[], hasMark?: boolean) =>
@@ -142,7 +223,10 @@ export function ModelMenu({
         defaults={defaults}
       />
     ));
-  const firstItem = () => contentRef.current?.querySelector<HTMLElement>('[role^=menuitem]:not([data-disabled])');
+  const firstItem = () =>
+    contentRef.current?.querySelector<HTMLElement>(
+      '[role^=menuitem]:not([data-disabled])',
+    );
   const back = () => {
     setPage(null);
     inputRef.current?.focus();
@@ -151,8 +235,14 @@ export function ModelMenu({
   // Keys reaching the menu itself: letters go to the search instead of Radix's typeahead; ArrowUp off the first item and
   // ArrowLeft in a drilled-in list come back up. Keys from a submenu bubble here through React but aren't inside this content.
   const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.defaultPrevented || e.target === inputRef.current || !e.currentTarget.contains(e.target as Node)) return;
-    const isTyping = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+    if (
+      e.defaultPrevented ||
+      e.target === inputRef.current ||
+      !e.currentTarget.contains(e.target as Node)
+    )
+      return;
+    const isTyping =
+      e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
     if (isTyping || (e.key === 'ArrowUp' && e.target === firstItem())) {
       e.preventDefault();
       inputRef.current?.focus();
@@ -196,13 +286,19 @@ export function ModelMenu({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={onSearchKeyDown}
-          placeholder={drilled && !search ? `Search ${HARNESSES[drilled].name} models` : 'Search models'}
+          placeholder={
+            drilled && !search
+              ? `Search ${HARNESSES[drilled].name} models`
+              : 'Search models'
+          }
           aria-label="Search models"
           className="w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
         />
       </label>
       <div className="max-h-80 overflow-y-auto">
-        {!!search && <SearchResults found={found} isLoading={isLoading} items={items} />}
+        {!!search && (
+          <SearchResults found={found} isLoading={isLoading} items={items} />
+        )}
         {!search && !!drilled && (
           <>
             {!isSingle && (
@@ -217,7 +313,13 @@ export function ModelMenu({
                 All models
               </DropdownMenuItem>
             )}
-            {pending.includes(drilled) ? <MenuNote>Asking {HARNESSES[drilled].name} for its models…</MenuNote> : items(ofHarness(drilled))}
+            {pending.includes(drilled) ? (
+              <MenuNote>
+                Asking {HARNESSES[drilled].name} for its models…
+              </MenuNote>
+            ) : (
+              items(ofHarness(drilled))
+            )}
           </>
         )}
         {!search && !drilled && (
@@ -229,9 +331,26 @@ export function ModelMenu({
               </DropdownMenuGroup>
             )}
             <DropdownMenuGroup>
-              {starredModels.length > 0 && <DropdownMenuLabel>Harnesses</DropdownMenuLabel>}
+              {starredModels.length > 0 && (
+                <DropdownMenuLabel>Harnesses</DropdownMenuLabel>
+              )}
               {harnesses.map((h) => {
-                const row = <HarnessRow harness={h} summary={[harnessSummary(ofHarness(h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')} plan={space.plans[h]} />;
+                const row = (
+                  <HarnessRow
+                    harness={h}
+                    summary={[
+                      harnessSummary(
+                        ofHarness(h),
+                        isChecked,
+                        pending.includes(h),
+                      ),
+                      notes[h],
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    plan={space.plans[h]}
+                  />
+                );
                 if (isNarrow)
                   return (
                     <DropdownMenuItem
@@ -242,14 +361,26 @@ export function ModelMenu({
                       }}
                     >
                       {row}
-                      <ChevronRight aria-hidden className="text-subtle-foreground" />
+                      <ChevronRight
+                        aria-hidden
+                        className="text-subtle-foreground"
+                      />
                     </DropdownMenuItem>
                   );
                 return (
                   <DropdownMenuSub key={h}>
                     <DropdownMenuSubTrigger>{row}</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent collisionPadding={8} className="max-h-(--radix-dropdown-menu-content-available-height) w-72 overflow-y-auto">
-                      {pending.includes(h) ? <MenuNote>Asking {HARNESSES[h].name} for its models…</MenuNote> : items(ofHarness(h))}
+                    <DropdownMenuSubContent
+                      collisionPadding={8}
+                      className="max-h-(--radix-dropdown-menu-content-available-height) w-72 overflow-y-auto"
+                    >
+                      {pending.includes(h) ? (
+                        <MenuNote>
+                          Asking {HARNESSES[h].name} for its models…
+                        </MenuNote>
+                      ) : (
+                        items(ofHarness(h))
+                      )}
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                 );
@@ -263,32 +394,65 @@ export function ModelMenu({
   );
 }
 
-function SearchResults({ found, isLoading, items }: { found: ModelOption[]; isLoading: boolean; items: (list: ModelOption[], hasMark?: boolean) => ReactNode }) {
-  if (!found.length) return <MenuNote>{isLoading ? 'Asking the harnesses for their models…' : 'No model matches.'}</MenuNote>;
-  return HARNESS_IDS.filter((h) => found.some((m) => m.harness === h)).map((h) => (
-    <DropdownMenuGroup key={h}>
-      <DropdownMenuLabel className="flex items-center gap-1.5">
-        <ProviderMark provider={h} size={12} />
-        {HARNESSES[h].name}
-      </DropdownMenuLabel>
-      {items(found.filter((m) => m.harness === h))}
-    </DropdownMenuGroup>
-  ));
+function SearchResults({
+  found,
+  isLoading,
+  items,
+}: {
+  found: ModelOption[];
+  isLoading: boolean;
+  items: (list: ModelOption[], hasMark?: boolean) => ReactNode;
+}) {
+  if (!found.length)
+    return (
+      <MenuNote>
+        {isLoading
+          ? 'Asking the harnesses for their models…'
+          : 'No model matches.'}
+      </MenuNote>
+    );
+  return HARNESS_IDS.filter((h) => found.some((m) => m.harness === h)).map(
+    (h) => (
+      <DropdownMenuGroup key={h}>
+        <DropdownMenuLabel className="flex items-center gap-1.5">
+          <ProviderMark provider={h} size={12} />
+          {HARNESSES[h].name}
+        </DropdownMenuLabel>
+        {items(found.filter((m) => m.harness === h))}
+      </DropdownMenuGroup>
+    ),
+  );
 }
 
 function MenuNote({ children }: { children: ReactNode }) {
-  return <p className="px-1.5 py-4 text-center type-meta text-muted-foreground">{children}</p>;
+  return (
+    <p className="px-1.5 py-4 text-center type-meta text-muted-foreground">
+      {children}
+    </p>
+  );
 }
 
-function HarnessRow({ harness, summary, plan }: { harness: Provider; summary: string; plan?: string }) {
+function HarnessRow({
+  harness,
+  summary,
+  plan,
+}: {
+  harness: Provider;
+  summary: string;
+  plan?: string;
+}) {
   return (
     <>
       <ProviderMark provider={harness} size={16} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{HARNESSES[harness].name}</span>
-        <span className="truncate type-caption text-subtle-foreground">{summary}</span>
+        <span className="truncate type-caption text-subtle-foreground">
+          {summary}
+        </span>
       </span>
-      {!!plan && <span className="type-caption text-subtle-foreground">{plan}</span>}
+      {!!plan && (
+        <span className="type-caption text-subtle-foreground">{plan}</span>
+      )}
     </>
   );
 }
@@ -325,13 +489,34 @@ function ModelItem({
       onKeyDown={defaults && makeDefaultKeys(() => defaults.make(model))}
       className={cn('group/item gap-2', defaults && UNCHECKED_FLUSH)}
     >
-      {!!onToggleStar && <FavoriteToggle isOn={isStarred} name={model.name} onToggle={() => onToggleStar(model)} />}
+      {!!onToggleStar && (
+        <FavoriteToggle
+          isOn={isStarred}
+          name={model.name}
+          onToggle={() => onToggleStar(model)}
+        />
+      )}
       {hasMark && <ProviderMark provider={model.harness} size={14} />}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{model.name}</span>
-        {!!model.description && <span className={cn('truncate type-caption', model.isUnavailable ? 'text-warning' : 'text-subtle-foreground')}>{model.description}</span>}
+        {!!model.description && (
+          <span
+            className={cn(
+              'truncate type-caption',
+              model.isUnavailable ? 'text-warning' : 'text-subtle-foreground',
+            )}
+          >
+            {model.description}
+          </span>
+        )}
       </span>
-      {!!defaults && <DefaultSlot isDefault={defaults.isDefault(model)} name={model.name} onMake={() => defaults.make(model)} />}
+      {!!defaults && (
+        <DefaultSlot
+          isDefault={defaults.isDefault(model)}
+          name={model.name}
+          onMake={() => defaults.make(model)}
+        />
+      )}
     </DropdownMenuCheckboxItem>
   );
 }
@@ -339,7 +524,11 @@ function ModelItem({
 const MODEL_COUNT = new Intl.PluralRules('en');
 
 /** The checked models' names, else how many the harness offers. */
-function harnessSummary(models: ModelOption[], isChecked: (model: ModelOption) => boolean, isLoading: boolean) {
+function harnessSummary(
+  models: ModelOption[],
+  isChecked: (model: ModelOption) => boolean,
+  isLoading: boolean,
+) {
   if (isLoading) return 'Loading models…';
   const checked = models.filter(isChecked);
   if (checked.length) return checked.map((m) => m.name).join(', ');
@@ -347,10 +536,16 @@ function harnessSummary(models: ModelOption[], isChecked: (model: ModelOption) =
 }
 
 /** Each harness's models, and which of `harnesses` the pickers list: set up, and its list read (`listedHarnesses`). */
-export function useListedModels(spaceId: string, harnesses: Provider[] = HARNESS_IDS) {
+export function useListedModels(
+  spaceId: string,
+  harnesses: Provider[] = HARNESS_IDS,
+) {
   const catalog = useModels(spaceId);
   const unavailable = useUnavailableHarnesses(spaceId);
-  return { catalog, harnesses: listedHarnesses(harnesses, catalog, unavailable) };
+  return {
+    catalog,
+    harnesses: listedHarnesses(harnesses, catalog, unavailable),
+  };
 }
 
 /** Per harness, why its models can't be picked right now. */
@@ -358,52 +553,53 @@ type Unavailable = Partial<Record<Provider, string>>;
 
 /** Harnesses the profile can't run: not installed, or its linked account signed out. Empty in the web build, which answers with a mock. */
 function useUnavailableHarnesses(spaceId: string) {
-  const [unavailable, setUnavailable] = useState<Unavailable>({});
-  useEffect(() => {
-    if (!host.isDesktop) return;
-    let isCurrent = true;
-    void host.settings.accounts().then(({ links }) =>
-      HARNESS_IDS.forEach((h) =>
-        host.settings.detect(linkedAccountId(links, spaceId, h)).then(
-          (install) => isCurrent && setUnavailable((prev) => ({ ...prev, [h]: unavailableReason(install) })),
-          () => {},
+  const unavailableQuery = useQuery({
+    queryKey: queryKeys.agent.unavailable(spaceId),
+    queryFn: async () => {
+      const { links } = await host.settings.accounts();
+      return Object.fromEntries(
+        await Promise.all(
+          HARNESS_IDS.map(async (h) => [
+            h,
+            unavailableReason(
+              await host.settings.detect(linkedAccountId(links, spaceId, h)),
+            ),
+          ]),
         ),
-      ),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
-  return unavailable;
+      );
+    },
+    enabled: host.isDesktop,
+    staleTime: 60_000,
+  });
+  return (unavailableQuery.data ?? {}) as Unavailable;
 }
 
-// GAP: read once per profile per launch, so signing in another way shows the old note until Mochi restarts.
-const harnessNotes = new Map<string, Promise<Partial<Record<Provider, string>>>>();
-
-/** Per harness, what its model list leaves out on this login; the picker's harness row says it. */
 function useHarnessNotes(spaceId: string) {
-  const [notes, setNotes] = useState<Partial<Record<Provider, string>>>({});
-  useEffect(() => {
-    if (!host.isDesktop) return;
-    let isCurrent = true;
-    let read = harnessNotes.get(spaceId);
-    if (!read) {
-      read = host.settings.accounts().then(({ links }) => host.settings.detect(linkedAccountId(links, spaceId, 'codex'))).then((install) => ({ codex: codexPlanNote(install) }));
-      harnessNotes.set(spaceId, read);
-      read.catch(() => harnessNotes.delete(spaceId));
-    }
-    read.then((n) => isCurrent && setNotes(n), () => {});
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
-  return notes;
+  const notesQuery = useQuery({
+    queryKey: queryKeys.agent.notes.space(spaceId),
+    queryFn: async () => {
+      const { links } = await host.settings.accounts();
+      return {
+        codex: codexPlanNote(
+          await host.settings.detect(linkedAccountId(links, spaceId, 'codex')),
+        ),
+      };
+    },
+    enabled: host.isDesktop,
+    staleTime: 60_000,
+  });
+  return (notesQuery.data ?? {}) as Partial<
+    Record<Provider, string | undefined>
+  >;
 }
 
 // Seen with codex-cli 0.155.1 on a ChatGPT Plus login (2026-10-13): gpt-6.1-sol is missing from `model/list` even with
 // `includeHidden`, and asking for it fails with "not supported when using Codex with a ChatGPT account".
 function codexPlanNote(install: AgentInstall) {
-  return install.login.state === 'logged-in' && install.login.method === 'ChatGPT' ? 'Some models need an API key' : undefined;
+  return install.login.state === 'logged-in' &&
+    install.login.method === 'ChatGPT'
+    ? 'Some models need an API key'
+    : undefined;
 }
 
 function unavailableReason(install: AgentInstall) {
@@ -412,69 +608,97 @@ function unavailableReason(install: AgentInstall) {
 }
 
 /** Another computer's models and defaults, for a composer starting a thread there; unset, the pickers read this computer's. */
-export const MachineModelsContext = createContext<Pick<MachineCatalog, 'models' | 'defaults'> | null>(null);
+export const MachineModelsContext = createContext<Pick<
+  MachineCatalog,
+  'models' | 'defaults'
+> | null>(null);
 
 /** Each harness's models on the profile's account, from main (cached there per account); a harness missing until its list arrives, [] when it can't be read. */
 export function useModels(spaceId: string) {
   const machine = useContext(MachineModelsContext);
-  const [models, setModels] = useState<Partial<Record<Provider, AgentModel[]>>>({});
-  useEffect(() => {
-    let isCurrent = true;
-    setModels({});
-    HARNESS_IDS.forEach((h) =>
-      host.agent.models(h, spaceId).then(
-        (list) => isCurrent && setModels((prev) => ({ ...prev, [h]: list })),
-        () => isCurrent && setModels((prev) => ({ ...prev, [h]: [] })),
-      ),
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [spaceId]);
+  const modelsQueries = useQueries({
+    queries: HARNESS_IDS.map((h) => ({
+      queryKey: queryKeys.agent.models(spaceId, h),
+      queryFn: () => host.agent.models(h, spaceId),
+    })),
+  });
+  const models = Object.fromEntries(
+    HARNESS_IDS.flatMap((h, i) =>
+      modelsQueries[i].data
+        ? [[h, modelsQueries[i].data]]
+        : modelsQueries[i].isError
+          ? [[h, []]]
+          : [],
+    ),
+  );
   return machine?.models ?? models;
 }
 
 /** Each harness's default model from Settings ('' = the harness's own); null until read. Re-read on mount, updated in place by `makeDefaultModel`. */
 export function useDefaultModels() {
   const machine = useContext(MachineModelsContext);
-  const models = useSyncExternalStore(subscribeDefaultModels, () => defaultModels);
-  useEffect(() => {
-    host.settings.get().then(publishDefaultModels, () => {});
-  }, []);
-  return machine?.defaults ?? models;
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.agent.settings(),
+    queryFn: () => host.settings.get(),
+  });
+  const settings = settingsQuery.data;
+  return (
+    machine?.defaults ??
+    (settings
+      ? {
+          claude: settings.harnesses.claude.model,
+          codex: settings.harnesses.codex.model,
+        }
+      : null)
+  );
 }
 
 /** New threads start on `model`: its harness becomes the default agent and the model that harness's Settings default. */
 export function makeDefaultModel(model: ModelOption) {
   setPrefs({ agent: model.harness });
-  host.settings.set({ harnesses: { [model.harness]: { model: model.id } } }).then(publishDefaultModels, (error: Error) => toast.error('Default model not saved', { description: error.message }));
+  host.settings
+    .set({ harnesses: { [model.harness]: { model: model.id } } })
+    .then(
+      () =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.agent.settings() }),
+      (error: Error) =>
+        toast.error('Default model not saved', { description: error.message }),
+    );
 }
 
 /** The composer pickers' "Default" and "Make default": what new threads start on, read from and saved to the same settings New thread uses. */
-export function useNewThreadDefaults(catalog: Partial<Record<Provider, AgentModel[]>>, model: AgentModel) {
+export function useNewThreadDefaults(
+  catalog: Partial<Record<Provider, AgentModel[]>>,
+  model: AgentModel,
+) {
   const harnessModels = useDefaultModels();
   const { agent, effort, speed } = usePrefs();
   return {
-    model: { isDefault: (m: ModelOption) => !!harnessModels && isNewThreadModel(m, catalog, harnessModels, agent), make: makeDefaultModel },
-    effort: { isDefault: (e: string) => e === effortFor(model, effort), make: (e: string) => setPrefs({ effort: e }) },
-    speed: { isDefault: (s: string) => s === speed, make: (s: string) => setPrefs({ speed: s ? FAST : '' }) },
+    model: {
+      isDefault: (m: ModelOption) =>
+        !!harnessModels && isNewThreadModel(m, catalog, harnessModels, agent),
+      make: makeDefaultModel,
+    },
+    effort: {
+      isDefault: (e: string) => e === effortFor(model, effort),
+      make: (e: string) => setPrefs({ effort: e }),
+    },
+    speed: {
+      isDefault: (s: string) => s === speed,
+      make: (s: string) => setPrefs({ speed: s ? FAST : '' }),
+    },
   };
 }
 
-let defaultModels: Record<Provider, string> | null = null;
-const defaultModelListeners = new Set<() => void>();
-
-function subscribeDefaultModels(listener: () => void) {
-  defaultModelListeners.add(listener);
-  return () => void defaultModelListeners.delete(listener);
-}
-
-function publishDefaultModels(settings: AgentSettings) {
-  defaultModels = { claude: settings.harnesses.claude.model, codex: settings.harnesses.codex.model };
-  defaultModelListeners.forEach((l) => l());
-}
-
-function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string; onToggle: () => void }) {
+function FavoriteToggle({
+  isOn,
+  name,
+  onToggle,
+}: {
+  isOn: boolean;
+  name: string;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
@@ -496,7 +720,17 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
 }
 
 /** Effort levels `model` takes, from its provider; hidden for a model that takes none. A chosen level the model lacks shows (and runs) as the model's default. */
-export function EffortPicker({ model, value, onChange: setEffort, defaults }: { model: AgentModel; value: string; onChange: (effort: string) => void; defaults?: Defaults<string> }) {
+export function EffortPicker({
+  model,
+  value,
+  onChange: setEffort,
+  defaults,
+}: {
+  model: AgentModel;
+  value: string;
+  onChange: (effort: string) => void;
+  defaults?: Defaults<string>;
+}) {
   const [isOpen, setOpen] = useState(false);
   const { efforts } = model;
   if (!efforts.length) return null;
@@ -505,24 +739,54 @@ export function EffortPicker({ model, value, onChange: setEffort, defaults }: { 
   return (
     // Controlled: the stepper keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click.
     <DropdownMenu open={isOpen} onOpenChange={setOpen}>
-      <WheelStepper values={efforts} value={effort ?? ''} onChange={setEffort} onTap={() => setOpen(true)}>
+      <WheelStepper
+        values={efforts}
+        value={effort ?? ''}
+        onChange={setEffort}
+        onTap={() => setOpen(true)}
+      >
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground" aria-label={`Reasoning effort: ${label}`}>
-            <EffortMeter levels={efforts.length} level={effort ? efforts.indexOf(effort) + 1 : 0} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 px-2 text-muted-foreground"
+            aria-label={`Reasoning effort: ${label}`}
+          >
+            <EffortMeter
+              levels={efforts.length}
+              level={effort ? efforts.indexOf(effort) + 1 : 0}
+            />
             {label}
-            <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
+            <ChevronDown
+              data-icon="inline-end"
+              className="text-subtle-foreground"
+            />
           </Button>
         </DropdownMenuTrigger>
       </WheelStepper>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Reasoning effort</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={effort ?? ''} onValueChange={setEffort}>
+          <DropdownMenuRadioGroup
+            value={effort ?? ''}
+            onValueChange={setEffort}
+          >
             {efforts.map((e, i) => (
-              <DropdownMenuRadioItem key={e} value={e} onKeyDown={defaults && makeDefaultKeys(() => defaults.make(e))} className={cn('group/item gap-2', defaults && UNCHECKED_FLUSH)}>
+              <DropdownMenuRadioItem
+                key={e}
+                value={e}
+                onKeyDown={defaults && makeDefaultKeys(() => defaults.make(e))}
+                className={cn('group/item gap-2', defaults && UNCHECKED_FLUSH)}
+              >
                 <EffortMeter levels={efforts.length} level={i + 1} />
                 <span className="flex-1">{effortName(e)}</span>
-                {!!defaults && <DefaultSlot isDefault={defaults.isDefault(e)} name={effortName(e)} onMake={() => defaults.make(e)} />}
+                {!!defaults && (
+                  <DefaultSlot
+                    isDefault={defaults.isDefault(e)}
+                    name={effortName(e)}
+                    onMake={() => defaults.make(e)}
+                  />
+                )}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -536,21 +800,43 @@ export function EffortPicker({ model, value, onChange: setEffort, defaults }: { 
  * The speed tiers `model` reports, under the harness's own names, each with the provider's note on what it costs; hidden
  * for a model that reports none. Picking the first tier stores `fast`, so Fast carries over to another model that has one.
  */
-export function SpeedPicker({ model, value, onChange, defaults }: { model: AgentModel; value: string; onChange: (speed: string) => void; defaults?: Defaults<string> }) {
+export function SpeedPicker({
+  model,
+  value,
+  onChange,
+  defaults,
+}: {
+  model: AgentModel;
+  value: string;
+  onChange: (speed: string) => void;
+  defaults?: Defaults<string>;
+}) {
   const { speeds } = model;
   if (!speeds.length) return null;
   const speed = speeds.find((s) => s.id === speedFor(model, value));
-  const stored = (id: string) => (id === STANDARD ? '' : id === speeds[0].id ? FAST : id);
+  const stored = (id: string) =>
+    id === STANDARD ? '' : id === speeds[0].id ? FAST : id;
   const choose = (id: string) => onChange(stored(id));
   // GAP: the new-thread default holds only standard or `fast`, so a second tier above Fast can't become it.
-  const defaultsFor = (id: string) => (defaults && (id === STANDARD || id === speeds[0].id) ? { isDefault: defaults.isDefault(stored(id)), make: () => defaults.make(stored(id)) } : undefined);
+  const defaultsFor = (id: string) =>
+    defaults && (id === STANDARD || id === speeds[0].id)
+      ? {
+          isDefault: defaults.isDefault(stored(id)),
+          make: () => defaults.make(stored(id)),
+        }
+      : undefined;
   const label = `Speed: ${speed?.name ?? 'Standard'}`;
   return (
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className={speed ? 'text-foreground' : 'text-muted-foreground'} aria-label={label}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={speed ? 'text-foreground' : 'text-muted-foreground'}
+              aria-label={label}
+            >
               <SpeedIcon level={speed ? speeds.indexOf(speed) + 1 : 0} />
             </Button>
           </DropdownMenuTrigger>
@@ -560,10 +846,26 @@ export function SpeedPicker({ model, value, onChange, defaults }: { model: Agent
       <DropdownMenuContent align="start" className="w-72">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Speed</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={speed?.id ?? STANDARD} onValueChange={choose}>
-            <SpeedItem value={STANDARD} level={0} name="Standard" description="The model's usual speed and price" defaults={defaultsFor(STANDARD)} />
+          <DropdownMenuRadioGroup
+            value={speed?.id ?? STANDARD}
+            onValueChange={choose}
+          >
+            <SpeedItem
+              value={STANDARD}
+              level={0}
+              name="Standard"
+              description="The model's usual speed and price"
+              defaults={defaultsFor(STANDARD)}
+            />
             {speeds.map((s, i) => (
-              <SpeedItem key={s.id} value={s.id} level={i + 1} name={s.name} description={s.description} defaults={defaultsFor(s.id)} />
+              <SpeedItem
+                key={s.id}
+                value={s.id}
+                level={i + 1}
+                name={s.name}
+                description={s.description}
+                defaults={defaultsFor(s.id)}
+              />
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
@@ -575,17 +877,46 @@ export function SpeedPicker({ model, value, onChange, defaults }: { model: Agent
 // Radix menus treat '' as no value.
 const STANDARD = 'standard';
 
-function SpeedItem({ value, level, name, description, defaults }: { value: string; level: number; name: string; description: string; defaults?: { isDefault: boolean; make: () => void } }) {
+function SpeedItem({
+  value,
+  level,
+  name,
+  description,
+  defaults,
+}: {
+  value: string;
+  level: number;
+  name: string;
+  description: string;
+  defaults?: { isDefault: boolean; make: () => void };
+}) {
   return (
-    <DropdownMenuRadioItem value={value} onKeyDown={defaults && makeDefaultKeys(defaults.make)} className={cn('group/item items-start gap-2', defaults && UNCHECKED_FLUSH)}>
+    <DropdownMenuRadioItem
+      value={value}
+      onKeyDown={defaults && makeDefaultKeys(defaults.make)}
+      className={cn(
+        'group/item items-start gap-2',
+        defaults && UNCHECKED_FLUSH,
+      )}
+    >
       <span className="flex h-5 w-7 shrink-0 items-center">
         <SpeedIcon level={level} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         {name}
-        {!!description && <span className="type-caption text-muted-foreground">{description}</span>}
+        {!!description && (
+          <span className="type-caption text-muted-foreground">
+            {description}
+          </span>
+        )}
       </span>
-      {!!defaults && <DefaultSlot isDefault={defaults.isDefault} name={name} onMake={defaults.make} />}
+      {!!defaults && (
+        <DefaultSlot
+          isDefault={defaults.isDefault}
+          name={name}
+          onMake={defaults.make}
+        />
+      )}
     </DropdownMenuRadioItem>
   );
 }
@@ -606,7 +937,14 @@ function EffortMeter({ levels, level }: { levels: number; level: number }) {
   return (
     <span aria-hidden className="flex h-3 items-end gap-px">
       {Array.from({ length: levels }, (_, i) => (
-        <span key={i} className={cn('w-[3px] rounded-full bg-current', i >= level && 'opacity-25')} style={{ height: `${40 + (i * 60) / Math.max(1, levels - 1)}%` }} />
+        <span
+          key={i}
+          className={cn(
+            'w-[3px] rounded-full bg-current',
+            i >= level && 'opacity-25',
+          )}
+          style={{ height: `${40 + (i * 60) / Math.max(1, levels - 1)}%` }}
+        />
       ))}
     </span>
   );
@@ -619,9 +957,25 @@ export interface Defaults<T> {
 }
 
 /** A default-able item's trailing slot: "Default" on the current one, else "Make default" while the item is highlighted (⌘↵ from the keyboard). */
-function DefaultSlot({ isDefault, name, onMake }: { isDefault: boolean; name: string; onMake: () => void }) {
+function DefaultSlot({
+  isDefault,
+  name,
+  onMake,
+}: {
+  isDefault: boolean;
+  name: string;
+  onMake: () => void;
+}) {
   // `!`: a focused menu item recolours every descendant.
-  if (isDefault) return <Badge variant="secondary" className="self-center type-caption font-normal text-muted-foreground!">Default</Badge>;
+  if (isDefault)
+    return (
+      <Badge
+        variant="secondary"
+        className="self-center type-caption font-normal text-muted-foreground!"
+      >
+        Default
+      </Badge>
+    );
   return (
     <button
       type="button"

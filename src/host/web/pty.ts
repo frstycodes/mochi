@@ -1,13 +1,15 @@
 import type { PtyData, PtyExit, PtyHost } from '../types/pty.ts';
 
 const listeners = new Set<(event: PtyData) => void>();
-const emit = (event: PtyData) => listeners.forEach((listener) => listener(event));
+const emit = (event: PtyData) =>
+  listeners.forEach((listener) => listener(event));
 let nextId = 0;
 
 // OSC 133 C/D marks match what the desktop zsh integration prints, so the web demo shows the "Ask agent to fix" flow too.
 const START = '\x1b]133;C\x07';
 const end = (code: number) => `\x1b]133;D;${code}\x07`;
-const prompt = (cwd: string) => `\x1b[2m${cwd === '.' ? '~/latitude' : cwd}\x1b[0m $ `;
+const prompt = (cwd: string) =>
+  `\x1b[2m${cwd === '.' ? '~/latitude' : cwd}\x1b[0m $ `;
 const demo = (cwd: string) =>
   [
     `${prompt(cwd)}pnpm dev\r\n${START}`,

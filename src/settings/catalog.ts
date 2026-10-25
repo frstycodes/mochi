@@ -5,17 +5,52 @@ import { SHARED_ACCESS } from '../runtime/access.ts';
 import { EFFORTS } from '../runtime/controls.ts';
 import { effortName } from '../runtime/models.ts';
 import type { RemoteSettings } from '../host/types/remote.ts';
-import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from '../themes/model.ts';
+import {
+  MOCHI_THEME_ID,
+  slotOf,
+  type ColorTheme,
+  type ThemeSlot,
+} from '../themes/model.ts';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../utility/prompts.ts';
-import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ImageGenHarness, type ModelChoice, type ProfileConfig } from '../host/types/settings.ts';
+import {
+  CONCURRENCY_RANGE,
+  type AccountsState,
+  type AgentSettings,
+  type AgentSettingsPatch,
+  type ImageGenHarness,
+  type ModelChoice,
+  type ProfileConfig,
+} from '../host/types/settings.ts';
 import { linkedAccountId } from './accounts.ts';
 import type { ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
-import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type CommandId } from '../keymap.ts';
+import {
+  bindingOf,
+  chordText,
+  COMMAND_IDS,
+  COMMANDS,
+  parseChord,
+  rebind,
+  type CommandId,
+} from '../keymap.ts';
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, ANIMATIONS, APP_ICONS, type AnimationArea, DIFF_STYLES, ENGINES, IDLE_ALERTS, MOTION, SPEEDS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import {
+  AGENT_CONTROL,
+  AGENTS,
+  ANIMATIONS,
+  APP_ICONS,
+  type AnimationArea,
+  DIFF_STYLES,
+  ENGINES,
+  IDLE_ALERTS,
+  MOTION,
+  SPEEDS,
+  WHILE_WORKING,
+  WORKSPACE_MODES,
+  WORKTREE_CLEANUP,
+} from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -42,7 +77,11 @@ export interface Setting {
 }
 
 /** `tone: 'warning'` marks an option that must never be on unnoticed (Full access). */
-type Option = { readonly value: string; readonly label: string; readonly tone?: 'warning' };
+type Option = {
+  readonly value: string;
+  readonly label: string;
+  readonly tone?: 'warning';
+};
 
 export type Control =
   /** `appIcon` draws its options as the icons themselves (`AppIconPicker`). */
@@ -50,7 +89,14 @@ export type Control =
   | { type: 'switch' }
   | { type: 'number'; min: number; max: number; step: number }
   /** `fallback` is what an emptied field saves; without it, empty is a value of its own ("use $SHELL"). */
-  | { type: 'text'; placeholder: string; fallback?: string; isPath?: boolean; isMono?: boolean; isMultiline?: boolean }
+  | {
+      type: 'text';
+      placeholder: string;
+      fallback?: string;
+      isPath?: boolean;
+      isMono?: boolean;
+      isMultiline?: boolean;
+    }
   /** A model id; `provider` limits it to one harness, else the value is `provider:model`. */
   | { type: 'model'; provider?: Provider; emptyLabel?: string }
   | { type: 'starredModels' }
@@ -89,7 +135,10 @@ export type SettingWrite =
   | { to: 'config'; title: string; changes: ConfigChange[] };
 
 /** App-wide settings, then the profile's when `profile` is given (its MCP servers and skills once `config` is read). */
-export function settingsCatalog({ profile, config }: { profile?: Space; config?: ProfileConfig } = {}): Setting[] {
+export function settingsCatalog({
+  profile,
+  config,
+}: { profile?: Space; config?: ProfileConfig } = {}): Setting[] {
   return [...APP_SETTINGS, ...(profile ? profileSettings(config) : [])];
 }
 
@@ -102,7 +151,9 @@ export function findSetting(catalog: Setting[], key: string) {
  * one is written to each paired computer too, and a computer that missed one is offered this computer's values
  * (`src/remote/sharedSettings.ts`). Paths, shell, keys, appearance, access and Devices stay with each computer.
  */
-export const isSharedSetting = (key: string) => SHARED_KEYS.has(key) || SHARED_PREFIXES.some((prefix) => key.startsWith(prefix));
+export const isSharedSetting = (key: string) =>
+  SHARED_KEYS.has(key) ||
+  SHARED_PREFIXES.some((prefix) => key.startsWith(prefix));
 
 const SHARED_KEYS = new Set([
   'agent',
@@ -136,11 +187,19 @@ const SHARED_PREFIXES = ['alert.', 'idleAlert.', 'utility.', 'simplify'];
 export function valueLabel(setting: Setting, value: string | undefined) {
   if (value === undefined) return '…';
   const { control } = setting;
-  if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return value === 'true' ? 'On' : 'Off';
-  if ('options' in control) return control.options.find((o) => o.value === value)?.label ?? value;
-  if (control.type === 'shortcut') return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
+  if (
+    control.type === 'switch' ||
+    control.type === 'mcp' ||
+    control.type === 'skill'
+  )
+    return value === 'true' ? 'On' : 'Off';
+  if ('options' in control)
+    return control.options.find((o) => o.value === value)?.label ?? value;
+  if (control.type === 'shortcut')
+    return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
   // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
-  if (control.type === 'colorTheme') return value === MOCHI_THEME_ID ? 'Mochi' : value.split(':').pop()!;
+  if (control.type === 'colorTheme')
+    return value === MOCHI_THEME_ID ? 'Mochi' : value.split(':').pop()!;
   return value || 'Not set';
 }
 
@@ -148,8 +207,10 @@ export function valueLabel(setting: Setting, value: string | undefined) {
 
 const SWITCH = { type: 'switch' } as const;
 
-const choice = (options: readonly Option[]) => ({ type: 'choice', options }) as const;
-const select = (options: readonly Option[]) => ({ type: 'select', options }) as const;
+const choice = (options: readonly Option[]) =>
+  ({ type: 'choice', options }) as const;
+const select = (options: readonly Option[]) =>
+  ({ type: 'select', options }) as const;
 
 const IMAGE_GEN_OPTIONS = [
   { value: 'codex', label: 'Codex' },
@@ -172,12 +233,23 @@ const SIMPLIFY_LENGTHS = [
   { value: 'detailed', label: 'Detailed' },
 ] as const;
 
-const HOURS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: hourLabel(h) }));
+const HOURS = Array.from({ length: 24 }, (_, h) => ({
+  value: String(h),
+  label: hourLabel(h),
+}));
 
-type PrefKey = { [K in keyof Prefs]: Prefs[K] extends string | number | boolean ? K : never }[keyof Prefs];
+type PrefKey = {
+  [K in keyof Prefs]: Prefs[K] extends string | number | boolean ? K : never;
+}[keyof Prefs];
 
 /** A pref whose stored value is the control's own value: a string option, a number, a boolean switch or text. */
-function pref(key: PrefKey, label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
+function pref(
+  key: PrefKey,
+  label: string,
+  section: SettingSection,
+  control: Control,
+  extra: Partial<Setting> = {},
+): Setting {
   return {
     key,
     label,
@@ -186,14 +258,30 @@ function pref(key: PrefKey, label: string, section: SettingSection, control: Con
     read: ({ prefs }) => String(prefs[key]),
     write: (value) => {
       const parsed = parseValue(control, value);
-      return parsed === null ? null : { to: 'prefs', patch: { [key]: parsed } as Partial<Prefs> };
+      return parsed === null
+        ? null
+        : { to: 'prefs', patch: { [key]: parsed } as Partial<Prefs> };
     },
     ...extra,
   };
 }
 
 /** A host (main-process) setting at the top level of `AgentSettings`. */
-function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude' | 'imageGen' | 'appIcon', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
+function hostSetting(
+  key:
+    | 'concurrency'
+    | 'worktreeRoot'
+    | 'shell'
+    | 'prDrafts'
+    | 'prepareWorktrees'
+    | 'worktreeInclude'
+    | 'imageGen'
+    | 'appIcon',
+  label: string,
+  section: SettingSection,
+  control: Control,
+  extra: Partial<Setting> = {},
+): Setting {
   return {
     key,
     label,
@@ -209,12 +297,19 @@ function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' 
 }
 
 /** The control's typed value for `value`, or null when the control can't take it. */
-function parseValue(control: Control, value: string): string | number | boolean | null {
-  if (control.type === 'switch') return value === 'true' ? true : value === 'false' ? false : null;
-  if ('options' in control) return control.options.some((o) => o.value === value) ? value : null;
+function parseValue(
+  control: Control,
+  value: string,
+): string | number | boolean | null {
+  if (control.type === 'switch')
+    return value === 'true' ? true : value === 'false' ? false : null;
+  if ('options' in control)
+    return control.options.some((o) => o.value === value) ? value : null;
   if (control.type === 'number') {
     const n = Number(value);
-    return Number.isInteger(n) && n >= control.min && n <= control.max ? n : null;
+    return Number.isInteger(n) && n >= control.min && n <= control.max
+      ? n
+      : null;
   }
   if (control.type === 'text') return value.trim() || control.fallback || '';
   return value;
@@ -225,7 +320,9 @@ const modelValue = ({ provider, model }: ModelChoice) => `${provider}:${model}`;
 
 function parseModelChoice(value: string): ModelChoice | null {
   const [provider, ...model] = value.split(':');
-  return HARNESS_IDS.includes(provider as Provider) && model.length ? { provider: provider as Provider, model: model.join(':') } : null;
+  return HARNESS_IDS.includes(provider as Provider) && model.length
+    ? { provider: provider as Provider, model: model.join(':') }
+    : null;
 }
 
 const AGENT_REACH = "An agent can't widen its own reach.";
@@ -241,15 +338,29 @@ function colorTheme(slot: ThemeSlot): Setting {
     control: { type: 'colorTheme', slot },
     read: ({ prefs }) => prefs[key],
     write: (value, { colorThemes }) => {
-      const isKnown = value === MOCHI_THEME_ID || !colorThemes || colorThemes.some((t) => t.id === value && slotOf(t.kind) === slot);
+      const isKnown =
+        value === MOCHI_THEME_ID ||
+        !colorThemes ||
+        colorThemes.some((t) => t.id === value && slotOf(t.kind) === slot);
       return isKnown ? { to: 'prefs', patch: { [key]: value } } : null;
     },
   };
 }
 
-const REMOTE_KEYS = { isEnabled: 'remoteEnabled', allowsNetwork: 'remoteNetwork', reachesAnywhere: 'remoteAnywhere', machineName: 'machineName', keepsAwake: 'keepAwake' } satisfies Record<keyof RemoteSettings, string>;
+const REMOTE_KEYS = {
+  isEnabled: 'remoteEnabled',
+  allowsNetwork: 'remoteNetwork',
+  reachesAnywhere: 'remoteAnywhere',
+  machineName: 'machineName',
+  keepsAwake: 'keepAwake',
+} satisfies Record<keyof RemoteSettings, string>;
 
-function remoteSetting(key: keyof RemoteSettings, label: string, control: Control, extra: Partial<Setting> = {}): Setting {
+function remoteSetting(
+  key: keyof RemoteSettings,
+  label: string,
+  control: Control,
+  extra: Partial<Setting> = {},
+): Setting {
   return {
     key: REMOTE_KEYS[key],
     label,
@@ -259,7 +370,10 @@ function remoteSetting(key: keyof RemoteSettings, label: string, control: Contro
     read: ({ remote }) => remote && String(remote[key]),
     write: (value) => {
       const parsed = parseValue(control, value);
-      return parsed === null || (typeof parsed === 'string' && parsed.length > 64) ? null : { to: 'remote', patch: { [key]: parsed } };
+      return parsed === null ||
+        (typeof parsed === 'string' && parsed.length > 64)
+        ? null
+        : { to: 'remote', patch: { [key]: parsed } };
     },
     ...extra,
   };
@@ -282,7 +396,12 @@ function keybinding(id: CommandId): Setting {
       const keys = value === '' ? null : parseChord(value);
       if (value !== '' && !keys) return null;
       try {
-        return { to: 'prefs', patch: { keybindings: rebind(prefs.keybindings, id, keys, 'replace') } };
+        return {
+          to: 'prefs',
+          patch: {
+            keybindings: rebind(prefs.keybindings, id, keys, 'replace'),
+          },
+        };
       } catch {
         return null;
       }
@@ -290,7 +409,8 @@ function keybinding(id: CommandId): Setting {
   };
 }
 
-const REMOTE_REACH = "It opens this computer to other devices; only you do that.";
+const REMOTE_REACH =
+  'It opens this computer to other devices; only you do that.';
 
 const APP_SETTINGS: Setting[] = [
   {
@@ -301,32 +421,73 @@ const APP_SETTINGS: Setting[] = [
     description: 'System follows your OS appearance',
     control: choice(THEMES),
     read: ({ theme }) => theme,
-    write: (value) => (THEMES.some((t) => t.value === value) ? { to: 'theme', theme: value } : null),
+    write: (value) =>
+      THEMES.some((t) => t.value === value)
+        ? { to: 'theme', theme: value }
+        : null,
   },
   colorTheme('light'),
   colorTheme('dark'),
-  pref('reduceMotion', 'Reduce motion', 'appearance', choice(MOTION), { group: 'Mode', description: 'System follows your OS setting' }),
+  pref('reduceMotion', 'Reduce motion', 'appearance', choice(MOTION), {
+    group: 'Mode',
+    description: 'System follows your OS setting',
+  }),
   ...(Object.keys(ANIMATIONS) as AnimationArea[]).flatMap(animationSettings),
-  hostSetting('appIcon', 'App icon', 'appearance', { type: 'appIcon', options: APP_ICONS }, { group: 'App icon', description: 'While Mochi is open; Finder keeps the default' }),
-  pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }, { group: 'Folders', description: 'Where Open folder starts, and where clones and new projects go' }),
-  pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, { group: 'Startup', description: 'Off, each space opens on its default view' }),
-  ...Object.entries(ALERT_KINDS).map(
-    ([kind, label]): Setting => ({
-      key: `alert.${kind}`,
-      label,
-      section: 'notifications',
-      group: 'System alerts',
-      context: 'System alert',
-      control: SWITCH,
-      read: ({ prefs }) => String(prefs.alertKinds.includes(kind)),
-      write: (value, { prefs }) => {
-        const isOn = parseValue(SWITCH, value);
-        if (isOn === null) return null;
-        return { to: 'prefs', patch: { alertKinds: isOn ? [...new Set([...prefs.alertKinds, kind])] : prefs.alertKinds.filter((k) => k !== kind) } };
-      },
-    }),
+  hostSetting(
+    'appIcon',
+    'App icon',
+    'appearance',
+    { type: 'appIcon', options: APP_ICONS },
+    {
+      group: 'App icon',
+      description: 'While Mochi is open; Finder keeps the default',
+    },
   ),
-  pref('watchedToasts', 'Toasts for watched threads', 'notifications', SWITCH, { group: 'While Mochi is open', description: 'Only while Mochi is in front' }),
+  pref(
+    'projectsFolder',
+    'Projects folder',
+    'general',
+    {
+      type: 'text',
+      placeholder: DEFAULT_PREFS.projectsFolder,
+      fallback: DEFAULT_PREFS.projectsFolder,
+      isPath: true,
+    },
+    {
+      group: 'Folders',
+      description:
+        'Where Open folder starts, and where clones and new projects go',
+    },
+  ),
+  pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, {
+    group: 'Startup',
+    description: 'Off, each space opens on its default view',
+  }),
+  ...Object.entries(ALERT_KINDS).map(([kind, label]): Setting => ({
+    key: `alert.${kind}`,
+    label,
+    section: 'notifications',
+    group: 'System alerts',
+    context: 'System alert',
+    control: SWITCH,
+    read: ({ prefs }) => String(prefs.alertKinds.includes(kind)),
+    write: (value, { prefs }) => {
+      const isOn = parseValue(SWITCH, value);
+      if (isOn === null) return null;
+      return {
+        to: 'prefs',
+        patch: {
+          alertKinds: isOn
+            ? [...new Set([...prefs.alertKinds, kind])]
+            : prefs.alertKinds.filter((k) => k !== kind),
+        },
+      };
+    },
+  })),
+  pref('watchedToasts', 'Toasts for watched threads', 'notifications', SWITCH, {
+    group: 'While Mochi is open',
+    description: 'Only while Mochi is in front',
+  }),
   {
     key: 'dockBadge',
     label: 'App icon badge counts',
@@ -335,7 +496,10 @@ const APP_SETTINGS: Setting[] = [
     description: 'Counts the threads that need you',
     control: choice(BADGE),
     read: ({ prefs }) => (prefs.dockBadge ? 'on' : 'off'),
-    write: (value) => (value === 'on' || value === 'off' ? { to: 'prefs', patch: { dockBadge: value === 'on' } } : null),
+    write: (value) =>
+      value === 'on' || value === 'off'
+        ? { to: 'prefs', patch: { dockBadge: value === 'on' } }
+        : null,
   },
   {
     key: 'quietHours',
@@ -345,26 +509,73 @@ const APP_SETTINGS: Setting[] = [
     description: 'No alerts or toasts; the notification list still fills',
     control: SWITCH,
     read: ({ quiet }) => String(quiet.isOn),
-    write: (value) => (value === 'true' || value === 'false' ? { to: 'quiet', patch: { isOn: value === 'true' } } : null),
+    write: (value) =>
+      value === 'true' || value === 'false'
+        ? { to: 'quiet', patch: { isOn: value === 'true' } }
+        : null,
   },
-  ...(['start', 'end'] as const).map(
-    (edge): Setting => ({
-      key: edge === 'start' ? 'quietFrom' : 'quietUntil',
-      label: edge === 'start' ? 'Quiet from' : 'Quiet until',
-      section: 'notifications',
-      group: 'Quiet hours',
-      control: select(HOURS),
-      read: ({ quiet }) => String(quiet[edge]),
-      write: (value) => (HOURS.some((h) => h.value === value) ? { to: 'quiet', patch: { [edge]: Number(value) } } : null),
-    }),
+  ...(['start', 'end'] as const).map((edge): Setting => ({
+    key: edge === 'start' ? 'quietFrom' : 'quietUntil',
+    label: edge === 'start' ? 'Quiet from' : 'Quiet until',
+    section: 'notifications',
+    group: 'Quiet hours',
+    control: select(HOURS),
+    read: ({ quiet }) => String(quiet[edge]),
+    write: (value) =>
+      HOURS.some((h) => h.value === value)
+        ? { to: 'quiet', patch: { [edge]: Number(value) } }
+        : null,
+  })),
+  remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, {
+    locked: REMOTE_REACH,
+    description: 'Your other devices can follow and steer threads running here',
+  }),
+  remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, {
+    locked: REMOTE_REACH,
+    description: 'Devices on your local network or Tailscale can connect',
+  }),
+  remoteSetting(
+    'reachesAnywhere',
+    'Reach this computer from anywhere',
+    SWITCH,
+    {
+      locked: REMOTE_REACH,
+      description: 'Through Mochi’s encrypted relay, off this network',
+    },
   ),
-  remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, { locked: REMOTE_REACH, description: 'Your other devices can follow and steer threads running here' }),
-  remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, { locked: REMOTE_REACH, description: 'Devices on your local network or Tailscale can connect' }),
-  remoteSetting('reachesAnywhere', 'Reach this computer from anywhere', SWITCH, { locked: REMOTE_REACH, description: 'Through Mochi’s encrypted relay, off this network' }),
-  remoteSetting('keepsAwake', 'Keep this computer awake', SWITCH, { description: 'While a thread works or a device is connected' }),
-  remoteSetting('machineName', 'Computer name', { type: 'text', placeholder: 'This computer’s host name' }, { description: 'How your devices list this computer; empty uses the host name' }),
-  pref('agent', 'Agent', 'general', choice(AGENTS), { group: 'New threads', description: 'The harness a new thread starts on' }),
-  pref('permissions', 'Permissions', 'general', choice(SHARED_ACCESS.map((a) => ({ value: a, label: a, ...(a === 'Full access' && { tone: 'warning' as const }) }))), { locked: AGENT_REACH, group: 'New threads', description: 'What a new thread’s agent may do without asking' }),
+  remoteSetting('keepsAwake', 'Keep this computer awake', SWITCH, {
+    description: 'While a thread works or a device is connected',
+  }),
+  remoteSetting(
+    'machineName',
+    'Computer name',
+    { type: 'text', placeholder: 'This computer’s host name' },
+    {
+      description:
+        'How your devices list this computer; empty uses the host name',
+    },
+  ),
+  pref('agent', 'Agent', 'general', choice(AGENTS), {
+    group: 'New threads',
+    description: 'The harness a new thread starts on',
+  }),
+  pref(
+    'permissions',
+    'Permissions',
+    'general',
+    choice(
+      SHARED_ACCESS.map((a) => ({
+        value: a,
+        label: a,
+        ...(a === 'Full access' && { tone: 'warning' as const }),
+      })),
+    ),
+    {
+      locked: AGENT_REACH,
+      group: 'New threads',
+      description: 'What a new thread’s agent may do without asking',
+    },
+  ),
   {
     key: 'sideChatModel',
     label: 'Side chat model',
@@ -378,66 +589,267 @@ const APP_SETTINGS: Setting[] = [
       return sideChatModel && { to: 'host', patch: { sideChatModel } };
     },
   },
-  hostSetting('imageGen', 'Image generation', 'models', select(IMAGE_GEN_OPTIONS), { group: 'Image generation', description: 'Claude makes images through this harness, on this profile’s account' }),
-  pref('promptSuggestions', 'Suggest your next message', 'general', SWITCH, { group: 'Composer', description: "After each turn, the agent's suggested reply in the empty composer; Tab takes it" }),
-  pref('whileWorking', 'While the agent is working, new messages', 'general', select(WHILE_WORKING), { group: 'New threads', description: 'Steering joins the turn at its next step; queued messages go out one per turn, in order' }),
-  pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS), { group: 'Style', description: 'A few short sentences, or more of the detail' }),
-  pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH, { group: 'Style', description: 'Lead with questions and decisions waiting on you' }),
-  pref('simplifyRules', 'Your rules', 'simplify', { type: 'text', placeholder: 'Keep numbers, no jargon, one line per file', isMultiline: true }, { group: 'Style', description: 'Followed in every simplified reply' }),
-  pref('simplifyAuto', 'Simplify long replies automatically', 'simplify', SWITCH, { group: 'Automatic', description: 'Once a thread goes idle; Show original is one click away' }),
-  pref('simplifyAutoWords', 'Long means more than (words)', 'simplify', { type: 'number', min: 50, max: 2000, step: 50 }, { group: 'Automatic' }),
-  hostSetting('concurrency', 'Agents running at once', 'general', { type: 'number', ...CONCURRENCY_RANGE, step: 1 }, { group: 'Running agents', description: 'Threads past this wait their turn' }),
-  ...UTILITY_TASKS.map(
-    (task): Setting => ({
-      key: `utility.${task}`,
-      label: UTILITY_TASK_LABELS[task],
-      section: 'models',
-      group: 'Background tasks',
-      context: 'Background task model',
-      control: { type: 'model' },
-      read: ({ host }) => host && modelValue(host.utilityModels[task]),
-      write: (value) => {
-        const choice = parseModelChoice(value);
-        return choice && { to: 'host', patch: { utilityModels: { [task]: choice } } };
-      },
-    }),
+  hostSetting(
+    'imageGen',
+    'Image generation',
+    'models',
+    select(IMAGE_GEN_OPTIONS),
+    {
+      group: 'Image generation',
+      description:
+        'Claude makes images through this harness, on this profile’s account',
+    },
   ),
-  ...IDLE_ALERTS.map(
-    ({ value, label }): Setting => ({
-      key: `idleAlert.${value}`,
-      label,
-      section: 'notifications',
-      group: 'Idle threads',
-      context: 'Notify when a thread goes idle with',
-      control: SWITCH,
-      read: ({ prefs }) => String(prefs.idleAlerts.includes(value)),
-      write: (raw, { prefs }) => {
-        const isOn = parseValue(SWITCH, raw);
-        if (isOn === null) return null;
-        return { to: 'prefs', patch: { idleAlerts: isOn ? [...new Set([...prefs.idleAlerts, value])] : prefs.idleAlerts.filter((k) => k !== value) } };
-      },
-    }),
+  pref('promptSuggestions', 'Suggest your next message', 'general', SWITCH, {
+    group: 'Composer',
+    description:
+      "After each turn, the agent's suggested reply in the empty composer; Tab takes it",
+  }),
+  pref(
+    'whileWorking',
+    'While the agent is working, new messages',
+    'general',
+    select(WHILE_WORKING),
+    {
+      group: 'New threads',
+      description:
+        'Steering joins the turn at its next step; queued messages go out one per turn, in order',
+    },
   ),
-  hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.mochi/worktrees', isPath: true }, { group: 'Worktrees', description: 'Outside the project, so its git status stays clean' }),
-  hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH, { group: 'Branches and pull requests' }),
-  hostSetting('prepareWorktrees', 'Prepare worktrees before starting', 'git', SWITCH, { group: 'Worktree setup', description: 'Copy ignored files, install dependencies, then run the setup command' }),
-  hostSetting('worktreeInclude', 'Ignored files to copy', 'git', { type: 'text', placeholder: '.env*, .claude/settings.local.json', isMono: true }, { group: 'Worktree setup', description: 'Gitignore patterns, comma separated' }),
-  pref('autofixPrs', 'Auto-fix new pull requests', 'git', SWITCH, { group: 'Branches and pull requests', description: 'Fixes CI and conflicts, weighs reviews; each PR can turn it off' }),
-  pref('autoArchivePrs', 'Archive threads when their pull requests merge or close', 'git', SWITCH, { group: 'Branches and pull requests', description: 'Once every PR is done and the agent is idle; each PR can turn it off' }),
-  pref('worktreeCleanup', 'Remove settled worktrees', 'git', select(WORKTREE_CLEANUP), { group: 'Worktrees', description: 'Only clean ones; their branches stay' }),
-  pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES), { group: 'Worktrees', description: 'A worktree keeps a thread’s changes out of your checkout' }),
-  pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: DEFAULT_PREFS.branchPrefix, fallback: DEFAULT_PREFS.branchPrefix, isMono: true }, { group: 'Branches and pull requests', description: 'Comes before every new branch name, like mochi/login-bug' }),
-  pref('diffStyle', 'Diffs', 'git', choice(DIFF_STYLES), { group: 'Changes', description: 'In the Changes tab and the work log’s edits' }),
-  hostSetting('shell', 'Shell', 'terminal', { type: 'text', placeholder: '$SHELL', isMono: true }, { group: 'Shell', description: 'Empty uses your login shell' }),
-  pref('restoreTerminals', 'Restore terminals on launch', 'terminal', SWITCH, { group: 'Shell', description: 'Each thread’s tabs and recent output; shells start fresh' }),
-  pref('terminalFontSize', 'Font size', 'terminal', { type: 'number', min: 9, max: 24, step: 1 }, { group: 'Display' }),
-  pref('terminalScrollback', 'Scrollback lines', 'terminal', { type: 'number', min: 1000, max: 100_000, step: 1000 }, { group: 'Display' }),
-  pref('searchEngine', 'Search engine', 'browser', select(ENGINES), { group: 'Browser', description: 'For address bar text that isn’t a URL' }),
-  pref('simulator', 'Default simulator', 'browser', { type: 'simulator' }, { group: 'Simulator', description: 'Where the Simulator tab opens; each thread can switch' }),
-  pref('agentControl', AGENT_CONTROL.label, 'access', select(AGENT_CONTROL.options), { locked: AGENT_REACH, group: 'Agents', description: 'Threads, goals, panes, settings and the in-app browser' }),
-  pref('demoData', 'Show demo data', 'data', SWITCH, { group: 'Developer', description: 'Sample threads and profiles that never run; Mochi reloads' }),
-  pref('recordReplays', 'Record threads for replay', 'data', SWITCH, { group: 'Developer', description: 'Keep each thread’s events, up to 8 MB, so Replay can rebuild it' }),
-  pref('effort', 'Default effort', 'models', select(EFFORTS.map((level) => ({ value: level, label: effortName(level) }))), { group: 'Composer', description: 'New threads start at this effort' }),
+  pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS), {
+    group: 'Style',
+    description: 'A few short sentences, or more of the detail',
+  }),
+  pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH, {
+    group: 'Style',
+    description: 'Lead with questions and decisions waiting on you',
+  }),
+  pref(
+    'simplifyRules',
+    'Your rules',
+    'simplify',
+    {
+      type: 'text',
+      placeholder: 'Keep numbers, no jargon, one line per file',
+      isMultiline: true,
+    },
+    { group: 'Style', description: 'Followed in every simplified reply' },
+  ),
+  pref(
+    'simplifyAuto',
+    'Simplify long replies automatically',
+    'simplify',
+    SWITCH,
+    {
+      group: 'Automatic',
+      description: 'Once a thread goes idle; Show original is one click away',
+    },
+  ),
+  pref(
+    'simplifyAutoWords',
+    'Long means more than (words)',
+    'simplify',
+    { type: 'number', min: 50, max: 2000, step: 50 },
+    { group: 'Automatic' },
+  ),
+  hostSetting(
+    'concurrency',
+    'Agents running at once',
+    'general',
+    { type: 'number', ...CONCURRENCY_RANGE, step: 1 },
+    {
+      group: 'Running agents',
+      description: 'Threads past this wait their turn',
+    },
+  ),
+  ...UTILITY_TASKS.map((task): Setting => ({
+    key: `utility.${task}`,
+    label: UTILITY_TASK_LABELS[task],
+    section: 'models',
+    group: 'Background tasks',
+    context: 'Background task model',
+    control: { type: 'model' },
+    read: ({ host }) => host && modelValue(host.utilityModels[task]),
+    write: (value) => {
+      const choice = parseModelChoice(value);
+      return (
+        choice && { to: 'host', patch: { utilityModels: { [task]: choice } } }
+      );
+    },
+  })),
+  ...IDLE_ALERTS.map(({ value, label }): Setting => ({
+    key: `idleAlert.${value}`,
+    label,
+    section: 'notifications',
+    group: 'Idle threads',
+    context: 'Notify when a thread goes idle with',
+    control: SWITCH,
+    read: ({ prefs }) => String(prefs.idleAlerts.includes(value)),
+    write: (raw, { prefs }) => {
+      const isOn = parseValue(SWITCH, raw);
+      if (isOn === null) return null;
+      return {
+        to: 'prefs',
+        patch: {
+          idleAlerts: isOn
+            ? [...new Set([...prefs.idleAlerts, value])]
+            : prefs.idleAlerts.filter((k) => k !== value),
+        },
+      };
+    },
+  })),
+  hostSetting(
+    'worktreeRoot',
+    'Worktrees folder',
+    'git',
+    { type: 'text', placeholder: '~/.mochi/worktrees', isPath: true },
+    {
+      group: 'Worktrees',
+      description: 'Outside the project, so its git status stays clean',
+    },
+  ),
+  hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH, {
+    group: 'Branches and pull requests',
+  }),
+  hostSetting(
+    'prepareWorktrees',
+    'Prepare worktrees before starting',
+    'git',
+    SWITCH,
+    {
+      group: 'Worktree setup',
+      description:
+        'Copy ignored files, install dependencies, then run the setup command',
+    },
+  ),
+  hostSetting(
+    'worktreeInclude',
+    'Ignored files to copy',
+    'git',
+    {
+      type: 'text',
+      placeholder: '.env*, .claude/settings.local.json',
+      isMono: true,
+    },
+    {
+      group: 'Worktree setup',
+      description: 'Gitignore patterns, comma separated',
+    },
+  ),
+  pref('autofixPrs', 'Auto-fix new pull requests', 'git', SWITCH, {
+    group: 'Branches and pull requests',
+    description:
+      'Fixes CI and conflicts, weighs reviews; each PR can turn it off',
+  }),
+  pref(
+    'autoArchivePrs',
+    'Archive threads when their pull requests merge or close',
+    'git',
+    SWITCH,
+    {
+      group: 'Branches and pull requests',
+      description:
+        'Once every PR is done and the agent is idle; each PR can turn it off',
+    },
+  ),
+  pref(
+    'worktreeCleanup',
+    'Remove settled worktrees',
+    'git',
+    select(WORKTREE_CLEANUP),
+    { group: 'Worktrees', description: 'Only clean ones; their branches stay' },
+  ),
+  pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES), {
+    group: 'Worktrees',
+    description: 'A worktree keeps a thread’s changes out of your checkout',
+  }),
+  pref(
+    'branchPrefix',
+    'Branch prefix',
+    'git',
+    {
+      type: 'text',
+      placeholder: DEFAULT_PREFS.branchPrefix,
+      fallback: DEFAULT_PREFS.branchPrefix,
+      isMono: true,
+    },
+    {
+      group: 'Branches and pull requests',
+      description: 'Comes before every new branch name, like mochi/login-bug',
+    },
+  ),
+  pref('diffStyle', 'Diffs', 'git', choice(DIFF_STYLES), {
+    group: 'Changes',
+    description: 'In the Changes tab and the work log’s edits',
+  }),
+  hostSetting(
+    'shell',
+    'Shell',
+    'terminal',
+    { type: 'text', placeholder: '$SHELL', isMono: true },
+    { group: 'Shell', description: 'Empty uses your login shell' },
+  ),
+  pref('restoreTerminals', 'Restore terminals on launch', 'terminal', SWITCH, {
+    group: 'Shell',
+    description: 'Each thread’s tabs and recent output; shells start fresh',
+  }),
+  pref(
+    'terminalFontSize',
+    'Font size',
+    'terminal',
+    { type: 'number', min: 9, max: 24, step: 1 },
+    { group: 'Display' },
+  ),
+  pref(
+    'terminalScrollback',
+    'Scrollback lines',
+    'terminal',
+    { type: 'number', min: 1000, max: 100_000, step: 1000 },
+    { group: 'Display' },
+  ),
+  pref('searchEngine', 'Search engine', 'browser', select(ENGINES), {
+    group: 'Browser',
+    description: 'For address bar text that isn’t a URL',
+  }),
+  pref(
+    'simulator',
+    'Default simulator',
+    'browser',
+    { type: 'simulator' },
+    {
+      group: 'Simulator',
+      description: 'Where the Simulator tab opens; each thread can switch',
+    },
+  ),
+  pref(
+    'agentControl',
+    AGENT_CONTROL.label,
+    'access',
+    select(AGENT_CONTROL.options),
+    {
+      locked: AGENT_REACH,
+      group: 'Agents',
+      description: 'Threads, goals, panes, settings and the in-app browser',
+    },
+  ),
+  pref('demoData', 'Show demo data', 'data', SWITCH, {
+    group: 'Developer',
+    description: 'Sample threads and profiles that never run; Mochi reloads',
+  }),
+  pref('recordReplays', 'Record threads for replay', 'data', SWITCH, {
+    group: 'Developer',
+    description:
+      'Keep each thread’s events, up to 8 MB, so Replay can rebuild it',
+  }),
+  pref(
+    'effort',
+    'Default effort',
+    'models',
+    select(
+      EFFORTS.map((level) => ({ value: level, label: effortName(level) })),
+    ),
+    { group: 'Composer', description: 'New threads start at this effort' },
+  ),
   {
     key: 'speed',
     label: 'Default speed',
@@ -447,7 +859,10 @@ const APP_SETTINGS: Setting[] = [
     context: 'New threads',
     control: choice(SPEEDS),
     read: ({ prefs }) => prefs.speed || 'standard',
-    write: (value) => (value === 'standard' || value === 'fast' ? { to: 'prefs', patch: { speed: value === 'fast' ? 'fast' : '' } } : null),
+    write: (value) =>
+      value === 'standard' || value === 'fast'
+        ? { to: 'prefs', patch: { speed: value === 'fast' ? 'fast' : '' } }
+        : null,
     locked: "An agent can't raise what you pay.",
   },
   {
@@ -458,24 +873,58 @@ const APP_SETTINGS: Setting[] = [
     description: 'Model ids, comma-separated',
     control: { type: 'starredModels' },
     read: ({ prefs }) => prefs.starredModels.join(','),
-    write: (value) => ({ to: 'prefs', patch: { starredModels: value.split(',').map((m) => m.trim()).filter(Boolean) } }),
+    write: (value) => ({
+      to: 'prefs',
+      patch: {
+        starredModels: value
+          .split(',')
+          .map((m) => m.trim())
+          .filter(Boolean),
+      },
+    }),
   },
   ...HARNESS_IDS.flatMap((provider): Setting[] => {
     const name = HARNESSES[provider].name;
-    const harness = (field: 'path' | 'model' | 'secondOpinionModel', label: string, control: Control, extra: Partial<Setting> = {}): Setting => ({
+    const harness = (
+      field: 'path' | 'model' | 'secondOpinionModel',
+      label: string,
+      control: Control,
+      extra: Partial<Setting> = {},
+    ): Setting => ({
       key: `${provider}.${field}`,
       label: `${name} ${label}`,
       section: field === 'path' ? 'harnesses' : 'models',
       group: name,
       control,
       read: ({ host }) => host?.harnesses[provider][field],
-      write: (value) => ({ to: 'host', patch: { harnesses: { [provider]: { [field]: value } } } }),
+      write: (value) => ({
+        to: 'host',
+        patch: { harnesses: { [provider]: { [field]: value } } },
+      }),
       ...extra,
     });
     return [
-      harness('path', 'custom path', { type: 'text', placeholder: 'Found on your PATH', isMono: true }, { locked: `It picks the program that runs every agent with your login.`, description: 'Leave empty to use the one on your PATH.' }),
-      harness('model', 'default model', { type: 'model', provider }, { description: 'New threads start on this model' }),
-      harness('secondOpinionModel', 'second opinion model', { type: 'model', provider, emptyLabel: 'Default model' }, { description: `What ${name} reviews other threads on` }),
+      harness(
+        'path',
+        'custom path',
+        { type: 'text', placeholder: 'Found on your PATH', isMono: true },
+        {
+          locked: `It picks the program that runs every agent with your login.`,
+          description: 'Leave empty to use the one on your PATH.',
+        },
+      ),
+      harness(
+        'model',
+        'default model',
+        { type: 'model', provider },
+        { description: 'New threads start on this model' },
+      ),
+      harness(
+        'secondOpinionModel',
+        'second opinion model',
+        { type: 'model', provider, emptyLabel: 'Default model' },
+        { description: `What ${name} reviews other threads on` },
+      ),
     ];
   }),
   ...COMMAND_IDS.map(keybinding),
@@ -484,13 +933,20 @@ const APP_SETTINGS: Setting[] = [
 // {PROFILE}
 
 function profileSettings(config: ProfileConfig | undefined): Setting[] {
-  const field = (key: 'name' | 'github', label: string, control: Control): Setting => ({
+  const field = (
+    key: 'name' | 'github',
+    label: string,
+    control: Control,
+  ): Setting => ({
     key: `profile.${key}`,
     label,
     section: 'profile',
     control,
     read: ({ profile }) => profile?.[key],
-    write: (value) => (key === 'name' && !value.trim() ? null : { to: 'profile', patch: { [key]: value.trim() } }),
+    write: (value) =>
+      key === 'name' && !value.trim()
+        ? null
+        : { to: 'profile', patch: { [key]: value.trim() } },
   });
   return [
     field('name', 'Name', { type: 'text', placeholder: 'Profile name' }),
@@ -500,48 +956,85 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
       section: 'profile',
       control: { type: 'icon' },
       read: ({ profile }) => profile?.icon,
-      write: (value) => ((SPACE_ICON_NAMES as readonly string[]).includes(value) ? { to: 'profile', patch: { icon: value as Space['icon'] } } : null),
+      write: (value) =>
+        (SPACE_ICON_NAMES as readonly string[]).includes(value)
+          ? { to: 'profile', patch: { icon: value as Space['icon'] } }
+          : null,
     },
     field('github', 'GitHub account', { type: 'github' }),
-    ...HARNESS_IDS.map(
-      (provider): Setting => ({
-        key: `profile.${provider}Account`,
-        label: `${HARNESSES[provider].name} account`,
-        section: 'profile',
-        control: { type: 'account', provider },
-        read: ({ profile, accounts }) => profile && accounts && linkedAccountId(accounts.links, profile.id, provider),
-        write: (value, { accounts }) => (accounts?.accounts.some((a) => a.id === value && a.provider === provider) ? { to: 'account', provider, accountId: value } : null),
-      }),
-    ),
+    ...HARNESS_IDS.map((provider): Setting => ({
+      key: `profile.${provider}Account`,
+      label: `${HARNESSES[provider].name} account`,
+      section: 'profile',
+      control: { type: 'account', provider },
+      read: ({ profile, accounts }) =>
+        profile &&
+        accounts &&
+        linkedAccountId(accounts.links, profile.id, provider),
+      write: (value, { accounts }) =>
+        accounts?.accounts.some(
+          (a) => a.id === value && a.provider === provider,
+        )
+          ? { to: 'account', provider, accountId: value }
+          : null,
+    })),
     ...HARNESS_IDS.flatMap((provider) => [
-      ...(config?.[provider].mcpServers.filter((s) => s.scope === 'user') ?? []).map(
-        ({ def }): Setting => ({
-          key: `profile.${provider}.mcp.${def.name}`,
-          label: `MCP server ${def.name}`,
-          section: 'profile',
-          context: HARNESSES[provider].name,
-          control: { type: 'mcp', provider, name: def.name },
-          read: ({ config: c }) => {
-            const server = c?.[provider].mcpServers.find((s) => s.def.name === def.name);
-            return server && String(server.enabled);
-          },
-          write: (value) => (value === 'true' || value === 'false' ? { to: 'config', title: `${value === 'true' ? 'Turn on' : 'Turn off'} ${def.name}`, changes: [{ kind: 'mcp-enabled', provider, name: def.name, enabled: value === 'true' }] } : null),
-        }),
-      ),
-      ...(config?.[provider].skills ?? []).map(
-        (skill): Setting => ({
-          key: `profile.${provider}.skill.${skill.name}`,
-          label: `Skill ${skill.name}`,
-          section: 'profile',
-          context: HARNESSES[provider].name,
-          control: { type: 'skill', provider, name: skill.name },
-          read: ({ config: c }) => {
-            const found = c?.[provider].skills.find((s) => s.name === skill.name);
-            return found && String(found.enabled);
-          },
-          write: (value) => (value === 'true' || value === 'false' ? { to: 'config', title: `${value === 'true' ? 'Turn on' : 'Turn off'} ${skill.name}`, changes: [{ kind: 'skill-enabled', provider, name: skill.name, enabled: value === 'true' }] } : null),
-        }),
-      ),
+      ...(
+        config?.[provider].mcpServers.filter((s) => s.scope === 'user') ?? []
+      ).map(({ def }): Setting => ({
+        key: `profile.${provider}.mcp.${def.name}`,
+        label: `MCP server ${def.name}`,
+        section: 'profile',
+        context: HARNESSES[provider].name,
+        control: { type: 'mcp', provider, name: def.name },
+        read: ({ config: c }) => {
+          const server = c?.[provider].mcpServers.find(
+            (s) => s.def.name === def.name,
+          );
+          return server && String(server.enabled);
+        },
+        write: (value) =>
+          value === 'true' || value === 'false'
+            ? {
+                to: 'config',
+                title: `${value === 'true' ? 'Turn on' : 'Turn off'} ${def.name}`,
+                changes: [
+                  {
+                    kind: 'mcp-enabled',
+                    provider,
+                    name: def.name,
+                    enabled: value === 'true',
+                  },
+                ],
+              }
+            : null,
+      })),
+      ...(config?.[provider].skills ?? []).map((skill): Setting => ({
+        key: `profile.${provider}.skill.${skill.name}`,
+        label: `Skill ${skill.name}`,
+        section: 'profile',
+        context: HARNESSES[provider].name,
+        control: { type: 'skill', provider, name: skill.name },
+        read: ({ config: c }) => {
+          const found = c?.[provider].skills.find((s) => s.name === skill.name);
+          return found && String(found.enabled);
+        },
+        write: (value) =>
+          value === 'true' || value === 'false'
+            ? {
+                to: 'config',
+                title: `${value === 'true' ? 'Turn on' : 'Turn off'} ${skill.name}`,
+                changes: [
+                  {
+                    kind: 'skill-enabled',
+                    provider,
+                    name: skill.name,
+                    enabled: value === 'true',
+                  },
+                ],
+              }
+            : null,
+      })),
     ]),
   ];
 }
@@ -550,16 +1043,43 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
 function animationSettings(area: AnimationArea): Setting[] {
   const { label, description, items } = ANIMATIONS[area];
   const ids: string[] = items.map((item) => item.value);
-  const base = { section: 'appearance', group: 'Animations', control: SWITCH } as const;
-  const write = (only: string[]) => (value: string, { prefs }: SettingSources): SettingWrite | null => {
-    const isOn = parseValue(SWITCH, value);
-    if (isOn === null) return null;
-    return { to: 'prefs', patch: { animations: isOn ? [...new Set([...prefs.animations, ...only])] : prefs.animations.filter((id) => !only.includes(id)) } };
-  };
+  const base = {
+    section: 'appearance',
+    group: 'Animations',
+    control: SWITCH,
+  } as const;
+  const write =
+    (only: string[]) =>
+    (value: string, { prefs }: SettingSources): SettingWrite | null => {
+      const isOn = parseValue(SWITCH, value);
+      if (isOn === null) return null;
+      return {
+        to: 'prefs',
+        patch: {
+          animations: isOn
+            ? [...new Set([...prefs.animations, ...only])]
+            : prefs.animations.filter((id) => !only.includes(id)),
+        },
+      };
+    };
   return [
-    { ...base, key: `animations.${area}`, label, description, read: ({ prefs }) => String(ids.some((id) => prefs.animations.includes(id))), write: write(ids) },
-    ...items.map(
-      (item): Setting => ({ ...base, key: `animation.${item.value}`, label: item.label, description: item.description, context: label, read: ({ prefs }) => String(prefs.animations.includes(item.value)), write: write([item.value]) }),
-    ),
+    {
+      ...base,
+      key: `animations.${area}`,
+      label,
+      description,
+      read: ({ prefs }) =>
+        String(ids.some((id) => prefs.animations.includes(id))),
+      write: write(ids),
+    },
+    ...items.map((item): Setting => ({
+      ...base,
+      key: `animation.${item.value}`,
+      label: item.label,
+      description: item.description,
+      context: label,
+      read: ({ prefs }) => String(prefs.animations.includes(item.value)),
+      write: write([item.value]),
+    })),
   ];
 }

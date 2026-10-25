@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { terminalShell } from '../agents/config.ts';
+import { terminalShell } from '@mochi/core/agents/config';
 import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -25,11 +25,23 @@ autoload -Uz add-zle-hook-widget && add-zle-hook-widget line-init __harness_line
 
 let zdotdir: string | undefined;
 
-export function shellLaunch(): { file: string; args: string[]; env: Record<string, string> } {
+export function shellLaunch(): {
+  file: string;
+  args: string[];
+  env: Record<string, string>;
+} {
   const file = terminalShell();
   if (path.basename(file) !== 'zsh') return { file, args: ['-l'], env: {} };
   zdotdir ??= writeZshRc();
-  return { file, args: ['-l'], env: { ZDOTDIR: zdotdir, HARNESS_ZDOTDIR: zdotdir, HARNESS_USER_ZDOTDIR: process.env.ZDOTDIR ?? process.env.HOME ?? '' } };
+  return {
+    file,
+    args: ['-l'],
+    env: {
+      ZDOTDIR: zdotdir,
+      HARNESS_ZDOTDIR: zdotdir,
+      HARNESS_USER_ZDOTDIR: process.env.ZDOTDIR ?? process.env.HOME ?? '',
+    },
+  };
 }
 
 function writeZshRc() {
@@ -55,7 +67,12 @@ export function ensureSpawnHelper() {
   const require = createRequire(import.meta.url);
   // Packaged, the helper lives in app.asar.unpacked (see scripts/after-pack.mjs); its asar entry reports the mode it had before packing.
   const helper = path
-    .join(path.dirname(require.resolve('node-pty/package.json')), 'prebuilds', `darwin-${process.arch}`, 'spawn-helper')
+    .join(
+      path.dirname(require.resolve('node-pty/package.json')),
+      'prebuilds',
+      `darwin-${process.arch}`,
+      'spawn-helper',
+    )
     .replace('app.asar', 'app.asar.unpacked');
   const stat = statSync(helper, { throwIfNoEntry: false });
   if (stat && !(stat.mode & 0o111)) chmodSync(helper, 0o755);

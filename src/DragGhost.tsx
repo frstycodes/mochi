@@ -9,7 +9,25 @@ import { tiltFor } from './dragTilt';
  * dips, held right its left end dips, held in the middle it stays level. Give the dropped item the same `layoutId` and it
  * glides from here into its slot while it levels out.
  */
-export function DragGhost({ x, y, width, grabX, grabY, layoutId, className, children }: { x: number; y: number; width: number; grabX: number; grabY: number; layoutId?: string; className?: string; children: ReactNode }) {
+export function DragGhost({
+  x,
+  y,
+  width,
+  grabX,
+  grabY,
+  layoutId,
+  className,
+  children,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  grabX: number;
+  grabY: number;
+  layoutId?: string;
+  className?: string;
+  children: ReactNode;
+}) {
   const reduce = useReducedMotionConfig();
   // Motion values, not style props: a re-render with a new left/top would read as a layout change and animate behind the pointer.
   const left = useMotionValue(x);
@@ -22,7 +40,10 @@ export function DragGhost({ x, y, width, grabX, grabY, layoutId, className, chil
     <motion.div
       aria-hidden
       layoutId={layoutId}
-      className={cn('pointer-events-none fixed z-[600] shadow-float', className)}
+      className={cn(
+        'pointer-events-none fixed z-[600] shadow-float',
+        className,
+      )}
       style={{ left, top, width, originX: `${grabX}px`, originY: `${grabY}px` }}
       initial={{ rotate: 0 }}
       animate={{ rotate: reduce ? 0 : tiltFor(grabX, width) }}

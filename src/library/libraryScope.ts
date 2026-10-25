@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import type { Space } from '../model';
 import { useProfiles } from '../profiles';
 import { useHarnessSelector } from '../store';
@@ -9,26 +10,33 @@ import { useHarnessSelector } from '../store';
  */
 export const ALL_PROFILES = 'all';
 
-let picked: string | null = null;
-const listeners = new Set<() => void>();
+const scopeStore = createStore<{ picked: string | null }>(() => ({
+  picked: null,
+}));
 
 export function setLibraryScope(id: string) {
-  picked = id;
-  listeners.forEach((l) => l());
+  scopeStore.setState({ picked: id });
 }
 
 /** `profile` is null for All profiles; `installTo` is where a new item goes: the profile, or every profile. */
-export function useLibraryScope(): { id: string; profile: Space | null; installTo: string[] } {
-  const chosen = useSyncExternalStore(subscribe, () => picked);
+export function useLibraryScope(): {
+  id: string;
+  profile: Space | null;
+  installTo: string[];
+} {
+  const chosen = useStore(scopeStore, (s) => s.picked);
   const profiles = useProfiles();
   const spaceId = useHarnessSelector((s) => s.spaceId);
-  if (chosen === ALL_PROFILES) return { id: ALL_PROFILES, profile: null, installTo: profiles.map((p) => p.id) };
+  if (chosen === ALL_PROFILES)
+    return {
+      id: ALL_PROFILES,
+      profile: null,
+      installTo: profiles.map((p) => p.id),
+    };
   // A picked profile that was since removed falls back to the one you're in.
-  const profile = profiles.find((p) => p.id === chosen) ?? profiles.find((p) => p.id === spaceId) ?? profiles[0];
+  const profile =
+    profiles.find((p) => p.id === chosen) ??
+    profiles.find((p) => p.id === spaceId) ??
+    profiles[0];
   return { id: profile.id, profile, installTo: [profile.id] };
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
 }

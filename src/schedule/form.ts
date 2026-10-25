@@ -1,4 +1,8 @@
-import type { MissedRuns, PrEvent, TriggerWhen } from '../host/types/schedule.ts';
+import type {
+  MissedRuns,
+  PrEvent,
+  TriggerWhen,
+} from '../host/types/schedule.ts';
 import { describeCron, isValidCron, nextRuns, parseCron } from './cron.ts';
 
 export const PRESETS = [
@@ -22,18 +26,48 @@ export interface ScheduleForm {
   missed: MissedRuns;
 }
 
-export const DEFAULT_FORM: ScheduleForm = { kind: 'cron', preset: 'nightly', time: '02:00', cron: '0 2 * * *', event: 'opened', branch: '', label: '', missed: 'run-once' };
+export const DEFAULT_FORM: ScheduleForm = {
+  kind: 'cron',
+  preset: 'nightly',
+  time: '02:00',
+  cron: '0 2 * * *',
+  event: 'opened',
+  branch: '',
+  label: '',
+  missed: 'run-once',
+};
 
 const DAILY = /^(\d{1,2}) (\d{1,2}) \* \* \*$/;
 const WEEKDAYS = /^(\d{1,2}) (\d{1,2}) \* \* 1-5$/;
 const pad = (n: string) => n.padStart(2, '0');
 
 export function fromWhen(when: TriggerWhen, missed: MissedRuns): ScheduleForm {
-  if (when.kind === 'pr') return { ...DEFAULT_FORM, kind: 'pr', event: when.event, branch: when.branch ?? '', label: when.label ?? '', missed };
+  if (when.kind === 'pr')
+    return {
+      ...DEFAULT_FORM,
+      kind: 'pr',
+      event: when.event,
+      branch: when.branch ?? '',
+      label: when.label ?? '',
+      missed,
+    };
   const cron = when.cron.trim().replace(/\s+/g, ' ');
   const daily = DAILY.exec(cron) ?? WEEKDAYS.exec(cron);
-  const preset: Preset = cron === '0 * * * *' ? 'hourly' : DAILY.test(cron) ? 'nightly' : WEEKDAYS.test(cron) ? 'weekdays' : 'custom';
-  return { ...DEFAULT_FORM, preset, cron, missed, time: daily ? `${pad(daily[2])}:${pad(daily[1])}` : DEFAULT_FORM.time };
+  const preset: Preset =
+    cron === '0 * * * *'
+      ? 'hourly'
+      : DAILY.test(cron)
+        ? 'nightly'
+        : WEEKDAYS.test(cron)
+          ? 'weekdays'
+          : 'custom';
+  return {
+    ...DEFAULT_FORM,
+    preset,
+    cron,
+    missed,
+    time: daily ? `${pad(daily[2])}:${pad(daily[1])}` : DEFAULT_FORM.time,
+  };
 }
 
 /** The cron a preset stands for; the custom one is whatever was typed. */
@@ -46,9 +80,24 @@ export function formCron(form: ScheduleForm) {
 }
 
 /** The trigger, or the reason the form can't make one. */
-export function toWhen(form: ScheduleForm): { when: TriggerWhen } | { error: string } {
-  if (form.kind === 'pr') return { when: { kind: 'pr', event: form.event, ...(form.branch.trim() && { branch: form.branch.trim() }), ...(form.label.trim() && { label: form.label.trim() }) } };
-  if (form.preset !== 'hourly' && form.preset !== 'custom' && !/^\d{2}:\d{2}$/.test(form.time)) return { error: 'Pick a time' };
+export function toWhen(
+  form: ScheduleForm,
+): { when: TriggerWhen } | { error: string } {
+  if (form.kind === 'pr')
+    return {
+      when: {
+        kind: 'pr',
+        event: form.event,
+        ...(form.branch.trim() && { branch: form.branch.trim() }),
+        ...(form.label.trim() && { label: form.label.trim() }),
+      },
+    };
+  if (
+    form.preset !== 'hourly' &&
+    form.preset !== 'custom' &&
+    !/^\d{2}:\d{2}$/.test(form.time)
+  )
+    return { error: 'Pick a time' };
   const cron = formCron(form);
   try {
     parseCron(cron);

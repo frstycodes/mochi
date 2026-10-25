@@ -47,7 +47,12 @@ export interface SimHost {
   stopStream(udid: string): Promise<void>;
   onFrame(listener: (frame: SimFrame) => void): () => void;
   /** x and y are 0...1 across the screen. */
-  touch(udid: string, phase: SimTouchPhase, x: number, y: number): Promise<void>;
+  touch(
+    udid: string,
+    phase: SimTouchPhase,
+    x: number,
+    y: number,
+  ): Promise<void>;
   button(udid: string, button: SimButton): Promise<void>;
   type(udid: string, text: string): Promise<void>;
   /** HID usage of a non-printing key (backspace 42, return 40, arrows 79–82). */

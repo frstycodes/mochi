@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { host } from '../host';
 import type { ApprovalRequest } from '../host/types/remote';
 import { PairingCode } from './PairingCode';
@@ -7,11 +16,20 @@ import { PairingCode } from './PairingCode';
 /** "Let <computer> join?" when a computer of yours joins through this one. Unanswered by its deadline, it closes as No in main too. */
 export function DeviceApprovalLayer() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
-  useEffect(() => host.remote.onApproval((request) => setRequests((all) => [...all, request])), []);
+  useEffect(
+    () =>
+      host.remote.onApproval((request) =>
+        setRequests((all) => [...all, request]),
+      ),
+    [],
+  );
   const request = requests[0];
   useEffect(() => {
     if (!request) return;
-    const timer = setTimeout(() => setRequests((all) => all.slice(1)), Math.max(0, request.expiresAt - Date.now()));
+    const timer = setTimeout(
+      () => setRequests((all) => all.slice(1)),
+      Math.max(0, request.expiresAt - Date.now()),
+    );
     return () => clearTimeout(timer);
   }, [request]);
   const answer = (isAllowed: boolean) => {
@@ -20,21 +38,32 @@ export function DeviceApprovalLayer() {
     setRequests((all) => all.slice(1));
   };
   return (
-    <AlertDialog open={!!request} onOpenChange={(open) => !open && answer(false)}>
+    <AlertDialog
+      open={!!request}
+      onOpenChange={(open) => !open && answer(false)}
+    >
       {!!request && (
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Let “{request.name}” join your computers?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Let “{request.name}” join your computers?
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="flex flex-col gap-3">
-                <p>It will reach every computer of yours, and they it, to follow and steer their threads. Allow it only if “{request.name}” shows this code:</p>
+                <p>
+                  It will reach every computer of yours, and they it, to follow
+                  and steer their threads. Allow it only if “{request.name}”
+                  shows this code:
+                </p>
                 <PairingCode code={request.pairingCode} />
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Don’t allow</AlertDialogCancel>
-            <AlertDialogAction onClick={() => answer(true)}>Let it join</AlertDialogAction>
+            <AlertDialogAction onClick={() => answer(true)}>
+              Let it join
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       )}

@@ -22,7 +22,8 @@ export function vizGalleryThread(): Thread {
   };
 }
 
-const fence = (lang: string, body: string, meta = '') => `\`\`\`${lang}${meta ? ` ${meta}` : ''}\n${body}\n\`\`\``;
+const fence = (lang: string, body: string, meta = '') =>
+  `\`\`\`${lang}${meta ? ` ${meta}` : ''}\n${body}\n\`\`\``;
 
 const LATENCY = {
   type: 'line',
@@ -44,7 +45,11 @@ const REJECTIONS = {
   title: '429s per hour after rollout',
   x: 'hour',
   series: ['Free', 'Pro'],
-  data: ['09', '10', '11', '12', '13', '14'].map((hour, i) => ({ hour: `${hour}:00`, Free: [42, 61, 55, 38, 47, 30][i], Pro: [6, 9, 4, 3, 7, 2][i] })),
+  data: ['09', '10', '11', '12', '13', '14'].map((hour, i) => ({
+    hour: `${hour}:00`,
+    Free: [42, 61, 55, 38, 47, 30][i],
+    Pro: [6, 9, 4, 3, 7, 2][i],
+  })),
 };
 
 const PLAN_MIX = {
@@ -98,13 +103,24 @@ const BUCKET_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120
 </svg>`;
 
 const SCREENSHOT = `data:image/svg+xml;base64,${btoa(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="640" height="400"><rect width="320" height="200" fill="#f7f8fa"/><rect x="16" y="16" width="96" height="10" rx="3" fill="#1d1f24"/><rect x="248" y="14" width="56" height="14" rx="7" fill="#1d1f24"/>${[30, 36, 34, 44, 41, 52, 50, 58, 62, 70, 66, 78]
-    .map((h, i) => `<rect x="${20 + i * 24}" y="${170 - h * 1.6}" width="16" height="${h * 1.6}" rx="3" fill="#2a78d6" opacity="${0.5 + i * 0.04}"/>`)
-    .join('')}<rect x="16" y="176" width="288" height="1" fill="#e3e5ea"/></svg>`,
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="640" height="400"><rect width="320" height="200" fill="#f7f8fa"/><rect x="16" y="16" width="96" height="10" rx="3" fill="#1d1f24"/><rect x="248" y="14" width="56" height="14" rx="7" fill="#1d1f24"/>${[
+    30, 36, 34, 44, 41, 52, 50, 58, 62, 70, 66, 78,
+  ]
+    .map(
+      (h, i) =>
+        `<rect x="${20 + i * 24}" y="${170 - h * 1.6}" width="16" height="${h * 1.6}" rx="3" fill="#2a78d6" opacity="${0.5 + i * 0.04}"/>`,
+    )
+    .join(
+      '',
+    )}<rect x="16" y="176" width="288" height="1" fill="#e3e5ea"/></svg>`,
 )}`;
 
 const GALLERY: Omit<ActivityEntry, 'at'>[] = [
-  { who: 'you', kind: 'message', text: 'Before we ship rate limits, show me what you can draw inline in the chat.' },
+  {
+    who: 'you',
+    kind: 'message',
+    text: 'Before we ship rate limits, show me what you can draw inline in the chat.',
+  },
   {
     who: 'claude',
     kind: 'message',
@@ -113,9 +129,15 @@ const GALLERY: Omit<ActivityEntry, 'at'>[] = [
       '',
       '$$\ntokens_{t} = \\min\\left(B,\\; tokens_{t-1} + r\\,\\Delta t\\right)\n$$',
       '',
-      fence('mermaid', 'flowchart LR\n  req[Request] --> key{API key?}\n  key -- no --> r401[401]\n  key -- yes --> bucket[Take token]\n  bucket -- empty --> r429[429 + Retry-After]\n  bucket -- ok --> handler[Route handler]'),
+      fence(
+        'mermaid',
+        'flowchart LR\n  req[Request] --> key{API key?}\n  key -- no --> r401[401]\n  key -- yes --> bucket[Take token]\n  bucket -- empty --> r429[429 + Retry-After]\n  bucket -- ok --> handler[Route handler]',
+      ),
       '',
-      fence('ts', "export async function take(key: string, plan: Plan) {\n  const bucket = await redis().then((r) => tokenBucket(r, key, LIMITS[plan]));\n  return bucket.take(1);\n}"),
+      fence(
+        'ts',
+        'export async function take(key: string, plan: Plan) {\n  const bucket = await redis().then((r) => tokenBucket(r, key, LIMITS[plan]));\n  return bucket.take(1);\n}',
+      ),
       '',
       'CJK wraps and emphasises correctly too: **日本語の文章**も、中文的**标点**也可以。',
     ].join('\n'),
@@ -123,7 +145,17 @@ const GALLERY: Omit<ActivityEntry, 'at'>[] = [
   {
     who: 'claude',
     kind: 'message',
-    text: ['Latency held steady per tier through the week:', '', fence('chart', JSON.stringify(LATENCY, null, 2)), '', 'Most 429s land on Free keys:', '', fence('chart', JSON.stringify(REJECTIONS, null, 2)), '', fence('chart', JSON.stringify(PLAN_MIX, null, 2))].join('\n'),
+    text: [
+      'Latency held steady per tier through the week:',
+      '',
+      fence('chart', JSON.stringify(LATENCY, null, 2)),
+      '',
+      'Most 429s land on Free keys:',
+      '',
+      fence('chart', JSON.stringify(REJECTIONS, null, 2)),
+      '',
+      fence('chart', JSON.stringify(PLAN_MIX, null, 2)),
+    ].join('\n'),
   },
   {
     who: 'claude',
@@ -143,9 +175,21 @@ const GALLERY: Omit<ActivityEntry, 'at'>[] = [
   {
     who: 'claude',
     kind: 'message',
-    text: ['Pick a tier to preview its headroom; double-click one and I will load-test it:', '', fence('html', WIDGET, 'title="Tier picker"'), '', 'How the bucket works:', '', fence('svg', BUCKET_SVG, 'title="Token bucket"')].join('\n'),
+    text: [
+      'Pick a tier to preview its headroom; double-click one and I will load-test it:',
+      '',
+      fence('html', WIDGET, 'title="Tier picker"'),
+      '',
+      'How the bucket works:',
+      '',
+      fence('svg', BUCKET_SVG, 'title="Token bucket"'),
+    ].join('\n'),
   },
-  { who: 'claude', kind: 'message', text: `Here is the usage page before and after the change. Click one to page through both; drag one into the composer to attach it.\n\n![Usage page before](${SCREENSHOT})\n\n![API usage page](${SCREENSHOT})` },
+  {
+    who: 'claude',
+    kind: 'message',
+    text: `Here is the usage page before and after the change. Click one to page through both; drag one into the composer to attach it.\n\n![Usage page before](${SCREENSHOT})\n\n![API usage page](${SCREENSHOT})`,
+  },
   {
     who: 'claude',
     kind: 'message',
@@ -154,12 +198,42 @@ const GALLERY: Omit<ActivityEntry, 'at'>[] = [
       '',
       fence('harness-metro', '{ "threads": ["rl", "adm", "e2e"] }'),
       '',
-      fence('harness-diff', JSON.stringify({ title: 'Rate limiting so far', files: [{ path: 'packages/cache/redis.ts', added: 38, removed: 0 }, { path: 'packages/cache/token-bucket.ts', added: 64, removed: 0 }, { path: 'apps/api/middleware/rate-limit.ts', added: 41, removed: 7 }, { path: 'docs/api/limits.md', added: 22, removed: 3 }] }, null, 2)),
+      fence(
+        'harness-diff',
+        JSON.stringify(
+          {
+            title: 'Rate limiting so far',
+            files: [
+              { path: 'packages/cache/redis.ts', added: 38, removed: 0 },
+              { path: 'packages/cache/token-bucket.ts', added: 64, removed: 0 },
+              {
+                path: 'apps/api/middleware/rate-limit.ts',
+                added: 41,
+                removed: 7,
+              },
+              { path: 'docs/api/limits.md', added: 22, removed: 3 },
+            ],
+          },
+          null,
+          2,
+        ),
+      ),
     ].join('\n'),
   },
   {
     who: 'claude',
     kind: 'message',
-    text: ['A fence that fails to parse shows its source instead of a broken frame:', '', fence('chart', '{ "type": "bar", "x": "day", "data": [{ "day": "Mon", "calls": "twelve" }] }'), '', 'And one still streaming:', '', '```chart\n{ "type": "area", "x": "day", "data": [{ "day": "Mon", "calls": 3'].join('\n'),
+    text: [
+      'A fence that fails to parse shows its source instead of a broken frame:',
+      '',
+      fence(
+        'chart',
+        '{ "type": "bar", "x": "day", "data": [{ "day": "Mon", "calls": "twelve" }] }',
+      ),
+      '',
+      'And one still streaming:',
+      '',
+      '```chart\n{ "type": "area", "x": "day", "data": [{ "day": "Mon", "calls": 3',
+    ].join('\n'),
   },
 ];

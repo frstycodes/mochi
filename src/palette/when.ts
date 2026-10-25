@@ -49,8 +49,10 @@ export const when = {
   unwatched: (s: ActionScope) => isLive(s) && !s.isWatched,
   watched: (s: ActionScope) => !!s.thread && s.isWatched,
   repo: (s: ActionScope) => !!s.thread?.repo,
-  autofixOff: (s: ActionScope) => !!s.thread && !!autofixPr(s.thread) && !autofixPr(s.thread)!.autofixSince,
-  autofixOn: (s: ActionScope) => !!s.thread && !!autofixPr(s.thread)?.autofixSince,
+  autofixOff: (s: ActionScope) =>
+    !!s.thread && !!autofixPr(s.thread) && !autofixPr(s.thread)!.autofixSince,
+  autofixOn: (s: ActionScope) =>
+    !!s.thread && !!autofixPr(s.thread)?.autofixSince,
   worktree: (s: ActionScope) => !!s.thread?.repo && s.isDesktop,
   splits: (s: ActionScope) => s.leafCount > 1,
   /** Swap, rotate and zoom need every split on screen. */
@@ -65,12 +67,17 @@ export const when = {
   poppableTab: (s: ActionScope) => !!s.tab && s.tab.kind !== 'browser',
   browserTab: (s: ActionScope) => s.tab?.kind === 'browser',
   /** A browser tab showing a web page, not about:blank. */
-  webTab: (s: ActionScope) => s.tab?.kind === 'browser' && /^https?:/i.test(s.tab.url ?? ''),
+  webTab: (s: ActionScope) =>
+    s.tab?.kind === 'browser' && /^https?:/i.test(s.tab.url ?? ''),
   otherTabs: (s: ActionScope) => tabIndex(s) >= 0 && s.tabs.length > 1,
-  tabsToRight: (s: ActionScope) => tabIndex(s) >= 0 && tabIndex(s) < s.tabs.length - 1,
+  tabsToRight: (s: ActionScope) =>
+    tabIndex(s) >= 0 && tabIndex(s) < s.tabs.length - 1,
 };
 
-export function available<T extends { id: string; when?: Rule }>(actions: readonly T[], scope: ActionScope) {
+export function available<T extends { id: string; when?: Rule }>(
+  actions: readonly T[],
+  scope: ActionScope,
+) {
   return actions.filter((a) => !a.when || a.when(scope));
 }
 
@@ -82,22 +89,36 @@ export function splitByRule(rule: Rule | undefined, scopes: ActionScope[]) {
 
 const IS_DESKTOP = typeof window !== 'undefined' && !!window.harnessHost;
 
-export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_DESKTOP): ActionScope {
+export function scopeOf(
+  state: State,
+  target: ScopeTarget = {},
+  isDesktop = IS_DESKTOP,
+): ActionScope {
   const layout = state.layouts[state.spaceId];
   const leafId = target.leafId ?? layout.focusId;
   const view = findLeaf(layout.root, leafId)?.view;
   const threadId = target.threadId ?? threadOf(view);
   const thread = state.threads.find((t) => t.id === threadId);
   const pane = state.panes.find((p) => p.threadId === threadId);
-  const tabId = target.tabId ?? (view?.kind === 'tab' ? view.tabId : !target.threadId && pane?.isOpen ? pane.activeTab : undefined);
+  const tabId =
+    target.tabId ??
+    (view?.kind === 'tab'
+      ? view.tabId
+      : !target.threadId && pane?.isOpen
+        ? pane.activeTab
+        : undefined);
   const tab = pane?.tabs.find((t) => t.id === tabId);
   // Close others / to the right work within the tab's own pane.
-  const tabs = pane?.tabs.filter((t) => !t.isPopped && t.kind === tab?.kind) ?? [];
+  const tabs =
+    pane?.tabs.filter((t) => !t.isPopped && t.kind === tab?.kind) ?? [];
   return {
     thread,
-    isFocused: !!thread && thread.id === threadOf(findLeaf(layout.root, layout.focusId)?.view),
+    isFocused:
+      !!thread &&
+      thread.id === threadOf(findLeaf(layout.root, layout.focusId)?.view),
     isRow: !!target.isRow,
-    isPinned: !!thread && pinnedThreads(state.threads, state.spaceId).includes(thread),
+    isPinned:
+      !!thread && pinnedThreads(state.threads, state.spaceId).includes(thread),
     isWatched: !!thread && state.watched.includes(thread.id),
     isDesktop,
     leafId,
@@ -111,5 +132,9 @@ export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_D
 }
 
 function threadOf(view: View | undefined) {
-  return view?.kind === 'thread' ? view.id : view?.kind === 'tab' ? view.threadId : undefined;
+  return view?.kind === 'thread'
+    ? view.id
+    : view?.kind === 'tab'
+      ? view.threadId
+      : undefined;
 }

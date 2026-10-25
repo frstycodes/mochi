@@ -3,9 +3,20 @@ import type { ThreadSummary } from './summary.ts';
 import { hasGoal } from './drift.ts';
 import { activeTasks } from './runtime/tasks.ts';
 
-export type SummaryCardId = 'goal' | 'environment' | 'sources' | 'connectors' | 'servers' | 'outputs' | 'changes' | 'tasks';
+export type SummaryCardId =
+  | 'goal'
+  | 'environment'
+  | 'sources'
+  | 'connectors'
+  | 'servers'
+  | 'outputs'
+  | 'changes'
+  | 'tasks';
 
-export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+export const TOKENS = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 
 /** The cards with something to show, in Claude's order: where it runs, what it holds, what it reaches, what it made, then what still runs. */
 export function summaryCards({
@@ -26,7 +37,8 @@ export function summaryCards({
     !!thread.agent?.mcpServers?.length && 'connectors',
     portCount > 0 && 'servers',
     outputCount > 0 && 'outputs',
-    (!!thread.repo || summary.files.length > 0 || thread.prs.length > 0) && 'changes',
+    (!!thread.repo || summary.files.length > 0 || thread.prs.length > 0) &&
+      'changes',
     activeTasks(thread).length > 0 && 'tasks',
   ];
   return cards.filter((c) => c !== false);
@@ -36,22 +48,34 @@ const PLURAL = new Intl.PluralRules('en');
 
 /** The connectors' state in a few words: what needs you first, else how many are up. */
 export function connectorStatus(servers: Pick<McpServer, 'status'>[]) {
-  const broken = servers.filter((s) => s.status === 'needs-auth' || s.status === 'failed').length;
+  const broken = servers.filter(
+    (s) => s.status === 'needs-auth' || s.status === 'failed',
+  ).length;
   if (broken) return { text: `${broken} to reconnect`, needsYou: true };
   const connected = servers.filter((s) => s.status === 'connected').length;
-  if (connected === servers.length) return { text: `${connected} connected`, needsYou: false };
+  if (connected === servers.length)
+    return { text: `${connected} connected`, needsYou: false };
   const pending = servers.filter((s) => s.status === 'pending').length;
   if (pending) return { text: `${pending} connecting`, needsYou: false };
   return { text: `${connected} of ${servers.length} on`, needsYou: false };
 }
 
-export const fileCount = (n: number) => `${n} ${PLURAL.select(n) === 'one' ? 'file' : 'files'}`;
+export const fileCount = (n: number) =>
+  `${n} ${PLURAL.select(n) === 'one' ? 'file' : 'files'}`;
 
 /** `cards` in the order you dragged them to; a card you never placed keeps its default slot among them. */
-export function orderCards(cards: SummaryCardId[], saved: readonly string[]): SummaryCardId[] {
-  const placed = saved.filter((id): id is SummaryCardId => (cards as string[]).includes(id));
+export function orderCards(
+  cards: SummaryCardId[],
+  saved: readonly string[],
+): SummaryCardId[] {
+  const placed = saved.filter((id): id is SummaryCardId =>
+    (cards as string[]).includes(id),
+  );
   const out = [...placed];
-  cards.forEach((id, i) => !placed.includes(id) && out.splice(Math.min(i, out.length), 0, id));
+  cards.forEach(
+    (id, i) =>
+      !placed.includes(id) && out.splice(Math.min(i, out.length), 0, id),
+  );
   return out;
 }
 

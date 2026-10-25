@@ -1,8 +1,8 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { host } from './host';
 
-let zoom = 1;
-const listeners = new Set<() => void>();
+const zoomStore = createStore<{ zoom: number }>(() => ({ zoom: 1 }));
 
 /** The lights stay native size under ⌘+ / ⌘−, so the headers' inset for them is `--lights-end` in CSS px; zooming changes `devicePixelRatio`. */
 export function followZoom() {
@@ -11,9 +11,8 @@ export function followZoom() {
     if (window.devicePixelRatio === ratio) return;
     ratio = window.devicePixelRatio;
     void host.windows.zoomFactor().then((next) => {
-      zoom = next;
+      zoomStore.setState({ zoom: next });
       document.documentElement.style.setProperty('--app-zoom', String(next));
-      for (const listener of listeners) listener();
     });
   };
   sync();
@@ -22,15 +21,10 @@ export function followZoom() {
 
 /** `--lights-end` in `index.css`, in CSS px, for code that measures against it. */
 export function lightsEnd() {
-  return 75 / zoom;
+  return 75 / zoomStore.getState().zoom;
 }
 
 /** The app's ⌘+ / ⌘− zoom factor; always 1 off the desktop app. */
 export function useAppZoom() {
-  return useSyncExternalStore(subscribe, () => zoom);
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  return useStore(zoomStore, (s) => s.zoom);
 }

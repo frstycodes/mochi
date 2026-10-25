@@ -2,7 +2,8 @@ import type { NotifyHost, NotifyPermission } from '../types/notify.ts';
 
 const listeners = new Set<(id: string) => void>();
 const shown = new Map<string, Notification>();
-const permission = (): NotifyPermission => (typeof Notification === 'undefined' ? 'denied' : Notification.permission);
+const permission = (): NotifyPermission =>
+  typeof Notification === 'undefined' ? 'denied' : Notification.permission;
 
 export const notify: NotifyHost = {
   async show({ title, body, id }) {

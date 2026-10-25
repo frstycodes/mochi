@@ -1,5 +1,4 @@
 import { account as desktopAccount } from './desktop/account.ts';
-import { updates as desktopUpdates } from './desktop/updates.ts';
 import { agent as desktopAgent } from './desktop/agent.ts';
 import { data as desktopData } from './desktop/data.ts';
 import { browser as desktopBrowser } from './desktop/browser.ts';
@@ -19,7 +18,6 @@ import { windows as desktopWindows } from './desktop/windows.ts';
 import { usage as desktopUsage } from './desktop/usage.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
 import { account as webAccount } from './web/account.ts';
-import { updates as webUpdates } from './web/updates.ts';
 import { agent as webAgent } from './web/agent.ts';
 import { data as webData } from './web/data.ts';
 import { browser as webBrowser } from './web/browser.ts';
@@ -37,10 +35,14 @@ import { sim as webSim } from './web/sim.ts';
 import { themes as webThemes } from './web/themes.ts';
 import { windows as webWindows } from './web/windows.ts';
 import { usage as webUsage } from './web/usage.ts';
+import { isServed } from './web/core.ts';
+import { servedNamespace } from './web/served.ts';
 
 export type { HostBridge, Namespace } from './types/index.ts';
 
-type Registry = { [K in Namespace]: { web: HostBridge[K]; desktop: () => HostBridge[K] } };
+type Registry = {
+  [K in Namespace]: { web: HostBridge[K]; desktop: () => HostBridge[K] };
+};
 
 // Desktop impls are getters so the web build never touches window.harnessHost.
 // Annotated, not `satisfies`: `pick` needs the mapped type to correlate `registry[ns]` with `HostBridge[K]`.
@@ -60,7 +62,6 @@ export const registry: Registry = {
   themes: { web: webThemes, desktop: desktopThemes },
   remote: { web: webRemote, desktop: desktopRemote },
   account: { web: webAccount, desktop: desktopAccount },
-  updates: { web: webUpdates, desktop: desktopUpdates },
   projects: { web: webProjects, desktop: desktopProjects },
   library: { web: webLibrary, desktop: desktopLibrary },
   usage: { web: webUsage, desktop: desktopUsage },
@@ -68,10 +69,17 @@ export const registry: Registry = {
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
 
-const pick = <K extends Namespace>(ns: K): HostBridge[K] => (isDesktop ? registry[ns].desktop() : registry[ns].web);
+const pick = <K extends Namespace>(ns: K): HostBridge[K] =>
+  isDesktop
+    ? registry[ns].desktop()
+    : isServed
+      ? servedNamespace(ns)
+      : registry[ns].web;
 
 export const host = {
   isDesktop,
+  /** Core runs behind this page: the desktop app, or `mochi serve`. */
+  hasCore: isDesktop || isServed,
   pty: pick('pty'),
   git: pick('git'),
   fs: pick('fs'),
@@ -87,8 +95,7 @@ export const host = {
   themes: pick('themes'),
   remote: pick('remote'),
   account: pick('account'),
-  updates: pick('updates'),
   projects: pick('projects'),
   library: pick('library'),
   usage: pick('usage'),
-} satisfies HostBridge & { isDesktop: boolean };
+} satisfies HostBridge & { isDesktop: boolean; hasCore: boolean };

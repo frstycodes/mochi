@@ -1,14 +1,22 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { useDiffTheme } from '../themes/highlight';
 import type { DiffLineAnnotation } from '@pierre/diffs';
-import { PatchDiff } from '@pierre/diffs/react';
+import { PatchDiff } from '../files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronDown, MessageText, Minus, PlusBold, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { ChangeTarget, DiffFile, DiffHunk, ReviewThread } from '../host/types/git';
+import type {
+  ChangeTarget,
+  DiffFile,
+  DiffHunk,
+  ReviewThread,
+} from '../host/types/git';
 import { DiffStat } from '../WorkLog';
 import { fileKey, hunkCovers, type ChangeSection } from './files';
 import { isMod } from '../keys';
@@ -39,7 +47,10 @@ export interface ChangeActions {
   sendNote(note: LineNote, text: string): void;
   dropNote(note: LineNote): void;
   /** A PR's review threads, shown on the lines they sit on. */
-  review?: { threads: ReviewThread[]; renderThread(thread: ReviewThread): ReactNode };
+  review?: {
+    threads: ReviewThread[];
+    renderThread(thread: ReviewThread): ReactNode;
+  };
 }
 
 type Annotation = { note: LineNote } | { thread: ReviewThread };
@@ -48,8 +59,22 @@ type Annotation = { note: LineNote } | { thread: ReviewThread };
 const FOLDED_LINES = 400;
 
 /** Every changed file's diff, stacked in tree order under a sticky header; a header folds its file. */
-export function ChangeList({ sections, actions }: { sections: ChangeSection[]; actions: ChangeActions }) {
-  const [folded, setFolded] = useState(() => new Set(sections.flatMap((s) => s.files).filter((f) => f.added + f.removed > FOLDED_LINES).map(fileKey)));
+export function ChangeList({
+  sections,
+  actions,
+}: {
+  sections: ChangeSection[];
+  actions: ChangeActions;
+}) {
+  const [folded, setFolded] = useState(
+    () =>
+      new Set(
+        sections
+          .flatMap((s) => s.files)
+          .filter((f) => f.added + f.removed > FOLDED_LINES)
+          .map(fileKey),
+      ),
+  );
   const toggle = (key: string) =>
     setFolded((keys) => {
       const next = new Set(keys);
@@ -60,7 +85,10 @@ export function ChangeList({ sections, actions }: { sections: ChangeSection[]; a
   return (
     <div className="flex flex-col pb-3">
       {sections.map((section) => (
-        <section key={section.title ?? 'all'} aria-label={section.title ?? 'Changed files'}>
+        <section
+          key={section.title ?? 'all'}
+          aria-label={section.title ?? 'Changed files'}
+        >
           {!!section.title && (
             <h3 className="flex h-7 items-center gap-1.5 px-3 type-caption text-subtle-foreground">
               {section.title}
@@ -68,7 +96,13 @@ export function ChangeList({ sections, actions }: { sections: ChangeSection[]; a
             </h3>
           )}
           {section.files.map((file) => (
-            <FileDiff key={fileKey(file)} file={file} isOpen={!folded.has(fileKey(file))} onToggle={() => toggle(fileKey(file))} actions={actions} />
+            <FileDiff
+              key={fileKey(file)}
+              file={file}
+              isOpen={!folded.has(fileKey(file))}
+              onToggle={() => toggle(fileKey(file))}
+              actions={actions}
+            />
           ))}
         </section>
       ))}
@@ -76,27 +110,88 @@ export function ChangeList({ sections, actions }: { sections: ChangeSection[]; a
   );
 }
 
-function FileDiff({ file, isOpen, onToggle, actions }: { file: DiffFile; isOpen: boolean; onToggle: () => void; actions: ChangeActions }) {
+function FileDiff({
+  file,
+  isOpen,
+  onToggle,
+  actions,
+}: {
+  file: DiffFile;
+  isOpen: boolean;
+  onToggle: () => void;
+  actions: ChangeActions;
+}) {
   const slash = file.path.lastIndexOf('/');
   const name = file.path.slice(slash + 1);
   const dir = file.path.slice(0, Math.max(slash, 0));
-  const target = { path: file.path, staged: file.staged, untracked: file.kind === 'untracked' };
+  const target = {
+    path: file.path,
+    staged: file.staged,
+    untracked: file.kind === 'untracked',
+  };
   return (
     <div data-file-key={fileKey(file)} className="group/file border-b">
       <div className="sticky top-0 z-10 flex h-8 items-center gap-1.5 bg-card pr-1.5 pl-2">
-        <button type="button" aria-expanded={isOpen} onClick={onToggle} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-          <ChevronDown aria-hidden className={cn('size-3 shrink-0 text-subtle-foreground transition-transform duration-150', !isOpen && '-rotate-90')} />
-          <FileIcon fileName={name} autoAssign aria-hidden className="size-3.5 shrink-0" />
-          <span className={cn('shrink-0 type-meta text-foreground', file.kind === 'deleted' && 'line-through decoration-subtle-foreground')}>{name}</span>
-          {!!dir && <span className="min-w-0 truncate type-caption text-subtle-foreground">{dir}</span>}
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          onClick={onToggle}
+          title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+          className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              'size-3 shrink-0 text-subtle-foreground transition-transform duration-150',
+              !isOpen && '-rotate-90',
+            )}
+          />
+          <FileIcon
+            fileName={name}
+            autoAssign
+            aria-hidden
+            className="size-3.5 shrink-0"
+          />
+          <span
+            className={cn(
+              'shrink-0 type-meta text-foreground',
+              file.kind === 'deleted' &&
+                'line-through decoration-subtle-foreground',
+            )}
+          >
+            {name}
+          </span>
+          {!!dir && (
+            <span className="min-w-0 truncate type-caption text-subtle-foreground">
+              {dir}
+            </span>
+          )}
           <span className="shrink-0">
             <DiffStat added={file.added} removed={file.removed} />
           </span>
         </button>
         {actions.canStage && (
           <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/file:opacity-100 focus-within:opacity-100">
-            {!file.staged && <IconAction label="Revert file" icon={Undo} onClick={() => actions.revert(target)} />}
-            {file.staged ? <IconAction label="Unstage file" icon={Minus} onClick={() => actions.unstage(target)} /> : <IconAction label="Stage file" icon={PlusBold} onClick={() => actions.stage(target)} />}
+            {!file.staged && (
+              <IconAction
+                label="Revert file"
+                icon={Undo}
+                onClick={() => actions.revert(target)}
+              />
+            )}
+            {file.staged ? (
+              <IconAction
+                label="Unstage file"
+                icon={Minus}
+                onClick={() => actions.unstage(target)}
+              />
+            ) : (
+              <IconAction
+                label="Stage file"
+                icon={PlusBold}
+                onClick={() => actions.stage(target)}
+              />
+            )}
           </span>
         )}
       </div>
@@ -105,11 +200,25 @@ function FileDiff({ file, isOpen, onToggle, actions }: { file: DiffFile; isOpen:
   );
 }
 
-function IconAction({ label, icon: Icon, onClick }: { label: string; icon: typeof PlusBold; onClick: () => void }) {
+function IconAction({
+  label,
+  icon: Icon,
+  onClick,
+}: {
+  label: string;
+  icon: typeof PlusBold;
+  onClick: () => void;
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label={label} onClick={onClick} className="text-muted-foreground hover:text-foreground">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={label}
+          onClick={onClick}
+          className="text-muted-foreground hover:text-foreground"
+        >
           <Icon />
         </Button>
       </TooltipTrigger>
@@ -118,29 +227,97 @@ function IconAction({ label, icon: Icon, onClick }: { label: string; icon: typeo
   );
 }
 
-function FileBody({ file, actions }: { file: DiffFile; actions: ChangeActions }) {
-  if (file.hunks.length === 0) return <p className="px-3 pb-2 type-meta text-subtle-foreground">{file.binary ? 'Binary file changed' : file.oldPath ? `Renamed from ${file.oldPath}` : 'No content changes'}</p>;
-  return file.hunks.map((hunk, i) => <HunkBlock key={hunk.header + i} file={file} hunk={hunk} actions={actions} />);
+function FileBody({
+  file,
+  actions,
+}: {
+  file: DiffFile;
+  actions: ChangeActions;
+}) {
+  if (file.hunks.length === 0)
+    return (
+      <p className="px-3 pb-2 type-meta text-subtle-foreground">
+        {file.binary
+          ? 'Binary file changed'
+          : file.oldPath
+            ? `Renamed from ${file.oldPath}`
+            : 'No content changes'}
+      </p>
+    );
+  return file.hunks.map((hunk, i) => (
+    <HunkBlock
+      key={hunk.header + i}
+      file={file}
+      hunk={hunk}
+      actions={actions}
+    />
+  ));
 }
 
-function HunkBlock({ file, hunk, actions }: { file: DiffFile; hunk: DiffHunk; actions: ChangeActions }) {
-  const target = { path: file.path, staged: file.staged, untracked: file.kind === 'untracked', patch: hunk.patch };
+function HunkBlock({
+  file,
+  hunk,
+  actions,
+}: {
+  file: DiffFile;
+  hunk: DiffHunk;
+  actions: ChangeActions;
+}) {
+  const target = {
+    path: file.path,
+    staged: file.staged,
+    untracked: file.kind === 'untracked',
+    patch: hunk.patch,
+  };
   const key = fileKey(file);
-  const notes = actions.notes.filter((n) => n.fileKey === key && hunkCovers(hunk.header, n.side, n.line));
-  const threads = actions.review?.threads.filter((t) => t.path === file.path && t.line !== null && hunkCovers(hunk.header, t.side, t.line)) ?? [];
-  const annotations = [...notes.map((note) => ({ side: note.side, lineNumber: note.line, metadata: { note } })), ...threads.map((thread) => ({ side: thread.side, lineNumber: thread.line!, metadata: { thread } }))];
+  const notes = actions.notes.filter(
+    (n) => n.fileKey === key && hunkCovers(hunk.header, n.side, n.line),
+  );
+  const threads =
+    actions.review?.threads.filter(
+      (t) =>
+        t.path === file.path &&
+        t.line !== null &&
+        hunkCovers(hunk.header, t.side, t.line),
+    ) ?? [];
+  const annotations = [
+    ...notes.map((note) => ({
+      side: note.side,
+      lineNumber: note.line,
+      metadata: { note },
+    })),
+    ...threads.map((thread) => ({
+      side: thread.side,
+      lineNumber: thread.line!,
+      metadata: { thread },
+    })),
+  ];
   return (
     <div className="group/hunk">
       <div className="flex h-6 items-center gap-2 pr-1.5 pl-3">
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-subtle-foreground">{hunk.header}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-subtle-foreground">
+          {hunk.header}
+        </span>
         {actions.canStage && (
           <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/hunk:opacity-100 focus-within:opacity-100">
             {!file.staged && (
-              <Button variant="ghost" size="xs" onClick={() => actions.revert(target)} className="text-muted-foreground">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => actions.revert(target)}
+                className="text-muted-foreground"
+              >
                 Revert
               </Button>
             )}
-            <Button variant="ghost" size="xs" onClick={() => (file.staged ? actions.unstage(target) : actions.stage(target))} className="text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() =>
+                file.staged ? actions.unstage(target) : actions.stage(target)
+              }
+              className="text-muted-foreground"
+            >
               {file.staged ? 'Unstage' : 'Stage'}
             </Button>
           </span>
@@ -151,13 +328,23 @@ function HunkBlock({ file, hunk, actions }: { file: DiffFile; hunk: DiffHunk; ac
         diffStyle={actions.diffStyle}
         annotations={annotations}
         onComment={(side, line) => actions.comment(file, side, line)}
-        renderAnnotation={(a) => ('note' in a ? <NoteCard note={a.note} actions={actions} /> : actions.review?.renderThread(a.thread))}
+        renderAnnotation={(a) =>
+          'note' in a ? (
+            <NoteCard note={a.note} actions={actions} />
+          ) : (
+            actions.review?.renderThread(a.thread)
+          )
+        }
       />
     </div>
   );
 }
 
-const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as CSSProperties;
+const DIFF_STYLE = {
+  '--diffs-font-family': 'var(--font-mono)',
+  '--diffs-font-size': '12px',
+  '--diffs-line-height': '20px',
+} as CSSProperties;
 
 interface HunkDiffProps {
   patch: string;
@@ -167,8 +354,13 @@ interface HunkDiffProps {
   renderAnnotation: (annotation: Annotation) => ReactNode;
 }
 
-function HunkDiff({ patch, diffStyle, annotations, onComment, renderAnnotation }: HunkDiffProps) {
-  const diffTheme = useDiffTheme();
+function HunkDiff({
+  patch,
+  diffStyle,
+  annotations,
+  onComment,
+  renderAnnotation,
+}: HunkDiffProps) {
   return (
     <PatchDiff<Annotation>
       patch={patch}
@@ -179,9 +371,9 @@ function HunkDiff({ patch, diffStyle, annotations, onComment, renderAnnotation }
         hunkSeparators: 'simple',
         disableFileHeader: true,
         overflow: 'wrap',
-        ...diffTheme,
         enableGutterUtility: true,
-        onGutterUtilityClick: (range) => onComment(range.side ?? 'additions', range.start),
+        onGutterUtilityClick: (range) =>
+          onComment(range.side ?? 'additions', range.start),
       }}
       lineAnnotations={annotations}
       renderAnnotation={(annotation) => renderAnnotation(annotation.metadata)}
@@ -190,15 +382,28 @@ function HunkDiff({ patch, diffStyle, annotations, onComment, renderAnnotation }
   );
 }
 
-function NoteCard({ note, actions }: { note: LineNote; actions: ChangeActions }) {
+function NoteCard({
+  note,
+  actions,
+}: {
+  note: LineNote;
+  actions: ChangeActions;
+}) {
   const [text, setText] = useState(note.text);
   if (note.isSent)
     return (
       <div className="m-2 flex gap-2 rounded-lg border bg-background px-2.5 py-2 font-sans">
-        <MessageText className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground" aria-hidden />
+        <MessageText
+          className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground"
+          aria-hidden
+        />
         <div className="flex min-w-0 flex-col">
-          <p className="type-meta whitespace-pre-wrap text-foreground">{note.text}</p>
-          <p className="type-caption text-subtle-foreground">Sent to {actions.agentName}</p>
+          <p className="type-meta whitespace-pre-wrap text-foreground">
+            {note.text}
+          </p>
+          <p className="type-caption text-subtle-foreground">
+            Sent to {actions.agentName}
+          </p>
         </div>
       </div>
     );
@@ -224,7 +429,12 @@ function NoteCard({ note, actions }: { note: LineNote; actions: ChangeActions })
         className="min-h-14 resize-none text-sm"
       />
       <div className="flex justify-end gap-1.5">
-        <Button type="button" variant="ghost" size="sm" onClick={() => actions.dropNote(note)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => actions.dropNote(note)}
+        >
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={!text.trim()}>

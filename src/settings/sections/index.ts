@@ -1,5 +1,27 @@
 import type { ComponentType } from 'react';
-import { Brush, Chat, Clock, Connector, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
+import {
+  Brush,
+  Chat,
+  Clock,
+  Connector,
+  Cpu,
+  Database,
+  Devices,
+  Globe,
+  Hierarchy2,
+  Info,
+  Keyboard,
+  MagicStar,
+  Notification,
+  Plugin,
+  Skill,
+  Users,
+  Settings,
+  ShieldCheck,
+  Stars,
+  Terminal,
+  type IconComponent,
+} from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -32,7 +54,13 @@ import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
 import { ANIMATIONS } from '../settingOptions';
 
-export const SECTION_GROUPS = ['Mochi', 'Agents', 'Customize', 'Workspace', 'System'] as const;
+export const SECTION_GROUPS = [
+  'Mochi',
+  'Agents',
+  'Customize',
+  'Workspace',
+  'System',
+] as const;
 
 export interface SettingsSection {
   id: string;
@@ -63,14 +91,47 @@ export const SETTINGS_SECTIONS = [
     icon: Settings,
     component: GeneralSection,
     settings: [
-      { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread default' },
-      { id: 'permissions', label: 'Permissions', keywords: 'manual ask auto edit full access bypass plan' },
-      { id: 'whileWorking', label: 'While the agent is working, new messages', keywords: 'queue steer send message interrupt busy' },
-      { id: 'promptSuggestions', label: 'Suggest your next message', keywords: 'prompt suggestion autocomplete ghost placeholder tab next message composer' },
-      { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
-      { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
-      { id: 'projectsFolder', label: 'Projects folder', keywords: 'path open folder directory' },
-      { id: 'restoreLayout', label: 'Restore layout on launch', keywords: 'splits views startup' },
+      {
+        id: 'agent',
+        label: 'Agent',
+        keywords: 'harness claude codex new thread default',
+      },
+      {
+        id: 'permissions',
+        label: 'Permissions',
+        keywords: 'manual ask auto edit full access bypass plan',
+      },
+      {
+        id: 'whileWorking',
+        label: 'While the agent is working, new messages',
+        keywords: 'queue steer send message interrupt busy',
+      },
+      {
+        id: 'promptSuggestions',
+        label: 'Suggest your next message',
+        keywords:
+          'prompt suggestion autocomplete ghost placeholder tab next message composer',
+      },
+      {
+        id: 'concurrency',
+        label: 'Agents running at once',
+        keywords: 'concurrency limit parallel',
+      },
+      {
+        id: 'usageLimit',
+        label: 'When a usage limit hits',
+        keywords: 'rate limit pause reset quota',
+      },
+      {
+        id: 'projectsFolder',
+        label: 'Projects folder',
+        keywords: 'path open folder directory',
+      },
+      {
+        id: 'restoreLayout',
+        label: 'Restore layout on launch',
+        keywords: 'splits views startup',
+      },
     ],
   },
   {
@@ -80,18 +141,51 @@ export const SETTINGS_SECTIONS = [
     icon: Brush,
     component: AppearanceSection,
     settings: [
-      { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
-      { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
+      {
+        id: 'theme',
+        label: 'Theme',
+        keywords: 'appearance dark light system mode',
+      },
+      {
+        id: 'reduceMotion',
+        label: 'Reduce motion',
+        keywords: 'animation accessibility',
+      },
       { id: 'appIcon', label: 'App icon', keywords: 'dock icon logo variant' },
       ...Object.entries(ANIMATIONS).flatMap(([area, { label, items }]) => [
-        { id: `animations${area[0]!.toUpperCase()}${area.slice(1)}`, label, keywords: 'animation motion transition slide' },
-        ...items.map((item) => ({ id: `animation-${item.value}`, label: item.label, keywords: `${label} animation motion` })),
+        {
+          id: `animations${area[0]!.toUpperCase()}${area.slice(1)}`,
+          label,
+          keywords: 'animation motion transition slide',
+        },
+        ...items.map((item) => ({
+          id: `animation-${item.value}`,
+          label: item.label,
+          keywords: `${label} animation motion`,
+        })),
       ]),
-      { id: 'lightTheme', label: 'Light theme', keywords: 'color theme vs code' },
+      {
+        id: 'lightTheme',
+        label: 'Light theme',
+        keywords: 'color theme vs code',
+      },
       { id: 'darkTheme', label: 'Dark theme', keywords: 'color theme vs code' },
-      { id: 'installedThemes', label: 'Installed themes', keywords: 'uninstall remove color theme' },
-      { id: 'customTheme', label: 'Custom theme', keywords: 'import paste json jsonc vs code color theme file' },
-      { id: 'themeMarketplace', label: 'Open VSX themes', keywords: 'marketplace browse install vs code color theme one dark catppuccin github dracula' },
+      {
+        id: 'installedThemes',
+        label: 'Installed themes',
+        keywords: 'uninstall remove color theme',
+      },
+      {
+        id: 'customTheme',
+        label: 'Custom theme',
+        keywords: 'import paste json jsonc vs code color theme file',
+      },
+      {
+        id: 'themeMarketplace',
+        label: 'Open VSX themes',
+        keywords:
+          'marketplace browse install vs code color theme one dark catppuccin github dracula',
+      },
     ],
   },
   {
@@ -101,12 +195,36 @@ export const SETTINGS_SECTIONS = [
     icon: Notification,
     component: NotificationsSection,
     settings: [
-      ...Object.entries(ALERT_KINDS).map(([kind, label]) => ({ id: `alert-${kind}`, label: `${label} alerts`, keywords: 'system notification background' })),
-      { id: 'watchedToasts', label: 'Toasts for watched threads', keywords: 'notification popup watch' },
-      { id: 'dockBadge', label: 'App icon badge counts', keywords: 'badge icon needs you' },
-      ...IDLE_ALERTS.map(({ value, label }) => ({ id: `idleAlert${value[0].toUpperCase()}${value.slice(1)}`, label: `Notify when idle with ${label.toLowerCase()}`, keywords: 'idle verdict notification alert gaps stalled done' })),
-      { id: 'quietHours', label: 'Quiet hours', keywords: 'do not disturb night silence' },
-      { id: 'mutedThreads', label: 'Muted threads', keywords: 'mute unmute silence' },
+      ...Object.entries(ALERT_KINDS).map(([kind, label]) => ({
+        id: `alert-${kind}`,
+        label: `${label} alerts`,
+        keywords: 'system notification background',
+      })),
+      {
+        id: 'watchedToasts',
+        label: 'Toasts for watched threads',
+        keywords: 'notification popup watch',
+      },
+      {
+        id: 'dockBadge',
+        label: 'App icon badge counts',
+        keywords: 'badge icon needs you',
+      },
+      ...IDLE_ALERTS.map(({ value, label }) => ({
+        id: `idleAlert${value[0].toUpperCase()}${value.slice(1)}`,
+        label: `Notify when idle with ${label.toLowerCase()}`,
+        keywords: 'idle verdict notification alert gaps stalled done',
+      })),
+      {
+        id: 'quietHours',
+        label: 'Quiet hours',
+        keywords: 'do not disturb night silence',
+      },
+      {
+        id: 'mutedThreads',
+        label: 'Muted threads',
+        keywords: 'mute unmute silence',
+      },
     ],
   },
   {
@@ -116,7 +234,11 @@ export const SETTINGS_SECTIONS = [
     icon: Keyboard,
     component: KeyboardSection,
     get settings() {
-      return shownCommands(getProfiles().length).map((id) => ({ id: shortcutRowId(id), label: COMMANDS[id].title, keywords: `shortcut key keybinding ${COMMANDS[id].group}` }));
+      return shownCommands(getProfiles().length).map((id) => ({
+        id: shortcutRowId(id),
+        label: COMMANDS[id].title,
+        keywords: `shortcut key keybinding ${COMMANDS[id].group}`,
+      }));
     },
   },
   {
@@ -130,10 +252,26 @@ export const SETTINGS_SECTIONS = [
     get settings() {
       return [
         ...getProfiles().flatMap(({ id, name }) => [
-          { id: `${id}-name`, label: `${name} name`, keywords: 'profile space rename' },
-          { id: `${id}-icon`, label: `${name} icon`, keywords: 'profile space symbol' },
-          { id: `${id}-github`, label: `${name} GitHub account`, keywords: 'profile gh user' },
-          { id: `${id}-browsing`, label: `${name} browsing data`, keywords: 'profile cookies logins clear browser' },
+          {
+            id: `${id}-name`,
+            label: `${name} name`,
+            keywords: 'profile space rename',
+          },
+          {
+            id: `${id}-icon`,
+            label: `${name} icon`,
+            keywords: 'profile space symbol',
+          },
+          {
+            id: `${id}-github`,
+            label: `${name} GitHub account`,
+            keywords: 'profile gh user',
+          },
+          {
+            id: `${id}-browsing`,
+            label: `${name} browsing data`,
+            keywords: 'profile cookies logins clear browser',
+          },
         ]),
         { id: 'addProfile', label: 'Add profile', keywords: 'new space' },
       ];
@@ -148,12 +286,40 @@ export const SETTINGS_SECTIONS = [
     settings: HARNESS_IDS.flatMap((id) => {
       const { name, apiKey } = HARNESSES[id];
       return [
-        { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check update upgrade' },
-        { id: `${id}Update`, label: `${name} update`, keywords: 'upgrade latest version' },
-        { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
-        { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
-        { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },
-        ...(apiKey ? [{ id: `${id}ApiKey`, label: apiKey.label, keywords: 'key billing keychain' }] : []),
+        {
+          id: `${id}Install`,
+          label: `${name} install`,
+          keywords: 'version path detected check update upgrade',
+        },
+        {
+          id: `${id}Update`,
+          label: `${name} update`,
+          keywords: 'upgrade latest version',
+        },
+        {
+          id: `${id}Path`,
+          label: `${name} custom path`,
+          keywords: 'executable binary',
+        },
+        {
+          id: `${id}Accounts`,
+          label: `${name} accounts`,
+          keywords: 'login sign in plan config folder add rename remove',
+        },
+        {
+          id: `${id}Profiles`,
+          label: `${name} account per profile`,
+          keywords: 'space link',
+        },
+        ...(apiKey
+          ? [
+              {
+                id: `${id}ApiKey`,
+                label: apiKey.label,
+                keywords: 'key billing keychain',
+              },
+            ]
+          : []),
       ];
     }),
   },
@@ -164,20 +330,53 @@ export const SETTINGS_SECTIONS = [
     icon: MagicStar,
     component: ModelsSection,
     settings: [
-      { id: 'starredModels', label: 'Starred models', keywords: 'favorite star dock model claude codex opus sonnet haiku gpt' },
+      {
+        id: 'starredModels',
+        label: 'Starred models',
+        keywords: 'favorite star dock model claude codex opus sonnet haiku gpt',
+      },
       { id: 'effort', label: 'Default effort', keywords: 'reasoning thinking' },
-      { id: 'speed', label: 'Default speed', keywords: 'fast mode service tier priority' },
+      {
+        id: 'speed',
+        label: 'Default speed',
+        keywords: 'fast mode service tier priority',
+      },
       ...HARNESS_IDS.flatMap((id) => {
         const { name } = HARNESSES[id];
         return [
-          { id: `${id}Model`, label: `${name} default model`, keywords: 'model' },
-          { id: `${id}SecondOpinionModel`, label: `${name} second opinion model`, keywords: 'model review verdict' },
+          {
+            id: `${id}Model`,
+            label: `${name} default model`,
+            keywords: 'model',
+          },
+          {
+            id: `${id}SecondOpinionModel`,
+            label: `${name} second opinion model`,
+            keywords: 'model review verdict',
+          },
         ];
       }),
-      { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
-      { id: 'imageGen', label: 'Image generation', keywords: 'image picture generate codex gpt-image draw' },
-      { id: 'backgroundModel', label: 'Background model', keywords: 'background utility cheap model haiku luna every task all' },
-      ...UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr handoff summary audit transcript verdict' })),
+      {
+        id: 'sideChatModel',
+        label: 'Side chat model',
+        keywords: 'aside question claude codex gpt sonnet opus haiku',
+      },
+      {
+        id: 'imageGen',
+        label: 'Image generation',
+        keywords: 'image picture generate codex gpt-image draw',
+      },
+      {
+        id: 'backgroundModel',
+        label: 'Background model',
+        keywords: 'background utility cheap model haiku luna every task all',
+      },
+      ...UTILITY_TASKS.map((task) => ({
+        id: `utility-${task}`,
+        label: `${UTILITY_TASK_LABELS[task]} model`,
+        keywords:
+          'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr handoff summary audit transcript verdict',
+      })),
     ],
   },
   {
@@ -187,11 +386,31 @@ export const SETTINGS_SECTIONS = [
     icon: Stars,
     component: SimplifySection,
     settings: [
-      { id: 'simplifyLength', label: 'Length', keywords: 'simplify bullets summary short detailed' },
-      { id: 'simplifyNeedsFirst', label: 'Put what needs you first', keywords: 'simplify question decision' },
-      { id: 'simplifyRules', label: 'Your rules', keywords: 'simplify custom instructions rules' },
-      { id: 'simplifyAuto', label: 'Simplify long replies automatically', keywords: 'simplify auto automatic' },
-      { id: 'simplifyAutoWords', label: 'Long means more than (words)', keywords: 'simplify threshold words length' },
+      {
+        id: 'simplifyLength',
+        label: 'Length',
+        keywords: 'simplify bullets summary short detailed',
+      },
+      {
+        id: 'simplifyNeedsFirst',
+        label: 'Put what needs you first',
+        keywords: 'simplify question decision',
+      },
+      {
+        id: 'simplifyRules',
+        label: 'Your rules',
+        keywords: 'simplify custom instructions rules',
+      },
+      {
+        id: 'simplifyAuto',
+        label: 'Simplify long replies automatically',
+        keywords: 'simplify auto automatic',
+      },
+      {
+        id: 'simplifyAutoWords',
+        label: 'Long means more than (words)',
+        keywords: 'simplify threshold words length',
+      },
     ],
   },
   {
@@ -201,8 +420,17 @@ export const SETTINGS_SECTIONS = [
     icon: ShieldCheck,
     component: AccessSection,
     settings: [
-      { id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' },
-      ...TOOL_NAMES.filter((name) => !isGoalTool(name)).map((name) => ({ id: toolRowId(name), label: TOOL_GUIDE[name].label, keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent` })),
+      {
+        id: 'agentControl',
+        label: 'Agents can change Mochi',
+        keywords:
+          'tools permissions read only changes settings confirm approve mcp control browser delete',
+      },
+      ...TOOL_NAMES.filter((name) => !isGoalTool(name)).map((name) => ({
+        id: toolRowId(name),
+        label: TOOL_GUIDE[name].label,
+        keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent`,
+      })),
     ],
   },
   {
@@ -211,7 +439,13 @@ export const SETTINGS_SECTIONS = [
     title: 'Schedules',
     icon: Clock,
     component: SchedulesSection,
-    settings: [{ id: 'schedules', label: 'Scheduled and background threads', keywords: 'cron nightly trigger pull request pause resume run' }],
+    settings: [
+      {
+        id: 'schedules',
+        label: 'Scheduled and background threads',
+        keywords: 'cron nightly trigger pull request pause resume run',
+      },
+    ],
   },
   {
     id: 'skills',
@@ -219,7 +453,14 @@ export const SETTINGS_SECTIONS = [
     title: 'Skills',
     icon: Skill,
     component: SkillsView,
-    settings: [{ id: 'skillsLibrary', label: 'Installed skills and their profiles', keywords: 'skill install github anthropics openai discover library profile' }],
+    settings: [
+      {
+        id: 'skillsLibrary',
+        label: 'Installed skills and their profiles',
+        keywords:
+          'skill install github anthropics openai discover library profile',
+      },
+    ],
   },
   {
     id: 'plugins',
@@ -227,7 +468,13 @@ export const SETTINGS_SECTIONS = [
     title: 'Plugins',
     icon: Plugin,
     component: PluginsView,
-    settings: [{ id: 'pluginsLibrary', label: 'Installed plugins and their profiles', keywords: 'plugin marketplace install discover library profile' }],
+    settings: [
+      {
+        id: 'pluginsLibrary',
+        label: 'Installed plugins and their profiles',
+        keywords: 'plugin marketplace install discover library profile',
+      },
+    ],
   },
   {
     id: 'connectors',
@@ -240,7 +487,8 @@ export const SETTINGS_SECTIONS = [
       {
         id: 'connectorsLibrary',
         label: 'Connected accounts, their profiles, and each connector’s tools',
-        keywords: 'connector account mcp server sign in oauth custom gmail linear github discover library profile tool permission allow ask deny off disable enable approval read only destructive',
+        keywords:
+          'connector account mcp server sign in oauth custom gmail linear github discover library profile tool permission allow ask deny off disable enable approval read only destructive',
       },
     ],
   },
@@ -251,14 +499,42 @@ export const SETTINGS_SECTIONS = [
     icon: Hierarchy2,
     component: GitSection,
     settings: [
-      { id: 'worktreeRoot', label: 'Worktrees folder', keywords: 'worktree path directory' },
-      { id: 'workspaceMode', label: 'New threads work in', keywords: 'worktree project folder local checkout workspace' },
-      { id: 'worktreeCleanup', label: 'Remove settled worktrees', keywords: 'worktree cleanup delete settled' },
-      { id: 'prepareWorktrees', label: 'Prepare worktrees before starting', keywords: 'worktree setup install dependencies' },
-      { id: 'worktreeInclude', label: 'Ignored files to copy', keywords: 'worktreeinclude env gitignore copy' },
+      {
+        id: 'worktreeRoot',
+        label: 'Worktrees folder',
+        keywords: 'worktree path directory',
+      },
+      {
+        id: 'workspaceMode',
+        label: 'New threads work in',
+        keywords: 'worktree project folder local checkout workspace',
+      },
+      {
+        id: 'worktreeCleanup',
+        label: 'Remove settled worktrees',
+        keywords: 'worktree cleanup delete settled',
+      },
+      {
+        id: 'prepareWorktrees',
+        label: 'Prepare worktrees before starting',
+        keywords: 'worktree setup install dependencies',
+      },
+      {
+        id: 'worktreeInclude',
+        label: 'Ignored files to copy',
+        keywords: 'worktreeinclude env gitignore copy',
+      },
       { id: 'branchPrefix', label: 'Branch prefix', keywords: 'branch name' },
-      { id: 'prDrafts', label: 'Open pull requests as drafts', keywords: 'pr github draft' },
-      { id: 'diffStyle', label: 'Diffs', keywords: 'unified split side by side changes' },
+      {
+        id: 'prDrafts',
+        label: 'Open pull requests as drafts',
+        keywords: 'pr github draft',
+      },
+      {
+        id: 'diffStyle',
+        label: 'Diffs',
+        keywords: 'unified split side by side changes',
+      },
     ],
   },
   {
@@ -269,9 +545,21 @@ export const SETTINGS_SECTIONS = [
     component: TerminalSection,
     settings: [
       { id: 'shell', label: 'Shell', keywords: 'zsh bash fish' },
-      { id: 'restoreTerminals', label: 'Restore terminals on launch', keywords: 'startup tabs' },
-      { id: 'terminalFontSize', label: 'Terminal font size', keywords: 'text size' },
-      { id: 'terminalScrollback', label: 'Scrollback lines', keywords: 'history buffer' },
+      {
+        id: 'restoreTerminals',
+        label: 'Restore terminals on launch',
+        keywords: 'startup tabs',
+      },
+      {
+        id: 'terminalFontSize',
+        label: 'Terminal font size',
+        keywords: 'text size',
+      },
+      {
+        id: 'terminalScrollback',
+        label: 'Scrollback lines',
+        keywords: 'history buffer',
+      },
     ],
   },
   {
@@ -281,9 +569,21 @@ export const SETTINGS_SECTIONS = [
     icon: Globe,
     component: BrowserSection,
     settings: [
-      { id: 'searchEngine', label: 'Search engine', keywords: 'duckduckgo google bing kagi address bar' },
-      { id: 'addressHistory', label: 'Clear address history', keywords: 'browser urls suggestions' },
-      { id: 'simulator', label: 'Default simulator', keywords: 'ios iphone ipad device' },
+      {
+        id: 'searchEngine',
+        label: 'Search engine',
+        keywords: 'duckduckgo google bing kagi address bar',
+      },
+      {
+        id: 'addressHistory',
+        label: 'Clear address history',
+        keywords: 'browser urls suggestions',
+      },
+      {
+        id: 'simulator',
+        label: 'Default simulator',
+        keywords: 'ios iphone ipad device',
+      },
     ],
   },
   {
@@ -293,13 +593,42 @@ export const SETTINGS_SECTIONS = [
     icon: Devices,
     component: RemoteSection,
     settings: [
-      { id: 'remoteEnabled', label: 'Let devices control this computer', keywords: 'remote control phone laptop server connect' },
-      { id: 'remoteNetwork', label: 'Allow devices on this network', keywords: 'lan tailscale wifi firewall remote' },
-      { id: 'keepAwake', label: 'Keep this computer awake', keywords: 'sleep power battery lid caffeinate remote' },
-      { id: 'machineName', label: 'Computer name', keywords: 'machine host name remote' },
-      { id: 'remoteAnywhere', label: 'Reach this computer from anywhere', keywords: 'relay internet away remote account' },
-      { id: 'members', label: 'Your computers', keywords: 'remove trusted devices members approve connected scopes pair' },
-      { id: 'otherComputers', label: 'Join your computers', keywords: 'join pair computer machine account relay code' },
+      {
+        id: 'remoteEnabled',
+        label: 'Let devices control this computer',
+        keywords: 'remote control phone laptop server connect',
+      },
+      {
+        id: 'remoteNetwork',
+        label: 'Allow devices on this network',
+        keywords: 'lan tailscale wifi firewall remote',
+      },
+      {
+        id: 'keepAwake',
+        label: 'Keep this computer awake',
+        keywords: 'sleep power battery lid caffeinate remote',
+      },
+      {
+        id: 'machineName',
+        label: 'Computer name',
+        keywords: 'machine host name remote',
+      },
+      {
+        id: 'remoteAnywhere',
+        label: 'Reach this computer from anywhere',
+        keywords: 'relay internet away remote account',
+      },
+      {
+        id: 'members',
+        label: 'Your computers',
+        keywords:
+          'remove trusted devices members approve connected scopes pair',
+      },
+      {
+        id: 'otherComputers',
+        label: 'Join your computers',
+        keywords: 'join pair computer machine account relay code',
+      },
     ],
   },
   {
@@ -311,12 +640,36 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'storage', label: 'Storage used', keywords: 'disk space size' },
       { id: 'clearPins', label: 'Clear pins', keywords: 'reset delete' },
-      { id: 'clearSideChats', label: 'Clear side chats', keywords: 'reset delete' },
-      { id: 'clearTerminals', label: 'Clear terminal history', keywords: 'reset delete scrollback' },
-      { id: 'clearEverything', label: 'Clear everything', keywords: 'reset delete factory' },
-      { id: 'demoData', label: 'Show demo data', keywords: 'sample example fixture threads prototype' },
-      { id: 'recordReplays', label: 'Record threads for replay', keywords: 'replay recording session playback demo debug events' },
-      { id: 'clearReplays', label: 'Clear replay recordings', keywords: 'replay recording delete disk space' },
+      {
+        id: 'clearSideChats',
+        label: 'Clear side chats',
+        keywords: 'reset delete',
+      },
+      {
+        id: 'clearTerminals',
+        label: 'Clear terminal history',
+        keywords: 'reset delete scrollback',
+      },
+      {
+        id: 'clearEverything',
+        label: 'Clear everything',
+        keywords: 'reset delete factory',
+      },
+      {
+        id: 'demoData',
+        label: 'Show demo data',
+        keywords: 'sample example fixture threads prototype',
+      },
+      {
+        id: 'recordReplays',
+        label: 'Record threads for replay',
+        keywords: 'replay recording session playback demo debug events',
+      },
+      {
+        id: 'clearReplays',
+        label: 'Clear replay recordings',
+        keywords: 'replay recording delete disk space',
+      },
     ],
   },
   {
@@ -325,7 +678,13 @@ export const SETTINGS_SECTIONS = [
     title: 'About',
     icon: Info,
     component: AboutSection,
-    settings: [{ id: 'about', label: 'About Mochi', keywords: 'version electron chromium docs' }],
+    settings: [
+      {
+        id: 'about',
+        label: 'About Mochi',
+        keywords: 'version electron chromium docs',
+      },
+    ],
   },
 ] as const satisfies SettingsSection[];
 
@@ -336,7 +695,11 @@ export function searchSettings(query: string) {
   const q = query.trim().toLowerCase();
   return SETTINGS_SECTIONS.flatMap((section) => {
     if (!q) return [{ section, settings: [] as SettingsSection['settings'] }];
-    const settings = (section.settings as SettingsSection['settings']).filter((s) => `${s.label} ${s.keywords ?? ''}`.toLowerCase().includes(q));
-    return settings.length || section.title.toLowerCase().includes(q) ? [{ section, settings }] : [];
+    const settings = (section.settings as SettingsSection['settings']).filter(
+      (s) => `${s.label} ${s.keywords ?? ''}`.toLowerCase().includes(q),
+    );
+    return settings.length || section.title.toLowerCase().includes(q)
+      ? [{ section, settings }]
+      : [];
   });
 }

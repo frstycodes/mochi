@@ -1,4 +1,4 @@
 import type { SettingsHost } from '../types/settings.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const settings = (): SettingsHost => bridge().settings;
+export const settings = (): SettingsHost => desktopNamespace('settings');

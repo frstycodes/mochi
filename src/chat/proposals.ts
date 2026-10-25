@@ -1,4 +1,9 @@
-import { PROPOSAL_TTL, type ActivityEntry, type Thread, type ThreadProposal } from '../model.ts';
+import {
+  PROPOSAL_TTL,
+  type ActivityEntry,
+  type Thread,
+  type ThreadProposal,
+} from '../model.ts';
 
 /** Proposals of one kind (own_initiative) a single turn may make. */
 export const PROPOSALS_PER_TURN = 3;
@@ -14,7 +19,11 @@ export function findProposal(thread: Thread, id: string) {
   return undefined;
 }
 
-export const isExpired = (proposal: ThreadProposal, entry: Pick<ActivityEntry, 'at'>, now: number) => proposal.state === 'pending' && now - entry.at >= PROPOSAL_TTL;
+export const isExpired = (
+  proposal: ThreadProposal,
+  entry: Pick<ActivityEntry, 'at'>,
+  now: number,
+) => proposal.state === 'pending' && now - entry.at >= PROPOSAL_TTL;
 
 /** own_initiative proposals this turn has made, the ones since withdrawn included. */
 export const turnProposalCount = (thread: Thread) =>
@@ -23,17 +32,49 @@ export const turnProposalCount = (thread: Thread) =>
     .flatMap((e) => e.proposals ?? [])
     .filter((p) => p.initiation === 'own_initiative').length;
 
-export const nextProposalId = (thread: Thread) => `${thread.id}-p${thread.activity.flatMap((e) => e.proposals ?? []).length + 1}`;
+export const nextProposalId = (thread: Thread) =>
+  `${thread.id}-p${thread.activity.flatMap((e) => e.proposals ?? []).length + 1}`;
 
 /** Joins this turn's card when it has one, so a turn's proposals page through one card; else a new card where the agent asked. */
-export function addProposal(thread: Thread, proposal: ThreadProposal, entry: ActivityEntry): Thread {
-  const at = thread.activity.findLastIndex((e, i) => i >= turnOf(thread).start && !!e.proposals);
-  if (at < 0) return { ...thread, activity: [...thread.activity, { ...entry, proposals: [proposal] }] };
-  return { ...thread, activity: thread.activity.map((e, i) => (i === at ? { ...e, proposals: [...e.proposals!, proposal] } : e)) };
+export function addProposal(
+  thread: Thread,
+  proposal: ThreadProposal,
+  entry: ActivityEntry,
+): Thread {
+  const at = thread.activity.findLastIndex(
+    (e, i) => i >= turnOf(thread).start && !!e.proposals,
+  );
+  if (at < 0)
+    return {
+      ...thread,
+      activity: [...thread.activity, { ...entry, proposals: [proposal] }],
+    };
+  return {
+    ...thread,
+    activity: thread.activity.map((e, i) =>
+      i === at ? { ...e, proposals: [...e.proposals!, proposal] } : e,
+    ),
+  };
 }
 
-export function updateProposal(thread: Thread, id: string, patch: Partial<ThreadProposal>): Thread {
-  return { ...thread, activity: thread.activity.map((e) => (e.proposals?.some((p) => p.id === id) ? { ...e, proposals: e.proposals.map((p) => (p.id === id ? { ...p, ...patch } : p)) } : e)) };
+export function updateProposal(
+  thread: Thread,
+  id: string,
+  patch: Partial<ThreadProposal>,
+): Thread {
+  return {
+    ...thread,
+    activity: thread.activity.map((e) =>
+      e.proposals?.some((p) => p.id === id)
+        ? {
+            ...e,
+            proposals: e.proposals.map((p) =>
+              p.id === id ? { ...p, ...patch } : p,
+            ),
+          }
+        : e,
+    ),
+  };
 }
 
 /** Why a pending proposal can't be started or answered now; undefined when it can. */
@@ -41,12 +82,22 @@ export function proposalBlocker(thread: Thread, id: string, now: number) {
   const found = findProposal(thread, id);
   if (!found) return `No proposal ${id} in this thread`;
   const { proposal, entry } = found;
-  if (proposal.state !== 'pending') return `"${proposal.title}" was already ${STATE_WORD[proposal.state]}`;
-  if (isExpired(proposal, entry, now)) return `"${proposal.title}" expired after 7 days; propose it again if it still matters`;
+  if (proposal.state !== 'pending')
+    return `"${proposal.title}" was already ${STATE_WORD[proposal.state]}`;
+  if (isExpired(proposal, entry, now))
+    return `"${proposal.title}" expired after 7 days; propose it again if it still matters`;
   return undefined;
 }
 
-const STATE_WORD = { pending: 'pending', started: 'started', dismissed: 'dismissed', here: 'answered: the user chose to do it here' } satisfies Record<ThreadProposal['state'], string>;
+const STATE_WORD = {
+  pending: 'pending',
+  started: 'started',
+  dismissed: 'dismissed',
+  here: 'answered: the user chose to do it here',
+} satisfies Record<ThreadProposal['state'], string>;
 
 /** The message the agent gets when you answer its offer in place, since it stopped to wait for you. */
-export const OFFER_REPLY = { here: 'Do it here.', dismissed: "Leave it, don't do that task." } as const;
+export const OFFER_REPLY = {
+  here: 'Do it here.',
+  dismissed: "Leave it, don't do that task.",
+} as const;

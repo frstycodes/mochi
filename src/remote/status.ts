@@ -1,10 +1,14 @@
 import type { FollowedMachine } from '../host/types/remote.ts';
 
 /** What's wrong with the connection, for a caption beside the machine's name; nothing while it's online. */
-export function machineStatus(machine: FollowedMachine, now = new Date()): string | undefined {
+export function machineStatus(
+  machine: FollowedMachine,
+  now = new Date(),
+): string | undefined {
   if (machine.status === 'online') return undefined;
   if (machine.status === 'connecting') return 'Connecting…';
-  if (machine.status === 'refused') return machine.error ?? 'It refused this computer; pair again';
+  if (machine.status === 'refused')
+    return machine.error ?? 'It refused this computer; pair again';
   if (!machine.lastSeenAt) return 'Offline';
   const seen = new Date(machine.lastSeenAt);
   const isToday = seen.toDateString() === now.toDateString();

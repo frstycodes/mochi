@@ -1,4 +1,4 @@
 import type { FsHost } from '../types/fs.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const fs = (): FsHost => bridge().fs;
+export const fs = (): FsHost => desktopNamespace('fs');

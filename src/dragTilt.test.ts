@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { tiltFor } from './dragTilt.ts';
 
 test('tilt leans away from the grab point and is level at the centre', () => {

@@ -65,13 +65,13 @@ T3 Code is the closest reference. Its model holds up and Mochi should copy most 
 
 Everything runs on the machine that owns the thread; a device sends the command and shows the result. Each device holds scopes, granted on the machine at pairing and changeable later in Settings › Devices.
 
-| Scope | What it allows | Default for a new device |
-|---|---|---|
-| `read` | threads, activity, goals, report cards, Queue, usage, PR status, schedules | on |
-| `operate` | answer approvals and questions, send messages and attachments, interrupt, stop, resume, rewind, fork, hand off, side chat | on |
-| `manage` | start threads (pick machine, project, agent, model, permissions), edit goals, rename, pin, archive, delete, schedules, commit, push, open a PR (as the machine's gh login, asked first as on the machine), the machine's settings | on |
-| `code` | file tree, file contents, diffs, Changes tab actions (stage, revert, line comments), checkpoint diffs | on |
-| `terminal` | open and type in the thread's terminals | off: a terminal is a shell on your machine |
+| Scope      | What it allows                                                                                                                                                                                                                    | Default for a new device                   |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `read`     | threads, activity, goals, report cards, Queue, usage, PR status, schedules                                                                                                                                                        | on                                         |
+| `operate`  | answer approvals and questions, send messages and attachments, interrupt, stop, resume, rewind, fork, hand off, side chat                                                                                                         | on                                         |
+| `manage`   | start threads (pick machine, project, agent, model, permissions), edit goals, rename, pin, archive, delete, schedules, commit, push, open a PR (as the machine's gh login, asked first as on the machine), the machine's settings | on                                         |
+| `code`     | file tree, file contents, diffs, Changes tab actions (stage, revert, line comments), checkpoint diffs                                                                                                                             | on                                         |
+| `terminal` | open and type in the thread's terminals                                                                                                                                                                                           | off: a terminal is a shell on your machine |
 
 - Never on a device, whatever the scope: provider logins, API keys, gh tokens, the machine's OS keychain, the Mochi tools' browser sessions. Browser and simulator panes are pixels on the machine; devices get a live screenshot (`code` scope), not control.
 - "Runs on" (SETTINGS.md › Defaults) lists every machine you are paired with, on every device; a thread stays on the machine it started on.
@@ -129,15 +129,15 @@ Mochi on macOS, Windows and Linux are equal peers: any of them can own threads a
 
 ## What syncs (built)
 
-| Data | Where it lives | Reaches devices |
-|---|---|---|
-| Threads, activity, goals, Queue, usage, PR status | the owning machine's store | streamed live; changed only through commands |
-| File contents, diffs, terminal output | the worktree | streamed on demand with `code` / `terminal` scope |
-| Settings that aren't tied to one machine (notifications, defaults for new threads, models and starred models, Simplify, goals and drift, git conventions; `isSharedSetting` in `src/settings/catalog.ts`) | each machine | a change is written to each paired computer that's online; one that missed it is offered this computer's values above Settings |
-| Pins | each machine, for its own threads, with an order key | one Pinned list across machines, sorted by key; moving a pin writes one key, on its own machine |
-| Machine-specific settings (paths, shell, worktrees folder, harness paths, accounts and profiles' config files) | that machine | editable remotely with `manage`, never synced to another machine |
-| Provider credentials, API keys, gh tokens, Clerk tokens, device private keys | keychain / `safeStorage` | never |
-| Replay recordings, checkpoints | the machine | replay plays on a device through the stream; files never leave |
+| Data                                                                                                                                                                                                      | Where it lives                                       | Reaches devices                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Threads, activity, goals, Queue, usage, PR status                                                                                                                                                         | the owning machine's store                           | streamed live; changed only through commands                                                                                   |
+| File contents, diffs, terminal output                                                                                                                                                                     | the worktree                                         | streamed on demand with `code` / `terminal` scope                                                                              |
+| Settings that aren't tied to one machine (notifications, defaults for new threads, models and starred models, Simplify, goals and drift, git conventions; `isSharedSetting` in `src/settings/catalog.ts`) | each machine                                         | a change is written to each paired computer that's online; one that missed it is offered this computer's values above Settings |
+| Pins                                                                                                                                                                                                      | each machine, for its own threads, with an order key | one Pinned list across machines, sorted by key; moving a pin writes one key, on its own machine                                |
+| Machine-specific settings (paths, shell, worktrees folder, harness paths, accounts and profiles' config files)                                                                                            | that machine                                         | editable remotely with `manage`, never synced to another machine                                                               |
+| Provider credentials, API keys, gh tokens, Clerk tokens, device private keys                                                                                                                              | keychain / `safeStorage`                             | never                                                                                                                          |
+| Replay recordings, checkpoints                                                                                                                                                                            | the machine                                          | replay plays on a device through the stream; files never leave                                                                 |
 
 - Nothing about your settings or pins is stored in the cloud: each computer keeps its own and the others write to it, so the relay still holds only the machine registry and the signed membership records.
   - **Settings.** A shared row changed in Settings (or the settings widget) is saved here, then written to every paired computer that's online and lets this one `manage` it, through the same `setting` command a device uses; one that refuses or fails is named in one toast. Opening Settings reads each online computer's values (`settings`) and, where shared ones differ, shows "<computer> has different settings" with "Use this computer's" (`SharedSettingsNotice`). Appearance stays with each screen; paths, shell, keys, access and Devices with each computer.

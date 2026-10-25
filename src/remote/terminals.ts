@@ -1,23 +1,20 @@
+import { Effect } from 'effect';
 import { host } from '../host/index.ts';
-import type { TerminalOutput } from '../host/types/remote.ts';
+import { coreClient } from '../host/desktop/rpc.ts';
 
 /**
- * Shells this computer opens for devices, one pty each in a thread's folder. Output collects here and a device reads it from
- * an offset, so a dropped connection loses nothing it can still catch up on. Kept apart from the Terminal pane's own shells:
- * a device never types into a shell you have open here. An open pane reads several times a second, so a shell nobody has
- * read or typed into for `IDLE_MS` belongs to a device that left without closing it (reloaded, lost its connection) and closes.
+ * Shells this computer opens for devices, one pty each in a thread's folder. Core holds the output and pushes it to the device
+ * (`terminal.output`), so a dropped connection resumes from its offset and loses nothing. Kept apart from the Terminal pane's own
+ * shells: a device never types into a shell you have open here. A shell no device has typed into or opened for `IDLE_MS`
+ * belongs to a device that left without closing it (reloaded, lost its connection) and closes.
  */
 interface Shell {
   threadId: string;
-  /** Epoch ms of the last read or write. */
+  /** Epoch ms of the last use. */
   touchedAt: number;
-  output: string;
-  /** Offset of `output[0]` in everything the shell printed. */
-  start: number;
-  exitCode?: number;
 }
 
-const MAX_OUTPUT = 256 * 1024;
+const EARLY_MAX = 256 * 1024;
 const MAX_SHELLS = 8;
 const IDLE_MS = 60_000;
 const shells = new Map<string, Shell>();
@@ -26,14 +23,25 @@ const early = new Map<string, string>();
 let spawning = 0;
 let isWired = false;
 
-export async function openShell(threadId: string, cwd: string, cols: number, rows: number) {
+export async function openShell(
+  threadId: string,
+  cwd: string,
+  cols: number,
+  rows: number,
+) {
   wire();
   spawning++;
   try {
     const port = await host.ports.allocate(threadId);
     const { id } = await host.pty.spawn({ cwd, cols, rows, port, threadId });
-    shells.set(id, { threadId, touchedAt: Date.now(), output: '', start: 0 });
-    append(id, early.get(id) ?? '');
+    // Until Core knows the shell, its output collects in `early`; requests go out in order, so the feed below precedes later output.
+    await core('terminal.open', { terminalId: id, threadId });
+    const printed = early.get(id);
+    if (printed)
+      void core('terminal.feed', { terminalId: id, data: printed }).catch(
+        () => {},
+      );
+    shells.set(id, { threadId, touchedAt: Date.now() });
     if (shells.size > MAX_SHELLS) closeShell(shells.keys().next().value!);
     return id;
   } finally {
@@ -49,43 +57,64 @@ export function shellOf(id: string, threadId: string) {
   return shell;
 }
 
-/** How often the bridge closes idle shells (`useRemoteBridge`). */
+/** How often the bridge closes idle shells (`useRemoteBridge`, in `WindowReactor`). */
 export const SWEEP_MS = IDLE_MS / 2;
 
-/** Closes shells no device has used for `IDLE_MS`. */
-export function closeIdleShells(now: number) {
-  for (const [id, shell] of shells) if (now - shell.touchedAt > IDLE_MS) closeShell(id);
-}
-
-export function readShell(shell: Shell, after: number): TerminalOutput {
-  const from = Math.max(after, shell.start) - shell.start;
-  return { data: shell.output.slice(from), next: shell.start + shell.output.length, ...(shell.exitCode !== undefined && { exitCode: shell.exitCode }) };
+/** Closes shells no device has used for `IDLE_MS` and none is watching. */
+export async function closeIdleShells(now: number) {
+  for (const [id, shell] of shells) {
+    if (now - shell.touchedAt <= IDLE_MS) continue;
+    if (
+      (await core('terminal.watched', { terminalId: id }).catch(
+        () => false,
+      )) === true
+    )
+      shell.touchedAt = now;
+    else closeShell(id);
+  }
 }
 
 export function closeShell(id: string) {
   if (!shells.delete(id)) return;
+  void core('terminal.close', { terminalId: id }).catch(() => {});
   void host.pty.kill(id).catch(() => {});
 }
 
-function append(id: string, data: string) {
-  const shell = shells.get(id);
-  if (!shell) return;
-  shell.output += data;
-  const over = shell.output.length - MAX_OUTPUT;
-  if (over <= 0) return;
-  shell.output = shell.output.slice(over);
-  shell.start += over;
-}
+type Call = {
+  'terminal.open': { terminalId: string; threadId: string };
+  'terminal.feed': { terminalId: string; data: string };
+  'terminal.exit': { terminalId: string; exitCode: number };
+  'terminal.close': { terminalId: string };
+  'terminal.watched': { terminalId: string };
+};
+
+/** Core's side of a shell, over the window's own connection so output reaches it in the order the pty printed it. An object so tests can stand in for Core. */
+export const terminalCore = {
+  async call<K extends keyof Call>(tag: K, payload: Call[K]) {
+    const client = await coreClient();
+    return Effect.runPromise(
+      (client[tag] as (payload: Call[K]) => Effect.Effect<unknown, unknown>)(
+        payload,
+      ),
+    );
+  },
+};
+const core = <K extends keyof Call>(tag: K, payload: Call[K]) =>
+  terminalCore.call(tag, payload);
 
 function wire() {
   if (isWired) return;
   isWired = true;
   host.pty.onData(({ id, data }) => {
-    if (shells.has(id)) return append(id, data);
-    if (spawning > 0) early.set(id, ((early.get(id) ?? '') + data).slice(-MAX_OUTPUT));
+    if (shells.has(id))
+      return void core('terminal.feed', { terminalId: id, data }).catch(
+        () => {},
+      );
+    if (spawning > 0)
+      early.set(id, ((early.get(id) ?? '') + data).slice(-EARLY_MAX));
   });
   host.pty.onExit(({ id, exitCode }) => {
-    const shell = shells.get(id);
-    if (shell) shell.exitCode = exitCode;
+    if (shells.has(id))
+      void core('terminal.exit', { terminalId: id, exitCode }).catch(() => {});
   });
 }

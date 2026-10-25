@@ -1,4 +1,4 @@
 import type { WindowsHost } from '../types/windows.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const windows = (): WindowsHost => bridge().windows;
+export const windows = (): WindowsHost => desktopNamespace('windows');

@@ -12,9 +12,19 @@ interface ModifierState {
   altKey: boolean;
 }
 
-export const IS_WINDOWS = typeof navigator !== 'undefined' && /win/i.test((navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform);
+export const IS_WINDOWS =
+  typeof navigator !== 'undefined' &&
+  /win/i.test(
+    (navigator as Navigator & { userAgentData?: { platform: string } })
+      .userAgentData?.platform ?? navigator.platform,
+  );
 
-export const IS_MAC = typeof navigator !== 'undefined' && isMacPlatform((navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform);
+export const IS_MAC =
+  typeof navigator !== 'undefined' &&
+  isMacPlatform(
+    (navigator as Navigator & { userAgentData?: { platform: string } })
+      .userAgentData?.platform ?? navigator.platform,
+  );
 
 /** Chromium's `userAgentData.platform` says `macOS`, the older `navigator.platform` says `MacIntel`: match both, any case. */
 export function isMacPlatform(platform: string) {
@@ -27,7 +37,9 @@ export function isMod(e: ModifierState, isMac = IS_MAC) {
 
 /** Only the secondary modifier, so `nav` shortcuts never fire alongside `mod` ones. */
 export function isNav(e: ModifierState, isMac = IS_MAC) {
-  return isMac ? e.ctrlKey && !e.metaKey && !e.altKey : e.altKey && !e.ctrlKey && !e.metaKey;
+  return isMac
+    ? e.ctrlKey && !e.metaKey && !e.altKey
+    : e.altKey && !e.ctrlKey && !e.metaKey;
 }
 
 /** `KeyboardEvent.key` of the modifier the composer holds to queue a message: never the Windows key, which opens Start. */
@@ -39,7 +51,8 @@ const PC_ORDER: Key[] = ['mod', 'nav', 'alt', 'shift'];
 /** Modifiers in the platform's conventional order (⌃⌥⇧⌘ on macOS, Ctrl+Alt+Shift elsewhere), then the key. */
 export function orderKeys(keys: Key[], isMac = IS_MAC) {
   const order = isMac ? MAC_ORDER : PC_ORDER;
-  const rank = (k: Key) => (order.includes(k) ? order.indexOf(k) : order.length);
+  const rank = (k: Key) =>
+    order.includes(k) ? order.indexOf(k) : order.length;
   return [...keys].sort((a, b) => rank(a) - rank(b));
 }
 
@@ -69,5 +82,10 @@ export function shortcutText(keys: Key[], isMac = IS_MAC) {
 
 /** Keys typed into a field, or inside a dialog or menu, belong there, not to a page's own shortcuts. */
 export function isTyping(target: EventTarget | null) {
-  return target instanceof HTMLElement && !!target.closest('input:not([type=checkbox]):not([role=switch]), textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu]');
+  return (
+    target instanceof HTMLElement &&
+    !!target.closest(
+      'input:not([type=checkbox]):not([role=switch]), textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu]',
+    )
+  );
 }

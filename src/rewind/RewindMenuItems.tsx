@@ -1,5 +1,9 @@
 import { ArrowLeftRight, Undo } from '@/icons';
-import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { SkippedItem } from '../menus/ActionItems';
@@ -21,16 +25,31 @@ export function RewindMenuItems({ thread }: { thread: Thread }) {
     <>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
-        {canUndo && (blockedReason ? (
-          <SkippedItem menu="dropdown" icon={<Undo />} title="Undo rewind" reason={blockedReason} />
-        ) : (
-          <DropdownMenuItem onSelect={() => void undo()}>
-            <Undo />
-            Undo rewind
-          </DropdownMenuItem>
-        ))}
+        {canUndo &&
+          (blockedReason ? (
+            <SkippedItem
+              menu="dropdown"
+              icon={<Undo />}
+              title="Undo rewind"
+              reason={blockedReason}
+            />
+          ) : (
+            <DropdownMenuItem onSelect={() => void undo()}>
+              <Undo />
+              Undo rewind
+            </DropdownMenuItem>
+          ))}
         {relatives.map((r) => (
-          <DropdownMenuItem key={r.id} onSelect={() => openRewind({ kind: 'compare', threadId: thread.id, otherId: r.id })}>
+          <DropdownMenuItem
+            key={r.id}
+            onSelect={() =>
+              openRewind({
+                kind: 'compare',
+                threadId: thread.id,
+                otherId: r.id,
+              })
+            }
+          >
             <ArrowLeftRight />
             <span className="min-w-0 truncate">Compare with {r.title}</span>
           </DropdownMenuItem>

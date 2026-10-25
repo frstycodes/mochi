@@ -1,12 +1,21 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import { DEVICES, fitDevice } from './devices.ts';
-import { EMPTY_HISTORY, history, isTooSmall, shapePath, type Shape } from './annotations.ts';
+import {
+  EMPTY_HISTORY,
+  history,
+  isTooSmall,
+  shapePath,
+  type Shape,
+} from './annotations.ts';
 import { nextScrollSync } from './scrollSync.ts';
 import { displayUrl, normalizeUrl, pushHistory, swapOrigin } from './url.ts';
 
 test('normalizeUrl adds the right scheme or searches', () => {
-  assert.equal(normalizeUrl('localhost:5173/admin'), 'http://localhost:5173/admin');
+  assert.equal(
+    normalizeUrl('localhost:5173/admin'),
+    'http://localhost:5173/admin',
+  );
   assert.equal(normalizeUrl(':3000'), 'http://localhost:3000');
   assert.equal(normalizeUrl('127.0.0.1:8080'), 'http://127.0.0.1:8080');
   assert.equal(normalizeUrl('app.test'), 'http://app.test');
@@ -14,16 +23,31 @@ test('normalizeUrl adds the right scheme or searches', () => {
   assert.equal(normalizeUrl('HTTPS://x.dev'), 'HTTPS://x.dev');
   assert.equal(normalizeUrl('  '), 'about:blank');
   assert.equal(normalizeUrl('file:///tmp/a.html'), 'file:///tmp/a.html');
-  assert.equal(normalizeUrl('/Users/me/my site/index.html'), 'file:///Users/me/my%20site/index.html');
-  assert.equal(normalizeUrl('react use effect'), 'https://duckduckgo.com/?q=react%20use%20effect');
-  assert.equal(normalizeUrl('javascript:alert(1)'), 'https://duckduckgo.com/?q=javascript%3Aalert(1)');
+  assert.equal(
+    normalizeUrl('/Users/me/my site/index.html'),
+    'file:///Users/me/my%20site/index.html',
+  );
+  assert.equal(
+    normalizeUrl('react use effect'),
+    'https://duckduckgo.com/?q=react%20use%20effect',
+  );
+  assert.equal(
+    normalizeUrl('javascript:alert(1)'),
+    'https://duckduckgo.com/?q=javascript%3Aalert(1)',
+  );
   assert.equal(displayUrl('https://example.com/'), 'example.com');
 });
 
 test('pushHistory keeps the most recent first, once', () => {
   assert.deepEqual(pushHistory(['b', 'a'], 'a'), ['a', 'b']);
   assert.deepEqual(pushHistory(['a'], 'about:blank'), ['a']);
-  assert.equal(pushHistory(Array.from({ length: 60 }, (_, i) => `u${i}`), 'new').length, 50);
+  assert.equal(
+    pushHistory(
+      Array.from({ length: 60 }, (_, i) => `u${i}`),
+      'new',
+    ).length,
+    50,
+  );
 });
 
 test('fitDevice centres, scales down only, and rotates', () => {
@@ -38,8 +62,17 @@ test('fitDevice centres, scales down only, and rotates', () => {
 });
 
 test('annotation history adds, undoes and redoes, and a new shape drops the redo stack', () => {
-  const dot = (x: number): Shape => ({ kind: 'box', color: 'red', size: 2, from: { x, y: 0 }, to: { x: x + 10, y: 10 } });
-  let h = history(history(EMPTY_HISTORY, { type: 'add', shape: dot(1) }), { type: 'add', shape: dot(2) });
+  const dot = (x: number): Shape => ({
+    kind: 'box',
+    color: 'red',
+    size: 2,
+    from: { x, y: 0 },
+    to: { x: x + 10, y: 10 },
+  });
+  let h = history(history(EMPTY_HISTORY, { type: 'add', shape: dot(1) }), {
+    type: 'add',
+    shape: dot(2),
+  });
   assert.equal(h.present.length, 2);
   h = history(h, { type: 'undo' });
   assert.deepEqual(h.present, [dot(1)]);
@@ -50,20 +83,69 @@ test('annotation history adds, undoes and redoes, and a new shape drops the redo
 });
 
 test('shapePath draws boxes closed and arrows with a head at the tip', () => {
-  assert.equal(shapePath({ kind: 'box', color: '', size: 2, from: { x: 1, y: 2 }, to: { x: 5, y: 6 } }), 'M1 2 H5 V6 H1 Z');
-  const arrow = shapePath({ kind: 'arrow', color: '', size: 2, from: { x: 0, y: 0 }, to: { x: 100, y: 0 } });
+  assert.equal(
+    shapePath({
+      kind: 'box',
+      color: '',
+      size: 2,
+      from: { x: 1, y: 2 },
+      to: { x: 5, y: 6 },
+    }),
+    'M1 2 H5 V6 H1 Z',
+  );
+  const arrow = shapePath({
+    kind: 'arrow',
+    color: '',
+    size: 2,
+    from: { x: 0, y: 0 },
+    to: { x: 100, y: 0 },
+  });
   assert.match(arrow, /^M0 0 L100 0 M91.3 -5 L100 0 L91.3 5$/);
-  assert.ok(isTooSmall({ kind: 'arrow', color: '', size: 2, from: { x: 0, y: 0 }, to: { x: 3, y: 0 } }, 1));
-  assert.ok(isTooSmall({ kind: 'note', color: '', size: 14, at: { x: 0, y: 0 }, text: '  ' }, 1));
+  assert.ok(
+    isTooSmall(
+      {
+        kind: 'arrow',
+        color: '',
+        size: 2,
+        from: { x: 0, y: 0 },
+        to: { x: 3, y: 0 },
+      },
+      1,
+    ),
+  );
+  assert.ok(
+    isTooSmall(
+      { kind: 'note', color: '', size: 14, at: { x: 0, y: 0 }, text: '  ' },
+      1,
+    ),
+  );
 });
 
 test('swapOrigin keeps the path on the base server', () => {
-  assert.equal(swapOrigin('http://localhost:5173/admin?tab=2#top', 'http://localhost:5400'), 'http://localhost:5400/admin?tab=2#top');
-  assert.equal(swapOrigin('not a url', 'http://localhost:5400'), 'http://localhost:5400');
+  assert.equal(
+    swapOrigin(
+      'http://localhost:5173/admin?tab=2#top',
+      'http://localhost:5400',
+    ),
+    'http://localhost:5400/admin?tab=2#top',
+  );
+  assert.equal(
+    swapOrigin('not a url', 'http://localhost:5400'),
+    'http://localhost:5400',
+  );
 });
 
 test('nextScrollSync follows whichever page moved', () => {
-  assert.deepEqual(nextScrollSync(null, { x: 0, y: 40 }, { x: 0, y: 0 }), { move: 'b', to: { x: 0, y: 40 } });
-  assert.deepEqual(nextScrollSync({ x: 0, y: 40 }, { x: 0, y: 40 }, { x: 0, y: 90 }), { move: 'a', to: { x: 0, y: 90 } });
-  assert.equal(nextScrollSync({ x: 0, y: 40 }, { x: 0, y: 40 }, { x: 0, y: 40.5 }), null);
+  assert.deepEqual(nextScrollSync(null, { x: 0, y: 40 }, { x: 0, y: 0 }), {
+    move: 'b',
+    to: { x: 0, y: 40 },
+  });
+  assert.deepEqual(
+    nextScrollSync({ x: 0, y: 40 }, { x: 0, y: 40 }, { x: 0, y: 90 }),
+    { move: 'a', to: { x: 0, y: 90 } },
+  );
+  assert.equal(
+    nextScrollSync({ x: 0, y: 40 }, { x: 0, y: 40 }, { x: 0, y: 40.5 }),
+    null,
+  );
 });

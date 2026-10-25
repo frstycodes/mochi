@@ -1,4 +1,4 @@
 import type { NotifyHost } from '../types/notify.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const notify = (): NotifyHost => bridge().notify;
+export const notify = (): NotifyHost => desktopNamespace('notify');

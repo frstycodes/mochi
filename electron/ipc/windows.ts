@@ -1,18 +1,27 @@
-import { BrowserWindow, Menu, nativeTheme, shell, systemPreferences } from 'electron';
-import { APPEARANCES, type Appearance, type ScreenAccess, type WindowsHost } from '../../src/host/types/windows.ts';
+import {
+  BrowserWindow,
+  Menu,
+  nativeTheme,
+  shell,
+  systemPreferences,
+} from 'electron';
+import type {
+  ScreenAccess,
+  WindowsHost,
+} from '../../src/host/types/windows.ts';
 import { fitWindowButtons, openRoute } from '../window.ts';
 import { captureAppWindow, listAppWindows } from '../windows/appWindows.ts';
-import { integer, record, string, type Handlers } from './handlers.ts';
+import type { Handlers } from './handlers.ts';
 
 export const windows = {
   async open(_sender, route) {
-    const path = string(route, 'route', 200).replace(/^\/+/, '');
-    if (!/^[\w\-/.]*$/.test(path)) throw new TypeError('route may only contain letters, digits, - _ . /');
+    const path = route.replace(/^\/+/, '');
     openRoute(path);
   },
   async broadcast(sender, message) {
-    const payload = record(message, 'message');
-    for (const win of BrowserWindow.getAllWindows()) if (win.webContents !== sender) win.webContents.send('windows:onMessage', payload);
+    for (const win of BrowserWindow.getAllWindows())
+      if (win.webContents !== sender)
+        win.webContents.send('windows:onMessage', message);
   },
   async isFullScreen(sender) {
     return BrowserWindow.fromWebContents(sender)?.isFullScreen() ?? false;
@@ -26,32 +35,41 @@ export const windows = {
     const window = BrowserWindow.fromWebContents(sender);
     if (!window) return;
     const zoom = sender.getZoomFactor();
-    Menu.getApplicationMenu()?.popup({ window, x: Math.round(integer(x, 'x', 0, 100_000) * zoom), y: Math.round(integer(y, 'y', 0, 100_000) * zoom) });
+    Menu.getApplicationMenu()?.popup({
+      window,
+      x: Math.round(x * zoom),
+      y: Math.round(y * zoom),
+    });
   },
   async resetZoom(sender) {
     sender.setZoomLevel(0);
   },
   async setAppearance(_sender, appearance) {
-    if (!APPEARANCES.includes(appearance as Appearance)) throw new TypeError(`appearance must be one of ${APPEARANCES.join(', ')}`);
-    nativeTheme.themeSource = appearance as Appearance;
+    nativeTheme.themeSource = appearance;
   },
   async listApps() {
     // Asking while not-determined is what shows the macOS prompt; the answer only applies after a relaunch.
-    if (!isAllowed(screenAccess())) return { access: screenAccess(), windows: [] };
+    if (!isAllowed(screenAccess()))
+      return { access: screenAccess(), windows: [] };
     return { access: screenAccess(), windows: await listAppWindows() };
   },
   async captureApp(_sender, id) {
-    string(id, 'id', 256);
     if (!isAllowed(screenAccess())) return null;
-    return captureAppWindow(id as string);
+    return captureAppWindow(id);
   },
   async openScreenRecordingSettings() {
-    if (process.platform === 'darwin') await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    if (process.platform === 'darwin')
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+      );
   },
 } satisfies Handlers<WindowsHost>;
 
 function screenAccess(): ScreenAccess {
-  return process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted';
+  return process.platform === 'darwin'
+    ? systemPreferences.getMediaAccessStatus('screen')
+    : 'granted';
 }
 
-const isAllowed = (access: ScreenAccess) => access === 'granted' || access === 'not-determined';
+const isAllowed = (access: ScreenAccess) =>
+  access === 'granted' || access === 'not-determined';

@@ -1,19 +1,39 @@
 import { useEffect, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { Pin } from '@/icons';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 
-export type OutlineItem = { rowIndex: number; text: string; time: string; pins: string[] };
+export type OutlineItem = {
+  rowIndex: number;
+  text: string;
+  time: string;
+  pins: string[];
+};
 
 /** One tick per prompt down the chat's left edge; prompts in view light up, pinned prompts stand out, hovering shows the prompt, clicking jumps to it. */
-export function ThreadMinimap({ items, onJump, className }: { items: OutlineItem[]; onJump: (rowIndex: number) => void; className?: string }) {
+export function ThreadMinimap({
+  items,
+  onJump,
+  className,
+}: {
+  items: OutlineItem[];
+  onJump: (rowIndex: number) => void;
+  className?: string;
+}) {
   const { scrollRef } = useStickToBottomContext();
   const inView = useRowsInView(scrollRef, items.length);
   if (items.length < 2) return null;
 
   return (
-    <nav aria-label="Prompt outline" className={cn('flex flex-col justify-center', className)}>
+    <nav
+      aria-label="Prompt outline"
+      className={cn('flex flex-col justify-center', className)}
+    >
       {items.map(({ rowIndex, text, time, pins }) => (
         <HoverCard key={rowIndex} openDelay={150} closeDelay={80}>
           <HoverCardTrigger asChild>
@@ -28,15 +48,25 @@ export function ThreadMinimap({ items, onJump, className }: { items: OutlineItem
                 className={cn(
                   'h-0.5 w-2 rounded-full bg-subtle-foreground/50 transition-[width,background-color] duration-150 group-hover:w-3.5 group-hover:bg-foreground',
                   inView.has(rowIndex) && 'bg-foreground/80',
-                  pins.length > 0 && 'h-[3px] w-3 bg-foreground group-hover:w-4',
+                  pins.length > 0 &&
+                    'h-[3px] w-3 bg-foreground group-hover:w-4',
                 )}
               />
             </button>
           </HoverCardTrigger>
-          <HoverCardContent side="right" align="start" className="flex max-h-80 w-80 flex-col gap-2 overflow-y-auto">
-            <span className="type-caption tabular text-subtle-foreground">{time}</span>
+          <HoverCardContent
+            side="right"
+            align="start"
+            className="flex max-h-80 w-80 flex-col gap-2 overflow-y-auto"
+          >
+            <span className="type-caption tabular text-subtle-foreground">
+              {time}
+            </span>
             {pins.map((pin, j) => (
-              <span key={j} className="flex items-start gap-1.5 type-caption text-muted-foreground">
+              <span
+                key={j}
+                className="flex items-start gap-1.5 type-caption text-muted-foreground"
+              >
                 <Pin className="mt-0.5 size-3 shrink-0" aria-hidden />
                 <span className="line-clamp-3">{pin}</span>
               </span>
@@ -49,7 +79,10 @@ export function ThreadMinimap({ items, onJump, className }: { items: OutlineItem
   );
 }
 
-function useRowsInView(scrollRef: React.RefObject<HTMLElement | null>, count: number) {
+function useRowsInView(
+  scrollRef: React.RefObject<HTMLElement | null>,
+  count: number,
+) {
   const [inView, setInView] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -62,9 +95,14 @@ function useRowsInView(scrollRef: React.RefObject<HTMLElement | null>, count: nu
       const next = new Set<number>();
       el.querySelectorAll<HTMLElement>('[data-chat-row]').forEach((row) => {
         const r = row.getBoundingClientRect();
-        if (r.bottom > view.top && r.top < view.bottom) next.add(Number(row.dataset.chatRow));
+        if (r.bottom > view.top && r.top < view.bottom)
+          next.add(Number(row.dataset.chatRow));
       });
-      setInView((prev) => (prev.size === next.size && [...next].every((i) => prev.has(i)) ? prev : next));
+      setInView((prev) =>
+        prev.size === next.size && [...next].every((i) => prev.has(i))
+          ? prev
+          : next,
+      );
     };
     const schedule = () => (frame ||= requestAnimationFrame(measure));
     const ro = new ResizeObserver(schedule);
@@ -77,6 +115,7 @@ function useRowsInView(scrollRef: React.RefObject<HTMLElement | null>, count: nu
       ro.disconnect();
       el.removeEventListener('scroll', schedule);
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- a new row count re-measures and re-observes the list's current first child
   }, [scrollRef, count]);
 
   return inView;

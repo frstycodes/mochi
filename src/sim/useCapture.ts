@@ -11,7 +11,16 @@ export function useCapture(threadId: string, device: Simulator | null) {
   const [isRecording, setRecording] = useState(false);
 
   // GAP: chat entries are text only, so the capture goes in as its file path until messages carry attachments.
-  const post = (what: string, path: string) => dispatch({ type: 'say', threadId, entry: { who: 'you', kind: 'message', text: `${what} of ${device?.name}: ${path}` } });
+  const post = (what: string, path: string) =>
+    dispatch({
+      type: 'say',
+      threadId,
+      entry: {
+        who: 'you',
+        kind: 'message',
+        text: `${what} of ${device?.name}: ${path}`,
+      },
+    });
 
   const screenshot = async () => {
     if (!device) return;

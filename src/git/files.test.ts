@@ -1,19 +1,41 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { DiffFile } from '../host/types/git.ts';
 import { changeSections, hunkCovers } from './files.ts';
 
-const file = (path: string, oldPath?: string): DiffFile => ({ path, oldPath, kind: 'modified', staged: false, binary: false, added: 0, removed: 0, patch: '', hunks: [] });
+const file = (path: string, oldPath?: string): DiffFile => ({
+  path,
+  oldPath,
+  kind: 'modified',
+  staged: false,
+  binary: false,
+  added: 0,
+  removed: 0,
+  patch: '',
+  hunks: [],
+});
 
 test('changeSections orders files like the tree (folders first) and splits staged from unstaged', () => {
-  const [flat] = changeSections([file('src/b.ts'), file('README.md'), file('src/lib/a.ts')], false);
+  const [flat] = changeSections(
+    [file('src/b.ts'), file('README.md'), file('src/lib/a.ts')],
+    false,
+  );
   assert.equal(flat.title, null);
-  assert.deepEqual(flat.files.map((f) => f.path), ['src/lib/a.ts', 'src/b.ts', 'README.md']);
-  const sections = changeSections([file('a.ts'), { ...file('b.ts'), staged: true }], true);
-  assert.deepEqual(sections.map((s) => [s.title, s.files.map((f) => f.path)]), [
-    ['Staged', ['b.ts']],
-    ['Changes', ['a.ts']],
-  ]);
+  assert.deepEqual(
+    flat.files.map((f) => f.path),
+    ['src/lib/a.ts', 'src/b.ts', 'README.md'],
+  );
+  const sections = changeSections(
+    [file('a.ts'), { ...file('b.ts'), staged: true }],
+    true,
+  );
+  assert.deepEqual(
+    sections.map((s) => [s.title, s.files.map((f) => f.path)]),
+    [
+      ['Staged', ['b.ts']],
+      ['Changes', ['a.ts']],
+    ],
+  );
 });
 
 test('hunkCovers checks the hunk range on the given side', () => {

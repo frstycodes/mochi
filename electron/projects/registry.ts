@@ -1,13 +1,26 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { normalizeOrigin } from '../../src/git/origin.ts';
-import type { Project, ProjectIconMode } from '../../src/host/types/projects.ts';
-import { customIconFile, findFavicon, iconUrl, removeCustomIcon, saveCustomIcon } from './icon.ts';
+import type {
+  Project,
+  ProjectIconMode,
+} from '../../src/host/types/projects.ts';
+import {
+  customIconFile,
+  findFavicon,
+  iconUrl,
+  removeCustomIcon,
+  saveCustomIcon,
+} from './icon.ts';
 import { runGit } from '../git/run.ts';
+import { readDoc, writeDoc } from '@mochi/core/store/client';
 
 /** `iconMode` is unset on rows saved before icons: those read as `auto`. */
-type StoredProject = Omit<Project, 'isMissing' | 'icon' | 'iconMode' | 'favicon'> & { iconMode?: ProjectIconMode };
+type StoredProject = Omit<
+  Project,
+  'isMissing' | 'icon' | 'iconMode' | 'favicon'
+> & { iconMode?: ProjectIconMode };
 
 interface Saved {
   version: 1;
@@ -18,22 +31,26 @@ interface Saved {
 export type ProjectRegistry = ReturnType<typeof projectRegistry>;
 
 /**
- * Every profile's projects in one JSON file, uploaded icons in `iconDir`. Changes run one at a time, each saved before the
- * next starts.
+ * Every profile's projects in one document of Core's `projects` table (`key`; tests use their own), uploaded icons in
+ * `iconDir`. Changes run one at a time, each saved before the next starts.
  */
-export function projectRegistry(file: string, iconDir = join(dirname(file), 'project-icons')) {
+export function projectRegistry(iconDir: string, key = 'registry') {
   let saved: Promise<Saved> | undefined;
   let queue: Promise<unknown> = Promise.resolve();
-  const load = () => (saved ??= readFile(file, 'utf8').then((text) => parseSaved(JSON.parse(text)), emptySaved));
+  const load = () => (saved ??= readDoc('projects', key).then(parseSaved));
 
-  function change<T>(spaceId: string, edit: (space: Saved['spaces'][string]) => Promise<T>) {
+  function change<T>(
+    spaceId: string,
+    edit: (space: Saved['spaces'][string]) => Promise<T>,
+  ) {
     const next = queue.then(async () => {
       const data = await load();
-      const space = (data.spaces[spaceId] ??= { projects: [], isMigrated: false });
+      const space = (data.spaces[spaceId] ??= {
+        projects: [],
+        isMigrated: false,
+      });
       const result = await edit(space);
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(`${file}.tmp`, JSON.stringify(data, null, 2), { mode: 0o600 });
-      await rename(`${file}.tmp`, file);
+      await writeDoc('projects', key, data);
       return result;
     });
     queue = next.catch(() => {});
@@ -48,7 +65,9 @@ export function projectRegistry(file: string, iconDir = join(dirname(file), 'pro
 
   async function list(spaceId: string) {
     await queue;
-    return Promise.all(((await load()).spaces[spaceId]?.projects ?? []).map(withOne));
+    return Promise.all(
+      ((await load()).spaces[spaceId]?.projects ?? []).map(withOne),
+    );
   }
 
   /** What the renderer gets: the folder's state and its icon, read now. */
@@ -56,10 +75,20 @@ export function projectRegistry(file: string, iconDir = join(dirname(file), 'pro
     const iconMode = project.iconMode ?? 'auto';
     const isMissing = !(await isFolder(project.path));
     const favicon = isMissing ? null : await findFavicon(project.path);
-    return { ...project, iconMode, isMissing, favicon, icon: isMissing ? null : await iconOf(project, iconMode, favicon) };
+    return {
+      ...project,
+      iconMode,
+      isMissing,
+      favicon,
+      icon: isMissing ? null : await iconOf(project, iconMode, favicon),
+    };
   }
 
-  async function iconOf(project: StoredProject, mode: ProjectIconMode, favicon: string | null): Promise<Project['icon']> {
+  async function iconOf(
+    project: StoredProject,
+    mode: ProjectIconMode,
+    favicon: string | null,
+  ): Promise<Project['icon']> {
     if (mode === 'custom') {
       const custom = await customIconFile(iconDir, project.id);
       const url = custom && (await iconUrl(custom));
@@ -75,8 +104,14 @@ export function projectRegistry(file: string, iconDir = join(dirname(file), 'pro
     async migrate(spaceId: string, paths: string[]) {
       await change(spaceId, async (space) => {
         if (space.isMigrated) return;
-        for (const path of new Set(paths.filter((p) => isAbsolute(p)).map((p) => resolve(p))))
-          if (!space.projects.some((p) => p.path === path) && (await isFolder(path))) space.projects.push(await newProject(path));
+        for (const path of new Set(
+          paths.filter((p) => isAbsolute(p)).map((p) => resolve(p)),
+        ))
+          if (
+            !space.projects.some((p) => p.path === path) &&
+            (await isFolder(path))
+          )
+            space.projects.push(await newProject(path));
         space.isMigrated = true;
       });
       return list(spaceId);
@@ -95,7 +130,10 @@ export function projectRegistry(file: string, iconDir = join(dirname(file), 'pro
       );
     },
     rename(spaceId: string, id: string, name: string) {
-      return change(spaceId, async (space) => void (find(space, id).name = name));
+      return change(
+        spaceId,
+        async (space) => void (find(space, id).name = name),
+      );
     },
     remove(spaceId: string, id: string) {
       return change(spaceId, async (space) => {
@@ -124,10 +162,16 @@ export function projectRegistry(file: string, iconDir = join(dirname(file), 'pro
       return withOne(
         await change(spaceId, async (space) => {
           const project = find(space, id);
-          const other = space.projects.find((p) => p.path === folder && p.id !== id);
-          if (other) throw new Error(`${folder} is already the project ${other.name}`);
+          const other = space.projects.find(
+            (p) => p.path === folder && p.id !== id,
+          );
+          if (other)
+            throw new Error(`${folder} is already the project ${other.name}`);
           const origin = await originOf(folder);
-          if (project.origin && origin !== project.origin) throw new Error(`${folder} is ${origin ? `a clone of ${origin}` : 'not a clone'}, not ${project.origin}`);
+          if (project.origin && origin !== project.origin)
+            throw new Error(
+              `${folder} is ${origin ? `a clone of ${origin}` : 'not a clone'}, not ${project.origin}`,
+            );
           project.path = folder;
           project.origin = origin;
           return project;
@@ -139,12 +183,23 @@ export function projectRegistry(file: string, iconDir = join(dirname(file), 'pro
 
 /** `origin` of the repo at `path`, normalised; null for a folder without one. */
 export async function originOf(path: string) {
-  const url = await runGit(path, ['remote', 'get-url', 'origin']).catch(() => '');
+  const url = await runGit(path, ['remote', 'get-url', 'origin']).catch(
+    () => '',
+  );
   return normalizeOrigin(url);
 }
 
-async function newProject(path: string, name = basename(path)): Promise<StoredProject> {
-  return { id: randomUUID(), name, path, origin: await originOf(path), addedAt: Date.now() };
+async function newProject(
+  path: string,
+  name = basename(path),
+): Promise<StoredProject> {
+  return {
+    id: randomUUID(),
+    name,
+    path,
+    origin: await originOf(path),
+    addedAt: Date.now(),
+  };
 }
 
 async function checkedFolder(path: string) {
@@ -154,7 +209,11 @@ async function checkedFolder(path: string) {
   return folder;
 }
 
-const isFolder = (path: string) => stat(path).then((s) => s.isDirectory(), () => false);
+const isFolder = (path: string) =>
+  stat(path).then(
+    (s) => s.isDirectory(),
+    () => false,
+  );
 
 const emptySaved = (): Saved => ({ version: 1, spaces: {} });
 
@@ -165,12 +224,27 @@ function parseSaved(value: unknown): Saved {
   return {
     version: 1,
     spaces: Object.fromEntries(
-      Object.entries(spaces).map(([id, space]) => [id, { isMigrated: space?.isMigrated === true, projects: Array.isArray(space?.projects) ? space.projects.filter(isStoredProject) : [] }]),
+      Object.entries(spaces).map(([id, space]) => [
+        id,
+        {
+          isMigrated: space?.isMigrated === true,
+          projects: Array.isArray(space?.projects)
+            ? space.projects.filter(isStoredProject)
+            : [],
+        },
+      ]),
     ),
   };
 }
 
 const ICON_MODES = [undefined, 'auto', 'custom', 'none'];
 
-const isStoredProject = (p: Partial<StoredProject> | null): p is StoredProject =>
-  typeof p?.id === 'string' && typeof p.name === 'string' && typeof p.path === 'string' && (p.origin === null || typeof p.origin === 'string') && typeof p.addedAt === 'number' && ICON_MODES.includes(p.iconMode);
+const isStoredProject = (
+  p: Partial<StoredProject> | null,
+): p is StoredProject =>
+  typeof p?.id === 'string' &&
+  typeof p.name === 'string' &&
+  typeof p.path === 'string' &&
+  (p.origin === null || typeof p.origin === 'string') &&
+  typeof p.addedAt === 'number' &&
+  ICON_MODES.includes(p.iconMode);

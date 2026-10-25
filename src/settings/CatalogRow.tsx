@@ -13,11 +13,31 @@ import { authorName, type Author, type Provider, type Space } from '../model';
 import { updateProfile } from '../profiles';
 import { useHarness } from '../store';
 import { useAgentSettings } from './AgentSettings';
-import { findSetting, isSharedSetting, settingsCatalog, valueLabel, type Setting, type SettingSources, type SettingWrite } from './catalog';
-import { CommitInput, FolderInput, NumberInput, SettingsChoice, SettingsRow, SettingsSelect, settingControlId } from './parts';
+import {
+  findSetting,
+  isSharedSetting,
+  settingsCatalog,
+  valueLabel,
+  type Setting,
+  type SettingSources,
+  type SettingWrite,
+} from './catalog';
+import {
+  CommitInput,
+  FolderInput,
+  NumberInput,
+  SettingsChoice,
+  SettingsRow,
+  SettingsSelect,
+  settingControlId,
+} from './parts';
 import { setPrefs, usePrefs } from './prefs';
 import { useConfigWriter, useProfileConfig } from './ProfileAgentConfig';
-import { AccountSelect, GitHubAccountSelect, IconPicker } from './sections/profiles';
+import {
+  AccountSelect,
+  GitHubAccountSelect,
+  IconPicker,
+} from './sections/profiles';
 import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
 import { ThemePicker } from './ThemePicker';
@@ -41,68 +61,160 @@ export interface RowSuggestion {
  * ids unique when the same setting shows twice (two widgets in one thread). `label` shortens it where the group title
  * already names part of it ("Default model" under "Claude Code").
  */
-export function CatalogRow({ settingKey, label, profile, suggestion, idPrefix = '' }: { settingKey: string; label?: string; profile?: Space; suggestion?: RowSuggestion; idPrefix?: string }) {
-  const { sources, reload } = useSettingSources(profile, isConfigKey(settingKey), REMOTE_KEYS.has(settingKey));
-  const setting = findSetting(settingsCatalog({ profile, config: sources.config }), settingKey);
-  if (!setting) return <SettingsRow label={settingKey} description="Not a setting here any more" />;
-  return <SettingRow setting={label ? { ...setting, label } : setting} sources={sources} profile={profile} rowId={idPrefix + rowIdOf(setting, profile)} suggestion={suggestion} onConfigWritten={reload} />;
+export function CatalogRow({
+  settingKey,
+  label,
+  profile,
+  suggestion,
+  idPrefix = '',
+}: {
+  settingKey: string;
+  label?: string;
+  profile?: Space;
+  suggestion?: RowSuggestion;
+  idPrefix?: string;
+}) {
+  const { sources, reload } = useSettingSources(
+    profile,
+    isConfigKey(settingKey),
+    REMOTE_KEYS.has(settingKey),
+  );
+  const setting = findSetting(
+    settingsCatalog({ profile, config: sources.config }),
+    settingKey,
+  );
+  if (!setting)
+    return (
+      <SettingsRow
+        label={settingKey}
+        description="Not a setting here any more"
+      />
+    );
+  return (
+    <SettingRow
+      setting={label ? { ...setting, label } : setting}
+      sources={sources}
+      profile={profile}
+      rowId={idPrefix + rowIdOf(setting, profile)}
+      suggestion={suggestion}
+      onConfigWritten={reload}
+    />
+  );
 }
 
 /** Settings › Remote access lives in main's remote server; only its rows read it. */
 const REMOTE_KEYS = new Set(['remoteEnabled', 'remoteNetwork', 'machineName']);
 
 /** Instructions, MCP servers and skills live in the profile's config files; nothing else needs them read. */
-export const isConfigKey = (key: string) => /^profile\.\w+\.(instructions|mcp|skill)\b/.test(key);
+export const isConfigKey = (key: string) =>
+  /^profile\.\w+\.(instructions|mcp|skill)\b/.test(key);
 
 /**
  * Every source a catalog setting reads, live: prefs, theme, color themes, quiet hours, main's settings and accounts, the
  * profile's files when `withConfig`, Settings › Remote access when `withRemote`.
  */
-export function useSettingSources(profile: Space | undefined, withConfig: boolean, withRemote = false) {
+export function useSettingSources(
+  profile: Space | undefined,
+  withConfig: boolean,
+  withRemote = false,
+) {
   const prefs = usePrefs();
   const { theme = 'system' } = useTheme();
   const { state } = useHarness();
   const { settings, accounts } = useAgentSettings();
-  const { config, reload } = useProfileConfig(withConfig ? profile?.id : undefined);
+  const { config, reload } = useProfileConfig(
+    withConfig ? profile?.id : undefined,
+  );
   const { installed, isLoaded } = useThemesState();
   const { status } = useRemoteStatus(withRemote);
-  const sources: SettingSources = { prefs, theme, quiet: state.notifications.quiet, host: settings, profile, accounts, config, colorThemes: isLoaded ? installed : undefined, remote: status?.settings };
+  const sources: SettingSources = {
+    prefs,
+    theme,
+    quiet: state.notifications.quiet,
+    host: settings,
+    profile,
+    accounts,
+    config,
+    colorThemes: isLoaded ? installed : undefined,
+    remote: status?.settings,
+  };
   return { sources, reload };
 }
 
 /** Deep links and search use these ids, kept from before the catalog: `alert-needs-you`, `claudePath`, `personal-name`. */
 function rowIdOf(setting: Setting, profile?: Space) {
-  if (setting.key.startsWith('profile.') && profile) return `${profile.id}-${setting.key.slice('profile.'.length)}`;
-  if (setting.key.startsWith('alert.')) return `alert-${setting.key.slice('alert.'.length)}`;
-  if (setting.key.startsWith('utility.')) return `utility-${setting.key.slice('utility.'.length)}`;
-  if (setting.key.startsWith('animation.')) return `animation-${setting.key.slice('animation.'.length)}`;
-  if (setting.key.startsWith('keybinding.')) return `shortcut-${setting.key.slice('keybinding.'.length)}`;
+  if (setting.key.startsWith('profile.') && profile)
+    return `${profile.id}-${setting.key.slice('profile.'.length)}`;
+  if (setting.key.startsWith('alert.'))
+    return `alert-${setting.key.slice('alert.'.length)}`;
+  if (setting.key.startsWith('utility.'))
+    return `utility-${setting.key.slice('utility.'.length)}`;
+  if (setting.key.startsWith('animation.'))
+    return `animation-${setting.key.slice('animation.'.length)}`;
+  if (setting.key.startsWith('keybinding.'))
+    return `shortcut-${setting.key.slice('keybinding.'.length)}`;
   return setting.key.replace(/\.(\w)/g, (_, c: string) => c.toUpperCase());
 }
 
-function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWritten }: { setting: Setting; sources: SettingSources; profile?: Space; rowId: string; suggestion?: RowSuggestion; onConfigWritten: () => void }) {
+function SettingRow({
+  setting,
+  sources,
+  profile,
+  rowId,
+  suggestion,
+  onConfigWritten,
+}: {
+  setting: Setting;
+  sources: SettingSources;
+  profile?: Space;
+  rowId: string;
+  suggestion?: RowSuggestion;
+  onConfigWritten: () => void;
+}) {
   const apply = useSettingWriter(profile, onConfigWritten);
   const share = useShareSetting();
   const value = setting.read(sources);
   const set = (next: string) => {
     const write = setting.write(next, sources);
     if (!write) return;
-    void apply.write(write).then((isSaved) => isSaved && isSharedSetting(setting.key) && share(setting.key, next));
+    void apply
+      .write(write)
+      .then(
+        (isSaved) =>
+          isSaved && isSharedSetting(setting.key) && share(setting.key, next),
+      );
   };
-  const line = !!suggestion && <SuggestionLine setting={setting} value={value} suggestion={suggestion} onUse={() => set(suggestion.value)} />;
+  const line = !!suggestion && (
+    <SuggestionLine
+      setting={setting}
+      value={value}
+      suggestion={suggestion}
+      onUse={() => set(suggestion.value)}
+    />
+  );
   const { control } = setting;
   if (control.type === 'starredModels')
     return (
-      <StarredModelsRow rowId={rowId} value={value?.split(',').filter(Boolean) ?? []} onChange={(ids) => set(ids.join(','))}>
+      <StarredModelsRow
+        rowId={rowId}
+        value={value?.split(',').filter(Boolean) ?? []}
+        onChange={(ids) => set(ids.join(','))}
+      >
         {line}
       </StarredModelsRow>
     );
-  const description = suggestion ? (setting.description ?? setting.context) : setting.description;
+  const description = suggestion
+    ? (setting.description ?? setting.context)
+    : setting.description;
   if (control.type === 'appIcon' && value !== undefined)
     return (
       <>
         <SettingsRow id={rowId} label={setting.label} description={description}>
-          <AppIconPicker id={settingControlId(rowId)} value={value} onChange={set} />
+          <AppIconPicker
+            id={settingControlId(rowId)}
+            value={value}
+            onChange={set}
+          />
           {line}
         </SettingsRow>
         {apply.dialog}
@@ -112,7 +224,12 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
     return (
       <>
         <SettingsRow id={rowId} label={setting.label} description={description}>
-          <CommitTextarea id={settingControlId(rowId)} value={value} placeholder={control.placeholder} onCommit={set} />
+          <CommitTextarea
+            id={settingControlId(rowId)}
+            value={value}
+            placeholder={control.placeholder}
+            onCommit={set}
+          />
           {line}
         </SettingsRow>
         {apply.dialog}
@@ -120,7 +237,31 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
     );
   return (
     <>
-      <SettingsRow id={rowId} label={control.type === 'account' ? <MarkedLabel provider={control.provider}>{setting.label}</MarkedLabel> : setting.label} description={description} control={value === undefined ? <Unavailable /> : <SettingControl setting={setting} value={value} rowId={rowId} onChange={set} />}>
+      <SettingsRow
+        id={rowId}
+        label={
+          control.type === 'account' ? (
+            <MarkedLabel provider={control.provider}>
+              {setting.label}
+            </MarkedLabel>
+          ) : (
+            setting.label
+          )
+        }
+        description={description}
+        control={
+          value === undefined ? (
+            <Unavailable />
+          ) : (
+            <SettingControl
+              setting={setting}
+              value={value}
+              rowId={rowId}
+              onChange={set}
+            />
+          )
+        }
+      >
         {line}
       </SettingsRow>
       {apply.dialog}
@@ -128,31 +269,107 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
   );
 }
 
-const WARNING_TOGGLE = 'text-warning hover:text-warning data-[state=on]:border-warning/60 data-[state=on]:bg-warning/12 data-[state=on]:text-warning dark:data-[state=on]:bg-warning/12';
+const WARNING_TOGGLE =
+  'text-warning hover:text-warning data-[state=on]:border-warning/60 data-[state=on]:bg-warning/12 data-[state=on]:text-warning dark:data-[state=on]:bg-warning/12';
 
 function Unavailable() {
-  return <span className="type-meta text-muted-foreground">{host.isDesktop ? 'Reading…' : 'Needs the desktop app'}</span>;
+  return (
+    <span className="type-meta text-muted-foreground">
+      {host.isDesktop ? 'Reading…' : 'Needs the desktop app'}
+    </span>
+  );
 }
 
-export function SettingControl({ setting, value, rowId, onChange }: { setting: Setting; value: string; rowId: string; onChange: (value: string) => void }) {
+export function SettingControl({
+  setting,
+  value,
+  rowId,
+  onChange,
+}: {
+  setting: Setting;
+  value: string;
+  rowId: string;
+  onChange: (value: string) => void;
+}) {
   const { control } = setting;
   const id = settingControlId(rowId);
   switch (control.type) {
     case 'choice':
-      return <SettingsChoice id={rowId} value={value} options={control.options.map((o) => ({ ...o, icon: optionIcon(setting.key, o.value), className: o.tone === 'warning' ? WARNING_TOGGLE : undefined }))} onChange={onChange} />;
+      return (
+        <SettingsChoice
+          id={rowId}
+          value={value}
+          options={control.options.map((o) => ({
+            ...o,
+            icon: optionIcon(setting.key, o.value),
+            className: o.tone === 'warning' ? WARNING_TOGGLE : undefined,
+          }))}
+          onChange={onChange}
+        />
+      );
     case 'select':
-      return <SettingsSelect id={rowId} value={value} options={control.options} onChange={onChange} className="w-56" />;
+      return (
+        <SettingsSelect
+          id={rowId}
+          value={value}
+          options={control.options}
+          onChange={onChange}
+          className="w-56"
+        />
+      );
     case 'switch':
     case 'mcp':
     case 'skill':
-      return <Switch id={id} checked={value === 'true'} onCheckedChange={(on) => onChange(String(on))} />;
+      return (
+        <Switch
+          id={id}
+          checked={value === 'true'}
+          onCheckedChange={(on) => onChange(String(on))}
+        />
+      );
     case 'number':
-      return <NumberInput id={id} value={Number(value)} min={control.min} max={control.max} step={control.step} onCommit={(n) => onChange(String(n))} />;
+      return (
+        <NumberInput
+          id={id}
+          value={Number(value)}
+          min={control.min}
+          max={control.max}
+          step={control.step}
+          onCommit={(n) => onChange(String(n))}
+        />
+      );
     case 'text':
-      if (control.isPath) return <FolderInput id={rowId} value={value} placeholder={control.placeholder} onCommit={onChange} />;
-      return <CommitInput id={id} value={value} placeholder={control.placeholder} onCommit={onChange} className={control.isMono ? 'font-mono placeholder:font-sans' : undefined} />;
+      if (control.isPath)
+        return (
+          <FolderInput
+            id={rowId}
+            value={value}
+            placeholder={control.placeholder}
+            onCommit={onChange}
+          />
+        );
+      return (
+        <CommitInput
+          id={id}
+          value={value}
+          placeholder={control.placeholder}
+          onCommit={onChange}
+          className={
+            control.isMono ? 'font-mono placeholder:font-sans' : undefined
+          }
+        />
+      );
     case 'model':
-      if (control.provider) return <ModelSelect id={rowId} provider={control.provider} value={value} emptyLabel={control.emptyLabel} onChange={onChange} />;
+      if (control.provider)
+        return (
+          <ModelSelect
+            id={rowId}
+            provider={control.provider}
+            value={value}
+            emptyLabel={control.emptyLabel}
+            onChange={onChange}
+          />
+        );
       return <SideChatModelPicker id={id} value={value} onChange={onChange} />;
     case 'colorTheme':
       return <ThemePicker slot={control.slot} />;
@@ -161,9 +378,18 @@ export function SettingControl({ setting, value, rowId, onChange }: { setting: S
     case 'icon':
       return <IconPicker id={id} value={value} onChange={onChange} />;
     case 'github':
-      return <GitHubAccountSelect id={rowId} value={value} onChange={onChange} />;
+      return (
+        <GitHubAccountSelect id={rowId} value={value} onChange={onChange} />
+      );
     case 'account':
-      return <AccountSelect id={rowId} provider={control.provider} value={value} onChange={onChange} />;
+      return (
+        <AccountSelect
+          id={rowId}
+          provider={control.provider}
+          value={value}
+          onChange={onChange}
+        />
+      );
     case 'shortcut':
       return <ShortcutRecorder id={id} command={control.command} />;
     default:
@@ -171,7 +397,13 @@ export function SettingControl({ setting, value, rowId, onChange }: { setting: S
   }
 }
 
-function MarkedLabel({ provider, children }: { provider: Provider; children: string }) {
+function MarkedLabel({
+  provider,
+  children,
+}: {
+  provider: Provider;
+  children: string;
+}) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderMark provider={provider} size={14} />
@@ -182,24 +414,67 @@ function MarkedLabel({ provider, children }: { provider: Provider; children: str
 
 /** Harnesses by their mark and theme modes by the user menu's icons; other options are words alone. */
 function optionIcon(key: string, value: string) {
-  if (key === 'agent') return <ProviderMark provider={value as Provider} size={14} />;
+  if (key === 'agent')
+    return <ProviderMark provider={value as Provider} size={14} />;
   if (key !== 'theme') return undefined;
   const Icon = THEMES.find((t) => t.value === value)?.Icon;
   return !!Icon && <Icon aria-hidden />;
 }
 
 /** Free text over several lines, under its label at full width: saved on blur, so Enter makes a new line. */
-function CommitTextarea({ value, onCommit, ...props }: { value: string; onCommit: (value: string) => void } & Omit<ComponentProps<typeof Textarea>, 'value' | 'defaultValue' | 'onBlur'>) {
-  return <Textarea key={value} defaultValue={value} onBlur={(e) => e.target.value.trim() !== value && onCommit(e.target.value.trim())} className="min-h-[calc(3lh+1rem+2px)] resize-none" {...props} />;
+function CommitTextarea({
+  value,
+  onCommit,
+  ...props
+}: { value: string; onCommit: (value: string) => void } & Omit<
+  ComponentProps<typeof Textarea>,
+  'value' | 'defaultValue' | 'onBlur'
+>) {
+  return (
+    <Textarea
+      key={value}
+      defaultValue={value}
+      onBlur={(e) =>
+        e.target.value.trim() !== value && onCommit(e.target.value.trim())
+      }
+      className="min-h-[calc(3lh+1rem+2px)] resize-none"
+      {...props}
+    />
+  );
 }
 
 /** `provider:model`, the way the side chat stores its default. */
-function SideChatModelPicker({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
+function SideChatModelPicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const [provider, ...model] = value.split(':');
-  return <ModelPicker id={id} value={model.join(':')} provider={provider as Provider} onChange={(m) => onChange(`${m.harness}:${m.id}`)} />;
+  return (
+    <ModelPicker
+      id={id}
+      value={model.join(':')}
+      provider={provider as Provider}
+      onChange={(m) => onChange(`${m.harness}:${m.id}`)}
+    />
+  );
 }
 
-function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Setting; value: string | undefined; suggestion: RowSuggestion; onUse: () => void }) {
+function SuggestionLine({
+  setting,
+  value,
+  suggestion,
+  onUse,
+}: {
+  setting: Setting;
+  value: string | undefined;
+  suggestion: RowSuggestion;
+  onUse: () => void;
+}) {
   const who = authorName(suggestion.by);
   if (value === suggestion.value)
     return (
@@ -211,9 +486,21 @@ function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Settin
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 type-meta text-muted-foreground">
       <span className="min-w-0 [overflow-wrap:anywhere]">
-        {who} suggests <span className="font-medium text-foreground">{setting.control.type === 'shortcut' && suggestion.value ? <Shortcut keys={parseChord(suggestion.value) ?? []} /> : valueLabel(setting, suggestion.value)}</span>
+        {who} suggests{' '}
+        <span className="font-medium text-foreground">
+          {setting.control.type === 'shortcut' && suggestion.value ? (
+            <Shortcut keys={parseChord(suggestion.value) ?? []} />
+          ) : (
+            valueLabel(setting, suggestion.value)
+          )}
+        </span>
       </span>
-      <Button variant="outline" size="xs" onClick={onUse} disabled={value === undefined}>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={onUse}
+        disabled={value === undefined}
+      >
         Use
       </Button>
     </div>
@@ -224,11 +511,17 @@ function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Settin
  * Applies a catalog write the way Settings does: prefs and quiet hours in the renderer, main's settings and account links
  * through the host, profile fields in `src/profiles.ts`, config files through the diff review (`dialog` renders it).
  */
-function useSettingWriter(profile: Space | undefined, onConfigWritten: () => void) {
+function useSettingWriter(
+  profile: Space | undefined,
+  onConfigWritten: () => void,
+) {
   const { setTheme } = useTheme();
   const { state, dispatch } = useHarness();
   const agent = useAgentSettings();
-  const { review, dialog } = useConfigWriter(profile?.id ?? '', onConfigWritten);
+  const { review, dialog } = useConfigWriter(
+    profile?.id ?? '',
+    onConfigWritten,
+  );
   const write = async (w: SettingWrite): Promise<boolean> => {
     switch (w.to) {
       case 'prefs':
@@ -240,14 +533,22 @@ function useSettingWriter(profile: Space | undefined, onConfigWritten: () => voi
         setTheme(w.theme);
         return true;
       case 'quiet':
-        dispatch({ type: 'notify-quiet', quiet: { ...state.notifications.quiet, ...w.patch } });
+        dispatch({
+          type: 'notify-quiet',
+          quiet: { ...state.notifications.quiet, ...w.patch },
+        });
         return true;
       case 'host':
         return (await agent.update(w.patch)) !== false;
       case 'remote':
         return host.remote.set(w.patch).then(
           () => true,
-          (error: Error) => (toast.error('Couldn’t change Settings › Remote access', { description: error.message }), false),
+          (error: Error) => (
+            toast.error('Couldn’t change Settings › Remote access', {
+              description: error.message,
+            }),
+            false
+          ),
         );
       case 'profile':
         updateProfile(profile!.id, w.patch);
@@ -260,4 +561,3 @@ function useSettingWriter(profile: Space | undefined, onConfigWritten: () => voi
   };
   return { write, review, dialog };
 }
-

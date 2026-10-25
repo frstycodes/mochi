@@ -13,7 +13,8 @@ export function sourceUrl(label: string) {
 }
 
 /** A trailing slash marks a folder, which opens in the Files tab rather than the file viewer. */
-export const isFolderSource = (source: Source) => source.kind === 'file' && source.label.endsWith('/');
+export const isFolderSource = (source: Source) =>
+  source.kind === 'file' && source.label.endsWith('/');
 
 /** What the agent is told when you add a source mid-thread; it lands in the transcript as your message. */
 export function sourcePrompt(source: Source) {
@@ -23,5 +24,9 @@ export function sourcePrompt(source: Source) {
 // ponytail: a host needs a dotted first segment followed by a path (`redis.io/docs`) or a `www.` prefix; a bare `example.com`
 // reads as a file name (`README.md` looks the same), so type the scheme for those.
 function isUrl(text: string) {
-  return /^[a-z][a-z\d+.-]*:\/\//i.test(text) || /^www\./i.test(text) || /^[\w-]+(\.[\w-]+)+(:\d+)?\//.test(text);
+  return (
+    /^[a-z][a-z\d+.-]*:\/\//i.test(text) ||
+    /^www\./i.test(text) ||
+    /^[\w-]+(\.[\w-]+)+(:\d+)?\//.test(text)
+  );
 }

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 import type { GeneratedImage } from '../model.ts';
 
 /**
@@ -18,24 +18,58 @@ export const IMAGE_SIZES = {
 export type ImageSize = keyof typeof IMAGE_SIZES;
 
 export const IMAGE_TOOL_DESCRIPTION =
-  "Generate an image (illustration, icon, mockup, photo, texture) from a text prompt. The user sees it in the thread as it's made; you get the image back. Pass saveTo to also write it into your worktree, like \"public/hero.png\". Takes up to a minute or two and counts against the user's plan, so make one at a time.";
+  'Generate an image (illustration, icon, mockup, photo, texture) from a text prompt. The user sees it in the thread as it\'s made; you get the image back. Pass saveTo to also write it into your worktree, like "public/hero.png". Takes up to a minute or two and counts against the user\'s plan, so make one at a time.';
 
 export const IMAGE_TOOL_SHAPE = {
-  prompt: z.string().min(1).max(4000).describe('What to draw: subject, style, composition, colors, any text to render'),
-  size: z.enum(Object.keys(IMAGE_SIZES) as [ImageSize, ...ImageSize[]]).optional().describe('Default square'),
-  saveTo: z.string().optional().describe('A path inside your worktree to copy the image to, like "assets/logo.png"'),
+  prompt: Schema.String.check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(4000),
+  ).annotate({
+    description:
+      'What to draw: subject, style, composition, colors, any text to render',
+  }),
+  size: Schema.optionalKey(
+    Schema.Literals(Object.keys(IMAGE_SIZES) as ImageSize[]).annotate({
+      description: 'Default square',
+    }),
+  ),
+  saveTo: Schema.optionalKey(
+    Schema.String.annotate({
+      description:
+        'A path inside your worktree to copy the image to, like "assets/logo.png"',
+    }),
+  ),
 };
 
 const PATH_LINE = 'Image file: ';
 
 /** The result's first line names the file, so the mapper finds it even when the image is too big to return. */
-export const imageResultText = (path: string, savedTo?: string) => [`${PATH_LINE}${path}`, ...(savedTo ? [`Saved to ${savedTo}`] : [])].join('\n');
+export const imageResultText = (path: string, savedTo?: string) =>
+  [`${PATH_LINE}${path}`, ...(savedTo ? [`Saved to ${savedTo}`] : [])].join(
+    '\n',
+  );
 
 /** The card for a `generate_image` call: running from its input, done or failed from its result text. */
-export function imageCard(input: Record<string, unknown>, result?: { text: string; isError?: boolean }): GeneratedImage {
-  const prompt = typeof input.prompt === 'string' ? { prompt: input.prompt } : {};
+export function imageCard(
+  input: Record<string, unknown>,
+  result?: { text: string; isError?: boolean },
+): GeneratedImage {
+  const prompt =
+    typeof input.prompt === 'string' ? { prompt: input.prompt } : {};
   const aspect = IMAGE_SIZES[input.size as ImageSize]?.aspect ?? 1;
   if (!result) return { status: 'running', ...prompt, aspect };
-  const src = result.isError ? undefined : result.text.split('\n').find((line) => line.startsWith(PATH_LINE))?.slice(PATH_LINE.length);
-  return src ? { status: 'done', ...prompt, aspect, src } : { status: 'failed', ...prompt, aspect, error: result.text || 'The image wasn’t generated.' };
+  const src = result.isError
+    ? undefined
+    : result.text
+        .split('\n')
+        .find((line) => line.startsWith(PATH_LINE))
+        ?.slice(PATH_LINE.length);
+  return src
+    ? { status: 'done', ...prompt, aspect, src }
+    : {
+        status: 'failed',
+        ...prompt,
+        aspect,
+        error: result.text || 'The image wasn’t generated.',
+      };
 }

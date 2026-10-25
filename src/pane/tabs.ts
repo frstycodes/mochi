@@ -1,5 +1,15 @@
 import type { ComponentType } from 'react';
-import { BackgroundTask, Chart, Folder, Layers, Globe, MessagePlus, Phone, Plug, type IconComponent } from '@/icons';
+import {
+  BackgroundTask,
+  Chart,
+  Folder,
+  Layers,
+  Globe,
+  MessagePlus,
+  Phone,
+  Plug,
+  type IconComponent,
+} from '@/icons';
 import type { Pane, PaneTab, PaneTabKind, Thread } from '../model';
 import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { GitPullRequestIcon } from '../icons/github';
@@ -29,11 +39,18 @@ export const PANE_TABS = {
   simulator: { title: 'Simulator', icon: Phone, component: SimulatorTab },
   ports: { title: 'Ports', icon: Plug, component: PortsTab },
   sidechat: { title: 'Side chat', icon: MessagePlus, component: SideChatTab },
-  agents: { title: 'Background tasks', icon: BackgroundTask, component: AgentsTab },
+  agents: {
+    title: 'Background tasks',
+    icon: BackgroundTask,
+    component: AgentsTab,
+  },
   visual: { title: 'Visual', icon: Chart, component: VisualTab },
   artifacts: { title: 'Artifacts', icon: Layers, component: ArtifactsTab },
   pr: { title: 'Pull request', icon: GitPullRequestIcon, component: PrTab },
-} satisfies Record<PaneTabKind, { title: string; icon: IconComponent; component: ComponentType<PaneTabProps> }>;
+} satisfies Record<
+  PaneTabKind,
+  { title: string; icon: IconComponent; component: ComponentType<PaneTabProps> }
+>;
 
 export function tabTitle(tab: PaneTab) {
   return tab.title ?? PANE_TABS[tab.kind].title;

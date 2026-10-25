@@ -7,6 +7,9 @@ declare global {
 }
 
 export function bridge(): HostBridge {
-  if (!window.harnessHost) throw new Error('window.harnessHost is missing: not running in the desktop app');
+  if (!window.harnessHost)
+    throw new Error(
+      'window.harnessHost is missing: not running in the desktop app',
+    );
   return window.harnessHost;
 }

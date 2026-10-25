@@ -2,9 +2,23 @@ import { useState } from 'react';
 import { XCircle, Keyboard, SearchAlt } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import { Toggle } from '@/components/ui/toggle';
-import { COMMAND_GROUPS, COMMAND_IDS, COMMANDS, filterCommands, FIXED_KEYS, isCustom, type CommandId, type ShortcutFilter } from '../../keymap';
+import {
+  COMMAND_GROUPS,
+  COMMAND_IDS,
+  COMMANDS,
+  filterCommands,
+  FIXED_KEYS,
+  isCustom,
+  type CommandId,
+  type ShortcutFilter,
+} from '../../keymap';
 import { useProfiles } from '../../profiles';
 import { Shortcut } from '../../Shortcut';
 import { CatalogRow } from '../CatalogRow';
@@ -16,17 +30,30 @@ import { getPrefs, setPrefs, usePrefs } from '../prefs';
 export function KeyboardSection() {
   const shown = shownCommands(useProfiles().length);
   const { keybindings } = usePrefs();
-  const [filter, setFilter] = useState<ShortcutFilter>({ query: '', chord: null, isChangedOnly: false });
+  const [filter, setFilter] = useState<ShortcutFilter>({
+    query: '',
+    chord: null,
+    isChangedOnly: false,
+  });
   const [isListening, setListening] = useState(false);
   useRecording(isListening, {
     onCancel: () => setListening(false),
-    onClear: () => (setFilter((f) => ({ ...f, chord: null })), setListening(false)),
-    onChord: (chord) => (setFilter((f) => ({ ...f, chord, query: '' })), setListening(false)),
+    onClear: () => (
+      setFilter((f) => ({ ...f, chord: null })),
+      setListening(false)
+    ),
+    onChord: (chord) => (
+      setFilter((f) => ({ ...f, chord, query: '' })),
+      setListening(false)
+    ),
   });
   const commands = filterCommands(shown, filter, keybindings);
   const q = filter.query.trim().toLowerCase();
   // Fixed keys can't be rebound, so a chord or Changed filter never finds them.
-  const fixed = filter.chord || filter.isChangedOnly ? [] : FIXED_KEYS.filter(({ what }) => !q || what.toLowerCase().includes(q));
+  const fixed =
+    filter.chord || filter.isChangedOnly
+      ? []
+      : FIXED_KEYS.filter(({ what }) => !q || what.toLowerCase().includes(q));
   const changedCount = shown.filter((id) => isCustom(id, keybindings)).length;
   const isEmpty = !commands.length && !fixed.length;
   return (
@@ -43,26 +70,58 @@ export function KeyboardSection() {
                 <Shortcut keys={filter.chord} />
               </span>
             ) : (
-              <InputGroupInput value={filter.query} onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))} placeholder={isListening ? 'Press a shortcut…' : 'Filter shortcuts'} aria-label="Filter shortcuts" />
+              <InputGroupInput
+                value={filter.query}
+                onChange={(e) =>
+                  setFilter((f) => ({ ...f, query: e.target.value }))
+                }
+                placeholder={
+                  isListening ? 'Press a shortcut…' : 'Filter shortcuts'
+                }
+                aria-label="Filter shortcuts"
+              />
             )}
             <InputGroupAddon align="inline-end">
               {filter.chord ? (
-                <InputGroupButton aria-label="Clear the shortcut" onClick={() => setFilter((f) => ({ ...f, chord: null }))}>
+                <InputGroupButton
+                  aria-label="Clear the shortcut"
+                  onClick={() => setFilter((f) => ({ ...f, chord: null }))}
+                >
                   <XCircle />
                 </InputGroupButton>
               ) : (
-                <InputGroupButton aria-pressed={isListening} onClick={() => setListening((on) => !on)}>
+                <InputGroupButton
+                  aria-pressed={isListening}
+                  onClick={() => setListening((on) => !on)}
+                >
                   <Keyboard />
                   {isListening ? 'Listening' : 'Find by keys'}
                 </InputGroupButton>
               )}
             </InputGroupAddon>
           </InputGroup>
-          <Toggle variant="outline" size="sm" pressed={filter.isChangedOnly} onPressedChange={(isChangedOnly) => setFilter((f) => ({ ...f, isChangedOnly }))} disabled={!changedCount && !filter.isChangedOnly}>
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={filter.isChangedOnly}
+            onPressedChange={(isChangedOnly) =>
+              setFilter((f) => ({ ...f, isChangedOnly }))
+            }
+            disabled={!changedCount && !filter.isChangedOnly}
+          >
             Changed
-            {changedCount > 0 && <span className="text-muted-foreground tabular">{changedCount}</span>}
+            {changedCount > 0 && (
+              <span className="text-muted-foreground tabular">
+                {changedCount}
+              </span>
+            )}
           </Toggle>
-          <Button variant="outline" size="sm" disabled={!changedCount} onClick={resetAll}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!changedCount}
+            onClick={resetAll}
+          >
             Reset all
           </Button>
         </div>
@@ -80,9 +139,16 @@ export function KeyboardSection() {
         );
       })}
       {fixed.length > 0 && (
-        <SettingsGroup title="Fixed" footer="These belong to a field, a viewer or a gesture, so they can't be changed.">
+        <SettingsGroup
+          title="Fixed"
+          footer="These belong to a field, a viewer or a gesture, so they can't be changed."
+        >
           {fixed.map(({ keys, what }) => (
-            <SettingsRow key={what} label={what} control={<Shortcut keys={keys} />} />
+            <SettingsRow
+              key={what}
+              label={what}
+              control={<Shortcut keys={keys} />}
+            />
           ))}
         </SettingsGroup>
       )}
@@ -96,7 +162,8 @@ function NoShortcutMatch({ filter }: { filter: ShortcutFilter }) {
     <p className="flex flex-wrap items-center gap-1 px-1 type-meta text-muted-foreground">
       {filter.chord ? (
         <>
-          Nothing uses <Shortcut keys={filter.chord} /> yet, so it's free to give a command.
+          Nothing uses <Shortcut keys={filter.chord} /> yet, so it's free to
+          give a command.
         </>
       ) : (
         `No shortcut matches “${filter.query.trim()}”.`
@@ -107,7 +174,11 @@ function NoShortcutMatch({ filter }: { filter: ShortcutFilter }) {
 
 /** Profile shortcuts only for the profiles there are. */
 export function shownCommands(profileCount: number): CommandId[] {
-  return COMMAND_IDS.filter((id) => !id.startsWith('space-') || Number(id.slice('space-'.length)) <= profileCount);
+  return COMMAND_IDS.filter(
+    (id) =>
+      !id.startsWith('space-') ||
+      Number(id.slice('space-'.length)) <= profileCount,
+  );
 }
 
 export const shortcutRowId = (id: CommandId) => `shortcut-${id}`;
@@ -115,5 +186,7 @@ export const shortcutRowId = (id: CommandId) => `shortcut-${id}`;
 function resetAll() {
   const before = getPrefs().keybindings;
   setPrefs({ keybindings: {} });
-  toast('Shortcuts reset to the defaults', { action: { label: 'Undo', onClick: () => setPrefs({ keybindings: before }) } });
+  toast('Shortcuts reset to the defaults', {
+    action: { label: 'Undo', onClick: () => setPrefs({ keybindings: before }) },
+  });
 }

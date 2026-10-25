@@ -1,12 +1,46 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardCheck, Clock, CopyStack, MessageQuestion, Send, Settings, ShieldCheck, TaskSquare, type IconComponent } from '@/icons';
+import {
+  Archive,
+  ArrowRight,
+  ArrowUpRight,
+  CheckCircle,
+  ClipboardCheck,
+  Clock,
+  CopyStack,
+  MessageQuestion,
+  Send,
+  Settings,
+  ShieldCheck,
+  TaskSquare,
+  type IconComponent,
+} from '@/icons';
 import { useContainingToastId } from '@/toast/context';
 import { toast } from '@/toast/store';
-import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
+import {
+  Confirmation,
+  ConfirmationAction,
+  ConfirmationActions,
+  ConfirmationRequest,
+  ConfirmationTitle,
+} from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { BoundShortcut } from './Shortcut';
 import {
   Questionnaire,
@@ -26,10 +60,22 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
-import { answerText, isMochiCard, type QueueItem, type QueueKind, type Thread } from './model';
+import {
+  answerText,
+  isMochiCard,
+  type QueueItem,
+  type QueueKind,
+  type Thread,
+} from './model';
 import { duration } from './progress';
 import { useReviewEntry } from './review/useReviewMode';
-import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, useDispatch } from './store';
+import {
+  snapshot,
+  useHarness,
+  useSpaceQueue,
+  useSpaceThreads,
+  useDispatch,
+} from './store';
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
 import { useSendCiLog } from './notify/useSendCiLog';
@@ -39,7 +85,7 @@ import { RemoteScope, useMachines } from './remote/useMachines';
 import { Seen, useSeen } from './notify/useSeen';
 import { isQueueUnread } from './store/seen';
 import { UnreadDot } from './ui';
-import { isCommand } from './keymap';
+import { isCommand, listenKeydown } from './keymap';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
@@ -53,8 +99,14 @@ const KIND = {
 
 export function QueueView() {
   const items = useSpaceQueue();
-  const remote = useMachines().machines.flatMap(({ machine, state }) => (state ? [{ machine, state, items: remoteDecisions(state) }] : [])).filter((m) => m.items.length > 0);
-  const isWorking = useSpaceThreads().some((t) => t.status === 'running' && (!t.live || t.live.isWorking));
+  const remote = useMachines()
+    .machines.flatMap(({ machine, state }) =>
+      state ? [{ machine, state, items: remoteDecisions(state) }] : [],
+    )
+    .filter((m) => m.items.length > 0);
+  const isWorking = useSpaceThreads().some(
+    (t) => t.status === 'running' && (!t.live || t.live.isWorking),
+  );
   const { state } = useHarness();
   const review = useReviewEntry(state.spaceId);
   const [selected, setSelected] = useState(0);
@@ -68,7 +120,9 @@ export function QueueView() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="type-heading">Queue</h1>
-            <p className="type-meta text-muted-foreground">Decisions your agents are waiting on, most blocking first.</p>
+            <p className="type-meta text-muted-foreground">
+              Decisions your agents are waiting on, most blocking first.
+            </p>
           </div>
           <span className="hidden items-center gap-1 type-caption text-subtle-foreground md:flex">
             <BoundShortcut command="list-next" />
@@ -82,7 +136,9 @@ export function QueueView() {
             </Button>
           )}
         </div>
-        {items.length === 0 && remote.length === 0 && <EmptyQueue isWorking={isWorking} />}
+        {items.length === 0 && remote.length === 0 && (
+          <EmptyQueue isWorking={isWorking} />
+        )}
         <ol className="flex flex-col gap-3">
           <AnimatePresence initial={false}>
             {items.map((item, i) => (
@@ -95,14 +151,22 @@ export function QueueView() {
                 transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
                 onPointerDown={() => setSelected(i)}
               >
-                <QueueDecision item={item} isSelected={i === index} showThread />
+                <QueueDecision
+                  item={item}
+                  isSelected={i === index}
+                  showThread
+                />
               </motion.li>
             ))}
           </AnimatePresence>
         </ol>
         {/* Another computer's agents wait on you too; answering sends it there, and the card leaves when that computer says so. */}
         {remote.map(({ machine, state, items: waiting }) => (
-          <section key={machine.id} aria-label={`On ${machine.name}`} className="flex flex-col gap-3">
+          <section
+            key={machine.id}
+            aria-label={`On ${machine.name}`}
+            className="flex flex-col gap-3"
+          >
             <h2 className="flex items-center gap-1.5 type-meta font-medium text-muted-foreground">
               <DeviceIcon kind={machine.kind} className="size-3.5" />
               On {machine.name}
@@ -124,18 +188,32 @@ export function QueueView() {
   );
 }
 
-function useListKeys(count: number, index: number, setSelected: (i: number) => void) {
+function useListKeys(
+  count: number,
+  index: number,
+  setSelected: (i: number) => void,
+) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isCommand(e, 'list-next')) setSelected(Math.min(count - 1, index + 1));
+      if (isCommand(e, 'list-next'))
+        setSelected(Math.min(count - 1, index + 1));
       if (isCommand(e, 'list-previous')) setSelected(Math.max(0, index - 1));
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [count, index, setSelected]);
 }
 
-export function QueueDecision({ item, isSelected, showThread, className }: { item: QueueItem; isSelected?: boolean; showThread?: boolean; className?: string }) {
+export function QueueDecision({
+  item,
+  isSelected,
+  showThread,
+  className,
+}: {
+  item: QueueItem;
+  isSelected?: boolean;
+  showThread?: boolean;
+  className?: string;
+}) {
   const { state, dispatch } = useHarness();
   const thread = state.threads.find((t) => t.id === item.threadId)!;
   const { icon: Icon, label } = KIND[item.kind];
@@ -145,14 +223,27 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
     <Card size="sm" className={cn(isSelected && 'ring-ring', className)}>
       <CardHeader>
         <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 type-caption">
-          <span className={'flex items-center gap-1 font-medium text-foreground'}>
+          <span
+            className={'flex items-center gap-1 font-medium text-foreground'}
+          >
             <Icon className="size-3.5" />
             {label}
           </span>
-          {showThread && <ThreadLink thread={thread} onOpen={() => dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })} />}
+          {showThread && (
+            <ThreadLink
+              thread={thread}
+              onOpen={() =>
+                dispatch({
+                  type: 'go',
+                  view: { kind: 'thread', id: thread.id },
+                })
+              }
+            />
+          )}
           {item.blocks.steps > 0 && (
             <span className="tabular">
-              Blocks {item.blocks.steps} {item.blocks.steps === 1 ? 'step' : 'steps'}
+              Blocks {item.blocks.steps}{' '}
+              {item.blocks.steps === 1 ? 'step' : 'steps'}
               {item.blocks.threads > 1 && ` in ${item.blocks.threads} threads`}
             </span>
           )}
@@ -164,9 +255,15 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
+        {!!item.detail && (
+          <p className="type-body text-muted-foreground text-pretty">
+            {item.detail}
+          </p>
+        )}
         {isMochiCard(item) && <ShowCard item={item} />}
-        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} canOpenThread={!!showThread} />}
+        {item.kind === 'approval' && !item.tool && (
+          <ApprovalRequest item={item} canOpenThread={!!showThread} />
+        )}
         {item.kind === 'question' && <QuestionChoices item={item} />}
         {!!item.collision && <SharedFiles files={item.collision.files} />}
       </CardContent>
@@ -177,7 +274,10 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
       )}
       {!!item.collision && (
         <CardFooter className="gap-2">
-          <CollisionActions item={item} otherId={item.collision.otherThreadId} />
+          <CollisionActions
+            item={item}
+            otherId={item.collision.otherThreadId}
+          />
         </CardFooter>
       )}
       {item.kind === 'run' && (
@@ -194,10 +294,25 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
   );
 }
 
-function ThreadLink({ thread, onOpen }: { thread: Thread; onOpen: () => void }) {
+function ThreadLink({
+  thread,
+  onOpen,
+}: {
+  thread: Thread;
+  onOpen: () => void;
+}) {
   return (
-    <Button variant="ghost" size="xs" onClick={onOpen} className="min-w-0 text-muted-foreground">
-      <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: lineColor(thread.line) }} />
+    <Button
+      variant="ghost"
+      size="xs"
+      onClick={onOpen}
+      className="min-w-0 text-muted-foreground"
+    >
+      <span
+        aria-hidden
+        className="size-2 shrink-0 rounded-full"
+        style={{ background: lineColor(thread.line) }}
+      />
       <span className="truncate">{thread.title}</span>
       <ProviderMarks providers={thread.providers} size={12} />
     </Button>
@@ -211,12 +326,24 @@ export function useUndoable() {
   return (message: string, run: () => void) => {
     const before = snapshot(state);
     run();
-    toast(message, { id: toastId, action: { label: 'Undo', onClick: () => dispatch({ type: 'restore', snapshot: before }) } });
+    toast(message, {
+      id: toastId,
+      action: {
+        label: 'Undo',
+        onClick: () => dispatch({ type: 'restore', snapshot: before }),
+      },
+    });
   };
 }
 
 /** `canOpenThread`: false inside the thread itself (the composer's tray), where Open thread would go nowhere. */
-function ApprovalRequest({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
+function ApprovalRequest({
+  item,
+  canOpenThread,
+}: {
+  item: QueueItem;
+  canOpenThread: boolean;
+}) {
   const dispatch = useDispatch();
   const withUndo = useUndoable();
   return (
@@ -225,17 +352,35 @@ function ApprovalRequest({ item, canOpenThread }: { item: QueueItem; canOpenThre
       {!!item.code && (
         <ConfirmationTitle className="flex flex-col gap-2">
           <span>The agent wants to run:</span>
-          <code className="block overflow-x-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption">{item.code}</code>
+          <code className="block overflow-x-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption">
+            {item.code}
+          </code>
         </ConfirmationTitle>
       )}
       <ConfirmationRequest>
         <ConfirmationActions>
           {canOpenThread && (
-            <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+            <ConfirmationAction
+              variant="outline"
+              onClick={() =>
+                dispatch({
+                  type: 'go',
+                  view: { kind: 'thread', id: item.threadId },
+                })
+              }
+            >
               Open thread
             </ConfirmationAction>
           )}
-          <ConfirmationAction onClick={() => withUndo('Approved', () => dispatch({ type: 'answer', queueId: item.id }))}>Approve and run</ConfirmationAction>
+          <ConfirmationAction
+            onClick={() =>
+              withUndo('Approved', () =>
+                dispatch({ type: 'answer', queueId: item.id }),
+              )
+            }
+          >
+            Approve and run
+          </ConfirmationAction>
         </ConfirmationActions>
       </ConfirmationRequest>
     </Confirmation>
@@ -255,17 +400,37 @@ function ShowCard({ item }: { item: QueueItem }) {
   );
 }
 
-function ReviewActions({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
+function ReviewActions({
+  item,
+  canOpenThread,
+}: {
+  item: QueueItem;
+  canOpenThread: boolean;
+}) {
   const dispatch = useDispatch();
   const withUndo = useUndoable();
   return (
     <>
-      <Button onClick={() => withUndo('Marked done', () => dispatch({ type: 'answer', queueId: item.id }))}>
+      <Button
+        onClick={() =>
+          withUndo('Marked done', () =>
+            dispatch({ type: 'answer', queueId: item.id }),
+          )
+        }
+      >
         <CheckCircle data-icon="inline-start" />
         Mark done
       </Button>
       {canOpenThread && (
-        <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            dispatch({
+              type: 'go',
+              view: { kind: 'thread', id: item.threadId },
+            })
+          }
+        >
           Open thread
         </Button>
       )}
@@ -276,20 +441,44 @@ function ReviewActions({ item, canOpenThread }: { item: QueueItem; canOpenThread
 function SharedFiles({ files }: { files: string[] }) {
   return (
     <p className="type-caption text-subtle-foreground">
-      Both edited <code className="rounded-sm bg-muted px-1 font-mono text-muted-foreground">{files.join(', ')}</code>
+      Both edited{' '}
+      <code className="rounded-sm bg-muted px-1 font-mono text-muted-foreground">
+        {files.join(', ')}
+      </code>
     </p>
   );
 }
 
 /** Never pauses an agent: open the other thread to coordinate, or keep both going. */
-function CollisionActions({ item, otherId }: { item: QueueItem; otherId: string }) {
+function CollisionActions({
+  item,
+  otherId,
+}: {
+  item: QueueItem;
+  otherId: string;
+}) {
   const { state, dispatch } = useHarness();
   const withUndo = useUndoable();
   const other = state.threads.find((t) => t.id === otherId);
   return (
     <>
-      {!!other && <Button onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: other.id } })}>Open "{other.title}"</Button>}
-      <Button variant="outline" onClick={() => withUndo('Kept both', () => dispatch({ type: 'answer', queueId: item.id }))}>
+      {!!other && (
+        <Button
+          onClick={() =>
+            dispatch({ type: 'go', view: { kind: 'thread', id: other.id } })
+          }
+        >
+          Open "{other.title}"
+        </Button>
+      )}
+      <Button
+        variant="outline"
+        onClick={() =>
+          withUndo('Kept both', () =>
+            dispatch({ type: 'answer', queueId: item.id }),
+          )
+        }
+      >
         Keep both
       </Button>
     </>
@@ -301,8 +490,21 @@ function RunActions({ item }: { item: QueueItem }) {
   const withUndo = useUndoable();
   return (
     <>
-      <Button onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>Open thread</Button>
-      <Button variant="outline" onClick={() => withUndo('Settled', () => dispatch({ type: 'answer', queueId: item.id }))}>
+      <Button
+        onClick={() =>
+          dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })
+        }
+      >
+        Open thread
+      </Button>
+      <Button
+        variant="outline"
+        onClick={() =>
+          withUndo('Settled', () =>
+            dispatch({ type: 'answer', queueId: item.id }),
+          )
+        }
+      >
         <Archive data-icon="inline-start" />
         Settle
       </Button>
@@ -320,7 +522,9 @@ function CiActions({ item }: { item: QueueItem }) {
     try {
       await sendLog();
     } catch (error) {
-      toast.error("Couldn't fetch the failing log", { description: (error as Error).message });
+      toast.error("Couldn't fetch the failing log", {
+        description: (error as Error).message,
+      });
     } finally {
       setSending(false);
     }
@@ -334,12 +538,28 @@ function CiActions({ item }: { item: QueueItem }) {
         </Button>
       )}
       {!!item.ci && (
-        <Button variant="outline" onClick={() => window.open(item.ci!.check?.link ?? item.ci!.url, '_blank', 'noopener')}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            window.open(
+              item.ci!.check?.link ?? item.ci!.url,
+              '_blank',
+              'noopener',
+            )
+          }
+        >
           <ArrowUpRight data-icon="inline-start" />
           Open on GitHub
         </Button>
       )}
-      <Button variant="outline" onClick={() => withUndo('Settled', () => dispatch({ type: 'answer', queueId: item.id }))}>
+      <Button
+        variant="outline"
+        onClick={() =>
+          withUndo('Settled', () =>
+            dispatch({ type: 'answer', queueId: item.id }),
+          )
+        }
+      >
         <Archive data-icon="inline-start" />
         Settle
       </Button>
@@ -354,16 +574,43 @@ function QuestionChoices({ item }: { item: QueueItem }) {
   const isWizard = questions.length > 1;
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const answers = answersFrom(new FormData(e.currentTarget), questions.length);
-    withUndo(`Answered: ${answerText(answers)}`, () => dispatch({ type: 'answer', queueId: item.id, answers }));
+    const answers = answersFrom(
+      new FormData(e.currentTarget),
+      questions.length,
+    );
+    withUndo(`Answered: ${answerText(answers)}`, () =>
+      dispatch({ type: 'answer', queueId: item.id, answers }),
+    );
   };
   return (
-    <Questionnaire items={questions.map((q, i) => ({ name: `q${i}`, required: true, choices: q.options.map((value) => ({ value })) }))} shortcuts="numbers" onSubmit={submit}>
+    <Questionnaire
+      items={questions.map((q, i) => ({
+        name: `q${i}`,
+        required: true,
+        choices: q.options.map((value) => ({ value })),
+      }))}
+      shortcuts="numbers"
+      onSubmit={submit}
+    >
       {isWizard && <QuestionnaireProgress />}
       {questions.map((q, i) => (
-        <QuestionnaireItem key={i} name={`q${i}`} multiple={q.multiSelect} required className="gap-3">
-          {isWizard && <QuestionnaireTitle className="mb-1 text-sm [&:not(:has(~[data-slot=questionnaire-description]))]:mb-3">{q.text}</QuestionnaireTitle>}
-          {q.multiSelect && <QuestionnaireDescription className="type-meta">Pick any that apply.</QuestionnaireDescription>}
+        <QuestionnaireItem
+          key={i}
+          name={`q${i}`}
+          multiple={q.multiSelect}
+          required
+          className="gap-3"
+        >
+          {isWizard && (
+            <QuestionnaireTitle className="mb-1 text-sm [&:not(:has(~[data-slot=questionnaire-description]))]:mb-3">
+              {q.text}
+            </QuestionnaireTitle>
+          )}
+          {q.multiSelect && (
+            <QuestionnaireDescription className="type-meta">
+              Pick any that apply.
+            </QuestionnaireDescription>
+          )}
           <QuestionnaireChoices>
             {q.options.map((label) => (
               <QuestionnaireChoice key={label} value={label}>
@@ -371,14 +618,23 @@ function QuestionChoices({ item }: { item: QueueItem }) {
               </QuestionnaireChoice>
             ))}
           </QuestionnaireChoices>
-          <QuestionnaireInput aria-label="Your own answer" placeholder={q.options.length ? 'Or type your own answer' : 'Type your answer'} />
-          <QuestionnaireError className="mt-0 type-meta">Pick an answer or type your own.</QuestionnaireError>
+          <QuestionnaireInput
+            aria-label="Your own answer"
+            placeholder={
+              q.options.length ? 'Or type your own answer' : 'Type your answer'
+            }
+          />
+          <QuestionnaireError className="mt-0 type-meta">
+            Pick an answer or type your own.
+          </QuestionnaireError>
         </QuestionnaireItem>
       ))}
       <QuestionnaireActions>
         <QuestionnairePrevious size="sm" />
         <QuestionnaireNext size="sm" />
-        <QuestionnaireSubmit size="sm">{isWizard ? 'Send answers' : 'Send answer'}</QuestionnaireSubmit>
+        <QuestionnaireSubmit size="sm">
+          {isWizard ? 'Send answers' : 'Send answer'}
+        </QuestionnaireSubmit>
       </QuestionnaireActions>
     </Questionnaire>
   );
@@ -386,7 +642,14 @@ function QuestionChoices({ item }: { item: QueueItem }) {
 
 /** Each question's checked labels plus its typed answer; the typed one only counts once selected, which the questionnaire tracks by naming its input. */
 function answersFrom(form: FormData, count: number) {
-  return Array.from({ length: count }, (_, i) => [...new Set(form.getAll(`q${i}`).map((v) => v.toString().trim()).filter(Boolean))]);
+  return Array.from({ length: count }, (_, i) => [
+    ...new Set(
+      form
+        .getAll(`q${i}`)
+        .map((v) => v.toString().trim())
+        .filter(Boolean),
+    ),
+  ]);
 }
 
 function EmptyQueue({ isWorking }: { isWorking: boolean }) {
@@ -397,7 +660,10 @@ function EmptyQueue({ isWorking }: { isWorking: boolean }) {
           <CheckCircle />
         </EmptyMedia>
         <EmptyTitle>Nothing needs you</EmptyTitle>
-        <EmptyDescription>{isWorking ? 'Your agents are working. ' : ''}Questions and approvals from your threads show up here, most blocking first.</EmptyDescription>
+        <EmptyDescription>
+          {isWorking ? 'Your agents are working. ' : ''}Questions and approvals
+          from your threads show up here, most blocking first.
+        </EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

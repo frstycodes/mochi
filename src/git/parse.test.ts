@@ -3,8 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
-import { parseDiff, parseGhAuthStatus, parseStatus, parseWorktrees } from './parse.ts';
+import { test } from 'vite-plus/test';
+import {
+  parseDiff,
+  parseGhAuthStatus,
+  parseStatus,
+  parseWorktrees,
+} from './parse.ts';
 
 const DIFF = [
   'diff --git a/src/a.ts b/src/a.ts',
@@ -47,7 +52,15 @@ const DIFF = [
 test('parseDiff splits files and hunks with counts, kinds and paths', () => {
   const files = parseDiff(DIFF, false);
   assert.deepEqual(
-    files.map((f) => [f.path, f.kind, f.added, f.removed, f.hunks.length, f.binary, f.oldPath]),
+    files.map((f) => [
+      f.path,
+      f.kind,
+      f.added,
+      f.removed,
+      f.hunks.length,
+      f.binary,
+      f.oldPath,
+    ]),
     [
       ['src/a.ts', 'modified', 2, 1, 2, false, undefined],
       ['new file.md', 'added', 1, 0, 1, false, undefined],
@@ -58,20 +71,48 @@ test('parseDiff splits files and hunks with counts, kinds and paths', () => {
   );
   const second = files[0].hunks[1];
   assert.equal(second.header, '@@ -10,2 +10,3 @@ function f() {');
-  assert.ok(second.patch.startsWith('diff --git a/src/a.ts b/src/a.ts\nindex'), 'hunk patch carries the file header');
+  assert.ok(
+    second.patch.startsWith('diff --git a/src/a.ts b/src/a.ts\nindex'),
+    'hunk patch carries the file header',
+  );
   assert.ok(second.patch.endsWith('\\ No newline at end of file\n'));
-  assert.ok(!second.patch.includes('-two'), 'hunk patch holds only its own hunk');
+  assert.ok(
+    !second.patch.includes('-two'),
+    'hunk patch holds only its own hunk',
+  );
 });
 
 test('parseDiff reads C-quoted paths', () => {
-  const [file] = parseDiff('diff --git "a/say \\"hi\\".txt" "b/say \\"hi\\".txt"\nnew file mode 100644\n', true);
+  const [file] = parseDiff(
+    'diff --git "a/say \\"hi\\".txt" "b/say \\"hi\\".txt"\nnew file mode 100644\n',
+    true,
+  );
   assert.equal(file.path, 'say "hi".txt');
   assert.equal(file.staged, true);
 });
 
+test('raw hunk boundaries ignore header text inside changed lines, and decode Git octal paths', () => {
+  const header =
+    'diff --git "a/\\303\\251.txt" "b/\\303\\251.txt"\n--- "a/\\303\\251.txt"\n+++ "b/\\303\\251.txt"\n';
+  const first = '@@ -1 +1 @@\n-old\n+@@ -10 +10 @@\n';
+  const second = '@@ -10 +10 @@\n-x\n+y\n';
+  const [file] = parseDiff(header + first + second, false);
+  assert.equal(file.path, 'é.txt');
+  assert.equal(file.patch, header + first + second);
+  assert.deepEqual(
+    file.hunks.map((hunk) => hunk.patch),
+    [header + first, header + second],
+  );
+});
+
 test('a hunk patch applies to the index on its own', () => {
   const dir = mkdtempSync(join(tmpdir(), 'harness-parse-'));
-  const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8' });
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+      { encoding: 'utf8' },
+    );
   try {
     git('init', '-q');
     const lines = Array.from({ length: 30 }, (_, i) => `line ${i}`);
@@ -83,7 +124,9 @@ test('a hunk patch applies to the index on its own', () => {
     writeFileSync(join(dir, 'f.txt'), `${lines.join('\n')}\n`);
     const [file] = parseDiff(git('diff'), false);
     assert.equal(file.hunks.length, 2);
-    execFileSync('git', ['-C', dir, 'apply', '--cached'], { input: file.hunks[1].patch });
+    execFileSync('git', ['-C', dir, 'apply', '--cached'], {
+      input: file.hunks[1].patch,
+    });
     assert.match(git('diff', '--cached'), /\+second change/);
     assert.doesNotMatch(git('diff', '--cached'), /first change/);
   } finally {
@@ -92,7 +135,15 @@ test('a hunk patch applies to the index on its own', () => {
 });
 
 test('parseStatus reads porcelain v1 -z including renames', () => {
-  const text = [' M src/a.ts', 'A  src/b.ts', 'R  new.ts', 'old.ts', ' D gone.ts', '?? notes.md', ''].join('\0');
+  const text = [
+    ' M src/a.ts',
+    'A  src/b.ts',
+    'R  new.ts',
+    'old.ts',
+    ' D gone.ts',
+    '?? notes.md',
+    '',
+  ].join('\0');
   assert.deepEqual(parseStatus(text), [
     { path: 'src/a.ts', status: 'modified' },
     { path: 'src/b.ts', status: 'added' },
@@ -103,14 +154,23 @@ test('parseStatus reads porcelain v1 -z including renames', () => {
 });
 
 test('parseWorktrees reads branches and detached heads', () => {
-  const text = ['worktree /repo', 'HEAD abc', 'branch refs/heads/main', '', 'worktree /wt/one', 'HEAD def', 'detached', ''].join('\n');
+  const text = [
+    'worktree /repo',
+    'HEAD abc',
+    'branch refs/heads/main',
+    '',
+    'worktree /wt/one',
+    'HEAD def',
+    'detached',
+    '',
+  ].join('\n');
   assert.deepEqual(parseWorktrees(text), [
     { path: '/repo', head: 'abc', branch: 'main' },
     { path: '/wt/one', head: 'def', branch: null },
   ]);
 });
 
-test('parseGhAuthStatus reads every host\'s logins, which one is active and which still work', () => {
+test("parseGhAuthStatus reads every host's logins, which one is active and which still work", () => {
   // Shape of gh 2.78's stderr, tokens masked the way gh prints them.
   const text = `github.com
   ✓ Logged in to github.com account octo (keyring)
@@ -130,9 +190,24 @@ ghe.example.com
 `;
   assert.deepEqual(parseGhAuthStatus(text), [
     { host: 'github.com', login: 'octo', isActive: false, isValid: true },
-    { host: 'github.com', login: 'stale_user', isActive: false, isValid: false },
+    {
+      host: 'github.com',
+      login: 'stale_user',
+      isActive: false,
+      isValid: false,
+    },
     { host: 'github.com', login: 'work-bot', isActive: true, isValid: true },
-    { host: 'ghe.example.com', login: 'enterprise', isActive: true, isValid: true },
+    {
+      host: 'ghe.example.com',
+      login: 'enterprise',
+      isActive: true,
+      isValid: true,
+    },
   ]);
-  assert.deepEqual(parseGhAuthStatus('You are not logged into any GitHub hosts. To log in, run: gh auth login'), []);
+  assert.deepEqual(
+    parseGhAuthStatus(
+      'You are not logged into any GitHub hosts. To log in, run: gh auth login',
+    ),
+    [],
+  );
 });

@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  type RefObject,
+} from 'react';
 
 export type Axis = 'x' | 'y';
 
@@ -7,9 +13,24 @@ export type Axis = 'x' | 'y';
  * This only reports the page the scroll came to rest on, and puts the scroller on `index` when it changes from elsewhere (keys, clicks).
  * `onCross` fires each time the page nearest the centre changes, mid-swipe and on a key or click, never for the restore at mount.
  */
-export function useSnapPager(ref: RefObject<HTMLElement | null>, { axis, index, onSettle, onCross }: { axis: Axis; index: number; onSettle: (page: number) => void; onCross?: () => void }) {
-  const latest = useRef({ index, onSettle, onCross });
-  latest.current = { index, onSettle, onCross };
+export function useSnapPager(
+  ref: RefObject<HTMLElement | null>,
+  {
+    axis,
+    index,
+    onSettle,
+    onCross,
+  }: {
+    axis: Axis;
+    index: number;
+    onSettle: (page: number) => void;
+    onCross?: () => void;
+  },
+) {
+  const cross = useEffectEvent(() => onCross?.());
+  const settle = useEffectEvent(
+    (page: number) => page !== index && onSettle(page),
+  );
   const nearest = useRef(nearestPage(index));
   const isMounted = useRef(false);
 
@@ -17,11 +38,8 @@ export function useSnapPager(ref: RefObject<HTMLElement | null>, { axis, index, 
     const el = ref.current;
     if (!el) return;
     nearest.current.set(pageOf(el, axis));
-    const onScroll = () => nearest.current.cross(pageOf(el, axis)) && latest.current.onCross?.();
-    const onEnd = () => {
-      const page = pageOf(el, axis);
-      if (page !== latest.current.index) latest.current.onSettle(page);
-    };
+    const onScroll = () => nearest.current.cross(pageOf(el, axis)) && cross();
+    const onEnd = () => settle(pageOf(el, axis));
     el.addEventListener('scroll', onScroll, { passive: true });
     el.addEventListener('scrollend', onEnd);
     return () => {
@@ -36,9 +54,12 @@ export function useSnapPager(ref: RefObject<HTMLElement | null>, { axis, index, 
     isMounted.current = true;
     if (!el || pageOf(el, axis) === index) return;
     nearest.current.set(index);
-    if (!isRestore) latest.current.onCross?.();
+    if (!isRestore) cross();
     // Instant: the change came from a key or a click, and DESIGN.md keeps keyboard navigation unanimated.
-    el.scrollTo({ [axis === 'x' ? 'left' : 'top']: index * pageSize(el, axis), behavior: 'instant' });
+    el.scrollTo({
+      [axis === 'x' ? 'left' : 'top']: index * pageSize(el, axis),
+      behavior: 'instant',
+    });
   }, [ref, axis, index]);
 }
 
@@ -62,5 +83,7 @@ export function pageSize(el: HTMLElement, axis: Axis) {
 }
 
 function pageOf(el: HTMLElement, axis: Axis) {
-  return Math.round((axis === 'x' ? el.scrollLeft : el.scrollTop) / pageSize(el, axis));
+  return Math.round(
+    (axis === 'x' ? el.scrollLeft : el.scrollTop) / pageSize(el, axis),
+  );
 }

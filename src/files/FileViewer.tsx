@@ -1,11 +1,29 @@
-import { lazy, Suspense, useEffect, useState, type KeyboardEvent } from 'react';
+import type { FileContent } from '@/host/types/fs';
+import { useQuery } from '@tanstack/react-query';
+import { lazy, Suspense, useState, type KeyboardEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronLeft, ChevronRight, Code, Copy, File, Download, Eye, SidebarRight, X } from '@/icons';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Code,
+  Copy,
+  File,
+  Download,
+  Eye,
+  SidebarRight,
+  X,
+} from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import type { FileContent } from '@/host/types/fs';
 import { cn } from '@/lib/utils';
 import { copyText } from '../clipboard';
 import { Shortcut } from '../Shortcut';
@@ -15,18 +33,34 @@ import { download } from '../viz/exportVisual';
 import { FilePath, OpenInMenu } from './FileView';
 import { fileKind, hasTextSource, viewerBody, type ViewerBody } from './kinds';
 import { FilePreview } from './previews';
-import { loadViewerFile, openFiles, useFileRequest, viewerName, viewerPath, type ViewerFile } from './viewer';
+import {
+  loadViewerFile,
+  openFiles,
+  useFileRequest,
+  viewerName,
+  viewerPath,
+  type ViewerFile,
+} from './viewer';
+import { queryKeys } from '../queryKeys';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
 /** Full-window viewer for files in chat and non-image composer attachments. Mounted once; `openFiles` drives it. */
 export function FileViewer() {
   const request = useFileRequest();
-  const [index, setIndex] = useState(0);
-  useEffect(() => setIndex(request?.index ?? 0), [request]);
+  const [picked, setPicked] = useState({ request, index: 0 });
+  const index =
+    picked.request === request ? picked.index : (request?.index ?? 0);
   const files = request?.files ?? [];
   const file = files[index];
-  const step = files.length > 1 ? (by: number) => setIndex((i) => (i + by + files.length) % files.length) : undefined;
+  const step =
+    files.length > 1
+      ? (by: number) =>
+          setPicked({
+            request,
+            index: (index + by + files.length) % files.length,
+          })
+      : undefined;
   const onKeyDown = (e: KeyboardEvent) => {
     if (!step || isTextEntry(e.target)) return;
     if (e.key === 'ArrowLeft') step(-1);
@@ -34,18 +68,37 @@ export function FileViewer() {
   };
 
   return (
-    <DialogPrimitive.Root open={!!file} onOpenChange={(open) => !open && openFiles(null)}>
+    <DialogPrimitive.Root
+      open={!!file}
+      onOpenChange={(open) => !open && openFiles(null)}
+    >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           onKeyDown={onKeyDown}
           // Focusing the first header button would pop its tooltip on open; the dialog itself still takes Esc and the arrows.
-          onOpenAutoFocus={(e) => (e.preventDefault(), (e.currentTarget as HTMLElement).focus())}
+          onOpenAutoFocus={(e) => (
+            e.preventDefault(),
+            (e.currentTarget as HTMLElement).focus()
+          )}
           className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none"
         >
-          {!!file && <FilePane key={`${index}:${viewerPath(file)}`} file={file} position={step && `${index + 1} of ${files.length}`} onStep={step} />}
-          {files.length > 1 && <FileStrip files={files} index={index} onSelect={setIndex} />}
+          {!!file && (
+            <FilePane
+              key={`${index}:${viewerPath(file)}`}
+              file={file}
+              position={step && `${index + 1} of ${files.length}`}
+              onStep={step}
+            />
+          )}
+          {files.length > 1 && (
+            <FileStrip
+              files={files}
+              index={index}
+              onSelect={(i) => setPicked({ request, index: i })}
+            />
+          )}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
@@ -53,40 +106,85 @@ export function FileViewer() {
 }
 
 function isTextEntry(target: EventTarget) {
-  return target instanceof HTMLElement && (target.isContentEditable || target.matches('input, textarea, select'));
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.matches('input, textarea, select'))
+  );
 }
 
 /** One file: header with its actions, then the preview, read-only source, or the can't-preview state. Keyed per file. */
-function FilePane({ file, position, onStep }: { file: ViewerFile; position?: string; onStep?: (by: number) => void }) {
+function FilePane({
+  file,
+  position,
+  onStep,
+}: {
+  file: ViewerFile;
+  position?: string;
+  onStep?: (by: number) => void;
+}) {
   const { content, error } = useViewerContent(file);
   const name = viewerName(file);
-  const kind = fileKind(name, file.source === 'attachment' ? file.mediaType : undefined);
+  const kind = fileKind(
+    name,
+    file.source === 'attachment' ? file.mediaType : undefined,
+  );
   const body = content && viewerBody(kind, content);
-  const hasSourceToggle = content?.kind === 'text' && !!body && hasTextSource(body);
-  const [mode, setMode] = useState<'preview' | 'source'>(file.source === 'workspace' && file.line ? 'source' : 'preview');
+  const hasSourceToggle =
+    content?.kind === 'text' && !!body && hasTextSource(body);
+  const [mode, setMode] = useState<'preview' | 'source'>(
+    file.source === 'workspace' && file.line ? 'source' : 'preview',
+  );
 
   return (
     <>
       {/* Fills the window, so it always sits under Windows' caption buttons. */}
-      <header data-under-captions className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
-        <FileIcon fileName={name} autoAssign aria-hidden className="size-4 shrink-0" />
+      <header
+        data-under-captions
+        className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20"
+      >
+        <FileIcon
+          fileName={name}
+          autoAssign
+          aria-hidden
+          className="size-4 shrink-0"
+        />
         <DialogPrimitive.Title className="flex min-w-0 px-1 font-normal">
           <FilePath path={viewerPath(file)} />
         </DialogPrimitive.Title>
-        {!!position && <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular max-sm:hidden">{position}</span>}
+        {!!position && (
+          <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular max-sm:hidden">
+            {position}
+          </span>
+        )}
         {!!onStep && (
           <>
-            <TooltipIconButton label="Previous file" hint={<Shortcut keys={['left']} />} onClick={() => onStep(-1)} className="max-sm:hidden">
+            <TooltipIconButton
+              label="Previous file"
+              hint={<Shortcut keys={['left']} />}
+              onClick={() => onStep(-1)}
+              className="max-sm:hidden"
+            >
               <ChevronLeft />
             </TooltipIconButton>
-            <TooltipIconButton label="Next file" hint={<Shortcut keys={['right']} />} onClick={() => onStep(1)} className="max-sm:hidden">
+            <TooltipIconButton
+              label="Next file"
+              hint={<Shortcut keys={['right']} />}
+              onClick={() => onStep(1)}
+              className="max-sm:hidden"
+            >
               <ChevronRight />
             </TooltipIconButton>
           </>
         )}
         <span className="flex-1" />
         {hasSourceToggle && (
-          <ToggleGroup type="single" size="sm" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)} aria-label="View">
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={mode}
+            onValueChange={(v) => v && setMode(v as typeof mode)}
+            aria-label="View"
+          >
             <ToggleGroupItem value="preview" aria-label="Preview">
               <Eye />
             </ToggleGroupItem>
@@ -106,40 +204,90 @@ function FilePane({ file, position, onStep }: { file: ViewerFile; position?: str
         {error ? (
           <CantPreviewState file={file} content={null} reason={error} />
         ) : (
-          !!body && <FileBody file={file} content={content} body={hasSourceToggle && mode === 'source' ? 'code' : body} />
+          !!body && (
+            <FileBody
+              file={file}
+              content={content}
+              body={hasSourceToggle && mode === 'source' ? 'code' : body}
+            />
+          )
         )}
       </div>
     </>
   );
 }
 
-function FileBody({ file, content, body }: { file: ViewerFile; content: FileContent; body: ViewerBody }) {
-  if (body === 'none') return <CantPreviewState file={file} content={content} reason={content.kind === 'binary' ? 'This is a binary file.' : 'This file is too large to preview.'} />;
+function FileBody({
+  file,
+  content,
+  body,
+}: {
+  file: ViewerFile;
+  content: FileContent;
+  body: ViewerBody;
+}) {
+  if (body === 'none')
+    return (
+      <CantPreviewState
+        file={file}
+        content={content}
+        reason={
+          content.kind === 'binary'
+            ? 'This is a binary file.'
+            : 'This file is too large to preview.'
+        }
+      />
+    );
   const data = content.kind === 'text' ? content.text : content.bytes;
-  if (body !== 'code') return <FilePreview kind={body} path={viewerPath(file)} data={data} />;
+  if (body !== 'code')
+    return <FilePreview kind={body} path={viewerPath(file)} data={data} />;
   return (
     <Suspense>
-      <CodeEditor readOnly path={viewerPath(file)} value={String(data)} line={file.source === 'workspace' ? file.line : undefined} />
+      <CodeEditor
+        readOnly
+        path={viewerPath(file)}
+        value={String(data)}
+        line={file.source === 'workspace' ? file.line : undefined}
+      />
     </Suspense>
   );
 }
 
-function FileActions({ file, content }: { file: ViewerFile; content: FileContent | null }) {
+function FileActions({
+  file,
+  content,
+}: {
+  file: ViewerFile;
+  content: FileContent | null;
+}) {
   const openInFilesTab = useOpenInFilesTab();
   return (
     <>
       {file.source === 'workspace' && (
         <>
-          <TooltipIconButton label="Open in Files tab" hint="Opens it in the side pane, where you can edit it" onClick={() => openInFilesTab(file)}>
+          <TooltipIconButton
+            label="Open in Files tab"
+            hint="Opens it in the side pane, where you can edit it"
+            onClick={() => openInFilesTab(file)}
+          >
             <SidebarRight />
           </TooltipIconButton>
           <OpenInMenu root={file.root} path={file.path} line={file.line} />
-          <TooltipIconButton label="Copy path" hint={file.path} onClick={() => copyText(file.path, 'Path copied')}>
+          <TooltipIconButton
+            label="Copy path"
+            hint={file.path}
+            onClick={() => copyText(file.path, 'Path copied')}
+          >
             <Copy />
           </TooltipIconButton>
         </>
       )}
-      <TooltipIconButton label="Download" hint={content ? undefined : 'Available once the file loads'} disabled={!content} onClick={() => content && saveFile(file, content)}>
+      <TooltipIconButton
+        label="Download"
+        hint={content ? undefined : 'Available once the file loads'}
+        disabled={!content}
+        onClick={() => content && saveFile(file, content)}
+      >
         <Download />
       </TooltipIconButton>
     </>
@@ -151,17 +299,36 @@ type WorkspaceFile = Extract<ViewerFile, { source: 'workspace' }>;
 function useOpenInFilesTab() {
   const dispatch = useDispatch();
   return (file: WorkspaceFile) => {
-    dispatch({ type: 'pane-open-tab', threadId: file.threadId, kind: 'files', file: { path: file.path, line: file.line } });
+    dispatch({
+      type: 'pane-open-tab',
+      threadId: file.threadId,
+      kind: 'files',
+      file: { path: file.path, line: file.line },
+    });
     openFiles(null);
   };
 }
 
 function saveFile(file: ViewerFile, content: FileContent) {
-  const data = content.kind === 'text' ? content.text : (content.bytes as BlobPart);
-  download(viewerName(file), new Blob([data], { type: file.source === 'attachment' ? file.mediaType : undefined }));
+  const data =
+    content.kind === 'text' ? content.text : (content.bytes as BlobPart);
+  download(
+    viewerName(file),
+    new Blob([data], {
+      type: file.source === 'attachment' ? file.mediaType : undefined,
+    }),
+  );
 }
 
-function CantPreviewState({ file, content, reason }: { file: ViewerFile; content: FileContent | null; reason: string }) {
+function CantPreviewState({
+  file,
+  content,
+  reason,
+}: {
+  file: ViewerFile;
+  content: FileContent | null;
+  reason: string;
+}) {
   const openInFilesTab = useOpenInFilesTab();
   return (
     <Empty className="h-full">
@@ -174,12 +341,20 @@ function CantPreviewState({ file, content, reason }: { file: ViewerFile; content
       </EmptyHeader>
       <EmptyContent className="flex-row justify-center gap-2">
         {file.source === 'workspace' && (
-          <Button size="sm" variant="secondary" onClick={() => openInFilesTab(file)}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => openInFilesTab(file)}
+          >
             Open in Files tab
           </Button>
         )}
         {!!content && (
-          <Button size="sm" variant="secondary" onClick={() => saveFile(file, content)}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => saveFile(file, content)}
+          >
             Download
           </Button>
         )}
@@ -189,21 +364,33 @@ function CantPreviewState({ file, content, reason }: { file: ViewerFile; content
 }
 
 function useViewerContent(file: ViewerFile) {
-  const [state, setState] = useState<{ content: FileContent | null; error: string | null }>({ content: null, error: null });
-  useEffect(() => {
-    let isCurrent = true;
-    loadViewerFile(file).then(
-      (content) => isCurrent && setState({ content, error: null }),
-      (e: Error) => isCurrent && setState({ content: null, error: e.message }),
-    );
-    return () => void (isCurrent = false);
-  }, [file]);
-  return state;
+  const contentQuery = useQuery({
+    queryKey:
+      file.source === 'workspace'
+        ? queryKeys.files.content(file.root, file.path)
+        : queryKeys.files.viewerContent(file.url),
+    queryFn: () => loadViewerFile(file),
+  });
+  return {
+    content: contentQuery.data ?? null,
+    error: contentQuery.error?.message ?? null,
+  };
 }
 
-function FileStrip({ files, index, onSelect }: { files: ViewerFile[]; index: number; onSelect: (i: number) => void }) {
+function FileStrip({
+  files,
+  index,
+  onSelect,
+}: {
+  files: ViewerFile[];
+  index: number;
+  onSelect: (i: number) => void;
+}) {
   return (
-    <nav aria-label="Files" className="flex shrink-0 gap-1.5 overflow-x-auto px-4 pt-2 pb-4 sm:justify-center">
+    <nav
+      aria-label="Files"
+      className="flex shrink-0 gap-1.5 overflow-x-auto px-4 pt-2 pb-4 sm:justify-center"
+    >
       {files.map((f, i) => (
         <button
           key={`${viewerPath(f)}:${i}`}
@@ -212,10 +399,17 @@ function FileStrip({ files, index, onSelect }: { files: ViewerFile[]; index: num
           onClick={() => onSelect(i)}
           className={cn(
             'flex h-7 max-w-48 shrink-0 items-center gap-1.5 rounded-md border px-2 type-caption transition-colors',
-            i === index ? 'border-foreground/40 bg-muted text-foreground dark:bg-input' : 'border-input text-muted-foreground hover:text-foreground',
+            i === index
+              ? 'border-foreground/40 bg-muted text-foreground dark:bg-input'
+              : 'border-input text-muted-foreground hover:text-foreground',
           )}
         >
-          <FileIcon fileName={viewerName(f)} autoAssign aria-hidden className="size-3.5 shrink-0" />
+          <FileIcon
+            fileName={viewerName(f)}
+            autoAssign
+            aria-hidden
+            className="size-3.5 shrink-0"
+          />
           <span className="truncate">{viewerName(f)}</span>
         </button>
       ))}

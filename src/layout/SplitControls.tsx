@@ -1,5 +1,14 @@
 import type { ReactNode } from 'react';
-import { ArrowLeftRight, ExitFullscreen, Share, Fullscreen, Grid, Layout, Rotation, X } from '@/icons';
+import {
+  ArrowLeftRight,
+  ExitFullscreen,
+  Share,
+  Fullscreen,
+  Grid,
+  Layout,
+  Rotation,
+  X,
+} from '@/icons';
 import { Button } from '@/components/ui/button';
 import { host } from '@/host';
 import {
@@ -14,7 +23,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToggleSlot } from '../SidebarToggle';
 import { DragStrip, TitleBar } from '../TitleBar';
 import { useDispatch, useHarnessSelector } from '../store';
@@ -28,16 +41,21 @@ import { TargetContextMenu } from '../menus/TargetContextMenu';
 export function SplitControls() {
   const dispatch = useDispatch();
   const { leafId, isMulti, isZoomed } = useSplit();
+  const view = useHarnessSelector(
+    (s) => findLeaf(s.layouts[s.spaceId].root, leafId)?.view,
+  );
   if (!isMulti) return null;
   const run = (action: Parameters<typeof dispatch>[0]) => {
     dispatch({ type: 'layout-focus', leafId });
     dispatch(action);
   };
-  const view = useHarnessSelector((s) => findLeaf(s.layouts[s.spaceId].root, leafId)?.view);
-  const tearOff = view?.kind === 'thread' ? () => {
-    void host.windows.open(`window/${view.id}`);
-    dispatch({ type: 'layout-close', leafId });
-  } : undefined;
+  const tearOff =
+    view?.kind === 'thread'
+      ? () => {
+          void host.windows.open(`window/${view.id}`);
+          dispatch({ type: 'layout-close', leafId });
+        }
+      : undefined;
 
   return (
     <>
@@ -45,7 +63,12 @@ export function SplitControls() {
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Split layout" className="text-muted-foreground">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Split layout"
+                className="text-muted-foreground"
+              >
                 <Layout />
               </Button>
             </DropdownMenuTrigger>
@@ -61,11 +84,17 @@ export function SplitControls() {
                 <BoundShortcut command="layout-zoom" />
               </DropdownMenuShortcut>
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={isZoomed} onSelect={() => run({ type: 'layout-swap', leafId })}>
+            <DropdownMenuItem
+              disabled={isZoomed}
+              onSelect={() => run({ type: 'layout-swap', leafId })}
+            >
               <ArrowLeftRight />
               Swap with next split
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={isZoomed} onSelect={() => run({ type: 'layout-rotate' })}>
+            <DropdownMenuItem
+              disabled={isZoomed}
+              onSelect={() => run({ type: 'layout-rotate' })}
+            >
               <Rotation />
               Rotate this split
             </DropdownMenuItem>
@@ -78,7 +107,9 @@ export function SplitControls() {
             )}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => dispatch({ type: 'layout-close', leafId })}>
+          <DropdownMenuItem
+            onSelect={() => dispatch({ type: 'layout-close', leafId })}
+          >
             <X />
             Close split
           </DropdownMenuItem>
@@ -86,7 +117,13 @@ export function SplitControls() {
       </DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Close split" onClick={() => dispatch({ type: 'layout-close', leafId })} className="text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close split"
+            onClick={() => dispatch({ type: 'layout-close', leafId })}
+            className="text-muted-foreground"
+          >
             <X />
           </Button>
         </TooltipTrigger>
@@ -106,7 +143,10 @@ function PresetSubmenu() {
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
         {PRESETS.map((p) => (
-          <DropdownMenuItem key={p} onSelect={() => dispatch({ type: 'layout-preset', preset: p })}>
+          <DropdownMenuItem
+            key={p}
+            onSelect={() => dispatch({ type: 'layout-preset', preset: p })}
+          >
             {PRESET_LABELS[p]}
           </DropdownMenuItem>
         ))}
@@ -123,7 +163,9 @@ export function LeafBar({ children }: { children: ReactNode }) {
   return (
     <TargetContextMenu target={{ leafId }} groups={SPLIT_MENU}>
       <TitleBar isFirst={isFirst} isMulti={isMulti}>
-        <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">
+          {children}
+        </span>
         <SplitControls />
       </TitleBar>
     </TargetContextMenu>

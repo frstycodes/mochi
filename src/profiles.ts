@@ -1,6 +1,12 @@
+import { persistedSlice } from './lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
 import { showsDemoData } from './demoData.ts';
-import { DEFAULT_SPACES, SPACE_ICON_NAMES, type Space, type SpaceIconName } from './model.ts';
+import {
+  DEFAULT_SPACES,
+  SPACE_ICON_NAMES,
+  type Space,
+  type SpaceIconName,
+} from './model.ts';
 
 /**
  * Profiles (spaces), edited in Settings › Profiles. Everything that lists or names a space reads them here. A profile's id
@@ -11,8 +17,19 @@ export const PROFILES_KEY = 'mochi.profiles.v1';
 export const MAX_PROFILES = 9;
 
 /** A desktop install without demo data starts with this one profile. */
-export const FIRST_PROFILE: Space = { id: 'personal', name: 'Personal', icon: 'home', plans: { claude: '', codex: '' }, github: '' };
+export const FIRST_PROFILE: Space = {
+  id: 'personal',
+  name: 'Personal',
+  icon: 'home',
+  plans: { claude: '', codex: '' },
+  github: '',
+};
 
+const profilesSlice = persistedSlice(
+  PROFILES_KEY,
+  startingProfiles(),
+  parseProfiles,
+);
 let profiles = load();
 const listeners = new Set<() => void>();
 
@@ -31,20 +48,36 @@ export function profileById(id: string): Space {
 
 /** A new profile, empty or with `from`'s own settings (GitHub login, what it turns off natively); a new id and icon either way. */
 export function addProfile(name: string, from?: Space): Space {
-  if (profiles.length >= MAX_PROFILES) throw new Error(`Mochi holds up to ${MAX_PROFILES} profiles`);
+  if (profiles.length >= MAX_PROFILES)
+    throw new Error(`Mochi holds up to ${MAX_PROFILES} profiles`);
   const profile: Space = {
     plans: { claude: '', codex: '' },
     github: '',
-    ...(from && { plans: from.plans, github: from.github, nativeOff: from.nativeOff, nativeNew: from.nativeNew }),
-    id: newProfileId(name, profiles.map((p) => p.id)),
+    ...(from && {
+      plans: from.plans,
+      github: from.github,
+      nativeOff: from.nativeOff,
+      nativeNew: from.nativeNew,
+    }),
+    id: newProfileId(
+      name,
+      profiles.map((p) => p.id),
+    ),
     name,
-    icon: SPACE_ICON_NAMES.find((icon) => !profiles.some((p) => p.icon === icon)) ?? 'layers',
+    icon:
+      SPACE_ICON_NAMES.find((icon) => !profiles.some((p) => p.icon === icon)) ??
+      'layers',
   };
   write([...profiles, profile]);
   return profile;
 }
 
-export function updateProfile(id: string, patch: Partial<Pick<Space, 'name' | 'icon' | 'github' | 'nativeOff' | 'nativeNew'>>) {
+export function updateProfile(
+  id: string,
+  patch: Partial<
+    Pick<Space, 'name' | 'icon' | 'github' | 'nativeOff' | 'nativeNew'>
+  >,
+) {
   write(profiles.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 }
 
@@ -55,21 +88,30 @@ export function removeProfile(id: string) {
   const removed = profiles[index];
   write(profiles.filter((p) => p.id !== id));
   return () => {
-    if (profiles.some((p) => p.id === id) || profiles.length >= MAX_PROFILES) return;
+    if (profiles.some((p) => p.id === id) || profiles.length >= MAX_PROFILES)
+      return;
     write(profiles.toSpliced(Math.min(index, profiles.length), 0, removed));
   };
 }
 
 /** Lowercase letters, digits and dashes (the browser session name allows nothing else), unique among `taken`. */
 export function newProfileId(name: string, taken: string[]) {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'profile';
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 32) || 'profile';
   let id = slug;
   for (let n = 2; taken.includes(id); n++) id = `${slug}-${n}`;
   return id;
 }
 
 /** Saved profiles when they parse into at least one valid entry, else the starting ones: the demo's, or one empty profile on desktop. */
-export function parseProfiles(raw: string | null, fallback = startingProfiles()): Space[] {
+export function parseProfiles(
+  raw: string | null,
+  fallback = startingProfiles(),
+): Space[] {
   try {
     const saved: unknown = JSON.parse(raw ?? 'null');
     if (!Array.isArray(saved)) return fallback;
@@ -100,24 +142,18 @@ function isProfile(value: unknown): value is Space {
 
 function write(next: Space[]) {
   profiles = next;
-  try {
-    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): edits last for this session.
-  }
+  profilesSlice.setState({ value: profiles });
   listeners.forEach((l) => l());
 }
 
 function load() {
-  let list: Space[];
-  try {
-    list = parseProfiles(localStorage.getItem(PROFILES_KEY));
-  } catch {
-    list = startingProfiles();
-  }
+  const list = profilesSlice.getState().value;
   // Demo threads live in the demo's profiles, so with demo data on any you don't have join the list (unsaved; they hold threads, so can't be removed).
   if (!showsDemoData()) return list;
-  return [...list, ...DEFAULT_SPACES.filter((d) => !list.some((p) => p.id === d.id))].slice(0, MAX_PROFILES);
+  return [
+    ...list,
+    ...DEFAULT_SPACES.filter((d) => !list.some((p) => p.id === d.id)),
+  ].slice(0, MAX_PROFILES);
 }
 
 function subscribe(listener: () => void) {
@@ -128,6 +164,7 @@ function subscribe(listener: () => void) {
 if (typeof window !== 'undefined')
   window.addEventListener('storage', (e) => {
     if (e.key !== PROFILES_KEY) return;
+    void profilesSlice.persist.rehydrate();
     profiles = load();
     listeners.forEach((l) => l());
   });

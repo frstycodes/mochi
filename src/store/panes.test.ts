@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vite-plus/test';
 import type { Pane } from '../model.ts';
 import type { State } from './index.tsx';
 import { defaultBrowserUrl } from '../terminal/devServer.ts';
@@ -17,124 +17,331 @@ const pane = (rest: Partial<Pane> = {}): Pane => ({
   layout: { columns: [['browser', 'changes', 'terminal']], focused: 'browser' },
   ...rest,
 });
-const run = (p: Pane | undefined, ...actions: Parameters<typeof panesReducer>[1][]) =>
-  actions.reduce((s, a) => panesReducer(s, a), { panes: p ? [p] : [], threads: [] } as unknown as State).panes[0];
+const run = (
+  p: Pane | undefined,
+  ...actions: Parameters<typeof panesReducer>[1][]
+) =>
+  actions.reduce((s, a) => panesReducer(s, a), {
+    panes: p ? [p] : [],
+    threads: [],
+  } as unknown as State).panes[0];
 
 test('opening a kind opens its pane below the focused one and focuses it', () => {
-  const p = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'files' }, { type: 'pane-open-tab', threadId: 't', kind: 'ports' });
-  assert.deepEqual(p.tabs.map((t) => t.kind), ['files', 'ports']);
+  const p = run(
+    undefined,
+    { type: 'pane-open-tab', threadId: 't', kind: 'files' },
+    { type: 'pane-open-tab', threadId: 't', kind: 'ports' },
+  );
+  assert.deepEqual(
+    p.tabs.map((t) => t.kind),
+    ['files', 'ports'],
+  );
   assert.deepEqual(p.layout?.columns, [['files', 'ports']]);
-  assert.deepEqual([p.isOpen, p.activeTab, p.layout?.focused], [true, p.tabs[1].id, 'ports']);
+  assert.deepEqual(
+    [p.isOpen, p.activeTab, p.layout?.focused],
+    [true, p.tabs[1].id, 'ports'],
+  );
 });
 
 test('a kind opens at most once per thread; a Files pane switches to the file asked for', () => {
-  const p = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'files', file: { path: 'src/a.ts' } }, { type: 'pane-open-tab', threadId: 't', kind: 'files', file: { path: 'src/b.ts', line: 4 } });
+  const p = run(
+    undefined,
+    {
+      type: 'pane-open-tab',
+      threadId: 't',
+      kind: 'files',
+      file: { path: 'src/a.ts' },
+    },
+    {
+      type: 'pane-open-tab',
+      threadId: 't',
+      kind: 'files',
+      file: { path: 'src/b.ts', line: 4 },
+    },
+  );
   assert.equal(p.tabs.length, 1);
-  assert.deepEqual([p.tabs[0].file, p.tabs[0].title], [{ path: 'src/b.ts', line: 4 }, 'b.ts']);
+  assert.deepEqual(
+    [p.tabs[0].file, p.tabs[0].title],
+    [{ path: 'src/b.ts', line: 4 }, 'b.ts'],
+  );
 });
 
 test('Preview keeps several tabs in one pane and shows the newest', () => {
-  const p = run(pane(), { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:5173' });
+  const p = run(pane(), {
+    type: 'pane-open-tab',
+    threadId: 't',
+    kind: 'browser',
+    url: 'localhost:5173',
+  });
   assert.equal(p.tabs.filter((t) => t.kind === 'browser').length, 2);
   assert.equal(shownTab(p, 'browser')?.url, 'localhost:5173');
   assert.deepEqual(p.layout?.columns, [['browser', 'changes', 'terminal']]);
 });
 
 test('a new Preview tab opens on the one running dev server, else blank', () => {
-  const port = (n: number) => ({ port: n, pid: n, command: 'vite', startedAt: 0 });
+  const port = (n: number) => ({
+    port: n,
+    pid: n,
+    command: 'vite',
+    startedAt: 0,
+  });
   assert.equal(defaultBrowserUrl([port(5173)]), 'http://localhost:5173');
   assert.equal(defaultBrowserUrl([port(5173), port(3000)]), undefined);
   assert.equal(defaultBrowserUrl([]), undefined);
   assert.equal(defaultBrowserUrl(undefined), undefined);
-  const p = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser' });
+  const p = run(undefined, {
+    type: 'pane-open-tab',
+    threadId: 't',
+    kind: 'browser',
+  });
   assert.equal(shownTab(p, 'browser')?.url, undefined);
 });
 
 test('closing a Preview tab shows its right neighbour, then its left; closing the last one closes the pane', () => {
-  const p = run(pane(), { type: 'pane-open-tab', threadId: 't', kind: 'browser' }, { type: 'pane-select-tab', threadId: 't', tabId: 'a' }, { type: 'pane-close-tab', threadId: 't', tabId: 'a' });
+  const p = run(
+    pane(),
+    { type: 'pane-open-tab', threadId: 't', kind: 'browser' },
+    { type: 'pane-select-tab', threadId: 't', tabId: 'a' },
+    { type: 'pane-close-tab', threadId: 't', tabId: 'a' },
+  );
   assert.equal(shownTab(p, 'browser')?.id, 'tab-1');
-  const gone = run(p, { type: 'pane-close-tab', threadId: 't', tabId: 'tab-1' });
+  const gone = run(p, {
+    type: 'pane-close-tab',
+    threadId: 't',
+    tabId: 'tab-1',
+  });
   assert.deepEqual(gone.layout?.columns, [['changes', 'terminal']]);
-  const empty = run(pane(), ...['a', 'b', 'c'].map((tabId) => ({ type: 'pane-close-tab' as const, threadId: 't', tabId })));
-  assert.deepEqual([empty.isOpen, empty.activeTab, empty.layout?.columns], [false, '', []]);
+  const empty = run(
+    pane(),
+    ...['a', 'b', 'c'].map((tabId) => ({
+      type: 'pane-close-tab' as const,
+      threadId: 't',
+      tabId,
+    })),
+  );
+  assert.deepEqual(
+    [empty.isOpen, empty.activeTab, empty.layout?.columns],
+    [false, '', []],
+  );
 });
 
 test('closing a pane keeps its tab, so it comes back as it was', () => {
-  const closed = run(pane(), { type: 'pane-close-kind', threadId: 't', kind: 'terminal' });
+  const closed = run(pane(), {
+    type: 'pane-close-kind',
+    threadId: 't',
+    kind: 'terminal',
+  });
   assert.deepEqual(closed.layout?.columns, [['browser', 'changes']]);
   assert.equal(closed.tabs.length, 3);
-  const back = run(closed, { type: 'pane-show-tab', threadId: 't', kind: 'terminal' });
+  const back = run(closed, {
+    type: 'pane-show-tab',
+    threadId: 't',
+    kind: 'terminal',
+  });
   assert.equal(back.tabs.length, 3);
   assert.deepEqual([back.layout?.focused, back.activeTab], ['terminal', 'c']);
 });
 
 test('reorder follows the given order and keeps unlisted tabs after it', () => {
-  const p = run(pane(), { type: 'pane-reorder', threadId: 't', order: ['c', 'a'] });
-  assert.deepEqual(p.tabs.map((t) => t.id), ['c', 'a', 'b']);
+  const p = run(pane(), {
+    type: 'pane-reorder',
+    threadId: 't',
+    order: ['c', 'a'],
+  });
+  assert.deepEqual(
+    p.tabs.map((t) => t.id),
+    ['c', 'a', 'b'],
+  );
 });
 
 test('popping a pane out closes it in the layout, putting it back opens and focuses it', () => {
-  const popped = run(pane({ activeTab: 'b' }), { type: 'pane-pop', threadId: 't', tabId: 'b', isPopped: true });
+  const popped = run(pane({ activeTab: 'b' }), {
+    type: 'pane-pop',
+    threadId: 't',
+    tabId: 'b',
+    isPopped: true,
+  });
   assert.equal(popped.tabs.find((t) => t.id === 'b')?.isPopped, true);
   assert.deepEqual(popped.layout?.columns, [['browser', 'terminal']]);
-  const back = run({ ...popped, isOpen: false }, { type: 'pane-pop', threadId: 't', tabId: 'b', isPopped: false });
-  assert.deepEqual([back.activeTab, back.isOpen, back.layout?.focused], ['b', true, 'changes']);
+  const back = run(
+    { ...popped, isOpen: false },
+    { type: 'pane-pop', threadId: 't', tabId: 'b', isPopped: false },
+  );
+  assert.deepEqual(
+    [back.activeTab, back.isOpen, back.layout?.focused],
+    ['b', true, 'changes'],
+  );
 });
 
 test('closing several tabs keeps a survivor active, and restoring brings the pane back as it was', () => {
-  const others = run(pane(), { type: 'pane-close-tabs', threadId: 't', tabIds: ['a', 'b'] });
-  assert.deepEqual(others.tabs.map((t) => t.id), ['c']);
+  const others = run(pane(), {
+    type: 'pane-close-tabs',
+    threadId: 't',
+    tabIds: ['a', 'b'],
+  });
+  assert.deepEqual(
+    others.tabs.map((t) => t.id),
+    ['c'],
+  );
   assert.equal(others.activeTab, 'c');
   assert.deepEqual(run(others, { type: 'pane-restore', pane: pane() }), pane());
 });
 
 test('expand, focus, move and resize change only the layout', () => {
-  const p = run(pane(), { type: 'pane-expand', threadId: 't', kind: 'changes' });
-  assert.deepEqual([p.layout?.expanded, p.layout?.focused], ['changes', 'changes']);
-  assert.equal(run(p, { type: 'pane-expand', threadId: 't', kind: undefined }).layout?.expanded, undefined);
-  assert.equal(run(pane(), { type: 'pane-focus-kind', threadId: 't', kind: 'terminal' }).activeTab, 'c');
-  assert.deepEqual(run(pane(), { type: 'pane-move-kind', threadId: 't', kind: 'terminal', col: 1, row: 0 }).layout?.columns, [['browser', 'changes'], ['terminal']]);
-  assert.equal(run(pane(), { type: 'pane-resize', threadId: 't', patch: { share: 0.5 } }).layout?.share, 0.5);
+  const p = run(pane(), {
+    type: 'pane-expand',
+    threadId: 't',
+    kind: 'changes',
+  });
+  assert.deepEqual(
+    [p.layout?.expanded, p.layout?.focused],
+    ['changes', 'changes'],
+  );
+  assert.equal(
+    run(p, { type: 'pane-expand', threadId: 't', kind: undefined }).layout
+      ?.expanded,
+    undefined,
+  );
+  assert.equal(
+    run(pane(), { type: 'pane-focus-kind', threadId: 't', kind: 'terminal' })
+      .activeTab,
+    'c',
+  );
+  assert.deepEqual(
+    run(pane(), {
+      type: 'pane-move-kind',
+      threadId: 't',
+      kind: 'terminal',
+      col: 1,
+      row: 0,
+    }).layout?.columns,
+    [['browser', 'changes'], ['terminal']],
+  );
+  assert.equal(
+    run(pane(), { type: 'pane-resize', threadId: 't', patch: { share: 0.5 } })
+      .layout?.share,
+    0.5,
+  );
 });
 
 test('a popped-out open adds a floating tab without opening the pane or changing its selection', () => {
-  const p = run(pane({ isOpen: false }), { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true });
+  const p = run(pane({ isOpen: false }), {
+    type: 'pane-open-tab',
+    threadId: 't',
+    kind: 'visual',
+    title: 'Latency',
+    visual: { language: 'svg', code: '<svg/>' },
+    isPopped: true,
+  });
   assert.deepEqual([p.isOpen, p.activeTab], [false, 'a']);
-  assert.deepEqual(p.tabs.at(-1), { id: p.tabs.at(-1)!.id, kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true, url: undefined, file: undefined });
+  assert.deepEqual(p.tabs.at(-1), {
+    id: p.tabs.at(-1)!.id,
+    kind: 'visual',
+    title: 'Latency',
+    visual: { language: 'svg', code: '<svg/>' },
+    isPopped: true,
+    url: undefined,
+    file: undefined,
+  });
 });
 
 test('opening the same visual again reuses its tab: docked selects it, popped out pops it, a different visual adds one', () => {
   const visual = { language: 'svg', code: '<svg></svg>' } as const;
-  const open = (p: Pane | undefined, isPopped = false) => run(p, { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Logo', visual, isPopped });
+  const open = (p: Pane | undefined, isPopped = false) =>
+    run(p, {
+      type: 'pane-open-tab',
+      threadId: 't',
+      kind: 'visual',
+      title: 'Logo',
+      visual,
+      isPopped,
+    });
   const docked = open(pane());
   const id = docked.activeTab;
-  const again = open(run(docked, { type: 'pane-select-tab', threadId: 't', tabId: 'a' }));
-  assert.deepEqual([again.tabs.length, again.activeTab], [docked.tabs.length, id]);
+  const again = open(
+    run(docked, { type: 'pane-select-tab', threadId: 't', tabId: 'a' }),
+  );
+  assert.deepEqual(
+    [again.tabs.length, again.activeTab],
+    [docked.tabs.length, id],
+  );
   const popped = open(docked, true);
-  assert.deepEqual([popped.tabs.length, popped.tabs.find((t) => t.id === id)?.isPopped], [docked.tabs.length, true]);
+  assert.deepEqual(
+    [popped.tabs.length, popped.tabs.find((t) => t.id === id)?.isPopped],
+    [docked.tabs.length, true],
+  );
   assert.equal(open(popped, true).tabs.length, docked.tabs.length);
-  const other = run(docked, { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Other', visual: { language: 'svg', code: '<svg><g/></svg>' } });
+  const other = run(docked, {
+    type: 'pane-open-tab',
+    threadId: 't',
+    kind: 'visual',
+    title: 'Other',
+    visual: { language: 'svg', code: '<svg><g/></svg>' },
+  });
   assert.equal(other.tabs.length, docked.tabs.length + 1);
 });
 
 test('a background tab leaves the layout and your pane in front, and a thread with no pane gets a closed one', () => {
-  const fresh = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:3000', isBackground: true });
+  const fresh = run(undefined, {
+    type: 'pane-open-tab',
+    threadId: 't',
+    kind: 'browser',
+    url: 'localhost:3000',
+    isBackground: true,
+  });
   assert.equal(fresh.isOpen, false);
   assert.equal(fresh.activeTab, fresh.tabs[0].id);
-  const beside = run(pane({ activeTab: 'b' }), { type: 'pane-open-tab', threadId: 't', kind: 'browser', isBackground: true });
-  assert.deepEqual([beside.isOpen, beside.activeTab, beside.tabs.length], [true, 'b', 4]);
+  const beside = run(pane({ activeTab: 'b' }), {
+    type: 'pane-open-tab',
+    threadId: 't',
+    kind: 'browser',
+    isBackground: true,
+  });
+  assert.deepEqual(
+    [beside.isOpen, beside.activeTab, beside.tabs.length],
+    [true, 'b', 4],
+  );
   assert.equal(shownTab(beside, 'browser')?.id, 'a');
 });
 
 test('showing an agent opens the Agents pane with that agent picked', () => {
-  const p = run(pane(), { type: 'pane-show-agent', threadId: 't', subagentId: 's1' });
+  const p = run(pane(), {
+    type: 'pane-show-agent',
+    threadId: 't',
+    subagentId: 's1',
+  });
   assert.equal(p.tabs.find((t) => t.kind === 'agents')?.agentId, 's1');
   assert.equal(p.layout?.focused, 'agents');
-  const again = run(p, { type: 'pane-show-agent', threadId: 't', subagentId: 's1' });
-  assert.equal(again.reveals, (p.reveals ?? 0) + 1, 'showing the same agent again still asks a narrow window to swap to the pane');
+  const again = run(p, {
+    type: 'pane-show-agent',
+    threadId: 't',
+    subagentId: 's1',
+  });
+  assert.equal(
+    again.reveals,
+    (p.reveals ?? 0) + 1,
+    'showing the same agent again still asks a narrow window to swap to the pane',
+  );
 });
 
 test('a tab opened with a tabId keeps it, so two popups in one render get two tabs', () => {
-  const p = run(pane(), { type: 'pane-open-tab', threadId: 't', kind: 'browser', tabId: 'popup_view-1' }, { type: 'pane-open-tab', threadId: 't', kind: 'browser', tabId: 'popup_view-2' });
-  assert.deepEqual(p.tabs.slice(-2).map((t) => t.id), ['popup_view-1', 'popup_view-2']);
+  const p = run(
+    pane(),
+    {
+      type: 'pane-open-tab',
+      threadId: 't',
+      kind: 'browser',
+      tabId: 'popup_view-1',
+    },
+    {
+      type: 'pane-open-tab',
+      threadId: 't',
+      kind: 'browser',
+      tabId: 'popup_view-2',
+    },
+  );
+  assert.deepEqual(
+    p.tabs.slice(-2).map((t) => t.id),
+    ['popup_view-1', 'popup_view-2'],
+  );
 });

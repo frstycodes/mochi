@@ -33,10 +33,41 @@ colors:
   spaces: Latitude 165, Personal 15, Liane 80 (hue only; L and C are fixed per theme)
 typography:
   family: Inter Variable (cv11, ss03), fallback system-ui; mono ui-monospace / SF Mono for code, paths and URLs only
-  scale: { display: 24/28 600 -0.02em, heading: 18/24 600 -0.012em, title: 14/20 600, prose: 14/22 400, body: 13/20 400, meta: 12/18 400, caption: 11/16 400 }
-rounded: { sm: 8px badges kbd checkboxes, md: 10px rows menu items small icon buttons, lg: 12px inputs selects icon buttons, xl: 18px cards panels summary card, 2xl: 24px composer side pane sheets PiP, full: text buttons chips dots radios, squircle: every tier x1.84 where corner-shape is supported, except anything rounded-full }
-elevation: { flat: canvas sidebar side pane, hairline: cards (1px ring), popover: menus tooltips hover cards summary card, float: goal timeline window and the PiP }
-motion: { press: 100-160ms, popover: 150-200ms ease-out, window snap: spring stiffness 420 damping 36, hover-intent: open 160ms close 240ms }
+  scale:
+    {
+      display: 24/28 600 -0.02em,
+      heading: 18/24 600 -0.012em,
+      title: 14/20 600,
+      prose: 14/22 400,
+      body: 13/20 400,
+      meta: 12/18 400,
+      caption: 11/16 400,
+    }
+rounded:
+  {
+    sm: 8px badges kbd checkboxes,
+    md: 10px rows menu items small icon buttons,
+    lg: 12px inputs selects icon buttons,
+    xl: 18px cards panels summary card,
+    2xl: 24px composer side pane sheets PiP,
+    full: text buttons chips dots radios,
+    squircle: every tier x1.84 where corner-shape is supported,
+    except anything rounded-full,
+  }
+elevation:
+  {
+    flat: canvas sidebar side pane,
+    hairline: cards (1px ring),
+    popover: menus tooltips hover cards summary card,
+    float: goal timeline window and the PiP,
+  }
+motion:
+  {
+    press: 100-160ms,
+    popover: 150-200ms ease-out,
+    window snap: spring stiffness 420 damping 36,
+    hover-intent: open 160ms close 240ms,
+  }
 ---
 
 # Mochi design system
@@ -59,31 +90,31 @@ The signature artifacts are the chat (main view), the summary card with its floa
 
 Mochi's look is the built-in "Mochi" theme. Any VS Code color theme (Open VSX or a custom file) replaces it per appearance: `src/themes/map.ts` turns the theme's `colors` into Mochi's tokens, written as inline custom properties on `<html>` (`ColorThemeController`), so Mochi itself is no properties at all. The first key present wins; a missing token derives from `editor.background` / `editor.foreground`.
 
-| Mochi token | VS Code keys, in order | Fallback |
-|---|---|---|
-| `background` | `editor.background` | `#1e1e1e` / `#ffffff` |
-| `foreground` | `editor.foreground`, `foreground` | `#d4d4d4` / `#333333` |
-| `sidebar` | `sideBar.background`, `activityBar.background` | background |
-| `card` | `editorWidget.background`, `sideBarSectionHeader.background` | 4% foreground into background |
-| `popover` (+ fg) | `editorHoverWidget.background`, `menu.background`, `quickInput.background`, `editorWidget.background` | card |
-| `primary` / `-foreground` | `button.background` / `button.foreground` | foreground / background (the inverted neutral) |
-| `secondary` / `-foreground` | `button.secondaryBackground` / `button.secondaryForeground` | 8% foreground |
-| `muted` | `input.background` | 6% foreground |
-| `muted-foreground` | `descriptionForeground` | 30% background into foreground |
-| `subtle-foreground` | — | 42% background into foreground |
-| `accent` / `-foreground` | `list.hoverBackground`, `list.inactiveSelectionBackground` / `list.hoverForeground` | 8% foreground over popover |
-| `destructive` | `errorForeground`, `editorError.foreground`, `terminal.ansiRed` | VS Code ANSI red |
-| `warning` | `editorWarning.foreground`, `terminal.ansiYellow` | ANSI yellow |
-| `success` | `terminal.ansiGreen`, `gitDecoration.addedResourceForeground` | ANSI green |
-| `info` | `textLink.foreground`, `editorInfo.foreground`, `terminal.ansiBlue` | ANSI blue |
-| `merged` | `terminal.ansiMagenta` | ANSI magenta |
-| `border` | `panel.border`, `sideBar.border`, `editorGroup.border`, `contrastBorder` | foreground at 10% |
-| `input` | `input.border`, `dropdown.border`, `contrastBorder` | foreground at 15% |
-| `ring` | `focusBorder` | 30% background into foreground |
-| `highlight` | `editor.lineHighlightBackground` | foreground at 6% |
-| `sidebar-accent` | `list.inactiveSelectionBackground`, `list.hoverBackground` | foreground at 7% |
-| `chart-1…5` | ANSI blue, red+yellow (orange), cyan, yellow, magenta | VS Code ANSI defaults |
-| `float`, `glass`, `glass-edge`, `scrim`, `chart-grid`, `chart-axis` | derived from popover, background and foreground at Mochi's alphas | — |
+| Mochi token                                                         | VS Code keys, in order                                                                                | Fallback                                       |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `background`                                                        | `editor.background`                                                                                   | `#1e1e1e` / `#ffffff`                          |
+| `foreground`                                                        | `editor.foreground`, `foreground`                                                                     | `#d4d4d4` / `#333333`                          |
+| `sidebar`                                                           | `sideBar.background`, `activityBar.background`                                                        | background                                     |
+| `card`                                                              | `editorWidget.background`, `sideBarSectionHeader.background`                                          | 4% foreground into background                  |
+| `popover` (+ fg)                                                    | `editorHoverWidget.background`, `menu.background`, `quickInput.background`, `editorWidget.background` | card                                           |
+| `primary` / `-foreground`                                           | `button.background` / `button.foreground`                                                             | foreground / background (the inverted neutral) |
+| `secondary` / `-foreground`                                         | `button.secondaryBackground` / `button.secondaryForeground`                                           | 8% foreground                                  |
+| `muted`                                                             | `input.background`                                                                                    | 6% foreground                                  |
+| `muted-foreground`                                                  | `descriptionForeground`                                                                               | 30% background into foreground                 |
+| `subtle-foreground`                                                 | —                                                                                                     | 42% background into foreground                 |
+| `accent` / `-foreground`                                            | `list.hoverBackground`, `list.inactiveSelectionBackground` / `list.hoverForeground`                   | 8% foreground over popover                     |
+| `destructive`                                                       | `errorForeground`, `editorError.foreground`, `terminal.ansiRed`                                       | VS Code ANSI red                               |
+| `warning`                                                           | `editorWarning.foreground`, `terminal.ansiYellow`                                                     | ANSI yellow                                    |
+| `success`                                                           | `terminal.ansiGreen`, `gitDecoration.addedResourceForeground`                                         | ANSI green                                     |
+| `info`                                                              | `textLink.foreground`, `editorInfo.foreground`, `terminal.ansiBlue`                                   | ANSI blue                                      |
+| `merged`                                                            | `terminal.ansiMagenta`                                                                                | ANSI magenta                                   |
+| `border`                                                            | `panel.border`, `sideBar.border`, `editorGroup.border`, `contrastBorder`                              | foreground at 10%                              |
+| `input`                                                             | `input.border`, `dropdown.border`, `contrastBorder`                                                   | foreground at 15%                              |
+| `ring`                                                              | `focusBorder`                                                                                         | 30% background into foreground                 |
+| `highlight`                                                         | `editor.lineHighlightBackground`                                                                      | foreground at 6%                               |
+| `sidebar-accent`                                                    | `list.inactiveSelectionBackground`, `list.hoverBackground`                                            | foreground at 7%                               |
+| `chart-1…5`                                                         | ANSI blue, red+yellow (orange), cyan, yellow, magenta                                                 | VS Code ANSI defaults                          |
+| `float`, `glass`, `glass-edge`, `scrim`, `chart-grid`, `chart-axis` | derived from popover, background and foreground at Mochi's alphas                                     | —                                              |
 
 Rules the mapping enforces: translucent surfaces are painted over the background; every text token reads at 4.5:1 against the surfaces it sits on (lightness nudged in OKLab, hue kept: foreground on background, sidebar, card and popover; muted, subtle and status colours on those plus muted; each `-foreground` on its fill); `ring` at 3:1; chart lines at 3:1 on background; `accent` at least 0.04 L from popover so menu highlights show; a `border` under 1.15:1 or `input` under 1.3:1 against its surfaces falls back to translucent foreground. Token colours (`tokenColors`) feed every highlighter: pierre diffs and markdown code blocks get the theme as a shiki theme (`src/themes/highlight.ts`), the CodeMirror file viewer reads `--syntax-*` (first TextMate scope that resolves, `SYNTAX_SCOPES`), the terminal re-reads the tokens.
 
@@ -93,15 +124,15 @@ Inter, one family. Hierarchy from size and weight, three weights (400, 500, 600)
 
 Use the `type-*` utilities, never raw `text-[..px]`:
 
-| Token | Spec | Use |
-|---|---|---|
-| `type-display` | 24/28 · 600 · −0.02em | Progress percentage, the one big number per surface |
-| `type-heading` | 18/24 · 600 · −0.012em | Page titles (Queue, Board) |
-| `type-title` | 14/20 · 600 | Thread title, panel titles, card titles |
-| `type-prose` | 14/22 · 400 | Chat messages, composer |
-| `type-body` | 13/20 · 400 | Default UI text; Tailwind `text-sm` is also 13px so shadcn components match |
-| `type-meta` | 12/18 · 400 | Secondary lines, step rows |
-| `type-caption` | 11/16 · 400 | Timestamps, counts, badges, tool calls |
+| Token          | Spec                   | Use                                                                         |
+| -------------- | ---------------------- | --------------------------------------------------------------------------- |
+| `type-display` | 24/28 · 600 · −0.02em  | Progress percentage, the one big number per surface                         |
+| `type-heading` | 18/24 · 600 · −0.012em | Page titles (Queue, Board)                                                  |
+| `type-title`   | 14/20 · 600            | Thread title, panel titles, card titles                                     |
+| `type-prose`   | 14/22 · 400            | Chat messages, composer                                                     |
+| `type-body`    | 13/20 · 400            | Default UI text; Tailwind `text-sm` is also 13px so shadcn components match |
+| `type-meta`    | 12/18 · 400            | Secondary lines, step rows                                                  |
+| `type-caption` | 11/16 · 400            | Timestamps, counts, badges, tool calls                                      |
 
 The one exception to Inter is `figure`: big totals (the Usage page and its share card) use the system face (SF Pro on Mac) with `tabular-nums`, at 700–800 for impact, with `$` and units (k, M, B) at half size on the baseline and a sign lifted to the digits' middle (`src/usage/Figure.tsx`).
 
@@ -117,12 +148,12 @@ The one exception to Inter is `figure`: big totals (the Usage page and its share
 
 ## Elevation
 
-| Level | Surface | Used by |
-|---|---|---|
-| Flat | `background` (darkest), `sidebar` (one step lighter) | Chat canvas; sidebar and side pane |
-| Hairline | `card` + 1px ring | Cards, queue decisions, tool runs, composer |
-| Popover | `popover` + `shadow-popover` | Tooltips, hover cards, popovers, menus |
-| Float | `float` (translucent) + blur + `shadow-float` | The expanded goal timeline window |
+| Level    | Surface                                              | Used by                                     |
+| -------- | ---------------------------------------------------- | ------------------------------------------- |
+| Flat     | `background` (darkest), `sidebar` (one step lighter) | Chat canvas; sidebar and side pane          |
+| Hairline | `card` + 1px ring                                    | Cards, queue decisions, tool runs, composer |
+| Popover  | `popover` + `shadow-popover`                         | Tooltips, hover cards, popovers, menus      |
+| Float    | `float` (translucent) + blur + `shadow-float`        | The expanded goal timeline window           |
 
 Glass (blur) is allowed only where content scrolls underneath: the composer and Float-level windows. Each level has exactly one hairline, and the elevation token owns it (`0 0 0 1px var(--border)` inside `shadow-popover` / `shadow-float`); overlays never add their own `border` or `ring` on top. In dark mode, depth comes from lighter surfaces, not heavy shadows.
 

@@ -1,4 +1,4 @@
 import type { RemoteHost } from '../types/remote.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const remote = (): RemoteHost => bridge().remote;
+export const remote = (): RemoteHost => desktopNamespace('remote');

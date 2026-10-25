@@ -19,13 +19,19 @@ import {
 } from '@/components/ui/sidebar';
 import { Shortcut } from '../Shortcut';
 import { SidebarResizer } from '../SidebarResizer';
-import { closeSettings, openSettings, useSettingsRoute } from './open';
+import { goBack, openSettings, useSettingsRoute } from '../routes/nav';
 import { SECTION_GROUPS, searchSettings, type SectionId } from './sections';
 import { HARNESS_IDS } from './harnesses';
 import { useAgentSettings } from './AgentSettings';
 
 /** Takes the app sidebar's place, width and toggle while settings are open. */
-export function SettingsSidebar({ width, onResize }: { width: number; onResize: (px: number) => void }) {
+export function SettingsSidebar({
+  width,
+  onResize,
+}: {
+  width: number;
+  onResize: (px: number) => void;
+}) {
   const route = useSettingsRoute();
   const [query, setQuery] = useState('');
   const { setOpenMobile } = useSidebar();
@@ -43,8 +49,18 @@ export function SettingsSidebar({ width, onResize }: { width: number; onResize: 
       </SidebarHeader>
       <div className="px-2 pb-2 max-md:pt-2">
         <div className="relative">
-          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <SidebarInput type="search" aria-label="Search settings" placeholder="Search settings" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" />
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <SidebarInput
+            type="search"
+            aria-label="Search settings"
+            placeholder="Search settings"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-8"
+          />
         </div>
       </div>
       <SidebarContent>
@@ -57,17 +73,29 @@ export function SettingsSidebar({ width, onResize }: { width: number; onResize: 
               <SidebarMenu className="gap-0.5">
                 {items.map(({ section, settings }) => (
                   <SidebarMenuItem key={section.id}>
-                    <SidebarMenuButton isActive={route?.section === section.id} onClick={() => go(section.id)}>
+                    <SidebarMenuButton
+                      isActive={route?.section === section.id}
+                      onClick={() => go(section.id)}
+                    >
                       <section.icon />
                       {section.title}
-                      {section.id === 'harnesses' && HARNESS_IDS.some(isUpdateAvailable) && <span className="ml-auto size-1.5 rounded-full bg-warning" aria-label="Update available" />}
+                      {section.id === 'harnesses' &&
+                        HARNESS_IDS.some(isUpdateAvailable) && (
+                          <span
+                            className="ml-auto size-1.5 rounded-full bg-warning"
+                            aria-label="Update available"
+                          />
+                        )}
                     </SidebarMenuButton>
                     {settings.length > 0 && (
                       <SidebarMenuSub>
                         {settings.map((s) => (
                           <SidebarMenuSubItem key={s.id}>
                             <SidebarMenuSubButton asChild>
-                              <button type="button" onClick={() => go(section.id, s.id)}>
+                              <button
+                                type="button"
+                                onClick={() => go(section.id, s.id)}
+                              >
                                 {s.label}
                               </button>
                             </SidebarMenuSubButton>
@@ -81,12 +109,16 @@ export function SettingsSidebar({ width, onResize }: { width: number; onResize: 
             </SidebarGroup>
           );
         })}
-        {!results.length && <p className="px-4 py-2 type-meta text-muted-foreground">No setting matches “{query.trim()}”.</p>}
+        {!results.length && (
+          <p className="px-4 py-2 type-meta text-muted-foreground">
+            No setting matches “{query.trim()}”.
+          </p>
+        )}
       </SidebarContent>
       <SidebarFooter className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={closeSettings}>
+            <SidebarMenuButton onClick={goBack}>
               <ArrowLeft />
               Back to app
               <Shortcut keys={['Esc']} className="ml-auto max-md:hidden" />

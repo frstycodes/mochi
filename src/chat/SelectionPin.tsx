@@ -6,8 +6,19 @@ import { Button } from '@/components/ui/button';
 import { normalise, togglePin, type Pin as PinData } from './pins';
 
 /** Select text inside one message and a Pin button appears above it; the passage is pinned to the outline rail. */
-export function SelectionPin({ threadId, scope }: { threadId: string; scope: RefObject<HTMLElement | null> }) {
-  const [target, setTarget] = useState<{ index: number; text: string; x: number; y: number } | null>(null);
+export function SelectionPin({
+  threadId,
+  scope,
+}: {
+  threadId: string;
+  scope: RefObject<HTMLElement | null>;
+}) {
+  const [target, setTarget] = useState<{
+    index: number;
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(() => {
     const update = () => setTarget(readSelection(scope.current));
@@ -40,27 +51,51 @@ export function SelectionPin({ threadId, scope }: { threadId: string; scope: Ref
 /** A selection counts only when both ends sit in the same message, so a pin always belongs to one message. */
 function readSelection(scope: HTMLElement | null) {
   const selection = window.getSelection();
-  if (!scope || !selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  if (
+    !scope ||
+    !selection ||
+    selection.isCollapsed ||
+    selection.rangeCount === 0
+  )
+    return null;
   const range = selection.getRangeAt(0);
-  const owner = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>('[data-activity-index]');
+  const owner = (node: Node) =>
+    (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>(
+      '[data-activity-index]',
+    );
   const start = owner(range.startContainer);
-  if (!start || start !== owner(range.endContainer) || !scope.contains(start)) return null;
+  if (!start || start !== owner(range.endContainer) || !scope.contains(start))
+    return null;
   const text = normalise(selection.toString());
   if (text.length < 2) return null;
   const rect = range.getBoundingClientRect();
-  return { index: Number(start.dataset.activityIndex), text, x: rect.left + rect.width / 2, y: rect.top };
+  return {
+    index: Number(start.dataset.activityIndex),
+    text,
+    x: rect.left + rect.width / 2,
+    y: rect.top,
+  };
 }
 
 /** Paints pinned passages with the CSS Custom Highlight API, so the message markup is never touched. */
-export function usePinHighlights(scope: RefObject<HTMLElement | null>, pins: PinData[]) {
+export function usePinHighlights(
+  scope: RefObject<HTMLElement | null>,
+  pins: PinData[],
+) {
   useEffect(() => {
     const el = scope.current;
     if (!el || typeof CSS === 'undefined' || !('highlights' in CSS)) return;
-    const paint = () => CSS.highlights.set('harness-pin', new Highlight(...pins.flatMap((p) => (p.text ? findRange(el, p) : []))));
+    const paint = () =>
+      CSS.highlights.set(
+        'harness-pin',
+        new Highlight(...pins.flatMap((p) => (p.text ? findRange(el, p) : []))),
+      );
     paint();
     // Messages render their markdown asynchronously; repaint when it lands.
     let frame = 0;
-    const mo = new MutationObserver(() => (frame ||= requestAnimationFrame(() => ((frame = 0), paint()))));
+    const mo = new MutationObserver(
+      () => (frame ||= requestAnimationFrame(() => ((frame = 0), paint()))),
+    );
     mo.observe(el, { childList: true, subtree: true, characterData: true });
     return () => {
       mo.disconnect();

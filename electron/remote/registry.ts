@@ -1,7 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_SCOPES, type DeviceKind, type Scope } from '../../src/host/types/remote.ts';
+import {
+  DEFAULT_SCOPES,
+  type DeviceKind,
+  type Scope,
+} from '../../src/host/types/remote.ts';
 import { parseRecords, type Member, type MemberRecord } from './members.ts';
 import type { PairedDevice } from './pairing.ts';
 
@@ -67,15 +71,37 @@ export class Registry {
     const others = members.filter((m) => m.deviceId !== selfId);
     const devices = others.map((m): PairedDevice => {
       const known = this.findDevice(m.deviceId);
-      return { id: m.deviceId, name: m.name, kind: m.kind ?? known?.kind, publicKey: m.publicKey, scopes: known?.scopes ?? DEFAULT_SCOPES, pairedAt: m.addedAt };
+      return {
+        id: m.deviceId,
+        name: m.name,
+        kind: m.kind ?? known?.kind,
+        publicKey: m.publicKey,
+        scopes: known?.scopes ?? DEFAULT_SCOPES,
+        pairedAt: m.addedAt,
+      };
     });
     const machines = others.flatMap((m): PairedMachine[] => {
       if (!m.machineId) return [];
       const known = this.stored.machines.find((p) => p.id === m.machineId);
-      return [{ id: m.machineId, name: m.name, kind: known?.kind ?? m.kind, publicKey: m.publicKey, pairedAt: m.addedAt, ...(known?.addresses && { addresses: known.addresses }) }];
+      return [
+        {
+          id: m.machineId,
+          name: m.name,
+          kind: known?.kind ?? m.kind,
+          publicKey: m.publicKey,
+          pairedAt: m.addedAt,
+          ...(known?.addresses && { addresses: known.addresses }),
+        },
+      ];
     });
-    const gone = this.stored.devices.filter((d) => !devices.some((n) => n.id === d.id)).map((d) => d.id);
-    if (JSON.stringify(devices) !== JSON.stringify(this.stored.devices) || JSON.stringify(machines) !== JSON.stringify(this.stored.machines)) this.save({ ...this.stored, devices, machines });
+    const gone = this.stored.devices
+      .filter((d) => !devices.some((n) => n.id === d.id))
+      .map((d) => d.id);
+    if (
+      JSON.stringify(devices) !== JSON.stringify(this.stored.devices) ||
+      JSON.stringify(machines) !== JSON.stringify(this.stored.machines)
+    )
+      this.save({ ...this.stored, devices, machines });
     return gone;
   }
 
@@ -90,11 +116,21 @@ export class Registry {
   /** A device paired before devices named their kind gets it on its next connection. */
   setDeviceKind(id: string, kind: DeviceKind | undefined) {
     if (!kind || this.findDevice(id)?.kind === kind) return;
-    this.save({ ...this.stored, devices: this.stored.devices.map((d) => (d.id === id ? { ...d, kind } : d)) });
+    this.save({
+      ...this.stored,
+      devices: this.stored.devices.map((d) =>
+        d.id === id ? { ...d, kind } : d,
+      ),
+    });
   }
 
   setScopes(id: string, scopes: Scope[]) {
-    this.save({ ...this.stored, devices: this.stored.devices.map((d) => (d.id === id ? { ...d, scopes } : d)) });
+    this.save({
+      ...this.stored,
+      devices: this.stored.devices.map((d) =>
+        d.id === id ? { ...d, scopes } : d,
+      ),
+    });
   }
 
   machines() {
@@ -104,8 +140,19 @@ export class Registry {
   /** What a machine said about itself in its last welcome. */
   noteWelcome(id: string, welcome: Pick<PairedMachine, 'addresses' | 'kind'>) {
     const machine = this.stored.machines.find((m) => m.id === id);
-    if (!machine || (JSON.stringify(machine.addresses ?? []) === JSON.stringify(welcome.addresses ?? []) && machine.kind === welcome.kind)) return;
-    this.save({ ...this.stored, machines: this.stored.machines.map((m) => (m.id === id ? { ...m, ...welcome } : m)) });
+    if (
+      !machine ||
+      (JSON.stringify(machine.addresses ?? []) ===
+        JSON.stringify(welcome.addresses ?? []) &&
+        machine.kind === welcome.kind)
+    )
+      return;
+    this.save({
+      ...this.stored,
+      machines: this.stored.machines.map((m) =>
+        m.id === id ? { ...m, ...welcome } : m,
+      ),
+    });
   }
 
   private save(next: Stored) {
@@ -117,11 +164,22 @@ export class Registry {
 function load(file: string): Stored {
   try {
     const saved = JSON.parse(readFileSync(file, 'utf8')) as Partial<Stored>;
-    if (typeof saved.machineId === 'string' && saved.machineId) return { machineId: saved.machineId, ...(saved.records && { records: parseRecords(saved.records) }), devices: saved.devices ?? [], machines: saved.machines ?? [] };
+    if (typeof saved.machineId === 'string' && saved.machineId)
+      return {
+        machineId: saved.machineId,
+        ...(saved.records && { records: parseRecords(saved.records) }),
+        devices: saved.devices ?? [],
+        machines: saved.machines ?? [],
+      };
   } catch {
     // First launch, or an unreadable file: a fresh identity with nobody trusted.
   }
-  const fresh = { machineId: randomBytes(12).toString('base64url'), records: [], devices: [], machines: [] };
+  const fresh = {
+    machineId: randomBytes(12).toString('base64url'),
+    records: [],
+    devices: [],
+    machines: [],
+  };
   writeFileSync(file, JSON.stringify(fresh), { mode: 0o600 });
   return fresh;
 }

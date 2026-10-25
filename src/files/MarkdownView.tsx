@@ -15,7 +15,15 @@ type Mode = 'rendered' | 'source';
  * A markdown document shown rendered, with its source a toggle away: the toggle sits top right and shows on hover or
  * keyboard focus (always on touch screens). Frontmatter renders as a key/value header instead of a stray rule.
  */
-export function MarkdownView({ text, path = 'document.md', className }: { text: string; path?: string; className?: string }) {
+export function MarkdownView({
+  text,
+  path = 'document.md',
+  className,
+}: {
+  text: string;
+  path?: string;
+  className?: string;
+}) {
   const [mode, setMode] = useState<Mode>('rendered');
   return (
     <div className={cn('group/markdown relative h-full min-h-0', className)}>

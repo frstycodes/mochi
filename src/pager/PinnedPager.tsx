@@ -1,11 +1,16 @@
-import { useDeferredValue, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import {
+  useDeferredValue,
+  useEffect,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { cn } from '@/lib/utils';
 import { COMPOSER_EDITABLE } from '../chat/ComposerEditor';
 import { haptic } from '../haptic';
 import { LeafView, Workspace, WorkspaceEffects } from '../layout/Workspace';
 import type { Leaf } from '../layout/tree';
 import { Overview } from '../stage/Overview';
-import { useWindowSyncHost } from '../stage/windowSync';
 import { useDispatch, useHarnessSelector, type State } from '../store';
 import { useSnapPager } from '../useSnapPager';
 import { isHot, OFF_PIN, slotsOf, type PagerSlots } from './slots';
@@ -29,14 +34,20 @@ export function PinnedPager() {
   const isMounted = (i: number) => isWarm || isHot(i, slots.center);
   const scroller = useRef<HTMLDivElement>(null);
   const open = (id: string | undefined) => {
-    if (id && id !== OFF_PIN) dispatch({ type: 'go', view: { kind: 'thread', id } });
+    if (id && id !== OFF_PIN)
+      dispatch({ type: 'go', view: { kind: 'thread', id } });
   };
   // A swipe commits once it's over (`useOnePagePerSwipe` fires that scrollend), not on the ones raised along the way.
   const onSettle = (page: number) => {
     const el = scroller.current;
     if (el && el.dataset.wheeling === undefined) open(slots.ids[page]);
   };
-  useSnapPager(scroller, { axis: 'x', index: slots.center, onSettle, onCross: haptic });
+  useSnapPager(scroller, {
+    axis: 'x',
+    index: slots.center,
+    onSettle,
+    onCross: haptic,
+  });
   useOnePagePerSwipe(scroller);
   useCaretFollowsPage(slots.ids[slots.center]);
   const pages = slots.ids.length;
@@ -66,7 +77,13 @@ export function PinnedPager() {
               );
             return (
               <Page key={id} slot={i} pages={pages} isOffscreen={!isCenter}>
-                <LeafView leaf={isCenter ? live! : previewLeaf(id)} isMulti={false} isZoomed={false} isFirst isPreview={!isCenter} />
+                <LeafView
+                  leaf={isCenter ? live! : previewLeaf(id)}
+                  isMulti={false}
+                  isZoomed={false}
+                  isFirst
+                  isPreview={!isCenter}
+                />
               </Page>
             );
           })}
@@ -79,44 +96,78 @@ export function PinnedPager() {
 
 /** The pager's whole-state side effects, in a leaf of their own so the pages don't re-render with every change. */
 function PagerEffects() {
-  useWindowSyncHost();
   usePagerKeys();
   return null;
 }
 
-const isSameSlots = (a: PagerSlots, b: PagerSlots) => a.center === b.center && a.ids.join() === b.ids.join();
+const isSameSlots = (a: PagerSlots, b: PagerSlots) =>
+  a.center === b.center && a.ids.join() === b.ids.join();
 
 /** The layout's only leaf when it shows the pinned thread on the current page: then that page is a lone split rendered by the pager itself. */
 function liveLeaf(state: State, centerId: string): Leaf | undefined {
   const { root } = state.layouts[state.spaceId];
-  if (centerId === OFF_PIN || root.kind !== 'leaf' || root.view.kind !== 'thread' || root.view.id !== centerId) return undefined;
+  if (
+    centerId === OFF_PIN ||
+    root.kind !== 'leaf' ||
+    root.view.kind !== 'thread' ||
+    root.view.id !== centerId
+  )
+    return undefined;
   return root;
 }
 
-const previewLeaf = (id: string): Leaf => ({ kind: 'leaf', id: `preview-${id}`, view: { kind: 'thread', id } });
+const previewLeaf = (id: string): Leaf => ({
+  kind: 'leaf',
+  id: `preview-${id}`,
+  view: { kind: 'thread', id },
+});
 
 /**
  * The snap target of one slot, keyed by slot so it never unmounts when a swipe commits. Chromium re-snaps when the element it snapped to
  * leaves the DOM: with the content pages as targets, landing on a page removed the one beyond it and the scroller jumped back, undoing the swipe.
  */
 function SnapPoint({ slot, pages }: { slot: number; pages: number }) {
-  return <div aria-hidden className="pointer-events-none absolute snap-start snap-always" style={slotStyle(slot, pages)} />;
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute snap-start snap-always"
+      style={slotStyle(slot, pages)}
+    />
+  );
 }
 
 /**
  * One page of the scroll content, absolutely placed at its slot so the browser scrolls it natively (no JS transform trailing the compositor).
  * Off screen, `content-visibility: auto` skips its style, layout and paint, shimmers included, while live updates keep landing in it.
  */
-function Page({ slot, pages, isOffscreen = false, children }: { slot: number; pages: number; isOffscreen?: boolean; children: ReactNode }) {
+function Page({
+  slot,
+  pages,
+  isOffscreen = false,
+  children,
+}: {
+  slot: number;
+  pages: number;
+  isOffscreen?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className={cn('absolute', isOffscreen && '[content-visibility:auto]')} style={slotStyle(slot, pages)}>
+    <div
+      className={cn('absolute', isOffscreen && '[content-visibility:auto]')}
+      style={slotStyle(slot, pages)}
+    >
       {children}
     </div>
   );
 }
 
 function slotStyle(slot: number, pages: number): CSSProperties {
-  return { left: `${(slot * 100) / pages}%`, width: `${100 / pages}%`, top: 0, bottom: 0 };
+  return {
+    left: `${(slot * 100) / pages}%`,
+    width: `${100 / pages}%`,
+    top: 0,
+    bottom: 0,
+  };
 }
 
 /** Landing on a page moves the caret into its composer when it was in the page you left, which just went inert. */
@@ -126,7 +177,10 @@ function useCaretFollowsPage(centerId: string) {
     if (previous.current === centerId) return;
     previous.current = centerId;
     const active = document.activeElement;
-    if (active && active !== document.body && !active.closest('[inert]')) return;
-    document.querySelector<HTMLElement>(`[data-leaf-id] ${COMPOSER_EDITABLE}`)?.focus({ preventScroll: true });
+    if (active && active !== document.body && !active.closest('[inert]'))
+      return;
+    document
+      .querySelector<HTMLElement>(`[data-leaf-id] ${COMPOSER_EDITABLE}`)
+      ?.focus({ preventScroll: true });
   }, [centerId]);
 }

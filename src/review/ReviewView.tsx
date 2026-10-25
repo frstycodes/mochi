@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle, MessageEdit, SkipForward, TaskSquare, X } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,9 +33,10 @@ import { TitleBar } from '../TitleBar';
 import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
+import { goBack } from '../routes/nav';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
-import { isCommand } from '../keymap';
+import { isCommand, listenKeydown } from '../keymap';
 import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
@@ -32,31 +47,49 @@ export function ReviewView() {
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, Math.max(0, threads.length - 1));
   const thread = threads[index];
-  const step = (by: 1 | -1) => setSelected(stepIndex(index, threads.length, by));
-  useReviewKeys(step, close);
+  const step = (by: 1 | -1) =>
+    setSelected(stepIndex(index, threads.length, by));
+  useReviewKeys(step, goBack);
   useCloseOnNavigate(close);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ReviewHeader position={thread ? `${index + 1} of ${threads.length}` : undefined} onClose={close} />
+      <ReviewHeader
+        position={thread ? `${index + 1} of ${threads.length}` : undefined}
+        onClose={goBack}
+      />
       {thread ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 md:grid md:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
-          <ReviewSummary key={thread.id} thread={thread} onSkip={() => step(1)} />
+          <ReviewSummary
+            key={thread.id}
+            thread={thread}
+            onSkip={() => step(1)}
+          />
           <ReviewSurface key={`surface-${thread.id}`} thread={thread} />
         </div>
       ) : (
-        <NothingToReview onClose={close} />
+        <NothingToReview onClose={goBack} />
       )}
     </div>
   );
 }
 
-function ReviewHeader({ position, onClose }: { position?: string; onClose: () => void }) {
+function ReviewHeader({
+  position,
+  onClose,
+}: {
+  position?: string;
+  onClose: () => void;
+}) {
   return (
     <TitleBar>
       <TaskSquare className="size-4 text-muted-foreground" />
       <span className="type-meta font-medium">Review</span>
-      {!!position && <span className="tabular type-caption text-subtle-foreground">{position}</span>}
+      {!!position && (
+        <span className="tabular type-caption text-subtle-foreground">
+          {position}
+        </span>
+      )}
       <span className="flex-1" />
       <KbdGroup className="hidden type-caption text-subtle-foreground md:flex">
         <Kbd>J</Kbd>
@@ -65,16 +98,30 @@ function ReviewHeader({ position, onClose }: { position?: string; onClose: () =>
         <Kbd className="ml-2">Esc</Kbd>
         close
       </KbdGroup>
-      <Button variant="ghost" size="icon-sm" aria-label="Close review" onClick={onClose} className="text-muted-foreground">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Close review"
+        onClick={onClose}
+        className="text-muted-foreground"
+      >
         <X />
       </Button>
     </TitleBar>
   );
 }
 
-function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void }) {
+function ReviewSummary({
+  thread,
+  onSkip,
+}: {
+  thread: Thread;
+  onSkip: () => void;
+}) {
   const summary = summarize(thread.activity);
-  const latest = thread.activity.findLast((a) => a.kind === 'message' && a.who !== 'you' && a.who !== 'harness');
+  const latest = thread.activity.findLast(
+    (a) => a.kind === 'message' && a.who !== 'you' && a.who !== 'harness',
+  );
   const doneCount = thread.steps.filter((s) => s.status === 'done').length;
   const liveSteps = thread.steps.filter((s) => s.status !== 'dropped');
 
@@ -82,8 +129,16 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
     <Card size="sm" className="min-h-0">
       <CardHeader>
         <CardDescription className="flex min-w-0 items-center gap-1.5 type-caption">
-          <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: lineColor(thread.line) }} />
-          {!!thread.repo && <span className="min-w-0 truncate font-mono">{thread.repo.branch}</span>}
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full"
+            style={{ background: lineColor(thread.line) }}
+          />
+          {!!thread.repo && (
+            <span className="min-w-0 truncate font-mono">
+              {thread.repo.branch}
+            </span>
+          )}
           <ProviderMarks providers={thread.providers} size={12} />
         </CardDescription>
         <CardTitle>{thread.title}</CardTitle>
@@ -97,20 +152,44 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
               <span className="tabular">
                 {doneCount} of {liveSteps.length} steps done
               </span>
-              {summary.added + summary.removed > 0 && <DiffStat added={summary.added} removed={summary.removed} />}
+              {summary.added + summary.removed > 0 && (
+                <DiffStat added={summary.added} removed={summary.removed} />
+              )}
             </span>
           </Fact>
           <Fact label="Pull requests">
             {thread.prs.length === 0 ? (
-              <span className="text-subtle-foreground">{thread.repo ? 'None yet. Push and open one from the diff.' : 'None. This chat has no project.'}</span>
+              <span className="text-subtle-foreground">
+                {thread.repo
+                  ? 'None yet. Push and open one from the diff.'
+                  : 'None. This chat has no project.'}
+              </span>
             ) : (
               <ul className="flex flex-col gap-1">
                 {thread.prs.map((pr) => (
-                  <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr} align="start">
-                    <li tabIndex={0} className="flex min-w-0 items-center gap-2">
-                      <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
+                  <ThreadPrHoverCard
+                    key={pr.number}
+                    thread={thread}
+                    pr={pr}
+                    align="start"
+                  >
+                    <li
+                      tabIndex={0}
+                      className="flex min-w-0 items-center gap-2"
+                    >
+                      <span
+                        className={
+                          pr.state === 'open'
+                            ? 'tabular text-success'
+                            : 'tabular text-muted-foreground'
+                        }
+                      >
+                        #{pr.number}
+                      </span>
                       <span className="min-w-0 truncate">{pr.title}</span>
-                      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
+                      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">
+                        {pr.state}
+                      </span>
                     </li>
                   </ThreadPrHoverCard>
                 ))}
@@ -126,16 +205,30 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
   );
 }
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function Fact({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-1">
       <h3 className="type-caption text-subtle-foreground">{label}</h3>
-      <div className="type-body text-pretty whitespace-pre-line">{children}</div>
+      <div className="type-body text-pretty whitespace-pre-line">
+        {children}
+      </div>
     </section>
   );
 }
 
-function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void }) {
+function ReviewActions({
+  thread,
+  onSkip,
+}: {
+  thread: Thread;
+  onSkip: () => void;
+}) {
   const { state, dispatch } = useHarness();
   const withUndo = useUndoable();
   const { confirm, dialog } = useConfirm();
@@ -146,12 +239,16 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
   const approve = async () => {
     const ok = await confirm({
       title: `Mark "${thread.title}" done?`,
-      description: openPrs.length ? `The thread settles. ${openPrs.map((p) => `#${p.number}`).join(', ')} stay open on GitHub; merge them there.` : 'The thread settles.',
+      description: openPrs.length
+        ? `The thread settles. ${openPrs.map((p) => `#${p.number}`).join(', ')} stay open on GitHub; merge them there.`
+        : 'The thread settles.',
       confirm: 'Mark done',
       cancel: 'Not yet',
     });
     if (!ok) return;
-    const item = state.queue.find((q) => q.kind === 'review' && q.threadId === thread.id);
+    const item = state.queue.find(
+      (q) => q.kind === 'review' && q.threadId === thread.id,
+    );
     withUndo(`Marked ${thread.title} done`, () => {
       if (item) dispatch({ type: 'answer', queueId: item.id });
       dispatch({ type: 'settle', threadId: thread.id });
@@ -161,7 +258,15 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
   const requestChanges = () => {
     const text = message.trim();
     if (!text) return;
-    withUndo('Changes requested. The agent is back on it.', () => dispatch({ type: 'send', threadId: thread.id, text, drift: 'scope-add', reason: 'review feedback' }));
+    withUndo('Changes requested. The agent is back on it.', () =>
+      dispatch({
+        type: 'send',
+        threadId: thread.id,
+        text,
+        drift: 'scope-add',
+        reason: 'review feedback',
+      }),
+    );
   };
 
   if (isRequesting)
@@ -178,7 +283,8 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && isMod(e)) e.currentTarget.form?.requestSubmit();
+            if (e.key === 'Enter' && isMod(e))
+              e.currentTarget.form?.requestSubmit();
             if (e.key === 'Escape') setRequesting(false);
           }}
           placeholder="What should the agent change?"
@@ -186,7 +292,12 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
           className="min-h-20 resize-none text-sm"
         />
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={() => setRequesting(false)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setRequesting(false)}
+          >
             Cancel
           </Button>
           <Button type="submit" size="sm" disabled={!message.trim()}>
@@ -206,7 +317,12 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
         <MessageEdit data-icon="inline-start" />
         Request changes
       </Button>
-      <Button variant="ghost" size="sm" onClick={onSkip} className="ml-auto text-muted-foreground">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onSkip}
+        className="ml-auto text-muted-foreground"
+      >
         Skip
         <SkipForward data-icon="inline-end" />
       </Button>
@@ -218,12 +334,24 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
 /** The thread's Changes and Preview tabs, reused as-is; the preview shares the pane's page when the thread has one. */
 function ReviewSurface({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const pane: Pane = state.panes.find((p) => p.threadId === thread.id) ?? { threadId: thread.id, isOpen: false, tabs: [], activeTab: '' };
-  const preview = pane.tabs.find((t) => t.kind === 'browser') ?? reviewPreviewTab(thread);
-  const changes: PaneTab = pane.tabs.find((t) => t.kind === 'changes') ?? { id: 'review-changes', kind: 'changes' };
+  const pane: Pane = state.panes.find((p) => p.threadId === thread.id) ?? {
+    threadId: thread.id,
+    isOpen: false,
+    tabs: [],
+    activeTab: '',
+  };
+  const preview =
+    pane.tabs.find((t) => t.kind === 'browser') ?? reviewPreviewTab(thread);
+  const changes: PaneTab = pane.tabs.find((t) => t.kind === 'changes') ?? {
+    id: 'review-changes',
+    kind: 'changes',
+  };
 
   return (
-    <Tabs defaultValue="diff" className="min-h-0 flex-1 gap-0 overflow-hidden rounded-2xl bg-sidebar">
+    <Tabs
+      defaultValue="diff"
+      className="min-h-0 flex-1 gap-0 overflow-hidden rounded-2xl bg-sidebar"
+    >
       <TabsList variant="line" className="mx-3 mt-1.5 shrink-0">
         <TabsTrigger value="diff">Diff</TabsTrigger>
         <TabsTrigger value="preview">Preview</TabsTrigger>
@@ -239,7 +367,11 @@ function ReviewSurface({ thread }: { thread: Thread }) {
 }
 
 function reviewPreviewTab(thread: Thread): PaneTab {
-  return { id: 'review-preview', kind: 'browser', url: defaultBrowserUrl(listeningPorts(thread.id)) };
+  return {
+    id: 'review-preview',
+    kind: 'browser',
+    url: defaultBrowserUrl(listeningPorts(thread.id)),
+  };
 }
 
 function NothingToReview({ onClose }: { onClose: () => void }) {
@@ -250,7 +382,9 @@ function NothingToReview({ onClose }: { onClose: () => void }) {
           <CheckCircle />
         </EmptyMedia>
         <EmptyTitle>Nothing to review</EmptyTitle>
-        <EmptyDescription>Threads land here when every step is done.</EmptyDescription>
+        <EmptyDescription>
+          Threads land here when every step is done.
+        </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button variant="outline" size="sm" onClick={onClose}>
@@ -267,12 +401,16 @@ function useReviewKeys(step: (by: 1 | -1) => void, close: () => void) {
       if (e.defaultPrevented) return;
       if (isCommand(e, 'list-next')) return step(1);
       if (isCommand(e, 'list-previous')) return step(-1);
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable], [role=dialog], [role=alertdialog]')) return;
-      if (e.key === 'Escape') close();
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest(
+          'input, textarea, [contenteditable], [role=dialog], [role=alertdialog]',
+        )
+      )
+        return;
+      if (isCommand(e, 'dismiss')) close();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenKeydown(onKey);
   }, [step, close]);
 }
 

@@ -4,7 +4,7 @@ import type { Manifest } from './manifest.ts';
 
 /**
  * VS Code color themes (DESIGN.md › Color themes): Open VSX's Themes category and the user's own theme files. The desktop
- * app keeps them under userData/themes; the web build keeps them in localStorage. Main reads only `extension/package.json`
+ * app keeps them under userData/themes; the web build keeps them in browser storage. Main reads only `extension/package.json`
  * and the theme files it names from a downloaded .vsix, never extracting or running anything else.
  */
 export interface ThemesHost {
@@ -12,8 +12,18 @@ export interface ThemesHost {
   list(): Promise<ColorTheme[]>;
   search(query: string, offset: number): Promise<SearchResult>;
   /** A version's themes, downloaded and read for preview without installing. */
-  inspect(namespace: string, name: string, version: string, displayName: string): Promise<ColorTheme[]>;
-  install(namespace: string, name: string, version: string, displayName: string): Promise<ColorTheme[]>;
+  inspect(
+    namespace: string,
+    name: string,
+    version: string,
+    displayName: string,
+  ): Promise<ColorTheme[]>;
+  install(
+    namespace: string,
+    name: string,
+    version: string,
+    displayName: string,
+  ): Promise<ColorTheme[]>;
   uninstall(namespace: string, name: string): Promise<void>;
   /** The OS file picker for a .json/.jsonc theme, `include`s resolved next to it; null when dismissed. */
   importFile(): Promise<ColorTheme | null>;

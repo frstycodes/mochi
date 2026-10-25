@@ -1,19 +1,22 @@
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { app, type WebContents } from 'electron';
+import {
+  runCommand,
+  spawnCommand,
+  type CoreChild,
+} from '@mochi/core/runClient';
 import type { SimFrame } from '../../src/host/types/sim.ts';
 import { frameSplitter } from './parse.ts';
 import helperSource from './simhelper.swift?raw';
 
-const run = promisify(execFile);
+const COMPILE_TIMEOUT_MS = 5 * 60_000;
 
 interface Stream {
   /** Unset while the helper compiles. */
-  child?: ChildProcessWithoutNullStreams;
+  child?: CoreChild;
   viewers: Set<WebContents>;
   size: Promise<{ width: number; height: number }>;
   /** Replayed to viewers that join an idle screen: the helper only sends frames when the screen changes. */
@@ -24,14 +27,17 @@ const streams = new Map<string, Stream>();
 let helperPath: Promise<string> | undefined;
 
 export async function developerDir() {
-  const { stdout } = await run('xcode-select', ['-p']);
+  const { stdout } = await runCommand('xcode-select', ['-p'], {
+    timeout: 10_000,
+  });
   return stdout.trim();
 }
 
 /** Starts (or joins) the helper for `udid` and forwards its frames to `viewer` until it stops or the viewer goes away. */
 export function startStream(udid: string, viewer: WebContents) {
   const stream = streams.get(udid) ?? spawnStream(udid);
-  if (!stream.viewers.has(viewer)) viewer.once('destroyed', () => leave(udid, viewer));
+  if (!stream.viewers.has(viewer))
+    viewer.once('destroyed', () => leave(udid, viewer));
   stream.viewers.add(viewer);
   if (stream.lastFrame) viewer.send('sim:onFrame', stream.lastFrame);
   return stream.size;
@@ -65,28 +71,33 @@ function leave(udid: string, viewer: WebContents) {
 function spawnStream(udid: string): Stream {
   let resolveSize!: (size: { width: number; height: number }) => void;
   let rejectSize!: (error: Error) => void;
-  const size = new Promise<{ width: number; height: number }>((resolve, reject) => ((resolveSize = resolve), (rejectSize = reject)));
+  const size = new Promise<{ width: number; height: number }>(
+    (resolve, reject) => ((resolveSize = resolve), (rejectSize = reject)),
+  );
   const stream: Stream = { viewers: new Set(), size };
   streams.set(udid, stream);
 
   Promise.all([compileHelper(), developerDir()])
     .then(([binary, devDir]) => {
       if (streams.get(udid) !== stream) return;
-      const child = spawn(binary, [devDir, udid]);
+      const child = spawnCommand(binary, [devDir, udid]);
       stream.child = child;
       child.stdout.on(
         'data',
         frameSplitter((data) => {
           const frame: SimFrame = { udid, data, mime: 'image/jpeg' };
           stream.lastFrame = frame;
-          for (const viewer of stream.viewers) if (!viewer.isDestroyed()) viewer.send('sim:onFrame', frame);
+          for (const viewer of stream.viewers)
+            if (!viewer.isDestroyed()) viewer.send('sim:onFrame', frame);
         }),
       );
       child.stderr.setEncoding('utf8').on('data', (text: string) => {
         for (const line of text.split('\n')) {
           const ready = /^ready (\d+) (\d+)$/.exec(line);
-          if (ready) resolveSize({ width: Number(ready[1]), height: Number(ready[2]) });
-          else if (line.startsWith('error ')) rejectSize(new Error(line.slice(6)));
+          if (ready)
+            resolveSize({ width: Number(ready[1]), height: Number(ready[2]) });
+          else if (line.startsWith('error '))
+            rejectSize(new Error(line.slice(6)));
         }
       });
       child.on('exit', (code) => {
@@ -104,18 +115,25 @@ function spawnStream(udid: string): Stream {
 // Compiled on first use, keyed by source hash, so the app ships Swift source instead of a signed binary.
 function compileHelper() {
   helperPath ??= (async () => {
-    const hash = createHash('sha256').update(helperSource).digest('hex').slice(0, 12);
+    const hash = createHash('sha256')
+      .update(helperSource)
+      .digest('hex')
+      .slice(0, 12);
     const dir = path.join(app.getPath('userData'), 'simulator');
     const binary = path.join(dir, `simhelper-${hash}`);
     if (existsSync(binary)) return binary;
     await mkdir(dir, { recursive: true });
     const source = path.join(dir, `simhelper-${hash}.swift`);
     await writeFile(source, helperSource);
-    await run('xcrun', ['swiftc', '-O', source, '-o', binary]);
+    await runCommand('xcrun', ['swiftc', '-O', source, '-o', binary], {
+      timeout: COMPILE_TIMEOUT_MS,
+    });
     return binary;
   })().catch((error: Error) => {
     helperPath = undefined;
-    throw new Error(`Couldn't compile the simulator helper (needs Xcode): ${error.message}`);
+    throw new Error(
+      `Couldn't compile the simulator helper (needs Xcode): ${error.message}`,
+    );
   });
   return helperPath;
 }

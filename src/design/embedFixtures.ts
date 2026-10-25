@@ -14,7 +14,28 @@ export const TICTACTOE_WIDGET = `<style>
 <div style="font-size:12px;color:var(--muted-foreground)">Player X, you're up.</div></div>
 <script>let x=true;document.querySelectorAll('.b button').forEach(b=>b.onclick=()=>{if(b.textContent)return;b.textContent=x?'X':'O';x=!x})</script>`;
 
-const ROWS = ['api-gateway', 'auth', 'billing', 'search', 'notifications', 'media', 'ledger', 'webhooks', 'scheduler', 'exports', 'imports', 'audit', 'flags', 'sessions', 'reports', 'mailer', 'geo', 'pricing', 'inventory', 'checkout'];
+const ROWS = [
+  'api-gateway',
+  'auth',
+  'billing',
+  'search',
+  'notifications',
+  'media',
+  'ledger',
+  'webhooks',
+  'scheduler',
+  'exports',
+  'imports',
+  'audit',
+  'flags',
+  'sessions',
+  'reports',
+  'mailer',
+  'geo',
+  'pricing',
+  'inventory',
+  'checkout',
+];
 
 export const TALL_WIDGET = `<style>
 .l{display:flex;flex-direction:column;padding:8px 0}
@@ -23,12 +44,23 @@ export const TALL_WIDGET = `<style>
 .d{width:6px;height:6px;border-radius:50%;background:var(--success)}
 </style><div class="l">${ROWS.map((name, i) => `<div class="r"><span class="d"></span><span>${name}</span><span>p95 ${120 + ((i * 37) % 260)} ms</span></div>`).join('')}</div>`;
 
-export const CHART_FENCE = JSON.stringify({ type: 'bar', title: 'Deploys per day', x: 'day', series: ['deploys'], data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day, i) => ({ day, deploys: [4, 7, 3, 9, 6][i] })) });
+export const CHART_FENCE = JSON.stringify({
+  type: 'bar',
+  title: 'Deploys per day',
+  x: 'day',
+  series: ['deploys'],
+  data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day, i) => ({
+    day,
+    deploys: [4, 7, 3, 9, 6][i],
+  })),
+});
 
-export const BROKEN_CHART_FENCE = '{ "type": "bar", "x": "day", "data": [ { "day": "Mon", ';
+export const BROKEN_CHART_FENCE =
+  '{ "type": "bar", "x": "day", "data": [ { "day": "Mon", ';
 
 /** Markdown for the Embeds section's code block and table, as an agent would write them. */
-export const CODE_MARKDOWN = '```diff\n- const frame = "bezeled";\n+ const frame = "flush";\n  render(frame);\n```';
+export const CODE_MARKDOWN =
+  '```diff\n- const frame = "bezeled";\n+ const frame = "flush";\n  render(frame);\n```';
 
 export const TABLE_MARKDOWN = `| Service | p95 (ms) | Errors |
 | --- | --- | --- |
@@ -36,4 +68,5 @@ export const TABLE_MARKDOWN = `| Service | p95 (ms) | Errors |
 | auth | 41 | 0.1% |
 | billing | 96 | 1.2% |`;
 
-export const MERMAID_MARKDOWN = '```mermaid\ngraph LR\n  A[Request] --> B{Cached?}\n  B -- yes --> C[Return]\n  B -- no --> D[Fetch] --> C\n```';
+export const MERMAID_MARKDOWN =
+  '```mermaid\ngraph LR\n  A[Request] --> B{Cached?}\n  B -- yes --> C[Return]\n  B -- no --> D[Fetch] --> C\n```';

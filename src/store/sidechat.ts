@@ -1,4 +1,5 @@
-import type { Action, State } from './index.tsx';
+import { persistedSlice } from '../lib/uiStorage.ts';
+import type { Action, State } from './types.ts';
 import type { ModelChoice } from '../host/types/settings.ts';
 import { projectRef } from '../projects.ts';
 import { panesReducer } from './panes.ts';
@@ -39,16 +40,44 @@ export interface SideChatState {
 
 export type SideChatAction =
   | { type: 'sidechat-open'; threadId: string; quote?: Quote; ask?: string }
-  | { type: 'sidechat-model'; threadId: string; tabId: string; model: ModelChoice }
+  | {
+      type: 'sidechat-model';
+      threadId: string;
+      tabId: string;
+      model: ModelChoice;
+    }
   | { type: 'sidechat-draft'; threadId: string; tabId: string; quote?: Quote }
-  | { type: 'sidechat-ask'; threadId: string; tabId: string; id: string; text: string }
-  | { type: 'sidechat-stream'; threadId: string; tabId: string; id: string; text: string; isDone?: boolean }
+  | {
+      type: 'sidechat-ask';
+      threadId: string;
+      tabId: string;
+      id: string;
+      text: string;
+    }
+  | {
+      type: 'sidechat-stream';
+      threadId: string;
+      tabId: string;
+      id: string;
+      text: string;
+      isDone?: boolean;
+    }
   | { type: 'sidechat-clear'; threadId: string; tabId: string }
   /** Every side chat at once: Settings › Data and storage clears them and its undo puts them back. */
   | { type: 'sidechat-replace'; sidechats: SideChatState['sidechats'] }
-  | { type: 'sidechat-promote'; threadId: string; tabId: string; id: string; to: 'message' | 'thread' };
+  | {
+      type: 'sidechat-promote';
+      threadId: string;
+      tabId: string;
+      id: string;
+      to: 'message' | 'thread';
+    };
 
 export const SIDECHAT_STORAGE_KEY = 'harness.sidechat.v1';
+const storageSlice = persistedSlice<SideChatState['sidechats']>(
+  SIDECHAT_STORAGE_KEY,
+  {},
+);
 const EMPTY: SideChat = { messages: [] };
 
 export function initialSideChat(saved = loadSideChats()): SideChatState {
@@ -60,20 +89,52 @@ export function sidechatReducer(state: State, action: Action): State {
     case 'sidechat-open':
       return open(state, action.threadId, action.quote, action.ask);
     case 'sidechat-model':
-      return patchChat(state, action.threadId, action.tabId, (c) => ({ ...c, model: action.model }));
+      return patchChat(state, action.threadId, action.tabId, (c) => ({
+        ...c,
+        model: action.model,
+      }));
     case 'sidechat-draft':
-      return patchChat(state, action.threadId, action.tabId, (c) => ({ ...c, draft: action.quote }));
+      return patchChat(state, action.threadId, action.tabId, (c) => ({
+        ...c,
+        draft: action.quote,
+      }));
     case 'sidechat-ask': {
-      const question: SideMessage = { id: `${action.id}-q`, role: 'user', text: action.text };
-      const answer: SideMessage = { id: action.id, role: 'assistant', text: '', isStreaming: true };
-      return patchChat(state, action.threadId, action.tabId, (c) => ({ model: c.model, messages: [...c.messages, { ...question, quote: c.draft }, answer] }));
+      const question: SideMessage = {
+        id: `${action.id}-q`,
+        role: 'user',
+        text: action.text,
+      };
+      const answer: SideMessage = {
+        id: action.id,
+        role: 'assistant',
+        text: '',
+        isStreaming: true,
+      };
+      return patchChat(state, action.threadId, action.tabId, (c) => ({
+        model: c.model,
+        messages: [...c.messages, { ...question, quote: c.draft }, answer],
+      }));
     }
     case 'sidechat-stream':
-      return patchMessage(state, action, (m) => ({ ...m, text: m.text + action.text, isStreaming: !action.isDone }));
+      return patchMessage(state, action, (m) => ({
+        ...m,
+        text: m.text + action.text,
+        isStreaming: !action.isDone,
+      }));
     case 'sidechat-clear':
-      return patchChat(state, action.threadId, action.tabId, (c) => ({ ...EMPTY, model: c.model }));
+      return patchChat(state, action.threadId, action.tabId, (c) => ({
+        ...EMPTY,
+        model: c.model,
+      }));
     case 'delete':
-      return { ...state, sidechats: Object.fromEntries(Object.entries(state.sidechats).filter(([id]) => !action.threadIds.includes(id))) };
+      return {
+        ...state,
+        sidechats: Object.fromEntries(
+          Object.entries(state.sidechats).filter(
+            ([id]) => !action.threadIds.includes(id),
+          ),
+        ),
+      };
     case 'sidechat-replace':
       return { ...state, sidechats: action.sidechats };
     case 'sidechat-promote':
@@ -83,7 +144,11 @@ export function sidechatReducer(state: State, action: Action): State {
   }
 }
 
-export function chatFor(state: SideChatState, threadId: string, tabId: string): SideChat {
+export function chatFor(
+  state: SideChatState,
+  threadId: string,
+  tabId: string,
+): SideChat {
   return state.sidechats[threadId]?.[tabId] ?? EMPTY;
 }
 
@@ -94,40 +159,69 @@ export function questionText(message: SideMessage) {
   return `${quoted}\n\n${message.text}`;
 }
 
-export const SOURCE_NAMES = { diff: 'Diff hunk', terminal: 'Terminal output', file: 'File range' } satisfies Record<QuoteSource, string>;
+export const SOURCE_NAMES = {
+  diff: 'Diff hunk',
+  terminal: 'Terminal output',
+  file: 'File range',
+} satisfies Record<QuoteSource, string>;
 
 export function saveSideChats(sidechats: SideChatState['sidechats']) {
-  try {
-    localStorage.setItem(SIDECHAT_STORAGE_KEY, JSON.stringify(sidechats));
-  } catch {
-    // Storage blocked (private window, artifact sandbox): side chats last for the session.
-  }
+  storageSlice.setState({ value: sidechats });
 }
 
 function loadSideChats(): SideChatState['sidechats'] {
   try {
-    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(SIDECHAT_STORAGE_KEY);
-    const saved: SideChatState['sidechats'] = raw ? JSON.parse(raw) : {};
+    const saved = storageSlice.getState().value;
     // A reload cuts any answer mid-stream; its listener is gone, so it would spin forever.
-    return mapChats(saved, ({ pending: _, ...c }) => ({ ...c, messages: c.messages.map((m) => ({ ...m, isStreaming: false })) }));
+    return mapChats(saved, ({ pending: _, ...c }) => ({
+      ...c,
+      messages: c.messages.map((m) => ({ ...m, isStreaming: false })),
+    }));
   } catch {
     return {};
   }
 }
 
 /** Reuses the thread's newest side chat tab, else opens one, and parks the quote in its composer or the question to ask. */
-function open(state: State, threadId: string, quote?: Quote, ask?: string): State {
-  const existing = state.panes.find((p) => p.threadId === threadId)?.tabs.findLast((t) => t.kind === 'sidechat' && !t.isPopped);
+function open(
+  state: State,
+  threadId: string,
+  quote?: Quote,
+  ask?: string,
+): State {
+  const existing = state.panes
+    .find((p) => p.threadId === threadId)
+    ?.tabs.findLast((t) => t.kind === 'sidechat' && !t.isPopped);
   const next = existing
-    ? panesReducer(state, { type: 'pane-select-tab', threadId, tabId: existing.id })
-    : panesReducer(state, { type: 'pane-open-tab', threadId, kind: 'sidechat' });
-  const opened = { ...next, panes: next.panes.map((p) => (p.threadId === threadId ? { ...p, isOpen: true } : p)) };
+    ? panesReducer(state, {
+        type: 'pane-select-tab',
+        threadId,
+        tabId: existing.id,
+      })
+    : panesReducer(state, {
+        type: 'pane-open-tab',
+        threadId,
+        kind: 'sidechat',
+      });
+  const opened = {
+    ...next,
+    panes: next.panes.map((p) =>
+      p.threadId === threadId ? { ...p, isOpen: true } : p,
+    ),
+  };
   const tabId = opened.panes.find((p) => p.threadId === threadId)!.activeTab;
   if (!quote && !ask) return opened;
-  return patchChat(opened, threadId, tabId, (c) => ({ ...c, ...(quote && { draft: quote }), ...(ask && { pending: ask }) }));
+  return patchChat(opened, threadId, tabId, (c) => ({
+    ...c,
+    ...(quote && { draft: quote }),
+    ...(ask && { pending: ask }),
+  }));
 }
 
-function promote(state: State, action: Extract<Action, { type: 'sidechat-promote' }>): State {
+function promote(
+  state: State,
+  action: Extract<Action, { type: 'sidechat-promote' }>,
+): State {
   const thread = state.threads.find((t) => t.id === action.threadId);
   const messages = chatFor(state, action.threadId, action.tabId).messages;
   const i = messages.findIndex((m) => m.id === action.id);
@@ -135,22 +229,69 @@ function promote(state: State, action: Extract<Action, { type: 'sidechat-promote
   if (!thread || !answer || answer.isStreaming) return state;
   const question = messages[i - 1];
   const text = `From the side chat:\n\n${answer.text}`;
-  const marked = patchMessage(state, action, (m) => ({ ...m, promotedTo: action.to }));
-  if (action.to === 'message') return threadsReducer(marked, { type: 'say', threadId: thread.id, entry: { who: 'you', kind: 'message', text } });
+  const marked = patchMessage(state, action, (m) => ({
+    ...m,
+    promotedTo: action.to,
+  }));
+  if (action.to === 'message')
+    return threadsReducer(marked, {
+      type: 'say',
+      threadId: thread.id,
+      entry: { who: 'you', kind: 'message', text },
+    });
   const newId = `new-${state.seq}`;
-  const created = threadsReducer(marked, { type: 'create', title: question?.text || answer.text.split('\n')[0], provider: thread.providers[0], project: projectRef(thread.repo), controls: thread.controls, isLive: !!thread.live });
-  return threadsReducer(created, { type: 'say', threadId: newId, entry: { who: 'you', kind: 'message', text } });
+  const created = threadsReducer(marked, {
+    type: 'create',
+    title: question?.text || answer.text.split('\n')[0],
+    provider: thread.providers[0],
+    project: projectRef(thread.repo),
+    controls: thread.controls,
+    isLive: !!thread.live,
+  });
+  return threadsReducer(created, {
+    type: 'say',
+    threadId: newId,
+    entry: { who: 'you', kind: 'message', text },
+  });
 }
 
-function patchChat(state: State, threadId: string, tabId: string, fn: (chat: SideChat) => SideChat): State {
+function patchChat(
+  state: State,
+  threadId: string,
+  tabId: string,
+  fn: (chat: SideChat) => SideChat,
+): State {
   const byTab = state.sidechats[threadId] ?? {};
-  return { ...state, sidechats: { ...state.sidechats, [threadId]: { ...byTab, [tabId]: fn(byTab[tabId] ?? EMPTY) } } };
+  return {
+    ...state,
+    sidechats: {
+      ...state.sidechats,
+      [threadId]: { ...byTab, [tabId]: fn(byTab[tabId] ?? EMPTY) },
+    },
+  };
 }
 
-function patchMessage(state: State, at: { threadId: string; tabId: string; id: string }, fn: (m: SideMessage) => SideMessage): State {
-  return patchChat(state, at.threadId, at.tabId, (c) => ({ ...c, messages: c.messages.map((m) => (m.id === at.id ? fn(m) : m)) }));
+function patchMessage(
+  state: State,
+  at: { threadId: string; tabId: string; id: string },
+  fn: (m: SideMessage) => SideMessage,
+): State {
+  return patchChat(state, at.threadId, at.tabId, (c) => ({
+    ...c,
+    messages: c.messages.map((m) => (m.id === at.id ? fn(m) : m)),
+  }));
 }
 
-function mapChats(all: SideChatState['sidechats'], fn: (chat: SideChat) => SideChat) {
-  return Object.fromEntries(Object.entries(all).map(([threadId, byTab]) => [threadId, Object.fromEntries(Object.entries(byTab).map(([tabId, chat]) => [tabId, fn(chat)]))]));
+function mapChats(
+  all: SideChatState['sidechats'],
+  fn: (chat: SideChat) => SideChat,
+) {
+  return Object.fromEntries(
+    Object.entries(all).map(([threadId, byTab]) => [
+      threadId,
+      Object.fromEntries(
+        Object.entries(byTab).map(([tabId, chat]) => [tabId, fn(chat)]),
+      ),
+    ]),
+  );
 }

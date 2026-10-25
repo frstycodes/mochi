@@ -1,5 +1,11 @@
 import { randomInt } from 'node:crypto';
-import { fillName, type CaptureKind, type SetupRecipe, type SetupResult, type SetupTarget } from '../../src/library/recipes.ts';
+import {
+  fillName,
+  type CaptureKind,
+  type SetupRecipe,
+  type SetupResult,
+  type SetupTarget,
+} from '../../src/library/recipes.ts';
 
 /** What a run does to a page; Playwright's in the app (`playwrightOps`), a fake in tests. */
 export interface RecipeOps {
@@ -16,7 +22,10 @@ export interface RecipeOps {
   /** Every match's text once the first shows, or none within `timeoutMs`. */
   texts(target: SetupTarget, timeoutMs: number): Promise<string[]>;
   /** The element's value, else what clicking it copies, whichever `isValid`; '' when neither is. */
-  capture(target: SetupTarget, isValid: (value: string) => boolean): Promise<string>;
+  capture(
+    target: SetupTarget,
+    isValid: (value: string) => boolean,
+  ): Promise<string>;
 }
 
 const VALID: Record<CaptureKind, (value: string) => boolean> = {
@@ -32,51 +41,116 @@ const WAIT_MS = 60_000;
 const PRESENT_MS = 3000;
 
 /** Runs `recipe` from `fromStep` (or the top) to the end, or to the first step that needs the user or fails. */
-export async function runRecipe(recipe: SetupRecipe, params: Record<string, string>, ops: RecipeOps, fromStep?: string) {
+export async function runRecipe(
+  recipe: SetupRecipe,
+  params: Record<string, string>,
+  ops: RecipeOps,
+  fromStep?: string,
+) {
   const values = { ...params };
-  for (const [key, param] of Object.entries(recipe.params)) if (param.generate === 'suffix' && !values[key]) values[key] = String(randomInt(100_000, 1_000_000));
+  for (const [key, param] of Object.entries(recipe.params))
+    if (param.generate === 'suffix' && !values[key])
+      values[key] = String(randomInt(100_000, 1_000_000));
   // Defaults that name another param ({email}) wait for it: a choose step may set it mid-run.
   const fillDefaults = () => {
     for (const [key, param] of Object.entries(recipe.params)) {
-      const value = param.default === undefined ? undefined : fillName(param.default, values);
-      if (!values[key] && value !== undefined && !/\{\w+\}/.test(value)) values[key] = value;
+      const value =
+        param.default === undefined
+          ? undefined
+          : fillName(param.default, values);
+      if (!values[key] && value !== undefined && !/\{\w+\}/.test(value))
+        values[key] = value;
     }
   };
   fillDefaults();
   const captured: Partial<Record<CaptureKind, string>> = {};
   const start = fromStep ? recipe.steps.findIndex((s) => s.id === fromStep) : 0;
-  if (start < 0) throw new Error(`No step ${fromStep}; its steps are ${recipe.steps.map((s) => s.id).join(', ')}`);
-  const own = () => Object.fromEntries(Object.keys(recipe.params).flatMap((k) => (values[k] ? [[k, values[k]]] : [])));
+  if (start < 0)
+    throw new Error(
+      `No step ${fromStep}; its steps are ${recipe.steps.map((s) => s.id).join(', ')}`,
+    );
+  const own = () =>
+    Object.fromEntries(
+      Object.keys(recipe.params).flatMap((k) =>
+        values[k] ? [[k, values[k]]] : [],
+      ),
+    );
   for (let i = start; i < recipe.steps.length; i++) {
     const step = recipe.steps[i];
     fillDefaults();
     const target = 'target' in step ? fill(step.target, values) : undefined;
-    const stop = (reason: string, isExpected = false) => ({ result: { status: 'stopped', stepId: step.id, note: step.note, kind: step.kind, target, nextStepId: recipe.steps[i + 1]?.id, reason, params: own(), ...(isExpected && { isExpected: true as const }) } satisfies SetupResult, captured, params: own() });
-    const needs = (param: string, options: string[]) => ({ result: { status: 'needs', stepId: step.id, param, question: recipe.params[param]?.question ?? `Which ${param}?`, options } satisfies SetupResult, captured, params: own() });
+    const stop = (reason: string, isExpected = false) => ({
+      result: {
+        status: 'stopped',
+        stepId: step.id,
+        note: step.note,
+        kind: step.kind,
+        target,
+        nextStepId: recipe.steps[i + 1]?.id,
+        reason,
+        params: own(),
+        ...(isExpected && { isExpected: true as const }),
+      } satisfies SetupResult,
+      captured,
+      params: own(),
+    });
+    const needs = (param: string, options: string[]) => ({
+      result: {
+        status: 'needs',
+        stepId: step.id,
+        param,
+        question: recipe.params[param]?.question ?? `Which ${param}?`,
+        options,
+      } satisfies SetupResult,
+      captured,
+      params: own(),
+    });
     try {
       if (step.kind === 'end') break;
       if (step.kind === 'ask') {
-        if (!values[step.param]) return needs(step.param, recipe.params[step.param]?.options ?? []);
+        if (!values[step.param])
+          return needs(step.param, recipe.params[step.param]?.options ?? []);
         continue;
       }
       if (step.kind === 'goto') await ops.goto(fillName(step.url, values));
-      if (!isOn(ops.url(), recipe.domains)) return stop(`The page left ${recipe.domains.join(', ')} (now ${hostOf(ops.url())}): the user may need to sign in there first`);
+      if (!isOn(ops.url(), recipe.domains))
+        return stop(
+          `The page left ${recipe.domains.join(', ')} (now ${hostOf(ops.url())}): the user may need to sign in there first`,
+        );
       if (step.kind === 'click') await ops.click(target!);
-      if (step.kind === 'fill') await ops.fill(target!, fillName(step.value, values), !!step.submit);
-      if (step.kind === 'wait' && !(await waitOrStop(ops, fillName(step.text, values), step.timeoutMs ?? WAIT_MS, step.stopText))) return stop(fillName(step.reason!, values), true);
+      if (step.kind === 'fill')
+        await ops.fill(target!, fillName(step.value, values), !!step.submit);
+      if (
+        step.kind === 'wait' &&
+        !(await waitOrStop(
+          ops,
+          fillName(step.text, values),
+          step.timeoutMs ?? WAIT_MS,
+          step.stopText,
+        ))
+      )
+        return stop(fillName(step.reason!, values), true);
       if (step.kind === 'read') {
         const pattern = new RegExp(step.pattern);
-        const value = (await ops.texts(target!, PRESENT_MS)).map((t) => pattern.exec(t.trim())?.[1]).find(Boolean);
+        const value = (await ops.texts(target!, PRESENT_MS))
+          .map((t) => pattern.exec(t.trim())?.[1])
+          .find(Boolean);
         if (value) {
           values[step.param] = value;
           i = recipe.steps.findIndex((s) => s.id === step.to) - 1;
         }
       }
-      if (step.kind === 'jumpIfPresent' && (await ops.isPresent(target!, PRESENT_MS))) i = recipe.steps.findIndex((s) => s.id === step.to) - 1;
-      if (step.kind === 'stopIf' && (await ops.isPresent(target!, PRESENT_MS))) return stop(fillName(step.reason, values), true);
+      if (
+        step.kind === 'jumpIfPresent' &&
+        (await ops.isPresent(target!, PRESENT_MS))
+      )
+        i = recipe.steps.findIndex((s) => s.id === step.to) - 1;
+      if (step.kind === 'stopIf' && (await ops.isPresent(target!, PRESENT_MS)))
+        return stop(fillName(step.reason, values), true);
       if (step.kind === 'choose') {
         const options = await ops.options(target!);
-        const value = values[step.param] ?? (options.length === 1 ? options[0] : undefined);
+        const value =
+          values[step.param] ?? (options.length === 1 ? options[0] : undefined);
         if (!value || !options.includes(value)) {
           await ops.close();
           return needs(step.param, options);
@@ -85,29 +159,63 @@ export async function runRecipe(recipe: SetupRecipe, params: Record<string, stri
         values[step.param] = value;
       }
       if (step.kind === 'capture') {
-        const value = 'urlPattern' in step ? (new RegExp(step.urlPattern).exec(ops.url())?.[1] ?? '') : await ops.capture(target!, VALID[step.as]);
-        if (!VALID[step.as](value) && 'urlPattern' in step) return stop("The page's address held nothing Mochi could keep");
-        if (!value) return stop('That element held nothing Mochi could keep (no value, and clicking it copied nothing usable)');
+        const value =
+          'urlPattern' in step
+            ? (new RegExp(step.urlPattern).exec(ops.url())?.[1] ?? '')
+            : await ops.capture(target!, VALID[step.as]);
+        if (!VALID[step.as](value) && 'urlPattern' in step)
+          return stop("The page's address held nothing Mochi could keep");
+        if (!value)
+          return stop(
+            'That element held nothing Mochi could keep (no value, and clicking it copied nothing usable)',
+          );
         captured[step.as] = value;
       }
     } catch (error) {
-      return stop((error instanceof Error ? error.message : String(error)).split('\n')[0].slice(0, 300));
+      return stop(
+        (error instanceof Error ? error.message : String(error))
+          .split('\n')[0]
+          .slice(0, 300),
+      );
     }
   }
-  return { result: { status: 'done', captured: Object.keys(captured) as CaptureKind[], params: own() } satisfies SetupResult, captured, params: own() };
+  return {
+    result: {
+      status: 'done',
+      captured: Object.keys(captured) as CaptureKind[],
+      params: own(),
+    } satisfies SetupResult,
+    captured,
+    params: own(),
+  };
 }
 
 /** False when `stopText` shows before `text`; a timeout still throws. */
-async function waitOrStop(ops: RecipeOps, text: string, timeoutMs: number, stopText?: string) {
+async function waitOrStop(
+  ops: RecipeOps,
+  text: string,
+  timeoutMs: number,
+  stopText?: string,
+) {
   if (!stopText) return ops.waitForText(text, timeoutMs).then(() => true);
   // Created first, so the page being ready wins a tie.
   const ready = ops.waitForText(text, timeoutMs).then(() => true);
-  const stopped = ops.waitForText(stopText, timeoutMs).then(() => false, () => new Promise<boolean>(() => {}));
+  const stopped = ops.waitForText(stopText, timeoutMs).then(
+    () => false,
+    () => new Promise<boolean>(() => {}),
+  );
   return Promise.race([ready, stopped]);
 }
 
-function fill(target: SetupTarget, params: Record<string, string>): SetupTarget {
-  return { ...target, ...(target.name && { name: fillName(target.name, params) }), ...(target.within && { within: fill(target.within, params) }) };
+function fill(
+  target: SetupTarget,
+  params: Record<string, string>,
+): SetupTarget {
+  return {
+    ...target,
+    ...(target.name && { name: fillName(target.name, params) }),
+    ...(target.within && { within: fill(target.within, params) }),
+  };
 }
 
 function isOn(url: string, domains: string[]) {
@@ -115,4 +223,5 @@ function isOn(url: string, domains: string[]) {
   return domains.some((d) => host === d || host.endsWith(`.${d}`));
 }
 
-const hostOf = (url: string) => (URL.canParse(url) ? new URL(url).hostname : url);
+const hostOf = (url: string) =>
+  URL.canParse(url) ? new URL(url).hostname : url;

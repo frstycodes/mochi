@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useReducedMotionConfig } from 'motion/react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 const PITCH = 9;
@@ -19,15 +20,20 @@ const RIPPLE_WIDTH = 8;
  * brightening where the light pools, a ripple spreading from it every couple of seconds, everything else twinkling. Ink is `currentColor`, so it follows the theme.
  * `onCentre` reports where the light is brightest (0–1 of the frame), so the image can land from there.
  */
-export function GeneratingDots({ className, onCentre }: { className?: string; onCentre?: (x: number, y: number) => void }) {
+export function GeneratingDots({
+  className,
+  onCentre,
+}: {
+  className?: string;
+  onCentre?: (x: number, y: number) => void;
+}) {
+  const reduced = useReducedMotionConfig();
   const ref = useRef<HTMLCanvasElement>(null);
-  const report = useRef(onCentre);
-  report.current = onCentre;
+  const report = useEffectEvent((x: number, y: number) => onCentre?.(x, y));
 
   useEffect(() => {
     const canvas = ref.current!;
     const ctx = canvas.getContext('2d')!;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let width = 0;
     let height = 0;
     let frame = 0;
@@ -69,13 +75,23 @@ export function GeneratingDots({ className, onCentre }: { className?: string; on
           const x = left + column * PITCH;
           const y = top + row * PITCH;
           let light = 0;
-          for (const g of glows) light += Math.exp(-((x - g.x) ** 2 + (y - g.y) ** 2) / g.r2);
+          for (const g of glows)
+            light += Math.exp(-((x - g.x) ** 2 + (y - g.y) ** 2) / g.r2);
           if (light > best.light) best = { light, x, y };
           const ring = Math.hypot(x - ripple.x, y - ripple.y) - ringRadius;
-          light = Math.min(1, light + ringStrength * Math.exp(-(ring * ring) / (2 * RIPPLE_WIDTH ** 2)));
+          light = Math.min(
+            1,
+            light +
+              ringStrength * Math.exp(-(ring * ring) / (2 * RIPPLE_WIDTH ** 2)),
+          );
           const seed = Math.sin(column * 12.9898 + row * 78.233) * 43758.5453;
-          const twinkle = 0.6 + 0.4 * Math.sin(now * 0.003 + (seed - Math.floor(seed)) * 6.283);
-          const edge = Math.min(1, Math.min(x, y, width - x, height - y) / EDGE);
+          const twinkle =
+            0.6 +
+            0.4 * Math.sin(now * 0.003 + (seed - Math.floor(seed)) * 6.283);
+          const edge = Math.min(
+            1,
+            Math.min(x, y, width - x, height - y) / EDGE,
+          );
           // Every dot keeps a faint floor, so the grid itself never disappears; only the light fades toward the edges.
           const alpha = FLOOR + 0.85 * light * light * twinkle * edge * edge;
           const radius = 0.5 + 0.7 * light;
@@ -87,8 +103,8 @@ export function GeneratingDots({ className, onCentre }: { className?: string; on
       }
       ctx.globalAlpha = 1;
       pooled = { x: best.x, y: best.y };
-      report.current?.(best.x / width, best.y / height);
-      if (isVisible && !reduced.matches) frame = requestAnimationFrame(draw);
+      report(best.x / width, best.y / height);
+      if (isVisible && !reduced) frame = requestAnimationFrame(draw);
     };
 
     const start = () => {
@@ -107,14 +123,21 @@ export function GeneratingDots({ className, onCentre }: { className?: string; on
     });
     resizes.observe(canvas);
     visibility.observe(canvas);
-    reduced.addEventListener('change', start);
     return () => {
       cancelAnimationFrame(frame);
       resizes.disconnect();
       visibility.disconnect();
-      reduced.removeEventListener('change', start);
     };
-  }, []);
+  }, [reduced]);
 
-  return <canvas ref={ref} aria-hidden className={cn('pointer-events-none absolute inset-0 size-full text-foreground', className)} />;
+  return (
+    <canvas
+      ref={ref}
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute inset-0 size-full text-foreground',
+        className,
+      )}
+    />
+  );
 }

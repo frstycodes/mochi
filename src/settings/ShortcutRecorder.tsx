@@ -1,20 +1,43 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { RotateLeft } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { checkBinding, chordOf, COMMANDS, defaultKeys, isCustom, rebind, type CommandId, type OnConflict } from '../keymap';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  checkBinding,
+  chordOf,
+  COMMANDS,
+  defaultKeys,
+  isCustom,
+  rebind,
+  type CommandId,
+  type OnConflict,
+  listenKeydown,
+} from '../keymap';
 import type { Key } from '../keys';
 import { Shortcut, useBinding } from '../Shortcut';
 import { TooltipIconButton } from '../ui';
 import { getPrefs, setPrefs, usePrefs } from './prefs';
 
-type Recording = { kind: 'idle' } | { kind: 'recording'; refused?: { keys: Key[]; reason: string } } | { kind: 'conflict'; keys: Key[]; with: CommandId };
+type Recording =
+  | { kind: 'idle' }
+  | { kind: 'recording'; refused?: { keys: Key[]; reason: string } }
+  | { kind: 'conflict'; keys: Key[]; with: CommandId };
 
 /**
  * A command's chord in Settings › Keyboard and the settings widget: click to record (Esc cancels, Backspace clears), a
  * reserved chord is refused with the reason, and a clash asks whether to swap or replace before anything is saved.
  */
-export function ShortcutRecorder({ id, command }: { id: string; command: CommandId }) {
+export function ShortcutRecorder({
+  id,
+  command,
+}: {
+  id: string;
+  command: CommandId;
+}) {
   const keys = useBinding(command);
   const hasCustom = isCustom(command, usePrefs().keybindings);
   const [state, setState] = useState<Recording>({ kind: 'idle' });
@@ -22,10 +45,16 @@ export function ShortcutRecorder({ id, command }: { id: string; command: Command
   const assign = (next: Key[] | null, onConflict?: OnConflict) => {
     const check = checkBinding(command, next, getPrefs().keybindings);
     if (check.ok || onConflict) {
-      setPrefs({ keybindings: rebind(getPrefs().keybindings, command, next, onConflict) });
+      setPrefs({
+        keybindings: rebind(getPrefs().keybindings, command, next, onConflict),
+      });
       return setState({ kind: 'idle' });
     }
-    setState('reason' in check ? { kind: 'recording', refused: { keys: next!, reason: check.reason } } : { kind: 'conflict', keys: next!, with: check.conflict });
+    setState(
+      'reason' in check
+        ? { kind: 'recording', refused: { keys: next!, reason: check.reason } }
+        : { kind: 'conflict', keys: next!, with: check.conflict },
+    );
   };
 
   useRecording(state.kind === 'recording', {
@@ -37,30 +66,72 @@ export function ShortcutRecorder({ id, command }: { id: string; command: Command
   return (
     <div className="flex items-center gap-1">
       {hasCustom && (
-        <TooltipIconButton label="Reset" hint={<>Back to <Shortcut keys={defaultKeys(command)} /></>} onClick={() => assign(defaultKeys(command))} className="text-muted-foreground">
+        <TooltipIconButton
+          label="Reset"
+          hint={
+            <>
+              Back to <Shortcut keys={defaultKeys(command)} />
+            </>
+          }
+          onClick={() => assign(defaultKeys(command))}
+          className="text-muted-foreground"
+        >
           <RotateLeft />
         </TooltipIconButton>
       )}
-      <Popover open={state.kind !== 'idle'} onOpenChange={(isOpen) => setState(isOpen ? { kind: 'recording' } : { kind: 'idle' })}>
+      <Popover
+        open={state.kind !== 'idle'}
+        onOpenChange={(isOpen) =>
+          setState(isOpen ? { kind: 'recording' } : { kind: 'idle' })
+        }
+      >
         <PopoverTrigger asChild>
-          <Button id={id} variant="outline" size="sm" aria-label={`Change the shortcut for ${COMMANDS[command].title}`} className="min-w-24 justify-center">
-            {state.kind === 'recording' ? <span className="text-muted-foreground">Press keys…</span> : keys ? <Shortcut keys={keys} /> : <span className="text-muted-foreground">None</span>}
+          <Button
+            id={id}
+            variant="outline"
+            size="sm"
+            aria-label={`Change the shortcut for ${COMMANDS[command].title}`}
+            className="min-w-24 justify-center"
+          >
+            {state.kind === 'recording' ? (
+              <span className="text-muted-foreground">Press keys…</span>
+            ) : keys ? (
+              <Shortcut keys={keys} />
+            ) : (
+              <span className="text-muted-foreground">None</span>
+            )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 gap-3 p-3" onOpenAutoFocus={(e) => state.kind === 'recording' && e.preventDefault()}>
+        <PopoverContent
+          align="end"
+          className="w-72 gap-3 p-3"
+          onOpenAutoFocus={(e) =>
+            state.kind === 'recording' && e.preventDefault()
+          }
+        >
           {state.kind === 'conflict' ? (
-            <Conflict keys={keys} next={state.keys} holder={state.with} onCancel={() => setState({ kind: 'idle' })} onSettle={(how) => assign(state.keys, how)} />
+            <Conflict
+              keys={keys}
+              next={state.keys}
+              holder={state.with}
+              onCancel={() => setState({ kind: 'idle' })}
+              onSettle={(how) => assign(state.keys, how)}
+            />
           ) : (
             <>
               {state.kind === 'recording' && state.refused ? (
                 <p className="type-body text-pretty">
-                  <Shortcut keys={state.refused.keys} /> can't be used. <span className="text-warning">{state.refused.reason}.</span>
+                  <Shortcut keys={state.refused.keys} /> can't be used.{' '}
+                  <span className="text-warning">{state.refused.reason}.</span>
                 </p>
               ) : (
-                <p className="type-body text-pretty">Press the new shortcut for {COMMANDS[command].title}.</p>
+                <p className="type-body text-pretty">
+                  Press the new shortcut for {COMMANDS[command].title}.
+                </p>
               )}
               <p className="flex flex-wrap items-center gap-1 type-caption text-muted-foreground">
-                <Shortcut keys={['Esc']} /> cancels, <Shortcut keys={['Backspace']} /> removes it
+                <Shortcut keys={['Esc']} /> cancels,{' '}
+                <Shortcut keys={['Backspace']} /> removes it
               </p>
             </>
           )}
@@ -70,17 +141,31 @@ export function ShortcutRecorder({ id, command }: { id: string; command: Command
   );
 }
 
-function Conflict({ keys, next, holder, onCancel, onSettle }: { keys: Key[] | null; next: Key[]; holder: CommandId; onCancel: () => void; onSettle: (how: OnConflict) => void }) {
+function Conflict({
+  keys,
+  next,
+  holder,
+  onCancel,
+  onSettle,
+}: {
+  keys: Key[] | null;
+  next: Key[];
+  holder: CommandId;
+  onCancel: () => void;
+  onSettle: (how: OnConflict) => void;
+}) {
   const title = COMMANDS[holder].title;
   return (
     <>
       <p className="type-body text-pretty">
-        <Shortcut keys={next} /> is already used by <span className="font-medium">{title}</span>.
+        <Shortcut keys={next} /> is already used by{' '}
+        <span className="font-medium">{title}</span>.
       </p>
       <p className="type-caption text-muted-foreground text-pretty">
         {keys ? (
           <>
-            Swap gives {title} <Shortcut keys={keys} />. Replace leaves it without a shortcut.
+            Swap gives {title} <Shortcut keys={keys} />. Replace leaves it
+            without a shortcut.
           </>
         ) : (
           `Replace leaves ${title} without a shortcut.`
@@ -90,7 +175,11 @@ function Conflict({ keys, next, holder, onCancel, onSettle }: { keys: Key[] | nu
         <Button variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant={keys ? 'outline' : 'default'} size="sm" onClick={() => onSettle('replace')}>
+        <Button
+          variant={keys ? 'outline' : 'default'}
+          size="sm"
+          onClick={() => onSettle('replace')}
+        >
           Replace
         </Button>
         {!!keys && (
@@ -104,21 +193,39 @@ function Conflict({ keys, next, holder, onCancel, onSettle }: { keys: Key[] | nu
 }
 
 /** While recording, every key press is the recorder's: captured on `window` before the app's own shortcuts and Radix's Esc. */
-export function useRecording(isRecording: boolean, on: { onCancel: () => void; onClear: () => void; onChord: (keys: Key[]) => void }) {
-  const latest = useRef(on);
-  latest.current = on;
+export function useRecording(
+  isRecording: boolean,
+  on: {
+    onCancel: () => void;
+    onClear: () => void;
+    onChord: (keys: Key[]) => void;
+  },
+) {
+  const handlers = useEffectEvent(() => on);
   useEffect(() => {
     if (!isRecording) return;
+    let isAltOnly = false;
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopImmediatePropagation();
       const isBare = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
-      if (isBare && e.key === 'Escape') return latest.current.onCancel();
-      if (isBare && e.key === 'Backspace') return latest.current.onClear();
+      if (isBare && e.key === 'Escape') return handlers().onCancel();
+      if (isBare && e.key === 'Backspace') return handlers().onClear();
+      isAltOnly = e.key === 'Alt' && !e.metaKey && !e.ctrlKey && !e.shiftKey;
       const chord = chordOf(e);
-      if (chord) latest.current.onChord(chord);
+      if (chord) handlers().onChord(chord);
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    const stop = listenKeydown(onKey, true);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!isAltOnly || e.key !== 'Alt') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      handlers().onChord(['alt']);
+    };
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      stop();
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
   }, [isRecording]);
 }

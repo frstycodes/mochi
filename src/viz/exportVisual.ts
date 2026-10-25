@@ -1,4 +1,18 @@
-const STYLE_PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-opacity', 'stroke-width', 'stroke-dasharray', 'opacity', 'color', 'font-family', 'font-size', 'font-weight', 'text-anchor', 'dominant-baseline'];
+const STYLE_PROPS = [
+  'fill',
+  'fill-opacity',
+  'stroke',
+  'stroke-opacity',
+  'stroke-width',
+  'stroke-dasharray',
+  'opacity',
+  'color',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'text-anchor',
+  'dominant-baseline',
+];
 
 /** Serializes a live <svg> with computed paint inlined: Tailwind classes and CSS variables don't survive outside the app. */
 export function serializeSvg(svg: SVGSVGElement) {
@@ -7,7 +21,9 @@ export function serializeSvg(svg: SVGSVGElement) {
   const copies = [clone, ...clone.querySelectorAll('*')];
   live.forEach((el, i) => {
     const css = getComputedStyle(el);
-    const style = STYLE_PROPS.map((p) => `${p}:${css.getPropertyValue(p)}`).join(';');
+    const style = STYLE_PROPS.map(
+      (p) => `${p}:${css.getPropertyValue(p)}`,
+    ).join(';');
     copies[i].setAttribute('style', style);
     copies[i].removeAttribute('class');
   });
@@ -20,7 +36,9 @@ export function serializeSvg(svg: SVGSVGElement) {
 
 /** Paints an SVG document onto a canvas behind the current page background. An <img> never runs the SVG's scripts. */
 export async function svgToPng(source: string, scale = 2): Promise<Blob> {
-  const url = URL.createObjectURL(new Blob([source], { type: 'image/svg+xml' }));
+  const url = URL.createObjectURL(
+    new Blob([source], { type: 'image/svg+xml' }),
+  );
   try {
     const img = new Image();
     img.src = url;
@@ -32,7 +50,12 @@ export async function svgToPng(source: string, scale = 2): Promise<Blob> {
     ctx.fillStyle = getComputedStyle(document.body).backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return await new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encode failed'))), 'image/png'));
+    return await new Promise((resolve, reject) =>
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('PNG encode failed'))),
+        'image/png',
+      ),
+    );
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -41,11 +64,21 @@ export async function svgToPng(source: string, scale = 2): Promise<Blob> {
 /** Resolves var(--token) references in agent-written SVG so the file looks the same outside the app. */
 export function withThemeVars(source: string) {
   const css = getComputedStyle(document.documentElement);
-  return source.replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)/g, (match, name: string, fallback?: string) => css.getPropertyValue(name).trim() || fallback?.trim() || match);
+  return source.replace(
+    /var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)/g,
+    (match, name: string, fallback?: string) =>
+      css.getPropertyValue(name).trim() || fallback?.trim() || match,
+  );
 }
 
-export function download(name: string, data: Blob | string, type = 'text/plain') {
-  const url = URL.createObjectURL(typeof data === 'string' ? new Blob([data], { type }) : data);
+export function download(
+  name: string,
+  data: Blob | string,
+  type = 'text/plain',
+) {
+  const url = URL.createObjectURL(
+    typeof data === 'string' ? new Blob([data], { type }) : data,
+  );
   const a = document.createElement('a');
   a.href = url;
   a.download = name;

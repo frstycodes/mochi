@@ -1,13 +1,30 @@
-import { useState, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { EventLine, MochiWidget } from '../chat/MochiWidget';
-import { ArrowUp, CheckCircle, Grid as WidgetGlyph, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
+import {
+  ArrowUp,
+  CheckCircle,
+  Grid as WidgetGlyph,
+  Info,
+  Link,
+  Monitor,
+  Moon,
+  Pin,
+  Sun,
+  TextBold,
+  TextItalic,
+  WarningAlt,
+} from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from '@/toast/store';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ButtonGroup } from '@/components/ui/button-group';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { Marker, MarkerContent } from '@/components/ui/marker';
 import {
   Questionnaire,
@@ -18,11 +35,34 @@ import {
   QuestionnaireSubmit,
   QuestionnaireTitle,
 } from '@/components/ui/questionnaire';
-import { SidebarMenu, SidebarMenuItem, SidebarProvider } from '@/components/ui/sidebar';
+import {
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarProvider,
+} from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@/components/ui/item';
 import { Kbd } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -35,10 +75,20 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
-import { CoinIcon, McpServerIcon, PluginIcon, SkillIcon } from '../icons/ObjectIcons';
+import {
+  CoinIcon,
+  McpServerIcon,
+  PluginIcon,
+  SkillIcon,
+} from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
 import { BoardView } from '../BoardView';
-import { seedQueue, type LineSlot, type QueueItem, type Thread } from '../model';
+import {
+  seedQueue,
+  type LineSlot,
+  type QueueItem,
+  type Thread,
+} from '../model';
 import { queueToast, useResolvedQueueToasts } from '../QueueToast';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
@@ -64,13 +114,18 @@ import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
 import { SplitContext } from '../layout/SplitContext';
-import { ReviewModeProvider } from '../review/useReviewMode';
 import { HarnessProvider, useHarness } from '../store';
-import { ProgressRing, ProviderMark, StepStatusIcon, ThreadStatusIcon, lineColor, stepLabel } from '../ui';
+import {
+  ProgressRing,
+  ProviderMark,
+  StepStatusIcon,
+  ThreadStatusIcon,
+  lineColor,
+  stepLabel,
+} from '../ui';
 import { ColorPair } from './color-pair';
 import { Block, Grid, Section } from './layout';
 import { AgentLoaderBlock } from './sections/agent-loader';
-import { DataSection } from './sections/data';
 import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
@@ -103,32 +158,36 @@ const SECTIONS = [
   ['rules', 'Do and don’t'],
 ] as const;
 
+const DataSection = lazy(() =>
+  import('./sections/data').then((m) => ({ default: m.DataSection })),
+);
+
 export function DesignPage() {
   return (
     <HarnessProvider>
       <MachinesProvider>
-        <ReviewModeProvider>
-          <ScrollArea className="h-full">
-            <DesignHeader />
-            <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
-              <Overview />
-              <Foundations />
-              <Actions />
-              <InputsSection />
-              <NavigationSection />
-              <Display />
+        <ScrollArea className="h-full">
+          <DesignHeader />
+          <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
+            <Overview />
+            <Foundations />
+            <Actions />
+            <InputsSection />
+            <NavigationSection />
+            <Display />
+            <Suspense>
               <DataSection />
-              <Feedback />
-              <OverlaysSection />
-              <Conversation />
-              <ImagesSection />
-              <EmbedsSection />
-              <Recipes />
-              <NativeItemsSection />
-              <Rules />
-            </main>
-          </ScrollArea>
-        </ReviewModeProvider>
+            </Suspense>
+            <Feedback />
+            <OverlaysSection />
+            <Conversation />
+            <ImagesSection />
+            <EmbedsSection />
+            <Recipes />
+            <NativeItemsSection />
+            <Rules />
+          </main>
+        </ScrollArea>
       </MachinesProvider>
       <Orbit />
       <PhotoViewer />
@@ -146,17 +205,35 @@ function DesignHeader() {
         <Badge variant="secondary" className="hidden sm:inline-flex">
           Design system v0.1
         </Badge>
-        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto xl:flex" aria-label="Sections">
+        <nav
+          className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto xl:flex"
+          aria-label="Sections"
+        >
           {SECTIONS.map(([id, label]) => (
             <Button key={id} variant="ghost" size="xs" asChild>
-              <a href={`#design-${id}`} onClick={(e) => (e.preventDefault(), document.getElementById(`design-${id}`)?.scrollIntoView({ behavior: 'smooth' }))}>
+              <a
+                href={`#design-${id}`}
+                onClick={(e) => (
+                  e.preventDefault(),
+                  document
+                    .getElementById(`design-${id}`)
+                    ?.scrollIntoView({ behavior: 'smooth' })
+                )}
+              >
                 {label}
               </a>
             </Button>
           ))}
         </nav>
         <span className="flex-1 xl:hidden" />
-        <ToggleGroup type="single" variant="outline" size="sm" value={theme} onValueChange={(v) => v && setTheme(v)} aria-label="Theme">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={theme}
+          onValueChange={(v) => v && setTheme(v)}
+          aria-label="Theme"
+        >
           <ToggleGroupItem value="system" aria-label="System theme">
             <Monitor />
           </ToggleGroupItem>
@@ -180,8 +257,9 @@ function Overview() {
     <section className="flex flex-col gap-3">
       <h1 className="type-display">Mochi design system</h1>
       <p className="max-w-[62ch] type-prose text-muted-foreground">
-        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and Solar icons, themed from DESIGN.md. Dark first, cool neutrals,
-        squircle corners, hairline separation.
+        Tokens, components and recipes for the agent harness. Built from
+        shadcn/ui, AI Elements and Solar icons, themed from DESIGN.md. Dark
+        first, cool neutrals, squircle corners, hairline separation.
       </p>
       <p className="flex flex-wrap items-center gap-1.5 type-caption text-subtle-foreground">
         Hold <Shortcut keys={['alt']} /> anywhere on this page to try Orbit.
@@ -207,7 +285,10 @@ const ROLE_PAIRS = [
 ] as const;
 
 const SWATCHES = [
-  ['Surfaces', ['background', 'sidebar', 'card', 'popover', 'float', 'muted', 'accent']],
+  [
+    'Surfaces',
+    ['background', 'sidebar', 'card', 'popover', 'float', 'muted', 'accent'],
+  ],
   ['Ink', ['foreground', 'muted-foreground', 'subtle-foreground', 'primary']],
   ['Lines', ['border', 'input', 'ring', 'chart-grid', 'chart-axis']],
   ['Status', ['success', 'warning', 'destructive']],
@@ -216,13 +297,43 @@ const SWATCHES = [
 ] as const;
 
 const TYPE_ROWS = [
-  ['type-display', '28/32 · 600 · −0.02em', 'The one big number per surface', '62%'],
+  [
+    'type-display',
+    '28/32 · 600 · −0.02em',
+    'The one big number per surface',
+    '62%',
+  ],
   ['type-heading', '20/26 · 600 · −0.012em', 'Page titles', 'Queue'],
-  ['type-title', '16/22 · 600', 'Thread, panel and card titles', 'Public API rate limiting'],
-  ['type-prose', '15/24 · 400', 'Chat messages, composer', 'Usage queries take 1.8s at 10k keys. I will add a Redis client and cache them.'],
-  ['type-body', '14/22 · 400', 'Default UI text', 'Claude keeps building it. This thread waits for that step.'],
-  ['type-meta', '13/20 · 400', 'Secondary lines, step rows, sidebar', 'Waiting on Public API rate limiting'],
-  ['type-caption', '12/16 · 400', 'Timestamps, counts, tool calls', '14:32 · 6 of 14 pts'],
+  [
+    'type-title',
+    '16/22 · 600',
+    'Thread, panel and card titles',
+    'Public API rate limiting',
+  ],
+  [
+    'type-prose',
+    '15/24 · 400',
+    'Chat messages, composer',
+    'Usage queries take 1.8s at 10k keys. I will add a Redis client and cache them.',
+  ],
+  [
+    'type-body',
+    '14/22 · 400',
+    'Default UI text',
+    'Claude keeps building it. This thread waits for that step.',
+  ],
+  [
+    'type-meta',
+    '13/20 · 400',
+    'Secondary lines, step rows, sidebar',
+    'Waiting on Public API rate limiting',
+  ],
+  [
+    'type-caption',
+    '12/16 · 400',
+    'Timestamps, counts, tool calls',
+    '14:32 · 6 of 14 pts',
+  ],
 ] as const;
 
 const RADII = [
@@ -241,23 +352,38 @@ function Foundations() {
       title="Foundations"
       intro="Colour roles with live contrast, the palette, type, radius, elevation and motion. Toggle the theme in the header to re-measure."
     >
-      <Block title="Colour roles" use="Each surface with the ink it carries. Contrast is measured live in the current theme." wide>
+      <Block
+        title="Colour roles"
+        use="Each surface with the ink it carries. Contrast is measured live in the current theme."
+        wide
+      >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {ROLE_PAIRS.map(([name, bg, fg]) => (
             <ColorPair key={name} name={name} background={bg} foreground={fg} />
           ))}
         </div>
       </Block>
-      <Block title="Palette" use="Grouped by job. Thread lines use the validated categorical order and never colour text." wide>
+      <Block
+        title="Palette"
+        use="Grouped by job. Thread lines use the validated categorical order and never colour text."
+        wide
+      >
         <div className="flex flex-col gap-4">
           {SWATCHES.map(([group, tokens]) => (
             <div key={group} className="flex flex-col gap-2">
-              <span className="type-caption font-medium text-subtle-foreground">{group}</span>
+              <span className="type-caption font-medium text-subtle-foreground">
+                {group}
+              </span>
               <div className="flex flex-wrap gap-3">
                 {tokens.map((t) => (
                   <div key={t} className="flex w-28 flex-col gap-1.5">
-                    <span className="h-12 rounded-lg ring-1 ring-border" style={{ background: `var(--${t})` }} />
-                    <code className="truncate font-mono type-caption text-muted-foreground">{t}</code>
+                    <span
+                      className="h-12 rounded-lg ring-1 ring-border"
+                      style={{ background: `var(--${t})` }}
+                    />
+                    <code className="truncate font-mono type-caption text-muted-foreground">
+                      {t}
+                    </code>
                   </div>
                 ))}
               </div>
@@ -265,7 +391,11 @@ function Foundations() {
           ))}
         </div>
       </Block>
-      <Block title="Type" use="Inter Variable, one family, three weights. Use the type-* utilities, never raw sizes." wide>
+      <Block
+        title="Type"
+        use="Inter Variable, one family, three weights. Use the type-* utilities, never raw sizes."
+        wide
+      >
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead className="type-caption text-subtle-foreground">
@@ -279,17 +409,28 @@ function Foundations() {
             <tbody>
               {TYPE_ROWS.map(([token, spec, use, sample]) => (
                 <tr key={token} className="border-b align-baseline">
-                  <td className="py-3 pr-4 font-mono type-caption whitespace-nowrap">{token}</td>
-                  <td className="tabular py-3 pr-4 type-caption whitespace-nowrap text-muted-foreground">{spec}</td>
-                  <td className="py-3 pr-4 type-meta text-muted-foreground">{use}</td>
-                  <td className={cn('max-w-[360px] truncate py-3', token)}>{sample}</td>
+                  <td className="py-3 pr-4 font-mono type-caption whitespace-nowrap">
+                    {token}
+                  </td>
+                  <td className="tabular py-3 pr-4 type-caption whitespace-nowrap text-muted-foreground">
+                    {spec}
+                  </td>
+                  <td className="py-3 pr-4 type-meta text-muted-foreground">
+                    {use}
+                  </td>
+                  <td className={cn('max-w-[360px] truncate py-3', token)}>
+                    {sample}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="max-w-[62ch] type-prose">
-          Running text sits at 15px in the chat. Paths like <code className="rounded-sm bg-muted px-1 font-mono type-caption">packages/cache/redis.ts</code>{' '}
+          Running text sits at 15px in the chat. Paths like{' '}
+          <code className="rounded-sm bg-muted px-1 font-mono type-caption">
+            packages/cache/redis.ts
+          </code>{' '}
           switch to mono, and{' '}
           <a href="#design-rules" className="underline underline-offset-4">
             links
@@ -298,7 +439,10 @@ function Foundations() {
         </p>
       </Block>
       <Grid>
-        <Block title="Radius" use="Four tiers. Full rounding only for dots and capsules.">
+        <Block
+          title="Radius"
+          use="Four tiers. Full rounding only for dots and capsules."
+        >
           <div className="flex flex-wrap gap-4">
             {RADII.map(([name, px, use, cls]) => (
               <div key={name} className="flex w-32 flex-col gap-2">
@@ -306,49 +450,91 @@ function Foundations() {
                 <span className="type-caption">
                   <b className="font-medium">{name}</b> · {px}
                 </span>
-                <span className="type-caption text-subtle-foreground">{use}</span>
+                <span className="type-caption text-subtle-foreground">
+                  {use}
+                </span>
               </div>
             ))}
           </div>
         </Block>
-        <Block title="Elevation" use="Flat, hairline, popover, float. Blur only at float, over content.">
+        <Block
+          title="Elevation"
+          use="Flat, hairline, popover, float. Blur only at float, over content."
+        >
           <div className="relative grid grid-cols-2 gap-4 rounded-xl bg-[repeating-linear-gradient(135deg,var(--muted)_0_8px,transparent_8px_16px)] p-4">
-            <ElevationTile label="Flat" detail="Canvas, sidebar" className="bg-background" />
-            <ElevationTile label="Hairline" detail="Cards, composer" className="bg-card ring-1 ring-foreground/10" />
-            <ElevationTile label="Popover" detail="Menus, tooltips" className="bg-popover shadow-popover" />
-            <ElevationTile label="Float" detail="Goal window, PiP" className="surface-float bg-float shadow-float" />
+            <ElevationTile
+              label="Flat"
+              detail="Canvas, sidebar"
+              className="bg-background"
+            />
+            <ElevationTile
+              label="Hairline"
+              detail="Cards, composer"
+              className="bg-card ring-1 ring-foreground/10"
+            />
+            <ElevationTile
+              label="Popover"
+              detail="Menus, tooltips"
+              className="bg-popover shadow-popover"
+            />
+            <ElevationTile
+              label="Float"
+              detail="Goal window, PiP"
+              className="surface-float bg-float shadow-float"
+            />
           </div>
         </Block>
-        <Block title="Motion" use="Short and interruptible. Keyboard navigation never animates.">
+        <Block
+          title="Motion"
+          use="Short and interruptible. Keyboard navigation never animates."
+        >
           <table className="w-full border-collapse text-left type-meta">
             <tbody>
               {[
                 ['Press', '100–160ms', 'scale 0.97 on active'],
-                ['Popover, hover card', '150–200ms ease-out', 'scale from the trigger'],
-                ['Hover intent', 'open 160ms, close 240ms', 'goal panel expansion'],
+                [
+                  'Popover, hover card',
+                  '150–200ms ease-out',
+                  'scale from the trigger',
+                ],
+                [
+                  'Hover intent',
+                  'open 160ms, close 240ms',
+                  'goal panel expansion',
+                ],
                 ['Window snap', 'spring 420 / 36', 'PiP keeps throw velocity'],
                 ['Orbit', '100–120ms fade', 'positions never animate'],
               ].map(([name, value, use]) => (
                 <tr key={name} className="border-b">
                   <td className="py-2 pr-4">{name}</td>
-                  <td className="tabular py-2 pr-4 text-muted-foreground">{value}</td>
+                  <td className="tabular py-2 pr-4 text-muted-foreground">
+                    {value}
+                  </td>
                   <td className="py-2 text-subtle-foreground">{use}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </Block>
-        <Block title="Icons and marks" use="Lucide at 16px in controls, 14px in dense rows. Real brand marks for agents.">
+        <Block
+          title="Icons and marks"
+          use="Lucide at 16px in controls, 14px in dense rows. Real brand marks for agents."
+        >
           <div className="flex flex-wrap items-center gap-4">
             <ProviderMark provider="claude" size={20} />
             <ProviderMark provider="codex" size={20} />
             <Separator orientation="vertical" className="h-6" />
-            {(['running', 'blocked', 'ready', 'done', 'dropped'] as const).map((s) => (
-              <span key={s} className="flex items-center gap-1.5 type-caption text-muted-foreground">
-                <StepStatusIcon status={s} />
-                {stepLabel(s)}
-              </span>
-            ))}
+            {(['running', 'blocked', 'ready', 'done', 'dropped'] as const).map(
+              (s) => (
+                <span
+                  key={s}
+                  className="flex items-center gap-1.5 type-caption text-muted-foreground"
+                >
+                  <StepStatusIcon status={s} />
+                  {stepLabel(s)}
+                </span>
+              ),
+            )}
           </div>
         </Block>
       </Grid>
@@ -356,24 +542,56 @@ function Foundations() {
   );
 }
 
-function ElevationTile({ label, detail, className }: { label: string; detail: string; className: string }) {
+function ElevationTile({
+  label,
+  detail,
+  className,
+}: {
+  label: string;
+  detail: string;
+  className: string;
+}) {
   return (
-    <div className={cn('flex h-24 flex-col justify-end rounded-xl p-3', className)}>
+    <div
+      className={cn('flex h-24 flex-col justify-end rounded-xl p-3', className)}
+    >
       <span className="type-meta font-medium">{label}</span>
       <span className="type-caption text-subtle-foreground">{detail}</span>
     </div>
   );
 }
 
-const BUTTON_VARIANTS = ['default', 'outline', 'secondary', 'ghost', 'destructive', 'link'] as const;
+const BUTTON_VARIANTS = [
+  'default',
+  'outline',
+  'secondary',
+  'ghost',
+  'destructive',
+  'link',
+] as const;
 
 function Actions() {
   return (
-    <Section id="actions" title="Actions" intro="The inverted neutral is the primary action. One per group.">
-      <Block title="Button" use="Variant × state, pinned so hover, focus and press are visible without interaction." wide>
+    <Section
+      id="actions"
+      title="Actions"
+      intro="The inverted neutral is the primary action. One per group."
+    >
+      <Block
+        title="Button"
+        use="Variant × state, pinned so hover, focus and press are visible without interaction."
+        wide
+      >
         <StateMatrix
           rows={BUTTON_VARIANTS}
-          states={['default', 'hover', 'focus', 'active', 'disabled', 'loading']}
+          states={[
+            'default',
+            'hover',
+            'focus',
+            'active',
+            'disabled',
+            'loading',
+          ]}
           render={(variant, state) =>
             state === 'loading' ? (
               <Button variant={variant} disabled>
@@ -389,7 +607,10 @@ function Actions() {
         />
       </Block>
       <Grid>
-        <Block title="Sizes and icons" use="xs for dense rows, sm in headers, default in forms and cards.">
+        <Block
+          title="Sizes and icons"
+          use="xs for dense rows, sm in headers, default in forms and cards."
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Button size="xs">Extra small</Button>
             <Button size="sm">Small</Button>
@@ -409,11 +630,16 @@ function Actions() {
               <Pin />
             </Button>
             <Button variant="outline" className="max-w-48">
-              <span className="truncate">Approve and run the session backfill script</span>
+              <span className="truncate">
+                Approve and run the session backfill script
+              </span>
             </Button>
           </div>
         </Block>
-        <Block title="Badge" use="Sizes, revisions, PRs, labels. Small radius, never a pill.">
+        <Block
+          title="Badge"
+          use="Sizes, revisions, PRs, labels. Small radius, never a pill."
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Badge>Default</Badge>
             <Badge variant="secondary">M</Badge>
@@ -428,7 +654,10 @@ function Actions() {
             </Badge>
           </div>
         </Block>
-        <Block title="Kbd" use="Every shortcut the UI mentions is shown as keys.">
+        <Block
+          title="Kbd"
+          use="Every shortcut the UI mentions is shown as keys."
+        >
           <div className="flex flex-wrap items-center gap-3 type-meta text-muted-foreground">
             <Shortcut keys={['mod', 'Enter']} />
             <Kbd>N</Kbd>
@@ -438,16 +667,28 @@ function Actions() {
             </span>
           </div>
         </Block>
-        <Block title="Button group" use="Joined actions that belong together: steer or queue, previous or next.">
+        <Block
+          title="Button group"
+          use="Joined actions that belong together: steer or queue, previous or next."
+        >
           <ButtonGroup>
             <Button variant="outline">Steer</Button>
             <Button variant="outline">Queue</Button>
             <Button variant="outline">Stop</Button>
           </ButtonGroup>
         </Block>
-        <Block title="Toggle and toggle group" use="Separate bordered toggles. The selected one gets a stronger border and a fill.">
+        <Block
+          title="Toggle and toggle group"
+          use="Separate bordered toggles. The selected one gets a stronger border and a fill."
+        >
           <div className="flex flex-wrap items-center gap-3">
-            <ToggleGroup type="single" variant="outline" size="sm" defaultValue="claude" aria-label="Agent">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              defaultValue="claude"
+              aria-label="Agent"
+            >
               <ToggleGroupItem value="claude">
                 <ProviderMark provider="claude" size={14} />
                 Claude
@@ -460,7 +701,12 @@ function Actions() {
             <Toggle variant="outline" size="sm" aria-label="Bold">
               <TextBold />
             </Toggle>
-            <Toggle variant="outline" size="sm" defaultPressed aria-label="Italic">
+            <Toggle
+              variant="outline"
+              size="sm"
+              defaultPressed
+              aria-label="Italic"
+            >
               <TextItalic />
             </Toggle>
           </div>
@@ -470,7 +716,13 @@ function Actions() {
   );
 }
 
-const DEVICE_SPECIMENS = ['mac', 'windows', 'linux', 'phone', undefined] satisfies (DeviceKind | undefined)[];
+const DEVICE_SPECIMENS = [
+  'mac',
+  'windows',
+  'linux',
+  'phone',
+  undefined,
+] satisfies (DeviceKind | undefined)[];
 const OBJECT_ICONS = [
   ['Skill', SkillIcon],
   ['Plugin', PluginIcon],
@@ -480,9 +732,16 @@ const OBJECT_ICONS = [
 
 function Display() {
   return (
-    <Section id="display" title="Display" intro="Items for rows, cards for decisions, rings and bars for progress.">
+    <Section
+      id="display"
+      title="Display"
+      intro="Items for rows, cards for decisions, rings and bars for progress."
+    >
       <Grid>
-        <Block title="Item" use="Rows with media, a title, a description and a trailing slot.">
+        <Block
+          title="Item"
+          use="Rows with media, a title, a description and a trailing slot."
+        >
           <div className="flex flex-col gap-2">
             <Item variant="outline">
               <ItemMedia variant="icon">
@@ -492,7 +751,9 @@ function Display() {
                 <ItemTitle>
                   Link <Badge variant="secondary">Suggested</Badge>
                 </ItemTitle>
-                <ItemDescription>Claude keeps building it. This thread waits for that step.</ItemDescription>
+                <ItemDescription>
+                  Claude keeps building it. This thread waits for that step.
+                </ItemDescription>
               </ItemContent>
               <Kbd>1</Kbd>
             </Item>
@@ -501,22 +762,35 @@ function Display() {
                 <ProviderMark provider="codex" size={20} />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Admin usage dashboard with an unusually long title that needs to truncate gracefully</ItemTitle>
+                <ItemTitle>
+                  Admin usage dashboard with an unusually long title that needs
+                  to truncate gracefully
+                </ItemTitle>
                 <ItemDescription>Codex · running · 57%</ItemDescription>
               </ItemContent>
             </Item>
           </div>
         </Block>
-        <Block title="Device" use="A computer or phone of yours, lit like Mochi in its own subtle colour; the same in both themes.">
+        <Block
+          title="Device"
+          use="A computer or phone of yours, lit like Mochi in its own subtle colour; the same in both themes."
+        >
           <div data-design="devices" className="flex flex-col gap-4">
             <div className="flex items-end gap-6">
               {DEVICE_SPECIMENS.map((kind) => (
-                <DeviceIcon key={kind ?? 'unknown'} kind={kind} className="size-12" />
+                <DeviceIcon
+                  key={kind ?? 'unknown'}
+                  kind={kind}
+                  className="size-12"
+                />
               ))}
             </div>
             <div className="flex items-center gap-6 type-meta text-muted-foreground">
               {DEVICE_SPECIMENS.map((kind) => (
-                <span key={kind ?? 'unknown'} className="flex items-center gap-1.5">
+                <span
+                  key={kind ?? 'unknown'}
+                  className="flex items-center gap-1.5"
+                >
                   <DeviceIcon kind={kind} />
                   {kind ?? 'unknown'}
                 </span>
@@ -524,7 +798,10 @@ function Display() {
             </div>
           </div>
         </Block>
-        <Block title="Object icons" use="Mochi's own concepts (skills, plugins, MCP servers, spend), lit like Mochi; the same in both themes.">
+        <Block
+          title="Object icons"
+          use="Mochi's own concepts (skills, plugins, MCP servers, spend), lit like Mochi; the same in both themes."
+        >
           <div data-design="object-icons" className="flex flex-col gap-4">
             <div className="flex items-end gap-6">
               {OBJECT_ICONS.map(([label, Icon]) => (
@@ -541,13 +818,20 @@ function Display() {
             </div>
           </div>
         </Block>
-        <Block title="Card" use="Decisions and grouped content. Hairline ring, no shadow.">
+        <Block
+          title="Card"
+          use="Decisions and grouped content. Hairline ring, no shadow."
+        >
           <Card size="sm">
             <CardHeader>
-              <CardDescription>Approval · Migrate auth to Better Auth</CardDescription>
+              <CardDescription>
+                Approval · Migrate auth to Better Auth
+              </CardDescription>
               <CardTitle>Run the session backfill</CardTitle>
             </CardHeader>
-            <CardContent className="type-body text-muted-foreground">Rewrites 18,204 rows in the local sessions table.</CardContent>
+            <CardContent className="type-body text-muted-foreground">
+              Rewrites 18,204 rows in the local sessions table.
+            </CardContent>
             <CardFooter className="gap-2">
               <Button size="sm">Approve and run</Button>
               <Button size="sm" variant="outline">
@@ -562,25 +846,43 @@ function Display() {
         >
           <div className="flex flex-col gap-3">
             {RING_SAMPLES.map(({ met, total, isWorking }, i) => (
-              <div key={i} className="flex items-center gap-2 type-caption text-muted-foreground">
-                <ProgressRing met={met} total={total} slot={((i % 5) + 1) as LineSlot} isWorking={isWorking} />
-                <span className="tabular">{total ? `${met}/${total}` : 'No criteria'}</span>
+              <div
+                key={i}
+                className="flex items-center gap-2 type-caption text-muted-foreground"
+              >
+                <ProgressRing
+                  met={met}
+                  total={total}
+                  slot={((i % 5) + 1) as LineSlot}
+                  isWorking={isWorking}
+                />
+                <span className="tabular">
+                  {total ? `${met}/${total}` : 'No criteria'}
+                </span>
                 {isWorking && <span>Working</span>}
               </div>
             ))}
           </div>
         </Block>
-        <Block title="Collapsible" use="Show more on demand: settled threads, long tool output.">
+        <Block
+          title="Collapsible"
+          use="Show more on demand: settled threads, long tool output."
+        >
           <Collapsible className="flex flex-col gap-1">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="self-start">
                 Archived · 1
               </Button>
             </CollapsibleTrigger>
-            <CollapsibleContent className="px-3 type-meta text-muted-foreground">Onboarding emails</CollapsibleContent>
+            <CollapsibleContent className="px-3 type-meta text-muted-foreground">
+              Onboarding emails
+            </CollapsibleContent>
           </Collapsible>
         </Block>
-        <Block title="Scroll area and separator" use="Long lists inside fixed panels.">
+        <Block
+          title="Scroll area and separator"
+          use="Long lists inside fixed panels."
+        >
           <ScrollArea className="h-40 rounded-xl border">
             <div className="flex flex-col p-3">
               {[
@@ -594,7 +896,9 @@ function Display() {
               ].map((t, i) => (
                 <div key={t}>
                   {i > 0 && <Separator className="my-2" />}
-                  <span className="font-mono type-caption text-muted-foreground">{t}</span>
+                  <span className="font-mono type-caption text-muted-foreground">
+                    {t}
+                  </span>
                 </div>
               ))}
             </div>
@@ -607,26 +911,44 @@ function Display() {
 
 function Feedback() {
   return (
-    <Section id="feedback" title="Feedback" intro="Toasts carry undo. Alerts explain. Skeletons copy the shape of what loads.">
+    <Section
+      id="feedback"
+      title="Feedback"
+      intro="Toasts carry undo. Alerts explain. Skeletons copy the shape of what loads."
+    >
       <Grid>
-        <Block title="Alert" use="Inline explanations. Status colour always comes with an icon.">
+        <Block
+          title="Alert"
+          use="Inline explanations. Status colour always comes with an icon."
+        >
           <div className="flex flex-col gap-2">
             <Alert>
               <Info />
               <AlertTitle>Overlap caught before any duplicate work</AlertTitle>
-              <AlertDescription>Two threads want to add a Redis client. Decide in the Queue.</AlertDescription>
+              <AlertDescription>
+                Two threads want to add a Redis client. Decide in the Queue.
+              </AlertDescription>
             </Alert>
             <Alert variant="destructive">
               <WarningAlt />
               <AlertTitle>Setup script failed in feat/admin-usage</AlertTitle>
-              <AlertDescription>pnpm install exited with code 1. The agent is paused until it passes.</AlertDescription>
+              <AlertDescription>
+                pnpm install exited with code 1. The agent is paused until it
+                passes.
+              </AlertDescription>
             </Alert>
           </div>
         </Block>
-        <Block title="Toast" use="Top center. Every reversible action gets an undo. Each click shows the next style.">
+        <Block
+          title="Toast"
+          use="Top center. Every reversible action gets an undo. Each click shows the next style."
+        >
           <ToastDemo />
         </Block>
-        <Block title="Loading" use="Spinner inside controls, skeletons shaped like the content.">
+        <Block
+          title="Loading"
+          use="Spinner inside controls, skeletons shaped like the content."
+        >
           <div className="flex items-center gap-3 type-meta text-muted-foreground">
             <Spinner /> Starting Codex in feat/admin-usage
           </div>
@@ -647,7 +969,9 @@ function Feedback() {
                 <CheckCircle />
               </EmptyMedia>
               <EmptyTitle>Nothing needs you</EmptyTitle>
-              <EmptyDescription>Questions and approvals show up here, most blocking first.</EmptyDescription>
+              <EmptyDescription>
+                Questions and approvals show up here, most blocking first.
+              </EmptyDescription>
             </EmptyHeader>
           </Empty>
         </Block>
@@ -666,28 +990,55 @@ function Conversation() {
       intro="AI Elements on live demo data: messages, reasoning, the tool-call chain, inline decisions and the prompt input. Reasoning and tool chains collapse like Codex's work log."
     >
       <div className="flex h-[620px] flex-col overflow-hidden rounded-xl border">
-        <SplitContext.Provider value={{ leafId: 'design', isFocused: false, isMulti: false, isZoomed: false, isFirst: false, isWide: true }}>
+        <SplitContext.Provider
+          value={{
+            leafId: 'design',
+            isFocused: false,
+            isMulti: false,
+            isZoomed: false,
+            isFirst: false,
+            isWide: true,
+          }}
+        >
           <ChatView thread={adm} />
         </SplitContext.Provider>
       </div>
       <Grid>
-        <Block title="MCP App view" use="A tool that declares a ui:// view (MCP Apps) gets it after its call's group: the server's own HTML in a sandboxed frame, sized by the view. Here Mobbin's search_screens on a recorded result.">
+        <Block
+          title="MCP App view"
+          use="A tool that declares a ui:// view (MCP Apps) gets it after its call's group: the server's own HTML in a sandboxed frame, sized by the view. Here Mobbin's search_screens on a recorded result."
+        >
           <EmbedFrame icon={WidgetGlyph} title="Mobbin">
             <McpAppFrame widget={MOBBIN_WIDGET} resource={MOBBIN_RESOURCE} />
           </EmbedFrame>
         </Block>
-        <Block title="Questionnaire" use="How agents ask you things: one choice, number keys, then send.">
+        <Block
+          title="Questionnaire"
+          use="How agents ask you things: one choice, number keys, then send."
+        >
           <Questionnaire
-            items={[{ name: 'stripe', required: true, choices: [{ value: 'stub' }, { value: 'record' }] }]}
+            items={[
+              {
+                name: 'stripe',
+                required: true,
+                choices: [{ value: 'stub' }, { value: 'record' }],
+              },
+            ]}
             defaultItem="stripe"
             shortcuts="numbers"
             onSubmit={(e) => (e.preventDefault(), toast('Answer sent'))}
           >
             <QuestionnaireItem name="stripe" required>
-              <QuestionnaireTitle>Stub Stripe webhooks or record fixtures?</QuestionnaireTitle>
+              <QuestionnaireTitle>
+                Stub Stripe webhooks or record fixtures?
+              </QuestionnaireTitle>
               <QuestionnaireChoices>
-                <QuestionnaireChoice value="stub">Stub webhooks</QuestionnaireChoice>
-                <QuestionnaireChoice value="record">Record fixtures</QuestionnaireChoice>
+                <QuestionnaireChoice value="stub">
+                  Stub webhooks
+                </QuestionnaireChoice>
+                <QuestionnaireChoice value="record">
+                  Record fixtures
+                </QuestionnaireChoice>
               </QuestionnaireChoices>
             </QuestionnaireItem>
             <QuestionnaireActions>
@@ -706,16 +1057,39 @@ function Conversation() {
             ))}
           </div>
         </Block>
-        <Block title="Action lines" use="An agent's browser actions in a thread: an icon for the kind of action and the page as its favicon and host, never the full URL.">
+        <Block
+          title="Action lines"
+          use="An agent's browser actions in a thread: an icon for the kind of action and the page as its favicon and host, never the full URL."
+        >
           <div className="flex flex-col gap-2">
-            <EventLine text='Claude clicked "Sandesh Pandey sandesh@withp…"' glyph="click" site="https://accounts.google.com/signin/oauth/error?authError=x" at={Date.now()} />
-            <EventLine text='Claude typed into "Text field for emails" and pressed Enter' glyph="type" site="https://console.cloud.google.com/auth/audience" at={Date.now()} />
-            <EventLine text="Claude opened a page outside your machine" glyph="browse" site="https://api.slack.com/apps" at={Date.now()} />
+            <EventLine
+              text='Claude clicked "Sandesh Pandey sandesh@withp…"'
+              glyph="click"
+              site="https://accounts.google.com/signin/oauth/error?authError=x"
+              at={AGO}
+            />
+            <EventLine
+              text='Claude typed into "Text field for emails" and pressed Enter'
+              glyph="type"
+              site="https://console.cloud.google.com/auth/audience"
+              at={AGO}
+            />
+            <EventLine
+              text="Claude opened a page outside your machine"
+              glyph="browse"
+              site="https://api.slack.com/apps"
+              at={AGO}
+            />
           </div>
         </Block>
-        <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, handoffs.">
+        <Block
+          title="Event marker"
+          use="Mochi events you would scroll back to: finished steps, goal revisions, handoffs."
+        >
           <Marker variant="separator">
-            <MarkerContent className="type-caption">Goal v2: + Done when: Every 429 carries Retry-After</MarkerContent>
+            <MarkerContent className="type-caption">
+              Goal v2: + Done when: Every 429 carries Retry-After
+            </MarkerContent>
           </Marker>
         </Block>
       </Grid>
@@ -728,15 +1102,26 @@ function Recipes() {
   const adm = state.threads.find((t) => t.id === 'adm')!;
   const admPane = state.panes.find((p) => p.threadId === 'adm');
   const rl = state.threads.find((t) => t.id === 'rl')!;
-  const decision = state.queue.find((q) => q.kind === 'question') ?? seedQueue()[1];
+  const decision =
+    state.queue.find((q) => q.kind === 'question') ?? seedQueue()[1];
 
   return (
-    <Section id="recipes" title="Recipes" intro="The harness’s own components, running on live demo data. These are the acceptance tests for the tokens.">
+    <Section
+      id="recipes"
+      title="Recipes"
+      intro="The harness’s own components, running on live demo data. These are the acceptance tests for the tokens."
+    >
       <Grid>
-        <Block title="Sidebar" use="Space tint, nav, pinned threads with status, marks and rings. Swipe sideways to change space.">
+        <Block
+          title="Sidebar"
+          use="Space tint, nav, pinned threads with status, marks and rings. Swipe sideways to change space."
+        >
           <div className="h-[560px] w-[256px] overflow-hidden rounded-xl border">
             <SidebarProvider className="h-full min-h-0">
-              <AppSidebar onSearch={() => toast('Opens the Cmd K palette in the app')} collapsible="none" />
+              <AppSidebar
+                onSearch={() => toast('Opens the Cmd K palette in the app')}
+                collapsible="none"
+              />
             </SidebarProvider>
           </div>
         </Block>
@@ -748,23 +1133,50 @@ function Recipes() {
             <SummaryPanel thread={rl} className="m-3 w-[300px]" />
           </div>
         </Block>
-        <Block title="Idle verdict rows" use="An idle thread's row says why it stopped, read by Mochi: a toned chip, then the reason. Working rows keep their shimmer.">
+        <Block
+          title="Idle verdict rows"
+          use="An idle thread's row says why it stopped, read by Mochi: a toned chip, then the reason. Working rows keep their shimmer."
+        >
           <div className="w-[256px] overflow-hidden rounded-xl border bg-sidebar p-2">
             <SidebarProvider className="min-h-0">
               <SidebarMenu>
                 {verdictFixtures(rl).map(({ label, thread }) => (
                   <SidebarMenuItem key={label}>
-                    <ThreadItem thread={thread} isActive={false} onSelect={() => toast(label)} />
+                    <ThreadItem
+                      thread={thread}
+                      isActive={false}
+                      onSelect={() => toast(label)}
+                    />
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
             </SidebarProvider>
           </div>
         </Block>
-        <Block title="Proposed goal" use="The goal the agent writes after its first look: the vague draft struck through, criteria marked as a command Mochi runs or you check. Settings › Goals and checks decides Accept or Apply, with undo." wide>
+        <Block
+          title="Proposed goal"
+          use="The goal the agent writes after its first look: the vague draft struck through, criteria marked as a command Mochi runs or you check. Settings › Goals and checks decides Accept or Apply, with undo."
+          wide
+        >
           <div className="flex w-full flex-col gap-4">
-            <ProposalCard thread={{ ...rl, proposal: proposalFixture(rl.activity.at(-1)?.at ?? 0, 'waiting') }} />
-            <ProposalCard thread={{ ...rl, proposal: proposalFixture(rl.activity.at(-1)?.at ?? 0, 'applied') }} />
+            <ProposalCard
+              thread={{
+                ...rl,
+                proposal: proposalFixture(
+                  rl.activity.at(-1)?.at ?? 0,
+                  'waiting',
+                ),
+              }}
+            />
+            <ProposalCard
+              thread={{
+                ...rl,
+                proposal: proposalFixture(
+                  rl.activity.at(-1)?.at ?? 0,
+                  'applied',
+                ),
+              }}
+            />
           </div>
         </Block>
         <NextMoveBlock rl={rl} />
@@ -776,7 +1188,12 @@ function Recipes() {
         <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
         {verdictFixtures(rl).map(({ label, thread }) => (
-          <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, the agent's summary, one line of evidence, gaps as call rows, then one question with the move as the primary with its shortcut, and one other answer." wide>
+          <Block
+            key={label}
+            title={`Verdict · ${label}`}
+            use="The end-of-turn card: Mochi's verdict, the agent's summary, one line of evidence, gaps as call rows, then one question with the move as the primary with its shortcut, and one other answer."
+            wide
+          >
             <VizThreadProvider value={rl.id}>
               <PromptInputProvider>
                 <ReportCard thread={thread} />
@@ -813,14 +1230,26 @@ function Recipes() {
         >
           <div className="flex flex-col gap-3">
             {turnChanges(changesFixture(rl).activity).map((turn) => (
-              <TurnChangesCard key={turn.start} thread={changesFixture(rl)} turn={turn} />
+              <TurnChangesCard
+                key={turn.start}
+                thread={changesFixture(rl)}
+                turn={turn}
+              />
             ))}
           </div>
         </Block>
-        <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
+        <Block
+          title="Queue decision"
+          use="Same card in the Queue and inline at the end of a chat."
+          wide
+        >
           <QueueDecision item={decision} showThread />
         </Block>
-        <Block title="Handoff" use="An agent hands you the tab for what only you can do. The card sits where it asked and the bar tops the pane; Done in either, or the page showing you're done, lets it carry on." wide>
+        <Block
+          title="Handoff"
+          use="An agent hands you the tab for what only you can do. The card sits where it asked and the bar tops the pane; Done in either, or the page showing you're done, lets it carry on."
+          wide
+        >
           <div className="flex flex-col gap-3">
             <MochiWidget
               item={{
@@ -828,16 +1257,26 @@ function Recipes() {
                 kind: 'approval',
                 threadId: rl.id,
                 title: 'Sign in to GitHub',
-                detail: "Claude carries on once the page shows you're done, or when you click Done.",
+                detail:
+                  "Claude carries on once the page shows you're done, or when you click Done.",
                 blocks: { steps: 0, threads: 1 },
                 createdAt: rl.startedAt,
                 tool: { callId: 'q-handoff-demo', isHandoff: true },
               }}
             />
-            <DriveBar thread={rl} pageId="design/handoff" hasTakenOver handoff="Sign in to GitHub" />
+            <DriveBar
+              thread={rl}
+              pageId="design/handoff"
+              hasTakenOver
+              handoff="Sign in to GitHub"
+            />
           </div>
         </Block>
-        <Block title="Same files" use="Two live threads of one project edited the same file; never pauses either agent." wide>
+        <Block
+          title="Same files"
+          use="Two live threads of one project edited the same file; never pauses either agent."
+          wide
+        >
           <QueueDecision
             item={{
               id: 'q-collision-demo',
@@ -847,7 +1286,10 @@ function Recipes() {
               detail: '',
               blocks: { steps: 0, threads: 2 },
               createdAt: rl.startedAt,
-              collision: { otherThreadId: adm.id, files: ['apps/api/middleware/ratelimit.ts'] },
+              collision: {
+                otherThreadId: adm.id,
+                files: ['apps/api/middleware/ratelimit.ts'],
+              },
             }}
             showThread
           />
@@ -857,7 +1299,9 @@ function Recipes() {
           use="One card per pane kind beside the chat, like Claude: each has its own header with its tabs or title, its actions, ⋯, expand and close. Panes stack in columns and fold to their header when there is no room."
           wide
         >
-          <div className="h-[460px] overflow-hidden rounded-xl border">{admPane && <SidePane thread={adm} pane={admPane} />}</div>
+          <div className="h-[460px] overflow-hidden rounded-xl border">
+            {admPane && <SidePane thread={adm} pane={admPane} />}
+          </div>
         </Block>
         <Block
           title="Floating window"
@@ -868,28 +1312,54 @@ function Recipes() {
             <PipLayer thread={adm} />
             {!admPane?.tabs.some((t) => t.isPopped && t.kind !== 'browser') && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Button onClick={() => admPane && dispatch({ type: 'pane-pop', threadId: 'adm', tabId: admPane.tabs[1].id, isPopped: true })}>
+                <Button
+                  onClick={() =>
+                    admPane &&
+                    dispatch({
+                      type: 'pane-pop',
+                      threadId: 'adm',
+                      tabId: admPane.tabs[1].id,
+                      isPopped: true,
+                    })
+                  }
+                >
                   Pop out the changes
                 </Button>
               </div>
             )}
           </div>
         </Block>
-        <Block title="Metro board" use="Threads as lines, each agent's plan items as stations." wide>
+        <Block
+          title="Metro board"
+          use="Threads as lines, each agent's plan items as stations."
+          wide
+        >
           <div className="h-[460px] overflow-hidden rounded-xl border">
             <BoardView />
           </div>
         </Block>
-        <Block title="Thread states" use="Status icons always sit next to a word or a title.">
+        <Block
+          title="Thread states"
+          use="Status icons always sit next to a word or a title."
+        >
           <div className="flex flex-col gap-2">
-            {(['running', 'needs-you', 'review', 'settled'] as const).map((s) => (
-              <span key={s} className="flex items-center gap-2 type-meta">
-                <span className="flex w-4 justify-center">
-                  <ThreadStatusIcon status={s} />
+            {(['running', 'needs-you', 'review', 'settled'] as const).map(
+              (s) => (
+                <span key={s} className="flex items-center gap-2 type-meta">
+                  <span className="flex w-4 justify-center">
+                    <ThreadStatusIcon status={s} />
+                  </span>
+                  {
+                    {
+                      running: 'Running',
+                      'needs-you': 'Needs you',
+                      review: 'Ready for review',
+                      settled: 'Archived',
+                    }[s]
+                  }
                 </span>
-                {{ running: 'Running', 'needs-you': 'Needs you', review: 'Ready for review', settled: 'Archived' }[s]}
-              </span>
-            ))}
+              ),
+            )}
           </div>
         </Block>
       </Grid>
@@ -899,7 +1369,11 @@ function Recipes() {
 
 function Rules() {
   return (
-    <Section id="rules" title="Do and don’t" intro="The rules that are easiest to break.">
+    <Section
+      id="rules"
+      title="Do and don’t"
+      intro="The rules that are easiest to break."
+    >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Pair rule="One primary action per group.">
           <div className="flex gap-2">
@@ -913,7 +1387,11 @@ function Rules() {
         </Pair>
         <Pair rule="Line colour marks identity. Text stays in ink.">
           <span className="flex items-center gap-2 type-meta">
-            <span aria-hidden className="size-2 rounded-full" style={{ background: lineColor(2) }} />
+            <span
+              aria-hidden
+              className="size-2 rounded-full"
+              style={{ background: lineColor(2) }}
+            />
             Admin usage dashboard
           </span>
           <span className="type-meta" style={{ color: lineColor(2) }}>
@@ -931,15 +1409,25 @@ function Rules() {
           </span>
         </Pair>
         <Pair rule="Blur only for windows that float over content.">
-          <div className="surface-float rounded-xl bg-float p-3 type-meta shadow-float">Floating goal window</div>
-          <div className="surface-float rounded-xl bg-float p-3 type-meta">Ordinary card with glass</div>
+          <div className="surface-float rounded-xl bg-float p-3 type-meta shadow-float">
+            Floating goal window
+          </div>
+          <div className="surface-float rounded-xl bg-float p-3 type-meta">
+            Ordinary card with glass
+          </div>
         </Pair>
       </div>
     </Section>
   );
 }
 
-function Pair({ rule, children }: { rule: string; children: [ReactNode, ReactNode] }) {
+function Pair({
+  rule,
+  children,
+}: {
+  rule: string;
+  children: [ReactNode, ReactNode];
+}) {
   return (
     <div className="flex flex-col gap-3">
       <p className="type-meta font-medium">{rule}</p>
@@ -949,7 +1437,9 @@ function Pair({ rule, children }: { rule: string; children: [ReactNode, ReactNod
           {children[0]}
         </div>
         <div className="flex min-h-24 flex-col justify-center gap-2 rounded-xl border p-4">
-          <span className="type-caption font-medium text-destructive">Don’t</span>
+          <span className="type-caption font-medium text-destructive">
+            Don’t
+          </span>
           {children[1]}
         </div>
       </div>
@@ -968,7 +1458,11 @@ const RING_SAMPLES = [
 
 function metReportFixture(rl: Thread): Thread {
   const at = rl.activity.at(-1)?.at ?? 0;
-  const claim = { evidence: 'pnpm test: 214 passed', at, by: 'claude' as const };
+  const claim = {
+    evidence: 'pnpm test: 214 passed',
+    at,
+    by: 'claude' as const,
+  };
   return {
     ...reportFixture(rl),
     prs: [],
@@ -976,7 +1470,12 @@ function metReportFixture(rl: Thread): Thread {
       { id: 'c1', text: 'Every 429 carries Retry-After', claim },
       { id: 'c2', text: 'pnpm test passes', command: 'pnpm test', claim },
     ],
-    report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body'], left: [] },
+    report: {
+      at,
+      by: 'claude',
+      decisions: ['Kept the plain-text 429 body'],
+      left: [],
+    },
   };
 }
 
@@ -987,13 +1486,23 @@ function reportFixture(rl: Thread): Thread {
     ...rl,
     live: undefined,
     criteria: [
-      { id: 'c1', text: 'Every 429 carries Retry-After', claim: { evidence: 'curl -i /v1/search shows Retry-After: 30', at, by: 'claude' } },
+      {
+        id: 'c1',
+        text: 'Every 429 carries Retry-After',
+        claim: {
+          evidence: 'curl -i /v1/search shows Retry-After: 30',
+          at,
+          by: 'claude',
+        },
+      },
       { id: 'c2', text: 'pnpm test passes', command: 'pnpm test' },
     ],
     report: {
       at,
       by: 'claude',
-      decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'],
+      decisions: [
+        'Kept the plain-text 429 body so existing clients keep parsing it',
+      ],
       left: ['Per-key overrides in the admin UI'],
       question: 'Switch the 429 body to JSON now, or in a follow-up?',
     },
@@ -1020,14 +1529,33 @@ const CHANGED_FILES = [
 /** One turn that changed 14 files, then a small one whose changes were undone. */
 function changesFixture(rl: Thread): Thread {
   const at = rl.activity.at(-1)?.at ?? 0;
-  const tool = (text: string): Thread['activity'][number] => ({ at, who: 'claude', kind: 'tool', text });
+  const tool = (text: string): Thread['activity'][number] => ({
+    at,
+    who: 'claude',
+    kind: 'tool',
+    text,
+  });
   return {
     ...rl,
     live: undefined,
     activity: [
-      { at, who: 'you', kind: 'message', text: 'Wire the limits through the gateway and the admin page' },
-      ...CHANGED_FILES.map((path, i) => tool(`${i % 4 === 1 ? 'Write' : 'Edit'} ${path}  +${((i * 37) % 210) + 4} −${i % 3 === 0 ? 0 : i * 2}`)),
-      { at, who: 'claude', kind: 'message', text: 'Wired through. Tests pass.' },
+      {
+        at,
+        who: 'you',
+        kind: 'message',
+        text: 'Wire the limits through the gateway and the admin page',
+      },
+      ...CHANGED_FILES.map((path, i) =>
+        tool(
+          `${i % 4 === 1 ? 'Write' : 'Edit'} ${path}  +${((i * 37) % 210) + 4} −${i % 3 === 0 ? 0 : i * 2}`,
+        ),
+      ),
+      {
+        at,
+        who: 'claude',
+        kind: 'message',
+        text: 'Wired through. Tests pass.',
+      },
       { at, who: 'you', kind: 'message', text: 'Bump the README too' },
       tool('Edit README.md  +3 −1'),
       { at, who: 'claude', kind: 'message', text: 'Done.' },
@@ -1057,7 +1585,11 @@ const INSTALL = {
   command: 'pnpm install --frozen-lockfile --prefer-offline',
   startedAt: AGO - 13_800,
 } as const;
-const SCRIPT = { id: 'script', label: 'Run setup command', command: 'pnpm build:native' } as const;
+const SCRIPT = {
+  id: 'script',
+  label: 'Run setup command',
+  command: 'pnpm build:native',
+} as const;
 
 const SETUP_SAMPLES: WorktreeSetup[] = [
   {
@@ -1068,7 +1600,8 @@ const SETUP_SAMPLES: WorktreeSetup[] = [
       {
         ...INSTALL,
         status: 'running',
-        output: 'Lockfile is up to date, resolution step is skipped\nProgress: resolved 812, reused 812, downloaded 0, added 640\n',
+        output:
+          'Lockfile is up to date, resolution step is skipped\nProgress: resolved 812, reused 812, downloaded 0, added 640\n',
       },
       { ...SCRIPT, status: 'pending' },
     ],
@@ -1085,7 +1618,8 @@ const SETUP_SAMPLES: WorktreeSetup[] = [
         startedAt: AGO - 9_000,
         endedAt: AGO - 6_000,
         exitCode: 1,
-        output: 'node-gyp rebuild\ngyp ERR! find Python Python is not set from command line or npm configuration\n',
+        output:
+          'node-gyp rebuild\ngyp ERR! find Python Python is not set from command line or npm configuration\n',
       },
     ],
   },
@@ -1093,7 +1627,11 @@ const SETUP_SAMPLES: WorktreeSetup[] = [
     status: 'ready',
     startedAt: AGO - 14_000,
     endedAt: AGO,
-    steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 2_000 }, { ...SCRIPT, status: 'done', startedAt: AGO - 2_000, endedAt: AGO }],
+    steps: [
+      COPY,
+      { ...INSTALL, status: 'done', endedAt: AGO - 2_000 },
+      { ...SCRIPT, status: 'done', startedAt: AGO - 2_000, endedAt: AGO },
+    ],
   },
 ];
 
@@ -1116,9 +1654,16 @@ function ToastDemo() {
   };
   const showQuestion = () => {
     const seed = seedQueue().find((q) => q.kind === 'question')!;
-    const item = { ...seed, id: `${seed.id}-${Date.now()}`, createdAt: state.now };
+    const item = {
+      ...seed,
+      id: `${seed.id}-${Date.now()}`,
+      createdAt: state.now,
+    };
     dispatch({ type: 'queue-add', item });
-    toast('Claude has a question', { description: item.title, ...queueToast(item.id) });
+    toast('Claude has a question', {
+      description: item.title,
+      ...queueToast(item.id),
+    });
   };
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -1130,29 +1675,67 @@ function ToastDemo() {
       </Button>
       <div className="flex items-center gap-2 type-meta text-muted-foreground">
         <label htmlFor="toast-slowmo">Slow motion</label>
-        <Slider id="toast-slowmo" className="w-32" min={1} max={40} step={1} value={[slowdown]} onValueChange={changeSlowdown} />
+        <Slider
+          id="toast-slowmo"
+          className="w-32"
+          min={1}
+          max={40}
+          step={1}
+          value={[slowdown]}
+          onValueChange={changeSlowdown}
+        />
         <span className="w-8 tabular">{slowdown}x</span>
       </div>
-      <span className="type-meta text-muted-foreground">Next: {TOAST_STYLES[next % TOAST_STYLES.length].label}</span>
+      <span className="type-meta text-muted-foreground">
+        Next: {TOAST_STYLES[next % TOAST_STYLES.length].label}
+      </span>
     </div>
   );
 }
 
-const PUSH_REJECTED = 'Updates were rejected because the remote contains work that you do not have locally.';
+const PUSH_REJECTED =
+  'Updates were rejected because the remote contains work that you do not have locally.';
 
 const TOAST_STYLES = [
   {
     label: 'with undo',
-    show: () => toast('Thread settled', { description: 'Idle terminals closed, PR watches stopped.', action: { label: 'Undo', onClick: () => undefined } }),
+    show: () =>
+      toast('Thread settled', {
+        description: 'Idle terminals closed, PR watches stopped.',
+        action: { label: 'Undo', onClick: () => undefined },
+      }),
   },
   { label: 'success', show: () => toast.success('Merged #482') },
-  { label: 'info', show: () => toast.info('localhost:5173 is up', { action: { label: 'Open preview', onClick: () => undefined } }) },
-  { label: 'warning', show: () => toast.warning('Weekly limit at 90%', { description: 'Claude resumes Tue 3:34 PM once it runs out.' }) },
-  { label: 'error', show: () => toast.error('Push rejected', { description: PUSH_REJECTED }) },
-  { label: 'the same error again', show: () => toast.error('Push rejected', { description: PUSH_REJECTED }) },
+  {
+    label: 'info',
+    show: () =>
+      toast.info('localhost:5173 is up', {
+        action: { label: 'Open preview', onClick: () => undefined },
+      }),
+  },
+  {
+    label: 'warning',
+    show: () =>
+      toast.warning('Weekly limit at 90%', {
+        description: 'Claude resumes Tue 3:34 PM once it runs out.',
+      }),
+  },
+  {
+    label: 'error',
+    show: () => toast.error('Push rejected', { description: PUSH_REJECTED }),
+  },
+  {
+    label: 'the same error again',
+    show: () => toast.error('Push rejected', { description: PUSH_REJECTED }),
+  },
   {
     label: 'a queue question, click it to answer',
-    show: (question?: QueueItem) => question && toast('Claude has a question', { description: question.title, ...queueToast(question.id) }),
+    show: (question?: QueueItem) =>
+      question &&
+      toast('Claude has a question', {
+        description: question.title,
+        ...queueToast(question.id),
+      }),
   },
   {
     label: 'loading, then success',

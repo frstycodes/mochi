@@ -17,21 +17,39 @@ const SHORTLIST_MIN = 0.34;
 // Offline, only near-identical wording counts, and only as related: never claim same work without the model.
 const LOCAL_RELATED = 0.8;
 const OUTCOME_MAX = 80;
-const QUESTION = /\?\s*$|^(why|what|how|where|which|when|who|is|are|does|did|do|can|could|would|should|explain|tell me)\b/i;
+const QUESTION =
+  /\?\s*$|^(why|what|how|where|which|when|who|is|are|does|did|do|can|could|would|should|explain|tell me)\b/i;
 
 /** Your newest message, when the thread has no goal yet and it's worth drafting one from; null otherwise. `threads` are compared for duplicate work. */
 export function goalDraftRequest(t: Thread, threads: Thread[] = []) {
   if (t.goal || t.isGoalOff || t.status === 'settled') return null;
-  const messages = t.activity.filter((e) => e.kind === 'message' && typeof e.text === 'string');
+  const messages = t.activity.filter(
+    (e) => e.kind === 'message' && typeof e.text === 'string',
+  );
   const latest = messages.findLast((e) => e.who === 'you');
   if (!latest || !isConcrete(latest.text)) return null;
   const earlier = messages
     .slice(0, messages.lastIndexOf(latest))
     .slice(-EARLIER_MESSAGES)
-    .map((m) => `${m.who === 'you' ? 'User' : 'Agent'}: ${m.text.slice(0, 400)}`);
+    .map(
+      (m) => `${m.who === 'you' ? 'User' : 'Agent'}: ${m.text.slice(0, 400)}`,
+    );
   const others = shortlist(t, latest.text, threads);
-  const related = others.filter((o) => o.score >= LOCAL_RELATED).map((o) => ({ threadId: o.o.id, relation: 'related' as const }));
-  return { key: `${t.id}:${latest.at}:${latest.text}`, text: latest.text, others: others.map((o) => o.o.id), related, prompt: outcomePrompt(t.repo?.project ?? null, latest.text, earlier, others.map((o) => describe(o.o))) };
+  const related = others
+    .filter((o) => o.score >= LOCAL_RELATED)
+    .map((o) => ({ threadId: o.o.id, relation: 'related' as const }));
+  return {
+    key: `${t.id}:${latest.at}:${latest.text}`,
+    text: latest.text,
+    others: others.map((o) => o.o.id),
+    related,
+    prompt: outcomePrompt(
+      t.repo?.project ?? null,
+      latest.text,
+      earlier,
+      others.map((o) => describe(o.o)),
+    ),
+  };
 }
 
 /** Goals in the same profile, active or settled, sharing enough words with the message to be worth asking about. */
@@ -52,7 +70,16 @@ function describe(o: Thread) {
 /** No model answered (web build, offline, timeout): questions stay chats, any other concrete request becomes the outcome as written. */
 export function localGoalDraft(text: string): GoalProposal {
   const trimmed = text.trim();
-  if (QUESTION.test(trimmed)) return { kind: 'chat', outcome: '', criteria: [], similar: [] };
+  if (QUESTION.test(trimmed))
+    return { kind: 'chat', outcome: '', criteria: [], similar: [] };
   const outcome = trimmed.split('\n')[0].replace(/[.!]+$/, '');
-  return { kind: 'task', outcome: outcome.length > OUTCOME_MAX ? `${outcome.slice(0, OUTCOME_MAX - 1)}…` : outcome, criteria: [], similar: [] };
+  return {
+    kind: 'task',
+    outcome:
+      outcome.length > OUTCOME_MAX
+        ? `${outcome.slice(0, OUTCOME_MAX - 1)}…`
+        : outcome,
+    criteria: [],
+    similar: [],
+  };
 }

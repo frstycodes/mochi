@@ -8,7 +8,10 @@ import { useHarness } from './store';
  * outcome (with its Undo); decided anywhere else, it leaves.
  */
 export function queueToast(queueId: string) {
-  return { id: queueToastId(queueId), expand: <QueueToastWidget queueId={queueId} /> };
+  return {
+    id: queueToastId(queueId),
+    expand: <QueueToastWidget queueId={queueId} />,
+  };
 }
 
 const queueToastId = (queueId: string) => `queue:${queueId}`;
@@ -21,7 +24,9 @@ export function useResolvedQueueToasts() {
   const { state } = useHarness();
   useEffect(() => {
     const pending = new Set(state.queue.map((q) => queueToastId(q.id)));
-    for (const t of getToasts()) if (t.id.startsWith('queue:') && !!t.expand && !pending.has(t.id)) dismiss(t.id);
+    for (const t of getToasts())
+      if (t.id.startsWith('queue:') && !!t.expand && !pending.has(t.id))
+        dismiss(t.id);
   }, [state.queue]);
 }
 

@@ -1,6 +1,11 @@
 import { Eye, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from '@/components/ui/card';
 import { TerminalIcon } from '@/icons/panes';
 import { authorName, type GoalProposal, type Thread } from '../model';
 import { usePrefs } from '../settings/prefs';
@@ -16,14 +21,23 @@ import { openGoalEditor } from './GoalEditor';
 export function ProposalCard({ thread }: { thread: Thread }) {
   const { proposal } = thread;
   if (!usePrefs().goals) return null;
-  if (proposal?.state === 'waiting') return <WaitingProposal thread={thread} proposal={proposal} />;
-  if (proposal?.state === 'applied' && !hasWrittenSince(thread, proposal.at)) return <AppliedProposal thread={thread} proposal={proposal} />;
+  if (proposal?.state === 'waiting')
+    return <WaitingProposal thread={thread} proposal={proposal} />;
+  if (proposal?.state === 'applied' && !hasWrittenSince(thread, proposal.at))
+    return <AppliedProposal thread={thread} proposal={proposal} />;
   return null;
 }
 
-function WaitingProposal({ thread, proposal }: { thread: Thread; proposal: GoalProposal }) {
+function WaitingProposal({
+  thread,
+  proposal,
+}: {
+  thread: Thread;
+  proposal: GoalProposal;
+}) {
   const dispatch = useDispatch();
-  const decide = (decision: 'accept' | 'keep') => dispatch({ type: 'goal-proposal', threadId: thread.id, decision });
+  const decide = (decision: 'accept' | 'keep') =>
+    dispatch({ type: 'goal-proposal', threadId: thread.id, decision });
   const acceptAndEdit = () => {
     decide('accept');
     openGoalEditor(thread.id);
@@ -41,9 +55,17 @@ function WaitingProposal({ thread, proposal }: { thread: Thread; proposal: GoalP
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          {!!proposal.before.goal && proposal.before.goal !== proposal.goal && <s className="type-meta text-subtle-foreground">{proposal.before.goal}</s>}
+          {!!proposal.before.goal && proposal.before.goal !== proposal.goal && (
+            <s className="type-meta text-subtle-foreground">
+              {proposal.before.goal}
+            </s>
+          )}
           <p className="type-title text-pretty">{proposal.goal}</p>
-          {!!proposal.basis && <p className="type-meta text-pretty text-muted-foreground">{proposal.basis}</p>}
+          {!!proposal.basis && (
+            <p className="type-meta text-pretty text-muted-foreground">
+              {proposal.basis}
+            </p>
+          )}
         </div>
         <ProposedCriteria criteria={proposal.criteria} />
       </CardContent>
@@ -63,21 +85,52 @@ function WaitingProposal({ thread, proposal }: { thread: Thread; proposal: GoalP
   );
 }
 
-function ProposedCriteria({ criteria }: { criteria: GoalProposal['criteria'] }) {
+function ProposedCriteria({
+  criteria,
+}: {
+  criteria: GoalProposal['criteria'];
+}) {
   return (
     <CallList aria-label="Done when">
       {criteria.map((c) => (
-        <li key={c.text} className="flex min-h-9 items-center gap-2.5 px-3 py-2 type-meta">
-          {c.command ? <TerminalIcon aria-label="Mochi runs a command" className="size-3.5 shrink-0 text-muted-foreground" /> : <Eye aria-label="You check" className="size-3.5 shrink-0 text-muted-foreground" />}
+        <li
+          key={c.text}
+          className="flex min-h-9 items-center gap-2.5 px-3 py-2 type-meta"
+        >
+          {c.command ? (
+            <TerminalIcon
+              aria-label="Mochi runs a command"
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
+          ) : (
+            <Eye
+              aria-label="You check"
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
+          )}
           <span className="min-w-0 flex-1 text-pretty">{c.text}</span>
-          {c.command ? <code className="max-w-[40%] shrink-0 truncate font-mono type-caption text-muted-foreground">{c.command}</code> : <span className="shrink-0 type-caption text-muted-foreground">you check</span>}
+          {c.command ? (
+            <code className="max-w-[40%] shrink-0 truncate font-mono type-caption text-muted-foreground">
+              {c.command}
+            </code>
+          ) : (
+            <span className="shrink-0 type-caption text-muted-foreground">
+              you check
+            </span>
+          )}
         </li>
       ))}
     </CallList>
   );
 }
 
-function AppliedProposal({ thread, proposal }: { thread: Thread; proposal: GoalProposal }) {
+function AppliedProposal({
+  thread,
+  proposal,
+}: {
+  thread: Thread;
+  proposal: GoalProposal;
+}) {
   const dispatch = useDispatch();
   return (
     <p className="flex items-center gap-2 type-meta text-muted-foreground">
@@ -87,11 +140,25 @@ function AppliedProposal({ thread, proposal }: { thread: Thread; proposal: GoalP
         <span className="text-foreground">{proposal.goal}</span>
         {` · ${proposal.criteria.length} ${proposal.criteria.length === 1 ? 'criterion' : 'criteria'}`}
       </span>
-      <Button size="sm" variant="ghost" onClick={() => dispatch({ type: 'goal-proposal', threadId: thread.id, decision: 'undo' })}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() =>
+          dispatch({
+            type: 'goal-proposal',
+            threadId: thread.id,
+            decision: 'undo',
+          })
+        }
+      >
         <Undo />
         Undo
       </Button>
-      <Button size="sm" variant="ghost" onClick={() => openGoalEditor(thread.id)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => openGoalEditor(thread.id)}
+      >
         Edit
       </Button>
     </p>
@@ -99,5 +166,7 @@ function AppliedProposal({ thread, proposal }: { thread: Thread; proposal: GoalP
 }
 
 function hasWrittenSince(thread: Thread, at: number) {
-  return thread.activity.some((e) => e.who === 'you' && e.kind === 'message' && e.at > at);
+  return thread.activity.some(
+    (e) => e.who === 'you' && e.kind === 'message' && e.at > at,
+  );
 }

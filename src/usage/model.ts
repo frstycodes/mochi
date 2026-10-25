@@ -26,8 +26,17 @@ export interface Usage {
 
 export function threadUsage(thread: Thread): Usage {
   const reported = thread.session?.usage;
-  if (reported) return { input: reported.input, output: reported.output, ...(reported.cached !== undefined && { cached: reported.cached }), costUsd: reported.costUsd ?? null };
-  const tokens = agentEntries(thread).reduce((sum, e) => add(sum, entryTokens(e)), { input: 0, output: 0 });
+  if (reported)
+    return {
+      input: reported.input,
+      output: reported.output,
+      ...(reported.cached !== undefined && { cached: reported.cached }),
+      costUsd: reported.costUsd ?? null,
+    };
+  const tokens = agentEntries(thread).reduce(
+    (sum, e) => add(sum, entryTokens(e)),
+    { input: 0, output: 0 },
+  );
   return { ...tokens, costUsd: null };
 }
 
@@ -35,7 +44,12 @@ export function threadUsage(thread: Thread): Usage {
 export function spaceUsage(threads: Thread[], space: Space) {
   const own = threads.filter((t) => t.spaceId === space.id);
   const total = own.map(threadUsage).reduce<Usage>(
-    (sum, u) => ({ input: sum.input + u.input, output: sum.output + u.output, costUsd: u.costUsd === null ? sum.costUsd : (sum.costUsd ?? 0) + u.costUsd }),
+    (sum, u) => ({
+      input: sum.input + u.input,
+      output: sum.output + u.output,
+      costUsd:
+        u.costUsd === null ? sum.costUsd : (sum.costUsd ?? 0) + u.costUsd,
+    }),
     { input: 0, output: 0, costUsd: null },
   );
   return total;
@@ -46,10 +60,14 @@ function agentEntries(thread: Thread) {
 }
 
 function entryTokens(e: ActivityEntry) {
-  if (e.kind === 'reasoning') return { input: 0, output: (e.seconds ?? 0) * REASONING_TOKENS_PER_SECOND };
+  if (e.kind === 'reasoning')
+    return { input: 0, output: (e.seconds ?? 0) * REASONING_TOKENS_PER_SECOND };
   return ENTRY_TOKENS[e.kind];
 }
 
-function add(a: { input: number; output: number }, b: { input: number; output: number }) {
+function add(
+  a: { input: number; output: number },
+  b: { input: number; output: number },
+) {
   return { input: a.input + b.input, output: a.output + b.output };
 }

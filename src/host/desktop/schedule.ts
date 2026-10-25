@@ -1,4 +1,4 @@
 import type { ScheduleHost } from '../types/schedule.ts';
-import { bridge } from './bridge.ts';
+import { desktopNamespace } from './rpc.ts';
 
-export const schedule = (): ScheduleHost => bridge().schedule;
+export const schedule = (): ScheduleHost => desktopNamespace('schedule');

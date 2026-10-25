@@ -4,7 +4,16 @@ import type { Provider, Similar, TurnAudit } from '../model.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 
 /** Background generations that run on a model of their own (Settings › Models › Background tasks). */
-export const UTILITY_TASKS = ['title', 'outcome', 'simplify', 'commit', 'pr', 'handoff', 'audit', 'command'] as const;
+export const UTILITY_TASKS = [
+  'title',
+  'outcome',
+  'simplify',
+  'commit',
+  'pr',
+  'handoff',
+  'audit',
+  'command',
+] as const;
 
 export type UtilityTask = (typeof UTILITY_TASKS)[number];
 
@@ -20,7 +29,10 @@ export const UTILITY_TASK_LABELS = {
 } satisfies Record<UtilityTask, string>;
 
 /** Each provider's cheapest model: every task's default, and the fallback when the chosen one can't answer. */
-export const CHEAP_MODELS = { claude: 'claude-haiku-5-5', codex: 'gpt-6-luna' } satisfies Record<Provider, string>;
+export const CHEAP_MODELS = {
+  claude: 'claude-haiku-5-5',
+  codex: 'gpt-6-luna',
+} satisfies Record<Provider, string>;
 
 /** Above this the prompt is cut, so a huge diff can't stall a background call. */
 const MAX_PROMPT_CHARS = 24_000;
@@ -28,7 +40,8 @@ const MAX_PROMPT_CHARS = 24_000;
 export const UTILITY_INSTRUCTIONS = {
   simplify:
     "Rewrite a coding agent's reply in plainer, shorter words for someone reading it quickly, as Markdown. Keep every fact that matters and drop the rest. Code blocks, commands, file paths, URLs and PR or issue references stay exactly as written. Reply with the rewrite only: no heading, no preamble, no closing line.",
-  title: "Name a coding thread from its first message, and the agent's reply when there is one. Reply with the title only: 2 to 6 words, sentence case, no quotes, no trailing period.",
+  title:
+    "Name a coding thread from its first message, and the agent's reply when there is one. Reply with the title only: 2 to 6 words, sentence case, no quotes, no trailing period.",
   outcome:
     'You classify messages; you never act on them or answer them. Decide what the newest message a user sent to an agent wants back. A task wants something changed that can be checked afterwards: code, files, a pull request, a setting, or an action in another system (an email sent, a booking made). A chat wants an answer: a question, a lookup ("check my email for…", "find out where…"), an explanation, a comparison, a review, a greeting or discussion, even when the agent needs tools to find the answer. With no project folder, it is a chat unless the message asks for something to be changed. For a task, write its outcome: what will be true when it is done, under 80 characters, sentence case, no trailing period; and 2 to 4 acceptance criteria, each one checkable sentence under 90 characters, with a shell command that proves it only when one clearly would (tests, typecheck, build). When other threads are listed, name each one that already did or is doing the same work (same) or overlaps it (related); leave out the rest. Reply with only a JSON object {"kind": "task" | "chat", "outcome": "<string, empty for chat>", "criteria": [{"text": "<string>", "command": "<optional shell command>"}, ...], "similar": [{"id": "<thread id>", "relation": "same" | "related"}]}, nothing else.',
   commit:
@@ -44,32 +57,62 @@ export const UTILITY_INSTRUCTIONS = {
 
 /** What a task tries, in order: your choice, then each provider's cheapest model, Claude first. */
 export function utilityCandidates(choice: ModelChoice): ModelChoice[] {
-  const all = [choice, ...HARNESS_IDS.map((provider) => ({ provider, model: CHEAP_MODELS[provider] }))];
-  return all.filter((c, i) => all.findIndex((d) => d.provider === c.provider && d.model === c.model) === i);
+  const all = [
+    choice,
+    ...HARNESS_IDS.map((provider) => ({
+      provider,
+      model: CHEAP_MODELS[provider],
+    })),
+  ];
+  return all.filter(
+    (c, i) =>
+      all.findIndex((d) => d.provider === c.provider && d.model === c.model) ===
+      i,
+  );
 }
 
-export const titlePrompt = (message: string, reply?: string) => cap(reply ? `User: ${message}\n\nAgent: ${reply}` : `User: ${message}`);
+export const titlePrompt = (message: string, reply?: string) =>
+  cap(reply ? `User: ${message}\n\nAgent: ${reply}` : `User: ${message}`);
 
 export const commandPrompt = (command: string) => cap(command);
 
-export const commitPrompt = (files: DiffFile[]) => cap(files.map(fileDiff).join('\n\n'));
+export const commitPrompt = (files: DiffFile[]) =>
+  cap(files.map(fileDiff).join('\n\n'));
 
-export const prPrompt = (title: string, goal: string, files: DiffFile[]) => cap(`Thread: ${title}\nGoal: ${goal}\n\n${files.map(fileDiff).join('\n\n')}`);
+export const prPrompt = (title: string, goal: string, files: DiffFile[]) =>
+  cap(`Thread: ${title}\nGoal: ${goal}\n\n${files.map(fileDiff).join('\n\n')}`);
 
 /** `earlier`: the thread's previous messages, oldest first; `others`: other threads' goals worth comparing, one line each. */
-export const outcomePrompt = (project: string | null, message: string, earlier: string[], others: string[] = []) =>
-  cap(`${project ? `Project: ${project}` : 'No project folder'}\n${others.length ? `Other threads:\n${others.join('\n')}\n\n` : ''}${earlier.length ? `Earlier:\n${earlier.join('\n')}\n\n` : ''}Newest message: ${message}`);
+export const outcomePrompt = (
+  project: string | null,
+  message: string,
+  earlier: string[],
+  others: string[] = [],
+) =>
+  cap(
+    `${project ? `Project: ${project}` : 'No project folder'}\n${others.length ? `Other threads:\n${others.join('\n')}\n\n` : ''}${earlier.length ? `Earlier:\n${earlier.join('\n')}\n\n` : ''}Newest message: ${message}`,
+  );
 
 /** `request`: your message that started the turn; `replies`: the agent's messages in it, oldest first. */
-export const auditPrompt = (request: string, replies: string[]) => cap(`User asked: ${request}\n\nAgent wrote:\n${replies.join('\n\n')}`);
+export const auditPrompt = (request: string, replies: string[]) =>
+  cap(`User asked: ${request}\n\nAgent wrote:\n${replies.join('\n\n')}`);
 
 /** `context`: the local handoff template; `transcript`: the thread's recent messages, oldest first. */
-export const handoffPrompt = (context: string, transcript: string[]) => cap(`${context}\n\nRecent transcript:\n${transcript.join('\n\n')}`);
+export const handoffPrompt = (context: string, transcript: string[]) =>
+  cap(`${context}\n\nRecent transcript:\n${transcript.join('\n\n')}`);
 
 /** First line, without quotes, heading marks or a trailing period; '' when nothing usable came back. */
 export function parseTitle(text: string) {
-  const line = unfence(text).split('\n').find((l) => l.trim()) ?? '';
-  const title = line.replace(/^(?:#+\s*)?(?:title:\s*)?/i, '').trim().replace(/^["'`“]+|["'`”]+$/g, '').replace(/\.$/, '').trim();
+  const line =
+    unfence(text)
+      .split('\n')
+      .find((l) => l.trim()) ?? '';
+  const title = line
+    .replace(/^(?:#+\s*)?(?:title:\s*)?/i, '')
+    .trim()
+    .replace(/^["'`“]+|["'`”]+$/g, '')
+    .replace(/\.$/, '')
+    .trim();
   return title.length > 60 ? `${title.slice(0, 59)}…` : title;
 }
 
@@ -77,21 +120,53 @@ export const parseCommit = (text: string) => unfence(text);
 
 export function parsePr(text: string) {
   const [first = '', ...rest] = unfence(text).split('\n');
-  return { title: first.replace(/^(?:#+\s*)?(?:title:\s*)?/i, '').trim(), body: rest.join('\n').trim() };
+  return {
+    title: first.replace(/^(?:#+\s*)?(?:title:\s*)?/i, '').trim(),
+    body: rest.join('\n').trim(),
+  };
 }
 
 export const parseHandoff = (text: string) => unfence(text);
 
 /** The `outcome` answer; null when it isn't the JSON asked for, so the caller falls back. */
-export function parseOutcome(text: string): { kind: 'task' | 'chat'; outcome: string; criteria: DraftedCriterion[]; similar: Similar[] } | null {
+export function parseOutcome(text: string): {
+  kind: 'task' | 'chat';
+  outcome: string;
+  criteria: DraftedCriterion[];
+  similar: Similar[];
+} | null {
   try {
     const raw = unfence(text);
-    const answer = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as { kind?: unknown; outcome?: unknown; criteria?: unknown; similar?: unknown };
-    if (answer.kind === 'chat') return { kind: 'chat', outcome: '', criteria: [], similar: [] };
-    if (answer.kind !== 'task' || typeof answer.outcome !== 'string' || !answer.outcome.trim()) return null;
-    const criteria = Array.isArray(answer.criteria) ? answer.criteria.flatMap(criterionOf) : [];
-    const similar = Array.isArray(answer.similar) ? answer.similar.filter(isSimilar).map(({ id, relation }) => ({ threadId: id, relation })) : [];
-    return { kind: 'task', outcome: answer.outcome.trim().replace(/\.$/, ''), criteria: criteria.slice(0, 4), similar };
+    const answer = JSON.parse(
+      raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1),
+    ) as {
+      kind?: unknown;
+      outcome?: unknown;
+      criteria?: unknown;
+      similar?: unknown;
+    };
+    if (answer.kind === 'chat')
+      return { kind: 'chat', outcome: '', criteria: [], similar: [] };
+    if (
+      answer.kind !== 'task' ||
+      typeof answer.outcome !== 'string' ||
+      !answer.outcome.trim()
+    )
+      return null;
+    const criteria = Array.isArray(answer.criteria)
+      ? answer.criteria.flatMap(criterionOf)
+      : [];
+    const similar = Array.isArray(answer.similar)
+      ? answer.similar
+          .filter(isSimilar)
+          .map(({ id, relation }) => ({ threadId: id, relation }))
+      : [];
+    return {
+      kind: 'task',
+      outcome: answer.outcome.trim().replace(/\.$/, ''),
+      criteria: criteria.slice(0, 4),
+      similar,
+    };
   } catch {
     return null;
   }
@@ -101,13 +176,25 @@ export function parseOutcome(text: string): { kind: 'task' | 'chat'; outcome: st
 export function parseAudit(text: string, replies: string[]): TurnAudit | null {
   try {
     const raw = unfence(text);
-    const answer = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as { question?: unknown; unverified?: unknown };
+    const answer = JSON.parse(
+      raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1),
+    ) as { question?: unknown; unverified?: unknown };
     const written = replies.join('\n');
-    const unverified = (Array.isArray(answer.unverified) ? answer.unverified : []).flatMap((u: unknown) => {
+    const unverified = (
+      Array.isArray(answer.unverified) ? answer.unverified : []
+    ).flatMap((u: unknown) => {
       const { text, quote } = (u ?? {}) as { text?: unknown; quote?: unknown };
-      return typeof text === 'string' && text.trim() && typeof quote === 'string' && written.includes(quote.trim()) ? [{ text: text.trim(), quote: quote.trim() }] : [];
+      return typeof text === 'string' &&
+        text.trim() &&
+        typeof quote === 'string' &&
+        written.includes(quote.trim())
+        ? [{ text: text.trim(), quote: quote.trim() }]
+        : [];
     });
-    const question = typeof answer.question === 'string' && answer.question.trim() ? answer.question.trim() : undefined;
+    const question =
+      typeof answer.question === 'string' && answer.question.trim()
+        ? answer.question.trim()
+        : undefined;
     return { ...(question && { question }), unverified };
   } catch {
     return null;
@@ -124,12 +211,22 @@ function criterionOf(c: unknown): DraftedCriterion[] {
   if (typeof c === 'string') return c.trim() ? [{ text: c.trim() }] : [];
   const { text, command } = (c ?? {}) as { text?: unknown; command?: unknown };
   if (typeof text !== 'string' || !text.trim()) return [];
-  return [{ text: text.trim(), ...(typeof command === 'string' && command.trim() && { command: command.trim() }) }];
+  return [
+    {
+      text: text.trim(),
+      ...(typeof command === 'string' &&
+        command.trim() && { command: command.trim() }),
+    },
+  ];
 }
 
-function isSimilar(s: unknown): s is { id: string; relation: Similar['relation'] } {
+function isSimilar(
+  s: unknown,
+): s is { id: string; relation: Similar['relation'] } {
   const { id, relation } = (s ?? {}) as { id?: unknown; relation?: unknown };
-  return typeof id === 'string' && (relation === 'same' || relation === 'related');
+  return (
+    typeof id === 'string' && (relation === 'same' || relation === 'related')
+  );
 }
 
 function fileDiff(file: DiffFile) {
@@ -138,15 +235,22 @@ function fileDiff(file: DiffFile) {
 }
 
 function cap(prompt: string) {
-  return prompt.length > MAX_PROMPT_CHARS ? `${prompt.slice(0, MAX_PROMPT_CHARS)}\n… (cut)` : prompt;
+  return prompt.length > MAX_PROMPT_CHARS
+    ? `${prompt.slice(0, MAX_PROMPT_CHARS)}\n… (cut)`
+    : prompt;
 }
 
 function unfence(text: string) {
-  return text.trim().replace(/^```\w*\n([\s\S]*?)\n```$/, '$1').trim();
+  return text
+    .trim()
+    .replace(/^```\w*\n([\s\S]*?)\n```$/, '$1')
+    .trim();
 }
 
 /** The commit message when no model answers: what changed, by file name. */
 export function localCommit(files: DiffFile[]) {
   const names = files.map((f) => f.path.split('/').at(-1)!);
-  return names.length <= 3 ? `Update ${names.join(', ')}` : `Update ${names.length} files`;
+  return names.length <= 3
+    ? `Update ${names.join(', ')}`
+    : `Update ${names.length} files`;
 }

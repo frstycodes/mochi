@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from 'react';
+import { persistedSlice } from '../lib/uiStorage.ts';
+import { useStore } from 'zustand';
+import { setAmbientPins } from '../store/context.ts';
 
 /** A pinned message, or a passage inside one, kept per thread so it can be found again from the chat's outline rail. */
 export interface Pin {
@@ -12,35 +14,47 @@ export interface Pin {
 export const PINS_STORAGE_KEY = 'harness.pins.v1';
 export type Pins = Record<string, Pin[]>;
 
-let pins: Pins = load();
-const listeners = new Set<() => void>();
+const pinsSlice = persistedSlice<Pins>(PINS_STORAGE_KEY, {});
+const getPins = () => pinsSlice.getState().value;
 const EMPTY: Pin[] = [];
 
-/** Outside React: the store reads them when a compaction starts or ends. */
-export const getThreadPins = (threadId: string) => pins[threadId] ?? EMPTY;
+/** Outside React. */
+export const getThreadPins = (threadId: string) => getPins()[threadId] ?? EMPTY;
+
+setAmbientPins(getPins);
 
 export function useThreadPins(threadId: string) {
-  return useSyncExternalStore(subscribe, () => pins[threadId] ?? EMPTY);
+  return useStore(pinsSlice, (s) => s.value[threadId] ?? EMPTY);
 }
 
 /** Pins the passage, or the whole message when `text` is empty; pinning the same thing twice unpins it. */
 export function togglePin(threadId: string, index: number, text = '') {
-  const list = pins[threadId] ?? [];
+  const list = getPins()[threadId] ?? [];
   const passage = normalise(text);
   const existing = list.find((p) => p.index === index && p.text === passage);
-  set(threadId, existing ? list.filter((p) => p !== existing) : [...list, { id: `${index}:${Date.now()}`, index, text: passage }].sort((a, b) => a.index - b.index));
+  set(
+    threadId,
+    existing
+      ? list.filter((p) => p !== existing)
+      : [...list, { id: `${index}:${Date.now()}`, index, text: passage }].sort(
+          (a, b) => a.index - b.index,
+        ),
+  );
   return !existing;
 }
 
 export function unpin(threadId: string, id: string) {
-  set(threadId, (pins[threadId] ?? []).filter((p) => p.id !== id));
+  set(
+    threadId,
+    (getPins()[threadId] ?? []).filter((p) => p.id !== id),
+  );
 }
 
 let pruned: { threadId: string; list: Pin[] } | null = null;
 
 /** After a rewind the transcript is shorter: pins on messages that are gone go with them, until the rewind is undone. */
 export function prunePins(threadId: string, messageCount: number) {
-  const list = pins[threadId] ?? [];
+  const list = getPins()[threadId] ?? [];
   pruned = { threadId, list };
   const kept = list.filter((p) => p.index < messageCount);
   if (kept.length !== list.length) set(threadId, kept);
@@ -61,39 +75,20 @@ export function normalise(text: string) {
 }
 
 export function useAllPins() {
-  return useSyncExternalStore(subscribe, () => pins);
+  return useStore(pinsSlice, (s) => s.value);
 }
 
 /** Every thread's pins at once (Settings › Data and storage clears them); returns what was there, for an undo. */
 export function replaceAllPins(next: Pins) {
-  const previous = pins;
+  const previous = getPins();
   write(next);
   return previous;
 }
 
 function set(threadId: string, list: Pin[]) {
-  write({ ...pins, [threadId]: list });
+  write({ ...getPins(), [threadId]: list });
 }
 
 function write(next: Pins) {
-  pins = next;
-  try {
-    localStorage.setItem(PINS_STORAGE_KEY, JSON.stringify(pins));
-  } catch {
-    // Private windows and blocked storage: pins still work for this session.
-  }
-  listeners.forEach((l) => l());
-}
-
-function load(): Pins {
-  try {
-    return JSON.parse(localStorage.getItem(PINS_STORAGE_KEY) ?? '{}') as Pins;
-  } catch {
-    return {};
-  }
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
+  pinsSlice.setState({ value: next });
 }
