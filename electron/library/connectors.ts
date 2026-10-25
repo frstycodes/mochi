@@ -1,4 +1,5 @@
-import { app, safeStorage, shell } from 'electron';
+import { app, shell } from 'electron';
+import { canStore, open, seal } from '../secrets';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -76,10 +77,8 @@ async function readAll(): Promise<Record<string, string>> {
 
 export async function readSecrets(id: string): Promise<Secrets> {
   const sealed = (await readAll())[id];
-  if (!sealed || !safeStorage.isEncryptionAvailable()) return {};
-  return JSON.parse(
-    safeStorage.decryptString(Buffer.from(sealed, 'base64')),
-  ) as Secrets;
+  if (!sealed || !canStore()) return {};
+  return JSON.parse(open(sealed)) as Secrets;
 }
 
 /** Merges `patch` into the account's secrets; `null` deletes them. Writes go one at a time. */
@@ -88,16 +87,14 @@ export function saveSecrets(
   patch: Partial<Secrets> | null,
 ): Promise<void> {
   const next = writes.then(async () => {
-    if (patch && !safeStorage.isEncryptionAvailable())
+    if (patch && !canStore())
       throw new Error(
         'The OS keychain is not available, so sign-ins cannot be stored safely',
       );
     const all = await readAll();
     if (patch === null) delete all[id];
     else
-      all[id] = safeStorage
-        .encryptString(JSON.stringify({ ...(await readSecrets(id)), ...patch }))
-        .toString('base64');
+      all[id] = seal(JSON.stringify({ ...(await readSecrets(id)), ...patch }));
     const tmp = `${secretsFile()}.${process.pid}.tmp`;
     await writeFile(tmp, JSON.stringify(all), { mode: 0o600 });
     await rename(tmp, secretsFile());
