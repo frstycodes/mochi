@@ -5,18 +5,24 @@ import { COMMAND_TYPE, project } from '@mochi/domain';
 import type {
   AgentDecision,
   AgentEvent,
-} from '../../../../src/host/types/agent.ts';
-import { resolution, undelivered } from '../../../../src/runtime/apply.ts';
+} from '../../../../apps/desktop/src/host/types/agent.ts';
+import {
+  resolution,
+  undelivered,
+} from '../../../../apps/desktop/src/runtime/apply.ts';
 import {
   agentCallArgs,
   agentCalls,
   unsentTurns,
   type AgentCall,
-} from '../../../../src/runtime/live.ts';
-import { setStartEnv } from '../../../../src/runtime/startEnv.ts';
-import { withContext } from '../../../../src/store/context.ts';
-import type { Action, State } from '../../../../src/store/types.ts';
-import type { Thread } from '../../../../src/model.ts';
+} from '../../../../apps/desktop/src/runtime/live.ts';
+import { setStartEnv } from '../../../../apps/desktop/src/runtime/startEnv.ts';
+import { withContext } from '../../../../apps/desktop/src/store/context.ts';
+import type {
+  Action,
+  State,
+} from '../../../../apps/desktop/src/store/types.ts';
+import type { Thread } from '../../../../apps/desktop/src/model.ts';
 import { agent } from '../agents/handlers.ts';
 import { removeSchedule } from '../schedule/scheduler.ts';
 import { Projection } from './projection.ts';

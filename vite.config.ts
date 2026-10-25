@@ -1,18 +1,14 @@
 import path from 'node:path';
-import { defineConfig, lazyPlugins, loadEnv } from 'vite-plus';
-import react, { reactCompilerPreset } from '@vitejs/plugin-react';
-import babel from '@rolldown/plugin-babel';
-import tailwindcss from '@tailwindcss/vite';
-import { viteSingleFile } from 'vite-plugin-singlefile';
-import electron from 'vite-plugin-electron/simple';
+import { defineConfig } from 'vite-plus';
 import { COMPLEX_FILES } from './scripts/oxlint/complexity-burndown.ts';
-import { csp } from './scripts/csp.ts';
 
 // Copied from shadcn and AI Elements and kept as published, so an update diffs cleanly.
-const VENDORED = ['src/components/ui/**', 'src/components/ai-elements/**'];
+const VENDORED = [
+  'apps/desktop/src/components/ui/**',
+  'apps/desktop/src/components/ai-elements/**',
+];
 
-export default defineConfig(({ mode }) => ({
-  base: './',
+export default defineConfig({
   run: {
     tasks: {
       test: {
@@ -28,13 +24,12 @@ export default defineConfig(({ mode }) => ({
           ],
         },
       },
-      typecheck: {
+      tsc: {
         command:
-          'tsc -b && tsc -p packages/domain && tsc -p packages/core && tsc -p electron && tsc -p infra/relay',
+          'tsc -b apps/desktop && tsc -p apps/desktop/electron && tsc -p packages/domain && tsc -p packages/core && tsc -p infra/relay',
         // `tsc -b` rewrites its own .tsbuildinfo, which would otherwise count as a changed input.
         cache: { input: [{ auto: true }, '!**/*.tsbuildinfo'] },
       },
-      build: 'tsc -b && vp build',
     },
   },
   staged: { '*.{js,mjs,ts,tsx,json,css,md}': 'vp check --fix' },
@@ -76,7 +71,12 @@ export default defineConfig(({ mode }) => ({
         rules: { 'sonarjs/cognitive-complexity': 'off' },
       },
       {
-        files: ['src/**', 'electron/**', 'packages/*/src/**', 'infra/*/src/**'],
+        files: [
+          'apps/*/src/**',
+          'apps/*/electron/**',
+          'packages/*/src/**',
+          'infra/*/src/**',
+        ],
         excludeFiles: [...VENDORED, '**/*.test.ts'],
         rules: { 'mochi/no-em-dash-copy': 'error' },
       },
@@ -92,7 +92,7 @@ export default defineConfig(({ mode }) => ({
       },
       // The React Compiler builds the renderer only; Core's `use*` setters are not hooks.
       {
-        files: ['src/**/*.{ts,tsx}'],
+        files: ['apps/desktop/src/**/*.{ts,tsx}'],
         excludeFiles: VENDORED,
         rules: {
           'react/hooks': 'error',
@@ -113,10 +113,11 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     include: [
-      'src/**/*.test.ts',
+      'apps/*/src/**/*.test.ts',
+      'apps/*/scripts/**/*.test.ts',
+      'apps/*/electron/**/*.test.ts',
       'scripts/**/*.test.ts',
       'packages/*/src/**/*.test.ts',
-      'electron/**/*.test.ts',
       'infra/**/src/**/*.test.ts',
     ],
     setupFiles: ['scripts/test-env.ts'],
@@ -133,66 +134,27 @@ export default defineConfig(({ mode }) => ({
     testTimeout: 60_000,
     hookTimeout: 60_000,
   },
-  // Tests run the sources as Node would, without the renderer's transforms.
-  plugins: lazyPlugins(() =>
-    mode === 'test'
-      ? []
-      : [
-          react(),
-          babel({ presets: [reactCompilerPreset()] }),
-          tailwindcss(),
-          mode === 'artifact' && viteSingleFile(),
-          mode === 'electron' && csp(),
-          mode === 'electron' &&
-            electron({
-              // node-pty is a native addon: bundling it breaks its `.node` and spawn-helper lookups.
-              // playwright-core resolves its own package.json and reads files beside it at runtime.
-              main: {
-                // `serve.js` is `mochi serve` (bin/mochi.mjs): the same Core under plain Node.
-                entry: [
-                  'electron/main.ts',
-                  'packages/core/src/core.ts',
-                  'packages/core/src/serve/serve.ts',
-                ],
-                vite: {
-                  // Mochi's OAuth app secrets (electron/library/oauthApps.ts), from the gitignored .env.local.
-                  define: {
-                    __MOCHI_OAUTH_ENV__: JSON.stringify(
-                      loadEnv(mode, import.meta.dirname, 'MOCHI_OAUTH_'),
-                    ),
-                  },
-                  build: {
-                    rolldownOptions: {
-                      external: ['node-pty', /^playwright-core(\/|$)/],
-                    },
-                  },
-                },
-              },
-              // A sandboxed preload must be CommonJS; `.cjs` keeps it CJS under the package's `"type": "module"`.
-              preload: {
-                input: 'electron/preload.ts',
-                vite: {
-                  build: {
-                    rolldownOptions: {
-                      output: { entryFileNames: '[name].cjs' },
-                    },
-                  },
-                },
-              },
-            }),
-        ],
-  ),
+  // Tests run the sources as Node would, without the renderer's transforms; the renderer's aliases still apply.
   resolve: {
     alias: [
-      { find: '@', replacement: path.resolve(import.meta.dirname, 'src') },
+      {
+        find: '@',
+        replacement: path.resolve(import.meta.dirname, 'apps/desktop/src'),
+      },
       {
         find: /^shiki$/,
-        replacement: path.resolve(import.meta.dirname, 'src/lib/shiki-slim.ts'),
+        replacement: path.resolve(
+          import.meta.dirname,
+          'apps/desktop/src/lib/shiki-slim.ts',
+        ),
       },
       {
         find: /^shiki\/wasm$/,
-        replacement: path.resolve(import.meta.dirname, 'src/lib/no-wasm.ts'),
+        replacement: path.resolve(
+          import.meta.dirname,
+          'apps/desktop/src/lib/no-wasm.ts',
+        ),
       },
     ],
   },
-}));
+});

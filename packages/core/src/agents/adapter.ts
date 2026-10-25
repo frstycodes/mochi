@@ -2,7 +2,7 @@ import type {
   AgentDecision,
   AgentRunOptions,
   AgentSendInput,
-} from '../../../../src/host/types/agent.ts';
+} from '../../../../apps/desktop/src/host/types/agent.ts';
 
 /** One harness's live sessions, by Mochi thread id. Every method but `start` is a no-op (or false/null) for a thread it doesn't hold. */
 export interface HarnessAdapter {

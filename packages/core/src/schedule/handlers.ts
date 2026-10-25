@@ -1,6 +1,6 @@
 import { Effect, Schema } from 'effect';
 import { definitionOf } from '@mochi/schema';
-import type { ScheduleEvent } from '../../../../src/host/types/schedule.ts';
+import type { ScheduleEvent } from '../../../../apps/desktop/src/host/types/schedule.ts';
 import { Scheduler } from './scheduler.ts';
 
 type Service = Scheduler['Service'];

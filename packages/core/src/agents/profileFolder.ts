@@ -1,13 +1,13 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Provider } from '../../../../src/model.ts';
-import { HARNESS_IDS } from '../../../../src/settings/harnesses.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
+import { HARNESS_IDS } from '../../../../apps/desktop/src/settings/harnesses.ts';
 import {
   composeInstructions,
   instructionsFileOf,
   SHARED_INSTRUCTIONS,
   type ProfileFolder,
-} from '../../../../src/settings/instructionFiles.ts';
+} from '../../../../apps/desktop/src/settings/instructionFiles.ts';
 import { userData } from './paths.ts';
 
 // A long file would crowd every turn's context; past this it is cut, and Settings says how long it is.

@@ -1,19 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
-  "entry": [
-    "electron/main.ts",
-    "electron/preload.ts",
-    "scripts/*.{ts,mjs}",
-    "tests/e2e/*.{ts,js,mjs}",
-    "src/lib/{shiki-slim,no-wasm}.ts"
-  ],
-  "ignore": [
-    "packages/schema/scripts/**",
-    "src/schemaConformance/**",
-    "src/schedule/RunMenu.tsx",
-    "src/goals/outcome.ts",
-    "src/settings/sections/goals.tsx"
-  ],
   "ignoreDependencies": ["@effect/language-service", "cloudflare"],
   "ignoreBinaries": ["mkfifo"],
   "rules": {
@@ -21,5 +7,27 @@
     "types": "off",
     "enumMembers": "off",
     "duplicates": "off"
+  },
+  "workspaces": {
+    "apps/desktop": {
+      "entry": [
+        "electron/main.ts",
+        "electron/preload.ts",
+        "scripts/*.{ts,mjs}",
+        "tests/e2e/*.{ts,js,mjs}",
+        "src/lib/{shiki-slim,no-wasm}.ts"
+      ],
+      "ignore": [
+        "src/schemaConformance/**",
+        "src/schedule/RunMenu.tsx",
+        "src/goals/outcome.ts",
+        "src/settings/sections/goals.tsx"
+      ],
+      "ignoreDependencies": ["@parcel/watcher"]
+    },
+    "packages/schema": {
+      "ignore": ["scripts/**"],
+      "ignoreDependencies": ["@anthropic-ai/claude-agent-sdk"]
+    }
   }
 }

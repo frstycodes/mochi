@@ -1,4 +1,4 @@
-import type { MochiScope } from '../../../../src/runtime/toolTable.ts';
+import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 
 /** Appended to every main thread's system prompt, Claude and Codex alike; the goals part only while goals are on. A settings chat gets its own. */
 export function mochiInstructions({

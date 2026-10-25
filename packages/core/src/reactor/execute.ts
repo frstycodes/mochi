@@ -3,18 +3,21 @@ import {
   compactFocus,
   compactInstructions,
   keptContext,
-} from '../../../../src/chat/compaction.ts';
-import { sendAction } from '../../../../src/chat/queued.ts';
-import { threadRoot } from '../../../../src/git/root.ts';
+} from '../../../../apps/desktop/src/chat/compaction.ts';
+import { sendAction } from '../../../../apps/desktop/src/chat/queued.ts';
+import { threadRoot } from '../../../../apps/desktop/src/git/root.ts';
 import {
   dueQueued,
   dueReports,
   dueWakes,
-} from '../../../../src/runtime/due.ts';
-import { dueResumes } from '../../../../src/runtime/limits.ts';
-import type { Action, State } from '../../../../src/store/types.ts';
-import { hasTempBranch } from '../../../../src/utility/titles.ts';
-import { parseTitle } from '../../../../src/utility/prompts.ts';
+} from '../../../../apps/desktop/src/runtime/due.ts';
+import { dueResumes } from '../../../../apps/desktop/src/runtime/limits.ts';
+import type {
+  Action,
+  State,
+} from '../../../../apps/desktop/src/store/types.ts';
+import { hasTempBranch } from '../../../../apps/desktop/src/utility/titles.ts';
+import { parseTitle } from '../../../../apps/desktop/src/utility/prompts.ts';
 import { agent, utilityCall } from '../agents/handlers.ts';
 import { GitHub } from '../github/service.ts';
 import { Capabilities, hostHandlers } from '../hostServer.ts';

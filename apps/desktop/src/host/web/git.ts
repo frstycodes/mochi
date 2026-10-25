@@ -1,0 +1,463 @@
+import { parseDiff } from '../../git/parse.ts';
+import { bareState, refKey, type RefState } from '@mochi/domain/chat/refs';
+import type { GitHost, PrReview } from '../types/git.ts';
+import { branchFromTitle } from '../../git/workspace.ts';
+
+// Fixture paths match the `adm` thread's demo work, so the Changes pane has something to show.
+const STAGED = [
+  'diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts',
+  'new file mode 100644',
+  'index 0000000..8f3c2a1',
+  '--- /dev/null',
+  '+++ b/apps/api/routes/admin/usage.ts',
+  '@@ -0,0 +1,14 @@',
+  "+import { db } from '@latitude/db';",
+  "+import { cursorPage } from '../../lib/pagination';",
+  '+',
+  '+export async function usage(req: AdminRequest) {',
+  '+  const { cursor, days = 14 } = req.query;',
+  '+  return cursorPage(',
+  '+    db.apiUsageDaily',
+  "+      .where('day', '>=', daysAgo(days))",
+  "+      .groupBy(['key_id', 'day'])",
+  "+      .orderBy(['key_id', 'day']),",
+  '+    cursor,',
+  '+    500,',
+  '+  );',
+  '+}',
+  '',
+].join('\n');
+
+const UNSTAGED = [
+  'diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx',
+  'index 2b7e9d0..c41a7f3 100644',
+  '--- a/apps/web/routes/admin/usage.tsx',
+  '+++ b/apps/web/routes/admin/usage.tsx',
+  '@@ -1,8 +1,10 @@',
+  "-import { Chart } from '../../components/Chart';",
+  "+import { BarChart } from '../../components/charts/BarChart';",
+  "+import { DateRangePicker } from '../../components/DateRangePicker';",
+  " import { useUsage } from '../../api/usage';",
+  ' ',
+  ' export function UsagePage() {',
+  '-  const { data } = useUsage();',
+  '+  const [range, setRange] = useState(last14Days);',
+  '+  const { data } = useUsage({ range });',
+  '   if (!data) return <UsageSkeleton />;',
+  ' ',
+  '   return (',
+  '@@ -20,8 +22,10 @@ export function UsagePage() {',
+  '       <header className="flex items-center gap-2">',
+  '         <h1>API usage</h1>',
+  '-        <span>Last 14 days</span>',
+  '+        <DateRangePicker value={range} onChange={setRange} />',
+  '       </header>',
+  '-      <Chart data={data.byDay} />',
+  '+      <BarChart data={data.byDay} x="day" y="requests" />',
+  '+      <KeyTable rows={data.byKey} />',
+  '+      <ExportButton range={range} />',
+  '     </section>',
+  '   );',
+  ' }',
+  'diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx',
+  'deleted file mode 100644',
+  'index 9a1b2c3..0000000',
+  '--- a/apps/web/components/Chart.tsx',
+  '+++ /dev/null',
+  '@@ -1,4 +0,0 @@',
+  "-import { LineChart } from 'recharts';",
+  '-export function Chart({ data }: { data: unknown[] }) {',
+  '-  return <LineChart data={data} />;',
+  '-}',
+  '',
+].join('\n');
+
+const FORK = [
+  'diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx',
+  'index 2b7e9d0..77d1e04 100644',
+  '--- a/apps/web/routes/admin/usage.tsx',
+  '+++ b/apps/web/routes/admin/usage.tsx',
+  '@@ -20,8 +20,7 @@ export function UsagePage() {',
+  '       <header className="flex items-center gap-2">',
+  '         <h1>API usage</h1>',
+  '         <span>Last 14 days</span>',
+  '       </header>',
+  '-      <Chart data={data.byDay} />',
+  '+      <UsageTable rows={data.byKey} virtualized />',
+  '     </section>',
+  '   );',
+  ' }',
+  '',
+].join('\n');
+
+const DAY = 86_400_000;
+const FIXTURE_BRANCHES = [
+  ['main', 0],
+  ['feat/admin-usage', 0.2],
+  ['feat/api-rate-limits', 0.5],
+  ['fix/checkout-e2e', 1.5],
+  ['feat/better-auth-session-rotation-and-device-trust-for-enterprise-sso', 3],
+  ['origin/release/2026-10', 4],
+  ['origin/feat/onboarding-emails', 9],
+] as const;
+// Same rule as `git check-ref-format --branch` for what people actually type.
+const BAD_REF =
+  /(^[-/.])|([/.]$)|\.\.|\/\/|@\{|[\s~^:?*[\\\x00-\x1f\x7f]|\.lock(\/|$)|^@$/;
+
+export const git: GitHost = {
+  async status() {
+    return {
+      branch: 'feat/admin-usage',
+      files: [
+        { path: 'apps/api/routes/admin/usage.ts', status: 'added' },
+        { path: 'apps/web/routes/admin/usage.tsx', status: 'modified' },
+        { path: 'apps/web/components/Chart.tsx', status: 'deleted' },
+      ],
+    };
+  },
+  async diff(cwd, scope) {
+    const staged = parseDiff(STAGED, scope === 'uncommitted');
+    const files = [...staged, ...parseDiff(UNSTAGED, false)];
+    // A forked worktree took another approach, so the fork comparison has two different sides to show.
+    if (cwd.includes('/fork-'))
+      return {
+        branch: 'feat/admin-usage-fork',
+        base: 'origin/main',
+        files: [...files.slice(0, 1), ...parseDiff(FORK, false)],
+      };
+    return { branch: 'feat/admin-usage', base: 'origin/main', files };
+  },
+  async stage() {},
+  async unstage() {},
+  async revert() {},
+  async commit() {
+    return '0000000';
+  },
+  async push() {},
+  async createPr() {
+    return 'https://github.com/latitude-dev/latitude/pull/490';
+  },
+  async ciLog() {
+    return 'Error: lint failed\n  src/index.ts:12:3  no-unused-vars';
+  },
+  async ghAccounts() {
+    return [];
+  },
+  async repoSlug() {
+    return { owner: 'frstycodes', repo: 'mochi' };
+  },
+  async refStates(_cwd, refs) {
+    return Object.fromEntries(
+      refs.flatMap((ref) =>
+        DEMO_REFS[ref.number] ? [[refKey(ref), DEMO_REFS[ref.number]]] : [],
+      ),
+    );
+  },
+  async worktreePrs() {
+    return [];
+  },
+  async setAutoMerge() {},
+  async prReview(_cwd, pr) {
+    return {
+      ...DEMO_REVIEW,
+      number: pr,
+      files: [...parseDiff(STAGED, false), ...parseDiff(UNSTAGED, false)],
+    };
+  },
+  async commentPr() {},
+  async replyThread() {},
+  async resolveThread() {},
+  async reviewPr() {},
+  async mergePr() {},
+  async pr() {
+    return {
+      number: 490,
+      url: 'https://github.com/latitude-dev/latitude/pull/490',
+      title: 'Rate limits for the public API',
+      state: 'OPEN',
+      checks: [
+        { name: 'typecheck', state: 'pass' },
+        { name: 'unit', state: 'pass' },
+        { name: 'e2e', state: 'pending' },
+        { name: 'lint', state: 'fail' },
+      ],
+    };
+  },
+  async sync() {
+    return { base: 'origin/main', conflicts: [] };
+  },
+  async branches(root) {
+    // One fixture project has uncommitted changes, so the project folder warning and the switch dialog can be seen.
+    const changes = root.endsWith('latitude')
+      ? { files: 10, added: 59, removed: 38 }
+      : { files: 0, added: 0, removed: 0 };
+    const now = Date.now();
+    return {
+      current: 'main',
+      defaultBranch: 'main',
+      changes,
+      branches: FIXTURE_BRANCHES.map(([name, days]) => ({
+        name,
+        isRemote: name.startsWith('origin/'),
+        committedAt: now - days * DAY,
+        worktree:
+          name === 'main'
+            ? root
+            : name === 'feat/admin-usage'
+              ? '~/.mochi/worktrees/latitude/adm'
+              : undefined,
+      })),
+    };
+  },
+  async renameAutoBranch(_cwd, expected, title) {
+    return branchFromTitle(
+      expected,
+      title,
+      new Set(FIXTURE_BRANCHES.map(([b]) => b)),
+    );
+  },
+  async branchNameError(_root, name) {
+    if (!name.trim()) return 'Name the branch';
+    if (BAD_REF.test(name)) return `"${name}" isn't a valid branch name`;
+    return FIXTURE_BRANCHES.some(([b]) => b === name)
+      ? `A branch named ${name} already exists`
+      : null;
+  },
+  async switchBranch(_root, branch, { changes }) {
+    if (changes === 'bring' && branch === 'feat/api-rate-limits')
+      throw new Error(
+        'error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/limits/schema.ts\nPlease commit your changes or stash them before you switch branches.\nAborting',
+      );
+  },
+  async addWorktree(_root, threadId) {
+    return `~/.mochi/worktrees/demo/${threadId}`;
+  },
+  async worktrees() {
+    return [];
+  },
+  async head() {
+    return { branch: 'main', isDetached: false };
+  },
+  async removeWorktree() {},
+  async diskUsage() {
+    return 48_200_000;
+  },
+  async checkpoint(_cwd, threadId, n) {
+    return `${threadId}${n}`.padEnd(40, '0');
+  },
+  async restoreCheckpoint() {},
+  async restoreFiles() {},
+  async rewindPreview() {
+    return {
+      files: ['src/limits/schema.ts', 'src/gateway/config.ts'],
+      outside: [],
+    };
+  },
+  /** Later checkpoints hold more of the fixture's changes, so scrubbing a replay shows the diff growing. */
+  async checkpointDiff(cwd, _threadId, n) {
+    const { files, ...diff } = await git.diff(cwd, 'branch');
+    return { ...diff, files: files.slice(0, (n % files.length) + 1) };
+  },
+  async turnDiff(cwd) {
+    return (await git.diff(cwd, 'branch')).files.slice(0, 2);
+  },
+  async runCheck(_cwd, command) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return { exitCode: 0, output: `$ ${command}\n(demo) passed`, ms: 1200 };
+  },
+  async forkWorktree(_cwd, threadId) {
+    return `~/.mochi/worktrees/demo/${threadId}`;
+  },
+};
+
+// One of every chip state, by number on any repo; other numbers stay unknown, as without gh.
+const demoRef = (
+  kind: RefState['kind'],
+  status: RefState['status'],
+  number: number,
+  title: string,
+  extra: Partial<RefState> = {},
+): RefState => ({
+  ...bareState(
+    kind,
+    status,
+    title,
+    `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`,
+  ),
+  author: {
+    login: 'frstycodes',
+    avatarUrl: 'https://avatars.githubusercontent.com/frstycodes?s=40',
+  },
+  updatedAt: new Date(Date.now() - (number % 9) * 47 * 60_000).toISOString(),
+  ...(kind === 'pr' && {
+    branch: { head: `feat/demo-${number}`, base: 'main' },
+    diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 },
+    checks: 'pass',
+    checkCounts: { passed: 5, total: 5 },
+    review: 'approved',
+  }),
+  ...extra,
+});
+
+const DEMO_REVIEW = {
+  number: 490,
+  url: 'https://github.com/latitude-dev/latitude/pull/490',
+  title: 'Admin usage dashboard',
+  body: 'Adds `/admin/usage` with a per-key daily breakdown.\n\n- Cursor-paged API route, 500 rows a page\n- Date range picker and CSV export on the page',
+  author: 'frstycodes',
+  state: 'OPEN',
+  isDraft: false,
+  base: 'main',
+  head: 'feat/admin-usage',
+  isConflicting: false,
+  viewer: 'frstycodes',
+  checks: [
+    { name: 'typecheck', state: 'pass' },
+    { name: 'unit', state: 'pass' },
+    { name: 'e2e', state: 'pending' },
+    {
+      name: 'lint',
+      state: 'fail',
+      link: 'https://github.com/latitude-dev/latitude/actions/runs/1',
+    },
+  ],
+  comments: [
+    {
+      id: 'c1',
+      author: 'mira',
+      body: 'Looks close. Two things inline, the page size mostly.',
+      at: '2026-10-20T09:12:00Z',
+      verdict: 'changes-requested',
+    },
+    {
+      id: 'c2',
+      author: 'frstycodes',
+      body: 'Thanks, on it.',
+      at: '2026-10-20T10:02:00Z',
+    },
+  ],
+  threads: [
+    {
+      id: 'PRRT_demo1',
+      path: 'apps/api/routes/admin/usage.ts',
+      side: 'additions',
+      line: 12,
+      isResolved: false,
+      comments: [
+        {
+          id: 't1',
+          author: 'mira',
+          body: '500 rows is a lot for the admin table. Can we do 100 and let the cursor do the rest?',
+          at: '2026-10-20T09:10:00Z',
+        },
+      ],
+    },
+    {
+      id: 'PRRT_demo2',
+      path: 'apps/web/routes/admin/usage.tsx',
+      side: 'deletions',
+      line: 5,
+      isResolved: true,
+      comments: [
+        {
+          id: 't2',
+          author: 'mira',
+          body: 'Was the default range on purpose?',
+          at: '2026-10-20T09:11:00Z',
+        },
+        {
+          id: 't3',
+          author: 'frstycodes',
+          body: 'Yes, matches billing.',
+          at: '2026-10-20T10:01:00Z',
+        },
+      ],
+    },
+    {
+      id: 'PRRT_demo3',
+      path: 'apps/web/routes/admin/old.tsx',
+      side: 'additions',
+      line: null,
+      isResolved: false,
+      comments: [
+        {
+          id: 't4',
+          author: 'mira',
+          body: 'This file can go once the new page ships.',
+          at: '2026-10-19T16:40:00Z',
+        },
+      ],
+    },
+  ],
+} satisfies Omit<PrReview, 'files'>;
+
+const DEMO_REFS: Record<number, RefState> = {
+  45: demoRef(
+    'pr',
+    'open',
+    45,
+    'fix(header): restore the side pane and sidebar toggles',
+  ),
+  46: demoRef(
+    'pr',
+    'open',
+    46,
+    'feat(composer): slash anywhere, @ skills and MCP servers',
+    { hasConflicts: true },
+  ),
+  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', {
+    checks: 'fail',
+    checkCounts: { passed: 3, total: 5 },
+  }),
+  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links', {
+    checks: 'pending',
+    checkCounts: { passed: 3, total: 5 },
+    review: null,
+  }),
+  47: demoRef(
+    'pr',
+    'merged',
+    47,
+    'fix: replace prototype stubs with working actions',
+  ),
+  30: demoRef('pr', 'closed', 30, 'feat: experimental orbit gestures'),
+  7: demoRef('pr', 'closed', 7, 'An early PR that was closed'),
+  50: demoRef('pr', 'open', 50, 'A PR that conflicts with main', {
+    hasConflicts: true,
+  }),
+  // The Better Auth demo thread's PRs: one of each attention rank, so its sidebar stack overflows.
+  479: demoRef('pr', 'merged', 479, 'Better Auth core', {
+    branch: { head: 'feat/better-auth', base: 'main' },
+  }),
+  482: demoRef('pr', 'open', 482, 'Session backfill + legacy removal', {
+    branch: { head: 'feat/better-auth-backfill', base: 'main' },
+    checks: 'fail',
+    checkCounts: { passed: 4, total: 6 },
+    review: 'changes',
+  }),
+  484: demoRef('pr', 'open', 484, 'Keep the latitude.sid cookie name', {
+    branch: { head: 'fix/session-cookie', base: 'feat/better-auth-backfill' },
+    checks: 'pending',
+    checkCounts: { passed: 3, total: 5 },
+    review: 'required',
+  }),
+  485: demoRef('pr', 'draft', 485, 'Passkeys on the login page', {
+    branch: { head: 'feat/passkeys', base: 'main' },
+    checks: null,
+    checkCounts: null,
+    review: null,
+  }),
+  487: demoRef('pr', 'open', 487, 'Docs: migrating to Better Auth', {
+    branch: { head: 'docs/better-auth', base: 'main' },
+  }),
+  12: demoRef(
+    'issue',
+    'open',
+    12,
+    'Sidebar loses scroll position on space switch',
+  ),
+  9: demoRef('issue', 'closed', 9, 'Composer drops pasted images'),
+  8: demoRef('issue', 'closed', 8, 'Support Windows titlebar', {
+    isNotPlanned: true,
+  }),
+};

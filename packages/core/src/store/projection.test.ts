@@ -18,14 +18,14 @@ import {
   domainOf,
   type ReplicaItem,
 } from '@mochi/domain';
-import type { AgentEvent } from '../../../../src/host/types/agent.ts';
+import type { AgentEvent } from '../../../../apps/desktop/src/host/types/agent.ts';
 import {
   createReplica,
   type Replica,
   type ReplicaLog,
-} from '../../../../src/store/replica.ts';
-import { initialState } from '../../../../src/store/root.ts';
-import type { Action } from '../../../../src/store/types.ts';
+} from '../../../../apps/desktop/src/store/replica.ts';
+import { initialState } from '../../../../apps/desktop/src/store/root.ts';
+import type { Action } from '../../../../apps/desktop/src/store/types.ts';
 import { Projection } from './projection.ts';
 import { ReplicaItem as ReplicaItemSchema } from './rpc.ts';
 import { Store } from './store.ts';

@@ -2,7 +2,7 @@ import type {
   HookCallbackMatcher,
   HookInput,
 } from '@anthropic-ai/claude-agent-sdk';
-import { MOCHI_SERVER } from '../../../../../src/runtime/toolTable.ts';
+import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 
 const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
 const GOAL_CALLS = ['get_goal', 'propose_goal'].map(
