@@ -18,8 +18,8 @@ const isNoise = (change: RootChange) => UNWATCHED.test(change.path) || (change.p
 /** One @parcel/watcher subscription per directory while anything holds it, shared by every key on that root. */
 export const makeRoots = Effect.gen(function* () {
   const map = yield* RcMap.make({ lookup: subscribeRoot });
-  /** `root`'s changes in batches, for as long as the stream runs. */
-  return (root: string) => Stream.unwrap(Effect.map(RcMap.get(map, root), (changes) => Stream.fromPubSub(changes)));
+  /** `root`'s changes in batches, held from now on: a read started after this can't miss a change made before its stream runs. */
+  return (root: string) => Effect.map(Effect.flatMap(RcMap.get(map, root), PubSub.subscribe), Stream.fromSubscription);
 });
 
 const subscribeRoot = (root: string) =>
