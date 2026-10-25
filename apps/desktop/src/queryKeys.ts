@@ -24,6 +24,8 @@ export const queryKeys = {
       ['account-limits', provider, spaceId] as const,
     widget: (threadId: string, server: string, uri: string) =>
       ['mcp-widget', threadId, server, uri] as const,
+    contextUsage: (threadId: string, used: number) =>
+      ['context-usage', threadId, used] as const,
     taskOutput: (outputFile: string | undefined, isRunning: boolean) =>
       ['task-output', outputFile, isRunning] as const,
   },

@@ -119,6 +119,10 @@ import {
   type SummaryCardId,
 } from './summarySections';
 import { SkillIcon } from './icons/ObjectIcons';
+import { contextBreakdown, type ContextRow } from './usage/contextBreakdown';
+import { useContextUsage } from './usage/useContextUsage';
+import { TONE_COLORS, toneFor } from './usage/limits';
+import { TOKENS } from '@mochi/domain/lib/format';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
 import { useLibraryNames } from './library/names';
 import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
@@ -139,6 +143,7 @@ import type { ListeningPort } from '@mochi/domain/host/types/ports';
 const LIST_LIMIT = 3;
 const OPEN_BY_DEFAULT: string[] = [
   'environment',
+  'context',
   'sources',
   'servers',
   'outputs',
@@ -203,6 +208,7 @@ function SummaryBody({
   const BODIES = {
     goal: <GoalSection thread={thread} />,
     environment: <EnvironmentCard {...props} />,
+    context: <ContextCard {...props} />,
     sources: <SourcesCard {...props} />,
     connectors: <ConnectorsCard {...props} />,
     servers: (
@@ -496,6 +502,106 @@ const parentOf = (path: string) => path.replace(/\/[^/]+\/?$/, '') || '/';
 const homeShort = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
 
 /** What the agent was handed or reached for: links, files and MCP items you added, then the skills it used. Context use lives in the composer's ring. */
+const PERCENT = new Intl.NumberFormat('en', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+});
+
+/** Claude Code's `/context` as a card: the window as one stacked bar, then each category with its tokens and share. */
+function ContextCard({ thread }: CardProps) {
+  const { data: usage = null } = useContextUsage(thread);
+  const { rows, deferred, used, window, share } = contextBreakdown(
+    usage,
+    thread.context,
+  );
+  const tone = toneFor(share);
+  return (
+    <>
+      <CardHeader
+        title="Context"
+        meta={
+          <span
+            style={{
+              color: tone === 'normal' ? undefined : TONE_COLORS[tone],
+            }}
+          >
+            {Math.round(share * 100)}% used
+          </span>
+        }
+      />
+      <AccordionContent className="flex flex-col gap-3 px-3 pb-3">
+        <div className="flex flex-col gap-1.5">
+          <p className="tabular type-caption text-muted-foreground">
+            {TOKENS.format(used)} of {TOKENS.format(window)} tokens
+          </p>
+          <ContextBar rows={rows} />
+        </div>
+        <ul className="flex flex-col gap-1">
+          {rows.map((row) => (
+            <ContextLegendRow key={row.name} row={row} />
+          ))}
+        </ul>
+        {deferred.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {deferred.map((row) => (
+              <li
+                key={row.name}
+                className="flex items-center gap-2 type-caption text-subtle-foreground"
+              >
+                <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                <span className="tabular">{TOKENS.format(row.tokens)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </AccordionContent>
+    </>
+  );
+}
+
+function ContextBar({ rows }: { rows: ContextRow[] }) {
+  return (
+    <div
+      role="img"
+      aria-label={rows
+        .map((r) => `${r.name} ${PERCENT.format(r.share)}`)
+        .join(', ')}
+      className="flex h-1.5 w-full gap-px overflow-hidden rounded-full bg-muted"
+    >
+      {rows
+        .filter((row) => row.kind !== 'free')
+        .map((row) => (
+          <span
+            key={row.name}
+            className="h-full min-w-0.5"
+            style={{ width: `${row.share * 100}%`, background: row.color }}
+          />
+        ))}
+    </div>
+  );
+}
+
+function ContextLegendRow({ row }: { row: ContextRow }) {
+  return (
+    <li className="flex items-center gap-2 type-caption">
+      <span
+        aria-hidden
+        className="size-2 shrink-0 rounded-[3px] ring-1 ring-foreground/10 ring-inset"
+        style={{ background: row.color }}
+      />
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+        {row.name}
+      </span>
+      <span className="tabular text-muted-foreground">
+        {TOKENS.format(row.tokens)}
+      </span>
+      <span className="w-11 shrink-0 text-right tabular text-subtle-foreground">
+        {PERCENT.format(row.share)}
+      </span>
+    </li>
+  );
+}
+
 function SourcesCard({ thread, summary, open }: CardProps) {
   const count = thread.sources.length + summary.skills.length;
   return (

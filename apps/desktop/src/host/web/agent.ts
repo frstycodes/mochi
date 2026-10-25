@@ -8,6 +8,7 @@ import type {
   AgentEvent,
   AgentHost,
   AgentModel,
+  ContextUsage,
 } from '../types/agent.ts';
 
 const listeners = new Set<(event: AgentEvent) => void>();
@@ -78,6 +79,9 @@ export const agent: AgentHost = {
     throw new Error('MCP App views need the desktop app.');
   },
   async stopTask() {},
+  async contextUsage() {
+    return DEMO_CONTEXT;
+  },
   async attached() {
     return [];
   },
@@ -151,3 +155,19 @@ const DEMO_CODEX_MODELS: AgentModel[] = [
 const DEMO_CLAUDE_MODELS = CLAUDE_DEMO_MODELS.map((m) =>
   m.id === 'claude-opus-5-5' ? { ...m, speeds: [claudeFast(m.id)] } : m,
 );
+
+// GAP: demo data, shaped like Claude Code's `/context`. The desktop build reads the live session's.
+const DEMO_CONTEXT = {
+  totalTokens: 237_600,
+  categories: [
+    { name: 'System prompt', tokens: 5_000, kind: 'used' },
+    { name: 'System tools', tokens: 15_900, kind: 'used' },
+    { name: 'MCP tools', tokens: 14_600, kind: 'used' },
+    { name: 'Memory files', tokens: 3_900, kind: 'used' },
+    { name: 'Skills', tokens: 10_000, kind: 'used' },
+    { name: 'Messages', tokens: 188_200, kind: 'used' },
+    { name: 'Autocompact buffer', tokens: 33_000, kind: 'buffer' },
+    { name: 'Free space', tokens: 729_400, kind: 'free' },
+    { name: 'MCP tools (deferred)', tokens: 169_100, kind: 'deferred' },
+  ],
+} satisfies ContextUsage;

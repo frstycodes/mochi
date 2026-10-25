@@ -26,6 +26,7 @@ const thread = (patch: Partial<Thread>) =>
     steps: [],
     revisions: [],
     startedAt: 0,
+    context: { used: 0, max: 0 },
     ...patch,
   }) as Thread;
 const cards = (t: Thread, portCount = 0, outputCount = 0) =>
@@ -38,6 +39,14 @@ const cards = (t: Thread, portCount = 0, outputCount = 0) =>
 
 test('a folderless chat shows only where it runs and its sources', () => {
   assert.deepEqual(cards(thread({})), ['environment', 'sources']);
+});
+
+test('the context card appears once the thread knows its window', () => {
+  assert.deepEqual(cards(thread({ context: { used: 0, max: 200_000 } })), [
+    'environment',
+    'context',
+    'sources',
+  ]);
 });
 
 test('servers, outputs and connectors appear only once there are some', () => {
