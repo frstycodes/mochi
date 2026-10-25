@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'vite-plus/test';
+import { onTestFinished, test, vi } from 'vite-plus/test';
 import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { draftFrom } from '../goals/edit.ts';
@@ -62,9 +62,13 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const setupRuns: { connector: string; viewId: string; options: unknown }[] = [];
   const setupResults: SetupResult[] = [];
   const authorizeListeners = new Set<(page: { url: string; authorizationUrl: string }) => void>();
+  const onDispatch = new Set<() => void>();
   const env: ToolEnv = {
     getState: () => state,
-    dispatch: (a) => void (state = reduce(state, a)),
+    dispatch: (a) => {
+      state = reduce(state, a);
+      onDispatch.forEach((listener) => listener());
+    },
     prefs: { get: () => prefs, set: (patch) => void (prefs = { ...prefs, ...patch }) },
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
@@ -135,14 +139,22 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   };
   const thread = (id: string) => state.threads.find((t) => t.id === id)!;
   const card = () => state.queue.find((q) => q.tool)!;
-  /** Starts an asking call and hands back its card once it's open (asks that preview first resolve a tick later). */
+  /** Resolves once a dispatch leaves the state matching `holds`, or now if it already does. */
+  const whenState = (holds: (s: State) => boolean) =>
+    new Promise<void>((resolve) => {
+      const check = () => holds(state) && (onDispatch.delete(check), resolve());
+      onDispatch.add(check);
+      check();
+    });
+  const cardOpens = () => whenState((s) => s.queue.some((q) => q.tool));
+  /** Starts an asking call and hands back its card once it's open (asks that preview first open it after an await). */
   const asking = async (name: string, args?: Record<string, unknown>) => {
     const queued = t.state().queue.length;
     const result = call(name, args);
-    for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
+    await Promise.race([whenState((s) => s.queue.length > queued), result]);
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, opened, drafted, connects, setupRuns, setupResults };
+  const t = { env, call, ok, err, asking, whenState, cardOpens, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, opened, drafted, connects, setupRuns, setupResults };
   return t;
 }
 
@@ -371,7 +383,7 @@ test('a delete always waits on its widget, and Cancel leaves everything as it wa
   const t = setup();
   let isSettled = false;
   const pending = t.call('delete_thread', { threadIds: ['e2e'] }).finally(() => (isSettled = true));
-  await new Promise((r) => setTimeout(r, 5));
+  await t.cardOpens();
   assert.equal(isSettled, false, 'still waiting');
   assert.ok(t.thread('e2e'), 'nothing happens while the widget waits');
   assert.match(t.card().title, /Delete "Fix flaky checkout e2e"\?/);
@@ -713,7 +725,7 @@ test('browser_click asks only before an irreversible click on another site, and 
   await t.ok('browser_click', { ref: 'e1' });
   assert.equal(t.state().queue.some((q) => q.tool), false, 'an ordinary submit (Save) just goes');
   const pending = t.call('browser_click', { ref: 'e3' });
-  await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   assert.equal(t.card().title, 'Click "Delete project" on shop.example.com?');
   assert.equal(t.card().detail, 'Claude wants to click "Delete project" on shop.example.com. It may not be undoable there.');
   assert.deepEqual(t.card().tool!.options, [{ id: 'trust', label: "Don't ask again on shop.example.com in this thread" }]);
@@ -808,7 +820,7 @@ test('browser_upload takes worktree files directly and asks for anything outside
   await t.ok('browser_upload', { ref: 'e2', path: 'fixtures/avatar.png' });
   assert.deepEqual(t.acts.at(-1), { kind: 'upload', ref: 'e2', path: '/repo/rl/fixtures/avatar.png' });
   const pending = t.call('browser_upload', { ref: 'e2', path: '../../etc/hosts' });
-  await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   assert.match(t.card().detail, /\/etc\/hosts/);
   decideTool(t.card().tool!.callId, { isApproved: false });
   assert.equal((await pending).isError, true);
@@ -828,7 +840,7 @@ test('browser_eval runs on a local page without asking and logs the origin and t
 test('browser_eval on another origin needs approval, saying in words what it does, then the whole script', async () => {
   const t = setup({ url: 'https://bank.example.com/' });
   const pending = t.call('browser_eval', { purpose: 'Read the page', script: 'document.cookie' });
-  await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   assert.equal(t.card().title, 'Read the page');
   assert.match(t.card().detail, /bank\.example\.com, run as you, signed in/);
   assert.equal(t.card().code, 'document.cookie');
@@ -837,7 +849,7 @@ test('browser_eval on another origin needs approval, saying in words what it doe
   assert.match((await pending).text, /denied/);
   assert.deepEqual(t.evals, []);
   const again = t.call('browser_eval', { purpose: 'Read the page', script: 'document.title' });
-  await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   decideTool(t.card().tool!.callId, { isApproved: true });
   assert.equal(JSON.parse((await again).text).value, '42');
 });
@@ -870,7 +882,7 @@ test('browser_batch steps ask where they would alone; a denial stops the batch',
   const t = setup({ url: 'https://store.example.org/' });
   await t.ok('browser_snapshot');
   const pending = t.call('browser_batch', { actions: [{ name: 'browser_click', input: { ref: 'e3' } }, { name: 'browser_press', input: { key: 'Enter' } }] });
-  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   assert.equal(t.card().title, 'Click "Delete project" on store.example.org?');
   decideTool(t.card().tool!.callId, { isApproved: false });
   const result = await pending;
@@ -882,7 +894,7 @@ test('browser_batch steps ask where they would alone; a denial stops the batch',
 test('browser_handoff gives you the tab with a card, keeps the agent off it, and returns when you click Done', async () => {
   const t = setup();
   const pending = t.call('browser_handoff', { task: 'Sign in to GitHub' });
-  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   assert.deepEqual([t.card().title, t.card().detail, t.card().tool!.isHandoff], ['Sign in to GitHub', 'Claude carries on when you click Done.', true]);
   assert.deepEqual([t.pages.get('rl/tab-1')!.hasTakenOver, t.pages.get('rl/tab-1')!.handoff], [true, 'Sign in to GitHub']);
   assert.match(await t.err('browser_snapshot'), /The user has this tab for "Sign in to GitHub"/);
@@ -899,10 +911,13 @@ test('browser_handoff returns by itself once doneWhen holds, and refuses one tha
   assert.match(await t.err('browser_handoff', { task: 'Sign in', doneWhen: { text: 'Hello' } }), /already holds/);
   let isSignedIn = false;
   t.env.browser.waitFor = async () => ({ isMet: isSignedIn, waitedMs: 1 });
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
   const pending = t.call('browser_handoff', { task: 'Sign in', doneWhen: { url: '/dashboard' } });
-  await new Promise((r) => setTimeout(r, 600));
+  await vi.advanceTimersByTimeAsync(600);
   assert.equal(t.state().queue.some((q) => q.tool?.isHandoff), true, 'still waiting');
   isSignedIn = true;
+  await vi.advanceTimersByTimeAsync(1000);
   assert.equal(JSON.parse((await pending).text).done, 'detected');
   assert.equal(t.state().queue.some((q) => q.tool), false, 'the card closed itself');
 });
@@ -910,11 +925,11 @@ test('browser_handoff returns by itself once doneWhen holds, and refuses one tha
 test('browser_handoff returns when you give the tab back in the pane; Cancel tells the agent', async () => {
   const t = setup();
   const given = t.call('browser_handoff', { task: 'Enter the code' });
-  await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   t.env.pages.update('rl/tab-1', { hasTakenOver: false });
   assert.equal(JSON.parse((await given).text).done, 'you');
   const cancelled = t.call('browser_handoff', { task: 'Enter the code' });
-  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  await t.cardOpens();
   decideTool(t.card().tool!.callId, { isApproved: false });
   assert.equal((await cancelled).isError, true);
   assert.equal(lastLog(t.thread('rl')), 'Stopped waiting: Enter the code');
@@ -1479,7 +1494,7 @@ test("a sub-thread's asked-for threads go on one card with no approval; Start an
 
   const before = t.state().queue.length;
   const own = t.call('create_thread', { initiation: 'user_asked', prompt: 'Unrelated', isTopLevel: true }, sub.id);
-  for (let i = 0; i < 20 && t.state().queue.length === before; i++) await new Promise((r) => setTimeout(r, 0));
+  await t.whenState((s) => s.queue.length > before);
   decideTool(t.state().queue.at(-1)!.id, { isApproved: true });
   assert.equal(t.thread(JSON.parse((await own).text).id).parent, undefined, 'isTopLevel still asks, then starts one on its own');
 });

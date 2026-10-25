@@ -106,6 +106,7 @@
   },
   "devDependencies": {
     "@babel/core": "^8.0.7",
+    "@effect/vitest": "4.0.5",
     "@lobehub/icons-static-svg": "^1.95.1",
     "@playwright/test": "1.60.0",
     "@rolldown/plugin-babel": "^0.2.4",

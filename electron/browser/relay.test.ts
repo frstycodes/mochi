@@ -14,15 +14,32 @@ const makeTarget = (send: CdpRelayTarget['send']): CdpRelayTarget => ({
   userAgent: () => 'Electron',
 });
 
-// Each relay reply resolves after a few microtasks; one macrotask lets them all land.
-const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+// Records what the relay writes; `reply(id)` resolves once the reply to that command id is written.
+const recorder = () => {
+  const written: Message[] = [];
+  const waiting = new Map<unknown, () => void>();
+  const write = (raw: string) => {
+    const message = JSON.parse(raw) as Message;
+    written.push(message);
+    waiting.get(message['id'])?.();
+  };
+  const reply = (...ids: number[]) =>
+    Promise.all(
+      ids.map((id) =>
+        written.some((message) => message['id'] === id)
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => waiting.set(id, resolve)),
+      ),
+    );
+  return { written, write, reply };
+};
 
 test('announces only the page, under its real target id', async () => {
-  const written: Message[] = [];
-  const relay = createCdpRelayConnection(makeTarget(vi.fn(async () => ({}))), (raw) => written.push(JSON.parse(raw)));
+  const { written, write, reply } = recorder();
+  const relay = createCdpRelayConnection(makeTarget(vi.fn(async () => ({}))), write);
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
   relay.receive(JSON.stringify({ id: 2, method: 'Target.createTarget', params: {} }));
-  await settle();
+  await reply(1, 2);
   const attach = written.findIndex((message) => message['id'] === 1);
   // The page is announced right after the auto-attach reply, never before it.
   assert.deepEqual(written.slice(attach, attach + 2), [
@@ -51,16 +68,16 @@ test('announces only the page, under its real target id', async () => {
 test('forwards page commands to the tab and lets a slow one finish last', async () => {
   const pending: Array<() => void> = [];
   const send = vi.fn((method: string) => new Promise<unknown>((resolve) => pending.push(() => resolve({ method }))));
-  const written: Message[] = [];
-  const relay = createCdpRelayConnection(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
+  const { written, write, reply } = recorder();
+  const relay = createCdpRelayConnection(makeTarget(send), write);
   relay.receive(JSON.stringify({ id: 5, method: 'Page.captureScreenshot', sessionId: 'mochi-page' }));
   relay.receive(JSON.stringify({ id: 6, method: 'DOM.enable', sessionId: 'iframe-session' }));
   // A slow screenshot must not hold up the reply behind it.
   pending[1]!();
-  await settle();
+  await reply(6);
   assert.deepEqual(written, [{ id: 6, result: { method: 'DOM.enable' }, sessionId: 'iframe-session' }]);
   pending[0]!();
-  await settle();
+  await reply(5);
   assert.deepEqual(send.mock.calls[0]!, ['Page.captureScreenshot', {}, undefined]);
   assert.deepEqual(send.mock.calls[1]!, ['DOM.enable', {}, 'iframe-session']);
   assert.deepEqual(written.at(-1), { id: 5, result: { method: 'Page.captureScreenshot' }, sessionId: 'mochi-page' });
@@ -68,11 +85,12 @@ test('forwards page commands to the tab and lets a slow one finish last', async 
 
 test('resumes paused child frames, so cross-site iframes run', async () => {
   const send = vi.fn(async () => ({}));
-  const relay = createCdpRelayConnection(makeTarget(send), () => {});
+  const { write, reply } = recorder();
+  const relay = createCdpRelayConnection(makeTarget(send), write);
   // The page's own session is already running; only its children wait.
   relay.receive(JSON.stringify({ id: 1, method: 'Runtime.runIfWaitingForDebugger', sessionId: 'mochi-page' }));
   relay.receive(JSON.stringify({ id: 2, method: 'Runtime.runIfWaitingForDebugger', sessionId: 'iframe-session' }));
-  await settle();
+  await reply(1, 2);
   assert.deepEqual(
     send.mock.calls,
     [['Runtime.runIfWaitingForDebugger', {}, 'iframe-session']],
@@ -80,12 +98,12 @@ test('resumes paused child frames, so cross-site iframes run', async () => {
 });
 
 test('routes page events to the page session once the page is announced', async () => {
-  const written: Message[] = [];
-  const relay = createCdpRelayConnection(makeTarget(vi.fn(async () => ({}))), (raw) => written.push(JSON.parse(raw)));
+  const { written, write, reply } = recorder();
+  const relay = createCdpRelayConnection(makeTarget(vi.fn(async () => ({}))), write);
   relay.event('Page.loadEventFired', {}, undefined);
   assert.deepEqual(written, []);
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
-  await settle();
+  await reply(1);
   // Electron passes an empty session id for the page's own events.
   relay.event('Page.loadEventFired', { timestamp: 1 }, '');
   relay.event('Runtime.consoleAPICalled', {}, 'iframe-session');
@@ -97,21 +115,21 @@ test('routes page events to the page session once the page is announced', async 
 
 test('gives a second page session the page commands and events', async () => {
   const send = vi.fn(async () => ({}));
-  const written: Message[] = [];
-  const relay = createCdpRelayConnection(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
+  const { written, write, reply } = recorder();
+  const relay = createCdpRelayConnection(makeTarget(send), write);
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
   relay.receive(JSON.stringify({ id: 2, method: 'Target.attachToBrowserTarget' }));
-  await settle();
+  await reply(1, 2);
   const browserSession = (written.find((m) => m['id'] === 2)!['result'] as { sessionId: string }).sessionId;
   relay.receive(
     JSON.stringify({ id: 3, method: 'Target.attachToTarget', params: { targetId: 'GUEST-TARGET', flatten: true }, sessionId: browserSession }),
   );
   relay.receive(JSON.stringify({ id: 4, method: 'Target.attachToTarget', params: { targetId: 'SOMETHING-ELSE' }, sessionId: browserSession }));
-  await settle();
+  await reply(3, 4);
   const extra = (written.find((m) => m['id'] === 3)!['result'] as { sessionId: string }).sessionId;
   assert.ok(written.find((m) => m['id'] === 4)?.['error']);
   relay.receive(JSON.stringify({ id: 5, method: 'Page.startScreencast', sessionId: extra }));
-  await settle();
+  await reply(5);
   assert.deepEqual(send.mock.calls.at(-1), ['Page.startScreencast', {}, undefined]);
   written.length = 0;
   relay.event('Page.screencastFrame', { data: 'x' }, undefined);
@@ -123,8 +141,8 @@ test('gives a second page session the page commands and events', async () => {
 
 test('acknowledges download behavior without touching the tab, and reports downloads on the root session', async () => {
   const send = vi.fn(async () => ({}));
-  const written: Message[] = [];
-  const relay = createCdpRelayConnection(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
+  const { written, write, reply } = recorder();
+  const relay = createCdpRelayConnection(makeTarget(send), write);
   relay.receive(JSON.stringify({ id: 1, method: 'Target.setAutoAttach', params: {} }));
   relay.receive(
     JSON.stringify({
@@ -133,7 +151,7 @@ test('acknowledges download behavior without touching the tab, and reports downl
       params: { behavior: 'allowAndName', browserContextId: 'mochi', downloadPath: '/srv/artifacts', eventsEnabled: true },
     }),
   );
-  await settle();
+  await reply(1, 2);
   assert.deepEqual(written.find((m) => m['id'] === 2), { id: 2, result: {} });
   assert.equal(send.mock.calls.length, 0);
   written.length = 0;

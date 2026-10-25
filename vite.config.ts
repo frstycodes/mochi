@@ -32,10 +32,22 @@ export default defineConfig(({ mode }) => ({
         },
       },
       { files: COMPLEX_FILES, rules: { 'sonarjs/cognitive-complexity': ['warn', 15] } },
+      // Vendored from T3 Code; kept close to upstream.
+      { files: ['scripts/oxlint/rules/*.ts'], excludeFiles: ['**/*.test.ts'], rules: { 'sonarjs/cognitive-complexity': 'off' } },
       {
         files: ['src/**', 'electron/**', 'packages/*/src/**', 'infra/*/src/**'],
         excludeFiles: [...VENDORED, '**/*.test.ts'],
         rules: { 'mochi/no-em-dash-copy': 'error' },
+      },
+      {
+        files: ['**/*.test.ts'],
+        rules: {
+          'mochi/no-manual-effect-runtime-in-tests': 'error',
+          'mochi/no-polling-loop-in-tests': 'error',
+          'mochi/no-real-time-wait-in-tests': 'error',
+          'mochi/no-test-in-loop': 'error',
+          'mochi/no-wall-clock-in-tests': 'error',
+        },
       },
       // The React Compiler builds the renderer only; Core's `use*` setters are not hooks.
       {
