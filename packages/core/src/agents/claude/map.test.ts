@@ -12,9 +12,11 @@ import {
   commandsFrom,
   createMapper,
   describeTool,
+  isPreApproved,
   mcpServersFromStatus,
   patchOf,
   permissionResult,
+  setMode,
   userContent,
 } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
@@ -1403,4 +1405,25 @@ test("Mochi's generate_image maps to the image card: running at the asked aspect
     aspect: 1,
     error: 'Image generation limit reached.',
   });
+});
+
+test('a mode switch on a live session: Auto falls back to acceptEdits where refused, and canUseTool allows what the new mode pre-approves', async () => {
+  const set: string[] = [];
+  const query = {
+    setPermissionMode: async (mode: string) => void set.push(mode),
+  };
+  const refusing = {
+    setPermissionMode: async (mode: string) => {
+      set.push(mode);
+      if (mode === 'auto') throw new Error('auto unavailable');
+    },
+  };
+  await setMode(query, 'plan');
+  await setMode(refusing, 'auto');
+  await setMode(refusing, 'bypassPermissions');
+  assert.deepEqual(set, ['plan', 'auto', 'acceptEdits', 'bypassPermissions']);
+  assert.equal(isPreApproved('auto', 'WebFetch'), true);
+  assert.equal(isPreApproved('default', 'WebFetch'), false);
+  assert.equal(isPreApproved(undefined, 'WebSearch'), false);
+  assert.equal(isPreApproved('nonsense', 'WebSearch'), false);
 });

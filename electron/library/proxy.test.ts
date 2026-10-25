@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { Server } from '@modelcontextprotocol/server';
 import { Schema } from 'effect';
 import { connectorServer } from './proxy.ts';
 
@@ -25,7 +20,7 @@ function upstream(account: string) {
     { name: 'linear', version: '1' },
     { capabilities: { tools: {} }, instructions: 'Linear tools.' },
   );
-  server.setRequestHandler(ListToolsRequestSchema, () => ({
+  server.setRequestHandler('tools/list', () => ({
     tools: [
       {
         name: 'whoami',
@@ -37,7 +32,7 @@ function upstream(account: string) {
       },
     ],
   }));
-  server.setRequestHandler(CallToolRequestSchema, ({ params }) => {
+  server.setRequestHandler('tools/call', ({ params }) => {
     const { greeting } = Schema.decodeUnknownSync(WhoamiInput)(
       params.arguments ?? {},
     );

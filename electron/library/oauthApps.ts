@@ -1,4 +1,4 @@
-import type { OAuthClientInformationMixed } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { OAuthClientInformationMixed } from '@modelcontextprotocol/client';
 import {
   OAUTH_PROVIDER_IDS,
   type OAuthProviderId,

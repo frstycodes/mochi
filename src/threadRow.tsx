@@ -1,5 +1,6 @@
 import { Hierarchy } from '@/icons';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import type { Thread } from './model';
 import { workingLabel } from './agentPhase';
 import { limitStatus } from './chat/LimitCard';
@@ -92,10 +93,11 @@ const DOT_BG = {
 export function AgentsBadge({ thread }: { thread: Thread }) {
   const running = runningBackground(thread);
   if (!running) return null;
-  const label =
-    AGENTS_LABEL.select(running) === 'one'
-      ? '1 background agent running'
-      : `${running} background agents running`;
+  const label = plural(
+    running,
+    '1 background agent running',
+    `${running} background agents running`,
+  );
   return (
     <span
       aria-label={label}
@@ -107,5 +109,3 @@ export function AgentsBadge({ thread }: { thread: Thread }) {
     </span>
   );
 }
-
-const AGENTS_LABEL = new Intl.PluralRules('en');

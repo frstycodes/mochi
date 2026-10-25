@@ -1,6 +1,7 @@
 import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
+import { plural } from '@/lib/format';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
 import { useSimulators } from '../../sim/useSimulators';
 import {
@@ -30,7 +31,7 @@ export function BrowserSection() {
           label="Address history"
           description={
             history.length
-              ? `${history.length} ${PAGES.select(history.length) === 'one' ? 'page' : 'pages'} suggested as you type`
+              ? `${history.length} ${plural(history.length, 'page', 'pages')} suggested as you type`
               : 'Empty'
           }
           control={
@@ -51,8 +52,6 @@ export function BrowserSection() {
     </div>
   );
 }
-
-const PAGES = new Intl.PluralRules('en');
 
 // Radix Select can't hold '' (the pref's "first booted"), so the choice uses its own value for it.
 const FIRST_BOOTED = 'first-booted';

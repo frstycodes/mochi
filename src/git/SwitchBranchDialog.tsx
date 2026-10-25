@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, WarningAlt } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { plural } from '@/lib/format';
 import {
   ButtonGroup,
   ButtonGroupSeparator,
@@ -202,8 +203,6 @@ function ChangeSummary({ changes }: { changes: ChangeStat }) {
 const localBranch = (b: Branch) =>
   b.isRemote ? b.name.slice(b.name.indexOf('/') + 1) : b.name;
 
-const PLURAL = new Intl.PluralRules('en');
-const fileCount = (n: number) =>
-  PLURAL.select(n) === 'one' ? '1 file' : `${n} files`;
+const fileCount = (n: number) => plural(n, '1 file', `${n} files`);
 const sessionsWarning = (n: number) =>
-  `${PLURAL.select(n) === 'one' ? '1 other session is' : `${n} other sessions are`} using this folder. Switching branches will affect them too.`;
+  `${plural(n, '1 other session is', `${n} other sessions are`)} using this folder. Switching branches will affect them too.`;

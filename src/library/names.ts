@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { MOCHI_SERVER } from '../runtime/toolTable.ts';
 import { connectorIcon, connectorKey, CONNECTORS } from './connectors.ts';
 import { skillPluginName, type LibraryEntry } from './library.ts';
@@ -107,24 +108,17 @@ export const serviceName = (entry: LibraryEntry) =>
     : entry.title;
 
 // One set for the whole window: items are installed once, so every profile's list names them alike.
-let current = libraryNames([]);
-const listeners = new Set<() => void>();
+const namesStore = createStore(() => ({ names: libraryNames([]) }));
 
 /** Called with each fresh library list, so names follow installs and renames. */
 export function setLibraryNames(entries: LibraryEntry[]) {
-  current = libraryNames(entries);
-  for (const listener of listeners) listener();
+  namesStore.setState({ names: libraryNames(entries) });
 }
 
 /** The names now, for code outside React (labels built in plain functions). */
-export const namesNow = () => current;
+export const namesNow = () => namesStore.getState().names;
 
 /** The names, re-rendering when the library list changes. */
 export function useLibraryNames() {
-  return useSyncExternalStore(subscribe, namesNow);
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
+  return useStore(namesStore, (s) => s.names);
 }

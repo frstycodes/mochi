@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import type { RewindMode } from './checkpoints.ts';
 import type { ForkPoint } from './fork.ts';
 
@@ -15,20 +16,16 @@ export type RewindRequest =
   | { kind: 'fork'; threadId: string; point?: ForkPoint }
   | { kind: 'compare'; threadId: string; otherId: string };
 
-let current: RewindRequest | null = null;
-const listeners = new Set<() => void>();
+const requestStore = createStore<{ request: RewindRequest | null }>(() => ({
+  request: null,
+}));
 
 export function openRewind(request: RewindRequest | null) {
-  current = request;
-  listeners.forEach((l) => l());
+  requestStore.setState({ request });
 }
 
 export function useRewindRequest(threadId: string) {
-  const request = useSyncExternalStore(subscribe, () => current);
-  return request?.threadId === threadId ? request : null;
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
+  return useStore(requestStore, ({ request }) =>
+    request?.threadId === threadId ? request : null,
+  );
 }

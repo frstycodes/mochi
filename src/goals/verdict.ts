@@ -4,6 +4,7 @@ import { resetLabel } from '../usage/limits.ts';
 import { subThreadsOf } from '../reorder.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { nextStep, turnReport } from './report.ts';
+import { plural } from '../lib/format.ts';
 
 export type VerdictKind =
   | 'checking'
@@ -122,7 +123,7 @@ export function idleVerdict(
     const isCritical = open.some((g) => g.severity === 'critical');
     return {
       kind: 'gaps',
-      chip: `${open.length} ${open.length === 1 ? 'gap' : 'gaps'}`,
+      chip: `${open.length} ${plural(open.length, 'gap', 'gaps')}`,
       tone: isCritical ? 'destructive' : 'warning',
       reason: gapReason(open),
       gaps,
@@ -135,7 +136,7 @@ export function idleVerdict(
       kind: 'waiting',
       chip: 'Waiting',
       tone: 'muted',
-      reason: `Waiting on ${out.length} ${out.length === 1 ? 'sub-thread' : 'sub-threads'}`,
+      reason: `Waiting on ${out.length} ${plural(out.length, 'sub-thread', 'sub-threads')}`,
       gaps,
     };
   if (isStoppedShort(thread))
@@ -661,7 +662,7 @@ export function verdictHeading(
 function doneDetail(thread: Thread, accepted: number) {
   if (thread.idle?.isConfirmed) return 'You confirmed it';
   return accepted
-    ? `Every criterion met; you accepted ${accepted} ${accepted === 1 ? 'gap' : 'gaps'}`
+    ? `Every criterion met; you accepted ${accepted} ${plural(accepted, 'gap', 'gaps')}`
     : 'Every criterion met, nothing left open';
 }
 

@@ -8,8 +8,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
+import { copyText } from '../clipboard';
 import { authorName, type Thread } from '../model';
 import { timeAgo } from '../progress';
 import { useDispatch, useHarnessSelector } from '../store';
@@ -53,7 +53,7 @@ export function useMessageActions(
     id: 'copy',
     label: 'Copy',
     icon: CopyStack,
-    run: () => copyText(entry.text),
+    run: () => copyText(entry.text, 'Copied', 'Could not copy'),
   };
   const disabledReason = rewindBlockedReason(thread);
   // Chat-only rewinds run at once (Undo brings it back); a files rewind first shows which files change.
@@ -227,13 +227,4 @@ function RewindModeMenu({ actions }: { actions: MessageAction[] }) {
 /** The upright pushpin, tilted like a pin stuck into the page. */
 function TiltedPin(props: IconProps) {
   return <Pushpin {...props} className={cn('rotate-45', props.className)} />;
-}
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast('Copied');
-  } catch {
-    toast.error('Could not copy');
-  }
 }

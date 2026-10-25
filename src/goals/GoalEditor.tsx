@@ -1,4 +1,6 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { Plus, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,23 +25,18 @@ import {
   type GoalDraft,
 } from './edit';
 
-let openThreadId: string | null = null;
-const listeners = new Set<() => void>();
+const openStore = createStore<{ threadId: string | null }>(() => ({
+  threadId: null,
+}));
 
 /** Opens the goal editor for a thread (goal card, summary, thread menu); null closes it. */
 export function openGoalEditor(threadId: string | null) {
-  openThreadId = threadId;
-  listeners.forEach((l) => l());
+  openStore.setState({ threadId });
 }
-
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-};
 
 /** Mounted once at the app root. */
 export function GoalEditorLayer() {
-  const threadId = useSyncExternalStore(subscribe, () => openThreadId);
+  const threadId = useStore(openStore, (s) => s.threadId);
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
   if (!thread) return null;

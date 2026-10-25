@@ -1,17 +1,18 @@
-import * as React from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 
 const MOBILE_BREAKPOINT = 768;
 const QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 
-export function useIsMobile() {
-  return React.useSyncExternalStore(
-    subscribe,
-    () => window.matchMedia(QUERY).matches,
+const mobileStore = createStore(() => ({
+  isMobile: typeof window !== 'undefined' && window.matchMedia(QUERY).matches,
+}));
+
+if (typeof window !== 'undefined') {
+  const mql = window.matchMedia(QUERY);
+  mql.addEventListener('change', () =>
+    mobileStore.setState({ isMobile: mql.matches }),
   );
 }
 
-function subscribe(onChange: () => void) {
-  const mql = window.matchMedia(QUERY);
-  mql.addEventListener('change', onChange);
-  return () => mql.removeEventListener('change', onChange);
-}
+export const useIsMobile = () => useStore(mobileStore, (s) => s.isMobile);

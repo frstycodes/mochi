@@ -28,12 +28,12 @@ test('each mode sends each harness these options', () => {
     {
       Manual: {
         permissionMode: 'default',
-        allowDangerouslySkipPermissions: false,
+        allowDangerouslySkipPermissions: true,
         allowedTools: ['WebSearch'],
       },
       Auto: {
         permissionMode: 'auto',
-        allowDangerouslySkipPermissions: false,
+        allowDangerouslySkipPermissions: true,
         allowedTools: ['WebSearch', 'WebFetch'],
       },
       'Full access': {
@@ -43,7 +43,7 @@ test('each mode sends each harness these options', () => {
       },
       Plan: {
         permissionMode: 'plan',
-        allowDangerouslySkipPermissions: false,
+        allowDangerouslySkipPermissions: true,
         allowedTools: ['WebSearch'],
       },
     },
