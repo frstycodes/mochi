@@ -388,7 +388,7 @@ function SpaceNav({
                     label="Projects"
                     aria-pressed={view.kind === 'projects'}
                     onClick={() => go({ kind: 'projects' })}
-                    className="size-6.5 text-sidebar-foreground/75 aria-pressed:bg-sidebar-accent"
+                    className="size-8 text-sidebar-foreground/75 aria-pressed:bg-sidebar-accent [&_svg]:size-4.5"
                   >
                     <Folder />
                   </TooltipIconButton>
@@ -397,7 +397,7 @@ function SpaceNav({
                     hint={<BoundShortcut command="go-new" />}
                     aria-pressed={view.kind === 'new'}
                     onClick={() => go({ kind: 'new' })}
-                    className="size-6.5 text-sidebar-foreground/75 aria-pressed:bg-sidebar-accent"
+                    className="size-8 text-sidebar-foreground/75 aria-pressed:bg-sidebar-accent [&_svg]:size-4.5"
                   >
                     <Edit />
                   </TooltipIconButton>
