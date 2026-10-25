@@ -32,6 +32,9 @@ const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUn
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
 function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/' } = {}) {
+  // The browser tools settle and poll on timers (`browserTools.ts`); with nothing else to run, skip straight to the next one.
+  vi.useFakeTimers().setTimerTickMode('nextTimerAsync');
+  onTestFinished(() => void vi.useRealTimers());
   const view = { kind: 'thread', id: 'rl' } as const;
   let state = {
     ...initialThreads(undefined, true),
@@ -911,8 +914,7 @@ test('browser_handoff returns by itself once doneWhen holds, and refuses one tha
   assert.match(await t.err('browser_handoff', { task: 'Sign in', doneWhen: { text: 'Hello' } }), /already holds/);
   let isSignedIn = false;
   t.env.browser.waitFor = async () => ({ isMet: isSignedIn, waitedMs: 1 });
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  vi.setTimerTickMode('manual');
   const pending = t.call('browser_handoff', { task: 'Sign in', doneWhen: { url: '/dashboard' } });
   await vi.advanceTimersByTimeAsync(600);
   assert.equal(t.state().queue.some((q) => q.tool?.isHandoff), true, 'still waiting');
