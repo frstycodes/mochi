@@ -129,7 +129,7 @@ test('a thread reference becomes a digest and a window reference its screenshot,
       threadId: id,
       text: ref.prompt,
       images: [shot],
-      speed: '',
+      policy: { speed: '', permissionMode: 'default' },
     },
   ]);
   const said = threadsReducer(s, send)
@@ -306,7 +306,13 @@ test('picked skills reach the agent call, so Codex can attach them', () => {
     skills: ['ui'],
   };
   assert.deepEqual(calls(s, send), [
-    { method: 'send', threadId: id, text: 'p', skills: ['ui'], speed: '' },
+    {
+      method: 'send',
+      threadId: id,
+      text: 'p',
+      skills: ['ui'],
+      policy: { speed: '', permissionMode: 'default' },
+    },
   ]);
 });
 
@@ -417,7 +423,7 @@ test('a /skill typed mid-text is sent as written and its name goes to the agent 
         threadId: id,
         text: claude.prompt,
         skills: ['ui'],
-        speed: '',
+        policy: { speed: '', permissionMode: 'default' },
       },
     ],
     'a running thread gets it with the message',

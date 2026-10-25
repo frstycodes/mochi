@@ -9,8 +9,10 @@ import {
   type AgentImage,
   type AgentModel,
   type AgentRunOptions,
+  type AgentSendInput,
   type LimitWindow,
 } from '../../../../../src/host/types/agent.ts';
+import type { HarnessAdapter } from '../adapter.ts';
 import { codexWindows } from '../../../../../src/usage/limits.ts';
 import {
   accountEnv,
@@ -66,6 +68,8 @@ interface Live {
   held: Held[];
   /** Ids of steered messages handed to Codex, until its `userMessage` item echoes one as `clientId`. */
   steered: Set<string>;
+  /** `turnPolicy` of a mode changed since `open`, for every `turn/start` after; a reopen takes the mode from `options` instead. */
+  policy?: ReturnType<typeof turnPolicy>;
 }
 
 interface Held {
@@ -110,6 +114,37 @@ export const POLICIES: Record<
   /** Second opinions: nothing can write, and nothing asks; a command that needs more simply fails. */
   review: { approvalPolicy: 'never', sandbox: 'read-only' },
 };
+/**
+ * A mode's `POLICIES` as `turn/start` overrides, which hold for that turn and the ones after (0.164.0's `TurnStartParams`).
+ * GAP: the sandbox goes as Codex's defaults, so the account's own `sandbox_workspace_write` config no longer applies after a switch.
+ */
+function turnPolicy(permissionMode: string) {
+  const policy = POLICIES[permissionMode];
+  if (!policy || permissionMode === 'review')
+    throw new TypeError(
+      `permissionMode must be one of ${Object.keys(POLICIES)
+        .filter((m) => m !== 'review')
+        .join(', ')}`,
+    );
+  return {
+    approvalPolicy: policy.approvalPolicy,
+    approvalsReviewer: policy.approvalsReviewer ?? 'user',
+    sandboxPolicy: SANDBOX_POLICIES[policy.sandbox],
+  };
+}
+
+const SANDBOX_POLICIES: Record<string, object> = {
+  'read-only': { type: 'readOnly', networkAccess: false },
+  'workspace-write': {
+    type: 'workspaceWrite',
+    writableRoots: [],
+    networkAccess: false,
+    excludeTmpdirEnvVar: false,
+    excludeSlashTmp: false,
+  },
+  'danger-full-access': { type: 'dangerFullAccess' },
+};
+
 /** Mochi has no goals; Codex's own (`features.goals`, stable and on in 0.163.0) would bring them back under its name. */
 const GOALS_OFF = { 'features.goals': false };
 /**
@@ -163,7 +198,7 @@ const MAX_BACKOFF_MS = 30_000;
  * One `codex app-server` child per Codex account in use, each driving the user's own install with that account's own login.
  * Harness never calls `account/login/*` and never touches credentials; logged out means telling the user to run `codex login`.
  */
-export class CodexAdapter {
+export class CodexAdapter implements HarnessAdapter {
   private servers = new Map<string, CodexServer>();
   private threads = new Map<string, Live>();
   private requests = new Map<string, Pending>();
@@ -201,17 +236,13 @@ export class CodexAdapter {
     this.profileText = profileText;
   }
 
-  owns(threadId: string) {
+  has(threadId: string) {
     return this.threads.has(threadId);
   }
 
   /** Every thread with a session open or still starting. */
   threadIds() {
     return [...new Set([...this.threads.keys(), ...this.inflight.keys()])];
-  }
-
-  ownsRequest(requestId: string) {
-    return requestId.startsWith('codex:');
   }
 
   /** Starts a thread on its profile's account, or resumes the one in `options.resume`, and sends the first prompt. Failures arrive as a failed turn, not a rejection. */
@@ -257,24 +288,28 @@ export class CodexAdapter {
   }
 
   /**
-   * `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. `steer`: the turn in
-   * flight takes the message (`turn/steer`); when it already ended, the message starts a turn of its own. With `steerId` it waits
-   * in `held` for the turn's next step, so `unsteer` can take it back until then.
+   * `policy` holds for this turn and the ones after: `speed` '' standard or a service tier id, `permissionMode` as `turn/start`
+   * overrides. `steer`: the turn in flight takes the message (`turn/steer`); when it already ended, the message starts a turn of its
+   * own. With `steerId` it waits in `held` for the turn's next step, so `unsteer` can take it back until then.
    */
   async send(
     threadId: string,
-    text: string,
-    images?: AgentImage[],
-    skills?: string[],
-    speed?: string,
-    steer?: boolean,
-    steerId?: string,
+    { text, images, skills, steer, steerId, policy = {} }: AgentSendInput,
   ) {
     const live = this.threads.get(threadId);
     if (!live)
       throw new Error('No live Codex session for this thread; resume it first');
+    const { speed, permissionMode } = policy;
     if (speed !== undefined)
       live.options = { ...live.options, speed: speed || undefined };
+    if (
+      permissionMode !== undefined &&
+      permissionMode !== live.options.permissionMode &&
+      !live.options.isSettingsChat
+    ) {
+      live.policy = turnPolicy(permissionMode);
+      live.options = { ...live.options, permissionMode };
+    }
     if (steer && steerId && live.turnId)
       return void live.held.push({ id: steerId, text, images, skills });
     await this.deliver(
@@ -340,7 +375,7 @@ export class CodexAdapter {
   }
 
   /** `thread/compact/start` runs as a turn of its own; it takes no instructions (0.155.1 schema), so the renderer re-sends what to keep after. */
-  async compact(threadId: string) {
+  async compact(threadId: string, _focus?: string) {
     const live = this.threads.get(threadId);
     if (!live)
       throw new Error('No live Codex session for this thread; resume it first');
@@ -366,7 +401,7 @@ export class CodexAdapter {
   }
 
   /** The turn before the latest one started with this text, for `forkAt`; null when unknown or it was the first. */
-  rewindPoint(threadId: string, text: string) {
+  async rewindPoint(threadId: string, text: string) {
     const turns = this.threads.get(threadId)?.turns ?? [];
     const index = turns.findLastIndex((t) => t.text.includes(text));
     return index > 0 ? turns[index - 1].id : null;
@@ -446,11 +481,13 @@ export class CodexAdapter {
     });
   }
 
-  async resolve(requestId: string, decision: AgentDecision) {
+  async respond(requestId: string, decision: AgentDecision) {
+    if (!requestId.startsWith('codex:')) return false;
     const pending = this.requests.get(requestId);
     if (!pending) throw new Error(NO_PENDING_REQUEST);
     this.requests.delete(requestId);
     pending.server.rpc?.respond(pending.id, reply(pending, decision));
+    return true;
   }
 
   async stop(threadId: string) {
@@ -790,6 +827,7 @@ export class CodexAdapter {
       serviceTier: live.options.speed ?? null,
       outputSchema: this.schemas.get(threadId) ?? null,
       clientUserMessageId: clientId ?? null,
+      ...live.policy,
     });
     aborted.addEventListener(
       'abort',

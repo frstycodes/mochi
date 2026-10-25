@@ -221,6 +221,15 @@ export const AgentStartOptions = Schema.Struct({
 );
 export type AgentStartOptions = typeof AgentStartOptions.Type;
 
+export const AgentSendInput = Schema.Struct({
+  text: Str(100_000),
+  images: opt(Images),
+  skills: opt(Skills),
+  steer: opt(B),
+  steerId: opt(Short),
+  policy: opt(Schema.Struct({ permissionMode: opt(Short), speed: opt(Short) })),
+});
+
 export const AttachedAgent = Schema.Struct({
   threadId: S,
   isWorking: B,
@@ -342,10 +351,7 @@ const IdOut = Schema.Struct({ id: S });
 /** `AgentHost` (`src/host/types/agent.ts`): each method's arguments and result, each push channel's payload. */
 export const agentRpc = {
   start: invoke(T([Id, AgentStartOptions]), Void),
-  send: invoke(
-    T([Id, Str(100_000), o(Images), o(Skills), o(Short), o(B), o(Short)]),
-    Void,
-  ),
+  send: invoke(T([Id, AgentSendInput]), Void),
   unsteer: invoke(T([Id, Id]), B),
   compact: invoke(T([Id, Str(10_000)]), Void),
   compactInstructions: invoke(T([Id, Str(20_000)]), Void),
