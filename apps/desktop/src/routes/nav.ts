@@ -5,7 +5,6 @@ import { isCommand, listenKeydown } from '../keymap';
 import { setLibraryScope } from '../library/libraryScope';
 import type { SectionId } from '../settings/sections';
 import {
-  isReviewLocation,
   remoteRouteOf,
   replayThreadOf,
   settingsRouteOf,
@@ -60,10 +59,6 @@ export function openRemoteThread({ machineId, threadId }: RemoteThreadRoute) {
     params: { machineId, threadId },
     replace: !!remoteRouteOf(getRouter().state.location),
   });
-}
-
-export function openReview() {
-  void getRouter().navigate({ to: '/review' });
 }
 
 export function openDeveloper() {
@@ -126,10 +121,6 @@ export function useRemoteThreadRoute() {
 
 export function usePathname() {
   return useLocation().pathname;
-}
-
-export function useIsReviewOpen() {
-  return isReviewLocation(useLocation());
 }
 
 /** A tab that follows deep links: `tabFor` names the tab a setting id lives on, or undefined when the id doesn't say. */

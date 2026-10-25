@@ -14,25 +14,27 @@ import { mainForAgents } from '../agents/events.ts';
 import { browser } from './browser.ts';
 import { data } from './data.ts';
 import { fs } from './fs.ts';
-import { git, type CoreServed } from './git.ts';
+import type { InMain as DataInMain } from '@mochi/core/data/host';
+import type { InMain as FsInMain } from '@mochi/core/fs/host';
+import type { InMain as ThemesInMain } from '@mochi/core/themes/host';
 import { library } from './library.ts';
 import { notify } from './notify.ts';
-import { ports } from './ports.ts';
-import { projects } from './projects.ts';
 import { pty } from './pty.ts';
 import { remote } from './remote.ts';
 import { settings } from './settings.ts';
 import { sim } from './sim.ts';
 import { themes } from './themes.ts';
-import { usage } from './usage.ts';
 import { windows } from './windows.ts';
 
-// `agent` and `schedule` are served by Core (packages/core/src/{agents,schedule}); main never gets those calls.
+// Core serves these itself (packages/core/src/{agents,schedule,hosted.ts}); main never gets their calls.
+type InCore = 'agent' | 'schedule' | 'git' | 'projects' | 'ports' | 'usage';
+
+/** Main's part of a namespace Core serves the rest of. */
+type InMain = { fs: FsInMain; data: DataInMain; themes: ThemesInMain };
+
 const handlers = {
   pty,
-  git,
   fs,
-  ports,
   sim,
   browser,
   notify,
@@ -42,12 +44,12 @@ const handlers = {
   themes,
   remote,
   account,
-  projects,
   library,
-  usage,
 } satisfies {
-  [K in Exclude<Namespace, 'agent' | 'schedule'>]: Handlers<
-    K extends 'git' ? Omit<HostBridge[K], CoreServed> : HostBridge[K]
+  [K in Exclude<Namespace, InCore>]: Handlers<
+    K extends keyof InMain
+      ? Pick<HostBridge[K], InMain[K] & keyof HostBridge[K]>
+      : HostBridge[K]
   >;
 };
 
@@ -112,7 +114,7 @@ export const mainCapabilities = {
       mainWindow()?.webContents;
     if (!sender) throw new Error(`No window to run ${method} for`);
     const [namespace, name] = method.split('.') as [
-      Exclude<Namespace, 'agent' | 'schedule'>,
+      Exclude<Namespace, InCore>,
       string,
     ];
     const result = await (handlers[namespace] as Record<string, Handler>)[

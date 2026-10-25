@@ -4,7 +4,7 @@ import { Effect, Layer, Stream } from 'effect';
 import type { makeCoreClient } from './client.ts';
 import { asRunError, RunError, type Run } from './run.ts';
 
-// No `electron` import: electron/git/run.ts goes through this, and its tests run under plain node.
+// No `electron` import: git/run.ts goes through this, from main too, and its tests run under plain node.
 
 export { RunError };
 

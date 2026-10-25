@@ -10,10 +10,10 @@ import {
   type AutofixEvent,
   type AutofixTarget,
 } from '../../src/git/autofix.ts';
-import { githubAccount } from '../git/gh.ts';
+import { githubAccount } from '@mochi/core/git/gh';
 import { readDoc, writeDoc } from '@mochi/core/store/client';
-import { topLevel } from '../git/run.ts';
-import { failedLog } from '../ipc/git.ts';
+import { topLevel } from '@mochi/core/git/run';
+import { failedLog } from '@mochi/core/git/host';
 import { deliver } from '../schedule/scheduler.ts';
 import type { OsNotice } from '../../src/notify/watch.ts';
 

@@ -7,7 +7,7 @@ import {
   parseSuggestions,
   SUGGEST_URLS,
 } from '../browser/external.ts';
-import { resolveCwd } from '../pty/cwd.ts';
+import { resolveCwd } from '@mochi/core/pty/cwd';
 import {
   actOnView,
   answerDialogInView,
