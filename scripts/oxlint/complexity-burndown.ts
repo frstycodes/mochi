@@ -7,7 +7,7 @@ export const COMPLEX_FILES = [
   'apps/desktop/electron/library/store.ts',
   'apps/desktop/electron/library/upload.ts',
   'apps/desktop/electron/remote/pairing.ts',
-  'apps/desktop/electron/usage/codex.ts',
+  'packages/core/src/usage/codex.ts',
   'packages/core/src/agents/ask.ts',
   'packages/core/src/agents/claude/map.ts',
   'packages/core/src/agents/claude/sessions.ts',

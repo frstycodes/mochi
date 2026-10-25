@@ -1,10 +1,13 @@
-import type { CommitStat, PrStat } from '../../src/host/types/usage.ts';
-import { Effect } from 'effect';
+import type {
+  CommitStat,
+  PrStat,
+} from '../../../../apps/desktop/src/host/types/usage.ts';
 import {
   formatGithubAccount,
   type GithubAccountRef,
-} from '../../src/git/github.ts';
-import { runGit } from '@mochi/core/git/run';
+} from '../../../../apps/desktop/src/git/github.ts';
+import type { AuthoredPr } from '../github/schema.ts';
+import { runGit } from '../git/run.ts';
 
 /** Generated files that would swamp the line counts. */
 const LOCKFILE =
@@ -67,24 +70,27 @@ export function parseLog(repo: string, out: string): CommitStat[] {
     });
 }
 
+/** Core's GitHub service's `authoredPrs`, as a promise. */
+export type AuthoredPrs = (
+  cwd: string,
+  since: number | null,
+  githubUser: string | undefined,
+) => Promise<ReadonlyArray<AuthoredPr>>;
+
 /** Pull requests you opened in the repo. */
 export async function prStats(
   repo: string,
   since: number | null,
   account: GithubAccountRef | undefined,
+  authoredPrs: AuthoredPrs,
 ): Promise<PrStat[]> {
   // A folder that isn't a repo, or one never pushed anywhere, has no pull requests to ask GitHub about.
   if (!(await runGit(repo, ['remote', 'get-url', 'origin']).catch(() => '')))
     return [];
-  // Imported here: `@mochi/core/host` loads electron, and this file's parsers are tested under plain node.
-  const { mainCoreClient } = await import('@mochi/core/host');
-  const client = await mainCoreClient();
-  const rows = await Effect.runPromise(
-    client['github.authoredPrs']({
-      cwd: repo,
-      since,
-      githubUser: account && formatGithubAccount(account),
-    }).pipe(Effect.catch((error) => Effect.die(new Error(String(error))))),
+  const rows = await authoredPrs(
+    repo,
+    since,
+    account && formatGithubAccount(account),
   );
   return rows.map((r) => ({
     repo,

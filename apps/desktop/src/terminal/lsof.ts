@@ -4,7 +4,7 @@ import type {
   RunTarget,
 } from '@mochi/domain/host/types/ports';
 
-// Shared by electron/ipc/ports.ts (main) and its test; pure so `node --test` can run it without Electron.
+// Shared by packages/core/src/ports/host.ts and its test; pure so `node --test` can run it without Electron.
 
 /** `lsof -nP -iTCP -sTCP:LISTEN -Fpn`: one `p<pid>` line, then an `n<addr>:<port>` line per socket. IPv4 and IPv6 listeners of one process collapse. */
 export function parseListening(output: string) {

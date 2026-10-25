@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import type { CostParts } from '../../src/host/types/usage.ts';
+import type { CostParts } from '../../../../apps/desktop/src/host/types/usage.ts';
 import type { UsageRecord } from './records.ts';
 
 /** Dollars per token. A tier replaces every rate for a whole request whose prompt is over `above` tokens. */
