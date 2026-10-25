@@ -11,6 +11,7 @@ import {
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
+import { Effect } from 'effect';
 import type {
   Account,
   ConfigPreview,
@@ -183,19 +184,18 @@ export async function testMcpServer(
       (chunk: Buffer) => (stderr = (stderr + chunk.toString()).slice(-400)),
     );
   const client = new Client({ name: 'mochi', version: '1' });
-  let timer: NodeJS.Timeout | undefined;
   try {
-    const timeout = new Promise<never>(
-      (_, reject) =>
-        (timer = setTimeout(
-          () => reject(new Error('No answer within 20 seconds')),
-          TEST_TIMEOUT_MS,
-        )),
+    const { tools } = await Effect.runPromise(
+      Effect.promise(() =>
+        client.connect(transport).then(() => client.listTools()),
+      ).pipe(
+        Effect.timeoutOrElse({
+          duration: TEST_TIMEOUT,
+          orElse: () =>
+            Effect.die(new Error(`No answer within ${TEST_TIMEOUT}`)),
+        }),
+      ),
     );
-    const { tools } = await Promise.race([
-      client.connect(transport).then(() => client.listTools()),
-      timeout,
-    ]);
     return { tools: tools.map((t) => t.name) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -203,12 +203,11 @@ export async function testMcpServer(
       cause: error,
     });
   } finally {
-    clearTimeout(timer);
     void client.close().catch(() => {});
   }
 }
 
-const TEST_TIMEOUT_MS = 20_000;
+const TEST_TIMEOUT = '20 seconds';
 
 // {READ}
 
