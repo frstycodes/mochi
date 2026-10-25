@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
 import { imageMime } from '../files/previews';
@@ -16,9 +16,26 @@ export const isFilePath = (src: string) => !isUrl(src);
  */
 export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
   const images = useQueries({ queries: srcs.map((src) => ({ queryKey: queryKeys.chat.imageBlob(src), queryFn: () => readImage(src), enabled: !!src && isFilePath(src), structuralSharing: false })), combine: (results) => results.map((result) => ({ blob: result.data, isError: result.isError })) });
-  const urls = images.map(({ blob }) => blob ? URL.createObjectURL(blob) : undefined);
-  useEffect(() => () => urls.forEach((url) => { if (url) URL.revokeObjectURL(url); }), [urls]);
-  return srcs.map((src, i) => isFilePath(src) ? urls[i] ?? (images[i].isError ? null : undefined) : src);
+  const urls = useObjectUrls(images.map(({ blob }) => blob));
+  return srcs.map((src, i) => {
+    if (!isFilePath(src)) return src;
+    const blob = images[i].blob;
+    return (blob && urls.get(blob)) ?? (images[i].isError ? null : undefined);
+  });
+}
+
+/** One object URL per loaded blob, made and revoked by an effect so StrictMode's re-run gets live ones. */
+function useObjectUrls(blobs: (Blob | undefined)[]) {
+  const [shown, setShown] = useState(blobs);
+  if (blobs.length !== shown.length || blobs.some((blob, i) => blob !== shown[i])) setShown(blobs);
+  const [urls, setUrls] = useState(() => new Map<Blob, string>());
+  useEffect(() => {
+    const made = new Map(shown.flatMap((blob) => (blob ? [[blob, URL.createObjectURL(blob)] as const] : [])));
+    // oxlint-disable-next-line react/set-state-in-effect -- an object URL is an external resource: made and revoked by this effect
+    setUrls(made);
+    return () => made.forEach((url) => URL.revokeObjectURL(url));
+  }, [shown]);
+  return urls;
 }
 
 /** Selects the file in Finder (Explorer, the file manager). */
