@@ -6,7 +6,7 @@ import type { AppendInput } from './store.ts';
 // Main's side of Core's store: the document tables that replaced the JSON files main wrote, and the event log. No
 // `electron` import: modules using it run under plain node in tests, where documents stay in this process.
 
-type Docs = {
+export type Docs = {
   list: (
     table: DocTable,
   ) => Promise<ReadonlyArray<{ key: string; value: unknown }>>;
@@ -21,7 +21,7 @@ let pending = 0;
 
 /** Main points this at its Core client (`startCore`). Calls retry across a Core restart (`retryIdempotent`). */
 export function useDocsClient(client: Promise<CoreClient>) {
-  backend = {
+  useDocs({
     list: async (table) =>
       Effect.runPromise((await client)['docs.list']({ table })),
     set: async (table, key, value) =>
@@ -33,7 +33,12 @@ export function useDocsClient(client: Promise<CoreClient>) {
           payload: input.payload ?? null,
         }),
       ),
-  };
+  });
+}
+
+/** Core points this at its own store, for the `host.*` modules it serves (`hosted.ts`). */
+export function useDocs(docs: Docs) {
+  backend = docs;
 }
 
 // ponytail: tests and the web build's absence of Core get a per-process map; same calls, no second store.

@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'vite-plus/test';
-import { readDoc } from '@mochi/core/store/client';
+import { readDoc } from '../store/client.ts';
 import { projectRegistry } from './registry.ts';
 
 function scratch() {

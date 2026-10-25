@@ -14,7 +14,7 @@ import {
   saveCustomIcon,
 } from './icon.ts';
 import { runGit } from '../git/run.ts';
-import { readDoc, writeDoc } from '@mochi/core/store/client';
+import { readDoc, writeDoc } from '../store/client.ts';
 
 /** `iconMode` is unset on rows saved before icons: those read as `auto`. */
 type StoredProject = Omit<

@@ -1,7 +1,7 @@
 import { access, constants } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runCommand } from '@mochi/core/runClient';
+import { runCommand } from '../runClient.ts';
 import type { Editor } from '@mochi/domain/host/types/fs';
 
 // A GUI-launched app doesn't get the shell's PATH, so the CLI bundled inside each .app is tried before PATH.

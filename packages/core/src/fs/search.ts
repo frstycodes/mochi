@@ -1,6 +1,5 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { WebContents } from 'electron';
 import type {
   SearchHits,
   SearchLine,
@@ -8,6 +7,8 @@ import type {
   SearchSummary,
 } from '@mochi/domain/host/types/fs';
 import { compileQuery, matchLines } from '@mochi/domain/files/search';
+import { push } from '../agents/events.ts';
+import type { Caller } from '../hostMethods.ts';
 import { isInside, resolveRoot } from './contain.ts';
 import { listFiles } from './list.ts';
 
@@ -75,8 +76,9 @@ async function readText(realRoot: string, file: string, maxFileBytes: number) {
 
 const running = new Map<string, AbortController>();
 
+/** `searchFiles` for a window: hits go to it as `fs:onSearchHits`; `cancelSearch(id)` or the call's end stops it. */
 export async function searchFor(
-  sender: WebContents,
+  { windowId, signal }: Caller,
   root: string,
   id: string,
   pattern: string,
@@ -84,25 +86,21 @@ export async function searchFor(
 ) {
   const controller = new AbortController();
   running.set(id, controller);
-  const abort = () => controller.abort();
-  sender.once('destroyed', abort);
   try {
     return await searchFiles(
       root,
       pattern,
       options,
       (path, lines) =>
-        sender.isDestroyed() ||
-        sender.send('fs:onSearchHits', {
-          id,
-          path,
-          lines,
-        } satisfies SearchHits),
-      { signal: controller.signal },
+        push({
+          channel: 'fs:onSearchHits',
+          payload: { id, path, lines } satisfies SearchHits,
+          windowId,
+        }),
+      { signal: AbortSignal.any([signal, controller.signal]) },
     );
   } finally {
     running.delete(id);
-    sender.off('destroyed', abort);
   }
 }
 

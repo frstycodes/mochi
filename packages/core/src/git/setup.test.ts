@@ -11,7 +11,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'vite-plus/test';
-import type { SetupChoice, WorktreeSetup } from '../../src/host/types/agent.ts';
+import type {
+  SetupChoice,
+  WorktreeSetup,
+} from '../../../../apps/desktop/src/host/types/agent.ts';
 import {
   includePatterns,
   installCommand,
