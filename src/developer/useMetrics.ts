@@ -39,7 +39,7 @@ export function useMetrics() {
       initialValue: [],
       refetchMode: 'append',
     }),
-    enabled: host.isDesktop,
+    enabled: host.hasCore,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     // The page is the only observer; leaving it ends the subscription instead of keeping a second of polling alive.

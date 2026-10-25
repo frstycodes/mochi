@@ -35,6 +35,8 @@ import { sim as webSim } from './web/sim.ts';
 import { themes as webThemes } from './web/themes.ts';
 import { windows as webWindows } from './web/windows.ts';
 import { usage as webUsage } from './web/usage.ts';
+import { isServed } from './web/core.ts';
+import { servedNamespace } from './web/served.ts';
 
 export type { HostBridge, Namespace } from './types/index.ts';
 
@@ -68,10 +70,16 @@ export const registry: Registry = {
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
 
 const pick = <K extends Namespace>(ns: K): HostBridge[K] =>
-  isDesktop ? registry[ns].desktop() : registry[ns].web;
+  isDesktop
+    ? registry[ns].desktop()
+    : isServed
+      ? servedNamespace(ns)
+      : registry[ns].web;
 
 export const host = {
   isDesktop,
+  /** Core runs behind this page: the desktop app, or `mochi serve`. */
+  hasCore: isDesktop || isServed,
   pty: pick('pty'),
   git: pick('git'),
   fs: pick('fs'),
@@ -90,4 +98,4 @@ export const host = {
   projects: pick('projects'),
   library: pick('library'),
   usage: pick('usage'),
-} satisfies HostBridge & { isDesktop: boolean };
+} satisfies HostBridge & { isDesktop: boolean; hasCore: boolean };

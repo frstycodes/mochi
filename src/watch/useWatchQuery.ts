@@ -38,12 +38,12 @@ export function useWatchQuery<K extends Tag, T>(
   const query = useQuery({
     queryKey,
     queryFn: read,
-    enabled: !!key && !host.isDesktop,
-    staleTime: host.isDesktop ? Infinity : undefined,
+    enabled: !!key && !host.hasCore,
+    staleTime: host.hasCore ? Infinity : undefined,
   });
   const refresh = async () => {
     if (!key) return;
-    if (host.isDesktop) return markStale([STALE_KIND[key._tag]]);
+    if (host.hasCore) return markStale([STALE_KIND[key._tag]]);
     await query.refetch();
   };
   return [query, refresh] as const;
@@ -51,14 +51,14 @@ export function useWatchQuery<K extends Tag, T>(
 
 /** Asks Core to read every subscribed key of these kinds again. */
 export async function markStale(kinds: StaleKind[]) {
-  if (!host.isDesktop) return;
+  if (!host.hasCore) return;
   const core = await coreClient();
   await Effect.runPromise(core['watch.stale']({ kinds }));
 }
 
 /** `onValue` for each of `key`'s values until the returned function is called; nothing in the web build. */
 export function watchKey(key: WatchKey, onValue: (value: WatchValue) => void) {
-  if (!host.isDesktop) return () => {};
+  if (!host.hasCore) return () => {};
   const abort = new AbortController();
   const subscribe = Effect.promise(() => coreClient()).pipe(
     Effect.flatMap((core) =>
