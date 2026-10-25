@@ -1059,15 +1059,6 @@ export const TURN_TOOLS = [
 export const isTurnTool = (name: string) =>
   (TURN_TOOLS as readonly string[]).includes(name);
 
-/** Never deferred for Claude either: asked for "a Codex subagent", an agent that can't see `delegate_task` looks only at its own Agent types and gives up. */
-export const ALWAYS_LOADED_TOOLS = [
-  ...TURN_TOOLS,
-  'delegate_task',
-] as const satisfies ToolName[];
-
-export const isAlwaysLoaded = (name: string) =>
-  (ALWAYS_LOADED_TOOLS as readonly string[]).includes(name);
-
 export const asks = (tier: Tier) =>
   (ASKING_TIERS as readonly Tier[]).includes(tier);
 

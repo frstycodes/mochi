@@ -20,7 +20,7 @@ import {
 } from '../../../../apps/desktop/src/runtime/imageTool.ts';
 import {
   decodeArgs,
-  isAlwaysLoaded,
+  isTurnTool,
   jsonSchemaOf,
   MOCHI_SERVER,
   servedTools,
@@ -89,7 +89,7 @@ export function claudeServer(
 ): McpSdkServerConfigWithInstance {
   const tools = toolsFor(scope).map((t): ServedTool => ({
     ...t,
-    alwaysLoad: !!scope.isSettingsChat || isAlwaysLoaded(t.name),
+    alwaysLoad: !!scope.isSettingsChat || isTurnTool(t.name),
     call: (args) => callMochi(thread, t.name, args),
   }));
   const image: ServedTool = {
