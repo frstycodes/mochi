@@ -45,7 +45,7 @@ export interface AgentSettings {
   worktreeRoot: string;
   shell: string;
   prDrafts: boolean;
-  /** A new worktree gets its ignored files, dependencies and the project's setup command before the agent's first turn (`electron/git/setup.ts`). */
+  /** A new worktree gets its ignored files, dependencies and the project's setup command before the agent's first turn (`packages/core/src/git/setup.ts`). */
   prepareWorktrees: boolean;
   /** Ignored files copied from the project into a new worktree, gitignore patterns split by commas or lines; the project's own `.worktreeinclude` adds to them. */
   worktreeInclude: string;

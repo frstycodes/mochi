@@ -36,11 +36,6 @@ const remoteRoute = createRoute({
   path: '/remote/$machineId/$threadId',
   component: lazyRouteComponent(load, 'RemoteThreadView'),
 });
-const reviewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/review',
-  component: lazyRouteComponent(load, 'ReviewView'),
-});
 const developerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/developer',
@@ -52,7 +47,6 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   replayRoute,
   remoteRoute,
-  reviewRoute,
   developerRoute,
 ]);
 

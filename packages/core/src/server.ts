@@ -15,6 +15,7 @@ import { Cache } from './cache.ts';
 import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
 import { Capabilities, hostHandlers } from './hostServer.ts';
+import { Hosted } from './hosted.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
@@ -87,6 +88,7 @@ export const layerCore = (options: ServerOptions) =>
         utilityCall('handoff', spaceId, prompt),
       ),
     ),
+    Layer.provideMerge(Hosted.layer(options.userData)),
     Layer.provide(
       Layer.mergeAll(
         GitHub.layer.pipe(Layer.provide(GithubTransport.layer)),
@@ -128,7 +130,8 @@ type Services =
   | Commands
   | Metrics
   | Terminals
-  | Scheduler;
+  | Scheduler
+  | Hosted;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -290,6 +293,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const metrics = yield* Metrics;
       const terminals = yield* Terminals;
       const scheduler = yield* Scheduler;
+      const hosted = yield* Hosted;
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) =>
@@ -424,6 +428,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           after: number;
         }) => terminals.output(terminalId, threadId, after),
         ...host,
+        ...hosted.handlers(windowId),
         ...scheduleHandlers(scheduler),
         ...scheduleRpcHandlers(scheduler),
         ...agentHandlers(windowId),

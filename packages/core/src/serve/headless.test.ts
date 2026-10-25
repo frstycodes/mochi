@@ -38,7 +38,7 @@ it.live(
       for (const [tag, args, capability] of [
         ['notify.show', [{ title: 'Done' }], 'notify'],
         ['sim.list', [], 'sim'],
-        ['fs.list', ['/tmp'], 'host'],
+        ['fs.pickFolder', [], 'host'],
       ] as const) {
         const error = yield* Effect.promise(() =>
           call(tag, args).then(

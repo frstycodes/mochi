@@ -14,7 +14,6 @@ import {
   CopyStack,
   Inbox,
   MessageQuestion as MessageCircleQuestion,
-  Route,
   Settings,
   ShieldCheck,
   Edit as SquarePen,
@@ -257,14 +256,6 @@ function useOrbitItems(): OrbitItem[] {
       label: 'Queue',
       view: { kind: 'queue' },
       icon: Inbox,
-    },
-    {
-      key: 'o-board',
-      ring: 'outer',
-      angle: SLOT_ANGLES[4],
-      label: 'Board',
-      view: { kind: 'board' },
-      icon: Route,
     },
     {
       key: 'o-new',

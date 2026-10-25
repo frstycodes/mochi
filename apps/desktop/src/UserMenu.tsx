@@ -9,6 +9,7 @@ import {
   Play,
   Refresh,
   Settings,
+  Chart,
   Sun,
   UserCircle,
   UserEdit,
@@ -70,6 +71,12 @@ export function UserMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
         <AccountItems {...mochiAccount} />
+        <DropdownMenuItem
+          onSelect={() => dispatch({ type: 'go', view: { kind: 'usage' } })}
+        >
+          <Chart />
+          Usage
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openSettings()}>
           <Settings />
           Settings

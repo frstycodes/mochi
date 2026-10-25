@@ -19,7 +19,7 @@ import {
   restorePaths,
   snapshot,
   snapshotCommit,
-} from '../../electron/git/checkpoints.ts';
+} from '@mochi/core/git/checkpoints';
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
