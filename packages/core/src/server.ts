@@ -287,7 +287,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const metrics = yield* Metrics;
       const terminals = yield* Terminals;
       const scheduler = yield* Scheduler;
-      const hosted = yield* Hosted;
+      const hosted = yield* (yield* Hosted).handlers(windowId);
       return {
         ping: () => Effect.succeed('pong'),
         ticks: ({ intervalMs }: { intervalMs: number }) =>
@@ -422,7 +422,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           after: number;
         }) => terminals.output(terminalId, threadId, after),
         ...host,
-        ...hosted.handlers(windowId),
+        ...hosted,
         ...scheduleHandlers(scheduler),
         ...scheduleRpcHandlers(scheduler),
         ...agentHandlers(windowId),

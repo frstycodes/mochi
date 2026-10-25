@@ -8,6 +8,7 @@ import { GitHub } from './github/service.ts';
 import { hostMethods } from './hostMethods.ts';
 import { ports } from './ports/host.ts';
 import { projectsHost } from './projects/host.ts';
+import { ptyHost } from './pty/host.ts';
 import { useDocs } from './store/client.ts';
 import { Store } from './store/store.ts';
 import { themesHost } from './themes/host.ts';
@@ -37,6 +38,7 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
         fs,
         ports,
         projects: projectsHost(data),
+        pty: ptyHost(data),
         data: dataHost(data),
         themes: themesHost(data),
         usage: usageHost(data, (cwd, since, githubUser) =>
@@ -44,12 +46,21 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
         ),
       };
       return {
-        /** `<ns>.<method>` handlers for one connection's window. */
+        /** `<ns>.<method>` handlers for one connection, which ends with the scope (its terminals with it). */
         handlers: (windowId: number | undefined) =>
-          Object.fromEntries(
-            Object.entries(namespaces).flatMap(([ns, methods]) =>
-              Object.entries(hostMethods(ns, methods, windowId)),
+          Effect.map(
+            Effect.acquireRelease(
+              Effect.sync(() => new AbortController()),
+              (connection) => Effect.sync(() => connection.abort()),
             ),
+            ({ signal: closed }) =>
+              Object.fromEntries(
+                Object.entries(namespaces).flatMap(([ns, methods]) =>
+                  Object.entries(
+                    hostMethods(ns, methods, { windowId, closed }),
+                  ),
+                ),
+              ),
           ),
       };
     }),
