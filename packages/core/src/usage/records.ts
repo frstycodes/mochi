@@ -3,9 +3,12 @@ import * as zlib from 'node:zlib';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { cached } from '../cache.ts';
-import type { Provider } from '../../src/model.ts';
-import type { TokenBucket, UsageSession } from '../../src/host/types/usage.ts';
+import { cached } from '../../../../apps/desktop/electron/cache.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
+import type {
+  TokenBucket,
+  UsageSession,
+} from '../../../../apps/desktop/src/host/types/usage.ts';
 import { localDay } from '@mochi/domain/usage/days';
 import { responseCost, uncachedCost, type PriceBook } from './prices.ts';
 

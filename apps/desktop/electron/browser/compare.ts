@@ -6,7 +6,7 @@ import { devTarget, pickPort } from '../../src/terminal/lsof.ts';
 import { worktreeRoot } from '@mochi/core/agents/config';
 import { baseRef, localName } from '@mochi/core/git/branches';
 import { mainRepo, runGit, topLevel } from '@mochi/core/git/run';
-import { isFree, listeningPorts, runTargets } from '../ipc/ports.ts';
+import { isFree, listeningPorts, runTargets } from '@mochi/core/ports/host';
 import { killTree, spawnShell } from '../platform.ts';
 import type { CoreChild } from '@mochi/core/runClient';
 import { userPath } from '@mochi/core/shellPath';

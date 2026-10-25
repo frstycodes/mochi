@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
-import { runCommand } from '@mochi/core/runClient';
+import { runCommand } from '../runClient.ts';
 import type { ListeningPort, PortsHost } from '@mochi/domain/host/types/ports';
 import {
   launchConfigs,
@@ -13,9 +13,9 @@ import {
   pickPort,
   portsByRoot,
   type PortScan,
-} from '../../src/terminal/lsof.ts';
+} from '../../../../apps/desktop/src/terminal/lsof.ts';
 import { resolveCwd } from '../pty/cwd.ts';
-import type { Handlers } from './handlers.ts';
+import type { HostMethods } from '../hostMethods.ts';
 
 const FIRST_THREAD_PORT = 5300;
 const allocated = new Map<string, Promise<number>>();
@@ -23,19 +23,19 @@ const allocated = new Map<string, Promise<number>>();
 let shownPids = new Set<number>();
 
 export const ports = {
-  async list(_sender, cwds) {
+  async list(_caller, cwds) {
     const found = portsByRoot(cwds.map(rootOrError), await scanListening());
     shownPids = new Set(
       found.flatMap((r) => ('ports' in r ? r.ports.map((p) => p.pid) : [])),
     );
     return found;
   },
-  async kill(_sender, pid) {
+  async kill(_caller, pid) {
     if (!shownPids.has(pid) || pid === process.pid)
       throw new Error(`pid ${pid} is not a listed dev server`);
     process.kill(pid, 'SIGTERM');
   },
-  async allocate(_sender, key) {
+  async allocate(_caller, key) {
     if (!allocated.has(key))
       allocated.set(
         key,
@@ -45,10 +45,10 @@ export const ports = {
       );
     return allocated.get(key)!;
   },
-  async targets(_sender, cwd) {
+  async targets(_caller, cwd) {
     return runTargets(resolveCwd(cwd));
   },
-} satisfies Handlers<PortsHost>;
+} satisfies HostMethods<PortsHost>;
 
 export function runTargets(dir: string) {
   return [

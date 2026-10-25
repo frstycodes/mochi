@@ -14,7 +14,7 @@ import { layerCore } from './server.ts';
 const TOKEN = 'local-token';
 
 it.live(
-  'Core answers git, fs and projects itself, with no main connected, and pushes the change',
+  'Core answers the moved host namespaces itself, with no main connected, and pushes changes',
   () =>
     Effect.gen(function* () {
       const repo = realpathSync(
@@ -22,6 +22,10 @@ it.live(
       );
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => rmSync(repo, { recursive: true, force: true })),
+      );
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-data-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(userData, { recursive: true, force: true })),
       );
       execFileSync('git', ['init', '-q', repo]);
       writeFileSync(path.join(repo, 'a.txt'), 'hello\n');
@@ -31,6 +35,7 @@ it.live(
           port: 0,
           tokens: new Map([[TOKEN, Capabilities.allScopes]]),
           origins: [],
+          userData,
         }),
       );
       const { port } = Context.get(context, HttpServer.HttpServer).address as {
@@ -70,6 +75,22 @@ it.live(
       assert.deepEqual(
         status.files.map((f) => f.path),
         ['a.txt'],
+      );
+
+      yield* Effect.promise(() =>
+        call('data.appendReplay', ['t1', '{"t":1}\n']),
+      );
+      assert.equal(
+        yield* Effect.promise(() => call('data.loadReplay', ['t1'])),
+        '{"t":1}\n',
+      );
+      assert.deepEqual(
+        yield* Effect.promise(() => call('themes.list', [])),
+        [],
+      );
+      assert.equal(
+        typeof (yield* Effect.promise(() => call('ports.allocate', ['t1']))),
+        'number',
       );
     }),
 );
