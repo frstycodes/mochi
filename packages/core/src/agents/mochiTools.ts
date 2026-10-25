@@ -28,6 +28,12 @@ import {
   TOOL_TABLE,
   type MochiScope,
 } from '@mochi/domain/runtime/toolTable';
+import {
+  HISTORY_TOOL,
+  HISTORY_TOOL_DESCRIPTION,
+  HISTORY_TOOL_SHAPE,
+  type HistoryArgs,
+} from '../switch/history.ts';
 import { agentSettings } from './config.ts';
 
 /**
@@ -59,7 +65,7 @@ export const instructionsFor = ({ isGoalsOff, isSettingsChat }: MochiScope) =>
       : INSTRUCTIONS;
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
-export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map(
+export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL, HISTORY_TOOL].map(
   (name) => `mcp__${SERVER}__${name}`,
 );
 
@@ -97,12 +103,38 @@ export function claudeServer(
   return {
     type: 'sdk',
     name: SERVER,
-    instance: mochiServer(
-      instructionsFor(scope),
-      isImageOff ? tools : [...tools, image],
-    ),
+    instance: mochiServer(instructionsFor(scope), [
+      ...tools,
+      ...(isImageOff ? [] : [image]),
+      ...(scope.isSettingsChat ? [] : [historyTool(thread, answerHistory)]),
+    ]),
   };
 }
+
+type AnswerHistory = (
+  thread: string,
+  args: HistoryArgs,
+) => Promise<CallToolResult>;
+
+let answerHistory: AnswerHistory = async () => ({
+  content: [{ type: 'text', text: 'The thread history is not available' }],
+  isError: true,
+});
+
+/** Set by the agents layer once Core's `ThreadContext` runs. */
+export const setThreadHistory = (answer: AnswerHistory) =>
+  void (answerHistory = answer);
+
+/** `thread_history` for `thread`, answered by Core however the agent reaches it. */
+export const historyTool = (
+  thread: string,
+  call: AnswerHistory,
+): ServedTool => ({
+  name: HISTORY_TOOL,
+  description: HISTORY_TOOL_DESCRIPTION,
+  shape: HISTORY_TOOL_SHAPE,
+  call: (args) => call(thread, args as HistoryArgs),
+});
 
 export interface ServedTool {
   name: string;

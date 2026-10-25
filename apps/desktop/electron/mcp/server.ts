@@ -17,11 +17,14 @@ import {
   type MochiScope,
 } from '@mochi/domain/runtime/toolTable';
 import {
+  historyTool,
   instructionsFor,
   mochiServer,
   toolsFor,
   type ServedTool,
 } from '@mochi/core/agents/mochiTools';
+import { mainCoreClient } from '@mochi/core/host';
+import { makeHostCaller } from '@mochi/core/hostClient';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
 
@@ -125,6 +128,13 @@ export async function callMochi(
   };
 }
 
+/** Codex's `thread_history`: Core answers it from its log. */
+const coreThreadHistory = async (threadId: string, args: unknown) =>
+  (await makeHostCaller(await mainCoreClient())('agentThreadHistory', {
+    threadId,
+    args,
+  })) as CallToolResult;
+
 function listening() {
   http ??= new Promise((resolve, reject) => {
     // Stateless: each POST gets a fresh server and transport, so nothing is kept between Codex's calls.
@@ -146,13 +156,16 @@ function listening() {
         match[2] === '__dev__';
       const mcp = isDev
         ? mochiServer(DEV_INSTRUCTIONS, devTools())
-        : mochiServer(
-            instructionsFor(scope),
-            toolsFor(scope).map((t) => ({
+        : mochiServer(instructionsFor(scope), [
+            ...toolsFor(scope).map((t) => ({
               ...t,
-              call: (args) => callMochi(match[2], t.name, args),
+              call: (args: Record<string, unknown>) =>
+                callMochi(match[2], t.name, args),
             })),
-          );
+            ...(scope.isSettingsChat
+              ? []
+              : [historyTool(match[2], coreThreadHistory)]),
+          ]);
       const transport = new NodeStreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

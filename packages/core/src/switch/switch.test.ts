@@ -26,6 +26,7 @@ import { Projection } from '../store/projection.ts';
 import { Store } from '../store/store.ts';
 import { ThreadContext } from './context.ts';
 import type { HandoffAsk } from './handoff.ts';
+import type { HistoryArgs } from './history.ts';
 import { launchSession } from './launch.ts';
 
 const THREAD = 'new-1';
@@ -249,7 +250,7 @@ it.live(
         ask.provider === 'claude'
           ? '## Goal\nRate-limit the API\n## Why\nToken bucket: bursts are fine'
           : null,
-      ({ store, agent, say, switchTo, start, asks }) =>
+      ({ store, context, agent, say, switchTo, start, asks }) =>
         Effect.gen(function* () {
           const options = yield* switchTo('codex', 'gpt-6');
           assert.equal(asks.length, 0, 'picking a provider runs nothing');
@@ -307,6 +308,38 @@ it.live(
           assert.ok(
             logged.some((e) => e.type === 'agent.context-writing'),
             'the row said the handoff was being written',
+          );
+
+          // What the package cut, Codex gets back from the event log when it needs it.
+          const historyText = (args: HistoryArgs) =>
+            Effect.map(context.history(THREAD, args), (r) =>
+              r.content.map((c) => (c.type === 'text' ? c.text : '')).join(''),
+            );
+          const pointer = Number(/thread_history get seq=(\d+)/.exec(sent)![1]);
+          const full = yield* historyText({ op: 'get', seq: pointer });
+          assert.equal(full.match(/^ok$/gm)?.length, 4000, 'the whole output');
+          assert.equal(
+            yield* historyText({ op: 'get', toolCallId: 't1' }),
+            full,
+          );
+          assert.match(
+            yield* historyText({ op: 'outline' }),
+            /^\d+–\d+ · Add a rate limiter to the API\n\d+–\d+ · No new dependencies, please/,
+          );
+          assert.match(
+            yield* historyText({ op: 'search', query: 'no new dependencies' }),
+            /^\[\d+\] you: …No new dependencies, please…$/m,
+          );
+          const before = yield* historyText({
+            op: 'read',
+            fromSeq: 0,
+            toSeq: pointer - 1,
+          });
+          assert.match(before, /User: Add a rate limiter to the API/);
+          assert.doesNotMatch(
+            before,
+            /Run the tests/,
+            'the range ends before the tool',
           );
 
           yield* agent({

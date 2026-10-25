@@ -6,6 +6,7 @@ import type { SwitchFrom } from '../../../../apps/desktop/src/host/types/agent.t
 import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import { Run } from '../run.ts';
 import { writeHandoff, type HandoffAsk } from './handoff.ts';
+import { historyAnswer, type HistoryArgs } from './history.ts';
 import { contextPackage, PACKAGE_TOKENS } from './package.ts';
 import { transcriptOf, type TranscriptItem } from './transcript.ts';
 
@@ -192,11 +193,13 @@ export class ThreadContext extends Context.Service<ThreadContext>()(
             };
           });
 
-        /** The thread's transcript, for `thread_history`. */
-        const transcript = (threadId: string) =>
-          Effect.map(eventsOf(threadId, 0), transcriptOf);
+        /** A `thread_history` call, scoped to its thread. */
+        const history = (threadId: string, args: HistoryArgs) =>
+          Effect.map(eventsOf(threadId, 0), (events) =>
+            historyAnswer(args, transcriptOf(events)),
+          );
 
-        return { prepare, transcript };
+        return { prepare, history };
       }),
   },
 ) {

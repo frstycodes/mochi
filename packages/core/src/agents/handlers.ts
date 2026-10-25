@@ -55,6 +55,7 @@ import type { UtilityQueue } from '../utility/queue.ts';
 import type { ThreadContext } from '../switch/context.ts';
 import { permissionModeOf } from '../../../../apps/desktop/src/runtime/access.ts';
 import type { HandoffAsk } from '../switch/handoff.ts';
+import type { HistoryArgs } from '../switch/history.ts';
 import { launchSession } from '../switch/launch.ts';
 import { PRIORITY } from '../utility/queue.ts';
 import {
@@ -229,6 +230,10 @@ const required = <A>(service: A | undefined) => {
   if (!service) throw new Error('The agents service is not running');
   return service;
 };
+
+/** Mochi's `thread_history` tool for the thread's agent: Claude's in-process server calls it, Codex's through main. */
+export const threadHistory = (threadId: string, args: HistoryArgs) =>
+  Effect.runPromise(required(context).history(threadId, args));
 
 /**
  * Each thread's session is a fiber on `Turns` from `start` until `stop`: stopping it interrupts the fiber, whose release
