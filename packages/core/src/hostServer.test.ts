@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'vite-plus/test';
+import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream } from 'effect';
 import { Capabilities } from './hostServer.ts';
 
@@ -15,11 +15,11 @@ const window = (capabilities: Capabilities['Service'], name: string, isStuck = f
     return { close: Fiber.interrupt(fiber), got: Deferred.await(got) };
   });
 
-const run = (body: Effect.Effect<void, unknown, Capabilities>) => Effect.runPromise(Effect.scoped(body.pipe(Effect.provide(Capabilities.layer))));
+const run = (body: Effect.Effect<void, unknown, Capabilities>) => Effect.scoped(body.pipe(Effect.provide(Capabilities.layer)));
 const call = { capability: 'reactor', method: 'run', args: [] } as const;
 
-test('closing the window that registered last hands its calls to the one before it, without waiting', async () => {
-  await run(
+it.effect('closing the window that registered last hands its calls to the one before it, without waiting', () =>
+  run(
     Effect.gen(function* () {
       const capabilities = yield* Capabilities;
       const first = yield* window(capabilities, 'first');
@@ -30,11 +30,11 @@ test('closing the window that registered last hands its calls to the one before 
       yield* first.close;
       assert.match(String(yield* Effect.flip(capabilities.call(call))), /No connected client offers reactor/);
     }),
-  );
-});
+  ),
+);
 
-test('a window that closes mid-call hands that call to the next window', async () => {
-  await run(
+it.effect('a window that closes mid-call hands that call to the next window', () =>
+  run(
     Effect.gen(function* () {
       const capabilities = yield* Capabilities;
       yield* window(capabilities, 'first');
@@ -44,5 +44,5 @@ test('a window that closes mid-call hands that call to the next window', async (
       yield* stuck.close;
       assert.equal(yield* Fiber.join(answer).pipe(Effect.timeout('1 second')), 'first');
     }),
-  );
-});
+  ),
+);

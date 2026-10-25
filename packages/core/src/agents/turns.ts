@@ -32,7 +32,7 @@ export class Turns extends Context.Service<Turns>()('mochi/core/Turns', {
         ),
     });
 
-    /** Fails when the thread already has a turn running; the turn's own failure ends it and is logged. */
+    /** Fails when the thread already has a turn running; the turn's own failure ends it and is logged. Returns the turn's fiber. */
     const start = <E>(threadId: string, turn: Turn<E>) =>
       Effect.gen(function* () {
         if (running.has(threadId)) return yield* Effect.fail(`${threadId} already has a turn running`);
@@ -45,6 +45,7 @@ export class Turns extends Context.Service<Turns>()('mochi/core/Turns', {
           Effect.forkDetach,
         );
         running.set(threadId, fiber);
+        return fiber;
       });
 
     /** Interrupts the thread's turn and waits until everything it held is released. A thread with none is a no-op. */

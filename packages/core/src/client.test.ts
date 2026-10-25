@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { test } from 'vite-plus/test';
+import { afterEach, it, vi } from '@effect/vitest';
 import { Effect, Exit, Fiber, Layer, Scope } from 'effect';
 import { Capabilities } from '@mochi/schema';
 import { coreUrl, makeCoreClient } from './client.ts';
@@ -24,27 +24,44 @@ const startCore = (port: number) =>
     return scope;
   });
 
-test('calls made while Core restarts succeed once it is back; a call in flight when it drops is sent again', async () => {
-  const port = await freePort();
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const first = yield* startCore(port);
-        const client = yield* makeCoreClient(coreUrl(port, TOKEN));
-        yield* client['docs.set']({ table: 'settings', key: 'agent', value: { model: 'opus' } });
-        // In flight when Core goes: `shell` keeps its socket busy, `docs.get` is mid-call while the server closes.
-        const inFlight = yield* Effect.forkChild(client['docs.get']({ table: 'settings', key: 'agent' }).pipe(Effect.delay(5)));
-        yield* Scope.close(first, Exit.void);
-        const during = yield* Effect.forkChild(Effect.all([client.ping(), client['docs.set']({ table: 'settings', key: 'agent', value: { model: 'sonnet' } })]));
-        yield* Effect.sleep(600);
-        const second = yield* startCore(port);
-        yield* Effect.addFinalizer(() => Scope.close(second, Exit.void));
-        const [pong] = yield* Fiber.join(during);
-        assert.equal(pong, 'pong');
-        // The restarted Core is in memory: the first value is gone, the one sent during the restart landed.
-        yield* Fiber.join(inFlight);
-        assert.deepEqual(yield* client['docs.get']({ table: 'settings', key: 'agent' }), { model: 'sonnet' });
-      }),
-    ),
-  );
+/** Watches every socket the client dials from now on; `redialFailed` resolves when the first `armed` one errors. */
+function watchDials() {
+  let isArmed = false;
+  let failed = () => {};
+  const redialFailed = new Promise<void>((resolve) => (failed = resolve));
+  class Watched extends WebSocket {
+    constructor(url: string | URL, protocols?: string | string[]) {
+      super(url, protocols);
+      if (isArmed) this.addEventListener('error', () => failed());
+    }
+  }
+  vi.stubGlobal('WebSocket', Watched);
+  return { arm: () => (isArmed = true), redialFailed };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
+
+it.live('calls made while Core restarts succeed once it is back; a call in flight when it drops is sent again', () =>
+  Effect.gen(function* () {
+    const port = yield* Effect.promise(freePort);
+    const dials = watchDials();
+    const first = yield* startCore(port);
+    const client = yield* makeCoreClient(coreUrl(port, TOKEN));
+    yield* client['docs.set']({ table: 'settings', key: 'agent', value: { model: 'opus' } });
+    // In flight when Core goes: `shell` keeps its socket busy, `docs.get` is mid-call while the server closes.
+    const inFlight = yield* Effect.forkChild(client['docs.get']({ table: 'settings', key: 'agent' }), { startImmediately: true });
+    yield* Scope.close(first, Exit.void);
+    dials.arm();
+    const during = yield* Effect.forkChild(Effect.all([client.ping(), client['docs.set']({ table: 'settings', key: 'agent', value: { model: 'sonnet' } })]));
+    yield* Effect.promise(() => dials.redialFailed);
+    const second = yield* startCore(port);
+    yield* Effect.addFinalizer(() => Scope.close(second, Exit.void));
+    const [pong] = yield* Fiber.join(during);
+    assert.equal(pong, 'pong');
+    // The restarted Core is in memory: the first value is gone, the one sent during the restart landed.
+    yield* Fiber.join(inFlight);
+    assert.deepEqual(yield* client['docs.get']({ table: 'settings', key: 'agent' }), { model: 'sonnet' });
+  }),
+);
