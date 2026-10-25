@@ -18,6 +18,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import { STATUS_WORDS } from '../chat/refs';
 import { ChangeList, type ChangeActions } from '../git/ChangeList';
 import { CheckList, ChecksSummary } from '../git/Checks';
@@ -491,7 +492,7 @@ function ThreadCard({
         <span className="ml-auto shrink-0 type-caption text-subtle-foreground">
           {thread.isResolved ? 'Resolved · ' : ''}
           {thread.comments.length}{' '}
-          {thread.comments.length === 1 ? 'comment' : 'comments'}
+          {plural(thread.comments.length, 'comment', 'comments')}
         </span>
       </button>
       {isOpen && (

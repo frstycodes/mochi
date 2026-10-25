@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
+import { formatBytes } from '@/lib/format';
 import { Button } from '@/components/ui/button';
+import { plural } from '@/lib/format';
 import { PINS_STORAGE_KEY, replaceAllPins, useAllPins } from '../../chat/pins';
 import { useConfirm } from '../../git/useConfirm';
 import { host } from '../../host';
@@ -197,9 +199,8 @@ interface Area {
   noun: (n: number) => string;
 }
 
-const PLURAL = new Intl.PluralRules('en');
 const noun = (one: string, other: string) => (n: number) =>
-  PLURAL.select(n) === 'one' ? one : other;
+  plural(n, one, other);
 // Browser storage keeps UTF-16: two bytes a character, keys included.
 const storedBytes = (key: string, raw: string) => (key.length + raw.length) * 2;
 
@@ -274,14 +275,4 @@ function terminalCount(raw: string): number {
   } catch {
     return 0;
   }
-}
-
-const BYTES = new Intl.NumberFormat('en', {
-  style: 'unit',
-  unit: 'kilobyte',
-  maximumFractionDigits: 1,
-});
-
-function formatBytes(bytes: number) {
-  return BYTES.format(bytes / 1024);
 }

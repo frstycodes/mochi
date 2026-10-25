@@ -1,6 +1,7 @@
 import { RefIcon, RefListHoverCard } from '../chat/RefHoverCard';
 import { refDescription } from '../chat/refs';
 import type { Thread } from '../model';
+import { plural } from '../lib/format.ts';
 import { useThreadPrs } from './useThreadPrs';
 
 const MAX_SHOWN = 3;
@@ -11,10 +12,11 @@ export function PrStack({ thread }: { thread: Thread }) {
   if (prs.length === 0) return null;
   const shown = prs.slice(0, MAX_SHOWN);
   const hidden = prs.length - shown.length;
-  const title =
-    PLURAL.select(prs.length) === 'one'
-      ? '1 pull request'
-      : `${prs.length} pull requests`;
+  const title = plural(
+    prs.length,
+    '1 pull request',
+    `${prs.length} pull requests`,
+  );
   return (
     <RefListHoverCard items={prs} title={title} side="bottom" align="end">
       <span
@@ -42,5 +44,3 @@ export function PrStack({ thread }: { thread: Thread }) {
 
 const MARK =
   'flex shrink-0 cursor-default items-center gap-1 rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring';
-
-const PLURAL = new Intl.PluralRules('en');

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import { useConfirm } from '../../git/useConfirm';
 import { formatGithubAccount } from '../../git/github';
 import { host } from '../../host';
@@ -445,8 +446,6 @@ function ClearBrowsingRow({ profile }: { profile: Space }) {
   );
 }
 
-const THREADS = new Intl.PluralRules('en');
-
 function RemoveProfileRow({ profile }: { profile: Space }) {
   const { state, dispatch } = useHarness();
   const isLast = useProfiles().length === 1;
@@ -456,7 +455,7 @@ function RemoveProfileRow({ profile }: { profile: Space }) {
   const block = isLast
     ? 'The last profile stays.'
     : threadCount
-      ? `${threadCount} ${THREADS.select(threadCount) === 'one' ? 'thread lives' : 'threads live'} here; delete or move them first.`
+      ? `${threadCount} ${plural(threadCount, 'thread lives', 'threads live')} here; delete or move them first.`
       : undefined;
   const remove = () => {
     const undo = removeProfile(profile.id);

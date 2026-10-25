@@ -30,6 +30,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { GitMergeIcon, GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import {
   usePrSwitches,
   type PrSwitch,
@@ -259,8 +260,7 @@ function RefFacts({ state }: { state: RefState }) {
             <span className="text-destructive">−{state.diff.removed}</span>
             <span className="text-subtle-foreground">
               {' '}
-              · {state.diff.files}{' '}
-              {PLURAL.select(state.diff.files) === 'one' ? 'file' : 'files'}
+              · {state.diff.files} {plural(state.diff.files, 'file', 'files')}
             </span>
           </span>
         </Fact>
@@ -304,8 +304,6 @@ const REVIEWS = {
   ReviewState,
   { icon: IconComponent; tone: string; children: string }
 >;
-
-const PLURAL = new Intl.PluralRules('en');
 
 type FactMedia =
   | { icon: IconComponent; media?: never }

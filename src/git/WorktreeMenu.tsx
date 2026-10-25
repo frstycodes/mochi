@@ -18,6 +18,7 @@ import type { ConfirmRequest } from './useConfirm';
 import { gitError } from './useGit';
 import { setWorktreePath, worktreePath } from './worktrees';
 import { OverflowIcon } from '../ui';
+import { plural } from '@/lib/format';
 
 interface WorktreeMenuProps {
   cwd: string;
@@ -57,7 +58,7 @@ export function WorktreeMenu({
 
   const cleanUp = async () => {
     const ok = await confirm({
-      title: `Remove ${settled.length === 1 ? '1 worktree' : `${settled.length} worktrees`}?`,
+      title: `Remove ${plural(settled.length, '1 worktree', `${settled.length} worktrees`)}?`,
       description: (
         <div className="flex flex-col gap-2">
           <p>

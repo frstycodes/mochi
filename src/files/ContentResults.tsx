@@ -1,6 +1,7 @@
 import { FileIcon } from '@react-symbols/icons/utils';
 import type { SearchHits, SearchLine } from '@/host/types/fs';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import type { FileTarget } from './FileFinder';
 import { Highlighted } from './Highlighted';
 import type { useContentSearch } from './useContentSearch';
@@ -13,7 +14,6 @@ export function contentHits(files: SearchHits[]) {
 }
 
 const numbers = new Intl.NumberFormat('en');
-const plural = new Intl.PluralRules('en');
 
 export function ContentResults({
   search,
@@ -78,7 +78,7 @@ function summary(results: number, files: number) {
 }
 
 function counted(n: number, noun: string) {
-  return `${numbers.format(n)} ${plural.select(n) === 'one' ? noun : `${noun}s`}`;
+  return `${numbers.format(n)} ${plural(n, noun, `${noun}s`)}`;
 }
 
 function SearchHint() {

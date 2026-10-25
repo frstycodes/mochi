@@ -56,6 +56,7 @@ import {
   type ToolSpec,
 } from './tools.ts';
 import { queryKeys } from '../queryKeys.ts';
+import { plural } from '../lib/format.ts';
 
 type SettingsToolName =
   | 'get_settings'
@@ -925,7 +926,7 @@ function checkAccount(
     );
   if (active.length)
     throw new Error(
-      `${active.length} active ${name} ${active.length === 1 ? 'thread runs' : 'threads run'} in ${profile.name} on ${current?.name}; Mochi never switches a running thread's account`,
+      `${active.length} active ${name} ${plural(active.length, 'thread runs', 'threads run')} in ${profile.name} on ${current?.name}; Mochi never switches a running thread's account`,
     );
 }
 
@@ -973,7 +974,7 @@ async function configWrite(
       : [`${profile.name} isn't this thread's profile.`]),
     ...(sharing.length
       ? [
-          `${account.name} is shared: ${sharing.join(', ')} ${sharing.length === 1 ? 'loses' : 'lose'} it too.`,
+          `${account.name} is shared: ${sharing.join(', ')} ${plural(sharing.length, 'loses', 'lose')} it too.`,
         ]
       : []),
     ...preview.notes,
@@ -989,7 +990,7 @@ function removable(ctx: Ctx<'remove_profile'>) {
   const live = threads.filter((t) => t.status !== 'settled').length;
   if (threads.length)
     throw new Error(
-      `${profile.name} still has ${threads.length} ${threads.length === 1 ? 'thread' : 'threads'}${live ? ` (${live} live)` : ''}; the user deletes or moves them first`,
+      `${profile.name} still has ${threads.length} ${plural(threads.length, 'thread', 'threads')}${live ? ` (${live} live)` : ''}; the user deletes or moves them first`,
     );
   return profile;
 }

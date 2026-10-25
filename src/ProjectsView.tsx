@@ -48,6 +48,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { plural } from '@/lib/format';
 import { AddProject } from './AddProject';
 import { gitError } from './git/useGit';
 import { host } from './host';
@@ -453,7 +454,7 @@ function OriginLabel({ origin }: { origin: string | null }) {
 }
 
 function threadCount({ open, total }: Usage) {
-  const all = total === 1 ? '1 thread' : `${total} threads`;
+  const all = plural(total, '1 thread', `${total} threads`);
   return open > 0 && open < total ? `${open} open of ${all}` : all;
 }
 
