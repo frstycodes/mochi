@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, watch } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createServer, type AddressInfo, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { expect, it } from '@effect/vitest';
+import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber, Layer } from 'effect';
 import { NodeServices } from '@effect/platform-node';
 import { TestClock } from 'effect/testing';
@@ -16,43 +17,36 @@ const INTERRUPT_BUDGET_MS = process.platform === 'win32' ? 500 : 100;
 
 it.live('interrupting run kills a 100s child and its grandchild within budget', () =>
   Effect.gen(function* () {
-    const dir = mkdtempSync(path.join(tmpdir(), 'mochi-run-'));
-    yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(dir, { recursive: true, force: true })));
-    const pidFile = path.join(dir, 'pids');
-    // Written aside and renamed, so the file appears with its content.
-    const script = `const { spawn } = require('node:child_process');
-const fs = require('node:fs');
-const grandchild = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 100000)'], { stdio: 'ignore' });
-fs.writeFileSync(process.argv[1] + '.tmp', process.pid + ' ' + grandchild.pid);
-fs.renameSync(process.argv[1] + '.tmp', process.argv[1]);
-setTimeout(() => {}, 100000);`;
+    const { port, connected } = yield* processLine(2);
+    // Each process holds a socket to the test: it closes when the OS tears that process down, whoever killed it.
+    const hold = `require('node:net').connect(${port}, '127.0.0.1').on('error', () => {}); setTimeout(() => {}, 100000);`;
+    const script = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(hold)}], { stdio: 'ignore' }); ${hold}`;
     const { run } = yield* Run;
-    const appeared = fileAppears(dir, pidFile);
-    const fiber = yield* run(process.execPath, ['-e', script, pidFile]).pipe(Effect.forkChild);
-    yield* appeared;
-    const pids = readFileSync(pidFile, 'utf8').split(' ').map(Number);
+    const fiber = yield* run(process.execPath, ['-e', script]).pipe(Effect.forkChild);
+    const closed = yield* connected;
     yield* Fiber.interrupt(fiber).pipe(Effect.timeoutOrElse({ duration: INTERRUPT_BUDGET_MS, orElse: () => Effect.die(`interrupt took over ${INTERRUPT_BUDGET_MS}ms`) }));
-    // A process that isn't ours has no exit event to await.
-    yield* Effect.promise(() => expect.poll(() => pids.filter(isAlive)).toEqual([]));
+    yield* closed.pipe(
+      Effect.timeoutOrElse({ duration: '5 seconds', orElse: () => Effect.die('a process outlived the interrupt') }),
+    );
   }).pipe(Effect.provide(layerRun)),
 );
 
-/** Resolves once `file` exists in `dir`, watching from before the check so a write in between isn't missed. */
-const fileAppears = (dir: string, file: string) =>
-  Effect.callback<void>((resume) => {
-    const watcher = watch(dir, () => existsSync(file) && resume(Effect.void));
-    if (existsSync(file)) resume(Effect.void);
-    return Effect.sync(() => watcher.close());
-  }).pipe(Effect.scoped);
-
-function isAlive(pid: number) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false; // ESRCH: no such process.
-  }
-}
+/** A local server: `connected` once `count` processes have connected, then `closed` once each of their sockets has. */
+const processLine = (count: number) =>
+  Effect.acquireRelease(
+    Effect.callback<{ server: Server; port: number; connected: Effect.Effect<Effect.Effect<void>> }>((resume) => {
+      // Listened for on connect: a socket can close while the test is still interrupting.
+      const closes: Promise<unknown>[] = [];
+      let all: () => void = () => {};
+      const connected = Effect.promise(() => new Promise<void>((resolve) => (all = resolve))).pipe(Effect.as(Effect.promise(() => Promise.all(closes))));
+      const server = createServer((socket) => {
+        socket.on('error', () => {});
+        if (closes.push(new Promise((resolve) => socket.once('close', resolve))) === count) all();
+      });
+      server.listen(0, '127.0.0.1', () => resume(Effect.succeed({ server, port: (server.address() as AddressInfo).port, connected })));
+    }),
+    ({ server }) => Effect.sync(() => server.close()),
+  );
 
 it.live('run fails outside okCodes and caps a queue', () =>
   Effect.gen(function* () {
