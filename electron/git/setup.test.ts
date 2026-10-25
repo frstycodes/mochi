@@ -112,12 +112,12 @@ test('an abort stops the running command and ends the setup cancelled', async ()
   const { project, dir } = scratch();
   const { emit, last } = recorder();
   const abort = new AbortController();
-  // The command's first output means it is spawned and listening for the abort.
+  // The command's first output means it is spawned and listening for the abort. Node, not `echo; sleep`: Windows runs it through cmd.exe.
   const emitUntilStarted = (update: WorktreeSetup) => {
     emit(update);
     if (update.steps.some((s) => s.id === 'script' && s.output?.includes('started'))) abort.abort();
   };
-  const status = await prepareWorktree({ root: project, dir, include: '', command: 'echo started; sleep 30', emit: emitUntilStarted, choose: () => Promise.resolve('skip'), signal: abort.signal });
+  const status = await prepareWorktree({ root: project, dir, include: '', command: `node -e "console.log('started'); setTimeout(() => {}, 30_000)"`, emit: emitUntilStarted, choose: () => Promise.resolve('skip'), signal: abort.signal });
   assert.equal(status, 'cancelled');
   assert.notEqual(last().steps.find((s) => s.id === 'script')!.exitCode, 0, 'the sleep was killed, not waited out');
   assert.equal(last().status, 'cancelled');
