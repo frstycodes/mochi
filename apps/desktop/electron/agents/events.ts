@@ -27,7 +27,6 @@ import {
   resolveToolCall,
   undeliveredToolCalls,
 } from '../mcp/server.ts';
-import { killThreadSessions } from '../pty/sessions.ts';
 import { mainWindow } from '../window.ts';
 
 // Agents run in Core (packages/core/src/agents). Main relays what they push to its windows, keeps the busy set its
@@ -180,8 +179,8 @@ export const mainForAgents = {
     ]);
     return { ...library, connectors, rules };
   },
+  // Core kills the thread's terminals itself (packages/core/src/pty/sessions.ts).
   settle: async (threadId: string) => {
-    killThreadSessions(threadId);
     await stopCompare(threadId);
   },
 } satisfies MainForAgents;

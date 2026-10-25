@@ -92,5 +92,41 @@ it.live(
         typeof (yield* Effect.promise(() => call('ports.allocate', ['t1']))),
         'number',
       );
+
+      let seen = '';
+      const output = yield* client.agentPush().pipe(
+        Stream.filter((item) => item.channel.startsWith('pty:')),
+        Stream.map((item) => JSON.stringify(item.payload)),
+        Stream.tap((data) => Effect.sync(() => (seen += data))),
+        Stream.takeUntil(() => withoutEscapes(seen).includes('mochi-pty-ok')),
+        Stream.runDrain,
+        Effect.forkScoped({ startImmediately: true }),
+      );
+      yield* client.ping();
+      const { id } = (yield* Effect.promise(() =>
+        call('pty.spawn', [{ cwd: repo, cols: 80, rows: 24, threadId: 't1' }]),
+      )) as { id: string };
+      yield* Effect.promise(() =>
+        call('pty.write', [id, 'echo mochi-pty-ok\r']),
+      );
+      // The shell's echo of the line is enough: it came back through the pty and Core's push.
+      const isDone = yield* Fiber.join(output).pipe(
+        Effect.timeoutOption('20 seconds'),
+      );
+      assert.ok(Option.isSome(isDone), `pty pushed: ${seen.slice(-800)}`);
+      // Kill it and wait for its exit before the scope closes: a ConPTY torn down mid-kill crashes the worker on Windows.
+      const exited = yield* client.agentPush().pipe(
+        Stream.filter((item) => item.channel === 'pty:onExit'),
+        Stream.runHead,
+        Effect.forkScoped({ startImmediately: true }),
+      );
+      yield* client.ping();
+      yield* Effect.promise(() => call('pty.kill', [id]));
+      assert.ok(Option.isSome(yield* Fiber.join(exited)));
     }),
 );
+
+/** Terminal output without its control sequences: shells colour and redraw the line they echo (PSReadLine, zsh highlighting). */
+const withoutEscapes = (text: string) =>
+  // oxlint-disable-next-line no-control-regex -- matching escape sequences is the point.
+  text.replace(/\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g, '');
