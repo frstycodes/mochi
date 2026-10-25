@@ -11,14 +11,14 @@ import {
   type LoggedEvent,
   type ReplicaItem,
 } from '@mochi/domain';
-import type { ProjectionContext } from '../../../../src/store/context.ts';
-import type { Action } from '../../../../src/store/types.ts';
+import type { ProjectionContext } from '../../../../apps/desktop/src/store/context.ts';
+import type { Action } from '../../../../apps/desktop/src/store/types.ts';
 import {
   joinSaved,
   restoreSavedThreads,
   splitSaved,
   toSaved,
-} from '../../../../src/store/saved.ts';
+} from '../../../../apps/desktop/src/store/saved.ts';
 import { sweepUnreferenced } from './handlers.ts';
 import { Store } from './store.ts';
 

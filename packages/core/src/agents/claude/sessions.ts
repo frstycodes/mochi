@@ -20,17 +20,17 @@ import type {
   AgentImage,
   AgentRunOptions,
   AgentSendInput,
-} from '../../../../../src/host/types/agent.ts';
+} from '../../../../../apps/desktop/src/host/types/agent.ts';
 import type { HarnessAdapter } from '../adapter.ts';
-import type { McpWidgetResource } from '../../../../../src/model.ts';
+import type { McpWidgetResource } from '../../../../../apps/desktop/src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
-import { HARNESSES } from '../../../../../src/settings/harnesses.ts';
-import { toClaude } from '../../../../../src/settings/agentConfig.ts';
-import { claudePermissions } from '../../../../../src/library/connectorTools.ts';
+import { HARNESSES } from '../../../../../apps/desktop/src/settings/harnesses.ts';
+import { toClaude } from '../../../../../apps/desktop/src/settings/agentConfig.ts';
+import { claudePermissions } from '../../../../../apps/desktop/src/library/connectorTools.ts';
 import {
   claudeNativeSettings,
   offItems,
-} from '../../../../../src/library/nativeOverrides.ts';
+} from '../../../../../apps/desktop/src/library/nativeOverrides.ts';
 import { readProfileConfig } from '../profileConfig.ts';
 import { warmClaude } from './oneshot.ts';
 import {
@@ -56,13 +56,13 @@ import {
   defaultModel,
   userPath,
 } from '../config.ts';
-import { detect } from '../../../../../electron/settings/detect.ts';
+import { detect } from '../../../../../apps/desktop/electron/settings/detect.ts';
 import { spawnThroughRun } from './spawn.ts';
 import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
 import { profileInstructions } from '../profileFolder.ts';
 import { recordLimits } from '../limits.ts';
-import { claudeEventWindow } from '../../../../../src/usage/limits.ts';
-import { MOCHI_TIMEOUT_MS } from '../../../../../src/runtime/toolTable.ts';
+import { claudeEventWindow } from '../../../../../apps/desktop/src/usage/limits.ts';
+import { MOCHI_TIMEOUT_MS } from '../../../../../apps/desktop/src/runtime/toolTable.ts';
 import { recordClaudeAiConnectors } from './claudeAiConnectors.ts';
 import {
   FORK_MISSING_NOTICE,

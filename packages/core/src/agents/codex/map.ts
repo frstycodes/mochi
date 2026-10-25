@@ -6,20 +6,20 @@ import type {
   AgentSubagentEvent,
   AgentTaskEvent,
   LimitWindow,
-} from '../../../../../src/host/types/agent.ts';
+} from '../../../../../apps/desktop/src/host/types/agent.ts';
 import type {
   AgentCommand,
   AgentInfo,
   GeneratedImage,
   McpServer,
   WebLink,
-} from '../../../../../src/model.ts';
+} from '../../../../../apps/desktop/src/model.ts';
 import {
   codexWindows,
   hottest,
   mergeWindows,
-} from '../../../../../src/usage/limits.ts';
-import { posixPath } from '../../../../../electron/platform.ts';
+} from '../../../../../apps/desktop/src/usage/limits.ts';
+import { posixPath } from '../../../../../apps/desktop/electron/platform.ts';
 import type { SaveImage } from '../images.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */

@@ -4,7 +4,7 @@ artifact
 *.tsbuildinfo
 dist-electron
 release
-build/native
+apps/desktop/build/native
 .wrangler
 
 .env*.local

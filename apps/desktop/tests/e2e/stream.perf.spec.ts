@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
 import { Effect } from 'effect';
-import { connectCore } from '../../packages/core/src/client.ts';
+import { connectCore } from '../../../../packages/core/src/client.ts';
 
 const EVENTS_PER_SEC = 30;
 const SECONDS = 10;

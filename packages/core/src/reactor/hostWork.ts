@@ -1,21 +1,30 @@
 import { Effect, Schedule } from 'effect';
-import { mayHaveEdited } from '../../../../src/chat/turnChanges.ts';
-import type { CheckRun, GitStatus } from '../../../../src/host/types/git.ts';
-import type { Criterion, Thread } from '../../../../src/model.ts';
-import { startEnv } from '../../../../src/runtime/startEnv.ts';
+import { mayHaveEdited } from '../../../../apps/desktop/src/chat/turnChanges.ts';
+import type {
+  CheckRun,
+  GitStatus,
+} from '../../../../apps/desktop/src/host/types/git.ts';
+import type { Criterion, Thread } from '../../../../apps/desktop/src/model.ts';
+import { startEnv } from '../../../../apps/desktop/src/runtime/startEnv.ts';
 import {
   localSimplify,
   rulesKey,
   simplifyPrompt,
   wordCount,
-} from '../../../../src/simplify/simplify.ts';
+} from '../../../../apps/desktop/src/simplify/simplify.ts';
 import {
   DEFAULT_CONTEXT,
   type ProjectionPrefs,
-} from '../../../../src/store/context.ts';
-import { seePrs } from '../../../../src/store/threads.ts';
-import type { Action, State } from '../../../../src/store/types.ts';
-import { auditPrompt, parseAudit } from '../../../../src/utility/prompts.ts';
+} from '../../../../apps/desktop/src/store/context.ts';
+import { seePrs } from '../../../../apps/desktop/src/store/threads.ts';
+import type {
+  Action,
+  State,
+} from '../../../../apps/desktop/src/store/types.ts';
+import {
+  auditPrompt,
+  parseAudit,
+} from '../../../../apps/desktop/src/utility/prompts.ts';
 import type { GitHub } from '../github/service.ts';
 import type { Outcome } from './worker.ts';
 

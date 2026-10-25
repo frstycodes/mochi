@@ -1,5 +1,5 @@
-import type * as Model from '../../packages/schema/src/model.ts';
-import type * as Persist from '../../packages/schema/src/persist.ts';
+import type * as Model from '../../../../packages/schema/src/model.ts';
+import type * as Persist from '../../../../packages/schema/src/persist.ts';
 import type { AutofixEvent, AutofixTarget } from '../git/autofix.ts';
 import type { WorkspaceDraft } from '../git/workspace.ts';
 import type { Mention } from '../chat/mentions.ts';

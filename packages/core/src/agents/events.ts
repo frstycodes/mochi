@@ -1,4 +1,4 @@
-import type { AgentEvent } from '../../../../src/host/types/agent.ts';
+import type { AgentEvent } from '../../../../apps/desktop/src/host/types/agent.ts';
 
 type Tap = (event: AgentEvent) => void;
 export type SeqEvent = AgentEvent & { seq: number };

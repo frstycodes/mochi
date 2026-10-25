@@ -14,7 +14,7 @@ import { Deferred, Effect } from 'effect';
 import {
   NO_PENDING_REQUEST,
   type AgentEvent,
-} from '../../../../src/host/types/agent.ts';
+} from '../../../../apps/desktop/src/host/types/agent.ts';
 import { UtilityQueue } from '../utility/queue.ts';
 import { useAgentConfig } from './config.ts';
 import { onAgentEvent } from './events.ts';

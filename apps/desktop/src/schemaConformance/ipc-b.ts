@@ -1,10 +1,10 @@
-import type * as P from '../../packages/schema/src/ipc/projects.ts';
-import type * as R from '../../packages/schema/src/ipc/remote.ts';
-import type * as Sc from '../../packages/schema/src/ipc/schedule.ts';
-import type * as Si from '../../packages/schema/src/ipc/sim.ts';
-import type * as Th from '../../packages/schema/src/ipc/themes.ts';
-import type * as U from '../../packages/schema/src/ipc/usage.ts';
-import type * as W from '../../packages/schema/src/ipc/windows.ts';
+import type * as P from '../../../../packages/schema/src/ipc/projects.ts';
+import type * as R from '../../../../packages/schema/src/ipc/remote.ts';
+import type * as Sc from '../../../../packages/schema/src/ipc/schedule.ts';
+import type * as Si from '../../../../packages/schema/src/ipc/sim.ts';
+import type * as Th from '../../../../packages/schema/src/ipc/themes.ts';
+import type * as U from '../../../../packages/schema/src/ipc/usage.ts';
+import type * as W from '../../../../packages/schema/src/ipc/windows.ts';
 import type {
   ProjectsHost,
   CloneSource,

@@ -26,5 +26,5 @@
     ]
   },
   "include": ["src", "scripts", "tests", "vite.config.ts"],
-  "references": [{ "path": "packages/schema" }]
+  "references": [{ "path": "../../packages/schema" }]
 }

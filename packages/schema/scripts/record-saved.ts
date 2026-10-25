@@ -3,9 +3,13 @@
 // Run from the repo root: `node --import ./scripts/test-env.ts packages/schema/scripts/record-saved.ts`.
 // Outside the package's tsconfig on purpose: it reaches into `src/`, which the package must not depend on.
 import { writeFileSync } from 'node:fs';
-import { seedQueue, seedThreads, type Thread } from '../../../src/model.ts';
-import type { Checkpoint } from '../../../src/rewind/checkpoints.ts';
-import { splitSaved, toSaved } from '../../../src/store/saved.ts';
+import {
+  seedQueue,
+  seedThreads,
+  type Thread,
+} from '../../../apps/desktop/src/model.ts';
+import type { Checkpoint } from '../../../apps/desktop/src/rewind/checkpoints.ts';
+import { splitSaved, toSaved } from '../../../apps/desktop/src/store/saved.ts';
 
 const demo = seedThreads();
 const base = demo[0];

@@ -1,7 +1,7 @@
 import os from 'node:os';
 import { spawnCommand, type CoreChild } from '../../runClient.ts';
 import { saveImage } from '../images.ts';
-import type { GeneratedImage } from '../../../../../src/model.ts';
+import type { GeneratedImage } from '../../../../../apps/desktop/src/model.ts';
 import {
   NO_PENDING_REQUEST,
   type AgentDecision,
@@ -11,9 +11,9 @@ import {
   type AgentRunOptions,
   type AgentSendInput,
   type LimitWindow,
-} from '../../../../../src/host/types/agent.ts';
+} from '../../../../../apps/desktop/src/host/types/agent.ts';
 import type { HarnessAdapter } from '../adapter.ts';
-import { codexWindows } from '../../../../../src/usage/limits.ts';
+import { codexWindows } from '../../../../../apps/desktop/src/usage/limits.ts';
 import {
   accountEnv,
   accountFor as defaultAccountFor,
@@ -46,12 +46,15 @@ import {
   CODEX_BROWSER_PLUGINS_OFF,
   mochiInstructions,
 } from '../instructions.ts';
-import { killTree, spawnable } from '../../../../../electron/platform.ts';
+import {
+  killTree,
+  spawnable,
+} from '../../../../../apps/desktop/electron/platform.ts';
 import {
   MOCHI_TIMEOUT_MS,
   type MochiScope,
-} from '../../../../../src/runtime/toolTable.ts';
-import { CHEAP_MODELS } from '../../../../../src/utility/prompts.ts';
+} from '../../../../../apps/desktop/src/runtime/toolTable.ts';
+import { CHEAP_MODELS } from '../../../../../apps/desktop/src/utility/prompts.ts';
 
 interface Live {
   codexId: string;

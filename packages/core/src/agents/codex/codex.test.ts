@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
 import { test } from 'vite-plus/test';
-import type { AgentEvent } from '../../../../../src/host/types/agent.ts';
+import type { AgentEvent } from '../../../../../apps/desktop/src/host/types/agent.ts';
 import { CodexAdapter, imageModel, reply } from './adapter.ts';
 import {
   changesPatch,

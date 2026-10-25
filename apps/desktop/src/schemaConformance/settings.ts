@@ -1,5 +1,5 @@
-import type * as Ipc from '../../packages/schema/src/ipc/settings.ts';
-import type * as Settings from '../../packages/schema/src/settings.ts';
+import type * as Ipc from '../../../../packages/schema/src/ipc/settings.ts';
+import type * as Settings from '../../../../packages/schema/src/settings.ts';
 import type * as H from '../host/types/settings.ts';
 import type { ConfigChange } from '../settings/agentConfig.ts';
 import type { Provider } from '../model.ts';

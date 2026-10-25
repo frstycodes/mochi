@@ -1,4 +1,5 @@
 packages:
+  - apps/*
   - infra/*
   - packages/*
 # The packaged app ships @parcel/watcher's native prebuild (package.json `build.files`); hoisting puts it at node_modules/@parcel.

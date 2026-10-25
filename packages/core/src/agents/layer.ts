@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { Effect, Layer, Queue, Stream } from 'effect';
-import type { AgentEvent } from '../../../../src/host/types/agent.ts';
-import type { AgentLogin } from '../../../../src/host/types/settings.ts';
+import type { AgentEvent } from '../../../../apps/desktop/src/host/types/agent.ts';
+import type { AgentLogin } from '../../../../apps/desktop/src/host/types/settings.ts';
 import { Capabilities } from '../hostServer.ts';
 import { clientFromRun, useCoreClient } from '../runClient.ts';
 import { Run } from '../run.ts';

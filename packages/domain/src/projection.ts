@@ -1,12 +1,18 @@
-import type { SeqAgentEvent } from '../../../src/host/types/agent.ts';
-import { scheduleReducer } from '../../../src/schedule/slice.ts';
-import { reviewsReducer } from '../../../src/secondOpinion/slice.ts';
-import { withContext } from '../../../src/store/context.ts';
-import { initialQueue, queueReducer } from '../../../src/store/queue.ts';
-import type { Saved } from '../../../src/store/saved.ts';
-import { initialThreads, threadsReducer } from '../../../src/store/threads.ts';
-import type { Action, State } from '../../../src/store/types.ts';
-import { applyUndo } from '../../../src/runtime/undo.ts';
+import type { SeqAgentEvent } from '../../../apps/desktop/src/host/types/agent.ts';
+import { scheduleReducer } from '../../../apps/desktop/src/schedule/slice.ts';
+import { reviewsReducer } from '../../../apps/desktop/src/secondOpinion/slice.ts';
+import { withContext } from '../../../apps/desktop/src/store/context.ts';
+import {
+  initialQueue,
+  queueReducer,
+} from '../../../apps/desktop/src/store/queue.ts';
+import type { Saved } from '../../../apps/desktop/src/store/saved.ts';
+import {
+  initialThreads,
+  threadsReducer,
+} from '../../../apps/desktop/src/store/threads.ts';
+import type { Action, State } from '../../../apps/desktop/src/store/types.ts';
+import { applyUndo } from '../../../apps/desktop/src/runtime/undo.ts';
 import type { LoggedEvent } from './shell.ts';
 
 /** The store's slices Core owns: the threads and what is saved with them. Layout, panes and the rest stay per window. */

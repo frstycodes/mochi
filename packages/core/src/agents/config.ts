@@ -12,15 +12,15 @@ import {
   type AgentSettings,
   type AgentSettingsPatch,
   type ApiKeyState,
-} from '../../../../src/host/types/settings.ts';
-import type { Provider } from '../../../../src/model.ts';
+} from '../../../../apps/desktop/src/host/types/settings.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import {
   DEFAULT_ACCOUNTS,
   linkedAccountId,
   newAccountId,
-} from '../../../../src/settings/accounts.ts';
-import { HARNESSES } from '../../../../src/settings/harnesses.ts';
-import { fallbackShell } from '../../../../electron/platform.ts';
+} from '../../../../apps/desktop/src/settings/accounts.ts';
+import { HARNESSES } from '../../../../apps/desktop/src/settings/harnesses.ts';
+import { fallbackShell } from '../../../../apps/desktop/electron/platform.ts';
 import { userPath } from '../shellPath.ts';
 
 export { userPath };

@@ -1,4 +1,4 @@
-import type { Agent, Model } from '../../packages/schema/src/index.ts';
+import type { Agent, Model } from '../../../../packages/schema/src/index.ts';
 import type * as A from '../host/types/agent.ts';
 import type * as M from '../model.ts';
 import type { Check, Decoded, Rpc, Same } from './check.ts';

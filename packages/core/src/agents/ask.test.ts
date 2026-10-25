@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import type { AgentAskContext } from '../../../../src/host/types/agent.ts';
+import type { AgentAskContext } from '../../../../apps/desktop/src/host/types/agent.ts';
 import {
   migrateSettings,
   type ModelChoice,
-} from '../../../../src/host/types/settings.ts';
-import { sideChatChoice } from '../../../../src/runtime/controls.ts';
+} from '../../../../apps/desktop/src/host/types/settings.ts';
+import { sideChatChoice } from '../../../../apps/desktop/src/runtime/controls.ts';
 import { ask, utility, type Asker } from './ask.ts';
 
 const context: AgentAskContext = {

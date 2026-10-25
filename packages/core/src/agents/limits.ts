@@ -1,9 +1,9 @@
 import type {
   AccountLimits,
   LimitWindow,
-} from '../../../../src/host/types/agent.ts';
-import type { Provider } from '../../../../src/model.ts';
-import { mergeWindows } from '../../../../src/usage/limits.ts';
+} from '../../../../apps/desktop/src/host/types/agent.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
+import { mergeWindows } from '../../../../apps/desktop/src/usage/limits.ts';
 import { push } from './events.ts';
 
 interface LimitDocs {

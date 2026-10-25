@@ -1,13 +1,13 @@
 import type { LoggedEvent } from '@mochi/domain';
-import type { QueueItem, Thread } from '../../../../src/model.ts';
+import type { QueueItem, Thread } from '../../../../apps/desktop/src/model.ts';
 import {
   dueQueued,
   dueReports,
   dueWakes,
-} from '../../../../src/runtime/due.ts';
-import { wordCount } from '../../../../src/simplify/simplify.ts';
-import type { ProjectionContext } from '../../../../src/store/context.ts';
-import { titleRequest } from '../../../../src/utility/titles.ts';
+} from '../../../../apps/desktop/src/runtime/due.ts';
+import { wordCount } from '../../../../apps/desktop/src/simplify/simplify.ts';
+import type { ProjectionContext } from '../../../../apps/desktop/src/store/context.ts';
+import { titleRequest } from '../../../../apps/desktop/src/utility/titles.ts';
 import type { ReactorCommand } from './commands.ts';
 
 /**

@@ -1,4 +1,4 @@
-import shipped from '../../recipes/setup.json' with { type: 'json' };
+import shipped from '../../../../recipes/setup.json' with { type: 'json' };
 
 /**
  * Setup recipes (LIBRARY.md › Bring your own app): a service's one-time app setup as data, which Mochi runs in main on the

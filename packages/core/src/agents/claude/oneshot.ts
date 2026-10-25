@@ -7,11 +7,14 @@ import {
   type SDKUserMessage,
   type SpareProcess,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentInstall } from '../../../../../src/host/types/settings.ts';
-import { CLASSIFY_PROMPT, classifyInput } from '../../../../../src/drift.ts';
-import type { Thread } from '../../../../../src/model.ts';
-import { cached, uncache } from '../../../../../electron/cache.ts';
-import { detect } from '../../../../../electron/settings/detect.ts';
+import type { AgentInstall } from '../../../../../apps/desktop/src/host/types/settings.ts';
+import {
+  CLASSIFY_PROMPT,
+  classifyInput,
+} from '../../../../../apps/desktop/src/drift.ts';
+import type { Thread } from '../../../../../apps/desktop/src/model.ts';
+import { cached, uncache } from '../../../../../apps/desktop/electron/cache.ts';
+import { detect } from '../../../../../apps/desktop/electron/settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
 
 const CLASSIFY_MODEL = 'claude-haiku-5-5';

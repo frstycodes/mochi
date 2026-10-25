@@ -2,15 +2,15 @@
 // build's implementations of the same contract (`src/host/web/*`), for the schema round-trip tests. Run from the repo root:
 // `node --import ./scripts/test-env.ts packages/schema/scripts/record-ipc-a.ts`. Outside the package's tsconfig on purpose.
 import { writeFileSync } from 'node:fs';
-import { account } from '../../../src/host/web/account.ts';
-import { browser } from '../../../src/host/web/browser.ts';
-import { data } from '../../../src/host/web/data.ts';
-import { fs } from '../../../src/host/web/fs.ts';
-import { git } from '../../../src/host/web/git.ts';
-import { library } from '../../../src/host/web/library.ts';
-import { notify } from '../../../src/host/web/notify.ts';
-import { ports } from '../../../src/host/web/ports.ts';
-import { pty } from '../../../src/host/web/pty.ts';
+import { account } from '../../../apps/desktop/src/host/web/account.ts';
+import { browser } from '../../../apps/desktop/src/host/web/browser.ts';
+import { data } from '../../../apps/desktop/src/host/web/data.ts';
+import { fs } from '../../../apps/desktop/src/host/web/fs.ts';
+import { git } from '../../../apps/desktop/src/host/web/git.ts';
+import { library } from '../../../apps/desktop/src/host/web/library.ts';
+import { notify } from '../../../apps/desktop/src/host/web/notify.ts';
+import { ports } from '../../../apps/desktop/src/host/web/ports.ts';
+import { pty } from '../../../apps/desktop/src/host/web/pty.ts';
 
 const hosts = {
   account,

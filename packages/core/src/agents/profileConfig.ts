@@ -18,8 +18,8 @@ import type {
   FileEdit,
   ProfileConfig,
   ProviderConfig,
-} from '../../../../src/host/types/settings.ts';
-import type { Provider } from '../../../../src/model.ts';
+} from '../../../../apps/desktop/src/host/types/settings.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import {
   claudeDeniedServers,
   claudeServers,
@@ -43,9 +43,12 @@ import {
   type McpEntry,
   type McpServerDef,
   type SkillEntry,
-} from '../../../../src/settings/agentConfig.ts';
-import { parseToml } from '../../../../src/settings/toml.ts';
-import { HARNESS_IDS, HARNESSES } from '../../../../src/settings/harnesses.ts';
+} from '../../../../apps/desktop/src/settings/agentConfig.ts';
+import { parseToml } from '../../../../apps/desktop/src/settings/toml.ts';
+import {
+  HARNESS_IDS,
+  HARNESSES,
+} from '../../../../apps/desktop/src/settings/harnesses.ts';
 import { claudeAiConnectorsOf } from './claude/claudeAiConnectors.ts';
 import { accountFor, userPath } from './config.ts';
 

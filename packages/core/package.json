@@ -9,5 +9,25 @@
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vp test run --root ../.. packages/core/src"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.296",
+    "@effect/platform-node": "4.0.5",
+    "@mochi/domain": "workspace:*",
+    "@mochi/schema": "workspace:*",
+    "@modelcontextprotocol/ext-apps": "2.0.3",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@octokit/graphql": "9.0.5",
+    "@parcel/watcher": "2.5.1",
+    "@pierre/diffs": "^1.5.2",
+    "effect": "4.0.5",
+    "electron-log": "5.4.4",
+    "libsodium-wrappers": "0.8.4",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.5",
+    "@types/ws": "^8.18.2",
+    "electron": "44.7.0"
   }
 }

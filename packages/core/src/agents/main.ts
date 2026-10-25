@@ -2,11 +2,11 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type {
   AgentToolCall,
   AgentToolResult,
-} from '../../../../src/host/types/agent.ts';
-import type { McpServerDef } from '../../../../src/settings/agentConfig.ts';
-import type { ToolRules } from '../../../../src/library/connectorTools.ts';
-import type { Provider } from '../../../../src/model.ts';
-import type { MochiScope } from '../../../../src/runtime/toolTable.ts';
+} from '../../../../apps/desktop/src/host/types/agent.ts';
+import type { McpServerDef } from '../../../../apps/desktop/src/settings/agentConfig.ts';
+import type { ToolRules } from '../../../../apps/desktop/src/library/connectorTools.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
+import type { MochiScope } from '../../../../apps/desktop/src/runtime/toolTable.ts';
 
 /**
  * What the agents ask of main, over the `main` capability: the window that runs Mochi's tools, the library (its OAuth

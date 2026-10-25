@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentEvent } from '../../../src/host/types/agent.ts';
+import type { AgentEvent } from '../../../apps/desktop/src/host/types/agent.ts';
 import { createMapper } from '../../core/src/agents/claude/map.ts';
 import { FIXTURE } from '../../core/src/agents/claude/fixture.ts';
 import {

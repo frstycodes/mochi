@@ -1,4 +1,4 @@
-import type * as Stored from '../../packages/schema/src/stored.ts';
+import type * as Stored from '../../../../packages/schema/src/stored.ts';
 import type { Pin, Pins } from '../chat/pins.ts';
 import type { Project, ProjectIconMode } from '../host/types/projects.ts';
 import type { Space } from '../model.ts';

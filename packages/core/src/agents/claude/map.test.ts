@@ -21,8 +21,8 @@ import {
 } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
-import { claudeFast } from '../../../../../src/runtime/models.ts';
-import { toolCall } from '../../../../../src/summary.ts';
+import { claudeFast } from '../../../../../apps/desktop/src/runtime/models.ts';
+import { toolCall } from '../../../../../apps/desktop/src/summary.ts';
 
 const CWD = '/repo';
 

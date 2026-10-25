@@ -8,8 +8,8 @@ import {
   type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Schema } from 'effect';
-import type { ImageGenHarness } from '../../../../src/host/types/settings.ts';
-import type { GeneratedImage } from '../../../../src/model.ts';
+import type { ImageGenHarness } from '../../../../apps/desktop/src/host/types/settings.ts';
+import type { GeneratedImage } from '../../../../apps/desktop/src/model.ts';
 import {
   IMAGE_SIZES,
   IMAGE_TOOL,
@@ -17,7 +17,7 @@ import {
   IMAGE_TOOL_SHAPE,
   imageResultText,
   type ImageSize,
-} from '../../../../src/runtime/imageTool.ts';
+} from '../../../../apps/desktop/src/runtime/imageTool.ts';
 import {
   decodeArgs,
   isTurnTool,
@@ -27,7 +27,7 @@ import {
   TOOL_NAMES,
   TOOL_TABLE,
   type MochiScope,
-} from '../../../../src/runtime/toolTable.ts';
+} from '../../../../apps/desktop/src/runtime/toolTable.ts';
 import { agentSettings } from './config.ts';
 
 /**

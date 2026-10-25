@@ -1,3 +1,3 @@
 #!/usr/bin/env node
 // Built by `pnpm electron:pack` (or `vp build --mode electron`) beside core.js.
-import '../dist-electron/serve.js';
+import '../apps/desktop/dist-electron/serve.js';

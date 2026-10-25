@@ -1,4 +1,4 @@
-import type * as Relay from '../../packages/schema/src/relay.ts';
+import type * as Relay from '../../../../packages/schema/src/relay.ts';
 import type * as R from '../host/types/remote.ts';
 import type { SentImage } from '../model.ts';
 import type { Check, Decoded, Same } from './check.ts';

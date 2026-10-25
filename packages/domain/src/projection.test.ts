@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'vite-plus/test';
-import { setAmbientPrefs } from '../../../src/store/context.ts';
+import { setAmbientPrefs } from '../../../apps/desktop/src/store/context.ts';
 import { actionOf, COMMAND_TYPE, domainFrom, project } from './index.ts';
 
 /** Every module the file loads at runtime (type-only imports are erased), and the packages they name. */
@@ -47,7 +47,7 @@ test('the projection loads without the renderer: no React, no host, no browser s
 });
 
 test('what Core runs from src/ for its reactor and device commands loads without the renderer too', () => {
-  const src = join(import.meta.dirname, '../../../src');
+  const src = join(import.meta.dirname, '../../../apps/desktop/src');
   for (const entry of [
     'runtime/live.ts',
     'remote/storeCommands.ts',
