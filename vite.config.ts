@@ -13,6 +13,31 @@ const VENDORED = ['src/components/ui/**', 'src/components/ai-elements/**'];
 
 export default defineConfig(({ mode }) => ({
   base: './',
+  run: {
+    tasks: {
+      test: {
+        command: 'vp test run',
+        // pnpm rewrites .modules.yaml on install and coverage writes ./coverage; neither is a test input.
+        cache: {
+          input: [
+            { auto: true },
+            '!node_modules/.modules.yaml',
+            '!node_modules/.vite/**',
+            '!coverage',
+            '!coverage/**',
+          ],
+        },
+      },
+      typecheck: {
+        command:
+          'tsc -b && tsc -p packages/domain && tsc -p packages/core && tsc -p electron && tsc -p infra/relay',
+        // `tsc -b` rewrites its own .tsbuildinfo, which would otherwise count as a changed input.
+        cache: { input: [{ auto: true }, '!**/*.tsbuildinfo'] },
+      },
+      build: 'tsc -b && vp build',
+    },
+  },
+  staged: { '*.{js,mjs,ts,tsx,json,css,md}': 'vp check --fix' },
   fmt: {
     singleQuote: true,
     printWidth: 80,
@@ -96,6 +121,7 @@ export default defineConfig(({ mode }) => ({
     ],
     setupFiles: ['scripts/test-env.ts'],
     // `--changed` follows imports only; a dependency bump or a fixture a test reads from disk reruns everything.
+    coverage: { provider: 'v8', reporter: ['text-summary', 'json-summary'] },
     forceRerunTriggers: [
       '**/package.json',
       '**/{vitest,vite}.config.*',

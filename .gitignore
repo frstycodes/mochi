@@ -8,3 +8,4 @@ build/native
 .wrangler
 
 .env*.local
+coverage

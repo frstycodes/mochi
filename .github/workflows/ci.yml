@@ -15,6 +15,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -24,10 +25,29 @@ jobs:
           node-version: '24'
           cache: true
 
+      # Restores Vite Task results; the fingerprints inside decide which tasks still hit.
+      - name: Restore Vite Task cache
+        id: vite-task-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-
+
       # Lint; tsgolint supplies types to the type-aware rules but doesn't type-check (lint.options.typeCheck).
       - run: vp check
       # tsc-rs over every project, with the Effect diagnostics.
-      - run: pnpm typecheck
+      - run: vp run typecheck
+      # Unused files and dependencies; unused exports are off (knip.json).
+      - run: pnpm exec knip
+
+      - name: Save Vite Task cache
+        if: success()
+        uses: actions/cache/save@v6
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 
   # Mochi ships for macOS, Windows and Linux: the tests and an unpacked build run on each (installers are `electron-builder` without `--dir`).
   package:
@@ -46,10 +66,29 @@ jobs:
         with:
           node-version: '24'
           cache: true
+
+      # Restores Vite Task results; the fingerprints inside decide which tasks still hit.
+      - name: Restore Vite Task cache
+        id: vite-task-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-
       # A pull request runs only the tests its diff reaches (vite.config.ts `forceRerunTriggers` widens that to all); main runs every test.
-      - run: vp test run ${{ github.event_name == 'pull_request' && '--changed HEAD~1' || '' }}
+      # macOS replays cached results. Windows runs `vp test` directly: under `vp run` the tracked child processes (`sh`, git) die with 0xC0000142 (STATUS_DLL_INIT_FAILED).
+      # Ubuntu runs it directly too, to print a v8 coverage summary (no gate): vitest wipes ./coverage, which `vp run` records as a changed input.
+      - run: ${{ matrix.os == 'macos-latest' && 'vp run test' || 'vp test run' }} ${{ github.event_name == 'pull_request' && '--changed HEAD~1' || '' }} ${{ matrix.os == 'ubuntu-latest' && '--coverage' || '' }}
       # electron:build minus its `tsc` steps, which the check job runs.
       - run: pnpm electron:pack
+
+      - name: Save Vite Task cache
+        if: success()
+        uses: actions/cache/save@v6
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 
       # Streams a reply into the built app; fails over the render and script budgets in tests/e2e/stream.perf.spec.ts.
       # Ubuntu 24.04's AppArmor blocks the user namespaces Chromium's sandbox needs.

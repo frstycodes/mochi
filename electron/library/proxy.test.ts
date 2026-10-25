@@ -2,33 +2,49 @@ import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import { Schema } from 'effect';
 import { connectorServer } from './proxy.ts';
 
-async function connected(server: { connect: McpServer['connect'] }) {
+async function connected(server: { connect: Server['connect'] }) {
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '1' });
   await Promise.all([server.connect(a), client.connect(b)]);
   return client;
 }
 
+const WhoamiInput = Schema.Struct({ greeting: Schema.optional(Schema.String) });
+
 /** A stand-in upstream: `whoami` answers with the account it belongs to. */
 function upstream(account: string) {
-  const server = new McpServer(
+  const server = new Server(
     { name: 'linear', version: '1' },
-    { instructions: 'Linear tools.' },
+    { capabilities: { tools: {} }, instructions: 'Linear tools.' },
   );
-  server.registerTool(
-    'whoami',
-    {
-      description: 'Who is signed in',
-      inputSchema: { greeting: z.string().optional() },
-    },
-    ({ greeting }) => ({
+  server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: [
+      {
+        name: 'whoami',
+        description: 'Who is signed in',
+        inputSchema: {
+          ...Schema.toJsonSchemaDocument(WhoamiInput).schema,
+          type: 'object' as const,
+        },
+      },
+    ],
+  }));
+  server.setRequestHandler(CallToolRequestSchema, ({ params }) => {
+    const { greeting } = Schema.decodeUnknownSync(WhoamiInput)(
+      params.arguments ?? {},
+    );
+    return {
       content: [{ type: 'text', text: `${greeting ?? 'hi'} ${account}` }],
-    }),
-  );
+    };
+  });
   return connected(server);
 }
 
