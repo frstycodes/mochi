@@ -1,8 +1,9 @@
+import type { Dispatch } from 'react';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { ActivityEntry, Handoff, Provider, Thread } from '../model.ts';
 import { controlsOf, DEFAULT_CONTROLS } from '../runtime/controls.ts';
 import { log, mapThread } from '../store/threads.ts';
-import type { State } from '../store/types.ts';
+import type { Action, State } from '../store/types.ts';
 import { PROVIDER_NAME } from './handoff.ts';
 
 /** The provider a thread's next message goes to. */
@@ -10,6 +11,18 @@ export const providerOf = (thread: Thread) =>
   thread.live?.restart && 'switchFrom' in thread.live.restart
     ? thread.providers[0]
     : (thread.session?.provider ?? thread.providers[0]);
+
+export const otherProvider = (thread: Thread): Provider =>
+  providerOf(thread) === 'claude' ? 'codex' : 'claude';
+
+/** Switches the thread to `to` from your next message, on that provider's default model. */
+export const switchHere = (
+  thread: Thread,
+  dispatch: Dispatch<Action>,
+  to = otherProvider(thread),
+) => dispatch({ type: 'provider-switch', threadId: thread.id, to });
+
+export const isSwitchPending = (thread: Thread) => pendingIndex(thread) >= 0;
 
 /** The thread's switch row still waiting on your next message; -1 when none is. */
 const pendingIndex = (thread: Thread) =>

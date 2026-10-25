@@ -66,7 +66,7 @@ import { useSpace } from './store';
 import { ProviderMark } from './ui';
 
 /**
- * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. Only harnesses that are
+ * `isLocked` keeps the list to `provider` (the settings chat); a thread's model of another provider switches it there. Only harnesses that are
  * set up and listed their models show (`useListedModels`); a stored model the account no longer offers shows as Unavailable.
  */
 export function ModelPicker({

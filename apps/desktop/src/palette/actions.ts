@@ -66,12 +66,7 @@ import { PANE_TABS } from '../pane/tabs';
 import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
 import { PROVIDER_NAME } from '../rewind/handoff';
-import {
-  copyHandoffPrompt,
-  handOffHere,
-  isHandingOff,
-  otherProvider,
-} from '../rewind/runHandoff';
+import { isSwitchPending, otherProvider, switchHere } from '../rewind/switch';
 import { openSchedule } from '../schedule/ScheduleDialog';
 import { openGoalEditor } from '../goals/GoalEditor';
 import { hasGoal } from '../drift';
@@ -383,24 +378,16 @@ export const ACTIONS = [
   {
     id: 'thread-handoff',
     group: 'Thread',
-    title: 'Hand off to another agent',
+    title: 'Switch to another agent',
     icon: Transfer,
-    keywords: 'claude codex switch',
+    keywords: 'claude codex switch hand off provider',
     when: when.liveThread,
-    label: (s) => `Hand off to ${PROVIDER_NAME[otherProvider(s.thread!)]} here`,
+    label: (s) =>
+      `Switch to ${PROVIDER_NAME[otherProvider(s.thread!)]} from the next message`,
     mark: (s) => otherProvider(s.thread!),
     disabledReason: (s) =>
-      isHandingOff(s.thread!) ? 'Already handing off' : undefined,
-    run: onThread((t, { dispatch }) => handOffHere(t, dispatch)),
-  },
-  {
-    id: 'thread-handoff-copy',
-    group: 'Thread',
-    title: 'Copy handoff prompt',
-    icon: Copy,
-    keywords: 'claude codex switch hand off summary clipboard',
-    when: when.liveThread,
-    run: onThread((t) => copyHandoffPrompt(t)),
+      isSwitchPending(s.thread!) ? 'Already switching' : undefined,
+    run: onThread((t, { dispatch }) => switchHere(t, dispatch)),
   },
   {
     id: 'thread-second-opinion',

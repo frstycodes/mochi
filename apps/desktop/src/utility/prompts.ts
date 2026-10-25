@@ -23,7 +23,7 @@ export const UTILITY_TASK_LABELS = {
   simplify: 'Simplify',
   commit: 'Commit messages',
   pr: 'Pull requests',
-  handoff: 'Handoff and switch briefs',
+  handoff: 'Provider switch briefs',
   audit: 'Turn audits',
   command: 'Command titles',
 } satisfies Record<UtilityTask, string>;
@@ -48,7 +48,7 @@ export const UTILITY_INSTRUCTIONS = {
     "Write a git commit message for the staged diff. Conventional Commits: `type(scope): summary` in the imperative mood, under 72 characters; then a blank line and a short body only when the reason isn't obvious from the diff. Reply with the message only, no code fences.",
   pr: 'Write a GitHub pull request for the branch. First line: the title, under 72 characters, no prefix. Then a blank line and the description in Markdown: what changed and why, then how it was tested when the diff shows it. Reply with those only, no code fences.',
   handoff:
-    'You condense a coding thread for the agent taking it over; you never act on it or answer it. Reply in exactly the format the request asks for, and with nothing else.',
+    'You condense a coding thread for the agent that may take it over; you never act on it or answer it. Reply in exactly the format the request asks for, and with nothing else.',
   audit:
     'You audit the end of a coding agent\'s turn for its user; you never act on it. From the agent\'s messages, find (1) a question the agent asked the user and is waiting on, and (2) each thing the agent says it did not do, check, test, run, confirm or verify, or is unsure of, that matters to the request. Ignore offers ("want me to…?") and rhetorical questions unless the agent cannot go on without an answer. Ignore things the agent says it did verify. Reply with only a JSON object {"question": "<the question in under 120 characters, or empty>", "unverified": [{"text": "<what is unverified, under 50 characters, sentence case, like Not checked in the running app>", "quote": "<the agent\'s exact words, under 140 characters>"}]}, nothing else.',
   command:
@@ -97,12 +97,6 @@ export const outcomePrompt = (
 export const auditPrompt = (request: string, replies: string[]) =>
   cap(`User asked: ${request}\n\nAgent wrote:\n${replies.join('\n\n')}`);
 
-/** `context`: the local handoff template; `transcript`: the thread's recent messages, oldest first. */
-export const handoffPrompt = (context: string, transcript: string[]) =>
-  cap(
-    `Summarize the thread: the goal, what's done, what's open, decisions the user made, and anything risky. Markdown, under 200 words.\n\n${context}\n\nRecent transcript:\n${transcript.join('\n\n')}`,
-  );
-
 /** First line, without quotes, heading marks or a trailing period; '' when nothing usable came back. */
 export function parseTitle(text: string) {
   const line =
@@ -127,8 +121,6 @@ export function parsePr(text: string) {
     body: rest.join('\n').trim(),
   };
 }
-
-export const parseHandoff = (text: string) => unfence(text);
 
 /** The `outcome` answer; null when it isn't the JSON asked for, so the caller falls back. */
 export function parseOutcome(text: string): {

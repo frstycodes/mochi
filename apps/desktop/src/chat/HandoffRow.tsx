@@ -5,17 +5,29 @@ import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
 import type { Handoff } from '../model';
 import { clock } from '../progress';
+import { useModels } from '../ModelControls';
 import { PROVIDER_NAME } from '../rewind/handoff';
-import { DRAFT_TIMEOUT_MS } from '../rewind/runHandoff';
+import { optionFor } from '../runtime/models';
 import { Expand } from '../WorkLog';
 
 const FALLBACK_NOTE = {
-  timeout: `drafting took over ${DRAFT_TIMEOUT_MS / 1000}s, so this is Mochi’s own summary`,
+  timeout: 'drafting took too long, so this is Mochi’s own summary',
   error: 'drafting failed, so this is Mochi’s own summary',
 } satisfies Record<NonNullable<Handoff['fallback']>, string>;
 
-/** A handoff as one log line like a compaction: drafting while a model writes the prompt, then who took over; open, the prompt they started from. */
-export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
+/**
+ * A handoff or provider switch as one log line like a compaction: a switch waits for your next message, then names what the
+ * new provider got; open, the exact context it got (a switch) or the prompt it started from (an older handoff).
+ */
+export function HandoffRow({
+  handoff,
+  at,
+  spaceId,
+}: {
+  handoff: Handoff;
+  at: number;
+  spaceId: string;
+}) {
   const [isOpen, setOpen] = useState(false);
   const hasBody = handoff.status === 'started' && !!handoff.prompt;
   return (
@@ -36,7 +48,11 @@ export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
           />
         )}
         <Transfer aria-hidden className="size-4 shrink-0" />
-        <HandoffLine handoff={handoff} />
+        {isSwitch(handoff) ? (
+          <SwitchLine handoff={handoff} spaceId={spaceId} />
+        ) : (
+          <HandoffLine handoff={handoff} />
+        )}
         {hasBody && (
           <ChevronRight
             aria-hidden
@@ -58,7 +74,9 @@ export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
             </MessageResponse>
             <p className="type-caption text-subtle-foreground">
               {[
-                `${PROVIDER_NAME[handoff.to]} started from this at ${clock(at)}`,
+                isSwitch(handoff)
+                  ? `${PROVIDER_NAME[handoff.to]} got this as context at ${clock(at)}; your message went as you typed it`
+                  : `${PROVIDER_NAME[handoff.to]} started from this at ${clock(at)}`,
                 handoff.fallback && FALLBACK_NOTE[handoff.fallback],
               ]
                 .filter(Boolean)
@@ -69,6 +87,44 @@ export function HandoffRow({ handoff, at }: { handoff: Handoff; at: number }) {
       )}
     </div>
   );
+}
+
+const isSwitch = (handoff: Handoff) =>
+  handoff.status === 'pending' || handoff.contents !== undefined;
+
+/** `Switches to Codex · GPT-5.5 on your next message`, then `Switched to Codex · GPT-5.5` and what the package held. */
+function SwitchLine({
+  handoff,
+  spaceId,
+}: {
+  handoff: Handoff;
+  spaceId: string;
+}) {
+  const target = useTargetName(handoff, spaceId);
+  if (handoff.status === 'pending')
+    return (
+      <span className="min-w-0 truncate">
+        Switches to {target} on your next message
+      </span>
+    );
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="shrink-0">Switched to {target}</span>
+      {!!handoff.contents && (
+        <span className="min-w-0 truncate text-subtle-foreground">
+          {handoff.contents}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The provider, then the model's name from its catalog (the id until that loads); just the provider for its default model. */
+function useTargetName(handoff: Handoff, spaceId: string) {
+  const catalog = useModels(spaceId);
+  const provider = PROVIDER_NAME[handoff.to];
+  if (!handoff.model) return provider;
+  return `${provider} · ${optionFor(catalog[handoff.to], handoff.model, handoff.to).name}`;
 }
 
 function HandoffLine({ handoff }: { handoff: Handoff }) {

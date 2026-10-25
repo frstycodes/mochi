@@ -30,7 +30,7 @@ import { askSideChat } from '../sidechat/ask.ts';
 import { chatFor } from '../store/sidechat.ts';
 import { closeShell, openShell, shellOf } from './terminals.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
-import { handOffHere } from '../rewind/runHandoff.ts';
+import { switchHere } from '../rewind/switch.ts';
 import type { Action, State } from '../store/index.tsx';
 import { storeCommand, type StoreCommand } from './storeCommands.ts';
 
@@ -93,7 +93,7 @@ export async function runRemoteCommand(
     case 'handoff': {
       const blocker = handoffBlocker(thread, command.to);
       if (blocker) return fail(blocker);
-      handOffHere(thread, dispatch, command.to);
+      switchHere(thread, dispatch, command.to);
       return ok;
     }
     case 'schedule':

@@ -4,7 +4,6 @@ import type { DiffFile } from '../host/types/git.ts';
 import { DEFAULT_SETTINGS, mergeSettings } from '../host/types/settings.ts';
 import {
   commitPrompt,
-  handoffPrompt,
   parseAudit,
   parseCommit,
   parsePr,
@@ -82,10 +81,6 @@ test('prompt builders carry the input and cut what would stall a call', () => {
   assert.match(
     prPrompt('Login fix', 'Fix the login redirect', [file('a.ts', '+x')]),
     /^Thread: Login fix\nGoal: Fix the login redirect\n\na\.ts/,
-  );
-  assert.match(
-    handoffPrompt('**Goal:** x', ['You: keep the API', 'Agent: ok']),
-    /\*\*Goal:\*\* x\n\nRecent transcript:\nYou: keep the API\n\nAgent: ok/,
   );
   const huge = commitPrompt([file('big.ts', 'x'.repeat(50_000))]);
   assert.ok(huge.length < 25_000 && huge.endsWith('… (cut)'));

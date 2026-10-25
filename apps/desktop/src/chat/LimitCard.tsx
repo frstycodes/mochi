@@ -1,15 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNow } from '../useNow';
-import { ChevronDown, Copy, Hourglass } from '@/icons';
+import { Hourglass } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Card,
   CardContent,
@@ -21,12 +15,7 @@ import {
 import { host } from '../host';
 import type { ActivityEntry, Provider, Thread } from '../model';
 import { PROVIDER_NAME } from '../rewind/handoff';
-import {
-  copyHandoffPrompt,
-  handOffHere,
-  isHandingOff,
-  otherProvider,
-} from '../rewind/runHandoff';
+import { isSwitchPending, otherProvider, switchHere } from '../rewind/switch';
 import { HARNESSES } from '../settings/harnesses';
 import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
@@ -99,7 +88,7 @@ function LimitCard({
         </p>
       </CardContent>
       <CardFooter className="flex-wrap justify-end gap-2 border-t-0 bg-transparent pt-0">
-        <HandoffMenu thread={thread} />
+        <SwitchButton thread={thread} />
         {hasApiKey && (
           <Button variant="outline" size="sm" onClick={() => resume(true)}>
             Use API key
@@ -120,33 +109,20 @@ function LimitCard({
   );
 }
 
-/** Both ways to hand off at once: here, or the prompt on the clipboard to take anywhere. */
-function HandoffMenu({ thread }: { thread: Thread }) {
+/** Moves the paused thread to the other provider: your next message starts it there, with the thread so far. */
+function SwitchButton({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();
   const other = otherProvider(thread);
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <ProviderMark provider={other} size={14} />
-          Hand off to {PROVIDER_NAME[other]}
-          <ChevronDown data-icon="inline-end" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-max">
-        <DropdownMenuItem
-          disabled={isHandingOff(thread)}
-          onSelect={() => handOffHere(thread, dispatch)}
-        >
-          <ProviderMark provider={other} size={14} />
-          Hand off to {PROVIDER_NAME[other]} here
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => copyHandoffPrompt(thread)}>
-          <Copy />
-          Copy handoff prompt
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={isSwitchPending(thread)}
+      onClick={() => switchHere(thread, dispatch, other)}
+    >
+      <ProviderMark provider={other} size={14} />
+      Switch to {PROVIDER_NAME[other]}
+    </Button>
   );
 }
 
