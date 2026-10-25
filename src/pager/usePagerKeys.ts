@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { useHarness } from '../store';
 import { commandOf, listenKeydown, isCommand } from '../keymap';
 import { pinnedNeighbour, slotsOf } from './slots';
@@ -9,31 +9,25 @@ import { pinnedNeighbour, slotsOf } from './slots';
  */
 export function usePagerKeys() {
   const { state, dispatch } = useHarness();
-  const latest = useRef(state);
-  latest.current = state;
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      const s = latest.current;
-      if (isCommand(e, 'dismiss') && s.isOverview) {
-        e.preventDefault();
-        return dispatch({ type: 'overview-toggle', isOpen: false });
-      }
-      const command = commandOf(e, ['layout-overview', 'pinned-previous', 'pinned-next']);
-      if (!command) return;
-      if (command === 'layout-overview') {
-        if (isEditingText(e.target)) return;
-        e.preventDefault();
-        return dispatch({ type: 'overview-toggle' });
-      }
-      const id = pinnedNeighbour(slotsOf(s), command === 'pinned-previous' ? -1 : 1);
-      if (!id) return;
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.defaultPrevented) return;
+    if (isCommand(e, 'dismiss') && state.isOverview) {
       e.preventDefault();
-      dispatch({ type: 'go', view: { kind: 'thread', id } });
-    };
-    return listenKeydown(onKey);
-  }, [dispatch]);
+      return dispatch({ type: 'overview-toggle', isOpen: false });
+    }
+    const command = commandOf(e, ['layout-overview', 'pinned-previous', 'pinned-next']);
+    if (!command) return;
+    if (command === 'layout-overview') {
+      if (isEditingText(e.target)) return;
+      e.preventDefault();
+      return dispatch({ type: 'overview-toggle' });
+    }
+    const id = pinnedNeighbour(slotsOf(state), command === 'pinned-previous' ? -1 : 1);
+    if (!id) return;
+    e.preventDefault();
+    dispatch({ type: 'go', view: { kind: 'thread', id } });
+  });
+  useEffect(() => listenKeydown((e) => onKey(e)), []);
 }
 
 /** Show all sessions' default, mod ↑, moves the caret in a field with text; an empty composer (which holds focus most of the time) lets it through. */

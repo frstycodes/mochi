@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ChevronRight, Cursor, Flag, Globe, Hand, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -159,10 +159,10 @@ function WidgetCard({ item, onEscape, children }: { item: QueueItem; onEscape: (
 function SettingsWidget({ item, settings }: { item: QueueItem; settings: SettingsSuggestion }) {
   const dispatch = useDispatch();
   const profiles = useProfiles();
-  const readers = useRef(new Map<string, Reader>());
+  const [readers] = useState(() => new Map<string, Reader>());
   const groups = [...new Set(settings.changes.map((c) => c.profileId ?? ''))].map((profileId) => [profileId, settings.changes.filter((c) => (c.profileId ?? '') === profileId)] as const);
   const close = async () => {
-    const done = (await Promise.all([...readers.current.values()].map((read) => read()))).flat();
+    const done = (await Promise.all([...readers.values()].map((read) => read()))).flat();
     dispatch({ type: 'card-record', queueId: item.id, text: done.length ? capitalize(LIST.format(done)) : 'Closed the suggestion; nothing changed' });
   };
   return (
@@ -179,9 +179,9 @@ function SettingsWidget({ item, settings }: { item: QueueItem; settings: Setting
         </CardHeader>
         <CardContent className="px-0">
           {groups.map(([profileId, changes]) => (
-            <SuggestionGroup key={profileId} item={item} profile={profiles.find((p) => p.id === profileId)} profileId={profileId} changes={changes} settings={settings} readers={readers.current} />
+            <SuggestionGroup key={profileId} item={item} profile={profiles.find((p) => p.id === profileId)} profileId={profileId} changes={changes} settings={settings} readers={readers} />
           ))}
-          {!!settings.addServer && <SuggestedServer server={settings.addServer} by={settings.by} readers={readers.current} />}
+          {!!settings.addServer && <SuggestedServer server={settings.addServer} by={settings.by} readers={readers} />}
         </CardContent>
         <CardFooter className="justify-between gap-2 border-t-0 bg-transparent pt-0">
           <p className="type-caption text-muted-foreground">Changes apply as you make them.</p>

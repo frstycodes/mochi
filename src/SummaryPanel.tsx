@@ -80,7 +80,7 @@ import { portUrl } from './terminal/devServer';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { PortIcon } from './pane/PortIcon';
 import { queuedMessage } from './chat/outbox';
-import { useArtifacts, type FileArtifact, type VisualArtifact } from './pane/artifacts';
+import { artifactsOf, type FileArtifact, type VisualArtifact } from './pane/artifacts';
 import { splitPath } from './chat/imageSrc';
 import type { VizLanguage } from './viz/fence';
 import type { ListeningPort } from './host/types/ports';
@@ -242,7 +242,7 @@ function useSummary(thread: Thread, onPaneOpened?: () => void) {
   const cwd = threadCwd(thread) ?? null;
   const { ports = [] } = usePorts(thread.id, cwd);
   const launchNames = useLaunchNames(cwd);
-  const outputs = useArtifacts(thread, thread.repo ? null : cwd);
+  const outputs = artifactsOf(thread, thread.repo ? null : cwd);
   const outputCount = outputs.files.length + outputs.visuals.length;
   const cards = summaryCards({ thread, summary, portCount: ports.length, outputCount });
   return { summary, cards, ports, launchNames, outputs, open };

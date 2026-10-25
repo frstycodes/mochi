@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { Chat, Plug, ShieldAlert, Skill, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
@@ -185,7 +185,7 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   const [picks, setMentions] = useState<Mention[]>([]);
   const text = textInput.value;
   // A file or thread whose token you deleted from the text is no longer a reference.
-  const mentions = useMemo(() => picks.filter((m) => (m.kind === 'file' || m.kind === 'thread' ? mentionTokens(text, [m]).length > 0 : true)), [picks, text]);
+  const mentions = picks.filter((m) => (m.kind === 'file' || m.kind === 'thread' ? mentionTokens(text, [m]).length > 0 : true));
   const query = mentionQuery(text);
   const isQuerying = query !== null && dismissedAt !== text;
   const browse = query === null ? null : browseQuery(query);
@@ -251,7 +251,7 @@ export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: 
   };
   // Edit on a queued message brings its references back beside any you already picked.
   const restore = (list: Mention[]) => setMentions((all) => [...all, ...list.filter((m) => !all.some((a) => a.id === m.id))]);
-  const inlineMentions = useMemo(() => mentions.filter((m) => m.kind === 'file' || m.kind === 'thread'), [mentions]);
+  const inlineMentions = mentions.filter((m) => m.kind === 'file' || m.kind === 'thread');
   return { listId, items, activeKey: current && itemKey(current), setActiveKey, dismiss: () => setDismissedAt(text), editor, listRef, isOpen, choose, mentions, inlineMentions, remove, mentionThread, restore, clear: () => setMentions([]), editorProps };
 }
 
@@ -263,11 +263,10 @@ export function useThreadMentionDrop(menu: ReturnType<typeof useMentionMenu>) {
   // A callback ref: the composer can mount after this hook does (a new thread's composer waits for its project step).
   const [el, setEl] = useState<HTMLDivElement | null>(null);
   const isOver = useDragSelector((s) => s?.view.kind === 'thread' && !!el && isInside(el, s.x, s.y));
-  const latest = useRef(menu.mentionThread);
-  latest.current = menu.mentionThread;
+  const mentionThread = useEffectEvent((threadId: string) => menu.mentionThread(threadId));
   useEffect(() => {
     if (!el) return;
-    const onDrop = (e: Event) => latest.current((e as CustomEvent<string>).detail);
+    const onDrop = (e: Event) => mentionThread((e as CustomEvent<string>).detail);
     el.addEventListener(MENTION_DROP_EVENT, onDrop);
     return () => el.removeEventListener(MENTION_DROP_EVENT, onDrop);
   }, [el]);
@@ -283,7 +282,7 @@ const MAX_BROWSE = 50;
 export function useThreadMentionFiles(thread: Thread): MentionFiles {
   const root = threadCwd(thread);
   const recent = useRecentFiles(thread, root ?? '');
-  return useMemo(() => ({ root, recent: recent.map((f) => f.path) }), [root, recent]);
+  return { root, recent: recent.map((f) => f.path) };
 }
 
 /**
@@ -297,19 +296,16 @@ function useFileOptions(query: string | null, { root, recent }: MentionFiles): F
   const deferred = useDeferredValue(query);
   const browse = deferred === null ? null : browseQuery(deferred);
   const folder = useFolder(browse && browseTarget(root, browse.dir), browse?.dir ?? null);
-  const recentKey = recent.join('\n');
-  return useMemo(() => {
-    if (deferred === null) return [];
-    if (browse) {
-      if (!folder) return [];
-      const filter = folder.dir === browse.dir ? browse.filter : '';
-      return browseEntries(folder.dirs, folder.files, filter, MAX_BROWSE).map((e) => ({ kind: 'file', mention: fileMentionFor(root, folder.dir, folder.path, e.name, e.isDir), name: e.isDir ? `${e.name}/` : e.name, dir: folder.dir }));
-    }
-    return rankFiles(files ?? [], deferred, recentKey ? recentKey.split('\n') : [], MAX_FILES).map((path) => {
-      const cut = path.lastIndexOf('/') + 1;
-      return { kind: 'file', mention: worktreeMention(path), name: path.slice(cut), dir: path.slice(0, cut) };
-    });
-  }, [deferred, browse?.dir, browse?.filter, folder, files, recentKey, root]); // eslint-disable-line react-hooks/exhaustive-deps -- browse and recent are tracked by their fields and joined key, not identity
+  if (deferred === null) return [];
+  if (browse) {
+    if (!folder) return [];
+    const filter = folder.dir === browse.dir ? browse.filter : '';
+    return browseEntries(folder.dirs, folder.files, filter, MAX_BROWSE).map((e) => ({ kind: 'file', mention: fileMentionFor(root, folder.dir, folder.path, e.name, e.isDir), name: e.isDir ? `${e.name}/` : e.name, dir: folder.dir }));
+  }
+  return rankFiles(files ?? [], deferred, recent, MAX_FILES).map((path) => {
+    const cut = path.lastIndexOf('/') + 1;
+    return { kind: 'file', mention: worktreeMention(path), name: path.slice(cut), dir: path.slice(0, cut) };
+  });
 }
 
 /** A browsed folder's listing, the last one kept while the next loads so the menu doesn't blink between folders. */

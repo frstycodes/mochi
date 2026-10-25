@@ -1,7 +1,7 @@
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { toast } from '@/toast/store';
 import { host } from '../host';
 import { connectorIcon, connectorKey } from './connectors';
@@ -36,8 +36,12 @@ export function useConnectorTools(entries: LibraryEntry[] | null) {
 
 
 
-  const unlisted = settings && connectors ? connectors.filter((c) => !settings[c.key]?.toolList && !listing.has(c.key)).map((c) => c.key) : [];
-  useEffect(() => unlisted.forEach(list), [unlisted.join()]);
+  const unlisted = settings && connectors ? connectors.filter((c) => !settings[c.key]?.toolList && !listing.has(c.key)).map((c) => c.key).join('\n') : '';
+  const listOnce = useEffectEvent(list);
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- listing calls main for each never-listed connector; the state set first only marks it in flight
+    if (unlisted) for (const key of unlisted.split('\n')) listOnce(key);
+  }, [unlisted]);
 
   const save = (key: string, change: (current: ConnectorSettings) => ConnectorSettings) => {
     const { toolList: _, ...next } = change(settings?.[key] ?? {});

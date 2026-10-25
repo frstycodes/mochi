@@ -31,9 +31,12 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
   }, [threadId, selected]);
   const open = (target: FileTarget) => setSelected(target);
   // The one Files pane switches to a file opened from the chat or a terminal without remounting, so a search in progress survives.
-  useEffect(() => {
-    if (initial) open(initial);
-  }, [initial?.path, initial?.line]);
+  const initialKey = initial && `${initial.path}:${initial.line}`;
+  const [openedKey, setOpenedKey] = useState(initialKey);
+  if (initialKey !== openedKey) {
+    setOpenedKey(initialKey);
+    if (initial) setSelected(initial);
+  }
   const focusFinder = (mode: 'name' | 'contents') => {
     setIsTreeOpen(true);
     if (mode === 'contents' && !query.startsWith('?')) setQuery('?');

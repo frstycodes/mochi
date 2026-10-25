@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 
 interface Draft {
@@ -18,18 +18,17 @@ export function sendToComposer(draft: Draft) {
 /** Mount inside a thread's PromptInputProvider so the side pane can reach its composer. */
 export function ComposerInbox({ threadId }: { threadId: string }) {
   const { attachments, textInput } = usePromptInputController();
-  const value = useRef(textInput.value);
-  value.current = textInput.value;
+  const receive = useEffectEvent((draft: Draft) => {
+    if (draft.threadId !== threadId) return;
+    if (draft.files?.length) attachments.add(draft.files);
+    if (draft.text) textInput.setInput(textInput.value ? `${textInput.value}\n\n${draft.text}` : draft.text);
+  });
 
   useEffect(() => {
-    const receive = (draft: Draft) => {
-      if (draft.threadId !== threadId) return;
-      if (draft.files?.length) attachments.add(draft.files);
-      if (draft.text) textInput.setInput(value.current ? `${value.current}\n\n${draft.text}` : draft.text);
-    };
-    listeners.add(receive);
-    return () => void listeners.delete(receive);
-  }, [threadId, attachments, textInput]);
+    const listener = (draft: Draft) => receive(draft);
+    listeners.add(listener);
+    return () => void listeners.delete(listener);
+  }, []);
 
   return null;
 }

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useEffectEvent, useState } from 'react';
 import { ChevronRight, Plus } from '@/icons';
 import { toast } from '@/toast/store';
 import { Badge } from '@/components/ui/badge';
@@ -57,10 +57,13 @@ export function ProfilesSection() {
 /** A deep link to one profile's row (`<profileId>-<row>`, from search or a thread) opens that profile's page on it. */
 function useOpenLinkedProfile(profiles: Space[]) {
   const route = useSettingsRoute();
-  useEffect(() => {
-    const settingId = route?.settingId;
-    const linked = settingId && profiles.find((p) => settingId.startsWith(`${p.id}-`));
+  const openLinked = useEffectEvent((settingId: string) => {
+    const linked = profiles.find((p) => settingId.startsWith(`${p.id}-`));
     if (linked) openSubpage('profiles', linked.id, settingId, true);
+  });
+  useEffect(() => {
+    if (route?.settingId) openLinked(route.settingId);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `nonce` re-runs it when the same setting is deep-linked twice
   }, [route?.nonce, route?.settingId]);
 }
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { ArrowUp, Columns, Rows, X } from '@/icons';
 import { ConversationContent, Conversation, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
@@ -119,10 +119,7 @@ function RemoteChanges({ machine, thread }: { machine: FollowedMachine; thread: 
   const { diffStyle } = usePrefs();
   const diffQuery = useMachineRead(
     machine, ['diff', thread.id, scope],
-    useCallback(
-      () => (checkpoint === undefined ? ask(machine.id, { type: 'diff', threadId: thread.id, scope: scope as DiffScope }) : ask(machine.id, { type: 'checkpoint-diff', threadId: thread.id, n: checkpoint })),
-      [ask, machine.id, thread.id, scope, checkpoint],
-    ),
+    () => (checkpoint === undefined ? ask(machine.id, { type: 'diff', threadId: thread.id, scope: scope as DiffScope }) : ask(machine.id, { type: 'checkpoint-diff', threadId: thread.id, n: checkpoint })),
     checkpoint === undefined ? DIFF_POLL_MS : undefined,
   );
   const { confirm, dialog } = useConfirm();
@@ -239,16 +236,19 @@ function RemoteFiles({ machine, thread, file }: { machine: FollowedMachine; thre
   const { ask } = useMachines();
   const list = useMachineRead(
     machine, ['files', thread.id],
-    useCallback(() => ask(machine.id, { type: 'files', threadId: thread.id }), [ask, machine.id, thread.id]),
+    () => ask(machine.id, { type: 'files', threadId: thread.id }),
   );
   const [expanded, setExpanded] = useState(() => new Set<string>());
   const [selected, setSelected] = useState<string | null>(null);
-  useEffect(() => {
-    if (!file) return;
-    setSelected(file.path);
-    setExpanded((all) => new Set([...all, ...ancestors(file.path)]));
-  }, [file]);
-  const rows = useMemo(() => visibleRows(buildTree(list.data?.paths ?? []), expanded), [list.data, expanded]);
+  const [shownFile, setShownFile] = useState<FileTarget>();
+  if (file !== shownFile) {
+    setShownFile(file);
+    if (file) {
+      setSelected(file.path);
+      setExpanded((all) => new Set([...all, ...ancestors(file.path)]));
+    }
+  }
+  const rows = visibleRows(buildTree(list.data?.paths ?? []), expanded);
   const toggle = (path: string) =>
     setExpanded((all) => {
       const next = new Set(all);
@@ -283,7 +283,7 @@ function RemoteFile({ machine, thread, path, line }: { machine: FollowedMachine;
   const { ask } = useMachines();
   const file = useMachineRead(
     machine, ['file', thread.id, path],
-    useCallback(() => ask(machine.id, { type: 'read-file', threadId: thread.id, path }), [ask, machine.id, thread.id, path]),
+    () => ask(machine.id, { type: 'read-file', threadId: thread.id, path }),
   );
   return (
     <>

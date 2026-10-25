@@ -119,15 +119,17 @@ function ResumeButton({ isReset, isArmed, at, onResume, onArm }: { isReset: bool
 export function useUntil(at?: string) {
   const target = at ? Date.parse(at) : NaN;
   const [expiredTarget, setExpiredTarget] = useState<number>();
-  const now = useNow(target > Date.now() && expiredTarget !== target ? 60_000 : null);
+  const isPending = !Number.isNaN(target) && expiredTarget !== target;
+  const now = useNow(isPending ? 60_000 : null);
   useEffect(() => {
-    if (!(target > Date.now())) return;
+    if (!isPending) return;
+    // A past target fires at once and stops the clock; one past setTimeout's 24.8-day cap is left to the minute clock.
     const id = window.setTimeout(() => {
       if (Date.now() >= target) setExpiredTarget(target);
     }, Math.min(target - Date.now(), 2_147_483_647));
     return () => window.clearTimeout(id);
-  }, [target, now]);
-  return expiredTarget !== target && target > now ? target - now : 0;
+  }, [target, isPending]);
+  return isPending && target > now ? target - now : 0;
 }
 
 function useHasApiKey(provider: Provider) {

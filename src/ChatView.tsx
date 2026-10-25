@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type ComponentType, type RefObject } from 'react';
+import { memo, useEffect, useEffectEvent, useRef, useState, type ComponentType, type RefObject } from 'react';
 import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
@@ -99,7 +99,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   const tray = useTrayState(decisions.length);
   const withActions = finalReplies(rows, isRunning);
 
-  const composer = useComposerHeightVar();
+  const { ref: composerRef, hold: holdComposer, release: releaseComposer } = useComposerHeightVar();
   const resize = useOpeningResize();
   const messages = useRef<HTMLDivElement>(null);
   const pins = useThreadPins(thread.id);
@@ -137,10 +137,10 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
           <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
           {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
           <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
-          {!isReadOnly && <ScrollIntent onScrollUp={() => (composer.hold(), tray.collapse())} onReachBottom={() => (tray.expand(), !decisions.length && composer.release())} />}
+          {!isReadOnly && <ScrollIntent onScrollUp={() => (holdComposer(), tray.collapse())} onReachBottom={() => (tray.expand(), !decisions.length && releaseComposer())} />}
         </Conversation>
         {!isReadOnly && (
-          <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
+          <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10">
             <ImageDropTarget>
               <Composer thread={composerThread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} restoreRef={restoreDraft} />
             </ImageDropTarget>
@@ -153,11 +153,6 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
 }
 
 /**
- * Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
- * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
- * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
- */
-/**
  * `thread`, or the one already shown while only the text of its entries grew (`isStreamedOnly`, no entry added): nothing in the
  * composer depends on the reply being written, and its subtree is the chat's largest after the transcript.
  */
@@ -168,6 +163,11 @@ function useWithoutStreamedText(thread: Thread) {
   return isSame ? held : thread;
 }
 
+/**
+ * Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
+ * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
+ * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
+ */
 function useComposerHeightVar() {
   const ref = useRef<HTMLDivElement>(null);
   const held = useRef(0);
@@ -181,6 +181,7 @@ function useComposerHeightVar() {
     held.current = el.offsetHeight;
     el.parentElement.style.setProperty('--composer-hold', `${held.current}px`);
   };
+  const releaseBelow = useEffectEvent((height: number) => height >= held.current && release());
   useEffect(() => {
     const el = ref.current;
     const parent = el?.parentElement;
@@ -188,7 +189,7 @@ function useComposerHeightVar() {
     const ro = new ResizeObserver(([e]) => {
       const height = e.borderBoxSize[0].blockSize;
       parent.style.setProperty('--composer-h', `${height}px`);
-      if (height >= held.current) release();
+      releaseBelow(height);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -281,7 +282,7 @@ function isSameRowProps(a: ChatRowProps, b: ChatRowProps) {
 
 /** Your message as markdown with its links, the known `/name` tokens coloured as they were in the composer. */
 function YourMessage({ text, slashItems }: { text: string; slashItems: SlashItem[] }) {
-  const rehypePlugins = useMemo(() => [...VIZ_REHYPE_PLUGINS, [rehypeSlashTokens, slashItems.map((i) => i.name)]] as typeof VIZ_REHYPE_PLUGINS, [slashItems]);
+  const rehypePlugins = [...VIZ_REHYPE_PLUGINS, [rehypeSlashTokens, slashItems.map((i) => i.name)]] as typeof VIZ_REHYPE_PLUGINS;
   return (
     <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={rehypePlugins} isAnimating={false}>
       {text}
@@ -330,9 +331,11 @@ function outline(rows: ChatRow[], pins: Pin[]): OutlineItem[] {
 /** Reading back through the chat folds the question tray away; returning to the latest message brings it back. */
 function useTrayState(count: number) {
   const [isOpen, setOpen] = useState(true);
-  useEffect(() => {
+  const [seenCount, setSeenCount] = useState(count);
+  if (count !== seenCount) {
+    setSeenCount(count);
     if (count > 0) setOpen(true);
-  }, [count]);
+  }
   return { isOpen, toggle: () => setOpen((o) => !o), collapse: () => setOpen(false), expand: () => setOpen(true) };
 }
 
@@ -341,8 +344,8 @@ const SCROLL_INTENT_PX = 24;
 // Listens to wheel and touch, not scroll: stick-to-bottom scrolls programmatically, and those scroll events aren't the reader's intent.
 function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; onReachBottom: () => void }) {
   const { scrollRef, isAtBottom } = useStickToBottomContext();
-  const handlers = useRef({ onScrollUp, onReachBottom });
-  handlers.current = { onScrollUp, onReachBottom };
+  const scrolledUp = useEffectEvent(onScrollUp);
+  const reachedBottom = useEffectEvent(onReachBottom);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -351,11 +354,11 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
     let touchY = 0;
     const atBottom = () => el.scrollHeight - el.scrollTop - el.clientHeight < 4;
     const intent = (dy: number) => {
-      if (dy > 0 && atBottom()) return handlers.current.onReachBottom();
+      if (dy > 0 && atBottom()) return reachedBottom();
       up = dy < 0 ? up - dy : 0;
       if (up < SCROLL_INTENT_PX) return;
       up = 0;
-      handlers.current.onScrollUp();
+      scrolledUp();
     };
     const onWheel = (e: WheelEvent) => intent(e.deltaY);
     const onTouchStart = (e: TouchEvent) => (touchY = e.touches[0].clientY);
@@ -374,7 +377,7 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
   }, [scrollRef]);
 
   useEffect(() => {
-    if (isAtBottom) handlers.current.onReachBottom();
+    if (isAtBottom) reachedBottom();
   }, [isAtBottom]);
 
   return null;
@@ -415,16 +418,15 @@ const Composer = memo(function Composer({
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
-  const items = useMemo(() => slashItems.map((i) => (i.source === 'mochi' && i.name === 'compact' && offReason ? { ...i, disabledReason: offReason } : i)), [slashItems, offReason]);
+  const items = slashItems.map((i) => (i.source === 'mochi' && i.name === 'compact' && offReason ? { ...i, disabledReason: offReason } : i));
   const slash = useSlashMenu(items);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
   const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
   const draftKey = threadDraftKey(thread.id);
   useSeedAttachment(thread.id === 'adm' && !getDraft(draftKey));
-  const draftExtra = useMemo(() => (mention.mentions.length > 0 ? { mentions: mention.mentions } : undefined), [mention.mentions]);
-  useEffect(() => {
-    mention.restore(getDraft<{ mentions: Mention[] }>(draftKey)?.extra?.mentions ?? []);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- restores the saved draft's mentions once, on mount
+  const draftExtra = mention.mentions.length > 0 ? { mentions: mention.mentions } : undefined;
+  const restoreMentions = useEffectEvent(() => mention.restore(getDraft<{ mentions: Mention[] }>(draftKey)?.extra?.mentions ?? []));
+  useEffect(() => restoreMentions(), []);
 
   // `/compact` never goes to the agent as text: it runs now, waits in the queue as typed, or says why it can't.
   const runCompact = (focus: string, hasFiles: boolean) => {

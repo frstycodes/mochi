@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
 import { imageMime } from '../files/previews';
@@ -16,7 +16,7 @@ export const isFilePath = (src: string) => !isUrl(src);
  */
 export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
   const images = useQueries({ queries: srcs.map((src) => ({ queryKey: queryKeys.chat.imageBlob(src), queryFn: () => readImage(src), enabled: !!src && isFilePath(src), structuralSharing: false })), combine: (results) => results.map((result) => ({ blob: result.data, isError: result.isError })) });
-  const urls = useMemo(() => images.map(({ blob }) => blob ? URL.createObjectURL(blob) : undefined), [images]);
+  const urls = images.map(({ blob }) => blob ? URL.createObjectURL(blob) : undefined);
   useEffect(() => () => urls.forEach((url) => { if (url) URL.revokeObjectURL(url); }), [urls]);
   return srcs.map((src, i) => isFilePath(src) ? urls[i] ?? (images[i].isError ? null : undefined) : src);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
 import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
@@ -64,7 +64,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const isPaneShown = isWide ? isPaneOpen : isPaneTabOpen;
   const inSplits = useSplitTabIds(thread.id);
   // Memoized by hand: the compiler leaves it inline, and a new array each render would give every pinned tab a new onToggle.
-  const openKinds = useMemo(() => (isPaneShown && pane ? layoutOf(pane).columns.flat() : []), [isPaneShown, pane]);
+  const openKinds = isPaneShown && pane ? layoutOf(pane).columns.flat() : [];
 
   const toggleKind = (kind: PaneTabKind) => {
     const split = pane?.tabs.find((t) => t.kind === kind && inSplits.has(t.id));
@@ -141,8 +141,7 @@ function noPane(threadId: string): Pane {
 
 /** Each pane's toggle command (mod Alt + its letter by default) toggles that pane in the focused split. */
 function usePaneShortcuts(isFocused: boolean, onToggle: (kind: PaneTabKind) => void) {
-  const toggle = useRef(onToggle);
-  toggle.current = onToggle;
+  const toggle = useEffectEvent(onToggle);
   useEffect(() => {
     if (!isFocused) return;
     const onKey = (e: KeyboardEvent) => {
@@ -150,7 +149,7 @@ function usePaneShortcuts(isFocused: boolean, onToggle: (kind: PaneTabKind) => v
       if (!command) return;
       const kind = PINNABLE_KINDS[PINNABLE_KINDS.map(paneCommand).indexOf(command)];
       e.preventDefault();
-      toggle.current(kind);
+      toggle(kind);
     };
     return listenKeydown(onKey);
   }, [isFocused]);

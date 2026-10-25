@@ -14,7 +14,7 @@ import { usePrefs } from '../settings/prefs';
 import { ForkIcon, TooltipIconButton } from '../ui';
 import { isMessagePinned, togglePin, useThreadPins } from './pins';
 import { ReadMark } from './SteerBubble';
-import { useIsSimplifying, useSimplify } from '../simplify/useSimplify';
+import { simplify as simplifyReply, useIsSimplifying } from '../simplify/useSimplify';
 
 export interface MessageAction {
   id: 'copy' | 'pin' | 'fork' | 'simplify' | `rewind-${RewindMode}`;
@@ -32,7 +32,6 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
   const pins = useThreadPins(thread.id);
   const { rewind } = useRewindActions();
   const dispatch = useDispatch();
-  const run = useSimplify(dispatch);
   const isSimplifying = useIsSimplifying(thread.id, index);
   const entry = thread.activity[index];
   if (!entry) return [];
@@ -63,7 +62,7 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
     icon: Stars,
     isActive: isShown,
     disabledReason: isSimplifying ? 'Simplifying…' : undefined,
-    run: () => void run(thread, index),
+    run: () => void simplifyReply(thread, index, dispatch),
   };
   // Rewind only goes back to your own messages, which return to the composer to edit.
   const actions = entry.who === 'you' ? [copy, ...rewinds, fork, pin] : [copy, simplify, fork, pin];

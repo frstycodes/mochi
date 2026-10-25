@@ -29,7 +29,7 @@ export function Annotator({ thread, pageId, image, name }: { thread: Thread; pag
   const [color, setColor] = useState<string>(ANNOTATION_COLORS[0].token);
   const [{ past, present, future }, dispatch] = useReducer(history, EMPTY_HISTORY);
   const [draft, setDraft] = useState<Shape | null>(null);
-  const [note, setNote] = useState<{ at: Point; text: string } | null>(null);
+  const [note, setNote] = useState<{ at: Point; text: string; scale: number } | null>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [isSending, setSending] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -54,7 +54,7 @@ export function Annotator({ thread, pageId, image, name }: { thread: Thread; pag
     const at = toImage(e);
     if (tool === 'note') {
       commitNote();
-      setNote({ at, text: '' });
+      setNote({ at, text: '', scale: scale() });
       return;
     }
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -174,7 +174,7 @@ export function Annotator({ thread, pageId, image, name }: { thread: Thread; pag
                 if (e.key === 'Escape') setNote(null);
               }}
               className="absolute h-6 min-w-24 rounded-sm border border-dashed border-current bg-transparent px-0.5 font-semibold outline-none"
-              style={{ left: note.at.x / scale(), top: note.at.y / scale() - 18, fontSize: NOTE_SIZE, color: `var(${color})`, width: `${Math.max(note.text.length + 2, 8)}ch` }}
+              style={{ left: note.at.x / note.scale, top: note.at.y / note.scale - 18, fontSize: NOTE_SIZE, color: `var(${color})`, width: `${Math.max(note.text.length + 2, 8)}ch` }}
             />
           )}
         </div>

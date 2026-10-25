@@ -5,6 +5,7 @@ import { SettingsChoice, SettingsSelect, settingControlId } from '../settings/pa
 import { shortRunTime } from './cron';
 import { PR_EVENT_LABELS } from './due';
 import { PRESETS, preview, toWhen, type Preset, type ScheduleForm } from './form';
+import { useNow } from '../useNow';
 
 const KINDS = [
   { value: 'cron', label: 'Schedule' },
@@ -62,7 +63,7 @@ function CronFields({ form, set, id }: { form: ScheduleForm; set: (patch: Partia
 
 function NextRuns({ form, id }: { form: ScheduleForm; id: string }) {
   const result = toWhen(form);
-  const now = Date.now();
+  const now = useNow(60_000);
   const next = preview(form, now);
   if ('error' in result || !next) return <FieldError id={id}>{'error' in result ? result.error : 'Not a valid schedule'}</FieldError>;
   return (

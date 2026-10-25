@@ -1,7 +1,7 @@
 import { useStore } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode } from 'react';
 import { replaceAllPins, useAllPins } from '../chat/pins.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
@@ -138,15 +138,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 export function StoreScope({ state, dispatch, children }: { state: State; dispatch: Dispatch<Action>; children: ReactNode }) {
   const [store] = useState(() => createStore<State>()(() => state));
   useLayoutEffect(() => store.setState(state, true), [store, state]);
-  const value = useMemo(() => ({ store, getState: store.getState, dispatch }), [store, dispatch]);
+  const value = { store, getState: store.getState, dispatch };
   return <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>;
 }
 
 function useStoreValue() {
   const replica = requireReplica();
-  const { dispatch, apply } = useStoreDispatch(replica);
+  const { dispatch, apply } = storeDispatch(replica);
   useProjectionContext(replica, dispatch);
-  const value = useMemo(() => ({ store: replica.store, getState: replica.getState, dispatch }), [replica, dispatch]);
+  const value = { store: replica.store, getState: replica.getState, dispatch };
   return { replica, value, apply };
 }
 
@@ -154,50 +154,44 @@ function useStoreValue() {
  * Applies an action here and sends it to Core when it changes the projection (`Replica.dispatch`), with what it sets off:
  * the agent calls it means (`agentCalls`), an answer to the agent that asked, the schedule's trigger.
  */
-function useStoreDispatch(replica: Replica) {
-  const apply = useCallback(
-    (action: Action) => {
-      recordAction(replica.getState(), action);
-      replica.dispatch(action);
-    },
-    [replica],
-  );
-  const dispatch = useCallback<Dispatch<Action>>(
-    (dispatched) => {
-      const before = replica.getState();
-      const action = withDispatchContext(before, dispatched);
-      recordAction(before, action);
-      if (action.type === 'answer') markOwnAnswer(action.queueId);
-      const answer = resolution(before, action);
-      if (answer) host.agent.resolve(answer.requestId, answer.decision).catch((error: unknown) => apply({ type: 'say', threadId: answer.threadId, entry: undelivered(answer, error) }));
-      let after: State | undefined;
-      const next = () => (after ??= reducer(before, action));
-      const calls = agentCalls(before, action, next);
-      for (const input of scheduleCalls(before, action, next)) host.schedule.set(input).catch((error: unknown) => console.error('Saving the schedule failed', error));
-      // A deleted thread takes its trigger with it.
-      if (action.type === 'delete') for (const id of action.threadIds) host.schedule.remove(id).catch((error: unknown) => console.error('Removing the schedule failed', error));
-      replica.dispatch(action, next());
-      for (const call of calls) {
-        // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
-        callAgent(replica, call).catch((error: unknown) => {
-          const thread = call.method === 'send' && isLostProcess(error) ? replica.getState().threads.find((t) => t.id === call.threadId) : undefined;
-          const retry = thread && call.method === 'send' ? resumeAfterLostProcess(thread, call) : [];
-          if (retry.length === 0) return apply(failed(call.threadId, error));
-          for (const again of retry) {
-            if (again.method === 'start') replica.dispatch({ type: 'agent-starting', threadId: again.threadId, provider: again.options.provider });
-            callAgent(replica, again).catch((e: unknown) => apply(failed(again.threadId, e)));
-          }
-        });
-      }
-      for (const threadId of unsentTurns(before, next(), calls)) apply(failed(threadId, new Error('Mochi had no agent to send this to')));
-      // After the action: a new thread only exists once it has applied.
-      for (const call of calls) if (call.method === 'start') replica.dispatch({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
-      if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
-      const acted = actedOn(action, before.queue);
-      if (acted) host.notify.addressed({ threadId: acted, isActedOn: true }).catch(() => undefined);
-    },
-    [replica, apply],
-  );
+function storeDispatch(replica: Replica) {
+  const apply = (action: Action) => {
+    recordAction(replica.getState(), action);
+    replica.dispatch(action);
+  };
+  const dispatch: Dispatch<Action> = (dispatched) => {
+    const before = replica.getState();
+    const action = withDispatchContext(before, dispatched);
+    recordAction(before, action);
+    if (action.type === 'answer') markOwnAnswer(action.queueId);
+    const answer = resolution(before, action);
+    if (answer) host.agent.resolve(answer.requestId, answer.decision).catch((error: unknown) => apply({ type: 'say', threadId: answer.threadId, entry: undelivered(answer, error) }));
+    let after: State | undefined;
+    const next = () => (after ??= reducer(before, action));
+    const calls = agentCalls(before, action, next);
+    for (const input of scheduleCalls(before, action, next)) host.schedule.set(input).catch((error: unknown) => console.error('Saving the schedule failed', error));
+    // A deleted thread takes its trigger with it.
+    if (action.type === 'delete') for (const id of action.threadIds) host.schedule.remove(id).catch((error: unknown) => console.error('Removing the schedule failed', error));
+    replica.dispatch(action, next());
+    for (const call of calls) {
+      // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
+      callAgent(replica, call).catch((error: unknown) => {
+        const thread = call.method === 'send' && isLostProcess(error) ? replica.getState().threads.find((t) => t.id === call.threadId) : undefined;
+        const retry = thread && call.method === 'send' ? resumeAfterLostProcess(thread, call) : [];
+        if (retry.length === 0) return apply(failed(call.threadId, error));
+        for (const again of retry) {
+          if (again.method === 'start') replica.dispatch({ type: 'agent-starting', threadId: again.threadId, provider: again.options.provider });
+          callAgent(replica, again).catch((e: unknown) => apply(failed(again.threadId, e)));
+        }
+      });
+    }
+    for (const threadId of unsentTurns(before, next(), calls)) apply(failed(threadId, new Error('Mochi had no agent to send this to')));
+    // After the action: a new thread only exists once it has applied.
+    for (const call of calls) if (call.method === 'start') replica.dispatch({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
+    if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
+    const acted = actedOn(action, before.queue);
+    if (acted) host.notify.addressed({ threadId: acted, isActedOn: true }).catch(() => undefined);
+  };
   return { dispatch, apply };
 }
 
@@ -216,7 +210,7 @@ function withDispatchContext(state: State, action: Action): Action {
 function useProjectionContext(replica: Replica, dispatch: Dispatch<Action>) {
   const prefs = usePrefs();
   const pins = useAllPins();
-  const local = useMemo((): ProjectionContext => ({ prefs: projectionPrefs(prefs), pins }), [prefs, pins]);
+  const local = { prefs: projectionPrefs(prefs), pins };
   const held = useStore(replica.store, (s) => s.context);
   /** The value both sides last agreed on, as JSON. */
   const synced = useRef<string | null>(null);

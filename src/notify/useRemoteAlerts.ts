@@ -1,5 +1,5 @@
 import { persistedFamily } from '../lib/uiStorage.ts';
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { toast } from '../toast/store';
 import { host } from '../host';
 import type { RemoteThreadRoute } from '../routes/locations';
@@ -21,16 +21,14 @@ export function useRemoteAlerts() {
   const { state } = useHarness();
   const { alertKinds } = usePrefs();
   const route = useRemoteThreadRoute();
-  const latest = useRef({ quiet: state.notifications.quiet, alertKinds, route });
-  latest.current = { quiet: state.notifications.quiet, alertKinds, route };
+  const { quiet } = state.notifications;
   const seen = useRef(new Map<string, State>());
   const opens = useRef(new Map<string, RemoteThreadRoute>());
 
-  useEffect(() => {
-    for (const { machine, state: mirrored } of machines) {
+  const alertNew = useEffectEvent((list: typeof machines) => {
+    for (const { machine, state: mirrored } of list) {
       if (!mirrored || seen.current.get(machine.id) === mirrored) continue;
       seen.current.set(machine.id, mirrored);
-      const { quiet, alertKinds, route } = latest.current;
       const isFocused = document.hasFocus();
       const alerts = alertsToShow(remoteAlerts(advanceBaseline(machine.id, mirrored), mirrored), { kinds: alertKinds, quiet }, new Date()).filter(
         (a) => !(isFocused && route?.machineId === machine.id && route.threadId === a.threadId),
@@ -50,7 +48,8 @@ export function useRemoteAlerts() {
         host.notify.show({ id, title: a.title, body: a.body }).catch(() => undefined);
       }
     }
-  }, [machines]);
+  });
+  useEffect(() => alertNew(machines), [machines]);
 
   useEffect(
     () =>

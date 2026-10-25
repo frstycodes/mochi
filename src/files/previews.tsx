@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight, FileText } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -53,7 +53,7 @@ const MAX_CSV_ROWS = 1000;
 
 // A plain <table>, not the shadcn Table: its overflow-x wrapper would become the sticky header's scroll container.
 function CsvPreview({ text, delimiter }: { text: string; delimiter: string }) {
-  const [head = [], ...rows] = useMemo(() => parseCsv(text, delimiter), [text, delimiter]);
+  const [head = [], ...rows] = parseCsv(text, delimiter);
   const shown = rows.slice(0, MAX_CSV_ROWS);
   return (
     <div className="h-full overflow-auto">
@@ -99,13 +99,7 @@ function MarkdownPreview({ text }: { text: string }) {
 }
 
 function JsonPreview({ text }: { text: string }) {
-  const parsed = useMemo(() => {
-    try {
-      return { value: JSON.parse(text) as unknown };
-    } catch (e) {
-      return { error: (e as Error).message };
-    }
-  }, [text]);
+  const parsed = parseJson(text);
   if ('error' in parsed) return <p className="p-4 font-mono text-xs text-destructive">{parsed.error}</p>;
   return (
     <ScrollArea className="h-full">
@@ -114,6 +108,14 @@ function JsonPreview({ text }: { text: string }) {
       </div>
     </ScrollArea>
   );
+}
+
+function parseJson(text: string) {
+  try {
+    return { value: JSON.parse(text) as unknown };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }
 
 function JsonNode({ name, value, depth }: { name: string | null; value: unknown; depth: number }) {
@@ -155,6 +157,7 @@ function useObjectUrl(data: string | Uint8Array, type: string) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     const next = URL.createObjectURL(new Blob([data as BlobPart], { type }));
+    // oxlint-disable-next-line react/set-state-in-effect -- an object URL is an external resource: made and revoked by this effect, so StrictMode's re-run gets a live one
     setUrl(next);
     return () => URL.revokeObjectURL(next);
   }, [data, type]);

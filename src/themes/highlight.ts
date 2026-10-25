@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { DEFAULT_THEMES, registerCustomTheme } from '@pierre/diffs';
 import type { ColorTheme } from './model';
 import { shikiTheme } from './shiki';
@@ -7,7 +6,7 @@ import { useColorTheme } from './store';
 /** Spread into a pierre diff's `options`: the color theme's token colors, in the mode on screen. */
 export function useDiffTheme() {
   const { mode, light, dark } = useColorTheme();
-  return useMemo(() => ({ themeType: mode, theme: { light: diffThemeName(light, 'light'), dark: diffThemeName(dark, 'dark') } }), [mode, light, dark]);
+  return { themeType: mode, theme: { light: diffThemeName(light, 'light'), dark: diffThemeName(dark, 'dark') } };
 }
 
 /** `theme` registered with pierre's highlighter by name; Mochi (null) keeps pierre's own themes. */

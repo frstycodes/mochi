@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { toast } from '@/toast/store';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -47,15 +47,13 @@ export function MachineSettings({ machine, section }: { machine: FollowedMachine
   const { catalog } = useMachineCatalog(machine);
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(
-    () =>
-      ask(machine.id, { type: 'settings' }).then(
-        (read) => (setValues(read), setError(null)),
-        (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
-      ),
-    [ask, machine.id],
-  );
-  useEffect(() => void load(), [load]);
+  const load = (machineId: string) =>
+    ask(machineId, { type: 'settings' }).then(
+      (read) => (setValues(read), setError(null)),
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  const loadOnOpen = useEffectEvent(load);
+  useEffect(() => void loadOnOpen(machine.id), [machine.id]);
   const canChange = machine.status === 'online' && machine.scopes.includes('manage');
   const rows = settingsCatalog().filter((s) => s.section === section && REMOTE_CONTROLS.includes(s.control.type) && values && s.key in values);
   const groups = groupRows(rows);
@@ -63,7 +61,7 @@ export function MachineSettings({ machine, section }: { machine: FollowedMachine
   const change = async (setting: Setting, value: string) => {
     setValues((all) => all && { ...all, [setting.key]: value });
     await ask(machine.id, { type: 'setting', key: setting.key, value }).catch((e: unknown) => toast.error(`${setting.label} not changed on ${machine.name}`, { description: e instanceof Error ? e.message : String(e) }));
-    void load();
+    void load(machine.id);
   };
 
   if (error) return <MachineSettingsState title={`Couldn’t read ${machine.name}’s settings`} description={error} />;

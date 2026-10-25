@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import type { Thread } from '../model';
 import { useDispatch } from '../store';
 import { usePorts } from './ports';
@@ -9,12 +9,12 @@ export function useTerminals(thread: Thread, tabId: string, cwd: string) {
   const dispatch = useDispatch();
   const key = `${thread.id}/${tabId}`;
   const openers = usePaneOpeners(thread.id);
-  const context = useMemo(() => ({ cwd, threadId: thread.id, links: openers }), [cwd, thread.id, openers]);
+  const context = { cwd, threadId: thread.id, links: openers };
   const group = useTerminalGroup(key);
   usePorts(thread.id, cwd);
   useEffect(() => ensureGroup(key, context), [key, context]);
 
-  const runs = useMemo(() => agentRuns(thread), [thread]);
+  const runs = agentRuns(thread);
   const agent = group?.sessions.find((s) => s.kind === 'agent');
   useEffect(() => {
     if (agent) feedAgent(agent, runs);

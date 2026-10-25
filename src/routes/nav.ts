@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouterState, type HistoryState } from '@tanstack/react-router';
 import { isTyping } from '../keys';
 import { isCommand, listenKeydown } from '../keymap';
@@ -80,7 +80,7 @@ export function useEscapeBack() {
 /** Null while another page is showing. */
 export function useSettingsRoute() {
   const location = useLocation();
-  return useMemo(() => settingsRouteOf(location), [location]);
+  return settingsRouteOf(location);
 }
 
 export function useReplayRoute() {
@@ -89,7 +89,7 @@ export function useReplayRoute() {
 
 export function useRemoteThreadRoute() {
   const location = useLocation();
-  return useMemo(() => remoteRouteOf(location), [location]);
+  return remoteRouteOf(location);
 }
 
 export function usePathname() {
@@ -105,10 +105,13 @@ export function useLinkedTab<T extends string>(tabFor: (settingId: string) => T 
   const route = useSettingsRoute();
   const linked = () => (route?.settingId ? tabFor(route.settingId) : undefined);
   const [tab, setTab] = useState<T>(() => linked() ?? fallback);
-  useEffect(() => {
+  const link = `${route?.nonce}:${route?.settingId}`;
+  const [followed, setFollowed] = useState(link);
+  if (followed !== link) {
+    setFollowed(link);
     const next = linked();
     if (next) setTab(next);
-  }, [route?.nonce, route?.settingId]);
+  }
   return [tab, setTab] as const;
 }
 

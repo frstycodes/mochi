@@ -1,5 +1,5 @@
 import { createRoot, type Root } from 'react-dom/client';
-import { useImperativeHandle, useLayoutEffect, useRef, useState, type FocusEventHandler, type KeyboardEventHandler, type Ref } from 'react';
+import { useEffectEvent, useImperativeHandle, useLayoutEffect, useRef, useState, type FocusEventHandler, type KeyboardEventHandler, type Ref } from 'react';
 import { history, historyKeymap, standardKeymap } from '@codemirror/commands';
 import { deleteMarkupBackward } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
@@ -9,6 +9,7 @@ import { tags as t } from '@lezer/highlight';
 import { usePromptInputAttachments, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { Chat } from '@/icons';
 import { cn } from '@/lib/utils';
+import { useLatest } from '@/useLatest';
 import { continueMarkup, markdownSupport, nestListItems, outdentListItems } from './markdownEditing';
 import { mentionTokens } from './fileMentions';
 import { FileMark } from './FileMark';
@@ -51,12 +52,11 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
   const attachments = usePromptInputAttachments();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
-  const latest = useRef({ onKeyDown, onCaret, setInput: textInput.setInput, attachments, suggestion });
-  latest.current = { onKeyDown, onCaret, setInput: textInput.setInput, attachments, suggestion };
+  const latest = useLatest({ onKeyDown, onCaret, setInput: textInput.setInput, attachments, suggestion });
   const [compartments] = useState(() => ({ items: new Compartment(), mentions: new Compartment(), placeholder: new Compartment(), attributes: new Compartment() }));
   const contentAttributes = { 'aria-label': placeholder, ...definedOnly(attributes) };
 
-  useLayoutEffect(() => {
+  const createEditor = useEffectEvent(() => {
     const editor = new EditorView({
       parent: host.current!,
       state: EditorState.create({
@@ -106,11 +106,15 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
         ],
       }),
     });
-    view.current = editor;
     if (autoFocus) editor.focus();
+    return editor;
+  });
+  // One editor per mount; text, items, placeholder and attributes are synced below without rebuilding it.
+  useLayoutEffect(() => {
+    const editor = createEditor();
+    view.current = editor;
     return () => editor.destroy();
-    // One editor per mount; text, items, placeholder and attributes are synced below without rebuilding it.
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useImperativeHandle(ref, () => view.current!, []);
 
@@ -128,10 +132,10 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
         compartments.items.reconfigure(slashItemsFacet.of(items)),
         compartments.mentions.reconfigure(mentionsFacet.of(inlineMentions)),
         compartments.placeholder.reconfigure(placeholderText(suggestion || placeholder)),
-        compartments.attributes.reconfigure(EditorView.contentAttributes.of(contentAttributes)),
+        compartments.attributes.reconfigure(EditorView.contentAttributes.of(JSON.parse(attributesKey) as typeof contentAttributes)),
       ],
     });
-  }, [items, inlineMentions, placeholder, suggestion, attributesKey]); // eslint-disable-line react-hooks/exhaustive-deps -- contentAttributes is tracked by its serialized key
+  }, [compartments, items, inlineMentions, placeholder, suggestion, attributesKey]);
 
   return <div ref={host} onKeyUp={onKeyUp} onBlur={onBlur} className={cn('w-full min-w-0', className)} />;
 }

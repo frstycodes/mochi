@@ -161,23 +161,23 @@ const SINCE_41S = Date.now() - 41_000;
 
 function LiveSample() {
   const [run, setRun] = useState(0);
-  const [isDone, setDone] = useState(false);
-  useEffect(() => {
-    setDone(false);
-    const timer = setTimeout(() => setDone(true), LIVE_MS);
-    return () => clearTimeout(timer);
-  }, [run]);
   return (
     <GenSample label="Live">
-      <ImageGenCard
-        key={run}
-        image={isDone ? { status: 'done', src: mochi.src, prompt: 'A mochi mascot sticker, soft pastel, white outline' } : { status: 'running', prompt: 'A mochi mascot sticker, soft pastel, white outline' }}
-      />
+      <LiveImage key={run} />
       <Button variant="outline" size="sm" className="self-start" onClick={() => setRun((r) => r + 1)}>
         Replay
       </Button>
     </GenSample>
   );
+}
+
+function LiveImage() {
+  const [isDone, setDone] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setDone(true), LIVE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return <ImageGenCard image={isDone ? { status: 'done', src: mochi.src, prompt: 'A mochi mascot sticker, soft pastel, white outline' } : { status: 'running', prompt: 'A mochi mascot sticker, soft pastel, white outline' }} />;
 }
 
 function TranscriptSample() {

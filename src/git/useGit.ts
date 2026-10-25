@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host/index.ts';
 import type { DiffScope, GitDiff } from '../host/types/git.ts';
@@ -37,20 +37,17 @@ function gitResult<T>(result: UseQueryResult<T>) {
 /** Runs a git action, reports failures as a toast and refreshes afterwards. Resolves to the action's result, or undefined when it failed. */
 export function useGitAction(refresh: () => Promise<void>) {
   const [pending, setPending] = useState<string | null>(null);
-  const run = useCallback(
-    async <T>(label: string, action: () => Promise<T>) => {
-      setPending(label);
-      try {
-        return await action();
-      } catch (error) {
-        toast.error(`${label} failed`, { description: gitError(error) });
-      } finally {
-        setPending(null);
-        await refresh();
-      }
-    },
-    [refresh],
-  );
+  const run = async <T>(label: string, action: () => Promise<T>) => {
+    setPending(label);
+    try {
+      return await action();
+    } catch (error) {
+      toast.error(`${label} failed`, { description: gitError(error) });
+    } finally {
+      setPending(null);
+      await refresh();
+    }
+  };
   return { run, pending };
 }
 

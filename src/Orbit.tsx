@@ -1,5 +1,5 @@
 import { listenKeydown, isCommand, commandOf } from './keymap';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
@@ -40,15 +40,11 @@ export function Orbit() {
   const items = useOrbitItems();
   const [center, setCenter] = useState<{ x: number; y: number; k: number } | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
-  const [peekKey, setPeekKey] = useState<string | null>(null);
+  const [peek, setPeek] = useState<string | null>(null);
   const selected = center ? pick(items, pointer.x - center.x, pointer.y - center.y, center.k) : null;
-  const latest = useRef({ center, selected, items });
-  latest.current = { center, selected, items };
-
   const answered = useRef(false);
 
   const commit = () => {
-    const { selected } = latest.current;
     setCenter(null);
     if (!selected || answered.current) return;
     if (selected.ring === 'outer') dispatch({ type: 'go', view: selected.view });
@@ -56,7 +52,6 @@ export function Orbit() {
   };
 
   const answerInPlace = (digit: number) => {
-    const { selected } = latest.current;
     if (selected?.ring !== 'inner') return false;
     const item = selected.item;
     answered.current = true;
@@ -87,11 +82,14 @@ export function Orbit() {
   });
 
   const selectedKey = selected?.key ?? null;
+  const peekKey = peek === selectedKey ? peek : null;
   useEffect(() => {
-    setPeekKey(null);
     if (!selectedKey) return;
-    const id = setTimeout(() => setPeekKey(selectedKey), PEEK_DELAY);
-    return () => clearTimeout(id);
+    const id = setTimeout(() => setPeek(selectedKey), PEEK_DELAY);
+    return () => {
+      clearTimeout(id);
+      setPeek(null);
+    };
   }, [selectedKey]);
 
   return (
@@ -304,8 +302,12 @@ function useOrbitTriggers(handlers: {
   cancel: () => void;
   digit: (n: number) => boolean;
 }) {
-  const h = useRef(handlers);
-  h.current = handlers;
+  const isOpen = useEffectEvent(() => handlers.isOpen);
+  const open = useEffectEvent(handlers.open);
+  const move = useEffectEvent(handlers.move);
+  const commit = useEffectEvent(handlers.commit);
+  const cancel = useEffectEvent(handlers.cancel);
+  const digit = useEffectEvent(handlers.digit);
 
   useEffect(() => {
     const last = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -322,29 +324,29 @@ function useOrbitTriggers(handlers: {
         clearTimeout(pressTimer);
         press = null;
       }
-      if (h.current.isOpen) h.current.move(e.clientX, e.clientY);
+      if (isOpen()) move(e.clientX, e.clientY);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      if (isCommand(e, 'dismiss') && h.current.isOpen) {
+      if (isCommand(e, 'dismiss') && isOpen()) {
         e.preventDefault();
         e.stopPropagation();
         via = null;
-        h.current.cancel();
+        cancel();
         return;
       }
       if (isCommand(e, 'orbit-hold')) {
-        if (e.repeat || h.current.isOpen) return;
+        if (e.repeat || isOpen()) return;
         triggerCode = e.code;
         altTimer = setTimeout(() => {
           via = 'alt';
-          h.current.open(last.x, last.y);
+          open(last.x, last.y);
         }, OPEN_DELAY);
         return;
       }
       clearTimeout(altTimer);
       const command = commandOf(e, ['orbit-1', 'orbit-2', 'orbit-3', 'orbit-4']);
-      if (h.current.isOpen && command && h.current.digit(Number(command.slice('orbit-'.length)))) {
+      if (isOpen() && command && digit(Number(command.slice('orbit-'.length)))) {
         e.preventDefault();
         e.stopImmediatePropagation();
       }
@@ -353,7 +355,7 @@ function useOrbitTriggers(handlers: {
       if (e.code !== triggerCode) return;
       triggerCode = null;
       clearTimeout(altTimer);
-      if (via === 'alt' && h.current.isOpen) h.current.commit();
+      if (via === 'alt' && isOpen()) commit();
       via = null;
     };
     const onPointerDown = (e: PointerEvent) => {
@@ -362,13 +364,13 @@ function useOrbitTriggers(handlers: {
       pressTimer = setTimeout(() => {
         press = null;
         via = 'pointer';
-        h.current.open(last.x, last.y);
+        open(last.x, last.y);
       }, LONG_PRESS);
     };
     const onPointerUp = () => {
       clearTimeout(pressTimer);
       press = null;
-      if (via === 'pointer' && h.current.isOpen) h.current.commit();
+      if (via === 'pointer' && isOpen()) commit();
       if (via === 'pointer') via = null;
     };
     const onPointerCancel = () => {
@@ -376,24 +378,24 @@ function useOrbitTriggers(handlers: {
       press = null;
       if (via !== 'pointer') return;
       via = null;
-      h.current.cancel();
+      cancel();
     };
     const onBlur = () => {
       clearTimeout(altTimer);
       clearTimeout(pressTimer);
       via = null;
-      h.current.cancel();
+      cancel();
     };
     const onTouchMove = (e: TouchEvent) => {
-      if (h.current.isOpen) e.preventDefault();
+      if (isOpen()) e.preventDefault();
     };
     const onContextMenu = (e: MouseEvent) => {
-      if (h.current.isOpen || via === 'pointer') e.preventDefault();
+      if (isOpen() || via === 'pointer') e.preventDefault();
     };
 
     window.addEventListener('pointermove', onPointerMove);
     const onCapture = (e: KeyboardEvent) => {
-      if (h.current.isOpen) onKeyDown(e);
+      if (isOpen()) onKeyDown(e);
     };
     listenKeydown(onCapture, true);
     listenKeydown(onKeyDown);

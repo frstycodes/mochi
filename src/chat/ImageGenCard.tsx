@@ -1,7 +1,7 @@
 import { Copy, Download, Expand, FolderOpen, ImageSparkle, WarningAlt } from '@/icons';
 import { toast } from '@/toast/store';
 import { Shimmer } from '@/components/ai-elements/shimmer';
-import { useRef, type CSSProperties } from 'react';
+import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useElapsed } from '../agents/parts';
 import { formatElapsed } from '../progress';
@@ -28,18 +28,22 @@ export function ImageGenCard({ image, startedMs, className }: { image: Generated
   const error = url === null ? 'The image file was moved or deleted.' : image.error;
   const onReveal = src && isFilePath(src) ? () => void revealFile(src) : undefined;
   // Only an image you watched being made lands with the reveal; one already done when the row mounts just shows.
-  const hasWaited = useRef(false);
-  if (status === 'running') hasWaited.current = true;
-  const light = useRef({ x: 0.5, y: 0.5 });
-  const landFrom = { '--land-x': `${light.current.x * 100}%`, '--land-y': `${light.current.y * 100}%` } as CSSProperties;
+  const [hasWaited, setHasWaited] = useState(false);
+  if (status === 'running' && !hasWaited) setHasWaited(true);
+  const frame = useRef<HTMLElement>(null);
+  // Set on the frame as the light moves, not rendered: the image lands from wherever it last pooled.
+  const onCentre = (x: number, y: number) => {
+    frame.current?.style.setProperty('--land-x', `${x * 100}%`);
+    frame.current?.style.setProperty('--land-y', `${y * 100}%`);
+  };
   const photo: Photo | null = status === 'done' && url ? { src: url, name: prompt?.slice(0, 60) ?? 'Generated image', ...(onReveal && { reveal: onReveal }) } : null;
 
   return (
-    <figure style={{ aspectRatio: image.aspect ?? 1 }} className={cn('group/gen relative w-full max-w-sm overflow-hidden rounded-xl border bg-muted', className)}>
-      {status === 'running' && <GeneratingDots onCentre={(x, y) => (light.current = { x, y })} />}
+    <figure ref={frame} style={{ aspectRatio: image.aspect ?? 1 }} className={cn('group/gen relative w-full max-w-sm overflow-hidden rounded-xl border bg-muted', className)}>
+      {status === 'running' && <GeneratingDots onCentre={onCentre} />}
       {!!photo && (
         <button type="button" aria-label="Open image larger" onClick={() => openPhotos({ photos: [photo], index: 0 })} className="absolute inset-0 cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-2">
-          <img src={photo.src} alt={prompt ?? ''} style={landFrom} className={cn('size-full object-cover', hasWaited.current && 'animate-image-land')} />
+          <img src={photo.src} alt={prompt ?? ''} className={cn('size-full object-cover', hasWaited && 'animate-image-land')} />
         </button>
       )}
       {status === 'failed' && <FailedFrame error={error} />}

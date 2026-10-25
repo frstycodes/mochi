@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useId, useMemo, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -170,18 +170,16 @@ export function useThreadPlugins(provider: Provider, spaceId: string, projectRoo
   const config = useProfileConfig(agent?.plugins ? undefined : spaceId, projectRoot);
   const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
   const library = useLibraryPlugins(agent?.plugins || provider !== 'claude' ? undefined : spaceId);
-  return useMemo(() => {
-    if (agent?.plugins) return agent.plugins.map((p) => p.name);
-    if (!config) return [];
-    const off = new Set(offItems(config[provider], nativeOff ?? []).map((i) => i.name));
-    const native = config[provider].plugins.filter((id) => !off.has(id)).map((id) => id.split('@')[0]);
-    return [...new Set([...native, ...library])];
-  }, [agent?.plugins, config, provider, nativeOff, library]);
+  if (agent?.plugins) return agent.plugins.map((p) => p.name);
+  if (!config) return [];
+  const off = new Set(offItems(config[provider], nativeOff ?? []).map((i) => i.name));
+  const native = config[provider].plugins.filter((id) => !off.has(id)).map((id) => id.split('@')[0]);
+  return [...new Set([...native, ...library])];
 }
 
 function useLibraryPlugins(spaceId: string | undefined) {
   const entriesQuery = useQuery({ ...libraryQuery(spaceId ?? ''), enabled: !!spaceId });
-  return useMemo(() => (entriesQuery.data ?? []).filter((e) => e.kind === 'plugin' && e.isEnabled).map((e) => e.name), [entriesQuery.data]);
+  return (entriesQuery.data ?? []).filter((e) => e.kind === 'plugin' && e.isEnabled).map((e) => e.name);
 }
 
 function useAgentCommands(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): { commands: AgentCommand[]; skills?: string[] } {
@@ -194,7 +192,7 @@ function useConfiguredCommands(provider: Provider, spaceId: string, projectRoot:
   const config = useProfileConfig(isNeeded ? spaceId : undefined, projectRoot);
   const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
   // Stable per config read: the menu reveals its current row when that row changes.
-  return useMemo(() => (config ? configuredCommands(config[provider], offItems(config[provider], nativeOff ?? [])) : { commands: [], skills: [] }), [config, provider, nativeOff]);
+  return config ? configuredCommands(config[provider], offItems(config[provider], nativeOff ?? [])) : { commands: [], skills: [] };
 }
 
 function useProfileConfig(spaceId: string | undefined, projectRoot: string | null) {

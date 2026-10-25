@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 import type { ActivityEntry, Thread } from '../model.ts';
 import { parseTool } from '../summary.ts';
 
@@ -37,7 +37,7 @@ export function noteOpened(threadId: string, path: string) {
 
 export function useRecentFiles(thread: Thread, root: string) {
   const opened = useOpenedFiles(thread.id);
-  return useMemo(() => recentFiles(thread.activity, opened, root), [thread.activity, opened, root]);
+  return recentFiles(thread.activity, opened, root);
 }
 
 function useOpenedFiles(threadId: string) {
