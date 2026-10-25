@@ -6,6 +6,8 @@ export interface Caller {
   readonly windowId: number | undefined;
   /** Aborts when the call is interrupted, as when its socket closes. */
   readonly signal: AbortSignal;
+  /** Aborts when the caller's connection closes: one per connection, so it also names it. */
+  readonly closed: AbortSignal;
 }
 
 /** A `host.<ns>` interface's promise methods as Core serves them, the caller first. Event methods arrive through `push`. */
@@ -29,7 +31,7 @@ const messageOf = (error: unknown) =>
 export const hostMethods = (
   ns: string,
   methods: object,
-  windowId: number | undefined,
+  { windowId, closed }: Omit<Caller, 'signal'>,
 ) =>
   Object.fromEntries(
     Object.entries(methods).map(([method, handle]) => {
@@ -41,7 +43,7 @@ export const hostMethods = (
           Effect.tryPromise({
             try: (signal) =>
               (handle as (...args: unknown[]) => Promise<unknown>)(
-                { windowId, signal } satisfies Caller,
+                { windowId, signal, closed } satisfies Caller,
                 ...args,
               ),
             catch: messageOf,

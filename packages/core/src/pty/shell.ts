@@ -1,8 +1,7 @@
-import { app } from 'electron';
-import { terminalShell } from '@mochi/core/agents/config';
 import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { terminalShell } from '../agents/config.ts';
 
 // OSC 133 marks: C when a command starts, D;<exit> when the prompt returns. The renderer turns a non-zero D into "Ask agent to fix".
 // zsh only: ZDOTDIR points at wrapper rc files that source the user's own and add the hooks, the way VS Code does it.
@@ -25,14 +24,16 @@ autoload -Uz add-zle-hook-widget && add-zle-hook-widget line-init __harness_line
 
 let zdotdir: string | undefined;
 
-export function shellLaunch(): {
+export function shellLaunch(userData: string): {
   file: string;
   args: string[];
   env: Record<string, string>;
 } {
   const file = terminalShell();
+  // PowerShell and cmd.exe take `-l` as a command to run, fail it and exit; they have no login mode.
+  if (process.platform === 'win32') return { file, args: [], env: {} };
   if (path.basename(file) !== 'zsh') return { file, args: ['-l'], env: {} };
-  zdotdir ??= writeZshRc();
+  zdotdir ??= writeZshRc(userData);
   return {
     file,
     args: ['-l'],
@@ -44,8 +45,8 @@ export function shellLaunch(): {
   };
 }
 
-function writeZshRc() {
-  const dir = path.join(app.getPath('userData'), 'shell-integration', 'zsh');
+function writeZshRc(userData: string) {
+  const dir = path.join(userData, 'shell-integration', 'zsh');
   mkdirSync(dir, { recursive: true });
   for (const rc of RC_FILES) {
     // Each file runs the user's own copy with ZDOTDIR set to theirs, then points ZDOTDIR back here for the next file; .zshrc hands it back for good, so .zlogin and subshells are the user's.

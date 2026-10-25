@@ -194,7 +194,7 @@ function Terminals({
           </AlertAction>
         </Alert>
       )}
-      {!host.isDesktop && (
+      {!host.hasCore && (
         <p className="px-1 type-caption text-subtle-foreground">
           Web preview: a recorded session. The desktop app runs a real shell
           here.

@@ -80,6 +80,7 @@ import { nameThread } from './naming.ts';
 import { threadSessions } from './settle.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
 import { topLevel } from '../git/run.ts';
+import { killThreadSessions } from '../pty/sessions.ts';
 import { codexToolConfig } from '@mochi/domain/library/connectorTools';
 import { codexServerConfig } from '../../../../apps/desktop/src/library/library.ts';
 import {
@@ -335,6 +336,7 @@ export const agent = {
   },
   async settle(_window, threadId) {
     const id = threadId;
+    killThreadSessions(id);
     await Promise.all([
       ...threadSessions(id, [
         ...adapters.flatMap((a) => a.threadIds()),
