@@ -392,13 +392,20 @@ function reduce(state: State, action: Action): State {
       return windowLoaded(state, action.threadIds);
     case 'seen':
       return markSeen(state, action);
-    case 'agent':
-      return stampNew(
+    case 'agent': {
+      const resumed = resumeStoppedSteps(
         state,
-        withEventSeq(applyAgentEvent(state, action.event), action.event),
+        action.event.threadId,
+        state.now,
+        action.ms,
+      );
+      return stampNew(
+        resumed,
+        withEventSeq(applyAgentEvent(resumed, action.event), action.event),
         action.event.threadId,
         action.ms,
       );
+    }
     case 'agent-starting':
       return {
         ...state,
@@ -1243,6 +1250,47 @@ function withEventSeq(state: State, event: SeqAgentEvent): State {
     threads: mapThread(state.threads, event.threadId, (t) =>
       t.live ? { ...t, live: { ...t.live, eventSeq: event.seq } } : t,
     ),
+  };
+}
+
+/**
+ * The agent's first event in a new turn picks up the step the last turn stopped: an interrupted step keeps running without the
+ * agent re-sending its plan. Its clock skips the time it sat stopped.
+ */
+function resumeStoppedSteps(
+  state: State,
+  threadId: string,
+  now: number,
+  ms?: number,
+): State {
+  const thread = state.threads.find((t) => t.id === threadId);
+  if (!thread?.live?.isWorking) return state;
+  if (!thread.steps.some(isStoppedRunning)) return state;
+  return {
+    ...state,
+    threads: mapThread(state.threads, threadId, (t) => ({
+      ...t,
+      steps: t.steps.map((s) =>
+        isStoppedRunning(s) ? resumeStep(s, now, ms) : s,
+      ),
+    })),
+  };
+}
+
+function isStoppedRunning(step: Step) {
+  return step.status === 'running' && step.stoppedAt !== undefined;
+}
+
+function resumeStep(step: Step, now: number, ms?: number): Step {
+  const { stoppedAt, stoppedMs, ...rest } = step;
+  return {
+    ...rest,
+    ...(rest.startedAt !== undefined && {
+      startedAt: rest.startedAt + now - stoppedAt!,
+    }),
+    ...(rest.startedMs !== undefined &&
+      stoppedMs !== undefined &&
+      ms !== undefined && { startedMs: rest.startedMs + ms - stoppedMs }),
   };
 }
 

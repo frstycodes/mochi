@@ -139,6 +139,52 @@ test('an agent action stamps the steps it starts and finishes with its wall-cloc
   );
 });
 
+test('a step the last turn stopped runs again on the next turn, its clock skipping the gap', () => {
+  let s = base();
+  const open = s.threads
+    .find((t) => t.id === 'rl')!
+    .steps.filter((x) => x.status !== 'dropped');
+  const target = open.find((x) => x.status === 'ready')!;
+  const items = open.map((x): AgentPlanItem => ({
+    title: x.title,
+    status: x === target ? 'running' : 'pending',
+  }));
+  const startTurn = () =>
+    (s = {
+      ...s,
+      threads: s.threads.map((t) =>
+        t.id === 'rl' ? { ...t, live: { ...t.live, isWorking: true } } : t,
+      ),
+    } as State);
+  const agent = (event: object, ms: number) =>
+    (s = threadsReducer(s, {
+      type: 'agent',
+      event: { threadId: 'rl', ...event },
+      ms,
+    } as never));
+  const current = () =>
+    s.threads
+      .find((t) => t.id === 'rl')!
+      .steps.find((x) => x.id === target.id)!;
+
+  startTurn();
+  agent({ type: 'plan', items }, 1_000);
+  agent({ type: 'turn-end', status: 'interrupted' }, 5_000);
+  assert.equal(current().stoppedMs, 5_000);
+  startTurn();
+  agent({ type: 'notice', text: 'next turn' }, 65_000);
+  assert.equal(current().stoppedAt, undefined, 'running again');
+  assert.equal(
+    stepElapsedMs(current(), s.now, 66_000),
+    5_000,
+    'the minute it sat stopped is skipped',
+  );
+  assert.equal(
+    planItems([current()], s.now, 66_000, true)[0].status,
+    'running',
+  );
+});
+
 test('a plan is complete only when no step is pending or running', () => {
   assert.equal(isPlanComplete([]), true);
   assert.equal(
