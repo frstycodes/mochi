@@ -1,7 +1,8 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { useTheme } from 'next-themes';
 import { host } from '../host';
 import {
@@ -31,26 +32,16 @@ interface State {
   active: Partial<Record<ThemeSlot, ColorTheme>>;
 }
 
-let state: State = {
+const themesStore = createStore<State>(() => ({
   installed: [],
   isLoaded: false,
   preview: null,
   active: activeSlice.getState().value,
-};
-const listeners = new Set<() => void>();
-
-function update(patch: Partial<State>) {
-  state = { ...state, ...patch };
-  listeners.forEach((l) => l());
-}
-
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-};
+}));
+const update = (patch: Partial<State>) => themesStore.setState(patch);
 
 export function useThemesState() {
-  return useSyncExternalStore(subscribe, () => state);
+  return useStore(themesStore, (s) => s);
 }
 
 export async function refreshThemes() {
@@ -69,7 +60,7 @@ export async function readThemes() {
 }
 
 export function setThemePreview(preview: ColorTheme | null) {
-  if (state.preview !== preview) update({ preview });
+  if (themesStore.getState().preview !== preview) update({ preview });
 }
 
 /** Uses `theme` (null = Mochi) for its own appearance, light or dark. */
@@ -125,6 +116,7 @@ export function useColorTheme() {
 
 function syncActive() {
   const prefs = getPrefs();
+  const state = themesStore.getState();
   const light = themeFor(prefs.lightTheme, 'light', state) ?? undefined;
   const dark = themeFor(prefs.darkTheme, 'dark', state) ?? undefined;
   if (state.active.light === light && state.active.dark === dark) return;
