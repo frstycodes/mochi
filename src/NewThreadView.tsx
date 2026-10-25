@@ -365,25 +365,13 @@ function NewThread() {
             <ComposerMeta>
               <RunsOnMenu value={runsOn} onChange={changeRunsOn} />
               {!!remote && (
-                <>
-                  <ProjectPicker
-                    value={remoteProject}
-                    onChange={setRemoteProject}
-                    projects={catalog?.projects ?? NO_PROJECTS}
-                    machine={remote}
-                    onAdded={reloadCatalog}
-                  />
-                  {!!remoteProject && (
-                    <PermissionsMenu
-                      threadId={layoutId}
-                      provider={provider}
-                      value={controls.access}
-                      onChange={(access) =>
-                        setControls({ ...controls, access })
-                      }
-                    />
-                  )}
-                </>
+                <ProjectPicker
+                  value={remoteProject}
+                  onChange={setRemoteProject}
+                  projects={catalog?.projects ?? NO_PROJECTS}
+                  machine={remote}
+                  onAdded={reloadCatalog}
+                />
               )}
               {!remote && (
                 <>
@@ -393,14 +381,14 @@ function NewThread() {
                     projects={projects}
                   />
                   {!!project && <WorkspaceControls workspace={workspace} />}
-                  <PermissionsMenu
-                    threadId={layoutId}
-                    provider={provider}
-                    value={controls.access}
-                    onChange={(access) => setControls({ ...controls, access })}
-                  />
                 </>
               )}
+              <PermissionsMenu
+                threadId={layoutId}
+                provider={provider}
+                value={controls.access}
+                onChange={(access) => setControls({ ...controls, access })}
+              />
             </ComposerMeta>
           </>
         )}
