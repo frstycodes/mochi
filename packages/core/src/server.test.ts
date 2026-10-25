@@ -151,7 +151,6 @@ it.live(
       yield* untilServed(() => window('notify.show', [{ title: 'after' }]));
       assert.equal(shown, 2);
     }),
-  { timeout: 90_000 },
 );
 
 /**

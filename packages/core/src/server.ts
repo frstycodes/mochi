@@ -46,14 +46,13 @@ export interface ServerOptions {
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
 export const layerCore = (options: ServerOptions) =>
-  Layer.mergeAll(layerRoute(options), Cache.layer, layerReactor).pipe(
-    Layer.provide(Metrics.layer),
-    Layer.provide(Watch.layer),
-    Layer.provideMerge(layerAgents(options.userData)),
-    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), UtilityQueue.layer, Turns.layer, Terminals.layer, layerStore(options.userData).pipe(Layer.provideMerge(Capabilities.layer))).pipe(Layer.provideMerge(Run.layer))),
+  layerRoute(options).pipe(
+    // Built after everything below, right before the route serves: the server listens when built but answers only once served,
+    // and an upgrade that arrives in between is never answered, so a client would wait out its 10s open timeout. Until then
+    // a connection is refused, and the client redials in 250ms.
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(
-      NodeHttpServer.layer(createServer, {
+      NodeHttpServer.layerServer(createServer, {
         port: options.port,
         host: options.host ?? '127.0.0.1',
         gracefulShutdownTimeout: '100 millis',
@@ -61,6 +60,12 @@ export const layerCore = (options: ServerOptions) =>
         websocket: { handleProtocols: (offered) => (offered.has(Contract.SUBPROTOCOL) ? Contract.SUBPROTOCOL : false) },
       }),
     ),
+    Layer.provideMerge(Layer.mergeAll(Cache.layer, layerReactor)),
+    Layer.provide(Metrics.layer),
+    Layer.provide(Watch.layer),
+    Layer.provideMerge(layerAgents(options.userData)),
+    Layer.provide(Layer.mergeAll(GitHub.layer.pipe(Layer.provide(GithubTransport.layer)), UtilityQueue.layer, Turns.layer, Terminals.layer, layerStore(options.userData).pipe(Layer.provideMerge(Capabilities.layer))).pipe(Layer.provideMerge(Run.layer))),
+    Layer.provideMerge(NodeHttpServer.layerHttpServices),
   );
 
 /** The store, its projection and Core's own dispatch, after the one-time import of main's JSON files, so neither reads it before they are in. */

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { afterAll, afterEach, onTestFinished, test, vi } from 'vite-plus/test';
+import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
 import { host } from '../host/index.ts';
-import { queryClient } from '../query.ts';
 import type { MachineCatalog } from '../host/types/remote.ts';
 import type { QueueItem } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -13,8 +12,6 @@ import { closeIdleShells, shellOf, terminalCore } from './terminals.ts';
 import { markOwnAnswer } from './answers.ts';
 
 afterEach(() => vi.restoreAllMocks());
-// `loadProjects` caches in the app's QueryClient, whose 5-minute GC timer otherwise holds the worker open.
-afterAll(() => queryClient.clear());
 
 function machine() {
   const base = {
