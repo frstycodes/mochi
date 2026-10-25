@@ -1,7 +1,7 @@
 import type { AgentEvent } from '../../../../src/host/types/agent.ts';
 
 type Tap = (event: AgentEvent) => void;
-type SeqEvent = AgentEvent & { seq: number };
+export type SeqEvent = AgentEvent & { seq: number };
 
 /** What Core sends main for its windows: `channel` is the preload channel, `windowId` the one window it is for (else every window). */
 export interface Push {

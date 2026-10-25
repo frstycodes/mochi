@@ -15,6 +15,7 @@ import {
   onPush,
   useEventLog,
   type Push,
+  type SeqEvent,
 } from './events.ts';
 import { disposeAgents, useAgentServices } from './handlers.ts';
 import { useLimitDocs } from './limits.ts';
@@ -84,21 +85,26 @@ export const layerAgents = (userData: string | undefined) =>
         ),
       );
       useCoreClient(Promise.resolve(clientFromRun(run)));
-      // In emit order: each append waits for the one before, so the log's sequence follows the agents' own.
-      let appending: Promise<unknown> = Promise.resolve();
-      useEventLog((event) => {
-        const append = store.append({
-          type: `agent.${event.type}`,
-          threadId: event.threadId,
-          payload: event,
-          eventId: `agent-${event.seq}`,
-        });
-        appending = appending
-          .then(() => Effect.runPromise(append))
-          .catch((error: unknown) =>
-            console.error(`Logging agent.${event.type} failed`, error),
-          );
-      });
+      // In emit order: one fiber appends them, so the log's sequence follows the agents' own.
+      const appends = yield* Queue.unbounded<SeqEvent>();
+      useEventLog((event) => Queue.offerUnsafe(appends, event));
+      yield* Stream.fromQueue(appends).pipe(
+        Stream.runForEach((event) =>
+          store
+            .append({
+              type: `agent.${event.type}`,
+              threadId: event.threadId,
+              payload: event,
+              eventId: `agent-${event.seq}`,
+            })
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logError(`Logging agent.${event.type} failed`, cause),
+              ),
+            ),
+        ),
+        Effect.forkScoped,
+      );
       useLimitDocs({
         list: () => Effect.runPromise(store.listDocs('limits')),
         set: (accountId, limits) =>
