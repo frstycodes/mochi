@@ -833,6 +833,7 @@ export const Thread = Schema.Struct({
   orbitSlot: opt(Schema.Number),
   pinOrder: opt(Schema.Number),
   settledAt: opt(Schema.Number),
+  settledMs: opt(Schema.Number),
   drift: opt(
     Schema.Struct({ isMuted: Schema.Boolean, keeps: opt(Schema.Number) }),
   ),

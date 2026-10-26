@@ -446,7 +446,7 @@ test('a listing stays the same through streamed text, and changes with its order
   );
 });
 
-test('settled threads list latest archived first, falling back to last activity', () => {
+test('settled threads list latest settled first, falling back to last activity', () => {
   const settled = (id: string, lastAt: number, settledAt?: number) => ({
     ...t(id, undefined, lastAt),
     status: 'settled',

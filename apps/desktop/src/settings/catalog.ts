@@ -50,6 +50,7 @@ import {
   WHILE_WORKING,
   WORKSPACE_MODES,
   WORKTREE_CLEANUP,
+  SETTLED_CLEANUP,
 } from './settingOptions.ts';
 
 /**
@@ -457,6 +458,17 @@ const APP_SETTINGS: Setting[] = [
       group: 'Folders',
       description:
         'Where Open folder starts, and where clones and new projects go',
+    },
+  ),
+  pref(
+    'settledCleanup',
+    'Delete settled threads',
+    'general',
+    select(SETTLED_CLEANUP),
+    {
+      group: 'Settled threads',
+      description:
+        'For good, with their history and clean worktrees; pinned ones and ones with an open PR stay',
     },
   ),
   pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, {

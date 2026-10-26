@@ -7,6 +7,7 @@ import {
 import type { Action, State } from './types.ts';
 import type { Saved } from './saved.ts';
 import { log, mapStep, mapThread } from './threads.ts';
+import { markSettled } from '../settled/settled.ts';
 
 export interface QueueState {
   queue: QueueItem[];
@@ -128,10 +129,12 @@ function answer(
   const threads = mapThread(state.threads, item.threadId, (t) => {
     // PR state is GitHub's: marking done never touches it.
     if (item.kind === 'review')
-      return log(
-        { ...t, status: 'settled', settledAt: now },
-        { at: now, who: 'you', kind: 'event', text: 'Marked done' },
-      );
+      return log(markSettled(t, now), {
+        at: now,
+        who: 'you',
+        kind: 'event',
+        text: 'Marked done',
+      });
     const blocked = t.steps.find((s) => s.status === 'blocked');
     const unblocked = blocked
       ? mapStep(t, blocked.id, (s) => ({

@@ -20,7 +20,7 @@ export const THREAD_MENU = [
   ],
   ['thread-replay', 'thread-export-replay'],
   ['thread-copy-branch', 'thread-reveal'],
-  ['thread-settle', 'thread-reactivate'],
+  ['thread-settle', 'thread-reactivate', 'thread-delete'],
 ] as const;
 
 export const TAB_MENU = [

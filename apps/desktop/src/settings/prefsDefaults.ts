@@ -57,13 +57,15 @@ export interface Prefs {
   branchPrefix: string;
   /** A PR a thread opens or picks up starts with Auto-fix on (`src/git/autofixToggle.ts`). */
   autofixPrs: boolean;
-  /** A PR a thread opens or picks up starts with Auto-archive on (`src/git/autoArchive.ts`). */
+  /** A PR a thread opens or picks up starts with Auto-settle on (`src/git/autoArchive.ts`). */
   autoArchivePrs: boolean;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
   diffStyle: 'unified' | 'split';
   /** Days after settling that a thread's worktree is removed (`useWorktreeCleanup`); `never` keeps them. */
   worktreeCleanup: 'never' | '1' | '7' | '30';
+  /** Days after settling that a thread is deleted (`useSettledCleanup`); `never` keeps them. */
+  settledCleanup: 'never' | '30' | '90' | '180';
   terminalFontSize: number;
   terminalScrollback: number;
   restoreTerminals: boolean;
@@ -137,6 +139,7 @@ export const DEFAULT_PREFS: Prefs = {
   workspaceMode: 'worktree',
   diffStyle: 'unified',
   worktreeCleanup: '7',
+  settledCleanup: 'never',
   terminalFontSize: 12,
   terminalScrollback: 5000,
   restoreTerminals: true,

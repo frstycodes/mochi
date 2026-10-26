@@ -50,6 +50,7 @@ export function scheduleReducer(state: State, action: Action): State {
           ...t,
           status: 'running' as const,
           settledAt: undefined,
+          settledMs: undefined,
           live: t.live && {
             ...t.live,
             isWorking: true,

@@ -1,7 +1,7 @@
 import type { AgentImage } from './agent.ts';
 import type { Manifest } from '@mochi/domain/host/types/manifest';
 
-/** The saved threads as Core stores them: an index (`SavedIndex` JSON) and one `SavedThread` JSON per thread, shaped by `src/store/saved.ts`. */
+/** The saved threads as Core's SQLite store holds them (`packages/core/src/store/store.ts`): the `SavedIndex` and one `SavedThread` per thread, each a JSON payload shaped by `src/store/saved.ts`. */
 export interface SavedFiles {
   index: string;
   threads: string[];

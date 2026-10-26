@@ -78,7 +78,7 @@ export function remoteDecisions(state: State) {
   );
 }
 
-/** A machine's threads for its sidebar group: active ones by latest activity, and settled ones folded below, latest archived first. Its pins show in Pinned. */
+/** A machine's threads for its sidebar group: active ones by latest activity, and settled ones folded below, latest settled first. Its pins show in Pinned. */
 export function remoteThreads(state: State) {
   const pinned = new Set(
     pinnedThreads(state.threads, state.spaceId).map((t) => t.id),

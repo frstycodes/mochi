@@ -44,6 +44,7 @@ import {
   SidebarRight,
   Sun,
   Transfer,
+  Trash,
   VideoPlay,
   Share,
   X,
@@ -78,6 +79,7 @@ import { askSecondOpinion } from '../secondOpinion/run';
 import { reviewerFor } from '../secondOpinion/reviewer';
 import { providerName } from '../secondOpinion/verdict';
 import { pinMany } from '../reorder';
+import { requestDelete } from '../settled/DeleteThreads';
 import { pinnedNeighbour, slotsOf } from '../pager/slots';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
@@ -152,6 +154,14 @@ export const ACTIONS = [
     icon: Folder,
     keywords: 'folder repository clone add',
     run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'projects' } }),
+  },
+  {
+    id: 'go-settled',
+    group: 'Go to',
+    title: 'Settled threads',
+    icon: Archive,
+    keywords: 'archive archived finished done old history delete',
+    run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'settled' } }),
   },
   {
     id: 'go-skills',
@@ -251,6 +261,19 @@ export const ACTIONS = [
       title: 'Reactivate threads',
       skipReason: 'not settled',
       run: (ts, { dispatch }) => toggleSettle(ts, dispatch),
+    },
+  },
+  {
+    id: 'thread-delete',
+    group: 'Thread',
+    title: 'Delete thread…',
+    icon: Trash,
+    when: when.settledThread,
+    run: onThread((t) => requestDelete([t.id])),
+    many: {
+      title: 'Delete threads…',
+      skipReason: 'not settled',
+      run: (ts) => requestDelete(ts.map((t) => t.id)),
     },
   },
   {

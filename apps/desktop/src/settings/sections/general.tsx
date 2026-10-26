@@ -38,6 +38,9 @@ export function GeneralSection() {
       <SettingsGroup title="Folders">
         <CatalogRow settingKey="projectsFolder" />
       </SettingsGroup>
+      <SettingsGroup title="Settled threads">
+        <CatalogRow settingKey="settledCleanup" />
+      </SettingsGroup>
       <SettingsGroup title="Startup">
         <CatalogRow settingKey="restoreLayout" />
       </SettingsGroup>

@@ -135,6 +135,7 @@ const prefsFields = {
   workspaceMode: Schema.Literals(['worktree', 'folder']),
   diffStyle: Schema.Literals(['unified', 'split']),
   worktreeCleanup: Schema.Literals(['never', '1', '7', '30']),
+  settledCleanup: Schema.Literals(['never', '30', '90', '180']),
   terminalFontSize: Schema.Number,
   terminalScrollback: Schema.Number,
   restoreTerminals: B,

@@ -62,7 +62,7 @@ export function matchesProjectFilter(thread: Thread, filter: ProjectFilter) {
   return projectRef(thread.repo) === filter;
 }
 
-/** Pinned, active and archived as the sidebar lists them, narrowed to the filter's project; a group goes by its top thread. */
+/** Pinned, active and settled as the sidebar lists them, narrowed to the filter's project; a group goes by its top thread. */
 export function filteredSidebarLists(
   threads: Thread[],
   spaceId: string,

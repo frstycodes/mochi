@@ -1,4 +1,5 @@
 import { isListed, isStreamedOnly, PIN_SLOTS, type Thread } from './model.ts';
+import { settledMsOf } from './settled/settled.ts';
 
 /**
  * Sidebar drag and drop: pinned threads take Orbit slots in list order, both lists keep the dropped order, threads not listed
@@ -111,12 +112,19 @@ export function pinnedThreads(threads: Thread[], spaceId: string) {
     .sort((a, b) => a.orbitSlot! - b.orbitSlot!);
 }
 
-/** Archived threads, latest archived first; one archived before `settledAt` was stored falls back to its last activity. */
+/**
+ * Settled threads, latest settled first by the wall clock (`settledMsOf`). Ones with no wall-clock time follow, ordered on the
+ * app clock: `settledAt`, or for one settled before that was stored, its last activity. The two clocks never compare.
+ */
 export function settledThreads(threads: Thread[]) {
-  const archivedAt = (t: Thread) => t.settledAt ?? lastActivityAt(t);
+  const appClock = (t: Thread) => t.settledAt ?? lastActivityAt(t);
   return threads
     .filter((t) => t.status === 'settled')
-    .sort((a, b) => archivedAt(b) - archivedAt(a));
+    .sort(
+      (a, b) =>
+        (settledMsOf(b) ?? 0) - (settledMsOf(a) ?? 0) ||
+        appClock(b) - appClock(a),
+    );
 }
 
 /** A space's unpinned threads, most recent activity first; only pinned threads keep a manual order. */

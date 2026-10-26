@@ -4,6 +4,7 @@ export type View =
   | { kind: 'queue' }
   | { kind: 'projects' }
   | { kind: 'usage' }
+  | { kind: 'settled' }
   | { kind: 'new' }
   | { kind: 'thread'; id: string }
   | { kind: 'tab'; threadId: string; tabId: string };

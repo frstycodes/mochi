@@ -90,6 +90,7 @@ import type { Saved } from './saved.ts';
 import { markSeen, type SeenAction } from './seen.ts';
 import type { TriggerDraft } from '../schedule/calls.ts';
 import { describeTrigger } from '../schedule/describe.ts';
+import { markSettled } from '../settled/settled.ts';
 
 export interface ThreadsState {
   now: number;
@@ -426,9 +427,7 @@ function reduce(state: State, action: Action): State {
           ids.has(t.id)
             ? pauseQueue(
                 {
-                  ...t,
-                  status: 'settled',
-                  settledAt: state.now,
+                  ...markSettled(t, state.now),
                   ...(t.live && {
                     live: {
                       ...t.live,
@@ -1963,15 +1962,12 @@ function driftNewThread(
     next = {
       ...next,
       threads: mapThread(next.threads, source.id, (t) =>
-        log(
-          { ...t, status: 'settled', settledAt: now },
-          {
-            at: now,
-            who: 'harness',
-            kind: 'event',
-            text: `Goal done, settled to start a new thread; ${outcome}`,
-          },
-        ),
+        log(markSettled(t, now), {
+          at: now,
+          who: 'harness',
+          kind: 'event',
+          text: `Goal done, settled to start a new thread; ${outcome}`,
+        }),
       ),
       queue: next.queue.filter(
         (q) => q.threadId !== source.id || (hasOpenPr && q.kind === 'review'),

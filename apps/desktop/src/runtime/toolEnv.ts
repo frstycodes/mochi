@@ -2,7 +2,7 @@ import { browserStorage } from '../lib/uiStorage.ts';
 import { toast } from '../toast/store.ts';
 import { getPage, openPage, updatePage } from '../browser/pages.ts';
 import { normalizeUrl } from '../browser/url.ts';
-import { setWorktreePath, worktreePath } from '../git/worktrees.ts';
+import { removeThreadWorktree } from '../git/worktrees.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import { getProfiles, removeProfile, updateProfile } from '../profiles.ts';
@@ -37,12 +37,7 @@ export function toolEnv(
         action: { label: 'Open', onClick: () => openSettings('chat') },
       });
     },
-    removeWorktree: async (threadId) => {
-      const path = worktreePath(threadId);
-      if (!path) return;
-      await host.git.removeWorktree(path);
-      setWorktreePath(threadId, null);
-    },
+    removeWorktree: removeThreadWorktree,
     pages: {
       get: getPage,
       update: updatePage,

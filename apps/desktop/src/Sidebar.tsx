@@ -338,11 +338,12 @@ function SpaceNav({
   };
 
   const projectFilter = useProjectFilter(spaceId, threads);
-  const { pinned, active, settled } = filteredSidebarLists(
-    threads,
-    spaceId,
-    projectFilter.selected,
-  );
+  const {
+    pinned,
+    active,
+    settled: allSettled,
+  } = filteredSidebarLists(threads, spaceId, projectFilter.selected);
+  const settled = allSettled.slice(0, SIDEBAR_SETTLED);
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
   const order = [
     ...[...pinned, ...active].flatMap((g) => [g.thread, ...g.subs]),
@@ -421,7 +422,7 @@ function SpaceNav({
         />
 
         {settled.length > 0 && (
-          <FoldGroup label="Settled" count={settled.length}>
+          <FoldGroup label="Settled" count={allSettled.length}>
             {settled.map((t) => (
               <ThreadRowMenu
                 key={t.id}
@@ -433,6 +434,17 @@ function SpaceNav({
                 </SidebarMenuItem>
               </ThreadRowMenu>
             ))}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={view.kind === 'settled'}
+                onClick={() => go({ kind: 'settled' })}
+                className="h-7 type-caption text-muted-foreground"
+              >
+                {allSettled.length > settled.length
+                  ? `View all ${allSettled.length}`
+                  : 'View all'}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </FoldGroup>
         )}
       </div>
@@ -440,6 +452,9 @@ function SpaceNav({
     </>
   );
 }
+
+/** The newest settled threads the sidebar lists; View all opens the rest on the Settled page. */
+const SIDEBAR_SETTLED = 10;
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
