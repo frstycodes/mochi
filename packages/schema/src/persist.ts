@@ -63,7 +63,7 @@ const liftCheckpoints = <C extends { thread: LegacyThread }>(
 const liftQueue = (queue: readonly LegacyQueueItem[]): QueueItem[] =>
   queue.flatMap((q) => (q.kind === 'overlap' ? [] : [{ ...q, kind: q.kind }]));
 
-/** One thread's file (`threads/<id>.json`), written whole on each change. */
+/** One thread's JSON, stored whole as its `threads` row's `payload_json` in Core's SQLite. */
 const SavedThreadV1 = Schema.Struct({
   v: Schema.Literal(1),
   thread: Thread,
@@ -101,7 +101,7 @@ const indexFields = {
   threadIds: Schema.Array(Schema.String),
 };
 
-/** The index file (`threads.json`): everything but the threads, which it lists by id. */
+/** The index JSON: everything but the threads, which it lists by id. */
 const SavedIndexV1 = Schema.Struct({
   v: Schema.Literal(1),
   ...indexFields,
@@ -128,7 +128,7 @@ export const SavedIndex = Schema.Union([
 ]);
 export type SavedIndex = typeof SavedIndexV1.Type;
 
-/** What the desktop app saves between launches, joined from the index and thread files (`src/store/saved.ts` `Saved`). */
+/** What the desktop app saves between launches, joined from the index and thread JSON (`src/store/saved.ts` `Saved`). */
 const SavedV1 = Schema.Struct({
   v: Schema.Literal(1),
   now: Schema.Number,

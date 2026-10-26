@@ -79,7 +79,7 @@ const isImageType = (type: string): type is AgentImage['mediaType'] =>
   (IMAGE_TYPES as readonly string[]).includes(type);
 const base64Of = (url: string) => url.slice(url.indexOf(',') + 1);
 
-// A small copy for where the original can't be kept: the full image would land in threads.json with every message.
+// A small copy for where the original can't be kept: the full image would land in the saved thread with every message.
 async function thumbnail(url: string) {
   const bitmap = await createImageBitmap(await (await fetch(url)).blob());
   const scale = Math.min(1, THUMB_PX / Math.max(bitmap.width, bitmap.height));
