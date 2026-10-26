@@ -93,7 +93,6 @@ function ScheduleDialog({
 
   const remove = async () => {
     await host.schedule.remove(thread.id);
-    toast(`Schedule removed from "${thread.title}"`);
     onClose();
   };
 

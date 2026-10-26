@@ -1093,20 +1093,12 @@ test('changes runs everything that doesn’t ask, and blocks deletes and setting
   );
 });
 
-test('changes log in the caller, toast with Undo, and Undo puts back only what still holds the result', async () => {
+test('thread changes log in the caller without a toast', async () => {
   const t = setup();
   const r = await t.ok('settle_thread', { threadIds: ['adm', 'e2e'] });
   assert.equal(r.changed, 'Settled 2 threads');
   assert.equal(lastLog(t.thread('rl')), 'Claude settled 2 threads');
-  assert.equal(t.toasts.at(-1)!.text, 'Claude settled 2 threads');
-  t.env.dispatch({ type: 'rename', threadId: 'e2e', title: 'Renamed since' });
-  t.toasts.at(-1)!.undo!();
-  assert.equal(t.thread('adm').status, 'running');
-  assert.equal(
-    t.thread('e2e').title,
-    'Renamed since',
-    'a later change survives the undo',
-  );
+  assert.equal(t.toasts.length, 0);
 });
 
 test('quiet tools log but never toast', async () => {
@@ -1251,7 +1243,7 @@ test('watch_thread toggles only when needed', async () => {
   assert.deepEqual(t.state().watched, []);
 });
 
-test('create_thread creates in the same project without moving your view, and Undo removes it', async () => {
+test('create_thread creates in the same project without moving your view or toasting', async () => {
   const t = setup();
   const r = await t.ok('create_thread', {
     initiation: 'user_asked',
@@ -1264,18 +1256,10 @@ test('create_thread creates in the same project without moving your view, and Un
     ['Add a rate limit dashboard', 'codex', 'latitude'],
   );
   assert.deepEqual(t.state().views, { latitude: { kind: 'thread', id: 'rl' } });
-  assert.equal(
-    t.toasts.at(-1)!.text,
-    'Claude started "Add a rate limit dashboard"',
-  );
-  t.toasts.at(-1)!.undo!();
-  assert.equal(
-    t.state().threads.some((x) => x.id === r.id),
-    false,
-  );
+  assert.equal(t.toasts.length, 0);
 });
 
-test('send_to_thread sends into the other thread as a message from this one, with no Undo', async () => {
+test('send_to_thread sends into the other thread as a message from this one, without a toast', async () => {
   const t = setup();
   const sender = t.thread('rl');
   t.env.dispatch({
@@ -1316,7 +1300,7 @@ test('send_to_thread sends into the other thread as a message from this one, wit
     },
     "the sender's call row knows what it sent",
   );
-  assert.equal(t.toasts.at(-1)!.undo, undefined);
+  assert.equal(t.toasts.length, 0);
 });
 
 test('delete_thread with approval removes the thread everywhere, and the worktree only when ticked', async () => {

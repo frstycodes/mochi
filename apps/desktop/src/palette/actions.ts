@@ -873,14 +873,8 @@ function openSplits(threads: Thread[], ctx: ActionContext) {
   ctx.dispatch({ type: 'overview-toggle', isOpen: false });
 }
 
-function watch(threads: Thread[], { state, dispatch }: ActionContext) {
+function watch(threads: Thread[], { dispatch }: ActionContext) {
   threads.forEach((t) => dispatch({ type: 'watch-toggle', threadId: t.id }));
-  const isStopping = state.watched.includes(threads[0].id);
-  toast(
-    isStopping
-      ? `Stopped watching ${named(threads)}`
-      : `Watching ${named(threads)}`,
-  );
 }
 
 function copyBranches(threads: Thread[]) {
@@ -893,9 +887,6 @@ function copyBranches(threads: Thread[]) {
     ),
   );
 }
-
-const named = (threads: Thread[]) =>
-  threads.length === 1 ? threads[0].title : `${threads.length} threads`;
 
 /** Closes several tabs at once; their pane comes back whole from the undo toast. */
 function closeTabs(
@@ -931,11 +922,6 @@ function pin(threads: Thread[], { state, dispatch }: ActionContext) {
       description: 'Orbit has five pin slots. Unpin a thread first.',
     });
   dispatch({ type: 'reorder', ...lists, at });
-  toast(
-    lists.pinned.includes(threads[0].id)
-      ? `Pinned ${named(threads)}`
-      : `Unpinned ${named(threads)}`,
-  );
 }
 
 // Summary visibility is ThreadView-local state; pressing its header toggle avoids lifting it into the store.
