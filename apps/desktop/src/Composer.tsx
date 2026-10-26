@@ -60,7 +60,6 @@ import {
   ModelPicker,
   SpeedPicker,
   useModels,
-  useNewThreadDefaults,
 } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
@@ -184,7 +183,6 @@ export function ComposerInput({
 }: ComposerInputProps) {
   const catalog = useModels(useSpace().id);
   const model = optionFor(catalog[provider], controls.model, provider);
-  const defaults = useNewThreadDefaults(catalog, model);
   const draft = useComposerDraft(draftKey, draftExtra);
   const send = async (message: PromptInputMessage) => {
     const result = await onSend(message);
@@ -228,14 +226,12 @@ export function ComposerInput({
             provider={provider}
             isLocked={isLocked}
             onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)}
-            defaults={defaults.model}
           />
           {!isModelOnly && (
             <EffortPicker
               model={model}
               value={controls.effort}
               onChange={(effort) => onControlsChange({ ...controls, effort })}
-              defaults={defaults.effort}
             />
           )}
           {!isModelOnly && (
@@ -243,7 +239,6 @@ export function ComposerInput({
               model={model}
               value={controls.speed}
               onChange={(speed) => onControlsChange({ ...controls, speed })}
-              defaults={defaults.speed}
             />
           )}
         </PromptInputTools>

@@ -425,6 +425,10 @@ export const FIXED_KEYS: { keys: Key[]; what: string }[] = [
     keys: ['mod', '1'],
     what: 'Pick a tab in a pane with tabs (1 to 9), while it has focus',
   },
+  {
+    keys: ['mod', '1'],
+    what: 'Pick a listed model in the model menu (1 to 9)',
+  },
   { keys: ['alt', 'up'], what: 'Move a focused pinned thread up or down' },
   { keys: ['left', 'right'], what: 'Step through files and photos' },
   { keys: ['1'], what: 'Answer a drift card (1 to 3)' },
