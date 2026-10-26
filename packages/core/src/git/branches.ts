@@ -1,5 +1,6 @@
+import { existsSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type {
   Branch,
   BranchList,
@@ -8,7 +9,7 @@ import type {
   SwitchOptions,
   WorktreeOptions,
 } from '../../../../apps/desktop/src/host/types/git.ts';
-import { listWorktrees, runGit } from './run.ts';
+import { listWorktrees, mainRepo, runGit } from './run.ts';
 import { branchFromTitle } from '../../../../apps/desktop/src/git/workspace.ts';
 
 const MAX_BRANCHES = 500;
@@ -255,12 +256,21 @@ export async function addBranchWorktree(
     );
   if (exists || isExisting) await assertFreeBranch(top, name);
   await mkdir(dirname(dir), { recursive: true });
-  // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.
+  // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself. A new one off
+  // origin/HEAD would track origin's default branch, which `renameAutoBranch` reads as published and a bare `git push` targets.
   await runGit(
     top,
     exists || isExisting
       ? ['worktree', 'add', dir, name]
-      : ['worktree', 'add', '-b', name, dir, base ?? (await baseRef(top))],
+      : [
+          'worktree',
+          'add',
+          '--no-track',
+          '-b',
+          name,
+          dir,
+          base ?? (await baseRef(top)),
+        ],
   );
 }
 
@@ -296,4 +306,17 @@ export async function renameAutoBranch(
   if (!branch) return null;
   await runGit(cwd, ['branch', '-m', expected, branch]);
   return branch;
+}
+
+// A thread's own folder is named after its id (`createWorktree`); a renamed one never takes that shape.
+const THREAD_FOLDER = /^new-\d+$/;
+
+/** Moves the worktree `dir` to `name` beside it, made unique there; the folder it's now in. */
+export async function moveWorktree(dir: string, name: string) {
+  const parent = dirname(dir);
+  let to = join(parent, name);
+  for (let n = 2; existsSync(to) || THREAD_FOLDER.test(basename(to)); n++)
+    to = join(parent, `${name}-${n}`);
+  await runGit(await mainRepo(dir), ['worktree', 'move', dir, to]);
+  return to;
 }

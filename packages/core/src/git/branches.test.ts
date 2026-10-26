@@ -271,6 +271,23 @@ test('a temp branch is renamed after the title, made unique; a switched, publish
   );
 });
 
+test("a new thread's branch, made off origin's default branch, tracks nothing, so its title renames it", async () => {
+  const { dir, git } = repo();
+  git('remote', 'add', 'origin', dir);
+  git('fetch', '-q', 'origin');
+  git('remote', 'set-head', 'origin', 'main');
+  const tree = join(dir, '..', `${basename(dir)}-thread`);
+  await addBranchWorktree(dir, tree, 'mochi/0badf00d', { isNew: true });
+  assert.equal(
+    git('for-each-ref', '--format=%(upstream)', 'refs/heads/mochi/0badf00d'),
+    '\n',
+  );
+  assert.equal(
+    await renameAutoBranch(tree, 'mochi/0badf00d', 'Login redirect'),
+    'mochi/login-redirect',
+  );
+});
+
 test("a thread's first start refuses a branch that exists; a restart or a branch you picked checks it out", async () => {
   const { dir, git } = repo();
   git('branch', 'mochi/0badf00d');
