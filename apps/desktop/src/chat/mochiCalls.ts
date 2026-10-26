@@ -20,6 +20,7 @@ export const MOCHI_CALLS = {
   reorder_threads: ['Reordering the sidebar', 'Reordered the sidebar'],
   watch_thread: ['Watching a thread', 'Watched a thread'],
   settle_when_merged: ['Setting Auto-settle', 'Set Auto-settle'],
+  move_to_project: ['Moving into a project', 'Moved into a project'],
   create_thread: ['Starting a new thread', 'Started a new thread'],
   dismiss_thread_proposal: [
     'Withdrawing a thread suggestion',

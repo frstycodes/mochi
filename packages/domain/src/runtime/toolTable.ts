@@ -186,6 +186,20 @@ export const TOOL_TABLE = {
       isOn: Schema.Boolean,
     },
   },
+  move_to_project: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Move your own folderless chat into one of the user's projects, keeping this session: the user picks the project on a card, and the move happens once your turn ends. Your next message then runs in the project's folder (a new worktree or the project folder, as the user's default); files you made so far stay where they are. Only for a chat with no project.",
+    shape: {
+      project: Schema.optionalKey(
+        Schema.String.annotate({
+          description:
+            "The project you suggest, by name or folder; it is listed first on the user's card",
+        }),
+      ),
+    },
+  },
   create_thread: {
     tier: 'change',
     quiet: true,

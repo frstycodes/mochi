@@ -75,6 +75,12 @@ export const TOOL_GUIDE = {
     description:
       "Turn Auto-settle on or off for a thread's pull requests, so it settles once they merge or close.",
   },
+  move_to_project: {
+    group: 'Threads',
+    label: 'Move into a project',
+    description:
+      'Move its own folderless chat into a project you pick on a card, keeping the session.',
+  },
   create_thread: {
     group: 'Threads',
     label: 'Start threads',

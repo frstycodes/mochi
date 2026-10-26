@@ -6,6 +6,7 @@ import { removeThreadWorktree } from '../git/worktrees.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import { getProfiles, removeProfile, updateProfile } from '../profiles.ts';
+import { loadProjects } from '../projects.ts';
 import { saveDraft, settingsChatDraftKey } from '../chat/drafts.ts';
 import { openSettings } from '../routes/nav.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
@@ -45,6 +46,11 @@ export function toolEnv(
         void openPage(key, normalizeUrl(url), spaceId),
     },
     browser: host.browser,
+    projects: (spaceId) =>
+      loadProjects(
+        spaceId,
+        getState().threads.filter((t) => t.spaceId === spaceId),
+      ),
     cwdOf: threadCwd,
     models: (provider, spaceId) =>
       host.agent.models(provider, spaceId).catch(() => []),
