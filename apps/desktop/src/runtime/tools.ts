@@ -738,6 +738,35 @@ const THREAD_SPECS = {
       };
     },
   },
+  settle_when_merged: {
+    run: ({ state, caller, args, dispatch }) => {
+      const thread = target(state(), caller, args.threadId);
+      const prs = thread.prs.filter(
+        (p) => args.pr === undefined || p.number === args.pr,
+      );
+      if (!prs.length)
+        throw new Error(
+          args.pr === undefined
+            ? 'This thread has no pull request yet; open one first'
+            : `Pull request #${args.pr} isn't on this thread`,
+        );
+      for (const p of prs)
+        dispatch({
+          type: 'auto-archive-set',
+          threadId: thread.id,
+          pr: p.number,
+          isOn: args.isOn,
+        });
+      return {
+        changed: `${args.isOn ? 'turned on' : 'turned off'} Auto-settle for ${prs.map((p) => `#${p.number}`).join(', ')}`,
+        result: {
+          threadId: thread.id,
+          pullRequests: prs.map((p) => p.number),
+          isOn: args.isOn,
+        },
+      };
+    },
+  },
   create_thread: {
     // A top-level thread waits on the user: an agent can't take work out from under the thread that coordinates it. A sub-thread's
     // other user_asked threads become cards (`isCardFromSubThread`). A card asks nothing: nothing runs until the user starts it.

@@ -69,6 +69,12 @@ export const TOOL_GUIDE = {
     description:
       'Start or stop watching a thread, so its events toast for you.',
   },
+  settle_when_merged: {
+    group: 'Threads',
+    label: 'Settle when merged',
+    description:
+      "Turn Auto-settle on or off for a thread's pull requests, so it settles once they merge or close.",
+  },
   create_thread: {
     group: 'Threads',
     label: 'Start threads',

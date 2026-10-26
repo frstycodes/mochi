@@ -36,6 +36,7 @@ import { layoutReducer } from '../store/layout.ts';
 import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { sidechatReducer } from '../store/sidechat.ts';
+import { scheduleReducer } from '../schedule/slice.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
@@ -58,6 +59,7 @@ const SLICES = [
   panesReducer,
   layoutReducer,
   sidechatReducer,
+  scheduleReducer,
 ];
 const reduce = (s: State, a: Action): State =>
   a.type === 'tool-undo'
@@ -1241,6 +1243,29 @@ test('watch_thread toggles only when needed', async () => {
   assert.deepEqual(t.state().watched, ['adm']);
   await t.ok('watch_thread', { threadId: 'adm', watch: false });
   assert.deepEqual(t.state().watched, []);
+});
+
+test('settle_when_merged flips Auto-settle on the thread’s PRs and refuses when it has none', async () => {
+  const t = setup();
+  assert.match(
+    await t.err('settle_when_merged', { isOn: true }),
+    /no pull request/,
+  );
+  const { id, prs } = t.state().threads.find((th) => th.prs.length)!;
+  await t.ok('settle_when_merged', { threadId: id, isOn: true });
+  assert.ok(t.thread(id).prs.every((p) => p.autoArchive));
+  await t.ok('settle_when_merged', {
+    threadId: id,
+    pr: prs[0].number,
+    isOn: false,
+  });
+  assert.ok(
+    !t.thread(id).prs.find((p) => p.number === prs[0].number)?.autoArchive,
+  );
+  assert.match(
+    await t.err('settle_when_merged', { threadId: id, pr: 99999, isOn: true }),
+    /isn't on this thread/,
+  );
 });
 
 test('create_thread creates in the same project without moving your view or toasting', async () => {
