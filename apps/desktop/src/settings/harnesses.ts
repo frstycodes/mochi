@@ -16,6 +16,8 @@ export const HARNESSES = {
     package: '@anthropic-ai/claude-code',
     docs: 'https://code.claude.com/docs/en/setup',
     defaultModel: '',
+    /** The SDK's flag-layer `claudeMdExcludes` skips the account's CLAUDE.md (key present in the 0.3.296 SDK types and the installed claude binary). */
+    canSkipAccountInstructions: true,
     /** Billing override the harness reads from its environment, stored in the keychain when the user sets one. */
     apiKey: {
       env: 'ANTHROPIC_API_KEY',
@@ -34,6 +36,8 @@ export const HARNESSES = {
     package: '@openai/codex',
     docs: 'https://learn.chatgpt.com/docs/codex/cli',
     defaultModel: '',
+    /** codex-cli 0.164: `thread/start` has no parameter for it, `project_doc_max_bytes=0` drops only project docs, and `--ignore-user-config` (exec only) also drops config.toml. */
+    canSkipAccountInstructions: false,
     apiKey: undefined,
   },
 } satisfies Record<Provider, Harness>;
@@ -49,6 +53,8 @@ export interface Harness {
   docs: string;
   /** '' runs the account's default model, from the provider's own list. */
   defaultModel: string;
+  /** Whether Mochi can start a thread without the account's own instructions file (CLAUDE.md, AGENTS.md). */
+  canSkipAccountInstructions: boolean;
   apiKey: { env: string; label: string; placeholder: string } | undefined;
 }
 

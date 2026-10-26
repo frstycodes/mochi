@@ -20,6 +20,7 @@ const T = Schema.Tuple;
 const MAX_MODEL_CHARS = 128;
 // Large enough for the default account's `.claude.json`, which also holds Claude Code's per-project history.
 const MAX_CONFIG_CHARS = 8 * 1024 * 1024;
+const MAX_INSTRUCTIONS_CHARS = 256 * 1024;
 
 const trimmed = (max = 4096) =>
   Str(max).pipe(Schema.decodeTo(S, SchemaTransformation.trim()));
@@ -214,6 +215,7 @@ export const InstructionsFile = Schema.Struct({
 export const ProfileFolder = Schema.Struct({
   dir: S,
   files: Schema.Array(InstructionsFile),
+  usesAccountFile: Schema.Record(Provider, B),
 });
 
 export const McpEntry = Schema.Struct({
@@ -295,6 +297,11 @@ export const ConfigChange = Schema.Union([
     provider: Provider,
     folder: SettingsPath,
   }),
+  Schema.Struct({
+    kind: Schema.Literal('instructions-set'),
+    provider: Provider,
+    text: Str(MAX_INSTRUCTIONS_CHARS),
+  }),
 ]);
 export type ConfigChange = typeof ConfigChange.Type;
 
@@ -326,6 +333,9 @@ export const settingsRpc = {
   apiKey: invoke(T([KeyedProvider]), ApiKeyState),
   setApiKey: invoke(T([KeyedProvider, Schema.NullOr(ApiKey)]), ApiKeyState),
   profileFolder: invoke(T([SpaceId]), ProfileFolder),
+  readInstructions: invoke(T([SpaceId, S]), Schema.String),
+  writeInstructions: invoke(T([SpaceId, S, Str(MAX_INSTRUCTIONS_CHARS)]), Void),
+  setAccountInstructions: invoke(T([SpaceId, Provider, B]), Void),
   copyProfileFolder: invoke(T([SpaceId, SpaceId]), Void),
   agentConfig: invoke(T([AccountId, opt(SettingsPath)]), ProfileConfig),
   previewConfig: invoke(T([AccountId, Changes]), ConfigPreview),

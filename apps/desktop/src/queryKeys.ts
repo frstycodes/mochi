@@ -38,6 +38,8 @@ export const queryKeys = {
         ['profile-config', spaceId, root] as const,
     },
     folder: (spaceId: string) => ['profile-folder', spaceId] as const,
+    instructions: (spaceId: string, name: string) =>
+      ['profile-instructions', spaceId, name] as const,
     settingsSources: (profileId: string) =>
       ['settings-sources', profileId] as const,
     githubAccounts: () => ['github-accounts'] as const,

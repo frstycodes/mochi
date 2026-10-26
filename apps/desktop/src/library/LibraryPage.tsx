@@ -121,7 +121,8 @@ export function LibraryPage({
 }
 
 /** Which profile the page shows and adds to; All profiles is the whole library with each item's profiles. */
-function ScopePicker() {
+/** The profile the page shows; `hasAll` adds the whole library, for pages whose content isn't per profile. */
+export function ScopePicker({ hasAll = true }: { hasAll?: boolean }) {
   const profiles = useProfiles();
   const scope = useLibraryScope();
   const spaceId = useHarnessSelector((s) => s.spaceId);
@@ -157,11 +158,15 @@ function ScopePicker() {
               )}
             </DropdownMenuRadioItem>
           ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuRadioItem value={ALL_PROFILES}>
-            <Users className="size-3.5" />
-            All profiles
-          </DropdownMenuRadioItem>
+          {hasAll && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioItem value={ALL_PROFILES}>
+                <Users className="size-3.5" />
+                All profiles
+              </DropdownMenuRadioItem>
+            </>
+          )}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

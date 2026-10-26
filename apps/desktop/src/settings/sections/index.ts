@@ -6,6 +6,7 @@ import {
   Connector,
   Cpu,
   Database,
+  FileText,
   Devices,
   Globe,
   Hierarchy2,
@@ -34,6 +35,7 @@ import { ConnectorsView } from '../../library/ConnectorsView';
 import { ConnectorPage } from '../../library/ConnectorPage';
 import { PluginsView } from '../../library/PluginsView';
 import { SkillsView } from '../../library/SkillsView';
+import { InstructionsView } from '../InstructionsView';
 import { AccessSection, toolRowId } from './access';
 import { isGoalTool, TOOL_NAMES } from '@mochi/domain/runtime/toolTable';
 import { TOOL_GUIDE } from '../toolGuide';
@@ -444,6 +446,27 @@ export const SETTINGS_SECTIONS = [
         id: 'schedules',
         label: 'Scheduled and background threads',
         keywords: 'cron nightly trigger pull request pause resume run',
+      },
+    ],
+  },
+  {
+    id: 'instructions',
+    group: 'Customize',
+    title: 'Instructions',
+    icon: FileText,
+    component: InstructionsView,
+    settings: [
+      {
+        id: 'instructionsFiles',
+        label: 'Mochi’s instructions for a profile',
+        keywords:
+          'instructions system prompt mochi.md claude.md codex.md profile rules',
+      },
+      {
+        id: 'instructionsAccount',
+        label: 'Your CLAUDE.md and AGENTS.md',
+        keywords:
+          'instructions claude.md agents.md global user turn off skip profile memory',
       },
     ],
   },

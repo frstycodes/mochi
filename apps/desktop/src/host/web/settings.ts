@@ -53,8 +53,14 @@ export const settings: SettingsHost = {
         { name: 'claude.md', provider: 'claude', lines: 0 },
         { name: 'codex.md', provider: 'codex', lines: 0 },
       ],
+      usesAccountFile: { claude: true, codex: true },
     };
   },
+  async readInstructions() {
+    return '';
+  },
+  writeInstructions: desktopOnly,
+  setAccountInstructions: desktopOnly,
   copyProfileFolder: desktopOnly,
   async agentConfig() {
     return DEMO_CONFIG;

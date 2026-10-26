@@ -268,7 +268,13 @@ async function readProvider(
  * Each tool's files for an account. Claude keeps user MCP servers in `.claude.json`, which sits in the config folder for
  * an account Mochi made but in the home folder (not `~/.claude`) for the default one.
  */
-function paths(provider: Provider, account: Account) {
+/** The instructions file the tool loads for an account (CLAUDE.md, AGENTS.md). */
+export const accountInstructionsPath = (
+  provider: Provider,
+  account: Pick<Account, 'configDir'>,
+) => paths(provider, account).instructions;
+
+function paths(provider: Provider, account: Pick<Account, 'configDir'>) {
   const dir =
     account.configDir ??
     join(homedir(), HARNESSES[provider].defaultFolder.replace(/^~\//, ''));
@@ -507,6 +513,8 @@ async function plan(
             ),
       );
     }
+    case 'instructions-set':
+      return edit(files.instructions, () => change.text);
     case 'skill-import': {
       if (!(await readText(join(change.folder, 'SKILL.md'))))
         throw new Error(

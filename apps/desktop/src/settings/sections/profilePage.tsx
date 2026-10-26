@@ -4,9 +4,11 @@ import {
   ChevronRight,
   Connector,
   Copy,
+  FileText,
   Plugin,
   Skill,
   Trash,
+  type IconComponent,
 } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
@@ -42,7 +44,7 @@ import { useNativeItems } from '../../library/useNativeItems';
 import { CatalogRow } from '../CatalogRow';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { openSettings } from '../../routes/nav';
-import { ProfileInstructions } from '../ProfileInstructions';
+import { useProfileFolder } from '../ProfileInstructions';
 import {
   DesktopOnlyNotice,
   SettingsGroup,
@@ -76,7 +78,7 @@ export function ProfilePage({ id }: { id: string }) {
         <CatalogRow settingKey="profile.name" profile={profile} />
         <CatalogRow settingKey="profile.icon" profile={profile} />
       </SettingsGroup>
-      <ProfileInstructions profile={profile} />
+      <ProfileInstructionsLink profile={profile} />
       {host.isDesktop && (
         <SettingsGroup
           title="Accounts"
@@ -233,30 +235,69 @@ function ProfileLibrary({ profile }: { profile: Space }) {
         const all = entries?.filter(isOf);
         const on = all?.filter((e) => e.profileIds.includes(profile.id)).length;
         return (
-          <button
+          <ProfileLinkRow
             key={kind}
-            type="button"
+            icon={Icon}
+            label={label}
+            meta={!!all && (all.length ? `${on} of ${all.length}` : 'None yet')}
             onClick={() => open(kind)}
-            className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
-          >
-            <Icon
-              aria-hidden
-              className="size-4 shrink-0 text-muted-foreground"
-            />
-            <span className="flex-1 type-body">{label}</span>
-            {!!all && (
-              <span className="type-meta text-muted-foreground tabular">
-                {all.length ? `${on} of ${all.length}` : 'None yet'}
-              </span>
-            )}
-            <ChevronRight
-              aria-hidden
-              className="size-4 shrink-0 text-subtle-foreground"
-            />
-          </button>
+          />
         );
       })}
     </SettingsGroup>
+  );
+}
+
+/** Mochi's own instructions for the profile and the switches for your CLAUDE.md and AGENTS.md live on Settings › Instructions. */
+function ProfileInstructionsLink({ profile }: { profile: Space }) {
+  const folder = useProfileFolder(profile.id);
+  const written = folder?.files.filter((f) => f.lines).length;
+  const total = folder?.files.length;
+  return (
+    <SettingsGroup
+      title="Instructions"
+      footer={`What ${profile.name}’s threads are told, and whether they also load your own CLAUDE.md and AGENTS.md.`}
+    >
+      <ProfileLinkRow
+        icon={FileText}
+        label="Edit instructions"
+        meta={!!total && `${written} of ${total} written`}
+        onClick={() => {
+          setLibraryScope(profile.id);
+          openSettings('instructions');
+        }}
+      />
+    </SettingsGroup>
+  );
+}
+
+function ProfileLinkRow({
+  icon: Icon,
+  label,
+  meta,
+  onClick,
+}: {
+  icon: IconComponent;
+  label: string;
+  meta: string | false;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
+    >
+      <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+      <span className="flex-1 type-body">{label}</span>
+      {!!meta && (
+        <span className="type-meta text-muted-foreground tabular">{meta}</span>
+      )}
+      <ChevronRight
+        aria-hidden
+        className="size-4 shrink-0 text-subtle-foreground"
+      />
+    </button>
   );
 }
 
@@ -287,7 +328,7 @@ function OwnSetupGroup({ profile }: { profile: Space }) {
             : 'some';
         const choose = (next: string) => {
           if (next === 'some')
-            return void (setLibraryScope(profile.id), openSettings('skills'));
+            return (setLibraryScope(profile.id), openSettings('skills'));
           // "None" covers what you add later too; "All" lets it in again.
           setAllOff(profile, usable, next === 'none', harness, {
             ...profile.nativeNew,

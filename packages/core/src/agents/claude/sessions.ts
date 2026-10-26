@@ -32,7 +32,10 @@ import {
   claudeNativeSettings,
   offItems,
 } from '../../../../../apps/desktop/src/library/nativeOverrides.ts';
-import { readProfileConfig } from '../profileConfig.ts';
+import {
+  accountInstructionsPath,
+  readProfileConfig,
+} from '../profileConfig.ts';
 import { warmClaude } from './oneshot.ts';
 import {
   approvalEvent,
@@ -60,7 +63,10 @@ import {
 import { detect } from '../../../../../apps/desktop/electron/settings/detect.ts';
 import { spawnThroughRun } from './spawn.ts';
 import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
-import { profileInstructions } from '../profileFolder.ts';
+import {
+  accountInstructionsUsed,
+  profileInstructions,
+} from '../profileFolder.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../../../apps/desktop/src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '@mochi/domain/runtime/toolTable';
@@ -431,11 +437,14 @@ async function launch(session: Session) {
           ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.`
           : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.',
       );
-    const [library, native, profileText] = await Promise.all([
-      main.library(options.spaceId, 'claude'),
-      nativeOffSettings(options),
-      profileInstructions(options.spaceId, 'claude'),
-    ]);
+    const [library, native, profileText, isAccountFileUsed] = await Promise.all(
+      [
+        main.library(options.spaceId, 'claude'),
+        nativeOffSettings(options),
+        profileInstructions(options.spaceId, 'claude'),
+        accountInstructionsUsed(options.spaceId, 'claude'),
+      ],
+    );
     const { connectors, rules: toolRules } = library;
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
@@ -474,6 +483,14 @@ async function launch(session: Session) {
           ...native,
           skillOverrides: { ...CLAUDE_SKILLS_OFF, ...native.skillOverrides },
           permissions: connectorRules,
+          // The user's own CLAUDE.md, when this profile turned it off; project and local ones still load.
+          ...(!isAccountFileUsed && {
+            claudeMdExcludes: [
+              accountInstructionsPath('claude', {
+                configDir: session.account.configDir ?? null,
+              }),
+            ],
+          }),
           ...(options.speed && { fastMode: true }),
         },
         // Claude in Chrome would otherwise wire itself when CLAUDE_CODE_ENABLE_CFC=1 is in the user's environment.

@@ -131,6 +131,16 @@ export interface SettingsHost {
   setApiKey(provider: Provider, key: string | null): Promise<ApiKeyState>;
   /** The profile's own folder and its instruction files (made empty the first time), for Settings to open. */
   profileFolder(spaceId: string): Promise<ProfileFolder>;
+  /** The text of one of the profile's instruction files (`mochi.md`, `<harness>.md`). */
+  readInstructions(spaceId: string, name: string): Promise<string>;
+  /** Replaces one instruction file; new threads in the profile get the new text. */
+  writeInstructions(spaceId: string, name: string, text: string): Promise<void>;
+  /** Whether the profile's threads load the account's own instructions file; refused for a harness that can't skip it. */
+  setAccountInstructions(
+    spaceId: string,
+    provider: Provider,
+    isUsed: boolean,
+  ): Promise<void>;
   /** Copies one profile's folder into another's (Duplicate profile). */
   copyProfileFolder(fromId: string, toId: string): Promise<void>;
   /** What each of the profile's accounts carries in its own config folder; `projectRoot` adds that project's `.mcp.json`. */
@@ -204,6 +214,9 @@ export const settingsMethods = {
   apiKey: 'invoke',
   setApiKey: 'invoke',
   profileFolder: 'invoke',
+  readInstructions: 'invoke',
+  writeInstructions: 'invoke',
+  setAccountInstructions: 'invoke',
   copyProfileFolder: 'invoke',
   agentConfig: 'invoke',
   previewConfig: 'invoke',
