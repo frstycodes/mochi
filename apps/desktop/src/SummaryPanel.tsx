@@ -61,6 +61,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
+import { useWorktreePath } from './git/worktrees';
 import { useGitDiff } from './git/useGit';
 import { DiffIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
@@ -422,6 +423,7 @@ function NeedsYou({ thread }: { thread: Thread }) {
 
 function EnvironmentCard({ thread }: CardProps) {
   const { repo, agent } = thread;
+  const worktree = useWorktreePath(thread.id);
   const fullAccess = isFullAccess(agent?.permissionMode);
   return (
     <>
@@ -465,7 +467,13 @@ function EnvironmentCard({ thread }: CardProps) {
                 ? undefined
                 : () => copyText(repo.branch, 'Branch name copied')
             }
-          />
+          >
+            {!!worktree && (
+              <span className="pointer-events-none max-w-24 truncate type-meta text-subtle-foreground">
+                {basenameOf(worktree)}
+              </span>
+            )}
+          </SummaryRow>
         )}
         {!!agent?.model && (
           <SummaryRow
@@ -498,6 +506,7 @@ function EnvironmentCard({ thread }: CardProps) {
   );
 }
 
+const basenameOf = (path: string) => path.replace(/\/+$/, '').split('/').pop()!;
 const parentOf = (path: string) => path.replace(/\/[^/]+\/?$/, '') || '/';
 const homeShort = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
 

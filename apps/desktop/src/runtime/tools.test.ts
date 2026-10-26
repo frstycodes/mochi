@@ -699,25 +699,13 @@ test('new tasks and subtasks inherit the running session and honor user-named mo
         { effort: 'max' },
         { model: other, effort: 'max' },
       ]) {
-        // Every pick here runs above the session (another model, or max over low), so it waits on your approval.
-        const pending =
-          picked.model || picked.effort
-            ? await t.asking('create_thread', {
-                initiation: 'user_asked',
-                prompt: 'Fix login',
-                isFromDefaultBranch,
-                ...picked,
-              })
-            : null;
-        if (pending) decideTool(pending.card.id, { isApproved: true });
-        const r = pending
-          ? await pending.result
-          : await t.call('create_thread', {
-              initiation: 'user_asked',
-              prompt: 'Fix login',
-              isFromDefaultBranch,
-              ...picked,
-            });
+        // Any pick the account offers starts without approval, above the session or not.
+        const r = await t.call('create_thread', {
+          initiation: 'user_asked',
+          prompt: 'Fix login',
+          isFromDefaultBranch,
+          ...picked,
+        });
         assert.ok(!r.isError, r.text);
         const created = JSON.parse(r.text);
         assert.deepEqual(t.thread(created.id).controls, {
@@ -816,15 +804,13 @@ test('create_thread resolves unset models, isolates provider changes, and passes
     access: 'Auto',
   });
   t.env.models = async () => [];
-  // Without a catalog nothing ranks the pick, so another model asks first.
-  const pending = await t.asking('create_thread', {
+  // Without a catalog a user-named model starts without approval too.
+  const unlisted = await t.ok('create_thread', {
     initiation: 'user_asked',
     prompt: 'Use a user-named model',
     model: 'custom-model',
     effort: 'custom-effort',
   });
-  decideTool(pending.card.id, { isApproved: true });
-  const unlisted = JSON.parse((await pending.result).text);
   assert.deepEqual(t.thread(unlisted.id).controls, {
     model: 'custom-model',
     effort: 'custom-effort',
@@ -888,7 +874,7 @@ test('isFromDefaultBranch nests the thread but bases it on the default branch', 
   assert.equal(t.thread(stacked.id).repo?.base, 'feat/api-rate-limits');
 });
 
-test("a new thread can't run above its parent: higher picks ask first, lower ones and permissions pass straight through", async () => {
+test('a new thread may run above its parent without asking, but never with looser permissions', async () => {
   const t = setup();
   t.env.models = async (provider) =>
     provider === 'codex'
@@ -928,14 +914,12 @@ test("a new thread can't run above its parent: higher picks ask first, lower one
     effort: 'low',
   });
   assert.equal(t.thread(lower.id).controls?.effort, 'low');
-  const pending = await t.asking('create_thread', {
+  const higher = await t.ok('create_thread', {
     initiation: 'user_asked',
     prompt: 'Think hard',
     effort: 'max',
   });
-  assert.match(pending.card.detail ?? '', /max effort, above this thread/);
-  decideTool(pending.card.id, { isApproved: false });
-  assert.match((await pending.result).text, /denied/);
+  assert.equal(t.thread(higher.id).controls?.effort, 'max');
   const switched = await t.ok('create_thread', {
     initiation: 'user_asked',
     prompt: 'Use Codex',
