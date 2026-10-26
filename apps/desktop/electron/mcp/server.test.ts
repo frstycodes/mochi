@@ -22,6 +22,11 @@ import {
 
 afterEach(() => vi.restoreAllMocks());
 
+// Codex in code mode learns Mochi's tool names only from these instructions, so an unnamed tool is never called.
+test('the instructions name start_subagent, which Codex otherwise never finds', () => {
+  assert.match(mochiInstructions(), /mcp__mochi__start_subagent/);
+});
+
 test('browser instructions route to Mochi, and Codex loses the cua_repl browser it reached for instead', () => {
   assert.match(mochiInstructions(), /mcp__mochi__browser_open/);
   assert.match(mochiInstructions(), /mcp__mochi__browser_snapshot/);
