@@ -309,7 +309,7 @@ function RemoteHeader({
               })
             }
           >
-            {isSettled ? 'Unarchive' : 'Archive'}
+            {isSettled ? 'Reactivate' : 'Settle'}
           </DropdownMenuItem>
           {!isSettled && (
             <DropdownMenuItem

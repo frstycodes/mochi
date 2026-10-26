@@ -225,7 +225,7 @@ function autofixApply(
     const sent = autofixSend(state, threadId, event);
     return sent ? send(state, sent) : state;
   }
-  // Merged or closed is the PR's state too, which Auto-archive waits for.
+  // Merged or closed is the PR's state too, which Auto-settle waits for.
   const ended = event.reason === 'cap' ? {} : { state: event.reason };
   const off = mapThread(state.threads, threadId, (t) =>
     log(

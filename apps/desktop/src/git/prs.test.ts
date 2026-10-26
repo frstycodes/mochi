@@ -125,7 +125,7 @@ const thread = (prs: Partial<PullRequest>[], isWorking = false) =>
     })),
   }) as unknown as Thread;
 
-test('Auto-archive comes due once every PR merged or closed and the agent is idle', () => {
+test('Auto-settle comes due once every PR merged or closed and the agent is idle', () => {
   assert.equal(
     isArchiveDue(thread([{ autoArchive: true }, { state: 'closed' }])),
     true,
@@ -144,6 +144,6 @@ test('Auto-archive comes due once every PR merged or closed and the agent is idl
   assert.equal(
     isArchiveDue({ ...thread([{ autoArchive: true }]), status: 'settled' }),
     false,
-    'already archived',
+    'already settled',
   );
 });

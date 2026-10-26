@@ -143,7 +143,7 @@ export function keepFork(state: State, keepId: string, dropId: string): State {
         at: now,
         who: 'harness',
         kind: 'event',
-        text: `Archived: you kept "${keep.title}"`,
+        text: `Settled: you kept "${keep.title}"`,
       },
     ),
   );

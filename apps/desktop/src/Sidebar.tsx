@@ -421,7 +421,7 @@ function SpaceNav({
         />
 
         {settled.length > 0 && (
-          <FoldGroup label="Archived" count={settled.length}>
+          <FoldGroup label="Settled" count={settled.length}>
             {settled.map((t) => (
               <ThreadRowMenu
                 key={t.id}
@@ -471,7 +471,7 @@ function MachineThreads() {
       </SidebarGroupLabel>
     );
     if (!state) return <SidebarGroup key={machine.id}>{label}</SidebarGroup>;
-    // Archived folds below as its own group, level with the machine's, as this computer's own does.
+    // Settled folds below as its own group, level with the machine's, as this computer's own does.
     return (
       <RemoteScope key={machine.id} machine={machine} state={state}>
         <SidebarGroup>
@@ -486,7 +486,7 @@ function MachineThreads() {
           </SidebarMenu>
         </SidebarGroup>
         {settled.length > 0 && (
-          <FoldGroup label="Archived" count={settled.length}>
+          <FoldGroup label="Settled" count={settled.length}>
             {settled.map(row)}
           </FoldGroup>
         )}
@@ -1193,7 +1193,7 @@ export function ThreadItem({
             className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden"
           />
         )}
-        {/* Room for the Archive / Unarchive button while it shows, so the title truncates before the button instead of under it. */}
+        {/* Room for the Settle / Reactivate button while it shows, so the title truncates before the button instead of under it. */}
         {!isRenaming && (
           <span
             aria-hidden
@@ -1242,11 +1242,11 @@ export function ThreadItem({
           className="top-1.5! right-2 size-5 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5"
         >
           <TooltipIconButton
-            label={isSettled ? 'Unarchive' : 'Archive'}
+            label={isSettled ? 'Reactivate' : 'Settle'}
             hint={
               isSettled
                 ? 'Moves it back to the active list.'
-                : 'Stops its agent, terminals and dev servers, and files it under Archived.'
+                : 'Stops its agent, terminals and dev servers, and files it under Settled.'
             }
             onClick={settle}
           >

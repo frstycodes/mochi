@@ -17,7 +17,7 @@ export interface PrSwitch {
 }
 
 /**
- * A PR's three switches, in Claude's order, while Mochi can watch it: Auto-fix and Auto-archive are Mochi's, Merge when ready is
+ * A PR's three switches, in Claude's order, while Mochi can watch it: Auto-fix and Auto-settle are Mochi's, Merge when ready is
  * GitHub's auto-merge (read from GitHub, and only on an open PR: GitHub refuses it on a draft).
  */
 export function usePrSwitches(thread: Thread, item: ThreadPr): PrSwitch[] {
@@ -57,7 +57,7 @@ export function usePrSwitches(thread: Thread, item: ThreadPr): PrSwitch[] {
   };
   const archive: PrSwitch = {
     id: 'archive',
-    label: 'Auto-archive on merge or close',
+    label: 'Auto-settle on merge or close',
     hint: 'Once every PR is done and the agent is idle',
     isOn: !!pr.autoArchive,
     set: (isOn) =>

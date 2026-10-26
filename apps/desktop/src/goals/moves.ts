@@ -71,7 +71,7 @@ export function moveFor(
   if (!thread.repo) {
     if (!thread.idle?.isConfirmed && thread.criteria?.some((c) => !c.command))
       return { kind: 'confirm', label: 'Verify outcome' };
-    return { kind: 'settle', label: 'Archive thread' };
+    return { kind: 'settle', label: 'Settle thread' };
   }
   if (thread.idle?.uncommitted) return { kind: 'commit', label: 'Commit' };
   const subPrs = context.subPrs ?? [];
@@ -88,7 +88,7 @@ export function moveFor(
     return thread.parent.handedBackAt
       ? null
       : { kind: 'hand-back', label: 'Hand back' };
-  return step === 'settle' ? { kind: 'settle', label: 'Archive thread' } : null;
+  return step === 'settle' ? { kind: 'settle', label: 'Settle thread' } : null;
 }
 
 /** A parent's move for the sub-thread that holds it up: its gaps go to its own agent, a finished one is handed back. */
@@ -191,6 +191,6 @@ export function questionFor(
     case 'merge-subs':
       return `Merge the ${context.subPrs?.length === 1 ? 'sub-thread PR' : `${context.subPrs?.length} sub-thread PRs`} into this branch?`;
     case 'settle':
-      return 'Archive this thread?';
+      return 'Settle this thread?';
   }
 }

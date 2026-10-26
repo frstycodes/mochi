@@ -76,7 +76,7 @@ function SimilarSuggestions() {
       <SimilarRow
         relation="Already in "
         title="Benchmark the gateway under load"
-        status="Archived, PR #98 merged"
+        status="Settled, PR #98 merged"
       />
     </ul>
   );

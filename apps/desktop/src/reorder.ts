@@ -182,7 +182,7 @@ export function nestBlocker(threads: Thread[], id: string, parentId: string) {
 
 /**
  * A top-level sidebar row with its whole open subtree one level under it, depth first (like Claude's sessions under the top
- * session); finished ones leave it for Archived. The data keeps the real tree: `parent` is the thread that started it.
+ * session); finished ones leave it for Settled. The data keeps the real tree: `parent` is the thread that started it.
  */
 export interface ThreadGroup {
   thread: Thread;

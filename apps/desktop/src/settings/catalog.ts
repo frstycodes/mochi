@@ -743,7 +743,7 @@ const APP_SETTINGS: Setting[] = [
   }),
   pref(
     'autoArchivePrs',
-    'Archive threads when their pull requests merge or close',
+    'Settle threads when their pull requests merge or close',
     'git',
     SWITCH,
     {

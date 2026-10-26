@@ -62,7 +62,7 @@ test('every criterion met reads done, and names what comes next from the PR', ()
   assert.deepEqual(pick(idleVerdict(thread(), [pr('merged')])), [
     'done',
     'Merged',
-    'Archive thread',
+    'Settle thread',
   ]);
 });
 

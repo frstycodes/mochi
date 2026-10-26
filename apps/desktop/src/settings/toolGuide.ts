@@ -38,14 +38,14 @@ export const TOOL_GUIDE = {
   },
   settle_thread: {
     group: 'Threads',
-    label: 'Archive threads',
+    label: 'Settle threads',
     description:
       'Move finished or abandoned threads out of the active list and stop their agents. Never its own thread.',
   },
   reactivate_thread: {
     group: 'Threads',
-    label: 'Unarchive threads',
-    description: 'Bring archived threads back to the active list.',
+    label: 'Reactivate threads',
+    description: 'Bring settled threads back to the active list.',
   },
   pin_thread: {
     group: 'Threads',

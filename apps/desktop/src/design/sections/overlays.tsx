@@ -165,7 +165,7 @@ export function OverlaysSection() {
                   <DropdownMenuItem>Open in editor</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive">
-                    Archive thread
+                    Settle thread
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -182,7 +182,7 @@ export function OverlaysSection() {
                   <ContextMenuItem>Move to space</ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem variant="destructive">
-                    Archive thread
+                    Settle thread
                   </ContextMenuItem>
                 </ContextMenuGroup>
               </ContextMenuContent>
