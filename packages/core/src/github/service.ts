@@ -10,7 +10,7 @@ import {
   RequestResolver,
   Schedule,
   Stream,
-  type Cause,
+  Cause,
 } from 'effect';
 import { graphql, GraphqlResponseError } from '@octokit/graphql';
 import type { Git } from '@mochi/schema';
@@ -103,6 +103,7 @@ export class GithubTransport extends Context.Service<
           Effect.mapError(
             () =>
               new GithubError({
+                status: 401,
                 message: `gh has no working login for ${login ?? 'its active account'} on ${host}. Sign in with gh auth login, or pick another GitHub account in Settings › Profiles.`,
               }),
           ),
@@ -142,6 +143,12 @@ export class GithubTransport extends Context.Service<
       return { query };
     }),
   );
+}
+
+/** Signing in again is the fix, so the surface shows the error; anything else (offline, rate limit, 5xx) clears on its own. */
+function isUnauthorized(cause: Cause.Cause<unknown>) {
+  const error = Cause.squash(cause);
+  return error instanceof GithubError && error.status === 401;
 }
 
 function apiUrl(host: string) {
@@ -185,6 +192,8 @@ interface Sub {
   /** Re-read each poll: a worktree's branch can change under it. */
   readonly ask: Effect.Effect<Ask, GithubError>;
   readonly queue: Queue.Queue<unknown, GithubError | Cause.Done>;
+  /** Once it has a value, a transient failed poll is skipped rather than ending the stream, which would freeze the surface on its last state. */
+  hasValue?: boolean;
 }
 
 interface Poller {
@@ -324,9 +333,11 @@ export class GitHub extends Context.Service<GitHub>()('mochi/core/GitHub', {
         );
         subs.forEach((sub, i) => {
           const result = results[i]!;
-          if (Exit.isSuccess(result))
+          if (Exit.isSuccess(result)) {
+            sub.hasValue = true;
             Queue.offerUnsafe(sub.queue, result.value);
-          else Queue.failCauseUnsafe(sub.queue, result.cause);
+          } else if (!sub.hasValue || isUnauthorized(result.cause))
+            Queue.failCauseUnsafe(sub.queue, result.cause);
         });
       });
 

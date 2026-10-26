@@ -47,7 +47,8 @@ export function githubStreamQuery<A>(
       refetchMode: 'append',
     }),
     staleTime: Infinity,
-    refetchOnWindowFocus: false,
+    // Resubscribes a stream that ended (a sign-in error); a live one is already fetching, so this is a no-op for it.
+    refetchOnWindowFocus: 'always' as const,
   };
 }
 
