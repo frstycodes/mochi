@@ -19,6 +19,7 @@ import {
   pinnedThreads,
   pinOrderOf,
   reorderThreads,
+  settledThreads,
   sidebarGroups,
   stepPin,
   togglePin,
@@ -442,5 +443,23 @@ test('a listing stays the same through streamed text, and changes with its order
         b,
       ],
     ),
+  );
+});
+
+test('settled threads list latest archived first, falling back to last activity', () => {
+  const settled = (id: string, lastAt: number, settledAt?: number) => ({
+    ...t(id, undefined, lastAt),
+    status: 'settled',
+    settledAt,
+  });
+  const threads = [
+    settled('old', 50, 100),
+    settled('recent', 10, 300),
+    settled('legacy', 200),
+    t('open', undefined, 999),
+  ] as Thread[];
+  assert.deepEqual(
+    settledThreads(threads).map((x) => x.id),
+    ['recent', 'legacy', 'old'],
   );
 });

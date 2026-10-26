@@ -111,6 +111,14 @@ export function pinnedThreads(threads: Thread[], spaceId: string) {
     .sort((a, b) => a.orbitSlot! - b.orbitSlot!);
 }
 
+/** Archived threads, latest archived first; one archived before `settledAt` was stored falls back to its last activity. */
+export function settledThreads(threads: Thread[]) {
+  const archivedAt = (t: Thread) => t.settledAt ?? lastActivityAt(t);
+  return threads
+    .filter((t) => t.status === 'settled')
+    .sort((a, b) => archivedAt(b) - archivedAt(a));
+}
+
 /** A space's unpinned threads, most recent activity first; only pinned threads keep a manual order. */
 export function activeThreads(threads: Thread[], spaceId: string) {
   return threads
