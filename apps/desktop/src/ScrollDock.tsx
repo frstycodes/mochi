@@ -10,6 +10,7 @@ import {
 import { useLatest } from './useLatest';
 import { createPortal } from 'react-dom';
 import { haptic } from './haptic';
+import { tick } from './tick';
 import {
   DOCK_WHEEL_RATIO,
   dockDragOffset,
@@ -249,7 +250,7 @@ export function ScrollDock<T extends string>({
     if (i === previewRef.current) return;
     previewRef.current = i;
     setPreview(i);
-    haptic();
+    detent();
   };
 
   return (
@@ -370,7 +371,8 @@ function DockTile({
 
 /**
  * Hover the trigger and scroll, or press it and drag, to step through `values` in place, for controls whose trigger already shows
- * where you are (the effort meter): one level per `EFFORT_STEP_PX`, with a haptic tick each. A press without a drag calls `onTap`.
+ * where you are (the effort meter): one level per `EFFORT_STEP_PX`, with a haptic and audible tick each. A press without a drag
+ * calls `onTap`.
  */
 export function WheelStepper<T extends string>({
   values,
@@ -415,7 +417,7 @@ export function WheelStepper<T extends string>({
       const next = list[from + step];
       live.current.value = next;
       change(next);
-      haptic();
+      detent();
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     let dragFrom = 0;
@@ -434,7 +436,7 @@ export function WheelStepper<T extends string>({
         if (next === current) return;
         live.current.value = next;
         change(next);
-        haptic();
+        detent();
       },
       onEnd: () => {},
       onTap: () => live.current.onTap(),
@@ -450,4 +452,9 @@ export function WheelStepper<T extends string>({
       {children}
     </span>
   );
+}
+
+function detent() {
+  haptic();
+  tick();
 }
