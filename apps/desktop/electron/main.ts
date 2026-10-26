@@ -18,6 +18,9 @@ import './fs/watch.ts';
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA)
   app.setPath('userData', process.env.MOCHI_USER_DATA);
+// Dev binaries are ad-hoc signed, so every rebuild re-prompts for the keychain; a fixed key instead.
+// Secrets a dev build saves are not protected, and ones saved before this switch won't decrypt.
+if (!app.isPackaged) app.commandLine.appendSwitch('use-mock-keychain');
 setImageDir(path.join(app.getPath('userData'), 'images'));
 // Minidumps stay local, under `app.getPath('crashDumps')`.
 crashReporter.start({ uploadToServer: false });
@@ -49,7 +52,7 @@ app
   .then(() => {
     startAppIcon();
     startWatch();
-    void startScheduler();
+    startScheduler();
     startLibraryUpdates();
     // Before the first window: it watches every window's close.
     startRemote();
