@@ -780,6 +780,8 @@ export const LiveRun = Schema.Struct({
       }),
     ]),
   ),
+  movedFrom: opt(Schema.String),
+  moveTo: opt(Schema.String),
 });
 
 export const Repo = Schema.Struct({

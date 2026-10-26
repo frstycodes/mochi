@@ -153,6 +153,10 @@ export type ThreadsAction =
   | { type: 'repo-head'; threadId: string; head: Head; worktree?: string }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
   | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
+  /** A folderless chat whose agent is idle moves into the project at this folder, on your default workspace mode; its session goes with it. */
+  | { type: 'attach-project'; threadId: string; project: string }
+  /** As `attach-project`, once the agent's turn ends (`move_to_project`). */
+  | { type: 'attach-project-queued'; threadId: string; project: string }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. `atReset`: the reset came and you had chosen Resume at reset. */
@@ -545,6 +549,22 @@ function reduce(state: State, action: Action): State {
                 ),
                 live: t.live && { ...t.live, cwd: undefined },
               }
+            : t,
+        ),
+      };
+    case 'attach-project':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) =>
+          canAttach(t) ? attachProject(t, action.project, state.now) : t,
+        ),
+      };
+    case 'attach-project-queued':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) =>
+          !t.repo && t.live
+            ? { ...t, live: { ...t.live, moveTo: action.project } }
             : t,
         ),
       };
@@ -1482,6 +1502,40 @@ export const nextTempBranch = (state: Pick<State, 'spaceId' | 'seq' | 'now'>) =>
 const threadTempBranch = (spaceId: string, threadId: string, at: number) =>
   tempBranch(prefsNow().branchPrefix, `${spaceId}/${threadId}/${at}`);
 
+/** Only a folderless chat moves into a project, and never mid-turn: its session moves with it. */
+export const canAttach = (thread: Thread) =>
+  !thread.repo && !thread.live?.isWorking;
+
+/** The next message resumes the same session in the project (`agentCalls`), told where its files went (`moveNote`). */
+function attachProject(thread: Thread, project: string, now: number): Thread {
+  const repo = withWorkspace(
+    repoFor(project, ''),
+    { mode: prefsNow().workspaceMode },
+    threadTempBranch(thread.spaceId, thread.id, thread.startedAt),
+  );
+  return log(
+    {
+      ...thread,
+      repo,
+      ...(thread.live && {
+        live: {
+          ...thread.live,
+          cwd: undefined,
+          isDetached: true,
+          moveTo: undefined,
+          movedFrom: thread.live.cwd ?? `~/.harness/chats/${thread.id}`,
+        },
+      }),
+    },
+    {
+      at: now,
+      who: 'harness',
+      kind: 'event',
+      text: `Moved to ${repo.project}`,
+    },
+  );
+}
+
 /** `fallback` names the branch when the draft doesn't: a project folder thread is on whatever branch the folder is. */
 function withWorkspace(
   repo: NonNullable<Thread['repo']>,
@@ -1530,6 +1584,7 @@ export function send(
         isDetached: undefined,
         notes: undefined,
         restart: undefined,
+        movedFrom: undefined,
       };
       const sent = withQueue(
         { ...t, queuePause: undefined },
