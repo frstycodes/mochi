@@ -1,4 +1,4 @@
-// Records saved-thread files the way the desktop app writes them today (`splitSaved`), from the app's own demo threads plus
+// Records saved-thread JSON the way `splitSaved` shapes it today, from the app's own demo threads plus
 // one live thread carrying the fields demo threads leave unset. Never from a real save on disk.
 // Run from the repo root: `node --import ./scripts/test-env.ts packages/schema/scripts/record-saved.ts`.
 // Outside the package's tsconfig on purpose: it reaches into `src/`, which the package must not depend on.

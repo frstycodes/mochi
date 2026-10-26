@@ -3,35 +3,31 @@ import { queryClient } from './query.ts';
 import { queryKeys } from './queryKeys.ts';
 import {
   createContext,
+  Fragment,
   useContext,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
 import { toast } from '@/toast/store';
+import { Bolt, ChevronDown, Command, Search, Star } from '@/icons';
 import {
-  ArrowLeft,
-  Bolt,
-  ChevronDown,
-  ChevronRight,
-  Search,
-  Star,
-} from '@/icons';
-import { Badge } from '@/components/ui/badge';
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
+import { Kbd } from '@/components/ui/kbd';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -39,9 +35,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { plural } from '@mochi/domain/lib/format';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
 import type { MachineCatalog } from './host/types/remote';
@@ -49,11 +43,12 @@ import {
   effortFor,
   effortName,
   FAST,
-  isNewThreadModel,
   listedHarnesses,
   optionFor,
-  searchModels,
+  listedFor,
+  openingTab,
   speedFor,
+  type MenuTab,
   type ModelOption,
 } from './runtime/models';
 import { setPrefs, toggleStar, usePrefs } from './settings/prefs';
@@ -64,6 +59,7 @@ import { linkedAccountId } from './settings/accounts';
 import { HARNESS_IDS, HARNESSES } from './settings/harnesses';
 import { useSpace } from './store';
 import { ProviderMark } from './ui';
+import { IS_MAC, isMod, shortcutText } from './keys';
 
 /**
  * `isLocked` keeps the list to `provider` (the settings chat); a thread's model of another provider switches it there. Only harnesses that are
@@ -75,14 +71,12 @@ export function ModelPicker({
   provider,
   isLocked,
   onChange,
-  defaults,
 }: {
   id?: string;
   value: string;
   provider: Provider;
   isLocked?: boolean;
   onChange: (model: ModelOption) => void;
-  defaults?: Defaults<ModelOption>;
 }) {
   const space = useSpace();
   const { catalog, harnesses } = useListedModels(
@@ -152,7 +146,6 @@ export function ModelPicker({
         onToggleStar={(m) =>
           setPrefs({ starredModels: toggleStar(favorites, m.id) })
         }
-        defaults={defaults}
       >
         <p className="px-1.5 pt-1 pb-0.5 type-caption text-subtle-foreground">
           Starred models show up when you scroll over the model button.
@@ -163,9 +156,10 @@ export function ModelPicker({
 }
 
 /**
- * The menu body for a `DropdownMenu`: starred models first (where stars apply), then one row per harness whose submenu lists its
- * models; typing filters every harness's models into one flat list. Below `md` the harness rows drill in instead of opening a
- * submenu beside the menu. `pending`: harnesses whose list hasn't arrived yet. `keepsOpen`: picking doesn't close (star mode).
+ * The menu body for a `DropdownMenu`, laid out like T3 Code's: a rail of tabs (Starred where stars apply, then one per harness)
+ * beside the open tab's models, so a long starred list never pushes the harnesses out of reach. Typing searches every harness;
+ * ⌘1–9 picks the listed models in order, ←/→ steps through the tabs. `pending`: harnesses whose list hasn't arrived yet.
+ * `keepsOpen`: picking doesn't close (star mode).
  */
 export function ModelMenu({
   models,
@@ -177,7 +171,6 @@ export function ModelMenu({
   onToggleStar,
   keepsOpen,
   align = 'start',
-  defaults,
   children,
 }: {
   models: ModelOption[];
@@ -189,81 +182,105 @@ export function ModelMenu({
   onToggleStar?: (model: ModelOption) => void;
   keepsOpen?: boolean;
   align?: 'start' | 'end';
-  /** Offers "Make default" per model and badges the one new threads start on. */
-  defaults?: Defaults<ModelOption>;
   children?: ReactNode;
 }) {
   const space = useSpace();
   const notes = useHarnessNotes(space.id);
-  const isNarrow = useIsMobile();
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState<Provider | null>(null);
+  const [pickedTab, setTab] = useState<MenuTab | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isSingle = harnesses.length === 1;
-  const drilled = isSingle ? harnesses[0] : isNarrow ? page : null;
-  const found = search ? searchModels(models, search) : [];
-  const starredModels =
-    onToggleStar && !drilled
-      ? models.filter((m) => starred?.includes(m.id))
-      : [];
+  const starredModels = onToggleStar
+    ? models.filter((m) => starred?.includes(m.id))
+    : [];
+  const tabs: MenuTab[] = onToggleStar ? ['starred', ...harnesses] : harnesses;
+  const hasRail = tabs.length > 1;
+  const tab =
+    pickedTab ??
+    openingTab(models, harnesses, isChecked, !!starredModels.length);
   const isLoading = !!pending.length && pending.length === harnesses.length;
-  const ofHarness = (h: Provider) => models.filter((m) => m.harness === h);
+  const shown = listedFor(tab, search, models, starredModels);
+  const caption =
+    !search && tab && tab !== 'starred'
+      ? [
+          HARNESSES[tab].name,
+          !!space.plans[tab] && `${space.plans[tab]} plan`,
+          notes[tab],
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '';
   const items = (list: ModelOption[], hasMark?: boolean) =>
-    list.map((m) => (
-      <ModelItem
-        key={`${m.harness}:${m.id}`}
-        model={m}
-        isChecked={isChecked(m)}
-        isDisabled={!!m.isUnavailable}
-        onPick={onPick}
-        keepsOpen={keepsOpen}
-        isStarred={!!starred?.includes(m.id)}
-        onToggleStar={onToggleStar}
-        hasMark={hasMark}
-        defaults={defaults}
-      />
-    ));
+    list.map((m) => {
+      const number = shown.indexOf(m) + 1;
+      return (
+        <ModelItem
+          key={`${m.harness}:${m.id}`}
+          model={m}
+          number={number <= 9 ? number : undefined}
+          isChecked={isChecked(m)}
+          isDisabled={!!m.isUnavailable}
+          onPick={onPick}
+          keepsOpen={keepsOpen}
+          isStarred={!!starred?.includes(m.id)}
+          onToggleStar={onToggleStar}
+          hasMark={hasMark}
+        />
+      );
+    });
   const firstItem = () =>
     contentRef.current?.querySelector<HTMLElement>(
       '[role^=menuitem]:not([data-disabled])',
     );
-  const back = () => {
-    setPage(null);
+  const openTab = (next: MenuTab) => {
+    setTab(next);
     inputRef.current?.focus();
   };
+  const stepTab = (by: number) =>
+    openTab(tabs[(tabs.indexOf(tab!) + by + tabs.length) % tabs.length]);
 
-  // Keys reaching the menu itself: letters go to the search instead of Radix's typeahead; ArrowUp off the first item and
-  // ArrowLeft in a drilled-in list come back up. Keys from a submenu bubble here through React but aren't inside this content.
+  // Shared by the search and the menu: ⌘1–9 picks a listed model, ←/→ step tabs while nothing is typed.
+  const onListKeys = (e: KeyboardEvent) => {
+    const number = Number(e.key);
+    if (isMod(e) && number >= 1 && number <= 9) {
+      e.preventDefault();
+      contentRef.current
+        ?.querySelector<HTMLElement>(`[data-model-number="${number}"]`)
+        ?.click();
+      return true;
+    }
+    if (!hasRail || search || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight'))
+      return false;
+    e.preventDefault();
+    stepTab(e.key === 'ArrowLeft' ? -1 : 1);
+    return true;
+  };
+  // Keys reaching the menu itself: letters go to the search instead of Radix's typeahead; ArrowUp off the first item comes back
+  // up. Keys from a tooltip portal bubble here through React but aren't inside this content.
   const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (
       e.defaultPrevented ||
       e.target === inputRef.current ||
-      !e.currentTarget.contains(e.target as Node)
+      !e.currentTarget.contains(e.target as Node) ||
+      onListKeys(e)
     )
       return;
     const isTyping =
       e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
-    if (isTyping || (e.key === 'ArrowUp' && e.target === firstItem())) {
-      e.preventDefault();
-      inputRef.current?.focus();
-      if (isTyping) setSearch((s) => s + e.key);
-      return;
-    }
-    if (e.key === 'ArrowLeft' && page && !search) {
-      e.preventDefault();
-      back();
-    }
+    if (!isTyping && !(e.key === 'ArrowUp' && e.target === firstItem())) return;
+    e.preventDefault();
+    inputRef.current?.focus();
+    if (isTyping) setSearch((s) => s + e.key);
   };
   const onSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape' || e.key === 'Tab') return;
     e.stopPropagation();
+    if (onListKeys(e)) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       firstItem()?.focus();
     }
     if (e.key === 'Enter') firstItem()?.click();
-    if (e.key === 'Backspace' && !search && page) back();
   };
 
   return (
@@ -271,127 +288,180 @@ export function ModelMenu({
       ref={contentRef}
       align={align}
       collisionPadding={8}
-      className="w-80"
+      className={cn(
+        'flex max-h-[min(26rem,var(--radix-dropdown-menu-content-available-height))] gap-2 overflow-hidden rounded-xl p-2',
+        hasRail ? 'w-96' : 'w-80',
+      )}
       // Radix focuses the content on open and whenever the pointer leaves an item; the search takes it, so typing always filters.
       onFocus={(e) => e.target === e.currentTarget && inputRef.current?.focus()}
       onCloseAutoFocus={() => {
         setSearch('');
-        setPage(null);
+        setTab(null);
       }}
       onKeyDown={onMenuKeyDown}
     >
-      <label className="mb-1 flex h-7 items-center gap-2 rounded-lg bg-input/30 px-2">
-        <Search aria-hidden className="size-4 shrink-0 opacity-50" />
-        <input
-          ref={inputRef}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={onSearchKeyDown}
-          placeholder={
-            drilled && !search
-              ? `Search ${HARNESSES[drilled].name} models`
-              : 'Search models'
-          }
-          aria-label="Search models"
-          className="w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
-        />
-      </label>
-      <div className="max-h-80 overflow-y-auto">
-        {!!search && (
-          <SearchResults found={found} isLoading={isLoading} items={items} />
-        )}
-        {!search && !!drilled && (
-          <>
-            {!isSingle && (
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  back();
-                }}
-                className="type-meta text-muted-foreground"
-              >
-                <ArrowLeft aria-hidden className="size-3.5" />
-                All models
-              </DropdownMenuItem>
-            )}
-            {pending.includes(drilled) ? (
-              <MenuNote>
-                Asking {HARNESSES[drilled].name} for its models…
-              </MenuNote>
-            ) : (
-              items(ofHarness(drilled))
-            )}
-          </>
-        )}
-        {!search && !drilled && (
-          <>
-            {starredModels.length > 0 && (
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Starred</DropdownMenuLabel>
-                {items(starredModels, true)}
-              </DropdownMenuGroup>
-            )}
-            <DropdownMenuGroup>
-              {starredModels.length > 0 && (
-                <DropdownMenuLabel>Harnesses</DropdownMenuLabel>
+      {hasRail && (
+        <div
+          role="tablist"
+          aria-orientation="vertical"
+          aria-label="Model sources"
+          className="relative flex shrink-0 flex-col gap-1 border-r pr-2"
+        >
+          {tabs.map((t, i) => (
+            <Fragment key={t}>
+              {i === 1 && t !== 'starred' && tabs[0] === 'starred' && (
+                <span
+                  aria-hidden
+                  className="mx-auto my-1 h-px w-4 shrink-0 bg-border"
+                />
               )}
-              {harnesses.map((h) => {
-                const row = (
-                  <HarnessRow
-                    harness={h}
-                    summary={[
-                      harnessSummary(
-                        ofHarness(h),
-                        isChecked,
-                        pending.includes(h),
-                      ),
-                      notes[h],
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    plan={space.plans[h]}
-                  />
-                );
-                if (isNarrow)
-                  return (
-                    <DropdownMenuItem
-                      key={h}
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setPage(h);
-                      }}
-                    >
-                      {row}
-                      <ChevronRight
-                        aria-hidden
-                        className="text-subtle-foreground"
-                      />
-                    </DropdownMenuItem>
-                  );
-                return (
-                  <DropdownMenuSub key={h}>
-                    <DropdownMenuSubTrigger>{row}</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent
-                      collisionPadding={8}
-                      className="max-h-(--radix-dropdown-menu-content-available-height) w-72 overflow-y-auto"
-                    >
-                      {pending.includes(h) ? (
-                        <MenuNote>
-                          Asking {HARNESSES[h].name} for its models…
-                        </MenuNote>
-                      ) : (
-                        items(ofHarness(h))
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                );
-              })}
+              <RailTab
+                value={t}
+                label={
+                  t === 'starred'
+                    ? 'Starred'
+                    : [HARNESSES[t].name, space.plans[t]]
+                        .filter(Boolean)
+                        .join(' · ')
+                }
+                isSelected={!search && t === tab}
+                onSelect={() => {
+                  setSearch('');
+                  openTab(t);
+                }}
+              >
+                {t === 'starred' ? (
+                  <Star filled className="size-4" />
+                ) : (
+                  <ProviderMark provider={t} size={16} />
+                )}
+              </RailTab>
+            </Fragment>
+          ))}
+          <RailNotch tab={search ? null : tab} />
+        </div>
+      )}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+        <InputGroup className="h-8 shrink-0">
+          <InputGroupAddon>
+            <Search aria-hidden />
+          </InputGroupAddon>
+          <InputGroupInput
+            ref={inputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder={
+              tab && tab !== 'starred' && !hasRail
+                ? `Search ${HARNESSES[tab].name} models`
+                : 'Search models'
+            }
+            aria-label="Search models"
+          />
+        </InputGroup>
+        <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto">
+          {!!search && (
+            <SearchResults found={shown} isLoading={isLoading} items={items} />
+          )}
+          {!search && tab === 'starred' && (
+            <DropdownMenuGroup>
+              {starredModels.length ? (
+                items(starredModels, true)
+              ) : (
+                <MenuNote>Star a model to keep it here.</MenuNote>
+              )}
             </DropdownMenuGroup>
-          </>
-        )}
+          )}
+          {!search && !!tab && tab !== 'starred' && (
+            <DropdownMenuGroup>
+              {!!caption && (
+                <DropdownMenuLabel className="truncate">
+                  {caption}
+                </DropdownMenuLabel>
+              )}
+              {pending.includes(tab) ? (
+                <MenuNote>
+                  Asking {HARNESSES[tab].name} for its models…
+                </MenuNote>
+              ) : (
+                items(shown)
+              )}
+            </DropdownMenuGroup>
+          )}
+        </div>
+        {children}
       </div>
-      {children}
     </DropdownMenuContent>
+  );
+}
+
+function RailTab({
+  value,
+  label,
+  isSelected,
+  onSelect,
+  children,
+}: {
+  value: MenuTab;
+  label: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          role="tab"
+          data-tab={value}
+          aria-label={label}
+          aria-selected={isSelected}
+          tabIndex={-1}
+          onClick={onSelect}
+          className={cn(
+            'flex size-8 shrink-0 cursor-default items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+            isSelected && 'bg-accent text-foreground',
+          )}
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="left">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** The open tab's mark on the rail's edge: a short notch that snaps from tab to tab like a dial's tick; hidden while searching. */
+function RailNotch({ tab }: { tab: MenuTab | null | undefined }) {
+  const notchRef = useRef<HTMLSpanElement>(null);
+  // Null until placed; the first placement jumps there, only later moves snap across.
+  const [place, setPlace] = useState<{ y: number; isMove: boolean } | null>(
+    null,
+  );
+  useLayoutEffect(() => {
+    const selected =
+      tab &&
+      // The rail itself, not a ref on it: a parent's ref attaches only after its children's layout effects run.
+      notchRef.current?.parentElement?.querySelector<HTMLElement>(
+        `[data-tab="${tab}"]`,
+      );
+    if (!selected) return;
+    const y = selected.offsetTop + selected.offsetHeight / 2;
+    setPlace((p) => ({ y, isMove: !!p }));
+  }, [tab]);
+  return (
+    <span
+      ref={notchRef}
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute -top-[5px] -right-[1.5px] h-2.5 w-0.5 rounded-full bg-muted-foreground',
+        place?.isMove &&
+          'transition-[translate,opacity] duration-120 ease-[cubic-bezier(0.23,1,0.32,1)]',
+        (!tab || !place) && 'opacity-0',
+      )}
+      style={{ translate: `0 ${place?.y ?? 0}px` }}
+    />
   );
 }
 
@@ -427,39 +497,20 @@ function SearchResults({
 
 function MenuNote({ children }: { children: ReactNode }) {
   return (
-    <p className="px-1.5 py-4 text-center type-meta text-muted-foreground">
+    <p className="px-2 py-6 text-center type-meta text-muted-foreground">
       {children}
     </p>
   );
 }
 
-function HarnessRow({
-  harness,
-  summary,
-  plan,
-}: {
-  harness: Provider;
-  summary: string;
-  plan?: string;
-}) {
-  return (
-    <>
-      <ProviderMark provider={harness} size={16} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate">{HARNESSES[harness].name}</span>
-        <span className="truncate type-caption text-subtle-foreground">
-          {summary}
-        </span>
-      </span>
-      {!!plan && (
-        <span className="type-caption text-subtle-foreground">{plan}</span>
-      )}
-    </>
-  );
-}
+// The checkbox item's check is hidden: the picked model takes the menu's highlight fill instead.
+const HIDDEN_CHECK =
+  'px-2 *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden data-[state=checked]:bg-accent';
 
+/** One model row: name and description, then its ⌘N and star in columns that line up on every row. */
 function ModelItem({
   model,
+  number,
   isChecked,
   isDisabled,
   onPick,
@@ -467,9 +518,10 @@ function ModelItem({
   isStarred,
   onToggleStar,
   hasMark,
-  defaults,
 }: {
   model: ModelOption;
+  /** Its ⌘1–9 shortcut, for the first nine listed. */
+  number?: number;
   isChecked: boolean;
   isDisabled: boolean;
   onPick: (model: ModelOption) => void;
@@ -477,26 +529,19 @@ function ModelItem({
   isStarred: boolean;
   onToggleStar?: (model: ModelOption) => void;
   hasMark?: boolean;
-  defaults?: Defaults<ModelOption>;
 }) {
   return (
     <DropdownMenuCheckboxItem
       checked={isChecked}
       disabled={isDisabled}
+      data-model-number={number}
       onSelect={(e) => {
         if (keepsOpen) e.preventDefault();
         onPick(model);
       }}
-      onKeyDown={defaults && makeDefaultKeys(() => defaults.make(model))}
-      className={cn('group/item gap-2', defaults && UNCHECKED_FLUSH)}
+      // A 2px gap, so the picked row and a highlighted neighbour never merge into one block.
+      className={cn('group/item gap-2 py-1.5 not-last:mb-0.5', HIDDEN_CHECK)}
     >
-      {!!onToggleStar && (
-        <FavoriteToggle
-          isOn={isStarred}
-          name={model.name}
-          onToggle={() => onToggleStar(model)}
-        />
-      )}
       {hasMark && <ProviderMark provider={model.harness} size={14} />}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{model.name}</span>
@@ -511,27 +556,32 @@ function ModelItem({
           </span>
         )}
       </span>
-      {!!defaults && (
-        <DefaultSlot
-          isDefault={defaults.isDefault(model)}
+      {!!number && <ModelShortcut number={number} />}
+      {!!onToggleStar && (
+        <FavoriteToggle
+          isOn={isStarred}
           name={model.name}
-          onMake={() => defaults.make(model)}
+          onToggle={() => onToggleStar(model)}
+          className={cn(
+            !isStarred && 'opacity-0 group-data-highlighted/item:opacity-100',
+          )}
         />
       )}
     </DropdownMenuCheckboxItem>
   );
 }
 
-/** The checked models' names, else how many the harness offers. */
-function harnessSummary(
-  models: ModelOption[],
-  isChecked: (model: ModelOption) => boolean,
-  isLoading: boolean,
-) {
-  if (isLoading) return 'Loading models…';
-  const checked = models.filter(isChecked);
-  if (checked.length) return checked.map((m) => m.name).join(', ');
-  return `${models.length} ${plural(models.length, 'model', 'models')}`;
+/** One key cap for ⌘N (Ctrl N off macOS), lighter than a cap per key. */
+function ModelShortcut({ number }: { number: number }) {
+  return (
+    <Kbd
+      aria-label={shortcutText(['mod', String(number)])}
+      className="gap-0.5 tabular-nums"
+    >
+      {IS_MAC ? <Command /> : 'Ctrl'}
+      {number}
+    </Kbd>
+  );
 }
 
 /** Each harness's models, and which of `harnesses` the pickers list: set up, and its list read (`listedHarnesses`). */
@@ -652,7 +702,7 @@ export function useDefaultModels() {
   );
 }
 
-/** New threads start on `model`: its harness becomes the default agent and the model that harness's Settings default. */
+/** New threads start on `model`: its harness becomes the default agent and the model that harness's Settings default. Picking in New thread calls it. */
 export function makeDefaultModel(model: ModelOption) {
   setPrefs({ agent: model.harness });
   host.settings
@@ -665,38 +715,16 @@ export function makeDefaultModel(model: ModelOption) {
     );
 }
 
-/** The composer pickers' "Default" and "Make default": what new threads start on, read from and saved to the same settings New thread uses. */
-export function useNewThreadDefaults(
-  catalog: Partial<Record<Provider, AgentModel[]>>,
-  model: AgentModel,
-) {
-  const harnessModels = useDefaultModels();
-  const { agent, effort, speed } = usePrefs();
-  return {
-    model: {
-      isDefault: (m: ModelOption) =>
-        !!harnessModels && isNewThreadModel(m, catalog, harnessModels, agent),
-      make: makeDefaultModel,
-    },
-    effort: {
-      isDefault: (e: string) => e === effortFor(model, effort),
-      make: (e: string) => setPrefs({ effort: e }),
-    },
-    speed: {
-      isDefault: (s: string) => s === speed,
-      make: (s: string) => setPrefs({ speed: s ? FAST : '' }),
-    },
-  };
-}
-
 function FavoriteToggle({
   isOn,
   name,
   onToggle,
+  className,
 }: {
   isOn: boolean;
   name: string;
   onToggle: () => void;
+  className?: string;
 }) {
   return (
     <button
@@ -710,10 +738,16 @@ function FavoriteToggle({
         e.stopPropagation();
         onToggle();
       }}
-      className="flex size-5 shrink-0 cursor-default items-center justify-center rounded-sm text-subtle-foreground hover:text-foreground"
+      className={cn(
+        'flex size-5 shrink-0 cursor-default items-center justify-center rounded-sm text-subtle-foreground hover:text-foreground',
+        className,
+      )}
     >
-      {/* `!`: a focused menu item recolours every descendant. */}
-      <Star filled={isOn} className={cn('size-3.5', isOn && 'text-warning!')} />
+      {/* `!` on the icon and its paths: a focused menu item recolours every descendant. */}
+      <Star
+        filled={isOn}
+        className={cn('size-3.5', isOn && 'text-warning! **:text-warning!')}
+      />
     </button>
   );
 }
@@ -723,12 +757,10 @@ export function EffortPicker({
   model,
   value,
   onChange: setEffort,
-  defaults,
 }: {
   model: AgentModel;
   value: string;
   onChange: (effort: string) => void;
-  defaults?: Defaults<string>;
 }) {
   const [isOpen, setOpen] = useState(false);
   const { efforts } = model;
@@ -771,21 +803,9 @@ export function EffortPicker({
             onValueChange={setEffort}
           >
             {efforts.map((e, i) => (
-              <DropdownMenuRadioItem
-                key={e}
-                value={e}
-                onKeyDown={defaults && makeDefaultKeys(() => defaults.make(e))}
-                className={cn('group/item gap-2', defaults && UNCHECKED_FLUSH)}
-              >
+              <DropdownMenuRadioItem key={e} value={e} className="gap-2">
                 <EffortMeter levels={efforts.length} level={i + 1} />
                 <span className="flex-1">{effortName(e)}</span>
-                {!!defaults && (
-                  <DefaultSlot
-                    isDefault={defaults.isDefault(e)}
-                    name={effortName(e)}
-                    onMake={() => defaults.make(e)}
-                  />
-                )}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -803,12 +823,10 @@ export function SpeedPicker({
   model,
   value,
   onChange,
-  defaults,
 }: {
   model: AgentModel;
   value: string;
   onChange: (speed: string) => void;
-  defaults?: Defaults<string>;
 }) {
   const { speeds } = model;
   if (!speeds.length) return null;
@@ -816,14 +834,6 @@ export function SpeedPicker({
   const stored = (id: string) =>
     id === STANDARD ? '' : id === speeds[0].id ? FAST : id;
   const choose = (id: string) => onChange(stored(id));
-  // GAP: the new-thread default holds only standard or `fast`, so a second tier above Fast can't become it.
-  const defaultsFor = (id: string) =>
-    defaults && (id === STANDARD || id === speeds[0].id)
-      ? {
-          isDefault: defaults.isDefault(stored(id)),
-          make: () => defaults.make(stored(id)),
-        }
-      : undefined;
   const label = `Speed: ${speed?.name ?? 'Standard'}`;
   return (
     <DropdownMenu>
@@ -854,7 +864,6 @@ export function SpeedPicker({
               level={0}
               name="Standard"
               description="The model's usual speed and price"
-              defaults={defaultsFor(STANDARD)}
             />
             {speeds.map((s, i) => (
               <SpeedItem
@@ -863,7 +872,6 @@ export function SpeedPicker({
                 level={i + 1}
                 name={s.name}
                 description={s.description}
-                defaults={defaultsFor(s.id)}
               />
             ))}
           </DropdownMenuRadioGroup>
@@ -881,23 +889,14 @@ function SpeedItem({
   level,
   name,
   description,
-  defaults,
 }: {
   value: string;
   level: number;
   name: string;
   description: string;
-  defaults?: { isDefault: boolean; make: () => void };
 }) {
   return (
-    <DropdownMenuRadioItem
-      value={value}
-      onKeyDown={defaults && makeDefaultKeys(defaults.make)}
-      className={cn(
-        'group/item items-start gap-2',
-        defaults && UNCHECKED_FLUSH,
-      )}
-    >
+    <DropdownMenuRadioItem value={value} className="items-start gap-2">
       <span className="flex h-5 w-7 shrink-0 items-center">
         <SpeedIcon level={level} />
       </span>
@@ -909,13 +908,6 @@ function SpeedItem({
           </span>
         )}
       </span>
-      {!!defaults && (
-        <DefaultSlot
-          isDefault={defaults.isDefault}
-          name={name}
-          onMake={defaults.make}
-        />
-      )}
     </DropdownMenuRadioItem>
   );
 }
@@ -947,61 +939,4 @@ function EffortMeter({ levels, level }: { levels: number; level: number }) {
       ))}
     </span>
   );
-}
-
-/** What new threads start on, for a picker's items: which one it is, and how to make another one it. */
-export interface Defaults<T> {
-  isDefault: (item: T) => boolean;
-  make: (item: T) => void;
-}
-
-/** A default-able item's trailing slot: "Default" on the current one, else "Make default" while the item is highlighted (⌘↵ from the keyboard). */
-function DefaultSlot({
-  isDefault,
-  name,
-  onMake,
-}: {
-  isDefault: boolean;
-  name: string;
-  onMake: () => void;
-}) {
-  // `!`: a focused menu item recolours every descendant.
-  if (isDefault)
-    return (
-      <Badge
-        variant="secondary"
-        className="self-center type-caption font-normal text-muted-foreground!"
-      >
-        Default
-      </Badge>
-    );
-  return (
-    <button
-      type="button"
-      tabIndex={-1}
-      aria-label={`Make ${name} the default for new threads`}
-      // Radix items select on pointerup when they never saw the pointerdown, so both stay here.
-      onPointerDown={(e) => e.stopPropagation()}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation();
-        onMake();
-      }}
-      className="h-5 shrink-0 cursor-default self-center rounded-sm px-1.5 type-caption text-muted-foreground! opacity-0 group-data-highlighted/item:opacity-100 hover:bg-foreground/10 hover:text-foreground!"
-    >
-      Make default
-    </button>
-  );
-}
-
-// Items reserve `pr-8` for the check; an unchecked one gives it to the default slot so Make default sits at the edge.
-const UNCHECKED_FLUSH = 'data-[state=unchecked]:pr-1';
-
-/** ⌘↵ (Ctrl+↵) on a highlighted item makes it the default instead of picking it. */
-function makeDefaultKeys(make: () => void) {
-  return (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
-    e.preventDefault();
-    make();
-  };
 }

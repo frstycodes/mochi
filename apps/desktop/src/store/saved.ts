@@ -23,7 +23,7 @@ export interface Saved {
   forks: Record<string, Fork>;
 }
 
-/** On disk the save is split so each write touches only the threads that changed (`electron/ipc/threadStore.ts`). */
+/** The save is split so each write touches only the threads that changed: one row per thread in Core's store (`packages/core/src/store/store.ts`). */
 interface SavedIndex extends Omit<Saved, 'threads' | 'checkpoints' | 'forks'> {
   threadIds: string[];
 }
@@ -312,8 +312,8 @@ const decodeThread = Schema.decodeUnknownOption(
 );
 
 /**
- * The index and thread files joined, each validated and upgraded (`Persist`); a `threads.json` from before the split is the
- * whole save in the index. Null when the index is none this version reads. A thread file that won't decode costs that
+ * The index and thread JSON joined, each validated and upgraded (`Persist`); a `threads.json` from before the split is the
+ * whole save in the index. Null when the index is none this version reads. A thread that won't decode costs that
  * thread, not the others.
  */
 export function joinSaved({ index, threads }: SavedFiles): Saved | null {

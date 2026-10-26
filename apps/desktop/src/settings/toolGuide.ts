@@ -38,14 +38,14 @@ export const TOOL_GUIDE = {
   },
   settle_thread: {
     group: 'Threads',
-    label: 'Archive threads',
+    label: 'Settle threads',
     description:
       'Move finished or abandoned threads out of the active list and stop their agents. Never its own thread.',
   },
   reactivate_thread: {
     group: 'Threads',
-    label: 'Unarchive threads',
-    description: 'Bring archived threads back to the active list.',
+    label: 'Reactivate threads',
+    description: 'Bring settled threads back to the active list.',
   },
   pin_thread: {
     group: 'Threads',
@@ -68,6 +68,12 @@ export const TOOL_GUIDE = {
     label: 'Watch threads',
     description:
       'Start or stop watching a thread, so its events toast for you.',
+  },
+  settle_when_merged: {
+    group: 'Threads',
+    label: 'Settle when merged',
+    description:
+      "Turn Auto-settle on or off for a thread's pull requests, so it settles once they merge or close.",
   },
   create_thread: {
     group: 'Threads',

@@ -1,4 +1,5 @@
 import type { SearchEngine } from '@mochi/domain/host/types/browser';
+import type { MergeMethod } from '../host/types/git.ts';
 import type { PaneTabKind } from '../model.ts';
 import type { SharedAccess } from '../runtime/access.ts';
 import type { ToolPolicies } from '../runtime/toolPolicy.ts';
@@ -57,13 +58,17 @@ export interface Prefs {
   branchPrefix: string;
   /** A PR a thread opens or picks up starts with Auto-fix on (`src/git/autofixToggle.ts`). */
   autofixPrs: boolean;
-  /** A PR a thread opens or picks up starts with Auto-archive on (`src/git/autoArchive.ts`). */
+  /** A PR a thread opens or picks up starts with Auto-settle on (`src/git/autoArchive.ts`). */
   autoArchivePrs: boolean;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
   diffStyle: 'unified' | 'split';
+  /** The PR pane's last merge method, like GitHub remembers it; a method the repo disallows falls back to its first. */
+  mergeMethod: MergeMethod;
   /** Days after settling that a thread's worktree is removed (`useWorktreeCleanup`); `never` keeps them. */
   worktreeCleanup: 'never' | '1' | '7' | '30';
+  /** Days after settling that a thread is deleted (`useSettledCleanup`); `never` keeps them. */
+  settledCleanup: 'never' | '30' | '90' | '180';
   terminalFontSize: number;
   terminalScrollback: number;
   restoreTerminals: boolean;
@@ -136,7 +141,9 @@ export const DEFAULT_PREFS: Prefs = {
   autoArchivePrs: false,
   workspaceMode: 'worktree',
   diffStyle: 'unified',
+  mergeMethod: 'squash',
   worktreeCleanup: '7',
+  settledCleanup: 'never',
   terminalFontSize: 12,
   terminalScrollback: 5000,
   restoreTerminals: true,

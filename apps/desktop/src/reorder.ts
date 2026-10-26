@@ -1,4 +1,5 @@
 import { isListed, isStreamedOnly, PIN_SLOTS, type Thread } from './model.ts';
+import { settledMsOf } from './settled/settled.ts';
 
 /**
  * Sidebar drag and drop: pinned threads take Orbit slots in list order, both lists keep the dropped order, threads not listed
@@ -111,6 +112,21 @@ export function pinnedThreads(threads: Thread[], spaceId: string) {
     .sort((a, b) => a.orbitSlot! - b.orbitSlot!);
 }
 
+/**
+ * Settled threads, latest settled first by the wall clock (`settledMsOf`). Ones with no wall-clock time follow, ordered on the
+ * app clock: `settledAt`, or for one settled before that was stored, its last activity. The two clocks never compare.
+ */
+export function settledThreads(threads: Thread[]) {
+  const appClock = (t: Thread) => t.settledAt ?? lastActivityAt(t);
+  return threads
+    .filter((t) => t.status === 'settled')
+    .sort(
+      (a, b) =>
+        (settledMsOf(b) ?? 0) - (settledMsOf(a) ?? 0) ||
+        appClock(b) - appClock(a),
+    );
+}
+
 /** A space's unpinned threads, most recent activity first; only pinned threads keep a manual order. */
 export function activeThreads(threads: Thread[], spaceId: string) {
   return threads
@@ -174,7 +190,7 @@ export function nestBlocker(threads: Thread[], id: string, parentId: string) {
 
 /**
  * A top-level sidebar row with its whole open subtree one level under it, depth first (like Claude's sessions under the top
- * session); finished ones leave it for Archived. The data keeps the real tree: `parent` is the thread that started it.
+ * session); finished ones leave it for Settled. The data keeps the real tree: `parent` is the thread that started it.
  */
 export interface ThreadGroup {
   thread: Thread;

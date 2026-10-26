@@ -161,6 +161,8 @@ export interface ActivityEntry {
   output?: string;
   exitCode?: number;
   patch?: string;
+  /** Shell commands: the files the worktree changed in while it ran (`tool-files`). */
+  files?: string[];
   /** Events only: the thread paused here on a usage limit; the latest such entry renders the live limit card while the pause lasts. */
   isLimit?: boolean;
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
@@ -210,7 +212,7 @@ export interface ActivityEntry {
 }
 
 /**
- * A thread the agent suggested (own_initiative: Start / Dismiss), a sub-thread was asked to start (user_asked: Start / Dismiss, as it
+ * A thread the agent suggested (own_initiative: New thread / Do it here / Dismiss), a sub-thread was asked to start (user_asked: Start / Dismiss, as it
  * can't start threads itself), or the agent asked whether to start (offer: New thread / Do it here).
  * Nothing runs until it's started; a pending one expires after `PROPOSAL_TTL`.
  */
@@ -491,6 +493,8 @@ export interface Thread {
   /** Where its pin sorts among all your computers' pins (`pinOrderOf`); unset while unpinned. */
   pinOrder?: number;
   settledAt?: number;
+  /** Wall-clock ms it settled (`markSettled`); `settledAt` is on the app clock. */
+  settledMs?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };
   session?: {

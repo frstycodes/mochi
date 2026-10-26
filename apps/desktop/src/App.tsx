@@ -29,6 +29,8 @@ import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarnessSelector } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
+import { DeleteThreadsLayer } from './settled/DeleteThreads';
+import { useSettledCleanup } from './settled/useSettledCleanup';
 import { RenameLayer } from './RenameDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
@@ -87,6 +89,7 @@ function AppContent() {
                 <PhotoViewer />
                 <FileViewer />
                 <ScheduleLayer />
+                <DeleteThreadsLayer />
                 <RenameLayer />
                 <GoalEditorLayer />
                 <DeviceApprovalLayer />
@@ -201,5 +204,6 @@ function ShellEffects() {
   useCheckoutRecovery();
   useWorktreeCleanup();
   useAutoArchive();
+  useSettledCleanup();
   return null;
 }

@@ -634,6 +634,7 @@ export const ActivityEntry = Schema.Struct({
   output: opt(Schema.String),
   exitCode: opt(Schema.Number),
   patch: opt(Schema.String),
+  files: opt(Schema.Array(Schema.String)),
   isLimit: opt(Schema.Boolean),
   card: opt(Schema.Struct({ id: Schema.String, isOpen: Schema.Boolean })),
   links: opt(Schema.Array(WebLink)),
@@ -832,6 +833,7 @@ export const Thread = Schema.Struct({
   orbitSlot: opt(Schema.Number),
   pinOrder: opt(Schema.Number),
   settledAt: opt(Schema.Number),
+  settledMs: opt(Schema.Number),
   drift: opt(
     Schema.Struct({ isMuted: Schema.Boolean, keeps: opt(Schema.Number) }),
   ),

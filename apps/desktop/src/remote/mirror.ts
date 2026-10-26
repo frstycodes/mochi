@@ -4,7 +4,7 @@ import { mirrorState } from '../store/root.ts';
 import { rankQueue } from '../store/queue.ts';
 import { savedThreadFrom, type SavedThread } from '../store/saved.ts';
 import { isListed } from '../model.ts';
-import { lastActivityAt, pinnedThreads } from '../reorder.ts';
+import { lastActivityAt, pinnedThreads, settledThreads } from '../reorder.ts';
 
 /** One thread's file as the machine saves it. */
 export type MirroredThread = SavedThread;
@@ -78,16 +78,16 @@ export function remoteDecisions(state: State) {
   );
 }
 
-/** A machine's threads for its sidebar group, latest activity first: active ones, and settled ones folded below. Its pins show in Pinned. */
+/** A machine's threads for its sidebar group: active ones by latest activity, and settled ones folded below, latest settled first. Its pins show in Pinned. */
 export function remoteThreads(state: State) {
   const pinned = new Set(
     pinnedThreads(state.threads, state.spaceId).map((t) => t.id),
   );
-  const threads = state.threads
-    .filter((t) => !pinned.has(t.id) && isListed(t))
-    .sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
+  const threads = state.threads.filter((t) => !pinned.has(t.id) && isListed(t));
   return {
-    active: threads.filter((t) => t.status !== 'settled'),
-    settled: threads.filter((t) => t.status === 'settled'),
+    active: threads
+      .filter((t) => t.status !== 'settled')
+      .sort((a, b) => lastActivityAt(b) - lastActivityAt(a)),
+    settled: settledThreads(threads),
   };
 }

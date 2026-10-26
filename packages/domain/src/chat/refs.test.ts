@@ -128,6 +128,7 @@ const pr = (extra: Partial<RefState>): RefState => ({
   isAutoMerge: false,
   checks: null,
   checkCounts: null,
+  mergeMethods: null,
   review: null,
   isNotPlanned: false,
   author: null,

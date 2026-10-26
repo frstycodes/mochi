@@ -1,3 +1,4 @@
+import type { MergeMethod, MergeMode } from '../host/types/git.ts';
 import type { PullRequest, Thread } from '../model.ts';
 
 /** `prs` with `seen` added or updated by number; the same array when nothing changed, so the store neither re-renders nor re-saves. */
@@ -24,7 +25,7 @@ function isSame(a: PullRequest, b: PullRequest) {
 export const OPEN_PR_PROMPT =
   'Open a pull request for this branch: commit what is left, push it, then run gh pr create with --base set explicitly (usually main, or the branch this one was cut from), a Conventional Commits title, and a body written from your turn report: What, Why, Checks. If a check or gap blocks it, tell me what is missing instead.';
 
-/** Auto-archive (`useAutoArchive`) is due: a PR has it on, every PR merged or closed, and the agent idle; until then it waits. */
+/** Auto-settle (`useAutoArchive`) is due: a PR has it on, every PR merged or closed, and the agent idle; until then it waits. */
 export function isArchiveDue(thread: Thread) {
   if (thread.status === 'settled' || thread.live?.isWorking) return false;
   return (
@@ -48,12 +49,13 @@ export function autoMergeArgs(
   return ['pr', 'merge', String(pr), '--auto', mergeMethod(allowed)];
 }
 
-/** `gh pr merge` merging now with the first method the repo allows. */
-export const mergeArgs = (pr: number, allowed: MergeMethods) => [
+/** `gh pr merge` with `method`. Plain `now` must only run once checks pass: gh quietly turns it into auto-merge while required checks are pending. */
+export const mergeArgs = (pr: number, method: MergeMethod, mode: MergeMode) => [
   'pr',
   'merge',
   String(pr),
-  mergeMethod(allowed),
+  `--${method}`,
+  ...(mode === 'bypass' ? ['--admin'] : mode === 'auto' ? ['--auto'] : []),
 ];
 
 function mergeMethod(allowed: MergeMethods) {

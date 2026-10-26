@@ -293,7 +293,8 @@ const demoRef = (
     branch: { head: `feat/demo-${number}`, base: 'main' },
     diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 },
     checks: 'pass',
-    checkCounts: { passed: 5, total: 5 },
+    checkCounts: { passed: 5, failed: 0, running: 0, total: 5 },
+    mergeMethods: ['squash', 'merge'],
     review: 'approved',
   }),
   ...extra,
@@ -310,6 +311,7 @@ const DEMO_REVIEW = {
   base: 'main',
   head: 'feat/admin-usage',
   isConflicting: false,
+  mergeMethods: ['squash', 'merge'],
   viewer: 'frstycodes',
   checks: [
     { name: 'typecheck', state: 'pass' },
@@ -407,11 +409,11 @@ const DEMO_REFS: Record<number, RefState> = {
   ),
   48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', {
     checks: 'fail',
-    checkCounts: { passed: 3, total: 5 },
+    checkCounts: { passed: 3, failed: 1, running: 1, total: 5 },
   }),
   49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links', {
     checks: 'pending',
-    checkCounts: { passed: 3, total: 5 },
+    checkCounts: { passed: 3, failed: 0, running: 2, total: 5 },
     review: null,
   }),
   47: demoRef(
@@ -432,13 +434,13 @@ const DEMO_REFS: Record<number, RefState> = {
   482: demoRef('pr', 'open', 482, 'Session backfill + legacy removal', {
     branch: { head: 'feat/better-auth-backfill', base: 'main' },
     checks: 'fail',
-    checkCounts: { passed: 4, total: 6 },
+    checkCounts: { passed: 4, failed: 2, running: 0, total: 6 },
     review: 'changes',
   }),
   484: demoRef('pr', 'open', 484, 'Keep the latitude.sid cookie name', {
     branch: { head: 'fix/session-cookie', base: 'feat/better-auth-backfill' },
     checks: 'pending',
-    checkCounts: { passed: 3, total: 5 },
+    checkCounts: { passed: 3, failed: 0, running: 2, total: 5 },
     review: 'required',
   }),
   485: demoRef('pr', 'draft', 485, 'Passkeys on the login page', {

@@ -466,6 +466,7 @@ const VIEW_KINDS = {
   queue: true,
   projects: true,
   usage: true,
+  settled: true,
   new: true,
   thread: true,
   tab: true,

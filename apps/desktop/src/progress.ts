@@ -20,7 +20,7 @@ export const GOAL_PHASE_LABELS = {
   building: 'Building',
   verifying: 'Verifying',
   ready: 'Ready for review',
-  settled: 'Archived',
+  settled: 'Settled',
 } satisfies Record<Phase, string>;
 
 /**

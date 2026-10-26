@@ -117,6 +117,7 @@ export const FileDownload = solar(
   Bold.FileDownloadIcon,
 );
 export const FileText = solar(Linear.FileTextIcon, Bold.FileTextIcon);
+export const Filter = solar(Linear.FilterIcon, Bold.FilterIcon);
 export const Flag = solar(Linear.FlagIcon, Bold.FlagIcon);
 export const Flash = solar(Linear.BoltIcon, Bold.BoltIcon);
 export const Folder = solar(Linear.FolderIcon, Bold.FolderIcon);

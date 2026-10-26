@@ -83,6 +83,7 @@ export function Transcript({
     }),
     [virtualizer],
   );
+  useSyncScrollOffset(scrollRef, virtualizer);
   useRememberScroll(threadId, virtualizer, isAtBottom);
   useRevealCard(rows, virtualizer);
   useGapCheck(list, scrollRef, contentRef, virtualizer);
@@ -145,6 +146,25 @@ function useOffsetIn(
     return () => ro.disconnect();
   }, [list, scrollRef, contentRef]);
   return offset;
+}
+
+/**
+ * The virtualizer learns the scroller's offset only from scroll events, and `initialOffset` guesses the bottom. A thread whose rows fit
+ * the viewport never scrolls, so no event corrects the guess and only its last rows mount, leaving the top of the chat empty. The
+ * virtualizer attaches on the render after `scrollMargin` is measured (the scroller is an ancestor, so its ref is unset on the first
+ * render); replay a scroll when the two disagree so it reads the real offset.
+ */
+function useSyncScrollOffset(
+  scrollRef: RefObject<HTMLElement | null>,
+  virtualizer: Virtualizer,
+) {
+  // Every render: the attach happens in a render nothing else marks.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || virtualizer.scrollElement !== scroller) return;
+    if (scroller.scrollTop === virtualizer.scrollOffset) return;
+    scroller.dispatchEvent(new Event('scroll'));
+  });
 }
 
 const GAP_CHECK_SETTLE_MS = 250;

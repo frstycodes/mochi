@@ -26,6 +26,7 @@ import {
   Stop,
   ShieldAlert,
   ShieldCheck,
+  Danger,
   type IconComponent,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -61,6 +62,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
+import { useWorktreePath } from './git/worktrees';
 import { useGitDiff } from './git/useGit';
 import { DiffIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
@@ -75,6 +77,8 @@ import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { ThreadName } from './chat/ThreadMessage';
 import { refDescription, type ChecksState } from '@mochi/domain/chat/refs';
 import { usePrSwitches } from './git/prSwitches';
+import { MergeSubmenu } from './git/MergeButton';
+import { useThreadPrMerge } from './git/prMerge';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import { OPEN_PR_PROMPT } from './git/prs';
@@ -422,6 +426,7 @@ function NeedsYou({ thread }: { thread: Thread }) {
 
 function EnvironmentCard({ thread }: CardProps) {
   const { repo, agent } = thread;
+  const worktree = useWorktreePath(thread.id);
   const fullAccess = isFullAccess(agent?.permissionMode);
   return (
     <>
@@ -465,7 +470,13 @@ function EnvironmentCard({ thread }: CardProps) {
                 ? undefined
                 : () => copyText(repo.branch, 'Branch name copied')
             }
-          />
+          >
+            {!!worktree && (
+              <span className="pointer-events-none max-w-24 truncate type-meta text-subtle-foreground">
+                {basenameOf(worktree)}
+              </span>
+            )}
+          </SummaryRow>
         )}
         {!!agent?.model && (
           <SummaryRow
@@ -498,6 +509,7 @@ function EnvironmentCard({ thread }: CardProps) {
   );
 }
 
+const basenameOf = (path: string) => path.replace(/\/+$/, '').split('/').pop()!;
 const parentOf = (path: string) => path.replace(/\/[^/]+\/?$/, '') || '/';
 const homeShort = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
 
@@ -848,6 +860,8 @@ function BranchChanges({
       thread={thread}
       prs={prs}
       files={diffQuery.data?.files}
+      error={diffQuery.error}
+      onRetry={diffQuery.refresh}
       open={open}
     />
   );
@@ -857,11 +871,15 @@ function ChangesBody({
   thread,
   prs,
   files,
+  error,
+  onRetry,
   open,
 }: {
   thread: Thread;
   prs: ThreadPr[];
   files?: { added: number; removed: number }[];
+  error?: string;
+  onRetry?: () => void;
   open: CardProps['open'];
 }) {
   const added = files?.reduce((n, f) => n + f.added, 0) ?? 0;
@@ -895,10 +913,31 @@ function ChangesBody({
             {hasChanges && <DiffCount added={added} removed={removed} />}
           </SummaryRow>
         )}
+        {!files && prs.length === 0 && (
+          <DiffPendingRow error={error} onRetry={onRetry} />
+        )}
         {canOpenPr && <CreatePrRow thread={thread} />}
         <SubThreadPrs parent={thread} onOpen={open.url} />
       </CardBody>
     </>
+  );
+}
+
+/** The branch diff not read yet, or its read failed: the card says which instead of showing a bare header. */
+function DiffPendingRow({
+  error,
+  onRetry,
+}: {
+  error?: string;
+  onRetry?: () => void;
+}) {
+  if (!error) return <SummaryRow icon={DiffIcon} label="Reading changes…" />;
+  return (
+    <SummaryRow
+      icon={<Danger className="size-4 text-destructive" />}
+      label={<span title={error}>Couldn't read changes</span>}
+      onClick={onRetry}
+    />
   );
 }
 
@@ -1294,42 +1333,56 @@ function CheckCount({
 
 function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
   const switches = usePrSwitches(thread, item);
+  const merge = useThreadPrMerge(thread, item);
   const url = item.state.url;
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`${item.label} options`}
-          className="relative z-10 -my-1 -mr-1"
-        >
-          <OverflowIcon vertical />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
-        {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
-        <DropdownMenuItem
-          onSelect={() => window.open(url, '_blank', 'noreferrer')}
-        >
-          Open on GitHub
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>
-          Copy link
-        </DropdownMenuItem>
-        {switches.length > 0 && <DropdownMenuSeparator />}
-        {switches.map((s) => (
-          <DropdownMenuCheckboxItem
-            key={s.id}
-            checked={s.isOn}
-            onCheckedChange={s.set}
-            onSelect={(e) => e.preventDefault()}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`${item.label} options`}
+            className="relative z-10 -my-1 -mr-1"
           >
-            {s.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <OverflowIcon vertical />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto">
+          {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
+          <DropdownMenuItem
+            onSelect={() => window.open(url, '_blank', 'noreferrer')}
+          >
+            Open on GitHub
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>
+            Copy link
+          </DropdownMenuItem>
+          {switches.length > 0 && <DropdownMenuSeparator />}
+          {switches.map((s) => (
+            <DropdownMenuCheckboxItem
+              key={s.id}
+              checked={s.isOn}
+              onCheckedChange={s.set}
+              onSelect={(e) => e.preventDefault()}
+            >
+              {s.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+          {!!merge && (
+            <>
+              <DropdownMenuSeparator />
+              <MergeSubmenu
+                allowed={merge.allowed}
+                isDisabled={merge.isBusy || merge.isConflicting}
+                onPick={merge.request}
+              />
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {merge?.dialog}
+    </>
   );
 }
 

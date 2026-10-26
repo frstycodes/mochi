@@ -36,6 +36,7 @@ import { layoutReducer } from '../store/layout.ts';
 import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { sidechatReducer } from '../store/sidechat.ts';
+import { scheduleReducer } from '../schedule/slice.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
@@ -58,6 +59,7 @@ const SLICES = [
   panesReducer,
   layoutReducer,
   sidechatReducer,
+  scheduleReducer,
 ];
 const reduce = (s: State, a: Action): State =>
   a.type === 'tool-undo'
@@ -699,25 +701,13 @@ test('new tasks and subtasks inherit the running session and honor user-named mo
         { effort: 'max' },
         { model: other, effort: 'max' },
       ]) {
-        // Every pick here runs above the session (another model, or max over low), so it waits on your approval.
-        const pending =
-          picked.model || picked.effort
-            ? await t.asking('create_thread', {
-                initiation: 'user_asked',
-                prompt: 'Fix login',
-                isFromDefaultBranch,
-                ...picked,
-              })
-            : null;
-        if (pending) decideTool(pending.card.id, { isApproved: true });
-        const r = pending
-          ? await pending.result
-          : await t.call('create_thread', {
-              initiation: 'user_asked',
-              prompt: 'Fix login',
-              isFromDefaultBranch,
-              ...picked,
-            });
+        // Any pick the account offers starts without approval, above the session or not.
+        const r = await t.call('create_thread', {
+          initiation: 'user_asked',
+          prompt: 'Fix login',
+          isFromDefaultBranch,
+          ...picked,
+        });
         assert.ok(!r.isError, r.text);
         const created = JSON.parse(r.text);
         assert.deepEqual(t.thread(created.id).controls, {
@@ -816,15 +806,13 @@ test('create_thread resolves unset models, isolates provider changes, and passes
     access: 'Auto',
   });
   t.env.models = async () => [];
-  // Without a catalog nothing ranks the pick, so another model asks first.
-  const pending = await t.asking('create_thread', {
+  // Without a catalog a user-named model starts without approval too.
+  const unlisted = await t.ok('create_thread', {
     initiation: 'user_asked',
     prompt: 'Use a user-named model',
     model: 'custom-model',
     effort: 'custom-effort',
   });
-  decideTool(pending.card.id, { isApproved: true });
-  const unlisted = JSON.parse((await pending.result).text);
   assert.deepEqual(t.thread(unlisted.id).controls, {
     model: 'custom-model',
     effort: 'custom-effort',
@@ -888,7 +876,7 @@ test('isFromDefaultBranch nests the thread but bases it on the default branch', 
   assert.equal(t.thread(stacked.id).repo?.base, 'feat/api-rate-limits');
 });
 
-test("a new thread can't run above its parent: higher picks ask first, lower ones and permissions pass straight through", async () => {
+test('a new thread may run above its parent without asking, but never with looser permissions', async () => {
   const t = setup();
   t.env.models = async (provider) =>
     provider === 'codex'
@@ -928,14 +916,12 @@ test("a new thread can't run above its parent: higher picks ask first, lower one
     effort: 'low',
   });
   assert.equal(t.thread(lower.id).controls?.effort, 'low');
-  const pending = await t.asking('create_thread', {
+  const higher = await t.ok('create_thread', {
     initiation: 'user_asked',
     prompt: 'Think hard',
     effort: 'max',
   });
-  assert.match(pending.card.detail ?? '', /max effort, above this thread/);
-  decideTool(pending.card.id, { isApproved: false });
-  assert.match((await pending.result).text, /denied/);
+  assert.equal(t.thread(higher.id).controls?.effort, 'max');
   const switched = await t.ok('create_thread', {
     initiation: 'user_asked',
     prompt: 'Use Codex',
@@ -1109,20 +1095,12 @@ test('changes runs everything that doesn’t ask, and blocks deletes and setting
   );
 });
 
-test('changes log in the caller, toast with Undo, and Undo puts back only what still holds the result', async () => {
+test('thread changes log in the caller without a toast', async () => {
   const t = setup();
   const r = await t.ok('settle_thread', { threadIds: ['adm', 'e2e'] });
   assert.equal(r.changed, 'Settled 2 threads');
   assert.equal(lastLog(t.thread('rl')), 'Claude settled 2 threads');
-  assert.equal(t.toasts.at(-1)!.text, 'Claude settled 2 threads');
-  t.env.dispatch({ type: 'rename', threadId: 'e2e', title: 'Renamed since' });
-  t.toasts.at(-1)!.undo!();
-  assert.equal(t.thread('adm').status, 'running');
-  assert.equal(
-    t.thread('e2e').title,
-    'Renamed since',
-    'a later change survives the undo',
-  );
+  assert.equal(t.toasts.length, 0);
 });
 
 test('quiet tools log but never toast', async () => {
@@ -1267,7 +1245,30 @@ test('watch_thread toggles only when needed', async () => {
   assert.deepEqual(t.state().watched, []);
 });
 
-test('create_thread creates in the same project without moving your view, and Undo removes it', async () => {
+test('settle_when_merged flips Auto-settle on the thread’s PRs and refuses when it has none', async () => {
+  const t = setup();
+  assert.match(
+    await t.err('settle_when_merged', { isOn: true }),
+    /no pull request/,
+  );
+  const { id, prs } = t.state().threads.find((th) => th.prs.length)!;
+  await t.ok('settle_when_merged', { threadId: id, isOn: true });
+  assert.ok(t.thread(id).prs.every((p) => p.autoArchive));
+  await t.ok('settle_when_merged', {
+    threadId: id,
+    pr: prs[0].number,
+    isOn: false,
+  });
+  assert.ok(
+    !t.thread(id).prs.find((p) => p.number === prs[0].number)?.autoArchive,
+  );
+  assert.match(
+    await t.err('settle_when_merged', { threadId: id, pr: 99999, isOn: true }),
+    /isn't on this thread/,
+  );
+});
+
+test('create_thread creates in the same project without moving your view or toasting', async () => {
   const t = setup();
   const r = await t.ok('create_thread', {
     initiation: 'user_asked',
@@ -1280,18 +1281,10 @@ test('create_thread creates in the same project without moving your view, and Un
     ['Add a rate limit dashboard', 'codex', 'latitude'],
   );
   assert.deepEqual(t.state().views, { latitude: { kind: 'thread', id: 'rl' } });
-  assert.equal(
-    t.toasts.at(-1)!.text,
-    'Claude started "Add a rate limit dashboard"',
-  );
-  t.toasts.at(-1)!.undo!();
-  assert.equal(
-    t.state().threads.some((x) => x.id === r.id),
-    false,
-  );
+  assert.equal(t.toasts.length, 0);
 });
 
-test('send_to_thread sends into the other thread as a message from this one, with no Undo', async () => {
+test('send_to_thread sends into the other thread as a message from this one, without a toast', async () => {
   const t = setup();
   const sender = t.thread('rl');
   t.env.dispatch({
@@ -1332,7 +1325,7 @@ test('send_to_thread sends into the other thread as a message from this one, wit
     },
     "the sender's call row knows what it sent",
   );
-  assert.equal(t.toasts.at(-1)!.undo, undefined);
+  assert.equal(t.toasts.length, 0);
 });
 
 test('delete_thread with approval removes the thread everywhere, and the worktree only when ticked', async () => {
@@ -3126,7 +3119,7 @@ test('own_initiative proposes a card and starts nothing; Start creates it nested
     ...brief('Share the token bucket'),
   });
   assert.equal(r.state, 'pending');
-  assert.match(r.note, /nothing runs until they start it/);
+  assert.match(r.note, /nothing runs until they choose/);
   assert.equal(t.state().threads.length, threads, 'no thread yet');
   const [card] = cardsOf(t.thread('rl'));
   assert.deepEqual(

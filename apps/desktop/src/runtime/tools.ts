@@ -738,39 +738,54 @@ const THREAD_SPECS = {
       };
     },
   },
+  settle_when_merged: {
+    run: ({ state, caller, args, dispatch }) => {
+      const thread = target(state(), caller, args.threadId);
+      const prs = thread.prs.filter(
+        (p) => args.pr === undefined || p.number === args.pr,
+      );
+      if (!prs.length)
+        throw new Error(
+          args.pr === undefined
+            ? 'This thread has no pull request yet; open one first'
+            : `Pull request #${args.pr} isn't on this thread`,
+        );
+      for (const p of prs)
+        dispatch({
+          type: 'auto-archive-set',
+          threadId: thread.id,
+          pr: p.number,
+          isOn: args.isOn,
+        });
+      return {
+        changed: `${args.isOn ? 'turned on' : 'turned off'} Auto-settle for ${prs.map((p) => `#${p.number}`).join(', ')}`,
+        result: {
+          threadId: thread.id,
+          pullRequests: prs.map((p) => p.number),
+          isOn: args.isOn,
+        },
+      };
+    },
+  },
   create_thread: {
-    // A top-level thread and picks above this thread's run wait on the user: an agent can't raise what it was started with, nor take
-    // work out from under the thread that coordinates it. A sub-thread's other user_asked threads become cards (`isCardFromSubThread`).
-    // A card asks nothing: nothing runs until the user starts it. Nor does a turn `run` refuses (`AGENT_DRIVEN`).
-    ask: async ({ env, caller, args }) => {
+    // A top-level thread waits on the user: an agent can't take work out from under the thread that coordinates it. A sub-thread's
+    // other user_asked threads become cards (`isCardFromSubThread`). A card asks nothing: nothing runs until the user starts it.
+    // Nor does a turn `run` refuses (`AGENT_DRIVEN`). Any model or effort the account offers needs no approval.
+    ask: ({ caller, args }) => {
       if (!args.proposalId && args.initiation !== 'user_asked')
         return undefined;
       if (turnOf(caller).isAgentDriven) return undefined;
       // Refuses a link that can't be made before the user is asked about it.
       subThreadLink(caller, args);
-      const raised = await raisedControls(
-        env,
-        caller,
-        providerOf(args.provider, caller),
-        args,
-      );
-      if (!args.isTopLevel && !raised.length) return undefined;
-      const reasons = [
-        args.isTopLevel &&
-          'It would start top-level, not nested under this thread.',
-        raised.length &&
-          `It would run ${raised.join(' at ')}, above this thread.`,
-      ];
-      // The agent only suggests top-level; you pick where it goes.
-      const placement = args.isTopLevel
-        ? { options: PLACEMENTS, pick: 'one' as const }
-        : {};
+      if (!args.isTopLevel) return undefined;
       return {
         title: `${authorName(caller.providers[0])} wants to start a thread`,
-        detail: reasons.filter(Boolean).join(' '),
+        detail: 'It would start top-level, not nested under this thread.',
         code: args.prompt ?? args.proposalId,
         denied: "Didn't start the thread",
-        ...placement,
+        // The agent only suggests top-level; you pick where it goes.
+        options: PLACEMENTS,
+        pick: 'one' as const,
       };
     },
     run: async (ctx, [placement]) => {
@@ -794,7 +809,7 @@ const THREAD_SPECS = {
       const create = await proposalCreate({ ...ctx, args });
       if (
         args.initiation !== 'user_asked' ||
-        (await isCardFromSubThread({ ...ctx, args }))
+        isCardFromSubThread({ ...ctx, args })
       )
         return propose(ctx, args.initiation, prompt, create);
       const before = state();
@@ -1457,21 +1472,17 @@ const PROPOSAL_NOTES = {
   offer:
     'The user sees New thread / Do it here / Dismiss. Don\'t start the work: end your turn now with one short line. New thread starts it with your brief; "Do it here." or a dismissal comes back as their message.',
   own_initiative:
-    'The user sees a card with Start and Dismiss; nothing runs until they start it. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.',
+    'The user sees a card with New thread, Do it here and Dismiss; nothing runs until they choose, and Do it here comes back to you as their message with the brief. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.',
   user_asked:
     "Proposed and waiting: this thread is a sub-thread, so the threads it starts go on one card for the user, with Start, Dismiss and Start all. Don't retry or wait on it; carry on, or end your turn. Each one they start nests under this thread and its notes come back to you.",
 } satisfies Record<ThreadProposal['initiation'], string>;
 
-/** A sub-thread's user_asked thread that asks nothing else (placement, a raised pick) goes on its turn's card instead of starting. */
-async function isCardFromSubThread({
-  env,
+/** A sub-thread's user_asked thread that asks nothing else (placement) goes on its turn's card instead of starting. */
+function isCardFromSubThread({
   caller,
   args,
 }: ToolContext<Args<'create_thread'>>) {
-  if (!caller.parent || args.isTopLevel) return false;
-  return !(
-    await raisedControls(env, caller, providerOf(args.provider, caller), args)
-  ).length;
+  return !!caller.parent && !args.isTopLevel;
 }
 
 /** The user told the agent to start a card it proposed. */
@@ -1543,42 +1554,6 @@ function callerRun(caller: Thread) {
     model: caller.agent?.model ?? controls.model,
     effort: caller.agent?.effort ?? controls.effort,
   };
-}
-
-/** What a pick runs above the caller: another model, or an effort past the caller's in the model's list. GAP: models carry no rank, so any other model counts. */
-async function raisedControls(
-  env: ToolEnv,
-  caller: Thread,
-  provider: Provider,
-  picked: { model?: string; effort?: string },
-) {
-  if (!picked.model && !picked.effort) return [];
-  const origin =
-    env.getState().threads.find((t) => t.id === caller.id) ?? caller;
-  const running = callerRun(origin);
-  const own = await env.models(origin.providers[0], caller.spaceId);
-  const runModel =
-    resolveRun(own, running.model, running.effort, '').model ?? running.model;
-  const models =
-    provider === origin.providers[0]
-      ? own
-      : await env.models(provider, caller.spaceId);
-  const model =
-    picked.model ?? (provider === origin.providers[0] ? runModel : undefined);
-  const efforts = models.find((m) => m.id === model)?.efforts ?? [];
-  // A model the account doesn't offer isn't asked about: the run refuses it.
-  const isModelRaised =
-    !!picked.model &&
-    picked.model !== runModel &&
-    (!models.length || models.some((m) => m.id === picked.model));
-  const isEffortRaised =
-    !!picked.effort &&
-    picked.effort !== running.effort &&
-    efforts.indexOf(picked.effort) > efforts.indexOf(running.effort);
-  return [
-    ...(isModelRaised ? [picked.model!] : []),
-    ...(isEffortRaised ? [`${picked.effort} effort`] : []),
-  ];
 }
 
 const count = (threads: Thread[]) =>

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 
 const ACCORDION = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
-/** A sidebar group folded under its label and count (Archived, Projects); the label toggles it. */
+/** A sidebar group folded under its label and count (Settled, Projects); the label toggles it. */
 export function FoldGroup({
   label,
   count,

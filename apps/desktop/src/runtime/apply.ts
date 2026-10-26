@@ -170,6 +170,13 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
           e.toolId === event.id ? { ...e, description: event.description } : e,
         ),
       }));
+    case 'tool-files':
+      return update((t) => ({
+        ...t,
+        activity: t.activity.map((e) =>
+          e.toolId === event.id ? { ...e, files: event.files } : e,
+        ),
+      }));
     case 'plan':
       return applyPlan(state, thread, event.items, event.isFresh);
     case 'subagent':

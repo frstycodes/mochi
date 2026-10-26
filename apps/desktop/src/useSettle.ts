@@ -20,7 +20,7 @@ export function toggleSettle(threads: Thread[], dispatch: Dispatch<Action>) {
     threads.forEach((t) => dispatch({ type, threadId: t.id }));
   each(isSettled ? 'unsettle' : 'settle');
   const count = plural(threads.length, 'Thread', `${threads.length} threads`);
-  toast(isSettled ? `${count} active again` : `${count} archived`, {
+  toast(isSettled ? `${count} active again` : `${count} settled`, {
     description: isSettled
       ? undefined
       : 'Agent, terminals and dev servers stopped, PR watches too.',

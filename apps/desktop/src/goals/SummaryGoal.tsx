@@ -84,7 +84,7 @@ export function SummaryGoalHeader({
   );
 }
 
-/** Idle: the verdict in the sidebar chip's icon, tone and words. Working: the ring spins and the step in flight shimmers. Archived says so. */
+/** Idle: the verdict in the sidebar chip's icon, tone and words. Working: the ring spins and the step in flight shimmers. Settled says so. */
 export function SummaryGoalStatus({
   thread,
   verdict,
@@ -106,7 +106,7 @@ export function SummaryGoalStatus({
       <StatusLine
         icon={<CheckBadge className="size-3.5 text-subtle-foreground" />}
       >
-        Archived
+        Settled
       </StatusLine>
     );
   if (verdict && !working)

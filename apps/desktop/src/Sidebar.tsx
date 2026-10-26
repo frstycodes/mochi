@@ -70,7 +70,6 @@ import {
   rootOf,
   pinnedThreads,
   pinOrderOf,
-  sidebarGroups,
   stepPin,
   type DropAt,
   type ThreadGroup,
@@ -118,6 +117,13 @@ import { UserMenu } from './UserMenu';
 import { FoldGroup } from './SidebarFold';
 import { ProjectIcon } from './ProjectIcon';
 import { useProjectAt } from './projects';
+import {
+  filteredSidebarLists,
+  matchesProjectFilter,
+  useProjectFilter,
+  type ProjectFilter,
+} from './projectFilter';
+import { ProjectFilterMenu } from './ProjectFilterMenu';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { host } from './host';
 
@@ -331,8 +337,13 @@ function SpaceNav({
     setOpenMobile(false);
   };
 
-  const { pinned, active } = sidebarGroups(threads, spaceId);
-  const settled = threads.filter((t) => t.status === 'settled');
+  const projectFilter = useProjectFilter(spaceId, threads);
+  const {
+    pinned,
+    active,
+    settled: allSettled,
+  } = filteredSidebarLists(threads, spaceId, projectFilter.selected);
+  const settled = allSettled.slice(0, SIDEBAR_SETTLED);
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
   const order = [
     ...[...pinned, ...active].flatMap((g) => [g.thread, ...g.subs]),
@@ -396,14 +407,22 @@ function SpaceNav({
       <div className="contents" onKeyDown={selection.onKeyDown}>
         <ThreadList
           pinned={pinned}
-          remotePins={useRemotePins()}
+          remotePins={useRemotePins(projectFilter.selected)}
           active={active}
           row={row}
           selectedIds={selection.ids}
+          filterMenu={
+            <ProjectFilterMenu
+              spaceId={spaceId}
+              filter={projectFilter}
+              className="absolute top-1.5 right-3 z-10"
+            />
+          }
+          isFiltered={projectFilter.selected !== null}
         />
 
         {settled.length > 0 && (
-          <FoldGroup label="Archived" count={settled.length}>
+          <FoldGroup label="Settled" count={allSettled.length}>
             {settled.map((t) => (
               <ThreadRowMenu
                 key={t.id}
@@ -415,6 +434,17 @@ function SpaceNav({
                 </SidebarMenuItem>
               </ThreadRowMenu>
             ))}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={view.kind === 'settled'}
+                onClick={() => go({ kind: 'settled' })}
+                className="h-7 type-caption text-muted-foreground"
+              >
+                {allSettled.length > settled.length
+                  ? `View all ${allSettled.length}`
+                  : 'View all'}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </FoldGroup>
         )}
       </div>
@@ -422,6 +452,9 @@ function SpaceNav({
     </>
   );
 }
+
+/** The newest settled threads the sidebar lists; View all opens the rest on the Settled page. */
+const SIDEBAR_SETTLED = 10;
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
@@ -453,7 +486,7 @@ function MachineThreads() {
       </SidebarGroupLabel>
     );
     if (!state) return <SidebarGroup key={machine.id}>{label}</SidebarGroup>;
-    // Archived folds below as its own group, level with the machine's, as this computer's own does.
+    // Settled folds below as its own group, level with the machine's, as this computer's own does.
     return (
       <RemoteScope key={machine.id} machine={machine} state={state}>
         <SidebarGroup>
@@ -468,7 +501,7 @@ function MachineThreads() {
           </SidebarMenu>
         </SidebarGroup>
         {settled.length > 0 && (
-          <FoldGroup label="Archived" count={settled.length}>
+          <FoldGroup label="Settled" count={settled.length}>
             {settled.map(row)}
           </FoldGroup>
         )}
@@ -550,12 +583,16 @@ function ThreadList({
   active,
   row,
   selectedIds,
+  filterMenu,
+  isFiltered,
 }: {
   pinned: ThreadGroup[];
   remotePins: RemotePin[];
   active: ThreadGroup[];
   row: (t: Thread, isSub?: boolean) => ReactNode;
   selectedIds: string[];
+  filterMenu: ReactNode;
+  isFiltered: boolean;
 }) {
   const dispatch = useDispatch();
   const getState = useGetState();
@@ -610,7 +647,8 @@ function ThreadList({
   const target = useHarnessSelector(
     (s) => nestUnder && s.threads.find((t) => t.id === nestUnder),
   );
-  if (pins.length + active.length === 0) return null;
+  if (pins.length + active.length === 0)
+    return isFiltered && <NoFilteredThreads filterMenu={filterMenu} />;
 
   const dragged = drag.state && findRow(drag.state.id);
   const step = (id: string, by: 1 | -1) => {
@@ -765,6 +803,7 @@ function ThreadList({
 
   return (
     <SidebarGroup>
+      {filterMenu}
       <DragSurface
         distance={DRAG_THRESHOLD}
         canStart={drag.canStart}
@@ -849,15 +888,25 @@ function mergePins(pinned: ThreadGroup[], remotePins: RemotePin[]): ListRow[] {
 }
 
 /** Your other computers' pinned threads, from what each last streamed. */
-function useRemotePins(): RemotePin[] {
+function useRemotePins(filter: ProjectFilter): RemotePin[] {
   return useMachines().machines.flatMap(({ machine, state }) =>
     state
-      ? pinnedThreads(state.threads, state.spaceId).map((thread) => ({
-          machine,
-          state,
-          thread,
-        }))
+      ? pinnedThreads(state.threads, state.spaceId)
+          .filter((thread) => matchesProjectFilter(thread, filter))
+          .map((thread) => ({ machine, state, thread }))
       : [],
+  );
+}
+
+function NoFilteredThreads({ filterMenu }: { filterMenu: ReactNode }) {
+  return (
+    <SidebarGroup>
+      {filterMenu}
+      <SidebarGroupLabel>Threads</SidebarGroupLabel>
+      <p className="px-2 type-caption text-subtle-foreground">
+        No open threads in this project
+      </p>
+    </SidebarGroup>
   );
 }
 
@@ -1162,7 +1211,7 @@ export function ThreadItem({
             className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden"
           />
         )}
-        {/* Room for the Archive / Unarchive button while it shows, so the title truncates before the button instead of under it. */}
+        {/* Room for the Settle / Reactivate button while it shows, so the title truncates before the button instead of under it. */}
         {!isRenaming && (
           <span
             aria-hidden
@@ -1216,11 +1265,11 @@ export function ThreadItem({
           className="top-1.5! right-2 size-5 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5"
         >
           <TooltipIconButton
-            label={isSettled ? 'Unarchive' : 'Archive'}
+            label={isSettled ? 'Reactivate' : 'Settle'}
             hint={
               isSettled
                 ? 'Moves it back to the active list.'
-                : 'Stops its agent, terminals and dev servers, and files it under Archived.'
+                : 'Stops its agent, terminals and dev servers, and files it under Settled.'
             }
             onClick={settle}
           >

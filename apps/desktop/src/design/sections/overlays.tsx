@@ -86,7 +86,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Block, Grid, Section } from '../layout';
 import { OverflowIcon } from '../../ui';
-import { ModelDefaultsBlock } from './model-defaults';
+import { ModelPickersBlock } from './model-pickers';
 import { ZoomChipBlock } from './zoom-chip';
 
 export function OverlaysSection() {
@@ -140,7 +140,7 @@ export function OverlaysSection() {
             </HoverCard>
           </div>
         </Block>
-        <ModelDefaultsBlock />
+        <ModelPickersBlock />
         <Block
           title="Dropdown and context menu"
           use="Overflow actions on a button; the same actions on right-click."
@@ -165,7 +165,7 @@ export function OverlaysSection() {
                   <DropdownMenuItem>Open in editor</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive">
-                    Archive thread
+                    Settle thread
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -182,7 +182,7 @@ export function OverlaysSection() {
                   <ContextMenuItem>Move to space</ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem variant="destructive">
-                    Archive thread
+                    Settle thread
                   </ContextMenuItem>
                 </ContextMenuGroup>
               </ContextMenuContent>

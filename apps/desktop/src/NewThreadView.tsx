@@ -49,10 +49,14 @@ import {
 import { projectRoot } from './host/cwd';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
-import { MachineModelsContext, useDefaultModels } from './ModelControls';
+import {
+  MachineModelsContext,
+  makeDefaultModel,
+  useDefaultModels,
+} from './ModelControls';
 import type { ThreadControls } from './runtime/controls';
 import { initialControls } from './runtime/startOptions';
-import { contextMax } from './runtime/models';
+import { contextMax, FAST, type ModelOption } from './runtime/models';
 import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
 import { toast } from '@/toast/store';
@@ -99,16 +103,12 @@ function NewThread() {
     () => saved?.provider ?? getPrefs().agent,
   );
   const localDefaults = useDefaultModels();
-  // Subscribed so the defaults below follow Make default in the pickers; `initialControls` reads them once.
+  // Subscribed so the defaults below follow Settings; `initialControls` reads them once.
   usePrefs();
   // The Settings default model until you pick one here.
   const [picked, setPicked] = useState<ThreadControls | null>(
     saved?.picked ?? null,
   );
-  const setControls = (next: ThreadControls, model?: { harness: Provider }) => {
-    if (model) setProvider(model.harness);
-    setPicked(next);
-  };
   const projects = useProjectRows(spaceId);
   // Projects first, then the composer, so a thread starts without the mouse; a kept draft already has its project.
   const [step, setStep] = useState<'project' | 'compose'>(
@@ -157,6 +157,12 @@ function NewThread() {
   const remote = machines.machines.find(
     (m) => m.machine.id === runsOn,
   )?.machine;
+  const setControls = (next: ThreadControls, model?: ModelOption) => {
+    if (model) setProvider(model.harness);
+    setPicked(next);
+    // Another computer's picks are its own; on this one they're what the next new thread starts on.
+    if (!remote) keepAsDefaults(next, model);
+  };
   const { catalog, reload: reloadCatalog } = useMachineCatalog(remote);
   const [remoteProject, setRemoteProject] = useState<string | null>(null);
   // Another computer's projects and models are its own: picks made for this one don't carry over, either way.
@@ -444,4 +450,18 @@ function placeholder(
   return machineName
     ? `Ask anything; runs on ${machineName}, no folder attached`
     : 'Ask anything, no folder attached';
+}
+
+/** New thread's picks become what the next new thread starts on, saved where Settings › Models keeps them. */
+function keepAsDefaults(controls: ThreadControls, model?: ModelOption) {
+  if (model) makeDefaultModel(model);
+  setPrefs({
+    effort: controls.effort,
+    // Plan is for one thread; new threads never start in it.
+    ...(controls.access !== 'Plan' && { permissions: controls.access }),
+    // GAP: the default holds only standard or `fast`, so a second tier above Fast can't become it.
+    ...((controls.speed === '' || controls.speed === FAST) && {
+      speed: controls.speed,
+    }),
+  });
 }

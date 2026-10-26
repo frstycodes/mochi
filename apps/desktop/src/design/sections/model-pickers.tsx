@@ -9,6 +9,7 @@ import type { AgentModel } from '../../host/types/agent';
 import { EffortPicker, ModelMenu, SpeedPicker } from '../../ModelControls';
 import type { ModelOption } from '../../runtime/models';
 import { ProviderMark } from '../../ui';
+import { toggleStar } from '../../settings/prefs';
 import { Block } from '../layout';
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -59,23 +60,40 @@ const MODELS: ModelOption[] = [
   },
 ];
 
+const MORE_CODEX: ModelOption[] = [
+  ['gpt-6.1-mini', 'GPT-6.1 mini', 'Faster and cheaper for light tasks'],
+  ['gpt-6.1-codex', 'GPT-6.1 Codex', 'Tuned for long agentic coding runs'],
+  ['gpt-6.1-codex-max', 'GPT-6.1 Codex Max', 'Deepest reasoning, slowest'],
+].map(([id, name, description]) => ({
+  harness: 'codex',
+  id,
+  name,
+  description,
+  efforts: ['low', 'medium', 'high'],
+  speeds: [],
+  isDefault: false,
+}));
+
 const keyOf = (m: { harness: string; id: string }) => `${m.harness}:${m.id}`;
 
-/** The composer's three pickers with "Default" and "Make default", on fixture models and local state. */
-export function ModelDefaultsBlock() {
+/** The composer's three pickers on fixture models and local state; the model menu with working tabs, stars, search and ⌘1–9. */
+export function ModelPickersBlock() {
+  const models = [...MODELS, ...MORE_CODEX];
   const [modelKey, setModelKey] = useState(keyOf(MODELS[0]));
-  const [defaultModel, setDefaultModel] = useState(keyOf(MODELS[0]));
+  const [starred, setStarred] = useState([
+    'claude-opus-5-5',
+    'claude-sonnet-5-5',
+    'gpt-6.1',
+  ]);
   const [effort, setEffort] = useState('high');
-  const [defaultEffort, setDefaultEffort] = useState('high');
   const [speed, setSpeed] = useState('');
-  const [defaultSpeed, setDefaultSpeed] = useState('');
-  const model = MODELS.find((m) => keyOf(m) === modelKey)!;
+  const model = models.find((m) => keyOf(m) === modelKey)!;
   const opus = MODELS[0] as AgentModel;
 
   return (
     <Block
-      title="Model, effort and speed defaults"
-      use="Each composer picker badges what new threads start on; hover or arrow to another item for Make default, or press ⌘↵ on it."
+      title="Model, effort and speed"
+      use="The composer's pickers. In New thread, whatever you pick becomes what the next new thread starts on."
       wide
     >
       <div className="flex flex-wrap items-center gap-1">
@@ -95,37 +113,17 @@ export function ModelDefaultsBlock() {
             </Button>
           </DropdownMenuTrigger>
           <ModelMenu
-            models={MODELS}
+            models={models}
             pending={[]}
             harnesses={['claude', 'codex']}
             isChecked={(m) => keyOf(m) === modelKey}
             onPick={(m) => setModelKey(keyOf(m))}
-            starred={['claude-opus-5-5', 'claude-sonnet-5-5']}
-            onToggleStar={() => {}}
-            defaults={{
-              isDefault: (m) => keyOf(m) === defaultModel,
-              make: (m) => setDefaultModel(keyOf(m)),
-            }}
+            starred={starred}
+            onToggleStar={(m) => setStarred((s) => toggleStar(s, m.id))}
           />
         </DropdownMenu>
-        <EffortPicker
-          model={opus}
-          value={effort}
-          onChange={setEffort}
-          defaults={{
-            isDefault: (e) => e === defaultEffort,
-            make: setDefaultEffort,
-          }}
-        />
-        <SpeedPicker
-          model={opus}
-          value={speed}
-          onChange={setSpeed}
-          defaults={{
-            isDefault: (s) => s === defaultSpeed,
-            make: setDefaultSpeed,
-          }}
-        />
+        <EffortPicker model={opus} value={effort} onChange={setEffort} />
+        <SpeedPicker model={opus} value={speed} onChange={setSpeed} />
       </div>
     </Block>
   );
