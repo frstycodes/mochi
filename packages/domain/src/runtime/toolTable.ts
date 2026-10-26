@@ -171,6 +171,21 @@ export const TOOL_TABLE = {
       'Watch a thread (its events toast for the user) or stop watching it.',
     shape: { threadId: otherThread, watch: Schema.Boolean },
   },
+  settle_when_merged: {
+    tier: 'change',
+    quiet: true,
+    description:
+      'Turn Auto-settle on or off for a thread\'s pull requests: once every PR of it is merged or closed and its agent is idle, Mochi settles the thread. Use it when the user asks to settle after the merge (e.g. "create a PR, merge it and settle"); the thread stays active until then. Defaults to your own thread and all its PRs.',
+    shape: {
+      threadId,
+      pr: Schema.optionalKey(
+        Schema.Number.annotate({
+          description: 'One PR number of the thread; defaults to all of them',
+        }),
+      ),
+      isOn: Schema.Boolean,
+    },
+  },
   create_thread: {
     tier: 'change',
     quiet: true,

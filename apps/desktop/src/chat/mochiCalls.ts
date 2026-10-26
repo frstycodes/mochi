@@ -19,6 +19,7 @@ export const MOCHI_CALLS = {
   unpin_thread: ['Unpinning threads', 'Unpinned threads'],
   reorder_threads: ['Reordering the sidebar', 'Reordered the sidebar'],
   watch_thread: ['Watching a thread', 'Watched a thread'],
+  settle_when_merged: ['Setting Auto-settle', 'Set Auto-settle'],
   create_thread: ['Starting a new thread', 'Started a new thread'],
   dismiss_thread_proposal: [
     'Withdrawing a thread suggestion',
