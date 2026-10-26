@@ -92,6 +92,7 @@ import { queueToast, useResolvedQueueToasts } from '../QueueToast';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
 import { ReportCard } from '../goals/ReportCard';
+import { turnAnchor } from '../chat/turnAnchor';
 import { PromptInputProvider } from '@/components/ai-elements/prompt-input';
 import { VizThreadProvider } from '../viz/WidgetVisual';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
@@ -1197,7 +1198,7 @@ function Recipes() {
           >
             <VizThreadProvider value={rl.id}>
               <PromptInputProvider>
-                <ReportCard thread={thread} />
+                <ReportCardDemo thread={thread} />
               </PromptInputProvider>
             </VizThreadProvider>
           </Block>
@@ -1209,7 +1210,7 @@ function Recipes() {
         >
           <VizThreadProvider value={rl.id}>
             <PromptInputProvider>
-              <ReportCard thread={reportFixture(rl)} />
+              <ReportCardDemo thread={reportFixture(rl)} />
             </PromptInputProvider>
           </VizThreadProvider>
         </Block>
@@ -1220,7 +1221,7 @@ function Recipes() {
         >
           <VizThreadProvider value={rl.id}>
             <PromptInputProvider>
-              <ReportCard thread={metReportFixture(rl)} />
+              <ReportCardDemo thread={metReportFixture(rl)} />
             </PromptInputProvider>
           </VizThreadProvider>
         </Block>
@@ -1447,6 +1448,11 @@ const RING_SAMPLES = [
   { met: 0, total: 0, isWorking: true },
   { met: 0, total: 0, isWorking: false },
 ];
+
+/** A fixture's report card, on the turn it anchors to. */
+function ReportCardDemo({ thread }: { thread: Thread }) {
+  return <ReportCard thread={thread} anchor={turnAnchor(thread)} />;
+}
 
 function metReportFixture(rl: Thread): Thread {
   const at = rl.activity.at(-1)?.at ?? 0;

@@ -97,7 +97,7 @@ export function patchSections(patch: string) {
   );
 }
 
-const isYourMessage = (e: ActivityEntry) =>
+export const isYourMessage = (e: ActivityEntry) =>
   e.who === 'you' && e.kind === 'message';
 
 function emptyTurn(start: number): TurnChanges {
