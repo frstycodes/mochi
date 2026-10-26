@@ -39,6 +39,7 @@ export const agent: AgentHost = {
   async compactInstructions() {},
   interrupt: endTurn,
   stop: endTurn,
+  async move() {},
   settle: endTurn,
   async resolve() {},
   async setupChoice() {},

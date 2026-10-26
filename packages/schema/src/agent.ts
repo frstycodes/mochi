@@ -246,6 +246,14 @@ export const AgentStartOptions = Schema.Struct({
 );
 export type AgentStartOptions = typeof AgentStartOptions.Type;
 
+export const AgentMoveOptions = Schema.Struct({
+  provider: Provider,
+  spaceId: Short,
+  cwd: S,
+  workspace: StartWorkspace,
+  sessionId: opt(Short),
+});
+
 export const AgentSendInput = Schema.Struct({
   text: Str(100_000),
   images: opt(Images),
@@ -385,6 +393,7 @@ export const agentRpc = {
   keepTitle: invoke(T([Id]), Void),
   resolve: invoke(T([Id, AgentDecision]), Void),
   stop: invoke(T([Id]), Void),
+  move: invoke(T([Id, AgentMoveOptions]), Void),
   settle: invoke(T([Id]), Void),
   attached: invoke(
     T([Schema.Array(Schema.Struct({ threadId: Id, after: opt(N) }))]),
