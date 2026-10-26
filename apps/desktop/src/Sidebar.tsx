@@ -1120,12 +1120,15 @@ export function ThreadItem({
   machine,
   isActive,
   isSelected,
+  isProjectHidden,
   onSelect,
   onRename,
 }: {
   thread: Thread;
   isSub?: boolean;
   machine?: FollowedMachine;
+  /** Listed under its own project already (new thread's Recent): the detail line drops the project icon. */
+  isProjectHidden?: boolean;
   isActive: boolean;
   isSelected?: boolean;
   onSelect: (e: ReactMouseEvent) => void;
@@ -1179,7 +1182,12 @@ export function ThreadItem({
           </span>
         )
       ) : (
-        <RowDetail thread={thread} row={row} machine={machine} />
+        <RowDetail
+          thread={thread}
+          row={row}
+          machine={machine}
+          isProjectHidden={isProjectHidden}
+        />
       )}
     </>
   );
@@ -1277,10 +1285,12 @@ function RowDetail({
   thread,
   row,
   machine,
+  isProjectHidden,
 }: {
   thread: Thread;
   row: ThreadRow;
   machine?: FollowedMachine;
+  isProjectHidden?: boolean;
 }) {
   const project = useProjectAt(thread.spaceId, thread.repo?.path);
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
@@ -1292,16 +1302,18 @@ function RowDetail({
           <span className="sr-only">On {machine.name}</span>
         </>
       )}
-      <span
-        className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]"
-        title={thread.repo?.project ?? 'No project'}
-      >
-        {thread.repo ? (
-          <ProjectIcon name={thread.repo.project} icon={project?.icon} />
-        ) : (
-          <Chat aria-label="No project" className="size-4 shrink-0" />
-        )}
-      </span>
+      {!isProjectHidden && (
+        <span
+          className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]"
+          title={thread.repo?.project ?? 'No project'}
+        >
+          {thread.repo ? (
+            <ProjectIcon name={thread.repo.project} icon={project?.icon} />
+          ) : (
+            <Chat aria-label="No project" className="size-4 shrink-0" />
+          )}
+        </span>
+      )}
       {row.isWorking ? (
         <Shimmer as="span" className="min-w-0 flex-1 truncate">
           {row.detail}

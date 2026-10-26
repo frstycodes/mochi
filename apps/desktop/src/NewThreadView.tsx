@@ -66,7 +66,7 @@ import {
 import type { WorkspaceDraft } from './git/workspace';
 import { RunsOnMenu } from './remote/RunsOnMenu';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
-import { useNow } from './useNow';
+import { HeroRows, heroTitle } from './NewThreadHero';
 
 /** The new-thread page's picks, kept with its draft. */
 interface NewThreadPicks {
@@ -193,7 +193,6 @@ function NewThread() {
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
   // The sidebar's Projects: a new thread here, in that project, whatever was picked before.
-  const now = useNow(null);
   const requestedProject = useRequestedProject();
   const openRequested = useEffectEvent(() => {
     const ref = takeRequestedProject();
@@ -275,11 +274,16 @@ function NewThread() {
     });
   };
 
+  const projectLabel = remote
+    ? (catalog?.projects.find((p) => p.ref === remoteProject)?.name ?? null)
+    : (projects.find((p) => p.ref === project)?.name ??
+      (project && projectName(project)));
+
   return (
     // The greeting row has a fixed height, so the card's top stays put whichever step it holds and however tall it grows.
     <div className="mx-auto grid min-h-full max-w-[720px] grid-cols-1 grid-rows-[auto_auto_1fr] px-4 md:px-6">
       <header className="flex min-h-[30vh] flex-col items-center justify-end pt-10 pb-6 text-center">
-        <h1 className="text-balance type-display">{greeting(new Date(now))}</h1>
+        <h1 className="text-balance type-display">{heroTitle(projectLabel)}</h1>
       </header>
 
       {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. A constant layoutDependency keeps its resizes (project step to composer) instant; the handoff still animates. */}
@@ -349,15 +353,7 @@ function NewThread() {
                         />
                       )
                     }
-                    placeholder={placeholder(
-                      remote?.name,
-                      remote
-                        ? (catalog?.projects.find(
-                            (p) => p.ref === remoteProject,
-                          )?.name ?? null)
-                        : (projects.find((p) => p.ref === project)?.name ??
-                            (project && projectName(project))),
-                    )}
+                    placeholder={placeholder(remote?.name, projectLabel)}
                   />
                 </MachineModelsContext.Provider>
               </ComposerCard>
@@ -398,6 +394,13 @@ function NewThread() {
       <div className="flex flex-col gap-5 pt-4 pb-16">
         {step === 'compose' && !remote && !!project && (
           <WorkspaceNotes workspace={workspace} />
+        )}
+        {step === 'compose' && !remote && (
+          <HeroRows
+            project={project}
+            isDirty={!!project && workspace.isDirty}
+            onStarter={textInput.setInput}
+          />
         )}
       </div>
     </div>
@@ -441,11 +444,4 @@ function placeholder(
   return machineName
     ? `Ask anything; runs on ${machineName}, no folder attached`
     : 'Ask anything, no folder attached';
-}
-
-function greeting(now: Date) {
-  const hour = now.getHours();
-  if (hour >= 5 && hour < 12) return 'Good morning';
-  if (hour >= 12 && hour < 18) return 'Good afternoon';
-  return 'Good evening';
 }
