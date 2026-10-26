@@ -4,8 +4,9 @@ import type { AgentModel } from '../host/types/agent.ts';
 import {
   claudeFast,
   effortId,
-  isNewThreadModel,
+  listedFor,
   listedHarnesses,
+  openingTab,
   optionFor,
   resolveRun,
   searchModels,
@@ -217,40 +218,39 @@ test('the picker lists only harnesses that are set up and listed their models', 
   );
 });
 
-test("the Default badge marks the default harness's model, its account default when Settings leaves it unset", () => {
-  const catalog = { codex: CODEX };
-  const astra: ModelOption = { ...CODEX[0], harness: 'codex' };
-  const luna: ModelOption = { ...CODEX[1], harness: 'codex' };
+test('the model menu opens on Starred, else the checked model harness, and searches every harness', () => {
+  const models: ModelOption[] = [
+    ...CODEX.map((m) => ({ ...m, harness: 'codex' as const })),
+    { ...CODEX[0], id: 'claude-opus-5-5', name: 'Opus 5.5', harness: 'claude' },
+  ];
+  const isOpus = (m: ModelOption) => m.id === 'claude-opus-5-5';
   assert.equal(
-    isNewThreadModel(astra, catalog, { claude: '', codex: '' }, 'codex'),
-    true,
+    openingTab(models, ['claude', 'codex'], isOpus, true),
+    'starred',
   );
   assert.equal(
-    isNewThreadModel(
-      luna,
-      catalog,
-      { claude: '', codex: 'gpt-6-luna' },
-      'codex',
-    ),
-    true,
+    openingTab(models, ['claude', 'codex'], isOpus, false),
+    'claude',
   );
   assert.equal(
-    isNewThreadModel(
-      astra,
-      catalog,
-      { claude: '', codex: 'gpt-6-luna' },
-      'codex',
-    ),
-    false,
+    openingTab(models, ['codex'], isOpus, false),
+    'codex',
+    'a checked model of an unlisted harness falls back to the first',
   );
-  assert.equal(
-    isNewThreadModel(
-      luna,
-      catalog,
-      { claude: '', codex: 'gpt-6-luna' },
-      'claude',
-    ),
-    false,
-    "another harness's default isn't the new-thread default",
+  assert.equal(openingTab(models, [], isOpus, false), undefined);
+
+  const ids = (tab: Parameters<typeof listedFor>[0], search: string) =>
+    listedFor(tab, search, models, [models[2]]).map((m) => m.id);
+  assert.deepEqual(ids('starred', ''), ['claude-opus-5-5']);
+  assert.deepEqual(ids('codex', ''), ['gpt-6-astra', 'gpt-6-luna']);
+  assert.deepEqual(
+    ids('codex', 'opus'),
+    ['claude-opus-5-5'],
+    'search ignores the open tab',
+  );
+  assert.deepEqual(
+    ids('starred', 'a'),
+    ['claude-opus-5-5', 'gpt-6-astra', 'gpt-6-luna'],
+    'results run in harness order, as the menu groups them',
   );
 });

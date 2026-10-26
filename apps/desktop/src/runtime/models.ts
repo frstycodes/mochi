@@ -1,6 +1,6 @@
 import type { AgentModel, AgentSpeed } from '../host/types/agent.ts';
 import type { Provider } from '../model.ts';
-import { HARNESSES } from '../settings/harnesses.ts';
+import { HARNESS_IDS, HARNESSES } from '../settings/harnesses.ts';
 
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -188,13 +188,34 @@ export function searchModels(models: ModelOption[], query: string) {
   });
 }
 
-/** Whether `model` is the one a new thread starts on: the default harness's Settings model, or that account's own default when unset. */
-export function isNewThreadModel(
-  model: ModelOption,
-  catalog: Partial<Record<Provider, AgentModel[]>>,
-  harnessModels: Record<Provider, string>,
-  agent: Provider,
+/** A model menu's tabs: the starred models, or one harness's. */
+export type MenuTab = 'starred' | Provider;
+
+/** Starred when anything is, else the harness of the checked model, else the first. */
+export function openingTab(
+  models: ModelOption[],
+  harnesses: Provider[],
+  isChecked: (model: ModelOption) => boolean,
+  hasStarred: boolean,
+): MenuTab | undefined {
+  if (hasStarred) return 'starred';
+  const checked = models.find(
+    (m) => isChecked(m) && harnesses.includes(m.harness),
+  );
+  return checked?.harness ?? harnesses[0];
+}
+
+/** The models the menu lists, in the order ⌘1–9 counts them: search results grouped by harness, else the open tab's. */
+export function listedFor(
+  tab: MenuTab | undefined,
+  search: string,
+  models: ModelOption[],
+  starredModels: ModelOption[],
 ) {
-  const start = optionFor(catalog[agent], harnessModels[agent], agent);
-  return model.harness === start.harness && model.id === start.id;
+  if (search) {
+    const found = searchModels(models, search);
+    return HARNESS_IDS.flatMap((h) => found.filter((m) => m.harness === h));
+  }
+  if (tab === 'starred') return starredModels;
+  return models.filter((m) => m.harness === tab);
 }
