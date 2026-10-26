@@ -681,8 +681,8 @@ export async function startAgent(
     isLaunching = true;
     void (setup ?? Promise.resolve())
       .then(() => named?.())
-      .then(() => {
-        if (!start.signal.aborted) return launch(cwd);
+      .then((moved) => {
+        if (!start.signal.aborted) return launch(moved ?? cwd);
         markIdle(id);
         broadcast({ threadId: id, type: 'turn-end', status: 'interrupted' });
       })
@@ -821,7 +821,8 @@ async function agentFolder(threadId: string, cwd: string | null) {
  * The folder the agent runs in. A worktree thread gets its own worktree, so the panes and the agent see the same files (a folder
  * that isn't a git repo runs the agent in place, but a refused existing branch fails the start). A project folder thread runs in
  * the project's checkout, switched to its branch first when it chose one; a dirty checkout refuses the switch. A new worktree
- * with a `title` is named after it, and one with a `titlePrompt` asks for its title during the setup; `named` waits for it once the setup is through.
+ * with a `title` is named after it before anything uses it, and one with a `titlePrompt` asks for its title during the setup;
+ * `named` waits for it once the setup is through and gives the folder the agent then starts in.
  */
 async function workspaceFolder(
   threadId: string,
@@ -832,7 +833,7 @@ async function workspaceFolder(
 ): Promise<{
   cwd: string;
   setup?: Promise<unknown>;
-  named?: () => Promise<void>;
+  named?: () => Promise<string>;
 }> {
   if (!workspace) return { cwd: root };
   if (workspace.mode === 'folder') {
@@ -857,27 +858,17 @@ async function workspaceFolder(
     );
     return { cwd: root };
   }
-  const { dir, isNew } = await createWorktree(
+  const made = await createWorktree(
     root,
     threadId,
     workspace.branch,
     workspace,
   );
-  broadcast({ threadId, type: 'worktree', path: dir });
-  const title = !isNew
-    ? undefined
-    : workspace.title
-      ? Promise.resolve(workspace.title)
-      : workspace.titlePrompt
-        ? runUtility('title', spaceId, workspace.titlePrompt, threadId).then(
-            (text) => (text && parseTitle(text)) || null,
-            () => null,
-          )
-        : undefined;
-  const named =
-    title &&
-    (() =>
-      nameThread(threadId, dir, workspace.branch, title, start, broadcast));
+  const { isNew } = made;
+  const { dir, named } = isNew
+    ? await nameWorktree(threadId, made.dir, workspace, start, spaceId)
+    : { dir: made.dir };
+  if (dir === made.dir) broadcast({ threadId, type: 'worktree', path: dir });
   const settings = agentSettings();
   if (!isNew || !settings.prepareWorktrees) return { cwd: dir, named };
   const setup = topLevel(root).then((top) =>
@@ -895,6 +886,37 @@ async function workspaceFolder(
     }),
   );
   return { cwd: dir, setup, named };
+}
+
+/** A new worktree named now after the `title` it was given, or later (`named`) after the one its `titlePrompt` asks for. */
+async function nameWorktree(
+  threadId: string,
+  made: string,
+  workspace: StartWorkspace,
+  start: ReturnType<Starts['begin']>,
+  spaceId: string,
+) {
+  const { branch, title, titlePrompt } = workspace;
+  if (title)
+    return {
+      dir: await nameThread(
+        threadId,
+        made,
+        branch,
+        Promise.resolve(title),
+        start,
+        broadcast,
+      ),
+    };
+  if (!titlePrompt) return { dir: made };
+  const asked = runUtility('title', spaceId, titlePrompt, threadId).then(
+    (text) => (text && parseTitle(text)) || null,
+    () => null,
+  );
+  return {
+    dir: made,
+    named: () => nameThread(threadId, made, branch, asked, start, broadcast),
+  };
 }
 
 function imageOf(image: NonNullable<AgentToolResult['image']>) {

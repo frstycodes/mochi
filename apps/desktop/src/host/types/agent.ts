@@ -342,9 +342,9 @@ export interface StartWorkspace {
   isExisting?: boolean;
   /** The thread's first start: its new branch must not exist yet. A restart after cleanup checks out the one it left. */
   isNew?: boolean;
-  /** With `isNew`, on a temp branch: main asks for a title while the worktree is set up and renames the branch after it before the agent starts. */
+  /** With `isNew`, on a temp branch: main asks for a title while the worktree is set up and renames the branch and moves the worktree after it before the agent starts. */
   titlePrompt?: string;
-  /** With `isNew`, on a temp branch: the title the thread was given, which main renames the branch after in place of asking. */
+  /** With `isNew`, on a temp branch: the title the thread was given, which names the branch and worktree as it's made, in place of asking. */
   title?: string;
 }
 

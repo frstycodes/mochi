@@ -484,8 +484,22 @@ export async function createWorktree(
     throw new Error('threadId must be letters, digits, - or _');
   const dir = join(worktreeRoot(), basename(top), threadId);
   if (existsSync(dir)) return { dir, isNew: false };
+  const named = await namedWorktree(top, branch, options);
+  if (named) return { dir: named, isNew: false };
   await addBranchWorktree(top, dir, branch, options);
   return { dir, isNew: true };
+}
+
+/** A restart's worktree that its title moved out of `<threadId>` (`nameThread`), found by the branch only it has checked out. */
+async function namedWorktree(
+  top: string,
+  branch: string,
+  { isNew, isExisting }: WorktreeOptions,
+) {
+  if (isNew || isExisting) return undefined;
+  return (await listWorktrees(top)).find(
+    (w) => w.branch === branch && isUnderWorktreeRoot(w.path),
+  )?.path;
 }
 
 async function change(cwd: string, value: ChangeTarget) {
