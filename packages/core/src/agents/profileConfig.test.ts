@@ -2,13 +2,24 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'vite-plus/test';
+import { onTestFinished, test } from 'vite-plus/test';
 import { useAgentConfig } from './config.ts';
 import { applyConfig, previewConfig } from './profileConfig.ts';
 
 test('instructions-set rewrites the account’s CLAUDE.md, backs the old one up, and refuses a stale review', async () => {
   const home = mkdtempSync(join(tmpdir(), 'mochi-instructions-'));
+  // `homedir()` reads HOME on POSIX and USERPROFILE on Windows.
+  const saved = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+  };
   process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  onTestFinished(() => {
+    for (const [key, value] of Object.entries(saved))
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+  });
   useAgentConfig({
     read: () => undefined,
     write: async () => {},
