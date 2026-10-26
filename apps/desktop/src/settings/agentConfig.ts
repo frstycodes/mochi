@@ -61,7 +61,8 @@ export type ConfigChange =
       name: string;
       enabled: boolean;
     }
-  | { kind: 'skill-import'; provider: Provider; folder: string };
+  | { kind: 'skill-import'; provider: Provider; folder: string }
+  | { kind: 'instructions-set'; provider: Provider; text: string };
 
 export const INSTRUCTIONS_FILE = {
   claude: 'CLAUDE.md',

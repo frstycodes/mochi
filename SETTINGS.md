@@ -89,6 +89,8 @@ Per profile, Instructions / MCP servers / Skills / Import rows (`src/settings/Pr
 
 Per profile, a **Skills, plugins and connectors** row says how many this profile has and opens Settings › Customize › Skills, Plugins or Connectors, where everything is installed once and handed to profiles (design in [LIBRARY.md](LIBRARY.md)). The library is Mochi's own, held in `userData/library.json` and loaded into each new thread of the profiles that turn items on, never written into the accounts' files.
 
+Per profile, an **Instructions** row says how many of the profile's Mochi files have text and opens Settings › Customize › Instructions (`src/settings/InstructionsView.tsx`), which shows one profile at a time, picked as on Skills. It holds Mochi's own files for the profile (`mochi.md` for every harness, `claude.md`, `codex.md` in `userData/profiles/<id>/`), edited in place, and your account's `CLAUDE.md` and `AGENTS.md`, edited through the diff review and backup above (`instructions-set` config change). A switch per profile keeps your `CLAUDE.md` out of its new threads: the flag is stored in the profile's folder (`account-instructions.json`) and Claude gets `claudeMdExcludes` for the account's file in its flag-layer settings (checked with `claude -p`: the file is no longer in context; project and local CLAUDE.md still load). GAP: Codex has no switch, because `thread/start` takes no parameter for it and no config key was found (codex-cli 0.164), so `AGENTS.md` always loads.
+
 ## Agents
 
 ### Harnesses

@@ -9,6 +9,9 @@ import {
 import {
   copyProfileFolder,
   profileFolder,
+  readProfileInstructions,
+  setAccountInstructionsUsed,
+  writeProfileInstructions,
 } from '@mochi/core/agents/profileFolder';
 import {
   accountsState,
@@ -80,6 +83,15 @@ export const settings = {
   },
   async profileFolder(_sender, spaceId) {
     return profileFolder(spaceId);
+  },
+  async readInstructions(_sender, spaceId, name) {
+    return readProfileInstructions(spaceId, name);
+  },
+  async writeInstructions(_sender, spaceId, name, text) {
+    await writeProfileInstructions(spaceId, name, text);
+  },
+  async setAccountInstructions(_sender, spaceId, provider, isUsed) {
+    await setAccountInstructionsUsed(spaceId, provider, isUsed);
   },
   async copyProfileFolder(_sender, fromId, toId) {
     await copyProfileFolder(fromId, toId);
