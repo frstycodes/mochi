@@ -14,13 +14,14 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { hostHandlers, Capabilities } from '../hostServer.ts';
+import { Hosted } from '../hosted.ts';
 import { Run } from '../run.ts';
 import type { Git, Ports, Sim } from '@mochi/schema';
 import type { Gate, StaleKind, WatchKey, WatchValue } from './keys.ts';
 import { makeRoots } from './roots.ts';
 
 export interface WatchDeps {
-  /** `host.<namespace>.<method>`, served by the client that registered it (main); a failure is its message. */
+  /** `host.<namespace>.<method>`, served by Core itself or relayed to the client that registered it (main); a failure is its message. */
   readonly host: (
     tag: string,
     args: ReadonlyArray<unknown>,
@@ -230,18 +231,27 @@ export const makeWatch = (deps: WatchDeps) =>
               }),
             ),
           );
-          // The full diff only when the fingerprint moved; an unchanged worktree costs one `git status`.
+          // The full diff only when the fingerprint moved since the last good read; an unchanged worktree costs one
+          // `git status`. A failed read is retried on the next stale mark (Retry, an agent's tool) even when nothing changed.
+          let readAt: string | undefined;
+          const publish = (next: WatchValue) => {
+            readAt = next._tag === 'error' ? undefined : readAt;
+            return Effect.flatMap(SubscriptionRef.get(value), (current) =>
+              next._tag === 'error' && sameValue(current, next)
+                ? Effect.void
+                : SubscriptionRef.set(value, next),
+            );
+          };
           yield* forkEach(
-            Stream.changesWith(
-              defined(SubscriptionRef.changes(status.value)),
-              sameValue,
-            ),
-            (fingerprint) =>
-              typeof fingerprint === 'string'
-                ? Effect.flatMap(readDiff, (diff) =>
-                    SubscriptionRef.set(value, diff),
-                  )
-                : SubscriptionRef.set(value, fingerprint),
+            defined(SubscriptionRef.changes(status.value)),
+            (fingerprint) => {
+              if (typeof fingerprint !== 'string') return publish(fingerprint);
+              if (fingerprint === readAt) return Effect.void;
+              return Effect.flatMap(readDiff, (diff) => {
+                readAt = fingerprint;
+                return publish(diff);
+              });
+            },
           );
           return {
             value,
@@ -422,7 +432,11 @@ export const makeWatch = (deps: WatchDeps) =>
 export class Watch extends Context.Service<Watch>()('mochi/core/Watch', {
   make: Effect.gen(function* () {
     const run = yield* Run;
-    const host = hostHandlers(yield* Capabilities, undefined) as Record<
+    // As in server.ts: what Core serves itself (`git`, `fs`, `ports`) never reaches main, which has no handler for it.
+    const host = {
+      ...hostHandlers(yield* Capabilities, undefined),
+      ...(yield* (yield* Hosted).handlers(undefined)),
+    } as Record<
       string,
       (args: ReadonlyArray<unknown>) => Effect.Effect<unknown, unknown>
     >;

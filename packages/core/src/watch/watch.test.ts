@@ -210,6 +210,42 @@ it.live(
     }),
 );
 
+it.live(
+  'a failed diff read is retried on the next stale mark, though the worktree did not change',
+  () =>
+    Effect.gen(function* () {
+      const dir = tempDir();
+      const { calls, deps } = yield* fakeDeps(dir);
+      let isServed = false;
+      const host: WatchDeps['host'] = (tag, args) =>
+        Effect.suspend(() =>
+          tag === 'git.diff' && !isServed
+            ? Effect.fail('No connected client offers host')
+            : deps.host(tag, args),
+        );
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const { watch, markStale } = yield* makeWatch({ ...deps, host });
+          const sub = yield* subscribe(watch, {
+            _tag: 'gitDiff',
+            cwd: dir,
+            scope: 'branch',
+          });
+          yield* sub.next;
+
+          isServed = true;
+          yield* markStale(['git']);
+          yield* sub.nextWhere((value) => value._tag === 'gitDiff');
+          assert.deepEqual(sub.values, [
+            { _tag: 'error', message: 'No connected client offers host' },
+            { _tag: 'gitDiff', diff: DIFF },
+          ]);
+          assert.equal(calls.diff, 1);
+        }),
+      ).pipe(removed(dir));
+    }),
+);
+
 // TODO(windows): deleting the watched root itself sends no @parcel/watcher event on Windows, so nothing re-reads it and the
 // files key stays stale instead of turning into an error value. Needs a watch on the root's parent, or a re-read on EPERM.
 it.live.skipIf(process.platform === 'win32')(

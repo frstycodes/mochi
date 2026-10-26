@@ -107,7 +107,7 @@ export const git = {
     }
     const mergeBase = await runGit(top, ['merge-base', 'HEAD', base]).then(
       (s) => s.trim(),
-      () => 'HEAD',
+      () => headOrEmptyTree(top),
     );
     return {
       branch,
@@ -520,6 +520,19 @@ async function untrackedDiffs(top: string): Promise<DiffFile[]> {
   return patches
     .flatMap((p) => parseDiff(p, false))
     .map((f) => ({ ...f, kind: 'untracked' as const }));
+}
+
+/** A repo with no commit yet has no HEAD to diff against: everything in it is new, so the base is the empty tree. */
+async function headOrEmptyTree(top: string) {
+  return runGit(top, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(
+    () => 'HEAD',
+    async () =>
+      (
+        await runGit(top, ['hash-object', '-t', 'tree', '--stdin'], {
+          input: '',
+        })
+      ).trim(),
+  );
 }
 
 async function currentBranch(top: string) {
