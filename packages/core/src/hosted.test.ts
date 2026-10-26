@@ -126,6 +126,48 @@ it.live(
     }),
 );
 
+it.live(
+  "the git diff watch reads through Core's own git, with no main connected and no commit yet",
+  () =>
+    Effect.gen(function* () {
+      const repo = realpathSync(
+        mkdtempSync(path.join(tmpdir(), 'mochi-repo-')),
+      );
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-data-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          rmSync(repo, { recursive: true, force: true });
+          rmSync(userData, { recursive: true, force: true });
+        }),
+      );
+      execFileSync('git', ['init', '-q', '-b', 'main', repo]);
+      writeFileSync(path.join(repo, 'a.txt'), 'hello\n');
+
+      const context = yield* Layer.build(
+        layerCore({
+          port: 0,
+          tokens: new Map([[TOKEN, Capabilities.allScopes]]),
+          origins: [],
+          userData,
+        }),
+      );
+      const { port } = Context.get(context, HttpServer.HttpServer).address as {
+        port: number;
+      };
+      const client = yield* makeCoreClient(coreUrl(port, TOKEN));
+      const first = Option.getOrThrow(
+        yield* client
+          .watch({ key: { _tag: 'gitDiff', cwd: repo, scope: 'branch' } })
+          .pipe(Stream.runHead, Effect.timeout('20 seconds')),
+      );
+      assert.ok(first._tag === 'gitDiff', JSON.stringify(first));
+      assert.deepEqual(
+        first.diff.files.map((f) => f.path),
+        ['a.txt'],
+      );
+    }),
+);
+
 /** Terminal output without its control sequences: shells colour and redraw the line they echo (PSReadLine, zsh highlighting). */
 const withoutEscapes = (text: string) =>
   // oxlint-disable-next-line no-control-regex -- matching escape sequences is the point.
