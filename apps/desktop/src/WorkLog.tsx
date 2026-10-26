@@ -28,6 +28,7 @@ import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
 import type { ActivityEntry, AgentCommand, WebLink } from './model';
 import { clock, formatElapsed } from './progress';
+import { fileCount } from './summarySections';
 import { usePrefs } from './settings/prefs';
 import {
   eventLine,
@@ -224,6 +225,7 @@ type ToolEntry = Pick<
   | 'output'
   | 'exitCode'
   | 'patch'
+  | 'files'
   | 'links'
   | 'mcp'
   | 'sent'
@@ -246,6 +248,7 @@ export function CallRow({
   const run = runOf(entry);
   const detail = callDetail(entry, call, files);
   const description = describeCall(entry);
+  const changed = call.verb === 'Run' ? (entry.files ?? []) : [];
   if (import.meta.env.DEV && entry.text.includes(DEV_THROW))
     throw new Error(
       `Dev-only test card: a tool call containing ${DEV_THROW} throws`,
@@ -299,6 +302,14 @@ export function CallRow({
         )}
         {call.added !== undefined && (
           <DiffStat added={call.added} removed={call.removed ?? 0} withBar />
+        )}
+        {changed.length > 0 && (
+          <span
+            title={changed.join('\n')}
+            className="shrink-0 text-xs tabular text-muted-foreground"
+          >
+            changed {fileCount(changed.length)}
+          </span>
         )}
         {!isRunning && !!run && run.exitCode !== 0 && (
           <span className="shrink-0 font-mono text-xs tabular text-destructive">

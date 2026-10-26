@@ -77,6 +77,7 @@ import {
 import { createWorktree } from '../git/host.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from './starts.ts';
+import { trackCommandFiles } from './commandFiles.ts';
 import { nameThread } from './naming.ts';
 import { threadSessions } from './settle.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
@@ -176,6 +177,12 @@ onAgentEvent((event) => {
   if (event.type === 'tool' && event.command)
     void describeCommand(event.threadId, event.id, event.command);
 });
+onAgentEvent(
+  trackCommandFiles(
+    (threadId) => adapterOf(threadId)?.runOptions(threadId)?.cwd,
+    broadcast,
+  ),
+);
 
 /** A command its agent sent without a description (always on Codex, sometimes on Claude) gets one from the background model, for its row and the sidebar. */
 async function describeCommand(threadId: string, id: string, command: string) {
