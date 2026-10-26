@@ -3119,7 +3119,7 @@ test('own_initiative proposes a card and starts nothing; Start creates it nested
     ...brief('Share the token bucket'),
   });
   assert.equal(r.state, 'pending');
-  assert.match(r.note, /nothing runs until they start it/);
+  assert.match(r.note, /nothing runs until they choose/);
   assert.equal(t.state().threads.length, threads, 'no thread yet');
   const [card] = cardsOf(t.thread('rl'));
   assert.deepEqual(
