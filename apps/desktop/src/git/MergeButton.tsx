@@ -262,7 +262,7 @@ function BypassChecksDialog({
     : `${running} ${plural(running, 'check', 'checks')} still running`;
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="sm:max-w-md">
+      <AlertDialogContent className="sm:max-w-lg">
         <AlertDialogHeader>
           <AlertDialogMedia className="bg-warning/10 text-warning">
             <WarningAlt />
