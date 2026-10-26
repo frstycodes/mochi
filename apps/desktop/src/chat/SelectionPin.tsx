@@ -1,7 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Pin } from '@/icons';
-import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { normalise, togglePin, type Pin as PinData } from './pins';
 
@@ -30,7 +29,6 @@ export function SelectionPin({
   const pin = () => {
     togglePin(threadId, target.index, target.text);
     window.getSelection()?.removeAllRanges();
-    toast('Pinned to the outline rail');
   };
   return createPortal(
     <Button

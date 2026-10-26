@@ -121,11 +121,6 @@ function pinFocused(
       description: 'Orbit has five pin slots. Unpin a thread first.',
     });
   dispatch({ type: 'reorder', ...lists, at: Date.now() });
-  toast(
-    lists.pinned.includes(thread.id)
-      ? `Pinned ${thread.title}`
-      : `Unpinned ${thread.title}`,
-  );
 }
 
 function focusedThreadId(s: State) {

@@ -102,7 +102,8 @@ export const TOOL_TABLE = {
   },
   rename_thread: {
     tier: 'change',
-    description: 'Rename a thread. Shows the user an Undo toast.',
+    quiet: true,
+    description: 'Rename a thread.',
     shape: {
       threadId,
       title: Schema.String.check(
@@ -113,28 +114,33 @@ export const TOOL_TABLE = {
   },
   settle_thread: {
     tier: 'change',
+    quiet: true,
     description:
       "Settle threads whose work is finished or abandoned: they leave the sidebar's active list and their agents stop. Not your own thread. Undoable by the user.",
     shape: { threadIds },
   },
   reactivate_thread: {
     tier: 'change',
+    quiet: true,
     description: 'Bring settled threads back to the active list.',
     shape: { threadIds },
   },
   pin_thread: {
     tier: 'change',
+    quiet: true,
     description:
       'Pin threads to the top of the sidebar (at most 5 pinned in a profile), in the order given.',
     shape: { threadIds },
   },
   unpin_thread: {
     tier: 'change',
+    quiet: true,
     description: 'Unpin threads; they go to the top of the unpinned list.',
     shape: { threadIds },
   },
   reorder_threads: {
     tier: 'change',
+    quiet: true,
     description:
       'Reorder the sidebar. Either move one thread before or after another (moving next to a pinned thread pins it), or pass pinnedOrder to set the whole pinned list in order (threads left out are unpinned).',
     shape: {
@@ -167,6 +173,7 @@ export const TOOL_TABLE = {
   },
   create_thread: {
     tier: 'change',
+    quiet: true,
     description:
       'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with Start and Dismiss and nothing runs until they start it. At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread notes) can only use own_initiative. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a note, and you are started with the notes once all your sub-threads are idle. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Pass `criterionId` to hand it one piece of your goal. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread doesn\'t start: it goes on this turn\'s card with the others, which the user starts (Start, or Start all) or dismisses, so don\'t retry or wait on it.',
     shape: {
@@ -252,6 +259,7 @@ export const TOOL_TABLE = {
   },
   send_to_thread: {
     tier: 'change',
+    quiet: true,
     description:
       "Send a message to another thread's agent, as if typed in its composer.",
     shape: {
@@ -732,6 +740,7 @@ export const TOOL_TABLE = {
   },
   split_with: {
     tier: 'change',
+    quiet: true,
     description: 'Open a thread in a new split beside the focused one.',
     shape: { threadId: otherThread },
   },
@@ -928,6 +937,7 @@ export const TOOL_TABLE = {
   },
   run_setup: {
     tier: 'change',
+    quiet: true,
     description:
       "Run a service's setup recipe in your browser tab in seconds: Mochi does the known steps itself (for Slack: generates an app configuration token and keeps it, never showing it to you). Its result's next says what to do: connect_account with fromSetup when done; ask the user and pass params when it needs a value; do a step yourself and fix it with update_setup_step when a page changed.",
     shape: {
@@ -951,6 +961,7 @@ export const TOOL_TABLE = {
   },
   update_setup_step: {
     tier: 'change',
+    quiet: true,
     description:
       "Fix one step of a service's setup recipe for this user after its element changed: the ARIA role and accessible name of the element that worked when you did the step yourself (from browser_snapshot). Only the element changes; the step's kind, URLs and allowed sites never do. The change shows in your thread.",
     shape: {

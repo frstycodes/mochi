@@ -358,7 +358,6 @@ function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
     async kill(target: ListeningPort) {
       try {
         await host.ports.kill(target.pid);
-        toast(`Stopped localhost:${target.port}`);
       } catch (error) {
         toast.error(`Could not stop pid ${target.pid}`, {
           description: (error as Error).message,
