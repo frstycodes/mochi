@@ -15,7 +15,12 @@ import {
 } from 'effect';
 import { NodeServices } from '@effect/platform-node';
 import { Run } from '../run.ts';
-import { GitHub, GithubTransport, pushCadence } from './service.ts';
+import {
+  GitHub,
+  GithubError,
+  GithubTransport,
+  pushCadence,
+} from './service.ts';
 
 /** Answers every aliased field of a query; each title names the request that produced it, so a value says which poll it came from. */
 function fakeTransport() {
@@ -204,4 +209,112 @@ it.effect(
       assert.deepEqual(delays.slice(0, 20), Array(20).fill(30));
       assert.deepEqual(delays.slice(-6), [60, 120, 240, 480, 600, 600]);
     }),
+);
+
+it.live(
+  'a failed poll after a value leaves the stream open for the next one',
+  () =>
+    Effect.gen(function* () {
+      const cwd = gitRepo();
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(cwd, { recursive: true, force: true })),
+      );
+      const { layer: good } = fakeTransport();
+      let calls = 0;
+      const failed = yield* Queue.unbounded<void>();
+      const flaky = Layer.effect(GithubTransport)(
+        Effect.gen(function* () {
+          const inner = yield* GithubTransport;
+          return {
+            query: (...args: Parameters<typeof inner.query>) =>
+              ++calls === 2
+                ? Queue.offer(failed, undefined).pipe(
+                    Effect.andThen(
+                      Effect.fail(new GithubError({ message: 'offline' })),
+                    ),
+                  )
+                : inner.query(...args),
+          };
+        }),
+      ).pipe(Layer.provide(good));
+      yield* Effect.gen(function* () {
+        const github = yield* GitHub;
+        const titles = Stream.map(github.watchPr(cwd), (v) => v.prs[0]!.title);
+        const seen = yield* Queue.unbounded<string>();
+        yield* Effect.forkChild(
+          Stream.runForEach(titles, (t) => Queue.offer(seen, t)),
+        );
+        yield* Queue.take(seen);
+        yield* github.refresh({ cwd, isPush: false });
+        yield* Queue.take(failed);
+        yield* github.refresh({ cwd, isPush: false });
+        const next = yield* Queue.take(seen);
+        assert.equal(
+          callOf(next),
+          2,
+          'the failed poll never reached the fake, so the next value is its second',
+        );
+      }).pipe(
+        Effect.provide(
+          GitHub.layer.pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                flaky,
+                Run.layer.pipe(Layer.provide(NodeServices.layer)),
+              ),
+            ),
+          ),
+        ),
+      );
+    }),
+);
+
+it.live('a 401 after a value ends the stream with the error', () =>
+  Effect.gen(function* () {
+    const cwd = gitRepo();
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => rmSync(cwd, { recursive: true, force: true })),
+    );
+    const { layer: good } = fakeTransport();
+    let calls = 0;
+    const revoked = Layer.effect(GithubTransport)(
+      Effect.gen(function* () {
+        const inner = yield* GithubTransport;
+        return {
+          query: (...args: Parameters<typeof inner.query>) =>
+            ++calls === 2
+              ? Effect.fail(
+                  new GithubError({ message: 'bad token', status: 401 }),
+                )
+              : inner.query(...args),
+        };
+      }),
+    ).pipe(Layer.provide(good));
+    yield* Effect.gen(function* () {
+      const github = yield* GitHub;
+      const seen = yield* Queue.unbounded<string>();
+      const fiber = yield* Effect.forkChild(
+        Effect.flip(
+          Stream.runForEach(github.watchPr(cwd), (v) =>
+            Queue.offer(seen, v.prs[0]!.title),
+          ),
+        ),
+      );
+      yield* Queue.take(seen);
+      yield* github.refresh({ cwd, isPush: false });
+      const error = yield* Fiber.join(fiber);
+      assert.equal(error.status, 401);
+    }).pipe(
+      Effect.provide(
+        GitHub.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              revoked,
+              Run.layer.pipe(Layer.provide(NodeServices.layer)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }),
 );
