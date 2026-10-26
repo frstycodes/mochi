@@ -310,6 +310,7 @@ const DEMO_REVIEW = {
   base: 'main',
   head: 'feat/admin-usage',
   isConflicting: false,
+  mergeMethods: ['squash', 'merge'],
   viewer: 'frstycodes',
   checks: [
     { name: 'typecheck', state: 'pass' },

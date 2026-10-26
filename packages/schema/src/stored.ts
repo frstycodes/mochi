@@ -1,5 +1,6 @@
 import { Schema, SchemaTransformation } from 'effect';
 import { Int } from './checks.ts';
+import { MergeMethod } from './ipc/git.ts';
 import { ProjectIconMode } from './ipc/projects.ts';
 import { ColorTheme } from './ipc/themes.ts';
 import { PaneTabKind, Provider, Space } from './model.ts';
@@ -134,6 +135,7 @@ const prefsFields = {
   autoArchivePrs: B,
   workspaceMode: Schema.Literals(['worktree', 'folder']),
   diffStyle: Schema.Literals(['unified', 'split']),
+  mergeMethod: MergeMethod,
   worktreeCleanup: Schema.Literals(['never', '1', '7', '30']),
   terminalFontSize: Schema.Number,
   terminalScrollback: Schema.Number,

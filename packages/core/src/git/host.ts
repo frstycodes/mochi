@@ -241,22 +241,12 @@ export const git = {
     );
   },
 
-  async mergePr(_caller, cwd, pr, user) {
-    const top = await topLevel(cwd);
-    const account = githubAccount(user);
-    const allowed = JSON.parse(
-      await runGh(
-        top,
-        [
-          'repo',
-          'view',
-          '--json',
-          'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed',
-        ],
-        account,
-      ),
-    ) as MergeMethods;
-    await runGh(top, mergeArgs(pr, allowed), account);
+  async mergePr(_caller, cwd, pr, method, mode, user) {
+    await runGh(
+      await topLevel(cwd),
+      mergeArgs(pr, method, mode),
+      githubAccount(user),
+    );
   },
 
   async ciLog(_caller, cwd, link, user) {

@@ -60,6 +60,7 @@
   "autoArchivePrs": false,
   "workspaceMode": "worktree",
   "diffStyle": "unified",
+  "mergeMethod": "squash",
   "worktreeCleanup": "7",
   "terminalFontSize": 12,
   "terminalScrollback": 5000,

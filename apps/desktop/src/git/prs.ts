@@ -1,3 +1,4 @@
+import type { MergeMethod, MergeMode } from '../host/types/git.ts';
 import type { PullRequest, Thread } from '../model.ts';
 
 /** `prs` with `seen` added or updated by number; the same array when nothing changed, so the store neither re-renders nor re-saves. */
@@ -48,12 +49,13 @@ export function autoMergeArgs(
   return ['pr', 'merge', String(pr), '--auto', mergeMethod(allowed)];
 }
 
-/** `gh pr merge` merging now with the first method the repo allows. */
-export const mergeArgs = (pr: number, allowed: MergeMethods) => [
+/** `gh pr merge` with `method`. Plain `now` must only run once checks pass: gh quietly turns it into auto-merge while required checks are pending. */
+export const mergeArgs = (pr: number, method: MergeMethod, mode: MergeMode) => [
   'pr',
   'merge',
   String(pr),
-  mergeMethod(allowed),
+  `--${method}`,
+  ...(mode === 'bypass' ? ['--admin'] : mode === 'auto' ? ['--auto'] : []),
 ];
 
 function mergeMethod(allowed: MergeMethods) {

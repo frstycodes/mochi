@@ -109,6 +109,7 @@ import { SubThreadsBlock } from './sections/sub-threads';
 import { SubThreadGroupingBlock } from './sections/sub-thread-grouping';
 import { TiltedDragBlock } from './sections/tilted-drag';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
+import { MergeButtonBlock } from './sections/merge-button';
 import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
@@ -1186,6 +1187,7 @@ function Recipes() {
         <SubThreadGroupingBlock rl={rl} />
         <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
+        <MergeButtonBlock />
         {verdictFixtures(rl).map(({ label, thread }) => (
           <Block
             key={label}

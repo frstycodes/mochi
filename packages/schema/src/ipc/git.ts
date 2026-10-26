@@ -110,6 +110,9 @@ export const ReviewThread = Schema.Struct({
   comments: Schema.Array(PrComment),
 });
 
+export const MergeMethod = Schema.Literals(['squash', 'merge', 'rebase']);
+const MergeMode = Schema.Literals(['now', 'bypass', 'auto']);
+
 export const ReviewVerdict = Schema.Literals([
   'approve',
   'request-changes',
@@ -127,6 +130,7 @@ export const PrReview = Schema.Struct({
   base: S,
   head: S,
   isConflicting: B,
+  mergeMethods: Schema.Array(MergeMethod),
   viewer: S,
   checks: Schema.Array(PrCheck),
   comments: Schema.Array(PrComment),
@@ -284,7 +288,10 @@ export const gitRpc = {
   replyThread: invoke(T([Cwd, NodeId, Body, User]), Schema.Void),
   resolveThread: invoke(T([Cwd, NodeId, B, User]), Schema.Void),
   reviewPr: invoke(T([Cwd, PrNumber, ReviewVerdict, Body, User]), Schema.Void),
-  mergePr: invoke(T([Cwd, PrNumber, User]), Schema.Void),
+  mergePr: invoke(
+    T([Cwd, PrNumber, MergeMethod, MergeMode, User]),
+    Schema.Void,
+  ),
   ciLog: invoke(T([Cwd, Str(2048), User]), S),
   repoSlug: invoke(T([Cwd]), Schema.NullOr(RepoSlug)),
   refStates: invoke(

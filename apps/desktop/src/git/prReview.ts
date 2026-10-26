@@ -1,5 +1,6 @@
 import type {
   DiffFile,
+  MergeMethod,
   PrComment,
   PrReview,
   ReviewThread,
@@ -8,11 +9,12 @@ import type {
 import { rollupCheck, type GqlContext } from '@mochi/core/github/nodes';
 import { untrusted } from './autofix.ts';
 import { hunkCovers } from './files.ts';
+import type { MergeMethods } from './prs.ts';
 
 // ponytail: first 100 threads and the last 100 comments; a PR past that shows a partial review. Upgrade: paginate on `pageInfo`.
 const QUERY = `query($owner: String!, $repo: String!, $n: Int!) {
   viewer { login }
-  repository(owner: $owner, name: $repo) { pullRequest(number: $n) {
+  repository(owner: $owner, name: $repo) { squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed pullRequest(number: $n) {
     number url title body state isDraft baseRefName headRefName mergeable author { login }
     commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
       __typename
@@ -103,12 +105,13 @@ export function parsePrReview(
     JSON.parse(json) as {
       data?: {
         viewer?: { login: string };
-        repository?: { pullRequest?: GqlPr | null } | null;
+        repository?: (MergeMethods & { pullRequest?: GqlPr | null }) | null;
       };
     }
   ).data;
-  const pr = data?.repository?.pullRequest;
-  if (!pr) return null;
+  const repo = data?.repository;
+  const pr = repo?.pullRequest;
+  if (!repo || !pr) return null;
   const reviews = pr.reviews.nodes
     .filter((r) => r.body.trim() || VERDICTS[r.state])
     .map((r) => ({
@@ -126,6 +129,7 @@ export function parsePrReview(
     base: pr.baseRefName,
     head: pr.headRefName,
     isConflicting: pr.mergeable === 'CONFLICTING',
+    mergeMethods: allowedMethods(repo),
     viewer: data?.viewer?.login ?? '',
     checks: (
       pr.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? []
@@ -146,6 +150,15 @@ export function parsePrReview(
     files: patch,
   };
 }
+
+const allowedMethods = (repo: MergeMethods): MergeMethod[] =>
+  (
+    [
+      repo.squashMergeAllowed && 'squash',
+      repo.mergeCommitAllowed && 'merge',
+      repo.rebaseMergeAllowed && 'rebase',
+    ] as const
+  ).filter((m) => !!m);
 
 const login = (a: Author) => a?.login ?? 'ghost';
 const comment = (c: GqlComment): PrComment => ({
