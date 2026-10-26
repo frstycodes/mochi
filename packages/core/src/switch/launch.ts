@@ -19,6 +19,20 @@ export async function launchSession(
   switchFrom: AgentStartOptions['switchFrom'],
   signal?: AbortSignal,
 ) {
+  return adapter.start(
+    threadId,
+    await preparedRun(context, threadId, run, switchFrom),
+    signal,
+  );
+}
+
+/** `run` with what `context.prepare` gives the start: the session to resume and the package for its instructions. */
+export async function preparedRun(
+  context: ThreadContext['Service'],
+  threadId: string,
+  run: AgentRunOptions,
+  switchFrom: AgentStartOptions['switchFrom'],
+): Promise<AgentRunOptions> {
   const prepared = await Effect.runPromise(
     context.prepare({
       threadId,
@@ -33,13 +47,9 @@ export async function launchSession(
   );
   if (prepared.delivered)
     emitAgentEvent({ threadId, type: 'context', ...prepared.delivered });
-  return adapter.start(
-    threadId,
-    {
-      ...run,
-      ...(prepared.resume && { resume: prepared.resume }),
-      ...(prepared.context && { context: prepared.context }),
-    },
-    signal,
-  );
+  return {
+    ...run,
+    ...(prepared.resume && { resume: prepared.resume }),
+    ...(prepared.context && { context: prepared.context }),
+  };
 }

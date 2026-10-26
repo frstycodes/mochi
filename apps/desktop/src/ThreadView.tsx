@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
+import { AddToProject } from './AddToProject';
 import { motion } from 'motion/react';
 import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
 import { Badge } from '@/components/ui/badge';
@@ -355,6 +356,9 @@ function ThreadHeader({
       >
         <ThreadMenu thread={thread} />
         <LimitChip thread={thread} />
+        {!thread.repo && !thread.isSettingsChat && (
+          <AddToProject thread={thread} />
+        )}
         {thread.prs.map((pr) => (
           <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr}>
             <Badge

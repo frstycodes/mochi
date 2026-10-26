@@ -661,6 +661,10 @@ export interface LiveRun {
    * `seed`. A provider switch: the next start runs `providers[0]`, and Core hands it the thread so far (`switchFrom` is the old one).
    */
   restart?: { forkAt: string } | { seed: string } | { switchFrom: SwitchFrom };
+  /** A folderless chat moved into a project; its files stayed in this folder, which the agent is told ahead of the next message. */
+  movedFrom?: string;
+  /** The agent asked to move this folderless chat into this project (`move_to_project`): it moves once the turn ends. */
+  moveTo?: string;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */

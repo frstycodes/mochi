@@ -10,6 +10,7 @@ import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '@mochi/domain/host/types/themes';
+import type { Project } from '@mochi/domain/host/types/projects';
 import {
   nextProposalId,
   PROPOSALS_PER_TURN,
@@ -30,7 +31,7 @@ import {
   type Thread,
   type ThreadProposal,
 } from '../model.ts';
-import { projectRef } from '../projects.ts';
+import { projectName, projectRef } from '../projects.ts';
 import {
   activeThreads,
   dropPin,
@@ -96,6 +97,8 @@ export interface ToolEnv {
     | 'waitFor'
     | 'answerDialog'
   >;
+  /** The profile's projects, which `move_to_project` offers. */
+  projects: (spaceId: string) => Promise<Project[]>;
   /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
   cwdOf: (thread: Thread) => string | null | undefined;
   /** The models `provider` offers the profile's account; empty when they couldn't be read. */
@@ -767,6 +770,38 @@ const THREAD_SPECS = {
       };
     },
   },
+  move_to_project: {
+    // The agent only suggests; you pick the project. Mid-turn the session is busy, so the move waits for the turn to end.
+    ask: async ({ env, caller, args }) => {
+      const projects = await movableProjects(env, caller);
+      const suggested = projects.find(
+        (p) => p.path === args.project || p.name === args.project,
+      );
+      return {
+        title: `${authorName(caller.providers[0])} wants to move this chat into a project`,
+        detail:
+          'It moves when this turn ends, keeping its session. Files made so far stay in the chat’s own folder.',
+        denied: 'Kept the chat without a project',
+        options: [
+          ...(suggested ? [suggested] : []),
+          ...projects.filter((p) => p !== suggested),
+        ].map((p) => ({ id: p.path, label: p.name })),
+        pick: 'one' as const,
+      };
+    },
+    run: ({ caller, dispatch }, [project]) => {
+      if (caller.repo) throw new Error(NOT_FOLDERLESS);
+      dispatch({
+        type: 'attach-project-queued',
+        threadId: caller.id,
+        project,
+      });
+      return {
+        changed: `queued a move into ${projectName(project)}`,
+        result: { project, movesAt: 'turn end' },
+      };
+    },
+  },
   create_thread: {
     // A top-level thread waits on the user: an agent can't take work out from under the thread that coordinates it. A sub-thread's
     // other user_asked threads become cards (`isCardFromSubThread`). A card asks nothing: nothing runs until the user starts it.
@@ -1402,6 +1437,22 @@ const PLACEMENTS = [
 
 const AGENT_DRIVEN =
   'This turn began with another thread\'s message or an automated event (Auto-fix, sub-thread notes), not the user, so it can\'t start threads or ask where work runs: propose it with initiation "own_initiative" and the user decides.';
+
+const NOT_FOLDERLESS =
+  'This thread already has a project; only a folderless chat moves into one';
+
+/** The projects a folderless caller can move into: those with their folder on disk. */
+async function movableProjects(env: ToolEnv, caller: Thread) {
+  if (caller.repo) throw new Error(NOT_FOLDERLESS);
+  const projects = (await env.projects(caller.spaceId)).filter(
+    (p) => !p.isMissing,
+  );
+  if (!projects.length)
+    throw new Error(
+      'The user has no projects to move into; they can add one from the thread header’s Add to project',
+    );
+  return projects;
+}
 
 /** What the new thread is: who runs it, where, and under which thread. Resolved now, so a card's Start later creates the same. */
 async function proposalCreate({

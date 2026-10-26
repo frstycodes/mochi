@@ -40,6 +40,7 @@ import { scheduleReducer } from '../schedule/slice.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
+import type { Project } from '@mochi/domain/host/types/projects';
 import {
   asks,
   TOOL_NAMES,
@@ -65,6 +66,20 @@ const reduce = (s: State, a: Action): State =>
   a.type === 'tool-undo'
     ? applyUndo(s, a.undo).state
     : SLICES.reduce((x, r) => r(x, a), s);
+
+const project = (name: string, isMissing = false) =>
+  ({
+    id: name,
+    name,
+    path: `/repo/${name}`,
+    origin: null,
+    addedAt: 0,
+    iconMode: 'auto',
+    icon: null,
+    favicon: null,
+    isMissing,
+  }) as Project;
+const PROJECTS = [project('api'), project('web'), project('gone', true)];
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
 function setup({
@@ -231,6 +246,7 @@ function setup({
         void (answers.push(accept),
         pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, dialog: null })),
     },
+    projects: async () => PROJECTS,
     cwdOf: () => '/repo/rl',
     models: async () => CLAUDE_DEMO_MODELS,
     askSecondOpinion: async () => 'codex',
@@ -1266,6 +1282,33 @@ test('settle_when_merged flips Auto-settle on the thread’s PRs and refuses whe
     await t.err('settle_when_merged', { threadId: id, pr: 99999, isOn: true }),
     /isn't on this thread/,
   );
+});
+
+test('move_to_project refuses a thread with a project, and queues the project the user picks for a folderless chat', async () => {
+  const t = setup();
+  assert.match(await t.err('move_to_project'), /already has a project/);
+  t.env.dispatch({
+    type: 'create',
+    title: 'plan the trip',
+    provider: 'claude',
+    project: null,
+    isLive: true,
+  });
+  const chat = t.state().threads.at(-1)!;
+  const result = t.call('move_to_project', { project: 'web' }, chat.id);
+  await t.cardOpens();
+  assert.deepEqual(
+    t.card().tool!.options!.map((o) => o.label),
+    ['web', 'api'],
+  );
+  decideTool(t.card().tool!.callId, {
+    isApproved: true,
+    options: ['/repo/api'],
+  });
+  assert.ok(!(await result).isError);
+  const moved = t.thread(chat.id);
+  assert.equal(moved.repo, null);
+  assert.equal(moved.live?.moveTo, '/repo/api');
 });
 
 test('create_thread creates in the same project without moving your view or toasting', async () => {

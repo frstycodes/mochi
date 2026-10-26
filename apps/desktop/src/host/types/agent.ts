@@ -51,6 +51,16 @@ export interface AgentStartOptions {
  * Where a switched thread comes from: the provider and model it ran on, and whether that session had run out of usage (it then
  * can't write the handoff). The same provider as the start's is a fresh session after a usage limit.
  */
+/** A folderless chat moving into a project (`move`): its session goes with it, resumed by the same id in the new folder. */
+export interface AgentMoveOptions {
+  provider: Provider;
+  spaceId: string;
+  /** The project folder. */
+  cwd: string;
+  workspace: StartWorkspace;
+  sessionId?: string;
+}
+
 export interface SwitchFrom {
   provider: Provider;
   model?: string;
@@ -508,6 +518,8 @@ export interface AgentHost {
   keepTitle(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
+  /** Moves a folderless chat into a project: makes its folder now, stops its idle agent, and readies its session to resume there on the next start. */
+  move(threadId: string, options: AgentMoveOptions): Promise<void>;
   /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
   settle(threadId: string): Promise<void>;
   /**
@@ -579,6 +591,7 @@ export const agentMethods = {
   keepTitle: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
+  move: 'invoke',
   settle: 'invoke',
   attached: 'invoke',
   onEvent: 'event',

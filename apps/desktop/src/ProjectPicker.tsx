@@ -20,8 +20,8 @@ import {
 import type { FollowedMachine } from './host/types/remote';
 import { MetaChip } from './MetaChip';
 import { AddProject, type AddedProject } from './AddProject';
-import { refreshProjects } from './projects';
-import { useHarnessSelector } from './store';
+import { useHarnessSelector, useSpaceThreads } from './store';
+import { refreshProjects, useProjects } from './projects';
 import { isMod } from './keys';
 import { Shortcut } from './Shortcut';
 
@@ -95,12 +95,29 @@ export function ProjectPicker({
   );
 }
 
-/** The searchable list with Add project… in place: the picker's popover, and the new-thread page's first step. */
+const NO_ROWS: PickerProject[] = [];
+
+/** This computer's projects as the picker lists them: by folder, which is what a thread here starts in. */
+export function useProjectRows(spaceId: string): PickerProject[] {
+  const projects = useProjects(spaceId, useSpaceThreads());
+  return (
+    projects?.map((p) => ({
+      ref: p.path,
+      name: p.name,
+      ...(p.path !== p.name && { detail: p.path }),
+      isMissing: p.isMissing,
+      icon: p.icon,
+    })) ?? NO_ROWS
+  );
+}
+
+/** The searchable list with Add project… in place: the picker's popover, the new-thread page's first step, and a folderless chat's Add to project. */
 export function ProjectChooser({
   value,
   projects,
   machine,
   placeholder = 'Search projects',
+  isProjectRequired,
   onChoose,
   onAdded,
 }: {
@@ -108,6 +125,8 @@ export function ProjectChooser({
   projects: PickerProject[];
   machine?: FollowedMachine;
   placeholder?: string;
+  /** No "No project" row: the choice is which project. */
+  isProjectRequired?: boolean;
   onChoose: (project: string | null) => void;
   onAdded?: () => void;
 }) {
@@ -129,6 +148,7 @@ export function ProjectChooser({
       projects={projects}
       value={value}
       placeholder={placeholder}
+      isProjectRequired={isProjectRequired}
       onChoose={onChoose}
       onAdd={() => setAdding(true)}
     />
@@ -139,12 +159,14 @@ function ProjectList({
   projects,
   value,
   placeholder,
+  isProjectRequired,
   onChoose,
   onAdd,
 }: {
   projects: PickerProject[];
   value: string | null;
   placeholder: string;
+  isProjectRequired?: boolean;
   onChoose: (project: string | null) => void;
   onAdd: () => void;
 }) {
@@ -158,7 +180,15 @@ function ProjectList({
   };
 
   return (
-    <Command defaultValue={value ?? 'No project'} onKeyDown={chooseByNumber}>
+    <Command
+      defaultValue={
+        value ??
+        (isProjectRequired
+          ? projects.find((p) => !p.isMissing)?.ref
+          : 'No project')
+      }
+      onKeyDown={chooseByNumber}
+    >
       <CommandInput autoFocus placeholder={placeholder} />
       <CommandList className="max-h-72">
         <CommandEmpty>No project matches.</CommandEmpty>
@@ -202,20 +232,22 @@ function ProjectList({
           </>
         )}
         <CommandGroup>
-          <CommandItem
-            value="No project"
-            keywords={['chat', 'folder']}
-            data-checked={value === null}
-            onSelect={() => onChoose(null)}
-          >
-            <Chat />
-            <span className="flex min-w-0 flex-col">
-              No project
-              <span className="type-caption text-subtle-foreground">
-                Chat without a folder, branch or files
+          {!isProjectRequired && (
+            <CommandItem
+              value="No project"
+              keywords={['chat', 'folder']}
+              data-checked={value === null}
+              onSelect={() => onChoose(null)}
+            >
+              <Chat />
+              <span className="flex min-w-0 flex-col">
+                No project
+                <span className="type-caption text-subtle-foreground">
+                  Chat without a folder, branch or files
+                </span>
               </span>
-            </span>
-          </CommandItem>
+            </CommandItem>
+          )}
           <CommandItem
             value="Add project"
             keywords={['open', 'folder', 'clone', 'github', 'git', 'new']}

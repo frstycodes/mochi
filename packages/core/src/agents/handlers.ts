@@ -11,6 +11,7 @@ import {
   type AgentDecision,
   type AgentEvent,
   type AgentHost,
+  type AgentMoveOptions,
   type AgentReviewEvent,
   type AgentReviewRequest,
   type AgentRunOptions,
@@ -36,8 +37,10 @@ import {
   claudeContextUsage,
   readClaudeWidget,
   setClaudeCompactInstructions,
+  setClaudeFreshRun,
   stopAllClaude,
 } from './claude/sessions.ts';
+import { copyTranscript } from './claude/move.ts';
 import { CodexAdapter } from './codex/adapter.ts';
 import type { HarnessAdapter } from './adapter.ts';
 import { reviewClaude, type ReviewUpdate } from './review.ts';
@@ -57,7 +60,7 @@ import type { ThreadContext } from '../switch/context.ts';
 import { permissionModeOf } from '../../../../apps/desktop/src/runtime/access.ts';
 import type { HandoffAsk } from '../switch/handoff.ts';
 import type { HistoryArgs } from '../switch/history.ts';
-import { launchSession } from '../switch/launch.ts';
+import { launchSession, preparedRun } from '../switch/launch.ts';
 import { PRIORITY } from '../utility/queue.ts';
 import {
   commandPrompt,
@@ -218,6 +221,8 @@ codex.onLimits = (accountId, windows) =>
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 setImageGenerator('codex', codex.generateImage.bind(codex));
 const starts = new Starts();
+// A moved thread's worktree setup, which the next start waits out instead of aborting.
+const moves = new Starts();
 // A delegated task's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
 const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
@@ -238,6 +243,11 @@ const required = <A>(service: A | undefined) => {
   if (!service) throw new Error('The agents service is not running');
   return service;
 };
+
+// The same-provider switch, for a Claude session its new folder can't resume.
+setClaudeFreshRun((threadId, run) =>
+  preparedRun(required(context), threadId, run, { provider: 'claude' }),
+);
 
 /** Mochi's `thread_history` tool for the thread's agent: Claude's in-process server calls it, Codex's through main. */
 export const threadHistory = (threadId: string, args: HistoryArgs) =>
@@ -325,22 +335,27 @@ export const agent = {
     setClaudeCompactInstructions(threadId, instructions);
   },
   async interrupt(_window, threadId) {
-    if (starts.abort(threadId)) return;
+    const isMoving = moves.abort(threadId);
+    if (starts.abort(threadId) || isMoving) return;
     // No adapter: nothing running for this thread (already stopped, or never started this launch): nothing to interrupt.
     return adapterOf(threadId)?.interrupt(threadId);
   },
   async setupChoice(_window, threadId, choice) {
-    if (!starts.choose(threadId, choice))
+    if (!starts.choose(threadId, choice) && !moves.choose(threadId, choice))
       throw new Error("This thread's worktree setup isn't waiting on you");
   },
   async keepTitle(_window, threadId) {
     starts.keepTitle(threadId);
+    moves.keepTitle(threadId);
   },
   async resolve(_window, requestId, decision) {
     return resolveRequest(requestId, decision);
   },
   async stop(_window, threadId) {
     return endSession(threadId);
+  },
+  async move(_window, threadId, options) {
+    return moveThread(threadId, options);
   },
   async settle(_window, threadId) {
     const id = threadId;
@@ -616,6 +631,7 @@ async function stopSession(threadId: string) {
   markIdle(threadId);
   forgetEvents(threadId);
   starts.abort(threadId);
+  moves.abort(threadId);
   // Every harness: Codex also drops a start still waiting on its app-server.
   await Promise.all(adapters.map((a) => a.stop(threadId)));
 }
@@ -679,7 +695,9 @@ export async function startAgent(
     // The renderer runs agent calls one after another, so a start that waited out the setup, or an app-server slow to answer,
     // would hold back the Stop (and every other thread's calls) behind it. It returns here; setup and launch report through events.
     isLaunching = true;
-    void (setup ?? Promise.resolve())
+    void moves
+      .wait(id)
+      .then(() => setup)
       .then(() => named?.())
       .then((moved) => {
         if (!start.signal.aborted) return launch(moved ?? cwd);
@@ -701,6 +719,47 @@ export async function startAgent(
     throw error;
   } finally {
     if (!isLaunching) start.end();
+  }
+}
+
+/**
+ * A folderless chat moving into a project: its idle agent stops, its folder is made now (a worktree and its setup, named after
+ * the thread, or the project folder), and Claude Code gets a copy of the session's transcript under that folder, so the next
+ * start resumes the same session there. Codex resumes a session by id from any folder.
+ */
+async function moveThread(
+  threadId: string,
+  { provider, spaceId, cwd, workspace, sessionId }: AgentMoveOptions,
+) {
+  const root = await agentFolder(threadId, cwd);
+  await endSession(threadId);
+  const move = moves.begin(threadId);
+  try {
+    const {
+      cwd: dir,
+      setup,
+      named,
+    } = await workspaceFolder(threadId, root, workspace, move, spaceId);
+    if (dir === root) broadcast({ threadId, type: 'worktree', path: dir });
+    if (provider === 'claude' && sessionId)
+      await copyTranscript(
+        (await accountFor(spaceId, 'claude')).configDir,
+        sessionId,
+        dir,
+      );
+    void (setup ?? Promise.resolve())
+      .then(() => named?.())
+      .catch((error: unknown) =>
+        broadcast({
+          threadId,
+          type: 'notice',
+          text: `Setting up the new folder failed: ${error instanceof Error ? error.message : String(error)}`,
+        }),
+      )
+      .finally(move.end);
+  } catch (error) {
+    move.end();
+    throw error;
   }
 }
 

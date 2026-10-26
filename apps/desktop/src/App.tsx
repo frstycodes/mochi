@@ -35,6 +35,7 @@ import { RenameLayer } from './RenameDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useAutoArchive } from './git/autoArchive';
+import { useQueuedMove } from './runtime/useQueuedMove';
 import {
   useCheckoutRecovery,
   useWorktreeManager,
@@ -204,6 +205,7 @@ function ShellEffects() {
   useCheckoutRecovery();
   useWorktreeCleanup();
   useAutoArchive();
+  useQueuedMove();
   useSettledCleanup();
   return null;
 }

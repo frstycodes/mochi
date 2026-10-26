@@ -2,6 +2,7 @@ import { agentImage } from '../chat/images.ts';
 import { interruptsToSend } from '../chat/queued.ts';
 import type {
   AgentImage,
+  AgentMoveOptions,
   AgentSendInput,
   AgentStartOptions,
   StartWorkspace,
@@ -25,6 +26,7 @@ import {
   type ThreadControls,
 } from './controls.ts';
 import { agentOptions } from './agentOptions.ts';
+import { moveCall, withMoveNote } from './move.ts';
 import { startEnv } from './startEnv.ts';
 import { WAKE_PROMPT } from './subThreadNotes.ts';
 import {
@@ -39,6 +41,7 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
+  | { method: 'move'; threadId: string; options: AgentMoveOptions }
   | ({ method: 'send'; threadId: string } & AgentSendInput)
   | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop' | 'settle' | 'keepTitle'; threadId: string }
@@ -46,7 +49,7 @@ export type AgentCall =
 
 /** A call's `host.agent` arguments after the thread id, in the method's order. */
 export function agentCallArgs(call: AgentCall): unknown[] {
-  if (call.method === 'start') return [call.options];
+  if (call.method === 'start' || call.method === 'move') return [call.options];
   if (call.method === 'send') {
     const { method: _, threadId: __, ...input } = call;
     return [input];
@@ -110,7 +113,10 @@ export function agentCalls(
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
-      const text = withNotes(thread, action.prompt ?? action.text);
+      const text = withMoveNote(
+        thread,
+        withNotes(thread, action.prompt ?? action.text),
+      );
       const images = action.images?.length ? { images: action.images } : {};
       const skills = action.skills?.length ? { skills: action.skills } : {};
       // Every message carries the thread's speed and permissions, so a change in the composer applies from the next one.
@@ -132,6 +138,11 @@ export function agentCalls(
           ...steer,
         },
       ];
+    }
+    case 'attach-project': {
+      const before = state.threads.find((t) => t.id === action.threadId);
+      const moved = next().threads.find((t) => t.id === action.threadId);
+      return before?.live && !before.repo && moved?.repo ? moveCall(moved) : [];
     }
     case 'compact':
       return hasAgent(state, action.threadId)
@@ -470,13 +481,15 @@ function reattach(
   const resume =
     seed === undefined && !switchFrom ? thread.session?.id : undefined;
   const forkAt = restart && 'forkAt' in restart ? restart.forkAt : undefined;
-  // Cleanup removed its worktree: main makes it again on the same branch, at the same path, so `resume` still finds the session.
-  const remake = isCleanedUp(thread)
-    ? {
-        cwd: startEnv().projectRoot(thread.repo!),
-        workspace: startWorkspace(thread.repo),
-      }
-    : {};
+  // Cleanup removed its worktree, or a move made it: main makes it again (or finds it) on the same branch, at the same path, so `resume`
+  // still finds the session.
+  const remake =
+    isCleanedUp(thread) || thread.live?.movedFrom
+      ? {
+          cwd: startEnv().projectRoot(thread.repo!),
+          workspace: startWorkspace(thread.repo),
+        }
+      : {};
   return start(
     thread,
     provider,

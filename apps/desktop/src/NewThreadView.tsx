@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useState } from 'react';
 import { motion } from 'motion/react';
 import { getPrefs, setPrefs, usePrefs } from './settings/prefs';
-import { useHarness, useSpace, useSpaceThreads } from './store';
+import { useHarness, useSpace } from './store';
 import {
   SlashMenu,
   useSlashItems,
@@ -37,13 +37,13 @@ import { useSplit } from './layout/SplitContext';
 import {
   ProjectChooser,
   ProjectPicker,
+  useProjectRows,
   type PickerProject,
 } from './ProjectPicker';
 import {
   projectName,
   repoFor,
   takeRequestedProject,
-  useProjects,
   useRequestedProject,
 } from './projects';
 import { projectRoot } from './host/cwd';
@@ -426,20 +426,6 @@ function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
 
 const NO_CATALOG = { models: {}, defaults: { claude: '', codex: '' } };
 const NO_PROJECTS: PickerProject[] = [];
-
-/** This computer's projects as the picker lists them: by folder, which is what a thread here starts in. */
-function useProjectRows(spaceId: string): PickerProject[] {
-  const projects = useProjects(spaceId, useSpaceThreads());
-  return (
-    projects?.map((p) => ({
-      ref: p.path,
-      name: p.name,
-      ...(p.path !== p.name && { detail: p.path }),
-      isMissing: p.isMissing,
-      icon: p.icon,
-    })) ?? NO_PROJECTS
-  );
-}
 
 function placeholder(
   machineName: string | undefined,

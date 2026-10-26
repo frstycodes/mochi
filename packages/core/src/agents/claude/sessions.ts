@@ -73,6 +73,7 @@ import {
   takeForkAt,
   transcriptUuids,
 } from './fork.ts';
+import { FRESH_SESSION_NOTICE, MISSING_SESSION } from './move.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -132,6 +133,17 @@ const approvals = new Map<
     resolve: (result: PermissionResult) => void;
   }
 >();
+
+/** Core's same-provider switch: the run a fresh session starts with, handed the thread so far. */
+type FreshRun = (
+  threadId: string,
+  run: AgentRunOptions,
+) => Promise<AgentRunOptions>;
+let freshRun: FreshRun = async (_threadId, run) => run;
+
+export function setClaudeFreshRun(run: FreshRun) {
+  freshRun = run;
+}
 
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 const DEFAULT_CAP = 6;
@@ -331,6 +343,33 @@ function resolveClaude(requestId: string, decision: AgentDecision) {
 }
 
 /**
+ * Claude Code has no transcript of the session under this folder (a moved thread whose copy it didn't find): the same messages
+ * start a fresh session instead, so the thread never breaks. Its run comes from Core's same-provider switch.
+ */
+async function startFresh(session: Session, sentBefore: number) {
+  const unread = session.sent.splice(sentBefore);
+  session.sent = [];
+  session.sessionId = undefined;
+  session.lastUuid = null;
+  session.inbox.unshift(
+    ...unread.map(({ text, images }) => ({ text, images })),
+  );
+  session.isBusy = true;
+  emit({
+    threadId: session.threadId,
+    type: 'notice',
+    text: FRESH_SESSION_NOTICE,
+  });
+  const { resume: _, ...options } = session.options;
+  const run = {
+    ...options,
+    prompt: session.inbox[0]?.text ?? options.prompt,
+  };
+  session.options = await freshRun(session.threadId, run).catch(() => run);
+  if (sessions.get(session.threadId) === session) await schedule(session);
+}
+
+/**
  * Core is stopping: every Claude Code process closes. Their transcripts are already on disk, so each thread resumes from its
  * persisted session id when the user next sends. Nothing resumes on launch: that would spend the user's usage unasked.
  */
@@ -360,6 +399,7 @@ async function launch(session: Session) {
   const abort = new AbortController();
   const sentBefore = session.sent.length;
   let isForkRefused = false;
+  let isSessionMissing = false;
   try {
     const { configDir = null } = session.account;
     const install = await detect({
@@ -500,6 +540,17 @@ async function launch(session: Session) {
         isForkRefused = true;
         break;
       }
+      // A side session (`<thread>--handoff`) reports it as a failed turn, which its caller handles.
+      if (
+        session.sessionId &&
+        !threadId.includes('--') &&
+        message.type === 'result' &&
+        message.subtype !== 'success' &&
+        message.errors.some((e) => e.includes(MISSING_SESSION))
+      ) {
+        isSessionMissing = true;
+        break;
+      }
       if (
         message.type === 'user' &&
         'isReplay' in message &&
@@ -579,6 +630,8 @@ async function launch(session: Session) {
   }
   if (isForkRefused && sessions.get(threadId) === session)
     await resumeWhole(session, sentBefore);
+  if (isSessionMissing && sessions.get(threadId) === session)
+    await startFresh(session, sentBefore);
 }
 
 /** Claude Code refused the fork before running anything: the same messages go again on the whole session (its `forkAt` is spent). */
