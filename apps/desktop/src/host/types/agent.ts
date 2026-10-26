@@ -141,6 +141,13 @@ export type AgentEvent =
       id: string;
       description: string;
     }
+  /** The files a shell command changed, from worktree snapshots at its start and end; sent after its end, only when it changed any. */
+  | {
+      threadId: string;
+      type: 'tool-files';
+      id: string;
+      files: string[];
+    }
   /** `items` is the whole plan. `isFresh`: a new request's plan, so none of the previous plan's steps carry over. */
   | {
       threadId: string;

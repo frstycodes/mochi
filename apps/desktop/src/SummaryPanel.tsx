@@ -26,6 +26,7 @@ import {
   Stop,
   ShieldAlert,
   ShieldCheck,
+  Danger,
   type IconComponent,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -848,6 +849,8 @@ function BranchChanges({
       thread={thread}
       prs={prs}
       files={diffQuery.data?.files}
+      error={diffQuery.error}
+      onRetry={diffQuery.refresh}
       open={open}
     />
   );
@@ -857,11 +860,15 @@ function ChangesBody({
   thread,
   prs,
   files,
+  error,
+  onRetry,
   open,
 }: {
   thread: Thread;
   prs: ThreadPr[];
   files?: { added: number; removed: number }[];
+  error?: string;
+  onRetry?: () => void;
   open: CardProps['open'];
 }) {
   const added = files?.reduce((n, f) => n + f.added, 0) ?? 0;
@@ -895,10 +902,31 @@ function ChangesBody({
             {hasChanges && <DiffCount added={added} removed={removed} />}
           </SummaryRow>
         )}
+        {!files && prs.length === 0 && (
+          <DiffPendingRow error={error} onRetry={onRetry} />
+        )}
         {canOpenPr && <CreatePrRow thread={thread} />}
         <SubThreadPrs parent={thread} onOpen={open.url} />
       </CardBody>
     </>
+  );
+}
+
+/** The branch diff not read yet, or its read failed: the card says which instead of showing a bare header. */
+function DiffPendingRow({
+  error,
+  onRetry,
+}: {
+  error?: string;
+  onRetry?: () => void;
+}) {
+  if (!error) return <SummaryRow icon={DiffIcon} label="Reading changes…" />;
+  return (
+    <SummaryRow
+      icon={<Danger className="size-4 text-destructive" />}
+      label={<span title={error}>Couldn't read changes</span>}
+      onClick={onRetry}
+    />
   );
 }
 

@@ -111,6 +111,7 @@ const UnversionedAgentEvent = Schema.Union([
     widget: opt(McpWidget),
   }),
   member('tool-description', { id: S, description: S }),
+  member('tool-files', { id: S, files: Schema.Array(S) }),
   member('plan', { items: Schema.Array(AgentPlanItem), isFresh: opt(B) }),
   AgentSubagentEvent,
   AgentTaskEvent,

@@ -161,6 +161,8 @@ export interface ActivityEntry {
   output?: string;
   exitCode?: number;
   patch?: string;
+  /** Shell commands: the files the worktree changed in while it ran (`tool-files`). */
+  files?: string[];
   /** Events only: the thread paused here on a usage limit; the latest such entry renders the live limit card while the pause lasts. */
   isLimit?: boolean;
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
