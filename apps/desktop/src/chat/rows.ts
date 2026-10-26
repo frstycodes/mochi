@@ -1,6 +1,7 @@
 import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
 import { isTurnCall } from './mochiCalls.ts';
+import type { TurnAnchor } from './turnAnchor.ts';
 import type { TurnChanges } from './turnChanges.ts';
 import { plural } from '@mochi/domain/lib/format';
 
@@ -26,7 +27,14 @@ export type ChatRow =
   /** A message another thread's agent sent (`entry.from`) or an Auto-fix event (`entry.autofix`): a line in the log, not a bubble. It still starts a turn like yours. */
   | { kind: 'thread-message'; key: string; entry: ActivityEntry; index: number }
   /** The files a finished turn changed, after its last row. */
-  | { kind: 'changes'; key: string; turn: TurnChanges };
+  | { kind: 'changes'; key: string; turn: TurnChanges }
+  /** The end-of-turn widgets kept on `anchor` while a newer turn runs, its answered next move (`record`) folded in. */
+  | {
+      kind: 'earlier-turn';
+      key: string;
+      anchor: TurnAnchor;
+      record?: ActivityEntry['nextMove'];
+    };
 
 /**
  * Work groups interleave with prose like Claude's: the tool calls and reasoning between two messages (anyone's) are one
@@ -37,6 +45,7 @@ export function chatRows(
   activity: ActivityEntry[],
   reviews: Review[] = [],
   changes: TurnChanges[] = [],
+  earlier?: TurnAnchor,
 ): ChatRow[] {
   const rows: ChatRow[] = [];
   let turn: Extract<ChatRow, { kind: 'work' }> | undefined;
@@ -64,10 +73,25 @@ export function chatRows(
       .forEach((turn) =>
         rows.push({ kind: 'changes', key: `changes-${turn.start}`, turn }),
       );
+  const recordAt = earlier
+    ? activity.findLastIndex(
+        (e, i) => i > earlier.start && i <= earlier.end && !!e.nextMove,
+      )
+    : -1;
+  const pushEarlier = (at: number) =>
+    earlier?.end === at - 1 &&
+    rows.push({
+      kind: 'earlier-turn',
+      key: `earlier-${earlier.start}`,
+      anchor: earlier,
+      record: activity[recordAt]?.nextMove,
+    });
 
   activity.forEach((entry, i) => {
     pushChanges(i);
+    pushEarlier(i);
     pushReviews(i);
+    if (i === recordAt) return;
     const key = `${entry.at}-${i}`;
     // Like a subagent, a generated image stays in view: the turn goes on in a new group after it.
     if (entry.generated) {
@@ -139,6 +163,7 @@ export function chatRows(
     });
   });
   pushChanges(activity.length);
+  pushEarlier(activity.length);
   pushReviews(activity.length);
   return rows;
 }

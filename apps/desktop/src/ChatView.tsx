@@ -90,7 +90,7 @@ import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
-import { ReportCard } from './goals/ReportCard';
+import { EarlierTurnCard, ReportCard } from './goals/ReportCard';
 import { NextMoveRecord, ThreadPlan, useNextMove } from './goals/NextMove';
 import { SubThreadResultRow } from './goals/SubThreads';
 import { ProposalEntry } from './chat/ThreadProposals';
@@ -98,7 +98,11 @@ import { showsVerdictCard, suggestedReply } from './goals/report';
 import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import { AutofixEventRow, ReceivedMessageRow } from './chat/ThreadMessage';
-import { openTurn } from './chat/turnChanges';
+import {
+  isTurnRunning,
+  type TurnAnchor,
+  useTurnAnchor,
+} from './chat/turnAnchor';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
@@ -172,18 +176,18 @@ export function ChatView({
   isReadOnly?: boolean;
   messageBar?: MessageBar;
 }) {
-  // A live agent thread may have no planned steps; its turn is what's running.
-  const isRunning = thread.live
-    ? thread.live.isWorking
-    : thread.steps.some((s) => s.status === 'running');
+  const isRunning = isTurnRunning(thread);
+  const anchor = useTurnAnchor(thread);
   const rows = chatRows(
     thread.activity,
     thread.reviews,
-    shownTurnChanges(thread, isRunning),
+    shownTurnChanges(thread, anchor),
+    anchor?.isLatest ? undefined : anchor,
   );
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex(
-    (r) => r.kind !== 'review' && r.kind !== 'changes',
+    (r) =>
+      r.kind !== 'review' && r.kind !== 'changes' && r.kind !== 'earlier-turn',
   );
   const liveWork = liveWorkIndex(rows);
   // Its label names skills and servers as the library does.
@@ -288,6 +292,7 @@ export function ChatView({
                 <ProposalCard thread={thread} />
                 <ReportCard
                   thread={thread}
+                  anchor={anchor}
                   isReadOnly={isReadOnly}
                   onJump={(quote) =>
                     jumpToQuote(transcript.current, rows, quote)
@@ -430,6 +435,15 @@ const ChatRowView = memo(function ChatRowView({
       <TurnChangesCard
         thread={thread}
         turn={row.turn}
+        isReadOnly={isReadOnly}
+      />
+    );
+  if (row.kind === 'earlier-turn')
+    return (
+      <EarlierTurnCard
+        thread={thread}
+        anchor={row.anchor}
+        record={row.record}
         isReadOnly={isReadOnly}
       />
     );
@@ -650,12 +664,13 @@ function AgentReply({
 }
 
 /**
- * The last turn's file changes, until you send your next message: the turn still running gets its card once it ends, and a
- * turn with a report lists its files there instead. Earlier turns' cards are gone; their edits stay in the work log.
+ * The latest turn's file changes when it anchors the widgets and no report card lists them; an earlier anchor's are in its
+ * `EarlierTurnCard`. Older turns' cards are gone; their edits stay in the work log.
  */
-function shownTurnChanges(thread: Thread, isRunning: boolean) {
-  const turn = openTurn(thread.activity);
-  return turn && !isRunning && !showsVerdictCard(thread) ? [turn] : [];
+function shownTurnChanges(thread: Thread, anchor: TurnAnchor | undefined) {
+  return anchor?.isLatest && anchor.changes && !showsVerdictCard(thread)
+    ? [anchor.changes]
+    : [];
 }
 
 /** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */

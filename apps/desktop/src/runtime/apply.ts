@@ -711,6 +711,7 @@ function endTurn(
         who: 'harness',
         kind: 'event',
         text: 'Turn interrupted',
+        turnEnd: 'interrupted',
       }),
     );
   if (event.status === 'failed')
@@ -722,6 +723,7 @@ function endTurn(
           who: 'harness',
           kind: 'event',
           text: `Turn failed${event.error ? `: ${event.error}` : ''}`,
+          turnEnd: 'failed',
         },
       ),
     );

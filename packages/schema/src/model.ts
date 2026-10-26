@@ -515,6 +515,7 @@ export const TurnReport = Schema.Struct({
   next: opt(Schema.String),
   options: opt(Schema.Array(NextOption)),
   isSuperseded: opt(Schema.Literal(true)),
+  index: opt(Schema.Number),
 });
 export type TurnReport = typeof TurnReport.Type;
 
@@ -655,6 +656,7 @@ export const ActivityEntry = Schema.Struct({
   turnUndo: opt(
     Schema.Struct({ start: Schema.Number, isUndone: Schema.Boolean }),
   ),
+  turnEnd: opt(Schema.Literals(['interrupted', 'failed'])),
   nextMove: opt(
     Schema.Struct({
       summary: opt(Schema.String),

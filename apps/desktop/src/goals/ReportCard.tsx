@@ -20,6 +20,7 @@ import {
 import { TerminalIcon } from '@/icons/panes';
 import { cn } from '@/lib/utils';
 import {
+  type ActivityEntry,
   authorName,
   isMet,
   type NextOption,
@@ -29,7 +30,7 @@ import {
 import { ProgressRing } from '../ui';
 import { RefChip } from '../chat/ChatLink';
 import type { RefTone } from '@mochi/domain/chat/refs';
-import { openTurn } from '../chat/turnChanges';
+import type { TurnAnchor } from '../chat/turnAnchor';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { OPEN_PR_PROMPT } from '../git/prs';
 import type { ThreadPr } from '../git/useThreadPrs';
@@ -40,10 +41,12 @@ import { SubThreadLineage } from './SubThreads';
 import { SubThreadList } from './SubThreadList';
 import {
   NextMoveActions,
+  NextMoveAnswer,
   NextMoveAsk,
   NextMoveCard,
   NextMoveContent,
   NextMoveHeader,
+  NextMoveQuestion,
   NextMoveSummary,
   useNextMove,
 } from './NextMove';
@@ -61,21 +64,24 @@ import {
  * The end of a turn, in the chat: Mochi's verdict, the agent's summary, Mochi's evidence and gaps, then the agent's question with
  * its own answers as buttons, or Mochi's move when it wrote none. Answering it, or writing instead, keeps it in the chat as a
  * record (`next-move-record`); ⌘↵ takes the first answer while the message box is empty. Read-only (a replay, another computer's thread) shows the
- * question without answers: they would act on this computer's store. `onJump` scrolls to the agent's quoted words.
+ * question without answers: they would act on this computer's store. `onJump` scrolls to the agent's quoted words. Only on the
+ * latest turn: while a newer one runs, or after one stopped without widgets of its own, `EarlierTurnCard` keeps them on `anchor`.
  */
 export function ReportCard({
   thread,
+  anchor,
   isReadOnly,
   onJump,
 }: {
   thread: Thread;
+  anchor: TurnAnchor | undefined;
   isReadOnly?: boolean;
   onJump?: (quote: string) => void;
 }) {
   const next = useNextMove(thread);
   const answers = useMoveAnswers(thread);
   const { textInput } = usePromptInputController();
-  const isShown = !!next && showsVerdictCard(thread);
+  const isShown = !!next && !!anchor?.isLatest && showsVerdictCard(thread);
   // The agent wrote it before reading your message, so its answers may already be moot.
   const isSuperseded = !!next?.report?.isSuperseded;
   const choices =
@@ -88,7 +94,7 @@ export function ReportCard({
   );
   if (!isShown) return null;
   const { verdict, prs, tiles, question, report } = next;
-  const changes = openTurn(thread.activity);
+  const { changes } = anchor;
   return (
     // A goal-less idle turn with no summary, changes or question leaves every section below empty; the children decide that, so CSS hides the shell.
     <NextMoveCard
@@ -129,6 +135,44 @@ export function ReportCard({
             )}
           </NextMoveAsk>
         )}
+      </NextMoveContent>
+    </NextMoveCard>
+  );
+}
+
+/**
+ * The widgets of the last turn that produced them, kept under it while a newer turn runs: its summary, the sub-threads (live), its
+ * file changes, and the question you answered. No verdict and no answers: those describe the thread now, and the newer turn ends with its own.
+ */
+export function EarlierTurnCard({
+  thread,
+  anchor,
+  record,
+  isReadOnly,
+}: {
+  thread: Thread;
+  anchor: TurnAnchor;
+  record?: ActivityEntry['nextMove'];
+  isReadOnly?: boolean;
+}) {
+  const summary = record?.summary ?? anchor.report?.summary;
+  return (
+    <NextMoveCard
+      data-earlier-turn={anchor.start}
+      className="has-[>[data-slot=card-content]:only-child:empty]:hidden"
+    >
+      <NextMoveContent>
+        {!!summary && <NextMoveSummary>{summary}</NextMoveSummary>}
+        <SubThreadList thread={thread} />
+        {!!anchor.changes && (
+          <TurnChangesCard
+            thread={thread}
+            turn={anchor.changes}
+            isReadOnly={isReadOnly}
+          />
+        )}
+        {!!record && <NextMoveQuestion>{record.question}</NextMoveQuestion>}
+        {!!record?.answer && <NextMoveAnswer>{record.answer}</NextMoveAnswer>}
       </NextMoveContent>
     </NextMoveCard>
   );

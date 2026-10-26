@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import type { ActivityEntry } from '../model.ts';
 import { chatRows, finalReplies, liveWorkIndex, planSummary } from './rows.ts';
+import type { TurnAnchor } from './turnAnchor.ts';
 import { turnChanges, type TurnChanges } from './turnChanges.ts';
 
 const e = (
@@ -9,15 +10,21 @@ const e = (
   who: ActivityEntry['who'],
   text: string,
 ): ActivityEntry => ({ at: 0, who, kind, text });
-const shape = (activity: ActivityEntry[], changes: TurnChanges[] = []) =>
-  chatRows(activity, [], changes).map((r) =>
+const shape = (
+  activity: ActivityEntry[],
+  changes: TurnChanges[] = [],
+  earlier?: TurnAnchor,
+) =>
+  chatRows(activity, [], changes, earlier).map((r) =>
     'entries' in r
       ? `${r.kind}(${r.entries.map((x) => x.text).join(', ')})`
       : r.kind === 'review'
         ? 'review'
         : r.kind === 'changes'
           ? `changes(${r.turn.start})`
-          : r.entry.text,
+          : r.kind === 'earlier-turn'
+            ? `earlier(${r.anchor.start}, ${r.record?.answer ?? 'no record'})`
+            : r.entry.text,
   );
 
 test('work groups interleave with prose: tools, message, tools, message, each group in transcript order', () => {
@@ -297,8 +304,8 @@ test('a second opinion the agent asked for sits where its verdict reached the ag
           ? r.kind
           : r.kind === 'changes'
             ? 'changes'
-            : r.kind === 'subagent'
-              ? 'subagent'
+            : r.kind === 'subagent' || r.kind === 'earlier-turn'
+              ? r.kind
               : r.entry.text,
     );
   const asked = [
@@ -386,4 +393,31 @@ test('plan changes logged back to back fold into one row; anything between them 
     ['Plan: Claude found 3 more steps'],
     'only the harness logs plan changes',
   );
+});
+
+test("an earlier turn's widgets go right after its last row, its answered next move folded in", () => {
+  const record = {
+    ...e('event', 'harness', 'Commit?'),
+    nextMove: { question: 'Commit?', answer: 'Commit' },
+  };
+  const activity = [
+    e('message', 'you', 'add charts'),
+    e('message', 'claude', 'Done.'),
+    record,
+    e('message', 'you', 'Commit'),
+    e('tool', 'claude', 'Run git commit'),
+  ];
+  const anchor = { start: 0, end: 2, isLatest: false };
+  assert.deepEqual(shape(activity, [], anchor), [
+    'add charts',
+    'Done.',
+    'earlier(0, Commit)',
+    'Commit',
+    'work(Run git commit)',
+  ]);
+  assert.deepEqual(shape(activity.slice(0, 2), [], { ...anchor, end: 1 }), [
+    'add charts',
+    'Done.',
+    'earlier(0, no record)',
+  ]);
 });

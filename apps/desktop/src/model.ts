@@ -83,6 +83,8 @@ export interface TurnReport {
   options?: NextOption[];
   /** Written before the agent read a message you sent into its turn: the card keeps it, muted, without its answers. */
   isSuperseded?: true;
+  /** The activity's length when it was made, which places it in its turn. Unset on reports saved before it was recorded. */
+  index?: number;
 }
 
 /** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
@@ -193,6 +195,8 @@ export interface ActivityEntry {
   widget?: McpWidget;
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
   turnUndo?: { start: number; isUndone: boolean };
+  /** Events only: the turn ended here because you stopped it or it failed. */
+  turnEnd?: 'interrupted' | 'failed';
   /** Events only: a next-move card you answered, kept where it was: its summary, its question and what you picked (none when you wrote instead). */
   nextMove?: { summary?: string; question: string; answer?: string };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */

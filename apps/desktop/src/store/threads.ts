@@ -819,6 +819,7 @@ function reduce(state: State, action: Action): State {
             ...action.report,
             at: state.now,
             turn: (t.idle?.turn ?? 0) + 1,
+            index: t.activity.length,
           },
           steering: t.steering?.map((s) => ({
             ...s,
