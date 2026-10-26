@@ -122,7 +122,15 @@ const pr = {
 test('a PR parses to its review page: bare approvals kept, bare comment reviews dropped, oldest first, LEFT threads on removed lines, file threads lineless', () => {
   const review = parsePrReview(
     JSON.stringify({
-      data: { viewer: { login: 'me' }, repository: { pullRequest: pr } },
+      data: {
+        viewer: { login: 'me' },
+        repository: {
+          squashMergeAllowed: true,
+          mergeCommitAllowed: false,
+          rebaseMergeAllowed: true,
+          pullRequest: pr,
+        },
+      },
     }),
     PATCH,
   )!;
@@ -135,6 +143,7 @@ test('a PR parses to its review page: bare approvals kept, bare comment reviews 
   );
   assert.equal(review.checks[0].state, 'skipping');
   assert.equal(review.isConflicting, true);
+  assert.deepEqual(review.mergeMethods, ['squash', 'rebase']);
   assert.deepEqual(review.threads[0], {
     id: 'PRRT_1',
     path: 'a.ts',

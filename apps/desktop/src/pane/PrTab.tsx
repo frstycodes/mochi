@@ -22,6 +22,7 @@ import { plural } from '@mochi/domain/lib/format';
 import { STATUS_WORDS } from '@mochi/domain/chat/refs';
 import { ChangeList, type ChangeActions } from '../git/ChangeList';
 import { CheckList, ChecksSummary } from '../git/Checks';
+import { checkTally, MergeButton, pickMethod } from '../git/MergeButton';
 import { changeSections } from '../git/files';
 import { threadPlace, threadPrompt } from '../git/prReview';
 import { useConfirm } from '../git/useConfirm';
@@ -31,6 +32,8 @@ import { useWorktreePath } from '../git/worktrees';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type {
+  MergeMethod,
+  MergeMode,
   PrComment,
   PrReview,
   ReviewThread,
@@ -39,7 +42,7 @@ import type {
 import { isMod } from '../keys';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
-import { usePrefs } from '../settings/prefs';
+import { setPrefs, usePrefs } from '../settings/prefs';
 import { useDispatch } from '../store';
 import { ChangesSkeleton, DiffError, useChangeActions } from './ChangesTab';
 import { PaneActions, PaneTitle } from './PaneHeader';
@@ -103,7 +106,7 @@ function PrView({
   const reviewQuery = usePrReview(cwd, number, githubUser);
   const { run, pending } = useGitAction(reviewQuery.refresh);
   const { confirm, dialog } = useConfirm();
-  const { diffStyle } = usePrefs();
+  const { diffStyle, mergeMethod: preferred } = usePrefs();
   const changeActions = useChangeActions({
     thread,
     cwd,
@@ -118,7 +121,6 @@ function PrView({
     number,
     githubUser,
     run,
-    confirm,
   });
 
   const review = reviewQuery.data;
@@ -140,21 +142,26 @@ function PrView({
       ),
     },
   };
+  const mergeMethod = pickMethod(review.mergeMethods, preferred);
   const unplaced = review.threads.filter((t) => !threadPlace(t, review.files));
   const isOpen = review.state === 'OPEN';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PaneActions>
-        {isOpen && !review.isDraft && (
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={!!pending}
-            onClick={() => prActions.merge(review)}
-          >
-            Merge
-          </Button>
+        {isOpen && !review.isDraft && review.mergeMethods.length > 0 && (
+          <MergeButton
+            head={review.head}
+            base={review.base}
+            tally={checkTally(review.checks)}
+            checks={review.checks}
+            isConflicting={review.isConflicting}
+            method={mergeMethod}
+            allowed={review.mergeMethods}
+            isBusy={!!pending}
+            onMethodChange={(m) => setPrefs({ mergeMethod: m })}
+            onMerge={prActions.merge}
+          />
         )}
         <Button
           asChild
@@ -221,7 +228,6 @@ interface PrActionsInput {
   number: number;
   githubUser?: string;
   run: ReturnType<typeof useGitAction>['run'];
-  confirm: ReturnType<typeof useConfirm>['confirm'];
 }
 
 type PrActions = ReturnType<typeof usePrActions>;
@@ -232,7 +238,6 @@ function usePrActions({
   number,
   githubUser,
   run,
-  confirm,
 }: PrActionsInput) {
   const dispatch = useDispatch();
   const agentName = thread.providers[0] === 'codex' ? 'Codex' : 'Claude';
@@ -256,16 +261,10 @@ function usePrActions({
         threadId: thread.id,
         entry: { who: 'you', kind: 'message', text: threadPrompt(t, review) },
       }),
-    merge: async (review: PrReview) => {
-      const ok = await confirm({
-        title: `Merge #${review.number}?`,
-        description: `${review.head} merges into ${review.base} on GitHub, with the first merge method the repository allows.`,
-        confirm: 'Merge',
-        cancel: 'Not yet',
-      });
-      if (ok)
-        await run('Merge', () => host.git.mergePr(cwd, number, githubUser));
-    },
+    merge: (method: MergeMethod, mode: MergeMode) =>
+      run(mode === 'auto' ? 'Merge when ready' : 'Merge', () =>
+        host.git.mergePr(cwd, number, method, mode, githubUser),
+      ),
   };
 }
 

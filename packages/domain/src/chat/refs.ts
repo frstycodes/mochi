@@ -10,6 +10,8 @@ export interface GithubRef {
   kind?: RefKind;
 }
 
+export type MergeMethod = 'squash' | 'merge' | 'rebase';
+
 /** The head commit's check rollup: `fail` covers failure and error, `pending` covers expected. */
 export type ChecksState = 'pass' | 'fail' | 'pending';
 /** GitHub's `reviewDecision`: `required` means a review is requested and none approved yet. */
@@ -26,8 +28,13 @@ export interface RefState {
   isAutoMerge: boolean;
   /** Null when the PR has no checks, and for issues. */
   checks: ChecksState | null;
-  /** Checks that passed (skipped and neutral count) out of all of them; null when unread or there are none. */
-  checkCounts: { passed: number; total: number } | null;
+  /** Checks that passed (skipped and neutral count), failed and are still running, out of all of them; null when unread or there are none. */
+  checkCounts: {
+    passed: number;
+    failed: number;
+    running: number;
+    total: number;
+  } | null;
   review: ReviewState | null;
   /** Issues closed as not planned read as muted, not done. */
   isNotPlanned: boolean;
@@ -38,6 +45,8 @@ export interface RefState {
   /** PR only. */
   branch: { head: string; base: string } | null;
   diff: { added: number; removed: number; files: number } | null;
+  /** PR only: the merge methods its repository allows, in GitHub's order. */
+  mergeMethods: readonly MergeMethod[] | null;
 }
 
 /** A state with only what's known without GitHub: the thread's own record of a PR, demo fixtures. */
@@ -56,6 +65,7 @@ export function bareState(
     isAutoMerge: false,
     checks: null,
     checkCounts: null,
+    mergeMethods: null,
     review: null,
     isNotPlanned: false,
     author: null,

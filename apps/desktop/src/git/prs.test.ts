@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import type { PullRequest, Thread } from '../model.ts';
-import { autoMergeArgs, createdPr, isArchiveDue, recordPrs } from './prs.ts';
+import {
+  autoMergeArgs,
+  createdPr,
+  isArchiveDue,
+  mergeArgs,
+  recordPrs,
+} from './prs.ts';
 
 const url = 'https://github.com/o/r/pull/7';
 
@@ -146,4 +152,27 @@ test('Auto-settle comes due once every PR merged or closed and the agent is idle
     false,
     'already settled',
   );
+});
+
+test('merging uses the chosen method; bypass adds --admin, auto adds --auto', () => {
+  assert.deepEqual(mergeArgs(7, 'rebase', 'now'), [
+    'pr',
+    'merge',
+    '7',
+    '--rebase',
+  ]);
+  assert.deepEqual(mergeArgs(7, 'squash', 'bypass'), [
+    'pr',
+    'merge',
+    '7',
+    '--squash',
+    '--admin',
+  ]);
+  assert.deepEqual(mergeArgs(7, 'merge', 'auto'), [
+    'pr',
+    'merge',
+    '7',
+    '--merge',
+    '--auto',
+  ]);
 });

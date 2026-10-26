@@ -20,6 +20,7 @@ import {
   type IconComponent,
 } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import {
   HoverCard,
@@ -36,6 +37,8 @@ import {
   type PrSwitch,
   type PrSwitchId,
 } from '../git/prSwitches';
+import { MERGE_METHODS } from '../git/MergeButton';
+import { useThreadPrMerge } from '../git/prMerge';
 import { useThreadPr } from '../git/useThreadPrs';
 import type { PullRequest, Thread } from '../model';
 import { timeAgo } from '../progress';
@@ -88,7 +91,7 @@ export function RefHoverCard({
   );
 }
 
-/** `RefHoverCard` for one of a thread's PRs, reading its live state, with its switches while Mochi can watch it. */
+/** `RefHoverCard` for one of a thread's PRs, reading its live state, with its switches while Mochi can watch it and Merge while it's open. */
 export function ThreadPrHoverCard({
   thread,
   pr,
@@ -96,14 +99,43 @@ export function ThreadPrHoverCard({
 }: Placement & { thread: Thread; pr: PullRequest; children: ReactElement }) {
   const item = useThreadPr(thread, pr);
   const switches = usePrSwitches(thread, item);
-  const footer = switches.length > 0 && (
-    <div className="flex flex-col gap-2.5 border-t pt-3">
-      {switches.map((s) => (
-        <PrSwitchRow key={s.id} item={s} />
-      ))}
-    </div>
+  const merge = useThreadPrMerge(thread, item);
+  const footer = (
+    <>
+      {switches.length > 0 && (
+        <div className="flex flex-col gap-2.5 border-t pt-3">
+          {switches.map((s) => (
+            <PrSwitchRow key={s.id} item={s} />
+          ))}
+        </div>
+      )}
+      {!!merge && (
+        <div className="flex justify-end border-t pt-3">
+          <Button
+            size="sm"
+            disabled={merge.isBusy || merge.isConflicting}
+            title={
+              merge.isConflicting ? 'Resolve the conflicts first' : undefined
+            }
+            onClick={() => merge.request(merge.method)}
+          >
+            {merge.isBusy ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <GitMergeIcon data-icon="inline-start" />
+            )}
+            {MERGE_METHODS[merge.method].action}
+          </Button>
+        </div>
+      )}
+    </>
   );
-  return <RefHoverCard item={item} footer={footer} {...props} />;
+  return (
+    <>
+      <RefHoverCard item={item} footer={footer} {...props} />
+      {merge?.dialog}
+    </>
+  );
 }
 
 const SWITCH_ICONS = {

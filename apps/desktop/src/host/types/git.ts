@@ -1,4 +1,9 @@
-import type { GithubRef, RefState, RepoSlug } from '@mochi/domain/chat/refs';
+import type {
+  GithubRef,
+  MergeMethod,
+  RefState,
+  RepoSlug,
+} from '@mochi/domain/chat/refs';
 import type { Manifest } from '@mochi/domain/host/types/manifest';
 import type { PullRequest } from '../../model.ts';
 
@@ -97,6 +102,11 @@ export interface ReviewThread {
 
 export type ReviewVerdict = 'approve' | 'request-changes' | 'comment';
 
+export type { MergeMethod };
+
+/** `now` merges, `bypass` merges past unmet requirements with admin rights, `auto` turns on GitHub auto-merge. */
+export type MergeMode = 'now' | 'bypass' | 'auto';
+
 /** One PR as its review page shows it: conversation, checks, files and inline threads. */
 export interface PrReview {
   number: number;
@@ -109,6 +119,8 @@ export interface PrReview {
   base: string;
   head: string;
   isConflicting: boolean;
+  /** The merge methods the repository allows, in GitHub's order. */
+  mergeMethods: MergeMethod[];
   /** The account gh reads as: its own comments and reviews are yours. */
   viewer: string;
   checks: PrCheck[];
@@ -251,8 +263,13 @@ export interface GitHost {
     body: string,
     githubUser?: string,
   ): Promise<void>;
-  /** Merges now with the first method the repo allows (squash, merge, rebase). */
-  mergePr(cwd: string, pr: number, githubUser?: string): Promise<void>;
+  mergePr(
+    cwd: string,
+    pr: number,
+    method: MergeMethod,
+    mode: MergeMode,
+    githubUser?: string,
+  ): Promise<void>;
   /** The tail of a failed GitHub Actions job's log, from the check's `link`; throws for a check that isn't an Actions job. */
   ciLog(cwd: string, checkLink: string, githubUser?: string): Promise<string>;
   /** origin's `owner/repo` when it's on github.com; null otherwise (no origin, another host, not a repo). */

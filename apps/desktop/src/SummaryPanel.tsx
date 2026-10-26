@@ -77,6 +77,8 @@ import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { ThreadName } from './chat/ThreadMessage';
 import { refDescription, type ChecksState } from '@mochi/domain/chat/refs';
 import { usePrSwitches } from './git/prSwitches';
+import { MergeSubmenu } from './git/MergeButton';
+import { useThreadPrMerge } from './git/prMerge';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import { OPEN_PR_PROMPT } from './git/prs';
@@ -1331,42 +1333,56 @@ function CheckCount({
 
 function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
   const switches = usePrSwitches(thread, item);
+  const merge = useThreadPrMerge(thread, item);
   const url = item.state.url;
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`${item.label} options`}
-          className="relative z-10 -my-1 -mr-1"
-        >
-          <OverflowIcon vertical />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
-        {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
-        <DropdownMenuItem
-          onSelect={() => window.open(url, '_blank', 'noreferrer')}
-        >
-          Open on GitHub
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>
-          Copy link
-        </DropdownMenuItem>
-        {switches.length > 0 && <DropdownMenuSeparator />}
-        {switches.map((s) => (
-          <DropdownMenuCheckboxItem
-            key={s.id}
-            checked={s.isOn}
-            onCheckedChange={s.set}
-            onSelect={(e) => e.preventDefault()}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`${item.label} options`}
+            className="relative z-10 -my-1 -mr-1"
           >
-            {s.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <OverflowIcon vertical />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto">
+          {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
+          <DropdownMenuItem
+            onSelect={() => window.open(url, '_blank', 'noreferrer')}
+          >
+            Open on GitHub
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>
+            Copy link
+          </DropdownMenuItem>
+          {switches.length > 0 && <DropdownMenuSeparator />}
+          {switches.map((s) => (
+            <DropdownMenuCheckboxItem
+              key={s.id}
+              checked={s.isOn}
+              onCheckedChange={s.set}
+              onSelect={(e) => e.preventDefault()}
+            >
+              {s.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+          {!!merge && (
+            <>
+              <DropdownMenuSeparator />
+              <MergeSubmenu
+                allowed={merge.allowed}
+                isDisabled={merge.isBusy || merge.isConflicting}
+                onPick={merge.request}
+              />
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {merge?.dialog}
+    </>
   );
 }
 
