@@ -96,6 +96,11 @@ const STATE_WORD = {
   here: 'answered: the user chose to do it here',
 } satisfies Record<ThreadProposal['state'], string>;
 
+/** Do it here on a suggestion: the agent's turn already ended, so the message carries the brief it wrote. */
+export const suggestionHereReply = (
+  p: Pick<ThreadProposal, 'title' | 'brief'>,
+) => `Do it here: ${p.title}\n\n${p.brief}`;
+
 /** The message the agent gets when you answer its offer in place, since it stopped to wait for you. */
 export const OFFER_REPLY = {
   here: 'Do it here.',

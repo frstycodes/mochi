@@ -13,7 +13,7 @@ export function ThreadProposalsBlock() {
   return (
     <Block
       title="Thread proposals"
-      use="The agent's side work, Claude Code Desktop style. Work it noticed or recommends becomes a proposal: title, the brief folded, Dismiss and Start; nothing runs until you start it, and it expires after 7 days. A task you named where it isn't clear where it runs is an offer: the agent waits for New thread, Do it here or Dismiss. Started ones nest under this thread. Several in one turn page through the same card (‹ 2 of 3 ›), no box in a box."
+      use="The agent's side work, Claude Code Desktop style. Work it noticed or recommends becomes a proposal: title, the brief folded, Dismiss, Do it here and New thread; nothing runs until you choose, and it expires after 7 days. A task you named where it isn't clear where it runs is an offer: the agent waits for New thread, Do it here or Dismiss. Started ones nest under this thread. Several in one turn page through the same card (‹ 2 of 3 ›), no box in a box."
       wide
     >
       <div className="flex flex-col gap-12">
@@ -105,6 +105,7 @@ function LiveProposals({ initial }: { initial: ShownProposal[] }) {
     <ProposalCard
       proposals={items}
       onStart={(p) => set(p.id, 'started')}
+      onHere={(p) => set(p.id, 'here')}
       onDismiss={(p) => set(p.id, 'dismissed')}
     />
   );

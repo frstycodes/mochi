@@ -212,7 +212,7 @@ export interface ActivityEntry {
 }
 
 /**
- * A thread the agent suggested (own_initiative: Start / Dismiss), a sub-thread was asked to start (user_asked: Start / Dismiss, as it
+ * A thread the agent suggested (own_initiative: New thread / Do it here / Dismiss), a sub-thread was asked to start (user_asked: Start / Dismiss, as it
  * can't start threads itself), or the agent asked whether to start (offer: New thread / Do it here).
  * Nothing runs until it's started; a pending one expires after `PROPOSAL_TTL`.
  */

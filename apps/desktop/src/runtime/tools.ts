@@ -1443,7 +1443,7 @@ const PROPOSAL_NOTES = {
   offer:
     'The user sees New thread / Do it here / Dismiss. Don\'t start the work: end your turn now with one short line. New thread starts it with your brief; "Do it here." or a dismissal comes back as their message.',
   own_initiative:
-    'The user sees a card with Start and Dismiss; nothing runs until they start it. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.',
+    'The user sees a card with New thread, Do it here and Dismiss; nothing runs until they choose, and Do it here comes back to you as their message with the brief. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.',
   user_asked:
     "Proposed and waiting: this thread is a sub-thread, so the threads it starts go on one card for the user, with Start, Dismiss and Start all. Don't retry or wait on it; carry on, or end your turn. Each one they start nests under this thread and its notes come back to you.",
 } satisfies Record<ThreadProposal['initiation'], string>;

@@ -11,7 +11,7 @@ import {
 import { useHarness, useHarnessSelector } from '../store';
 import { SubThreadState } from '../goals/SubThreads';
 import { useThreadStatus } from '../goals/VerdictChip';
-import { isExpired, OFFER_REPLY } from './proposals';
+import { isExpired, OFFER_REPLY, suggestionHereReply } from './proposals';
 import { ThreadName } from './ThreadMessage';
 
 /** A proposal as a card shows it: expiry is read off the clock, never stored. */
@@ -39,14 +39,18 @@ export function ProposalEntry({
       proposalId: p.id,
       state,
     });
-  // The agent ended its turn to wait on an offer, so your answer in place is its next message.
-  const reply = (p: ThreadProposal, state: keyof typeof OFFER_REPLY) => {
+  // The agent ended its turn, so your answer in place is its next message.
+  const reply = (
+    p: ThreadProposal,
+    state: 'here' | 'dismissed',
+    text: string,
+  ) => {
     answer(p, state);
     dispatch({
       type: 'send',
       threadId: thread.id,
-      text: OFFER_REPLY[state],
-      reason: `Answered the offer "${p.title}"`,
+      text,
+      reason: `Answered "${p.title}"`,
     });
   };
   const proposals = shown.filter((p) => p.initiation !== 'offer');
@@ -60,14 +64,15 @@ export function ProposalEntry({
             proposal={p}
             agent={authorName(thread.providers[0])}
             onNew={() => start(p)}
-            onHere={() => reply(p, 'here')}
-            onDismiss={() => reply(p, 'dismissed')}
+            onHere={() => reply(p, 'here', OFFER_REPLY.here)}
+            onDismiss={() => reply(p, 'dismissed', OFFER_REPLY.dismissed)}
           />
         ))}
       {proposals.length > 0 && (
         <ProposalCard
           proposals={proposals}
           onStart={start}
+          onHere={(p) => reply(p, 'here', suggestionHereReply(p))}
           onDismiss={(p) => answer(p, 'dismissed')}
         />
       )}
@@ -75,14 +80,16 @@ export function ProposalEntry({
   );
 }
 
-/** The agent's suggestions, or a sub-thread's asked-for threads: Dismiss and Start; several from one turn page through it (‹ 2 of 3 ›) with Start all. */
+/** The agent's suggestions (Dismiss, Do it here, New thread), or a sub-thread's asked-for threads (Dismiss, Start); several from one turn page through it (‹ 2 of 3 ›) with Start all. */
 export function ProposalCard({
   proposals,
   onStart,
+  onHere,
   onDismiss,
 }: {
   proposals: ShownProposal[];
   onStart: (p: ShownProposal) => void;
+  onHere?: (p: ShownProposal) => void;
   onDismiss: (p: ShownProposal) => void;
 }) {
   const [at, setAt] = useState(() => Math.max(0, proposals.findIndex(isOpen)));
@@ -109,6 +116,11 @@ export function ProposalCard({
         key={proposal.id}
         proposal={proposal}
         onStart={settle(onStart)}
+        onHere={
+          proposal.initiation === 'own_initiative' && onHere
+            ? settle(onHere)
+            : undefined
+        }
         onDismiss={settle(onDismiss)}
         pager={
           proposals.length > 1 && (
@@ -170,12 +182,15 @@ function Pager({
 function ProposalRow({
   proposal,
   onStart,
+  onHere,
   onDismiss,
   pager,
   startAll,
 }: {
   proposal: ShownProposal;
   onStart: () => void;
+  /** Suggestions only: the agent does it in this thread instead. */
+  onHere?: () => void;
   onDismiss: () => void;
   pager?: ReactNode;
   startAll?: ReactNode;
@@ -236,8 +251,13 @@ function ProposalRow({
             Dismiss
           </Button>
           {startAll}
+          {onHere && (
+            <Button size="sm" variant="outline" onClick={onHere}>
+              Do it here
+            </Button>
+          )}
           <Button size="sm" onClick={onStart}>
-            Start
+            {onHere ? 'New thread' : 'Start'}
           </Button>
         </div>
       )}
