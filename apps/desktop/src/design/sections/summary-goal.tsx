@@ -169,7 +169,7 @@ function summaryGoalFixtures(rl: Thread): SummaryGoalFixture[] {
       question: 'Retry it, or quarantine it and open an issue?',
     },
     {
-      label: 'Archived',
+      label: 'Settled',
       thread: {
         ...done,
         status: 'settled',

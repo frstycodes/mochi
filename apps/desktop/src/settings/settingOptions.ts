@@ -74,6 +74,13 @@ export const WORKTREE_CLEANUP = [
   { value: '30', label: 'After 30 days' },
 ] as const;
 
+export const SETTLED_CLEANUP = [
+  { value: 'never', label: 'Never' },
+  { value: '30', label: 'After 30 days' },
+  { value: '90', label: 'After 90 days' },
+  { value: '180', label: 'After 180 days' },
+] as const;
+
 export const WHILE_WORKING = [
   { value: 'queue', label: 'Queue until it finishes' },
   { value: 'steer', label: 'Send right away (steer)' },

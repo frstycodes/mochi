@@ -85,6 +85,7 @@ export function threadAt(thread: Thread, t: number): Thread {
     steps,
     status: statusFor(steps),
     settledAt: undefined,
+    settledMs: undefined,
     activity: thread.activity.filter((a) => a.at <= t),
     revisions: thread.revisions.filter((r) => r.at <= t),
   };

@@ -24,7 +24,7 @@ function isSame(a: PullRequest, b: PullRequest) {
 export const OPEN_PR_PROMPT =
   'Open a pull request for this branch: commit what is left, push it, then run gh pr create with --base set explicitly (usually main, or the branch this one was cut from), a Conventional Commits title, and a body written from your turn report: What, Why, Checks. If a check or gap blocks it, tell me what is missing instead.';
 
-/** Auto-archive (`useAutoArchive`) is due: a PR has it on, every PR merged or closed, and the agent idle; until then it waits. */
+/** Auto-settle (`useAutoArchive`) is due: a PR has it on, every PR merged or closed, and the agent idle; until then it waits. */
 export function isArchiveDue(thread: Thread) {
   if (thread.status === 'settled' || thread.live?.isWorking) return false;
   return (

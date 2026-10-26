@@ -23,7 +23,7 @@ export interface Saved {
   forks: Record<string, Fork>;
 }
 
-/** On disk the save is split so each write touches only the threads that changed (`electron/ipc/threadStore.ts`). */
+/** The save is split so each write touches only the threads that changed: one row per thread in Core's store (`packages/core/src/store/store.ts`). */
 interface SavedIndex extends Omit<Saved, 'threads' | 'checkpoints' | 'forks'> {
   threadIds: string[];
 }

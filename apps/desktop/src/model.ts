@@ -493,6 +493,8 @@ export interface Thread {
   /** Where its pin sorts among all your computers' pins (`pinOrderOf`); unset while unpinned. */
   pinOrder?: number;
   settledAt?: number;
+  /** Wall-clock ms it settled (`markSettled`); `settledAt` is on the app clock. */
+  settledMs?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };
   session?: {

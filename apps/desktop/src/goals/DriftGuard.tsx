@@ -85,7 +85,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     setPending(null);
     toast(
       isGoalDone
-        ? `Archived "${thread.title}" and started a new thread`
+        ? `Settled "${thread.title}" and started a new thread`
         : 'Started a new thread',
       {
         duration: UNDO_MS,

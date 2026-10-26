@@ -180,7 +180,7 @@ export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
     );
   return (
     <CircleCheck
-      aria-label="Archived"
+      aria-label="Settled"
       className="size-4 shrink-0 text-subtle-foreground"
     />
   );

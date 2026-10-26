@@ -338,11 +338,12 @@ function SpaceNav({
   };
 
   const projectFilter = useProjectFilter(spaceId, threads);
-  const { pinned, active, settled } = filteredSidebarLists(
-    threads,
-    spaceId,
-    projectFilter.selected,
-  );
+  const {
+    pinned,
+    active,
+    settled: allSettled,
+  } = filteredSidebarLists(threads, spaceId, projectFilter.selected);
+  const settled = allSettled.slice(0, SIDEBAR_SETTLED);
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
   const order = [
     ...[...pinned, ...active].flatMap((g) => [g.thread, ...g.subs]),
@@ -421,7 +422,7 @@ function SpaceNav({
         />
 
         {settled.length > 0 && (
-          <FoldGroup label="Archived" count={settled.length}>
+          <FoldGroup label="Settled" count={allSettled.length}>
             {settled.map((t) => (
               <ThreadRowMenu
                 key={t.id}
@@ -433,6 +434,17 @@ function SpaceNav({
                 </SidebarMenuItem>
               </ThreadRowMenu>
             ))}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={view.kind === 'settled'}
+                onClick={() => go({ kind: 'settled' })}
+                className="h-7 type-caption text-muted-foreground"
+              >
+                {allSettled.length > settled.length
+                  ? `View all ${allSettled.length}`
+                  : 'View all'}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </FoldGroup>
         )}
       </div>
@@ -440,6 +452,9 @@ function SpaceNav({
     </>
   );
 }
+
+/** The newest settled threads the sidebar lists; View all opens the rest on the Settled page. */
+const SIDEBAR_SETTLED = 10;
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
@@ -471,7 +486,7 @@ function MachineThreads() {
       </SidebarGroupLabel>
     );
     if (!state) return <SidebarGroup key={machine.id}>{label}</SidebarGroup>;
-    // Archived folds below as its own group, level with the machine's, as this computer's own does.
+    // Settled folds below as its own group, level with the machine's, as this computer's own does.
     return (
       <RemoteScope key={machine.id} machine={machine} state={state}>
         <SidebarGroup>
@@ -486,7 +501,7 @@ function MachineThreads() {
           </SidebarMenu>
         </SidebarGroup>
         {settled.length > 0 && (
-          <FoldGroup label="Archived" count={settled.length}>
+          <FoldGroup label="Settled" count={settled.length}>
             {settled.map(row)}
           </FoldGroup>
         )}
@@ -1193,7 +1208,7 @@ export function ThreadItem({
             className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden"
           />
         )}
-        {/* Room for the Archive / Unarchive button while it shows, so the title truncates before the button instead of under it. */}
+        {/* Room for the Settle / Reactivate button while it shows, so the title truncates before the button instead of under it. */}
         {!isRenaming && (
           <span
             aria-hidden
@@ -1242,11 +1257,11 @@ export function ThreadItem({
           className="top-1.5! right-2 size-5 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5"
         >
           <TooltipIconButton
-            label={isSettled ? 'Unarchive' : 'Archive'}
+            label={isSettled ? 'Reactivate' : 'Settle'}
             hint={
               isSettled
                 ? 'Moves it back to the active list.'
-                : 'Stops its agent, terminals and dev servers, and files it under Archived.'
+                : 'Stops its agent, terminals and dev servers, and files it under Settled.'
             }
             onClick={settle}
           >

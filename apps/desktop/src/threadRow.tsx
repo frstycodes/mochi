@@ -31,7 +31,7 @@ export function threadDetail(thread: Thread, question?: string) {
   const limit = limitStatus(thread);
   if (limit) return limit;
   if (thread.status === 'needs-you') return question ?? 'Waiting on you';
-  if (thread.status === 'settled') return 'Archived';
+  if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];
   if (thread.status === 'review')
     return pr ? `#${pr.number} ready for review` : NEXT_STEP_TITLES['open-pr'];
