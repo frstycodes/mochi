@@ -20,8 +20,8 @@ test('the window is used + buffer + free; deferred and empty rows stay out, the 
   assert.deepEqual(
     rows.map((r) => [r.name, r.share, r.color]),
     [
-      ['System prompt', 0.1, 'var(--chart-2)'],
       ['Messages', 0.2, 'var(--chart-1)'],
+      ['System prompt', 0.1, 'var(--chart-2)'],
       [
         'Autocompact buffer',
         0.1,
