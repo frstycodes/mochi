@@ -70,6 +70,7 @@ import {
   rootOf,
   pinnedThreads,
   pinOrderOf,
+  settledThreads,
   sidebarGroups,
   stepPin,
   type DropAt,
@@ -332,7 +333,7 @@ function SpaceNav({
   };
 
   const { pinned, active } = sidebarGroups(threads, spaceId);
-  const settled = threads.filter((t) => t.status === 'settled');
+  const settled = settledThreads(threads);
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
   const order = [
     ...[...pinned, ...active].flatMap((g) => [g.thread, ...g.subs]),
