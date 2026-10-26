@@ -111,6 +111,7 @@ export const ReviewThread = Schema.Struct({
 });
 
 export const MergeMethod = Schema.Literals(['squash', 'merge', 'rebase']);
+export type MergeMethod = typeof MergeMethod.Type;
 const MergeMode = Schema.Literals(['now', 'bypass', 'auto']);
 
 export const ReviewVerdict = Schema.Literals([
@@ -218,7 +219,10 @@ export const RefState = Schema.Struct({
   hasConflicts: B,
   isAutoMerge: B,
   checks: Schema.NullOr(Schema.Literals(['pass', 'fail', 'pending'])),
-  checkCounts: Schema.NullOr(Schema.Struct({ passed: N, total: N })),
+  checkCounts: Schema.NullOr(
+    Schema.Struct({ passed: N, failed: N, running: N, total: N }),
+  ),
+  mergeMethods: Schema.NullOr(Schema.Array(MergeMethod)),
   review: Schema.NullOr(Schema.Literals(['approved', 'changes', 'required'])),
   isNotPlanned: B,
   author: Schema.NullOr(Schema.Struct({ login: S, avatarUrl: S })),

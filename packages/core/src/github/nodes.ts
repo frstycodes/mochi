@@ -330,6 +330,7 @@ const REF = `fragment Ref on IssueOrPullRequest {
   __typename
   ... on PullRequest {
     title url state isDraft mergeable reviewDecision updatedAt author { login avatarUrl(size: 40) } headRefName baseRefName additions deletions changedFiles autoMergeRequest { enabledAt }
+    repository { squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed }
     commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 0) { totalCount checkRunCountsByState { state count } statusContextCountsByState { state count } } } } } }
   }
   ... on Issue { title url state stateReason updatedAt author { login avatarUrl(size: 40) } }
@@ -352,8 +353,25 @@ type RefNode = {
   deletions?: number;
   changedFiles?: number;
   autoMergeRequest?: { enabledAt: string } | null;
+  repository?: MergeAllowed;
   commits?: Connection<{ commit: { statusCheckRollup: Rollup | null } }>;
 };
+
+type MergeAllowed = {
+  squashMergeAllowed: boolean;
+  mergeCommitAllowed: boolean;
+  rebaseMergeAllowed: boolean;
+};
+
+/** The repository's allowed merge methods, in GitHub's order. */
+export const allowedMethods = (repo: MergeAllowed): Git.MergeMethod[] =>
+  (
+    [
+      repo.squashMergeAllowed && 'squash',
+      repo.mergeCommitAllowed && 'merge',
+      repo.rebaseMergeAllowed && 'rebase',
+    ] as const
+  ).filter((m) => !!m);
 
 type Counts = { state: string; count: number }[];
 type Rollup = {
@@ -365,7 +383,7 @@ type Rollup = {
   };
 };
 
-/** "3/5": check runs that succeeded, were skipped or neutral, and commit statuses that succeeded, out of every check. */
+/** "3/5": check runs that succeeded, were skipped or neutral, and commit statuses that succeeded, out of every check; with the failed and running ones. */
 function checkCounts(
   rollup: Rollup | null | undefined,
 ): Git.RefState['checkCounts'] {
@@ -376,10 +394,17 @@ function checkCounts(
       (n, c) => n + (states.includes(c.state) ? c.count : 0),
       0,
     );
-  const passed =
-    sum(contexts.checkRunCountsByState, ['SUCCESS', 'SKIPPED', 'NEUTRAL']) +
-    sum(contexts.statusContextCountsByState, ['SUCCESS']);
-  return { passed, total: contexts.totalCount };
+  const runs = contexts.checkRunCountsByState;
+  const statuses = contexts.statusContextCountsByState;
+  return {
+    passed:
+      sum(runs, ['SUCCESS', 'SKIPPED', 'NEUTRAL']) + sum(statuses, ['SUCCESS']),
+    failed: sum(runs, [...FAILED]) + sum(statuses, ['FAILURE', 'ERROR']),
+    running:
+      sum(runs, ['IN_PROGRESS', 'PENDING', 'QUEUED', 'WAITING']) +
+      sum(statuses, ['PENDING', 'EXPECTED']),
+    total: contexts.totalCount,
+  };
 }
 
 export function toRefState(node: RefNode): Git.RefState {
@@ -402,6 +427,7 @@ export function toRefState(node: RefNode): Git.RefState {
     isAutoMerge: !!node.autoMergeRequest,
     checks: (rollup ? CHECKS_STATE[rollup.state] : null) ?? null,
     checkCounts: checkCounts(rollup),
+    mergeMethods: node.repository ? allowedMethods(node.repository) : null,
     review: (node.reviewDecision && REVIEWS[node.reviewDecision]) ?? null,
     isNotPlanned: node.stateReason === 'NOT_PLANNED',
     author: node.author ?? null,

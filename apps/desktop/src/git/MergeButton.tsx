@@ -19,8 +19,12 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
@@ -43,10 +47,70 @@ export const MERGE_METHODS = {
   },
 } satisfies Record<MergeMethod, { action: string; body: string }>;
 
-/** GitHub's merge split button: the primary merges with `method`, the chevron changes it; unfinished or failing checks ask before bypassing them. */
+const METHODS = Object.keys(MERGE_METHODS) as MergeMethod[];
+
+/** Checks that keep a PR from merging cleanly now. */
+export interface CheckTally {
+  failed: number;
+  running: number;
+}
+
+export const checkTally = (checks: PrCheck[]): CheckTally => ({
+  failed: checks.filter((c) => c.state === 'fail').length,
+  running: checks.filter((c) => c.state === 'pending').length,
+});
+
+/** The remembered method when the repository allows it, else the first it allows. */
+export const pickMethod = (
+  allowed: readonly MergeMethod[],
+  preferred: MergeMethod,
+) => (allowed.includes(preferred) ? preferred : allowed[0]);
+
+/**
+ * `request(method)` merges now when no check is failing or running, else asks to bypass them first. Render `dialog` outside
+ * any hover card or menu: those close as focus moves to it.
+ */
+export function useMergeFlow({
+  head,
+  base,
+  tally,
+  checks,
+  onMerge,
+}: {
+  head: string;
+  base: string;
+  tally: CheckTally;
+  /** The checks themselves, listed in the dialog when known. */
+  checks?: PrCheck[];
+  onMerge: (method: MergeMethod, mode: MergeMode) => void;
+}) {
+  const [asking, setAsking] = useState<MergeMethod | null>(null);
+  const request = (method: MergeMethod) =>
+    tally.failed + tally.running > 0
+      ? setAsking(method)
+      : onMerge(method, 'now');
+  const dialog = (
+    <BypassChecksDialog
+      open={!!asking}
+      onOpenChange={(open) => !open && setAsking(null)}
+      head={head}
+      base={base}
+      tally={tally}
+      blocking={checks?.filter(
+        (c) => c.state === 'fail' || c.state === 'pending',
+      )}
+      onBypass={() => asking && onMerge(asking, 'bypass')}
+      onAutoMerge={() => asking && onMerge(asking, 'auto')}
+    />
+  );
+  return { request, dialog };
+}
+
+/** GitHub's merge split button: the primary merges with `method`, the chevron changes it. */
 export function MergeButton({
   head,
   base,
+  tally,
   checks,
   isConflicting,
   method,
@@ -57,20 +121,23 @@ export function MergeButton({
 }: {
   head: string;
   base: string;
-  checks: PrCheck[];
+  tally: CheckTally;
+  checks?: PrCheck[];
   isConflicting: boolean;
   method: MergeMethod;
   /** The methods the repository allows; the others show disabled. */
-  allowed: MergeMethod[];
+  allowed: readonly MergeMethod[];
   isBusy: boolean;
   onMethodChange: (method: MergeMethod) => void;
   onMerge: (method: MergeMethod, mode: MergeMode) => void;
 }) {
-  const [isAsking, setAsking] = useState(false);
-  const blocking = blockingChecks(checks);
-  const merge = () =>
-    blocking.length > 0 ? setAsking(true) : onMerge(method, 'now');
-
+  const { request, dialog } = useMergeFlow({
+    head,
+    base,
+    tally,
+    checks,
+    onMerge,
+  });
   return (
     <>
       <ButtonGroup>
@@ -78,7 +145,7 @@ export function MergeButton({
           size="xs"
           disabled={isBusy || isConflicting}
           title={isConflicting ? 'Resolve the conflicts first' : undefined}
-          onClick={merge}
+          onClick={() => request(method)}
         >
           {isBusy && <Spinner data-icon="inline-start" />}
           {MERGE_METHODS[method].action}
@@ -99,39 +166,74 @@ export function MergeButton({
               value={method}
               onValueChange={(v) => onMethodChange(v as MergeMethod)}
             >
-              {(Object.keys(MERGE_METHODS) as MergeMethod[]).map((m) => (
+              {METHODS.map((m) => (
                 <DropdownMenuRadioItem
                   key={m}
                   value={m}
                   disabled={!allowed.includes(m)}
                   className="items-start"
                 >
-                  <span className="flex flex-col gap-0.5">
-                    <span className="type-body font-medium">
-                      {MERGE_METHODS[m].action}
-                    </span>
-                    <span className="type-meta text-pretty text-muted-foreground">
-                      {allowed.includes(m)
-                        ? MERGE_METHODS[m].body
-                        : 'Not allowed in this repository.'}
-                    </span>
-                  </span>
+                  <MethodText method={m} isAllowed={allowed.includes(m)} />
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </ButtonGroup>
-      <BypassChecksDialog
-        open={isAsking}
-        onOpenChange={setAsking}
-        head={head}
-        base={base}
-        blocking={blocking}
-        onBypass={() => onMerge(method, 'bypass')}
-        onAutoMerge={() => onMerge(method, 'auto')}
-      />
+      {dialog}
     </>
+  );
+}
+
+/** A "Merge" submenu for a PR's menu: picking a method merges with it. */
+export function MergeSubmenu({
+  allowed,
+  isDisabled,
+  onPick,
+}: {
+  allowed: readonly MergeMethod[];
+  isDisabled: boolean;
+  onPick: (method: MergeMethod) => void;
+}) {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger disabled={isDisabled}>
+        Merge
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-72">
+        {METHODS.map((m) => (
+          <DropdownMenuItem
+            key={m}
+            disabled={!allowed.includes(m)}
+            className="items-start"
+            onSelect={() => onPick(m)}
+          >
+            <MethodText method={m} isAllowed={allowed.includes(m)} />
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+function MethodText({
+  method,
+  isAllowed,
+}: {
+  method: MergeMethod;
+  isAllowed: boolean;
+}) {
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="type-body font-medium">
+        {MERGE_METHODS[method].action}
+      </span>
+      <span className="type-meta text-pretty text-muted-foreground">
+        {isAllowed
+          ? MERGE_METHODS[method].body
+          : 'Not allowed in this repository.'}
+      </span>
+    </span>
   );
 }
 
@@ -140,6 +242,7 @@ function BypassChecksDialog({
   onOpenChange,
   head,
   base,
+  tally,
   blocking,
   onBypass,
   onAutoMerge,
@@ -148,12 +251,12 @@ function BypassChecksDialog({
   onOpenChange: (open: boolean) => void;
   head: string;
   base: string;
-  blocking: PrCheck[];
+  tally: CheckTally;
+  blocking?: PrCheck[];
   onBypass: () => void;
   onAutoMerge: () => void;
 }) {
-  const failed = blocking.filter((c) => c.state === 'fail').length;
-  const running = blocking.length - failed;
+  const { failed, running } = tally;
   const title = failed
     ? `${failed} ${plural(failed, 'check', 'checks')} failing`
     : `${running} ${plural(running, 'check', 'checks')} still running`;
@@ -172,9 +275,11 @@ function BypassChecksDialog({
             bypass the rule.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="max-h-40 overflow-y-auto rounded-lg border px-1 py-1">
-          <CheckList checks={blocking} />
-        </div>
+        {!!blocking?.length && (
+          <div className="max-h-40 overflow-y-auto rounded-lg border px-1 py-1">
+            <CheckList checks={blocking} />
+          </div>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel>Not yet</AlertDialogCancel>
           {!failed && (
@@ -190,6 +295,3 @@ function BypassChecksDialog({
     </AlertDialog>
   );
 }
-
-const blockingChecks = (checks: PrCheck[]) =>
-  checks.filter((c) => c.state === 'fail' || c.state === 'pending');

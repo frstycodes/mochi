@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from '@/toast/store';
 import type { MergeMethod, PrCheck } from '../../host/types/git';
-import { MergeButton, MERGE_METHODS } from '../../git/MergeButton';
+import { checkTally, MergeButton, MERGE_METHODS } from '../../git/MergeButton';
 import { Block } from '../layout';
 
 export function MergeButtonBlock() {
@@ -46,6 +46,7 @@ export function MergeButtonBlock() {
           <MergeButton
             head="mochi/4275df48"
             base="main"
+            tally={checkTally(SCENARIOS[scenario].checks)}
             checks={SCENARIOS[scenario].checks}
             isConflicting={scenario === 'conflicts'}
             method={method}

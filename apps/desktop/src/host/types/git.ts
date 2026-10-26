@@ -1,4 +1,9 @@
-import type { GithubRef, RefState, RepoSlug } from '@mochi/domain/chat/refs';
+import type {
+  GithubRef,
+  MergeMethod,
+  RefState,
+  RepoSlug,
+} from '@mochi/domain/chat/refs';
 import type { Manifest } from '@mochi/domain/host/types/manifest';
 import type { PullRequest } from '../../model.ts';
 
@@ -97,7 +102,7 @@ export interface ReviewThread {
 
 export type ReviewVerdict = 'approve' | 'request-changes' | 'comment';
 
-export type MergeMethod = 'squash' | 'merge' | 'rebase';
+export type { MergeMethod };
 
 /** `now` merges, `bypass` merges past unmet requirements with admin rights, `auto` turns on GitHub auto-merge. */
 export type MergeMode = 'now' | 'bypass' | 'auto';

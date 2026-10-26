@@ -80,6 +80,11 @@ test('refs map to states; an unresolved one is null', () => {
     deletions: 3,
     changedFiles: 2,
     autoMergeRequest: { enabledAt: '2026-10-13T10:00:00Z' },
+    repository: {
+      squashMergeAllowed: true,
+      mergeCommitAllowed: false,
+      rebaseMergeAllowed: true,
+    },
     commits: {
       nodes: [
         {
@@ -110,7 +115,8 @@ test('refs map to states; an unresolved one is null', () => {
     hasConflicts: true,
     isAutoMerge: true,
     checks: 'fail',
-    checkCounts: { passed: 3, total: 5 },
+    checkCounts: { passed: 3, failed: 1, running: 1, total: 5 },
+    mergeMethods: ['squash', 'rebase'],
     review: 'changes',
     isNotPlanned: false,
     author: { login: 'ana', avatarUrl: 'a.png' },
@@ -140,6 +146,7 @@ test('refs map to states; an unresolved one is null', () => {
       isAutoMerge: false,
       checks: null,
       checkCounts: null,
+      mergeMethods: null,
       review: null,
       isNotPlanned: true,
       author: null,

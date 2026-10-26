@@ -1,12 +1,15 @@
 import type {
   DiffFile,
-  MergeMethod,
   PrComment,
   PrReview,
   ReviewThread,
   ReviewVerdict,
 } from '../host/types/git.ts';
-import { rollupCheck, type GqlContext } from '@mochi/core/github/nodes';
+import {
+  allowedMethods,
+  rollupCheck,
+  type GqlContext,
+} from '@mochi/core/github/nodes';
 import { untrusted } from './autofix.ts';
 import { hunkCovers } from './files.ts';
 import type { MergeMethods } from './prs.ts';
@@ -150,15 +153,6 @@ export function parsePrReview(
     files: patch,
   };
 }
-
-const allowedMethods = (repo: MergeMethods): MergeMethod[] =>
-  (
-    [
-      repo.squashMergeAllowed && 'squash',
-      repo.mergeCommitAllowed && 'merge',
-      repo.rebaseMergeAllowed && 'rebase',
-    ] as const
-  ).filter((m) => !!m);
 
 const login = (a: Author) => a?.login ?? 'ghost';
 const comment = (c: GqlComment): PrComment => ({

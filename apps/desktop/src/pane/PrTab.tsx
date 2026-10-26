@@ -22,7 +22,7 @@ import { plural } from '@mochi/domain/lib/format';
 import { STATUS_WORDS } from '@mochi/domain/chat/refs';
 import { ChangeList, type ChangeActions } from '../git/ChangeList';
 import { CheckList, ChecksSummary } from '../git/Checks';
-import { MergeButton } from '../git/MergeButton';
+import { checkTally, MergeButton, pickMethod } from '../git/MergeButton';
 import { changeSections } from '../git/files';
 import { threadPlace, threadPrompt } from '../git/prReview';
 import { useConfirm } from '../git/useConfirm';
@@ -142,9 +142,7 @@ function PrView({
       ),
     },
   };
-  const mergeMethod = review.mergeMethods.includes(preferred)
-    ? preferred
-    : review.mergeMethods[0];
+  const mergeMethod = pickMethod(review.mergeMethods, preferred);
   const unplaced = review.threads.filter((t) => !threadPlace(t, review.files));
   const isOpen = review.state === 'OPEN';
 
@@ -155,6 +153,7 @@ function PrView({
           <MergeButton
             head={review.head}
             base={review.base}
+            tally={checkTally(review.checks)}
             checks={review.checks}
             isConflicting={review.isConflicting}
             method={mergeMethod}
