@@ -70,8 +70,6 @@ import {
   rootOf,
   pinnedThreads,
   pinOrderOf,
-  settledThreads,
-  sidebarGroups,
   stepPin,
   type DropAt,
   type ThreadGroup,
@@ -119,6 +117,13 @@ import { UserMenu } from './UserMenu';
 import { FoldGroup } from './SidebarFold';
 import { ProjectIcon } from './ProjectIcon';
 import { useProjectAt } from './projects';
+import {
+  filteredSidebarLists,
+  matchesProjectFilter,
+  useProjectFilter,
+  type ProjectFilter,
+} from './projectFilter';
+import { ProjectFilterMenu } from './ProjectFilterMenu';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { host } from './host';
 
@@ -332,8 +337,12 @@ function SpaceNav({
     setOpenMobile(false);
   };
 
-  const { pinned, active } = sidebarGroups(threads, spaceId);
-  const settled = settledThreads(threads);
+  const projectFilter = useProjectFilter(spaceId, threads);
+  const { pinned, active, settled } = filteredSidebarLists(
+    threads,
+    spaceId,
+    projectFilter.selected,
+  );
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
   const order = [
     ...[...pinned, ...active].flatMap((g) => [g.thread, ...g.subs]),
@@ -397,10 +406,18 @@ function SpaceNav({
       <div className="contents" onKeyDown={selection.onKeyDown}>
         <ThreadList
           pinned={pinned}
-          remotePins={useRemotePins()}
+          remotePins={useRemotePins(projectFilter.selected)}
           active={active}
           row={row}
           selectedIds={selection.ids}
+          filterMenu={
+            <ProjectFilterMenu
+              spaceId={spaceId}
+              filter={projectFilter}
+              className="absolute top-1.5 right-3 z-10"
+            />
+          }
+          isFiltered={projectFilter.selected !== null}
         />
 
         {settled.length > 0 && (
@@ -551,12 +568,16 @@ function ThreadList({
   active,
   row,
   selectedIds,
+  filterMenu,
+  isFiltered,
 }: {
   pinned: ThreadGroup[];
   remotePins: RemotePin[];
   active: ThreadGroup[];
   row: (t: Thread, isSub?: boolean) => ReactNode;
   selectedIds: string[];
+  filterMenu: ReactNode;
+  isFiltered: boolean;
 }) {
   const dispatch = useDispatch();
   const getState = useGetState();
@@ -611,7 +632,8 @@ function ThreadList({
   const target = useHarnessSelector(
     (s) => nestUnder && s.threads.find((t) => t.id === nestUnder),
   );
-  if (pins.length + active.length === 0) return null;
+  if (pins.length + active.length === 0)
+    return isFiltered && <NoFilteredThreads filterMenu={filterMenu} />;
 
   const dragged = drag.state && findRow(drag.state.id);
   const step = (id: string, by: 1 | -1) => {
@@ -766,6 +788,7 @@ function ThreadList({
 
   return (
     <SidebarGroup>
+      {filterMenu}
       <DragSurface
         distance={DRAG_THRESHOLD}
         canStart={drag.canStart}
@@ -850,15 +873,25 @@ function mergePins(pinned: ThreadGroup[], remotePins: RemotePin[]): ListRow[] {
 }
 
 /** Your other computers' pinned threads, from what each last streamed. */
-function useRemotePins(): RemotePin[] {
+function useRemotePins(filter: ProjectFilter): RemotePin[] {
   return useMachines().machines.flatMap(({ machine, state }) =>
     state
-      ? pinnedThreads(state.threads, state.spaceId).map((thread) => ({
-          machine,
-          state,
-          thread,
-        }))
+      ? pinnedThreads(state.threads, state.spaceId)
+          .filter((thread) => matchesProjectFilter(thread, filter))
+          .map((thread) => ({ machine, state, thread }))
       : [],
+  );
+}
+
+function NoFilteredThreads({ filterMenu }: { filterMenu: ReactNode }) {
+  return (
+    <SidebarGroup>
+      {filterMenu}
+      <SidebarGroupLabel>Threads</SidebarGroupLabel>
+      <p className="px-2 type-caption text-subtle-foreground">
+        No open threads in this project
+      </p>
+    </SidebarGroup>
   );
 }
 
