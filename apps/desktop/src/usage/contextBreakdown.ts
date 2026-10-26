@@ -26,8 +26,8 @@ export interface ContextRow {
 }
 
 /**
- * The window as bar segments and legend rows, Claude Code's `/context` order, empty rows dropped. The largest used rows take the
- * chart colours, the rest grey. Without a live breakdown (no Claude session, or Codex), the thread's own used/max as two rows.
+ * The window as bar segments and legend rows, used rows largest first, then the autocompact buffer and free space, empty rows dropped. The largest used rows take
+ * the chart colours, the rest grey. Without a live breakdown (no Claude session, or Codex), the thread's own used/max as two rows.
  */
 export function contextBreakdown(
   usage: ContextUsage | null,
@@ -48,7 +48,8 @@ export function contextBreakdown(
   const bySize = inWindow
     .filter((c) => c.kind === 'used')
     .toSorted((a, b) => b.tokens - a.tokens);
-  const rows: ContextRow[] = inWindow.map((c) => ({
+  const rest = inWindow.filter((c) => c.kind !== 'used');
+  const rows: ContextRow[] = [...bySize, ...rest].map((c) => ({
     name: c.name,
     tokens: c.tokens,
     kind: c.kind,
