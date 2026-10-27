@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
 import { killGuard } from './killGuard.ts';
-import { KILL_WARNING, killDecision } from '../processKill.ts';
+import { killDecision } from '../processKill.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import {
@@ -867,12 +867,23 @@ function approve(threadId: string): CanUseTool {
           input,
           title ?? toolName,
           // `killGuard` asked: the card says why, over the command's own description.
-          toolName === 'Bash' && killDecision(threadId, input.command) !== 'run'
-            ? KILL_WARNING
-            : (description ?? decisionReason ?? ''),
+          killReason(toolName, threadId, input) ??
+            description ??
+            decisionReason ??
+            '',
         ),
       );
     });
+}
+
+function killReason(
+  toolName: string,
+  threadId: string,
+  input: Record<string, unknown>,
+) {
+  if (toolName !== 'Bash') return undefined;
+  const decision = killDecision(threadId, input.command);
+  return decision.action === 'run' ? undefined : decision.reason;
 }
 
 function dropApprovals(threadId: string, message: string) {

@@ -3,6 +3,7 @@ import type {
   SpawnOptions,
 } from '@anthropic-ai/claude-agent-sdk';
 import { spawnCommand } from '../../runClient.ts';
+import { protect } from '../protectedKill.ts';
 
 /** Claude Code as a process of Core's `run`: a kill signals its whole process group, and its exit takes leftover children with it. */
 export function spawnThroughRun({
@@ -13,6 +14,8 @@ export function spawnThroughRun({
   signal,
 }: SpawnOptions) {
   const child = spawnCommand(command, args, { cwd, env });
+  // Until it exits, a kill by pattern that reaches it is refused (`protectedKill.ts`).
+  protect(command, args, child);
   const signalTree = child.kill.bind(child);
   let killed = false;
   const kill = (killSignal: NodeJS.Signals = 'SIGTERM') => {

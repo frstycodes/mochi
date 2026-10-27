@@ -3,8 +3,16 @@
  * process Mochi runs matches a broad pattern: one `pkill -f "cat" -n` (BSD pkill reads `-n` as a second pattern) killed seven
  * idle sessions in other threads. Both providers gate on `isPatternKill` before the command runs.
  */
-export const KILL_WARNING =
-  "Mochi: this command kills processes by name or pattern. It can kill other threads' agents, Mochi itself and dev servers. Kill by a PID you started instead (kill <pid>), and stop a dev server from its terminal or by restarting it with mcp__mochi__start_dev_server.";
+import {
+  describeHits,
+  protectedHits,
+  protectedProcesses,
+} from './protectedKill.ts';
+
+const KILL_ADVICE =
+  'Kill by a PID you started instead (kill <pid>), and stop a dev server from its terminal or by restarting it with mcp__mochi__start_dev_server. BSD pkill reads every word after the first pattern as another pattern, so a trailing `-n` or `.` widens it.';
+
+export const KILL_WARNING = `Mochi: this command kills processes by name or pattern. It can kill other threads' agents, Mochi itself and dev servers. ${KILL_ADVICE}`;
 
 /** Refused without asking: nobody is there to answer for an agent-driven turn. */
 export const KILL_REFUSED = `${KILL_WARNING} Refused: this turn was started by an agent or an automated event, so no one can approve it.`;
@@ -15,13 +23,34 @@ let isAgentDriven: (threadId: string) => boolean = () => false;
 export const useAgentDriven = (check: (threadId: string) => boolean) =>
   void (isAgentDriven = check);
 
-/** What a provider's gate does with a command: run it, ask the user with `KILL_WARNING`, or refuse with `KILL_REFUSED`. A delegated session (`<thread>--<agent>`) goes by its thread's turn. */
-export function killDecision(
-  threadId: string,
-  command: unknown,
-): 'run' | 'ask' | 'refuse' {
-  if (typeof command !== 'string' || !isPatternKill(command)) return 'run';
-  return isAgentDriven(threadId.split('--')[0]) ? 'refuse' : 'ask';
+/** Refused even when the user could answer: the pattern reaches a process Mochi runs (`protectedHits`), named in the reason. */
+export const protectedRefusal = (hits: string) =>
+  `Mochi: refused. This command kills processes by name or pattern, and it would kill ${hits}. That ends other threads' agents or Mochi itself. ${KILL_ADVICE}`;
+
+export type KillDecision =
+  | { action: 'run' }
+  | { action: 'ask' | 'refuse'; reason: string };
+
+/**
+ * What a provider's gate does with a command: run it, ask the user (`KILL_WARNING`), or refuse. It refuses when the pattern
+ * matches one of Mochi's own processes, whoever started the turn, and on an agent-driven turn, where nobody can answer. A
+ * delegated session (`<thread>--<agent>`) goes by its thread's turn.
+ */
+export function killDecision(threadId: string, command: unknown): KillDecision {
+  if (typeof command !== 'string' || !isPatternKill(command))
+    return { action: 'run' };
+  const commands = commandsIn(command);
+  // `kill -1` signals every process the user owns.
+  const hits = commands.some(
+    (w) => name(w[0]) === 'kill' && killTargets(w).includes('-1'),
+  )
+    ? protectedProcesses()
+    : protectedHits(commands);
+  if (hits.length)
+    return { action: 'refuse', reason: protectedRefusal(describeHits(hits)) };
+  return isAgentDriven(threadId.split('--')[0])
+    ? { action: 'refuse', reason: KILL_REFUSED }
+    : { action: 'ask', reason: KILL_WARNING };
 }
 
 // Wrappers that run the rest of their words as a command, and their options that take a value.
@@ -60,6 +89,18 @@ export function isPatternKill(command: string): boolean {
   });
 }
 
+/** The simple commands a line runs, wrappers stripped, including those inside `sh -c '…'` and `eval`. */
+export function commandsIn(command: string): string[][] {
+  return splitCommands(command)
+    .map(unwrap)
+    .flatMap((words) => {
+      const head = name(words[0]);
+      if (SHELLS.has(head)) return shellScripts(words).flatMap(commandsIn);
+      if (head === 'eval') return commandsIn(words.slice(1).join(' '));
+      return [words];
+    });
+}
+
 const name = (word: string | undefined) => word?.split('/').pop() ?? '';
 
 /** The command a segment runs once leading `VAR=value` assignments and wrappers (sudo, xargs, env…) are stripped. */
@@ -82,13 +123,17 @@ function unwrap(words: string[]): string[] {
 const isWrappedBy = (words: string[], wrapper: string) =>
   words.some((w) => name(w) === wrapper);
 
-/** `kill` aimed at every process (-1), the caller's group (0) or a group (-<pgid>): the first `-x` is the signal, targets follow. */
-function killsGroup(words: string[]) {
+/** `kill` aimed at every process (-1), the caller's group (0) or a group (-<pgid>). */
+const killsGroup = (words: string[]) =>
+  killTargets(words).some((t) => t === '0' || /^-\d+$/.test(t));
+
+/** What `kill` signals: the first `-x` is the signal (`-s`/`-n` take a value), targets follow. */
+function killTargets(words: string[]) {
   let i = 1;
   if (words[i] === '-s' || words[i] === '-n') i += 2;
   else if (words[i]?.startsWith('-') && words[i] !== '--') i += 1;
   if (words[i] === '--') i += 1;
-  return words.slice(i).some((t) => t === '0' || /^-\d+$/.test(t));
+  return words.slice(i);
 }
 
 /** The scripts `sh -c '…'` (or `-lc`, `-ec`…) runs. */
