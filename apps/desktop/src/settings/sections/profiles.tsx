@@ -26,11 +26,17 @@ import type { GhAccount } from '../../host/types/git';
 import { host } from '../../host';
 import { keyName } from '../../keys';
 import {
+  SPACE_COLOR_NAMES,
+  SPACE_HALO_MOTIONS,
   SPACE_ICON_NAMES,
   type Provider,
   type Space,
+  type SpaceColor,
+  type SpaceHaloMotion,
   type SpaceIconName,
 } from '../../model';
+import { spaceColorCss } from '../../spaceColor';
+import { cn } from '@/lib/utils';
 import { addProfile, MAX_PROFILES, useProfiles } from '../../profiles';
 import { useHarness, useDispatch } from '../../store';
 import { ProviderMark, SPACE_ICONS, SpaceIcon } from '../../ui';
@@ -183,15 +189,20 @@ export function NewProfileDialog({
   open,
   from,
   onClose,
+  onCreated,
 }: {
   open: boolean;
   from?: Space;
   onClose: () => void;
+  /** Replaces the default follow-up: opening the new profile's settings page with a "Switch to it" toast. */
+  onCreated?: (profile: Space) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-md">
-        {open && <NewProfileForm from={from} onDone={onClose} />}
+        {open && (
+          <NewProfileForm from={from} onDone={onClose} onCreated={onCreated} />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -201,9 +212,11 @@ export function NewProfileDialog({
 function NewProfileForm({
   from,
   onDone,
+  onCreated,
 }: {
   from?: Space;
   onDone: () => void;
+  onCreated?: (profile: Space) => void;
 }) {
   const profiles = useProfiles();
   const dispatch = useDispatch();
@@ -222,6 +235,7 @@ function NewProfileForm({
         }),
       );
     onDone();
+    if (onCreated) return onCreated(profile);
     openSubpage('profiles', profile.id);
     toast(`${profile.name} added`, {
       action: {
@@ -381,7 +395,7 @@ const ICON_LABELS = {
   star: 'Star',
 } satisfies Record<SpaceIconName, string>;
 
-/** Profiles are told apart by icon, not colour, so each icon is one tap away. */
+/** Every icon one tap away, not behind a select. */
 export function IconPicker({
   id,
   value,
@@ -422,6 +436,105 @@ export function IconPicker({
           </Tooltip>
         );
       })}
+    </ToggleGroup>
+  );
+}
+
+const COLOR_LABELS = {
+  green: 'Green',
+  blue: 'Blue',
+  violet: 'Violet',
+  amber: 'Amber',
+  pink: 'Pink',
+  teal: 'Teal',
+  orange: 'Orange',
+  red: 'Red',
+  none: 'None',
+} satisfies Record<SpaceColor, string>;
+
+const SPACE_COLORS = [...SPACE_COLOR_NAMES, 'none'] as const;
+
+const MOTION_LABELS = {
+  breathe: 'Breathe',
+  drift: 'Drift',
+  still: 'Still',
+} satisfies Record<SpaceHaloMotion, string>;
+
+/** Breathe pulses the glow, Drift slides its ragged edge sideways, Still holds it; Reduce motion stills all three. */
+export function HaloMotionPicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (motion: string) => void;
+}) {
+  return (
+    <ToggleGroup
+      id={id}
+      type="single"
+      size="sm"
+      variant="outline"
+      spacing={1}
+      value={value}
+      onValueChange={(motion) => motion && onChange(motion)}
+    >
+      {SPACE_HALO_MOTIONS.map((motion) => (
+        <ToggleGroupItem key={motion} value={motion} className="px-2.5">
+          {MOTION_LABELS[motion]}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
+/** The halo along the bottom of the sidebar in this profile; None leaves the sidebar plain. */
+export function SpaceColorPicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (color: string) => void;
+}) {
+  return (
+    <ToggleGroup
+      id={id}
+      type="single"
+      size="sm"
+      variant="outline"
+      spacing={1}
+      value={value}
+      onValueChange={(color) => color && onChange(color)}
+      className="flex-wrap"
+    >
+      {SPACE_COLORS.map((color) => (
+        <Tooltip key={color}>
+          {/* On a wrapper, as in IconPicker: the tooltip's data-state would overwrite the toggle's. */}
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <ToggleGroupItem
+                value={color}
+                aria-label={COLOR_LABELS[color]}
+                className="size-7 px-0"
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    'size-3.5 rounded-full',
+                    color === 'none' &&
+                      'border border-dashed border-muted-foreground',
+                  )}
+                  style={{ background: spaceColorCss(color) }}
+                />
+              </ToggleGroupItem>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{COLOR_LABELS[color]}</TooltipContent>
+        </Tooltip>
+      ))}
     </ToggleGroup>
   );
 }
