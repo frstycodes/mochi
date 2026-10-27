@@ -1426,14 +1426,25 @@ function SidebarContextMenu({
   onEdit: () => void;
   onAdd?: () => void;
 }) {
+  // The editor and dialog open only once the menu has closed and let go of focus; opened from onSelect, the editor
+  // closed again as the menu tore down around it.
+  const afterClose = useRef<() => void>(undefined);
   return (
-    // Focus going back to the sidebar would close the editor the Edit item just opened.
-    <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
-      <ContextMenuItem onSelect={onEdit}>
+    <ContextMenuContent
+      onCloseAutoFocus={(e) => {
+        e.preventDefault();
+        afterClose.current?.();
+        afterClose.current = undefined;
+      }}
+    >
+      <ContextMenuItem onSelect={() => (afterClose.current = onEdit)}>
         <SpaceIcon space={space} />
         Edit {space.name}…
       </ContextMenuItem>
-      <ContextMenuItem disabled={!onAdd} onSelect={onAdd}>
+      <ContextMenuItem
+        disabled={!onAdd}
+        onSelect={() => (afterClose.current = onAdd)}
+      >
         <Plus />
         New profile…
       </ContextMenuItem>
