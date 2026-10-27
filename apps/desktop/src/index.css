@@ -257,6 +257,46 @@
   color-scheme: dark;
 }
 
+/* Toasts take the opposite theme (dark on light, light on dark) so they stand out from the page. Only the tokens a toast reads. */
+.toast-inverse {
+  --foreground: oklch(0.965 0.003 285);
+  --popover: oklch(0.205 0.008 285);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.965 0.003 285);
+  --primary-foreground: oklch(0.18 0.006 285);
+  --secondary: oklch(0.235 0.008 285);
+  --secondary-foreground: var(--foreground);
+  --muted-foreground: oklch(0.73 0.01 285);
+  --accent: oklch(0.25 0.009 285);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.68 0.18 25);
+  --success: oklch(0.74 0.16 150);
+  --warning: oklch(0.82 0.14 80);
+  --info: oklch(0.76 0.12 250);
+  --border: oklch(0.95 0.01 285 / 0.08);
+  --input: oklch(0.95 0.01 285 / 0.12);
+  --ring: oklch(0.75 0.01 285);
+  color-scheme: dark;
+
+  @variant dark {
+    --foreground: oklch(0.2 0.01 285);
+    --popover: oklch(0.997 0.001 285);
+    --primary: oklch(0.22 0.01 285);
+    --primary-foreground: oklch(0.98 0.002 285);
+    --secondary: oklch(0.955 0.004 285);
+    --muted-foreground: oklch(0.46 0.012 285);
+    --accent: oklch(0.94 0.006 285);
+    --destructive: oklch(0.56 0.2 25);
+    --success: oklch(0.5 0.14 150);
+    --warning: oklch(0.48 0.13 65);
+    --info: oklch(0.5 0.15 255);
+    --border: oklch(0.25 0.02 285 / 0.1);
+    --input: oklch(0.25 0.02 285 / 0.15);
+    --ring: oklch(0.45 0.012 285);
+    color-scheme: light;
+  }
+}
+
 /* Not inline: Settings › Appearance › Fonts overrides these on the root at runtime. */
 @theme {
   --font-sans: system-ui, -apple-system, sans-serif;
