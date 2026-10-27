@@ -72,6 +72,7 @@ import {
 } from '../../themes/useMarketplace';
 import { OverflowIcon, TooltipIconButton } from '../../ui';
 import { CatalogRow } from '../CatalogRow';
+import { FontSettings } from '../FontSettings';
 import { useLinkedTab } from '../../routes/nav';
 import {
   ListIcon,
@@ -102,6 +103,7 @@ export function AppearanceSection() {
       <SettingsGroup title="App icon">
         <CatalogRow settingKey="appIcon" label="Dock icon" />
       </SettingsGroup>
+      <FontSettings />
       <SettingsSection
         id="animations"
         title="Animations"

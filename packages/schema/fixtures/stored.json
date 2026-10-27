@@ -3,6 +3,10 @@
  "prefs": {
   "v": 1,
   "reduceMotion": "system",
+  "uiFont": "",
+  "monoFont": "JetBrains Mono",
+  "uiTextSize": "default",
+  "codeFontSize": 12,
   "animations": [],
   "lightTheme": "mochi",
   "darkTheme": "mochi",

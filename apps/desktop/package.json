@@ -166,6 +166,10 @@
           "to": "windows"
         },
         {
+          "from": "build/native/fonts",
+          "to": "fonts"
+        },
+        {
           "from": "build/icons",
           "to": "icons",
           "filter": [
