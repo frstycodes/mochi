@@ -100,7 +100,7 @@ export function SidePane({
   const onKeyDown = usePaneKeys(thread.id, pane, layout);
   useEscapeExpand(thread.id, !!layout.expanded);
   const isEmpty = pane.isOpen && !kinds.length;
-  const placeholder = isEmpty
+  const emptyResolved = isEmpty
     ? belowTopGap(
         resolveLayout(
           { columns: [['changes']], share: layout.share },
@@ -108,8 +108,9 @@ export function SidePane({
           paneH,
           chatMin,
         ),
-      ).rects.changes
+      )
     : undefined;
+  const placeholder = emptyResolved?.rects.changes;
   const chatWidth = !chat
     ? 0
     : placeholder
@@ -174,7 +175,7 @@ export function SidePane({
           <Dividers
             threadId={thread.id}
             layout={layout}
-            resolved={resolved}
+            resolved={emptyResolved ?? resolved}
             width={size.w}
             hasChat={!!chat}
             onPreview={(patch) => setDraft((d) => ({ ...d, ...patch }))}
