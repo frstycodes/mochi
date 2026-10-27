@@ -383,7 +383,7 @@ function Foundations() {
       </Block>
       <Block
         title="Type"
-        use="Inter Variable, one family, three weights. Use the type-* utilities, never raw sizes."
+        use="The system font, one family, three weights. Use the type-* utilities, never raw sizes."
         wide
       >
         <div className="overflow-x-auto">

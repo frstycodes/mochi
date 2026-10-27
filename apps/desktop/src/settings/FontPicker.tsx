@@ -22,7 +22,12 @@ import {
   useSystemFonts,
 } from './fonts.ts';
 import { settingControlId } from './parts';
-import { DEFAULT_FONT_LABEL, type FontKind } from './settingOptions.ts';
+import {
+  DEFAULT_FONT_LABEL,
+  SYSTEM_FONT,
+  SYSTEM_FONT_LABEL,
+  type FontKind,
+} from './settingOptions.ts';
 
 /**
  * Picks the interface or code font: search, the default, then installed families (monospace ones for code), each in its
@@ -61,7 +66,9 @@ export function FontPicker({
             className="min-w-0 flex-1 truncate text-left"
             style={{ fontFamily: fontStack(kind, value) }}
           >
-            {value || DEFAULT_FONT_LABEL[kind]}
+            {value === SYSTEM_FONT[kind]
+              ? SYSTEM_FONT_LABEL[kind]
+              : value || DEFAULT_FONT_LABEL[kind]}
           </span>
           <ChevronDown data-icon="inline-end" />
         </Button>
@@ -94,6 +101,7 @@ export function FontNote({
 
 // cmdk needs a non-empty value per item, and a typed name could match a listed family in another case.
 const DEFAULT_VALUE = 'default:';
+const SYSTEM_VALUE = 'system:';
 const CUSTOM_PREFIX = 'custom:';
 
 function FontList({
@@ -109,16 +117,21 @@ function FontList({
   const installed = familiesFor(kind, fonts);
   const [search, setSearch] = useState('');
   // Controlled: cmdk reports the highlighted item only then, and the list opens on the font in use.
-  const [highlighted, setHighlighted] = useState(value || DEFAULT_VALUE);
+  const [highlighted, setHighlighted] = useState(
+    value === SYSTEM_FONT[kind] ? SYSTEM_VALUE : value || DEFAULT_VALUE,
+  );
   const highlight = (next: string) => {
     setHighlighted(next);
-    setFontPreview(kind, familyOf(next));
+    setFontPreview(kind, familyOf(kind, next));
   };
   const typed = search.trim();
-  const isListed = [DEFAULT_FONT_LABEL[kind], ...installed].some(
-    (family) => family.toLowerCase() === typed.toLowerCase(),
-  );
-  const isSavedListed = !value || installed.includes(value);
+  const isListed = [
+    DEFAULT_FONT_LABEL[kind],
+    SYSTEM_FONT_LABEL[kind],
+    ...installed,
+  ].some((family) => family.toLowerCase() === typed.toLowerCase());
+  const isSavedListed =
+    !value || value === SYSTEM_FONT[kind] || installed.includes(value);
   return (
     <Command value={highlighted} onValueChange={highlight}>
       <CommandInput
@@ -140,6 +153,15 @@ function FontList({
             isChecked={!value}
             onPick={onPick}
           />
+          {kind === 'mono' && (
+            <FontItem
+              value={SYSTEM_VALUE}
+              family={SYSTEM_FONT[kind]}
+              kind={kind}
+              isChecked={value === SYSTEM_FONT[kind]}
+              onPick={onPick}
+            />
+          )}
         </CommandGroup>
         {!isSavedListed && !typed && (
           <CommandGroup heading="Custom">
@@ -204,7 +226,10 @@ function FontItem({
   isChecked: boolean;
   onPick: (family: string) => void;
 }) {
-  const label = family || DEFAULT_FONT_LABEL[kind];
+  const label =
+    family === SYSTEM_FONT[kind]
+      ? SYSTEM_FONT_LABEL[kind]
+      : family || DEFAULT_FONT_LABEL[kind];
   return (
     <CommandItem
       value={value}
@@ -234,8 +259,9 @@ function familiesFor(kind: FontKind, fonts: SystemFont[] | null | undefined) {
     .map((f) => f.family);
 }
 
-function familyOf(itemValue: string) {
+function familyOf(kind: FontKind, itemValue: string) {
   if (itemValue === DEFAULT_VALUE) return '';
+  if (itemValue === SYSTEM_VALUE) return SYSTEM_FONT[kind];
   return itemValue.startsWith(CUSTOM_PREFIX)
     ? itemValue.slice(CUSTOM_PREFIX.length)
     : itemValue;

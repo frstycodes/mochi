@@ -26,7 +26,7 @@ export function FontSettings() {
             </Button>
           )
         }
-        footer="A font that isn't installed falls back to Inter, or to the system monospace for code."
+        footer="A font that isn't installed falls back to the system font, or to JetBrains Mono for code."
       >
         <CatalogRow settingKey="uiFont" />
         <CatalogRow settingKey="uiTextSize" />

@@ -12,6 +12,7 @@ import {
   Settings,
   Chart,
   Sun,
+  Text,
   UserCircle,
   RaisedHand,
 } from '@/icons';
@@ -38,6 +39,7 @@ import { useUpdates } from './updates/useUpdates';
 import { showsDemoData } from './demoData';
 import type { MochiUser } from '@mochi/domain/host/types/account';
 import { openSettings } from './routes/nav';
+import { setPrefs, usePrefs } from './settings/prefs';
 import { BoundShortcut } from './Shortcut';
 import { useDispatch, useHarnessSelector } from './store';
 import { IconSwap } from './ui';
@@ -86,6 +88,7 @@ export function UserMenu({ isCompact = false }: { isCompact?: boolean }) {
           <BoundShortcut command="go-settings" className="ml-auto" />
         </DropdownMenuItem>
         <ThemeSubmenu />
+        <FontSubmenu />
         {host.isDesktop && <UpdateItems />}
         {showsDemoData() && (
           <>
@@ -247,6 +250,58 @@ function ThemeSubmenu() {
               onSelect={(e) => e.preventDefault()}
             >
               <Icon />
+              {label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+// Bundled faces to try the interface in; '' is the default, the system font.
+const UI_FONTS = [
+  { value: '', label: 'System font' },
+  { value: 'Geist Variable', label: 'Geist' },
+  { value: 'Inter Variable', label: 'Inter' },
+  { value: 'Figtree Variable', label: 'Figtree' },
+  { value: 'Manrope Variable', label: 'Manrope' },
+  { value: 'Onest Variable', label: 'Onest' },
+  { value: 'DM Sans Variable', label: 'DM Sans' },
+  { value: 'Plus Jakarta Sans Variable', label: 'Plus Jakarta Sans' },
+  { value: 'Hanken Grotesk Variable', label: 'Hanken Grotesk' },
+  { value: 'Instrument Sans Variable', label: 'Instrument Sans' },
+  { value: 'Public Sans Variable', label: 'Public Sans' },
+  { value: 'Albert Sans Variable', label: 'Albert Sans' },
+  { value: 'Sora Variable', label: 'Sora' },
+  { value: 'Space Grotesk Variable', label: 'Space Grotesk' },
+  { value: 'Source Sans 3 Variable', label: 'Source Sans 3' },
+  { value: 'Work Sans Variable', label: 'Work Sans' },
+] as const;
+
+function FontSubmenu() {
+  const { uiFont } = usePrefs();
+  const current = UI_FONTS.find((f) => f.value === uiFont);
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <Text />
+        Font
+        <span className="ml-auto text-subtle-foreground">
+          {current?.label ?? uiFont}
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <DropdownMenuRadioGroup
+          value={uiFont}
+          onValueChange={(next) => setPrefs({ uiFont: next })}
+        >
+          {UI_FONTS.map(({ value, label }) => (
+            <DropdownMenuRadioItem
+              key={label}
+              value={value}
+              onSelect={(e) => e.preventDefault()}
+            >
               {label}
             </DropdownMenuRadioItem>
           ))}

@@ -25,7 +25,8 @@ export default function RemoteTerminal({
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const term = new Terminal({
-      fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+      fontFamily:
+        '"JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace',
       fontSize: 12,
       lineHeight: 1.4,
       cursorInactiveStyle: 'none',
