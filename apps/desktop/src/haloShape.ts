@@ -8,14 +8,12 @@ import {
 export const HALO = {
   /** Average height, as a share of the sidebar's. */
   reach: 0.1,
-  /** How far the edge swings either way, as a share of `reach`. */
-  raggedness: 0.8,
   /** Drift's sideways travel, in sidebar widths per second. */
   drift: 0.02,
 };
 
-/** The canvas's height as a share of the sidebar's: the tallest the ragged edge gets. */
-export const HALO_SPAN = HALO.reach * (1 + HALO.raggedness);
+/** The canvas's height as a share of the sidebar's: the tallest the edge gets at full raggedness. */
+export const HALO_SPAN = HALO.reach * 2;
 
 export function haloMotion(space: Pick<Space, 'haloMotion'>): SpaceHaloMotion {
   return space.haloMotion ?? 'breathe';
@@ -23,6 +21,17 @@ export function haloMotion(space: Pick<Space, 'haloMotion'>): SpaceHaloMotion {
 
 export function isHaloMotion(value: unknown): value is SpaceHaloMotion {
   return (SPACE_HALO_MOTIONS as readonly unknown[]).includes(value);
+}
+
+const DEFAULT_RAGGEDNESS = 80;
+
+/** The profile's raggedness in percent: how far the edge swings either way, as a share of the average reach. */
+export function haloRaggedness(space: Pick<Space, 'haloRaggedness'>) {
+  return space.haloRaggedness ?? DEFAULT_RAGGEDNESS;
+}
+
+export function isHaloRaggedness(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 100;
 }
 
 // Whole numbers of waves per sidebar width, so the edge repeats every width and Drift's shift never shows a seam.
@@ -51,20 +60,22 @@ export function haloEdge(x: number, seed: number, time = 0) {
 
 /**
  * The halo's alpha per pixel at full strength (`--halo-strength` in index.css scales it per theme), row by row from the
- * top, for a canvas `width` × `height` device pixels at `time` seconds, its edge moved `shift` sidebar widths left.
+ * top, for a canvas `width` × `height` device pixels at `time` seconds, its edge moved `shift` sidebar widths left and
+ * swinging `raggedness` percent either way.
  */
 export function haloAlpha(
   width: number,
   height: number,
   seed: number,
-  { time = 0, shift = 0 } = {},
+  { time = 0, shift = 0, raggedness = DEFAULT_RAGGEDNESS } = {},
 ) {
   const alpha = new Uint8ClampedArray(width * height);
-  const baseReach = height / (1 + HALO.raggedness);
+  // The canvas fits full raggedness (`HALO_SPAN`), so the average reach is always half its height.
+  const baseReach = height / 2;
+  const swing = raggedness / 100;
   for (let x = 0; x < width; x++) {
     const reach =
-      baseReach *
-      (1 + HALO.raggedness * haloEdge(x / width + shift, seed, time));
+      baseReach * (1 + swing * haloEdge(x / width + shift, seed, time));
     for (let y = 0; y < height; y++) {
       const strength = 1 - (height - y) / reach;
       if (strength > 0) alpha[y * width + x] = Math.round(255 * strength);

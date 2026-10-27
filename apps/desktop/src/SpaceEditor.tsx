@@ -10,7 +10,8 @@ import {
   IconPicker,
   SpaceColorPicker,
 } from './settings/sections/profiles';
-import { haloMotion, isHaloMotion } from './haloShape';
+import { haloMotion, haloRaggedness, isHaloMotion } from './haloShape';
+import { Slider } from '@/components/ui/slider';
 import { isSpaceColor, spaceColor } from './spaceColor';
 
 /** The profile's name, icon and halo colour and motion, edited in place from the sidebar like Arc's space editor; the rest stays in Settings. */
@@ -52,6 +53,7 @@ export function SpaceEditor({ space }: { space: Space }) {
           />
         </Field>
       )}
+      {spaceColor(space) !== 'none' && <RaggednessField space={space} />}
       <Button
         variant="ghost"
         size="xs"
@@ -61,6 +63,33 @@ export function SpaceEditor({ space }: { space: Space }) {
         All profile settings
       </Button>
     </div>
+  );
+}
+
+// Saves per 5% step while dragging, so the halo follows the thumb; 21 values at most per drag.
+function RaggednessField({ space }: { space: Space }) {
+  const raggedness = haloRaggedness(space);
+  return (
+    <Field>
+      <div className="flex items-center justify-between">
+        <FieldLabel htmlFor="space-editor-raggedness">Raggedness</FieldLabel>
+        <span className="type-caption text-muted-foreground tabular-nums">
+          {raggedness}%
+        </span>
+      </div>
+      <Slider
+        id="space-editor-raggedness"
+        aria-label="Raggedness"
+        min={0}
+        max={100}
+        step={5}
+        value={[raggedness]}
+        onValueChange={([value]) =>
+          value !== raggedness &&
+          updateProfile(space.id, { haloRaggedness: value })
+        }
+      />
+    </Field>
   );
 }
 

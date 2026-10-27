@@ -1,7 +1,12 @@
 import { hourLabel, type QuietHours } from '../notify/model.ts';
 import { ALERT_KINDS } from '../notify/model.ts';
 import { SPACE_ICON_NAMES, type Provider, type Space } from '../model.ts';
-import { haloMotion, isHaloMotion } from '../haloShape.ts';
+import {
+  haloMotion,
+  haloRaggedness,
+  isHaloMotion,
+  isHaloRaggedness,
+} from '../haloShape.ts';
 import { isSpaceColor, spaceColor } from '../spaceColor.ts';
 import { SHARED_ACCESS } from '../runtime/access.ts';
 import { EFFORTS } from '../runtime/controls.ts';
@@ -143,7 +148,10 @@ export type SettingWrite =
   | {
       to: 'profile';
       patch: Partial<
-        Pick<Space, 'name' | 'icon' | 'color' | 'haloMotion' | 'github'>
+        Pick<
+          Space,
+          'name' | 'icon' | 'color' | 'haloMotion' | 'haloRaggedness' | 'github'
+        >
       >;
     }
   | { to: 'account'; provider: Provider; accountId: string }
@@ -1032,6 +1040,20 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
         isHaloMotion(value)
           ? { to: 'profile', patch: { haloMotion: value } }
           : null,
+    },
+    {
+      key: 'profile.haloRaggedness',
+      label: 'Glow raggedness',
+      description: 'How far the glow’s top edge rises and falls, in percent',
+      section: 'profile',
+      control: { type: 'number', min: 0, max: 100, step: 5 },
+      read: ({ profile }) => profile && String(haloRaggedness(profile)),
+      write: (value) => {
+        const raggedness = Number(value);
+        return isHaloRaggedness(raggedness)
+          ? { to: 'profile', patch: { haloRaggedness: raggedness } }
+          : null;
+      },
     },
     field('github', 'GitHub account', { type: 'github' }),
     ...HARNESS_IDS.map((provider): Setting => ({

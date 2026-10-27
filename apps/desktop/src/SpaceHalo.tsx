@@ -2,7 +2,13 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 import type { Space } from './model';
-import { HALO, HALO_SPAN, haloAlpha, haloMotion } from './haloShape';
+import {
+  HALO,
+  HALO_SPAN,
+  haloAlpha,
+  haloMotion,
+  haloRaggedness,
+} from './haloShape';
 import { idSeed, spaceColor, spaceColorCss } from './spaceColor';
 
 /**
@@ -53,6 +59,7 @@ function HaloLayer({
   const color = spaceColorCss(spaceColor(space));
   const isReduced = useReducedMotionConfig();
   const motion = isReduced ? 'still' : haloMotion(space);
+  const raggedness = haloRaggedness(space);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas || !isCurrent || !size || !color) return;
@@ -61,6 +68,7 @@ function HaloLayer({
       drawHalo(canvas, size, seed, color, {
         time,
         shift: motion === 'drift' ? time * HALO.drift : 0,
+        raggedness,
       });
     draw(0);
     if (motion === 'still') return;
@@ -76,7 +84,7 @@ function HaloLayer({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [isCurrent, size, color, space.id, motion]);
+  }, [isCurrent, size, color, space.id, motion, raggedness]);
   return (
     <div
       className={cn(
@@ -103,7 +111,7 @@ function drawHalo(
   { width, height }: DeviceSize,
   seed: number,
   color: string,
-  at: { time: number; shift: number },
+  at: { time: number; shift: number; raggedness: number },
 ) {
   if (canvas.width !== width) canvas.width = width;
   if (canvas.height !== height) canvas.height = height;

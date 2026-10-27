@@ -1,5 +1,5 @@
 import { Effect, Schema, SchemaTransformation } from 'effect';
-import { JsonObject, Str } from './checks.ts';
+import { Int, JsonObject, Str } from './checks.ts';
 import { RunTarget } from './ipc/ports.ts';
 
 const opt = Schema.optional;
@@ -236,6 +236,12 @@ export const Space = Schema.Struct({
   icon: SpaceIconName,
   color: opt(SpaceColor),
   haloMotion: opt(SpaceHaloMotion),
+  haloRaggedness: opt(
+    Int.check(
+      Schema.isGreaterThanOrEqualTo(0),
+      Schema.isLessThanOrEqualTo(100),
+    ),
+  ),
   plans: Schema.Struct({ claude: Schema.String, codex: Schema.String }),
   github: Schema.String,
   nativeOff: opt(Schema.Array(Schema.String)),

@@ -49,3 +49,19 @@ test('the edge repeats every sidebar width, so Drift never shows a seam', () => 
   for (let x = 0; x < 1; x += 0.05)
     assert.ok(Math.abs(haloEdge(x, 7, 3) - haloEdge(x + 1, 7, 3)) < 1e-9);
 });
+
+test('raggedness 0 is a flat edge and 100 swings further than the default', () => {
+  const flat = haloAlpha(width, height, 1234, { raggedness: 0 });
+  const tops = (a: Uint8ClampedArray) =>
+    columns.map((x) => {
+      let y = 0;
+      while (y < height && a[y * width + x] === 0) y++;
+      return y;
+    });
+  const spread = (a: Uint8ClampedArray) =>
+    Math.max(...tops(a)) - Math.min(...tops(a));
+  assert.equal(spread(flat), 0);
+  assert.ok(
+    spread(haloAlpha(width, height, 1234, { raggedness: 100 })) > spread(alpha),
+  );
+});
