@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
+import { killGuard } from './killGuard.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import {
@@ -540,7 +541,10 @@ async function launch(session: Session) {
         },
         hooks: {
           ...compactHooks(threadId),
-          PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)],
+          PreToolUse: [
+            killGuard(),
+            ...(options.isGoalsOff ? [] : [goalNudge(threadId)]),
+          ],
         },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
         // Deny rules alone only refuse a call; disallowedTools also takes an Off tool out of the model's context (sdk.d.ts).
