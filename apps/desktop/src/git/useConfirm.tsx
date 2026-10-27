@@ -46,7 +46,7 @@ export function useConfirm() {
           <AlertDialogFooter>
             <AlertDialogCancel>{request.cancel}</AlertDialogCancel>
             <AlertDialogAction
-              variant={request.isDestructive ? 'destructive' : 'default'}
+              variant={request.isDestructive ? 'danger' : 'default'}
               onClick={() => settle(true)}
             >
               {request.confirm}

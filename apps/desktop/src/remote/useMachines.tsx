@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useConfirm } from '../git/useConfirm';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
 import {
@@ -11,16 +12,6 @@ import {
   type ReactNode,
 } from 'react';
 import { toast } from '@/toast/store';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { host } from '../host';
 import { useLatest } from '../useLatest';
 import type {
@@ -55,12 +46,6 @@ type DataOf<T extends RemoteCommand['type']> = T extends keyof CommandData
   ? CommandData[T]
   : undefined;
 
-type Asking = {
-  machineName: string;
-  command: Extract<RemoteCommand, { type: 'push' | 'open-pr' }>;
-  answer: (isSent: boolean) => void;
-};
-
 const MachinesContext = createContext<Machines | null>(null);
 const NOT_SENT: CommandResult = { isOk: false, error: 'Not sent' };
 
@@ -79,7 +64,7 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
   const [mirrors, setMirrors] = useState<Record<string, Mirror | undefined>>(
     {},
   );
-  const [asking, setAsking] = useState<Asking | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     const offMachines = host.remote.onMachines(() => {
@@ -128,8 +113,20 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       latest.current.find((m) => m.machine.id === machineId)?.machine.name ??
       'That computer';
     if (command.type === 'push' || command.type === 'open-pr') {
-      const isSent = await new Promise<boolean>((answer) =>
-        setAsking({ machineName, command, answer }),
+      const isSent = await confirm(
+        command.type === 'push'
+          ? {
+              title: `Push from ${machineName}?`,
+              description: `${machineName} pushes this thread’s branch to GitHub with its own GitHub login.`,
+              confirm: 'Push',
+              cancel: 'Cancel',
+            }
+          : {
+              title: `Open a pull request from ${machineName}?`,
+              description: `“${command.title}” opens on GitHub with ${machineName}’s GitHub login.`,
+              confirm: 'Open pull request',
+              cancel: 'Cancel',
+            },
       );
       if (!isSent) return NOT_SENT;
     }
@@ -159,41 +156,10 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     return result.data as DataOf<T>;
   };
 
-  const answer = (isSent: boolean) => {
-    asking?.answer(isSent);
-    setAsking(null);
-  };
-
   return (
     <MachinesContext.Provider value={{ machines, run, ask }}>
       {children}
-      <AlertDialog
-        open={!!asking}
-        onOpenChange={(open) => !open && answer(false)}
-      >
-        {!!asking && (
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {asking.command.type === 'push'
-                  ? `Push from ${asking.machineName}?`
-                  : `Open a pull request from ${asking.machineName}?`}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {asking.command.type === 'push'
-                  ? `${asking.machineName} pushes this thread’s branch to GitHub with its own GitHub login.`
-                  : `“${asking.command.title}” opens on GitHub with ${asking.machineName}’s GitHub login.`}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => answer(true)}>
-                {asking.command.type === 'push' ? 'Push' : 'Open pull request'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        )}
-      </AlertDialog>
+      {dialog}
     </MachinesContext.Provider>
   );
 }

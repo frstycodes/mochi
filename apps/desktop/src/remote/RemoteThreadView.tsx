@@ -5,17 +5,8 @@ import {
   type ComponentProps,
   type FormEvent,
 } from 'react';
+import { useConfirm } from '../git/useConfirm';
 import { ArrowUp, CopyStack, RotateLeft, Stop, Trash, X } from '@/icons';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -255,7 +246,22 @@ function RemoteHeader({
 }) {
   const { run } = useMachines();
   const [shipping, setShipping] = useState<'commit' | 'open-pr' | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const { confirm, dialog } = useConfirm();
+  const deleteThread = async () => {
+    const isConfirmed = await confirm({
+      title: `Delete “${thread.title}”?`,
+      description: `Stops its agent on ${machine.name} and removes its history there. Its files stay on disk. This can’t be undone.`,
+      confirm: 'Delete thread',
+      cancel: 'Keep thread',
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    const result = await run(machine.id, {
+      type: 'delete',
+      threadId: thread.id,
+    });
+    if (result.isOk) goBack();
+  };
   const hasFolder = !!thread.repo || !!thread.live?.cwd;
   const isSettled = thread.status === 'settled';
   const canManage = can(machine, 'manage');
@@ -354,7 +360,7 @@ function RemoteHeader({
           <DropdownMenuItem
             variant="destructive"
             disabled={!canManage}
-            onSelect={() => setIsDeleting(true)}
+            onSelect={() => void deleteThread()}
           >
             <Trash />
             Delete thread…
@@ -374,31 +380,7 @@ function RemoteHeader({
         thread={thread}
         onClose={() => setShipping(null)}
       />
-      <AlertDialog open={isDeleting} onOpenChange={setIsDeleting}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{thread.title}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Stops its agent on {machine.name} and removes its history there.
-              Its files stay on disk. This can’t be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep thread</AlertDialogCancel>
-            <AlertDialogAction
-              variant="danger"
-              onClick={() =>
-                void run(machine.id, {
-                  type: 'delete',
-                  threadId: thread.id,
-                }).then((r) => r.isOk && goBack())
-              }
-            >
-              Delete thread
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {dialog}
     </TitleBar>
   );
 }
@@ -446,7 +428,7 @@ function RemoteMessageBar({
   const { run, machines } = useMachines();
   const machineId = useRemoteThreadRoute()?.machineId;
   const machine = machines.find((m) => m.machine.id === machineId)?.machine;
-  const [isConfirming, setIsConfirming] = useState(false);
+  const { confirm, dialog } = useConfirm();
   const entry = thread.activity[index];
   if (!entry || !machine) return null;
   const canOperate = can(machine, 'operate');
@@ -462,6 +444,15 @@ function RemoteMessageBar({
       point: { kind: 'message', index },
       mode,
     });
+  const rewindFiles = async () => {
+    const isConfirmed = await confirm({
+      title: `Rewind chat and files on ${machine.name}?`,
+      description: `The worktree goes back to just before this message, including edits made outside the agent since. Undo on ${machine.name} brings it back.`,
+      confirm: 'Rewind chat and files',
+      cancel: 'Keep files',
+    });
+    if (isConfirmed) rewind('files');
+  };
   return (
     <div
       role="toolbar"
@@ -501,7 +492,7 @@ function RemoteMessageBar({
                   key={mode}
                   className="items-start"
                   onSelect={() =>
-                    mode === 'files' ? setIsConfirming(true) : rewind(mode)
+                    mode === 'files' ? void rewindFiles() : rewind(mode)
                   }
                 >
                   <Icon className="mt-0.5" />
@@ -538,26 +529,7 @@ function RemoteMessageBar({
       >
         <ForkIcon />
       </TooltipIconButton>
-      <AlertDialog open={isConfirming} onOpenChange={setIsConfirming}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Rewind chat and files on {machine.name}?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              The worktree goes back to just before this message, including
-              edits made outside the agent since. Undo on {machine.name} brings
-              it back.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep files</AlertDialogCancel>
-            <AlertDialogAction onClick={() => rewind('files')}>
-              Rewind chat and files
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {dialog}
     </div>
   );
 }
