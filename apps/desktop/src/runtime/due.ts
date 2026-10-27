@@ -23,6 +23,24 @@ export const undeliveredReports = (thread: Pick<Thread, 'activity'>) =>
 export const wakingReports = (thread: Pick<Thread, 'activity'>) =>
   undeliveredReports(thread).filter((e) => !e.subReport.isQuiet);
 
+/** Where in the transcript the undelivered reports sit: a send records them (`sentReports`) so a failed one can un-deliver them. */
+export const undeliveredPositions = (thread: Pick<Thread, 'activity'>) =>
+  thread.activity.flatMap((e, i) =>
+    e.subReport && !e.subReport.isDelivered ? [i] : [],
+  );
+
+/** The reports at `positions` go back to undelivered: the message that carried them never reached the agent. */
+export function undeliver(thread: Thread, positions: number[]): Thread {
+  return {
+    ...thread,
+    activity: thread.activity.map((e, i) =>
+      e.subReport?.isDelivered && positions.includes(i)
+        ? { ...e, subReport: { ...e.subReport, isDelivered: undefined } }
+        : e,
+    ),
+  };
+}
+
 /** The agent got its undelivered reports (with a message or a wake): they stay in the transcript, marked delivered. */
 export function markReportsDelivered(thread: Thread): Thread {
   if (!undeliveredReports(thread).length) return thread;
@@ -77,7 +95,8 @@ export function dueReports(threads: ReadonlyArray<Thread>) {
 /**
  * Threads holding sub-thread reports or replies that nothing else will deliver: idle, nothing queued or waiting on you, and every
  * sub-thread idle, so done reports batch. An urgent report (blocked, needs_input, failed) doesn't wait for the other sub-threads;
- * a quiet one (no_change) never wakes it, but goes out with the wake.
+ * a quiet one (no_change, or a restart's `isRestart`) never wakes it, but goes out with the wake. A stalled sub-thread or one
+ * waiting on your answer counts as idle: it reported so.
  */
 export function dueWakes(state: Threads): Thread[] {
   return state.threads.filter((t) => {
@@ -94,7 +113,10 @@ export function dueWakes(state: Threads): Thread[] {
     if (isWaitingOnYou(state, t.id)) return false;
     if (reports.some((e) => e.subReport.isUrgent)) return true;
     return !subThreadsOf([...state.threads], t.id).some(
-      (s) => s.live?.isWorking || s.live?.starting,
+      (s) =>
+        (s.live?.isWorking || s.live?.starting) &&
+        !s.live.isStalled &&
+        !isWaitingOnYou(state, s.id),
     );
   });
 }

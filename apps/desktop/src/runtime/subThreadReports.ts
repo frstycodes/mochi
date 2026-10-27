@@ -23,16 +23,113 @@ export function reportParent(
   state: State,
   sub: Thread,
   status: Extract<AgentEvent, { type: 'turn-end' }>['status'],
+  error?: string,
 ): State {
   if (status === 'done' && isAutofixTurn(sub)) return state;
   const ended = state.threads.find((t) => t.id === sub.id) ?? sub;
   const isReported = isThisTurns(ended, ended.parentReport);
   if (isReported && status === 'done') return state;
+  // A failure is news the parent acts on now, not when the others are done; the error says why.
+  const text = [error && `Error: ${error}`, isReported ? '' : excerptOf(ended)]
+    .filter(Boolean)
+    .join('\n');
   return addReport(
     state,
     ended,
-    { status },
-    isReported ? '' : excerptOf(ended),
+    { status, ...(status === 'failed' && { isUrgent: true }) },
+    text,
+  );
+}
+
+/** A Codex sub-thread's turn ended at its usage limit: the parent hears now, and when it resets, since nothing goes on until then. */
+export function reportLimit(state: State, sub: Thread): State {
+  const limit = state.threads.find((t) => t.id === sub.id)?.live?.limit;
+  const window = limit?.label ? `${limit.label.toLowerCase()} ` : '';
+  const reset = limit?.resetsAt ? `; resets ${limit.resetsAt}` : '';
+  return addReport(
+    state,
+    sub,
+    { status: `stopped at the ${window}usage limit${reset}`, isUrgent: true },
+    '',
+  );
+}
+
+/** A sub-thread waits on your approval or answer: its parent hears once, so it can tell you what is holding the work. */
+export function reportWaiting(
+  state: State,
+  sub: Thread,
+  kind: 'approval' | 'question',
+  what: string,
+): State {
+  return addReport(
+    state,
+    sub,
+    { status: `is waiting on you: ${kind}`, isUrgent: true },
+    what,
+  );
+}
+
+/** A working sub-thread or background agent with no agent event for this long is taken as stuck. */
+export const STALL_MINUTES = 10;
+
+/**
+ * The stall watchdog, run on each minute's tick: a working sub-thread with no agent event for `STALL_MINUTES` reports to its
+ * parent once and stops holding the parent's batched wake (`dueWakes`). Its next event clears it (`applyAgentEvent`).
+ */
+export function reportStalls(state: State): State {
+  return state.threads.reduce((s, t) => {
+    // Or since the message that started the turn, logged after the last turn's events.
+    const quietSince = Math.max(
+      t.live?.lastEventAt ?? -Infinity,
+      t.activity.at(-1)?.at ?? -Infinity,
+    );
+    if (
+      !t.parent ||
+      !t.live?.isWorking ||
+      t.live.isStalled ||
+      state.now - quietSince < STALL_MINUTES
+    )
+      return s;
+    const stalled = {
+      ...s,
+      threads: mapThread(s.threads, t.id, (u) => ({
+        ...u,
+        live: { ...u.live!, isStalled: true },
+      })),
+    };
+    return addReport(
+      stalled,
+      t,
+      {
+        status: `has had no activity for ${STALL_MINUTES} min; it may be stuck`,
+        isUrgent: true,
+      },
+      '',
+    );
+  }, state);
+}
+
+/**
+ * Sub-threads that were mid-turn when Mochi quit: each reports to its parent that it stopped, since none will end its turn now.
+ * The reports are quiet and marked `isRestart`: they go with your next message and never wake the parent (`dueWakes`).
+ */
+export function reportStoppedAtQuit<S extends Pick<State, 'threads' | 'now'>>(
+  state: S,
+  stopped: ReadonlyArray<Thread>,
+): S {
+  return stopped.reduce(
+    (s, sub) =>
+      addReport(
+        s,
+        sub,
+        {
+          status: 'stopped mid-turn when Mochi quit',
+          isQuiet: true,
+          isRestart: true,
+        },
+        'send_to_thread restarts it.',
+      ),
+    state,
   );
 }
 
@@ -188,12 +285,12 @@ const isThisTurns = (thread: Thread, report?: ParentReport) =>
  * Logs news from `sub` in its parent's transcript, for its agent: every report goes through here. `isUrgent` wakes the parent at
  * once (stalls, waits on you, failures); otherwise it waits until every sub-thread is idle. `text` is the body under the status.
  */
-export function addReport(
-  state: State,
+export function addReport<S extends Pick<State, 'threads' | 'now'>>(
+  state: S,
   sub: Thread,
   report: Omit<SubReport, 'threadId' | 'title'>,
   text: string,
-): State {
+): S {
   const parentId = sub.parent?.threadId;
   if (!parentId) return state;
   return logReport(
@@ -205,12 +302,12 @@ export function addReport(
 }
 
 /** Logs `report` in `threadId`'s transcript; the same news its agent hasn't had yet never stacks. */
-function logReport(
-  state: State,
+function logReport<S extends Pick<State, 'threads' | 'now'>>(
+  state: S,
   threadId: string,
   report: SubReport,
   text: string,
-): State {
+): S {
   return {
     ...state,
     threads: mapThread(state.threads, threadId, (t) =>

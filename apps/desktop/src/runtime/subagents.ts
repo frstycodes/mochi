@@ -3,6 +3,7 @@ import type { Provider, Subagent, SubagentStep, Thread } from '../model.ts';
 import type { State } from '../store/types.ts';
 import { log, mapThread } from '../store/threads.ts';
 import { wallNow } from '../store/context.ts';
+import { STALL_MINUTES } from './subThreadReports.ts';
 
 /** A task a thread's agent hands to another provider (`start_subagent`), run as a Mochi background agent. */
 export interface BackgroundStart {
@@ -246,6 +247,51 @@ export function oneLine(text?: string) {
 
 export const isRunning = (s: Subagent) => s.status === 'running';
 
+/**
+ * The stall watchdog for background agents, run on each minute's tick: one quiet for `STALL_MINUTES` that never sent its end is
+ * marked failed, and its report (saying so) goes to its thread's agent like any other (`dueReports`).
+ */
+export function stallBackground(state: State): State {
+  const nowMs = wallNow();
+  const isStalled = (s: Subagent) =>
+    s.isBackground &&
+    isRunning(s) &&
+    nowMs - (s.lastEventAt ?? s.startedAt) >= STALL_MINUTES * 60_000;
+  return state.threads.reduce((next, thread) => {
+    const stalled = (thread.subagents ?? []).filter(isStalled);
+    if (!stalled.length) return next;
+    return {
+      ...next,
+      threads: mapThread(next.threads, thread.id, (t) =>
+        stalled.reduce<Thread>(
+          (u, s) =>
+            log(u, {
+              at: state.now,
+              who: 'harness',
+              kind: 'event',
+              text: `Background agent "${s.name}" had no activity for ${STALL_MINUTES} min; marked failed`,
+            }),
+          {
+            ...t,
+            subagents: t.subagents!.map((s) =>
+              isStalled(s)
+                ? {
+                    ...s,
+                    status: 'failed' as const,
+                    error: `no activity for ${STALL_MINUTES} min`,
+                    endedAt: nowMs,
+                    activity: undefined,
+                    ...(t.live && { isReportDue: true }),
+                  }
+                : s,
+            ),
+          },
+        ),
+      ),
+    };
+  }, state);
+}
+
 /** Background agents still running; foreground subagents end with their turn, so they don't count. */
 export function runningBackground(thread: Thread) {
   return (thread.subagents ?? []).filter((s) => s.isBackground && isRunning(s))
@@ -253,7 +299,7 @@ export function runningBackground(thread: Thread) {
 }
 
 function patch(s: Subagent, e: AgentSubagentEvent): Subagent {
-  const next: Subagent = { ...s };
+  const next: Subagent = { ...s, lastEventAt: wallNow() };
   if (e.name) next.name = e.name;
   if (e.prompt) next.prompt = e.prompt;
   if (e.model) next.model = e.model;

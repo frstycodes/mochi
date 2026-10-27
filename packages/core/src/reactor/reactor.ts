@@ -4,7 +4,7 @@ import type { Domain } from '@mochi/domain';
 import { Projection, type Folded } from '../store/projection.ts';
 import { Store, type OutboxEffect } from '../store/store.ts';
 import type { ReactorCommand } from './commands.ts';
-import { react, type ReactorState } from './rules.ts';
+import { react, reactToRestore, type ReactorState } from './rules.ts';
 import { outboxWorker, type Outcome } from './worker.ts';
 
 /**
@@ -67,4 +67,15 @@ export const runReactor = (
     yield* Effect.forkScoped(Stream.runForEach(projection.folded, onFold), {
       startImmediately: true,
     });
+    // What the restore made due: no fold carries it.
+    const { domain } = yield* projection.current;
+    yield* Effect.forEach(reactToRestore(stateOf(domain)), enqueue, {
+      discard: true,
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError('Reactor failed on the restored state', cause).pipe(
+          Effect.annotateLogs({ source: 'reactor' }),
+        ),
+      ),
+    );
   });
