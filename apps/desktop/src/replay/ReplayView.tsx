@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { listenKeydown, commandOf, type CommandId } from '../keymap';
 import {
   memo,
@@ -240,18 +241,17 @@ function ReplayPlayer({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!!thread && <ReplayTranscript state={scratch} thread={thread} />}
         </div>
-        <aside
-          aria-label="Files at this point"
-          className="mb-3 hidden min-h-0 flex-col rounded-xl border bg-card md:flex"
-        >
-          {!!thread && (
-            <ReplayFiles
-              source={checkpoints}
-              thread={thread}
-              now={scratch.now}
-            />
-          )}
-        </aside>
+        <Card asChild className="mb-3 hidden min-h-0 gap-0 py-0 md:flex">
+          <aside aria-label="Files at this point">
+            {!!thread && (
+              <ReplayFiles
+                source={checkpoints}
+                thread={thread}
+                now={scratch.now}
+              />
+            )}
+          </aside>
+        </Card>
       </div>
       <Transport
         playback={playback}

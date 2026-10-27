@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import {
@@ -142,57 +143,60 @@ function VerdictCard({ thread, review }: { thread: Thread; review: Review }) {
       patch: { isDismissed: true },
     });
   return (
-    <section
-      data-file-scope
-      aria-label={`${providerName(review.provider)}'s second opinion`}
-      className="flex flex-col gap-3 rounded-xl border bg-card p-4"
-    >
-      <header className="flex min-w-0 items-center gap-2">
-        <ProviderMark provider={review.provider} size={16} />
-        <h3 className="min-w-0 truncate type-body font-medium text-foreground">
-          {providerName(review.provider)}'s second opinion
-        </h3>
-        <VerdictBadge verdict={result.verdict} />
-      </header>
-      <p className="type-body text-pretty text-foreground">{result.summary}</p>
-      {review.isTruncated && (
-        <p className="type-caption text-subtle-foreground">
-          The diff was too long to send whole; {providerName(review.provider)}{' '}
-          saw its start and read the rest from the files.
+    <Card asChild className="gap-3 p-4">
+      <section
+        data-file-scope
+        aria-label={`${providerName(review.provider)}'s second opinion`}
+      >
+        <header className="flex min-w-0 items-center gap-2">
+          <ProviderMark provider={review.provider} size={16} />
+          <h3 className="min-w-0 truncate type-body font-medium text-foreground">
+            {providerName(review.provider)}'s second opinion
+          </h3>
+          <VerdictBadge verdict={result.verdict} />
+        </header>
+        <p className="type-body text-pretty text-foreground">
+          {result.summary}
         </p>
-      )}
-      {result.findings.length > 0 && (
-        <ul className="-mx-2 flex flex-col gap-0.5">
-          {result.findings.map((finding, i) => (
-            <FindingRow key={i} finding={finding} files={files} />
-          ))}
-        </ul>
-      )}
-      <footer className="flex flex-wrap items-center justify-end gap-2">
-        {review.isAgentAsked && (
-          <p className="me-auto type-caption text-subtle-foreground">
-            {providerName(thread.providers[0])} asked for this · sent to this
-            thread
+        {review.isTruncated && (
+          <p className="type-caption text-subtle-foreground">
+            The diff was too long to send whole; {providerName(review.provider)}{' '}
+            saw its start and read the rest from the files.
           </p>
         )}
-        <Button variant="ghost" size="sm" onClick={dismiss}>
-          Dismiss
-        </Button>
-        {!review.isAgentAsked && result.findings.length > 0 && (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={review.isSent}
-            onClick={() => sendFindings(thread, review, dispatch)}
-          >
-            <ArrowUp aria-hidden />
-            {review.isSent
-              ? 'Sent to this thread'
-              : 'Send findings to this thread'}
-          </Button>
+        {result.findings.length > 0 && (
+          <ul className="-mx-2 flex flex-col gap-0.5">
+            {result.findings.map((finding, i) => (
+              <FindingRow key={i} finding={finding} files={files} />
+            ))}
+          </ul>
         )}
-      </footer>
-    </section>
+        <footer className="flex flex-wrap items-center justify-end gap-2">
+          {review.isAgentAsked && (
+            <p className="me-auto type-caption text-subtle-foreground">
+              {providerName(thread.providers[0])} asked for this · sent to this
+              thread
+            </p>
+          )}
+          <Button variant="ghost" size="sm" onClick={dismiss}>
+            Dismiss
+          </Button>
+          {!review.isAgentAsked && result.findings.length > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={review.isSent}
+              onClick={() => sendFindings(thread, review, dispatch)}
+            >
+              <ArrowUp aria-hidden />
+              {review.isSent
+                ? 'Sent to this thread'
+                : 'Send findings to this thread'}
+            </Button>
+          )}
+        </footer>
+      </section>
+    </Card>
   );
 }
 
@@ -277,10 +281,7 @@ function ReviewFailed({ thread, review }: { thread: Thread; review: Review }) {
     askSecondOpinion(thread, dispatch);
   };
   return (
-    <div
-      role="status"
-      className="flex flex-col gap-2 rounded-xl border bg-card p-4"
-    >
+    <Card role="status" className="gap-2 p-4">
       <p className="flex items-center gap-2 type-body font-medium text-foreground">
         <XCircle aria-hidden className="size-4 shrink-0 text-destructive" />
         {name} couldn't give a second opinion
@@ -297,7 +298,7 @@ function ReviewFailed({ thread, review }: { thread: Thread; review: Review }) {
           Try again
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 

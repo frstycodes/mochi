@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { useState, type ReactNode } from 'react';
 import { Check, Copy, Info, Refresh, CheckCircle, Warning } from '@/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -68,7 +69,7 @@ export function SettingsGroup({
 }
 
 export function SettingsCard({ children }: { children: ReactNode }) {
-  return <div className="rounded-xl border bg-card">{children}</div>;
+  return <Card className="gap-0 py-0">{children}</Card>;
 }
 
 /**

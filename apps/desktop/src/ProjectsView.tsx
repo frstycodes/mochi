@@ -224,7 +224,7 @@ function CountedTitle({ title, count }: { title: string; count: number }) {
 
 function NoProjects() {
   return (
-    <Empty className="rounded-xl border bg-card">
+    <Empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Folder />
