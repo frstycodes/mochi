@@ -18,7 +18,13 @@ export function PrStack({ thread }: { thread: Thread }) {
     `${prs.length} pull requests`,
   );
   return (
-    <RefListHoverCard items={prs} title={title} side="bottom" align="end">
+    <RefListHoverCard
+      items={prs}
+      title={title}
+      threadId={thread.id}
+      side="bottom"
+      align="end"
+    >
       <span
         role="list"
         tabIndex={0}

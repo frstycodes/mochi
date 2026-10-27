@@ -1,5 +1,6 @@
 import {
   useId,
+  useState,
   type ComponentProps,
   type ReactElement,
   type ReactNode,
@@ -8,6 +9,7 @@ import {
   Archive,
   ArrowRight,
   ArrowUpRight,
+  Copy,
   ClockCircle,
   XCircle,
   Edit,
@@ -20,7 +22,6 @@ import {
   type IconComponent,
 } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import {
   HoverCard,
@@ -31,13 +32,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { GitMergeIcon, GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
+import { copyText } from '../clipboard';
+import { useOpenLinkIn } from './useOpenLink';
 import { plural } from '@mochi/domain/lib/format';
 import {
   usePrSwitches,
   type PrSwitch,
   type PrSwitchId,
 } from '../git/prSwitches';
-import { MERGE_METHODS } from '../git/MergeButton';
+import { MergeSplitButton } from '../git/MergeButton';
 import { useThreadPrMerge } from '../git/prMerge';
 import { useThreadPr } from '../git/useThreadPrs';
 import type { PullRequest, Thread } from '../model';
@@ -67,16 +70,36 @@ type Placement = Pick<
   'side' | 'align'
 >;
 
+type OpenControl = Pick<
+  ComponentProps<typeof HoverCard>,
+  'open' | 'onOpenChange'
+>;
+
 /** Wraps a PR or issue trigger; hovering it (300ms) or focusing it opens the preview. The caller already holds the state, from `useRefState`. */
 export function RefHoverCard({
   item,
   side,
   align,
+  open,
+  onOpenChange,
+  threadId,
   footer,
   children,
-}: Placement & { item: RefItem; footer?: ReactNode; children: ReactElement }) {
+}: Placement &
+  OpenControl & {
+    item: RefItem;
+    /** The thread whose browser tab the card's links open in. */
+    threadId: string;
+    footer?: ReactNode;
+    children: ReactElement;
+  }) {
   return (
-    <HoverCard openDelay={OPEN_DELAY} closeDelay={CLOSE_DELAY}>
+    <HoverCard
+      open={open}
+      onOpenChange={onOpenChange}
+      openDelay={OPEN_DELAY}
+      closeDelay={CLOSE_DELAY}
+    >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent
         side={side}
@@ -84,7 +107,7 @@ export function RefHoverCard({
         collisionPadding={8}
         className={cn('flex w-80 flex-col gap-3 p-3', REDUCED_MOTION)}
       >
-        <RefPreview item={item} />
+        <RefPreview item={item} threadId={threadId} />
         {footer}
       </HoverCardContent>
     </HoverCard>
@@ -95,11 +118,27 @@ export function RefHoverCard({
 export function ThreadPrHoverCard({
   thread,
   pr,
+  open,
+  onOpenChange,
   ...props
-}: Placement & { thread: Thread; pr: PullRequest; children: ReactElement }) {
+}: Placement &
+  OpenControl & {
+    thread: Thread;
+    pr: PullRequest;
+    children: ReactElement;
+  }) {
   const item = useThreadPr(thread, pr);
   const switches = usePrSwitches(thread, item);
   const merge = useThreadPrMerge(thread, item);
+  const [isHovered, setHovered] = useState(false);
+  const [isMenuOpen, setMenuOpen] = useState(false);
+  const isControlled = open !== undefined;
+  // The merge method menu sits outside the card; the card stays open while it does.
+  const changeOpen = (next: boolean) => {
+    if (!next && isMenuOpen) return;
+    if (isControlled) onOpenChange?.(next);
+    else setHovered(next);
+  };
   const footer = (
     <>
       {switches.length > 0 && (
@@ -111,28 +150,29 @@ export function ThreadPrHoverCard({
       )}
       {!!merge && (
         <div className="flex justify-end border-t pt-3">
-          <Button
-            size="sm"
-            disabled={merge.isBusy || merge.isConflicting}
-            title={
-              merge.isConflicting ? 'Resolve the conflicts first' : undefined
-            }
-            onClick={() => merge.request(merge.method)}
-          >
-            {merge.isBusy ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <GitMergeIcon data-icon="inline-start" />
-            )}
-            {MERGE_METHODS[merge.method].action}
-          </Button>
+          <MergeSplitButton
+            method={merge.method}
+            allowed={merge.allowed}
+            isBusy={merge.isBusy}
+            isConflicting={merge.isConflicting}
+            onMethodChange={merge.setMethod}
+            onMenuOpenChange={setMenuOpen}
+            onRequest={merge.request}
+          />
         </div>
       )}
     </>
   );
   return (
     <>
-      <RefHoverCard item={item} footer={footer} {...props} />
+      <RefHoverCard
+        item={item}
+        threadId={thread.id}
+        open={(isControlled ? open : isHovered) || isMenuOpen}
+        onOpenChange={changeOpen}
+        footer={footer}
+        {...props}
+      />
       {merge?.dialog}
     </>
   );
@@ -170,10 +210,16 @@ function PrSwitchRow({ item }: { item: PrSwitch }) {
 export function RefListHoverCard({
   items,
   title,
+  threadId,
   side,
   align,
   children,
-}: Placement & { items: RefItem[]; title: string; children: ReactElement }) {
+}: Placement & {
+  items: RefItem[];
+  title: string;
+  threadId: string;
+  children: ReactElement;
+}) {
   return (
     <HoverCard openDelay={OPEN_DELAY} closeDelay={CLOSE_DELAY}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
@@ -196,7 +242,7 @@ export function RefListHoverCard({
           <ul className="flex flex-col gap-0.5">
             {items.map((item) => (
               <li key={item.label}>
-                <RefListRow item={item} />
+                <RefListRow item={item} threadId={threadId} />
               </li>
             ))}
           </ul>
@@ -214,8 +260,9 @@ const CLOSE_DELAY = 100;
 const REDUCED_MOTION =
   'motion-reduce:[--tw-enter-scale:1]! motion-reduce:[--tw-exit-scale:1]! motion-reduce:[--tw-enter-translate-x:0]! motion-reduce:[--tw-enter-translate-y:0]!';
 
-function RefPreview({ item }: { item: RefItem }) {
+function RefPreview({ item, threadId }: { item: RefItem; threadId: string }) {
   const { state } = item;
+  const openLink = useOpenLinkIn(threadId);
   const url = itemUrl(item);
   return (
     <>
@@ -238,15 +285,26 @@ function RefPreview({ item }: { item: RefItem }) {
       </div>
       {!!state && <RefFacts state={state} />}
       {!!url && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start"
-          onClick={() => window.open(url, '_blank', 'noreferrer')}
-        >
-          Open on GitHub
-          <ArrowUpRight data-icon="inline-end" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <a
+              href={url}
+              onClick={(e) => openLink(e, url)}
+              onAuxClick={(e) => openLink(e, url)}
+            >
+              Open on GitHub
+              <ArrowUpRight data-icon="inline-end" />
+            </a>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => copyText(url, 'Link copied')}
+          >
+            Copy link
+            <Copy data-icon="inline-end" />
+          </Button>
+        </div>
       )}
     </>
   );
@@ -377,8 +435,9 @@ function AuthorAvatar({ author }: { author: NonNullable<RefState['author']> }) {
 }
 
 /** Title, then the most pressing status with its icon, the number and the diff, like Claude's PR chip. The row's project already names the repo. */
-function RefListRow({ item }: { item: RefItem }) {
+function RefListRow({ item, threadId }: { item: RefItem; threadId: string }) {
   const url = itemUrl(item);
+  const openLink = useOpenLinkIn(threadId);
   const { state } = item;
   const content = (
     <>
@@ -402,13 +461,14 @@ function RefListRow({ item }: { item: RefItem }) {
     'flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-1.5 py-1.5 text-left type-meta';
   if (!url) return <div className={row}>{content}</div>;
   return (
-    <button
-      type="button"
-      onClick={() => window.open(url, '_blank', 'noreferrer')}
+    <a
+      href={url}
+      onClick={(e) => openLink(e, url)}
+      onAuxClick={(e) => openLink(e, url)}
       className={cn(row, 'transition-colors hover:bg-accent')}
     >
       {content}
-    </button>
+    </a>
   );
 }
 

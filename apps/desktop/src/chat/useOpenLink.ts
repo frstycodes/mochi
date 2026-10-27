@@ -6,7 +6,11 @@ import { linkTarget } from './linkTarget';
 
 /** A click handler for `onClick` and `onAuxClick` that opens `url` in the thread's browser tab, or the system browser on ⌘/Ctrl-click or middle click. */
 export function useOpenLink() {
-  const threadId = useVizThreadId();
+  return useOpenLinkIn(useVizThreadId());
+}
+
+/** `useOpenLink` for a link that names its thread, where no `VizThreadProvider` wraps it (a sidebar or notification card). */
+export function useOpenLinkIn(threadId: string) {
   const dispatch = useDispatch();
   return (e: MouseEvent, url: string) => {
     const target = linkTarget(e);

@@ -227,7 +227,7 @@ function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
     url: pr.url,
   });
   return (
-    <RefHoverCard item={item}>
+    <RefHoverCard item={item} threadId={thread.id}>
       <Button variant="ghost" size="sm" asChild className="min-w-0">
         <a href={pr.url} target="_blank" rel="noreferrer">
           <PrStateIcon
