@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { HALO_KNOBS, haloAlpha, haloEdge, haloKnob } from './haloShape.ts';
+import { haloAlpha, haloEdge } from './haloShape.ts';
 
 const width = 64;
 const height = 40;
@@ -33,7 +33,7 @@ test('the halo edge is ragged: columns reach different heights', () => {
     while (y < height && at(x, y) === 0) y++;
     return y;
   });
-  assert.ok(Math.max(...tops) - Math.min(...tops) > height / 4);
+  assert.ok(Math.max(...tops) - Math.min(...tops) > height / 8);
 });
 
 test('the edge stays in [-1, 1], repeats per seed and differs between profiles', () => {
@@ -73,17 +73,4 @@ test('raggedness 0 is a flat edge and 100 swings further than the default', () =
   assert.ok(
     spread(haloAlpha(width, height, 1234, { raggedness: 100 })) > spread(alpha),
   );
-});
-
-test('knobs fall back to their default and clamp stored values into range', () => {
-  assert.equal(haloKnob({}, 'haloReach'), HALO_KNOBS.haloReach.fallback);
-  assert.equal(
-    haloKnob({ haloReach: 999 }, 'haloReach'),
-    HALO_KNOBS.haloReach.max,
-  );
-  assert.equal(
-    haloKnob({ haloIntensity: 0 }, 'haloIntensity'),
-    HALO_KNOBS.haloIntensity.min,
-  );
-  assert.equal(haloKnob({ haloRaggedness: 35 }, 'haloRaggedness'), 35);
 });

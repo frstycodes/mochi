@@ -532,21 +532,6 @@
   animation: station-pulse 1.6s linear infinite;
 }
 
-/* The sidebar halo's Breathe pulse (src/SpaceHalo.tsx); the edge's own motion is drawn there, and both stop under Reduce motion. */
-@keyframes halo-breathe {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-@utility halo-breathe {
-  animation: halo-breathe 6s ease-in-out infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-reduce-motion='off']) .pulse::after,
   :root:not([data-reduce-motion='off']) .station-pulse {

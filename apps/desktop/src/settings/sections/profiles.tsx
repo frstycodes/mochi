@@ -27,12 +27,10 @@ import { host } from '../../host';
 import { keyName } from '../../keys';
 import {
   SPACE_COLOR_NAMES,
-  SPACE_HALO_MOTIONS,
   SPACE_ICON_NAMES,
   type Provider,
   type Space,
   type SpaceColor,
-  type SpaceHaloMotion,
   type SpaceIconName,
 } from '../../model';
 import { spaceColorCss } from '../../spaceColor';
@@ -453,41 +451,6 @@ const COLOR_LABELS = {
 } satisfies Record<SpaceColor, string>;
 
 const SPACE_COLORS = [...SPACE_COLOR_NAMES, 'none'] as const;
-
-const MOTION_LABELS = {
-  breathe: 'Breathe',
-  drift: 'Drift',
-  still: 'Still',
-} satisfies Record<SpaceHaloMotion, string>;
-
-/** Breathe pulses the glow, Drift slides its ragged edge sideways, Still holds it; Reduce motion stills all three. */
-export function HaloMotionPicker({
-  id,
-  value,
-  onChange,
-}: {
-  id: string;
-  value: string;
-  onChange: (motion: string) => void;
-}) {
-  return (
-    <ToggleGroup
-      id={id}
-      type="single"
-      size="sm"
-      variant="outline"
-      spacing={1}
-      value={value}
-      onValueChange={(motion) => motion && onChange(motion)}
-    >
-      {SPACE_HALO_MOTIONS.map((motion) => (
-        <ToggleGroupItem key={motion} value={motion} className="px-2.5">
-          {MOTION_LABELS[motion]}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
 
 /** The halo along the bottom of the sidebar in this profile; None leaves the sidebar plain. */
 export function SpaceColorPicker({
