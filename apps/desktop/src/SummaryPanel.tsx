@@ -41,11 +41,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -76,9 +74,6 @@ import { openFiles } from './files/viewer';
 import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { ThreadName } from './chat/ThreadMessage';
 import { refDescription, type ChecksState } from '@mochi/domain/chat/refs';
-import { usePrSwitches } from './git/prSwitches';
-import { MergeSubmenu } from './git/MergeButton';
-import { useThreadPrMerge } from './git/prMerge';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import { OPEN_PR_PROMPT } from './git/prs';
@@ -891,12 +886,7 @@ function ChangesBody({
       <CardHeader title="Changes" />
       <CardBody>
         {prs.map((item) => (
-          <PullRequestRow
-            key={item.pr.number}
-            thread={thread}
-            item={item}
-            onOpen={open.url}
-          />
+          <PullRequestRow key={item.pr.number} thread={thread} item={item} />
         ))}
         {!!files && prs.length === 0 && (
           <SummaryRow
@@ -917,7 +907,7 @@ function ChangesBody({
           <DiffPendingRow error={error} onRetry={onRetry} />
         )}
         {canOpenPr && <CreatePrRow thread={thread} />}
-        <SubThreadPrs parent={thread} onOpen={open.url} />
+        <SubThreadPrs parent={thread} />
       </CardBody>
     </>
   );
@@ -942,37 +932,19 @@ function DiffPendingRow({
 }
 
 /** The PRs of the thread's sub-threads, after its own: each sub-thread runs its PR (and its Auto-fix); here they read live, named for it. */
-function SubThreadPrs({
-  parent,
-  onOpen,
-}: {
-  parent: Thread;
-  onOpen: (url: string) => void;
-}) {
+function SubThreadPrs({ parent }: { parent: Thread }) {
   return useHarnessSelector(
     (s) => subThreadsOf(s.threads, parent.id),
     shallowEqual,
   )
     .filter((sub) => sub.prs.length > 0)
-    .map((sub) => <SubThreadPrRows key={sub.id} sub={sub} onOpen={onOpen} />);
+    .map((sub) => <SubThreadPrRows key={sub.id} sub={sub} />);
 }
 
-function SubThreadPrRows({
-  sub,
-  onOpen,
-}: {
-  sub: Thread;
-  onOpen: (url: string) => void;
-}) {
+function SubThreadPrRows({ sub }: { sub: Thread }) {
   const prs = useThreadPrs(sub);
   return prs.map((item) => (
-    <PullRequestRow
-      key={item.pr.number}
-      thread={sub}
-      item={item}
-      onOpen={onOpen}
-      isSubThread
-    />
+    <PullRequestRow key={item.pr.number} thread={sub} item={item} isSubThread />
   ));
 }
 
@@ -1240,7 +1212,6 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
   return {
     changes: () =>
       toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }),
-    url,
     source,
     output,
     visual,
@@ -1249,29 +1220,36 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
   };
 }
 
-/** Like Claude's: state icon, title and ⋮ on top; number, diff and checks under the title. Hover previews it, a click opens it. */
+/** Like Claude's: state icon and title on top; number, diff and checks under the title. Hover, focus or a click opens its preview. */
 function PullRequestRow({
   thread,
   item,
-  onOpen,
   isSubThread = false,
 }: {
   thread: Thread;
   item: ThreadPr;
-  onOpen: (url: string) => void;
   isSubThread?: boolean;
 }) {
   const { state, label } = item;
+  const [isOpen, setOpen] = useState(false);
   return (
-    <ThreadPrHoverCard thread={thread} pr={item.pr} side="left" align="start">
+    <ThreadPrHoverCard
+      thread={thread}
+      pr={item.pr}
+      side="left"
+      align="start"
+      open={isOpen}
+      onOpenChange={setOpen}
+    >
       <div className="relative isolate flex flex-col gap-0.5 rounded-lg px-2 py-1.5 hover:bg-accent/60">
         <div className="flex min-w-0 items-center gap-2.5">
           <RefIcon item={item} className="size-4" />
           {state.url ? (
-            // The stretched button makes the whole row the target while the ⋮ stays its own button.
+            // The stretched button makes the whole row the target.
             <button
               type="button"
-              onClick={() => onOpen(state.url)}
+              aria-expanded={isOpen}
+              onClick={() => setOpen(true)}
               aria-label={`${label}: ${state.title}, ${refDescription('pr', state)}`}
               className="min-w-0 flex-1 cursor-default truncate text-left type-meta after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2"
             >
@@ -1282,7 +1260,6 @@ function PullRequestRow({
               {state.title}
             </span>
           )}
-          {!!state.url && <PullRequestMenu thread={thread} item={item} />}
         </div>
         <div className="flex min-w-0 items-center gap-2 pl-6.5 tabular type-caption text-subtle-foreground">
           <span className="shrink-0">{label}</span>
@@ -1328,61 +1305,6 @@ function CheckCount({
       />
       {counts.passed}/{counts.total}
     </span>
-  );
-}
-
-function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
-  const switches = usePrSwitches(thread, item);
-  const merge = useThreadPrMerge(thread, item);
-  const url = item.state.url;
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`${item.label} options`}
-            className="relative z-10 -my-1 -mr-1"
-          >
-            <OverflowIcon vertical />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-auto">
-          {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
-          <DropdownMenuItem
-            onSelect={() => window.open(url, '_blank', 'noreferrer')}
-          >
-            Open on GitHub
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>
-            Copy link
-          </DropdownMenuItem>
-          {switches.length > 0 && <DropdownMenuSeparator />}
-          {switches.map((s) => (
-            <DropdownMenuCheckboxItem
-              key={s.id}
-              checked={s.isOn}
-              onCheckedChange={s.set}
-              onSelect={(e) => e.preventDefault()}
-            >
-              {s.label}
-            </DropdownMenuCheckboxItem>
-          ))}
-          {!!merge && (
-            <>
-              <DropdownMenuSeparator />
-              <MergeSubmenu
-                allowed={merge.allowed}
-                isDisabled={merge.isBusy || merge.isConflicting}
-                onPick={merge.request}
-              />
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {merge?.dialog}
-    </>
   );
 }
 

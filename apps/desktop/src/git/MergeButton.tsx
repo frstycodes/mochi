@@ -19,12 +19,8 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
@@ -182,37 +178,6 @@ export function MergeButton({
       </ButtonGroup>
       {dialog}
     </>
-  );
-}
-
-/** A "Merge" submenu for a PR's menu: picking a method merges with it. */
-export function MergeSubmenu({
-  allowed,
-  isDisabled,
-  onPick,
-}: {
-  allowed: readonly MergeMethod[];
-  isDisabled: boolean;
-  onPick: (method: MergeMethod) => void;
-}) {
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger disabled={isDisabled}>
-        Merge
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-72">
-        {METHODS.map((m) => (
-          <DropdownMenuItem
-            key={m}
-            disabled={!allowed.includes(m)}
-            className="items-start"
-            onSelect={() => onPick(m)}
-          >
-            <MethodText method={m} isAllowed={allowed.includes(m)} />
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
   );
 }
 

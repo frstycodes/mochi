@@ -67,16 +67,33 @@ type Placement = Pick<
   'side' | 'align'
 >;
 
+type OpenControl = Pick<
+  ComponentProps<typeof HoverCard>,
+  'open' | 'onOpenChange'
+>;
+
 /** Wraps a PR or issue trigger; hovering it (300ms) or focusing it opens the preview. The caller already holds the state, from `useRefState`. */
 export function RefHoverCard({
   item,
   side,
   align,
+  open,
+  onOpenChange,
   footer,
   children,
-}: Placement & { item: RefItem; footer?: ReactNode; children: ReactElement }) {
+}: Placement &
+  OpenControl & {
+    item: RefItem;
+    footer?: ReactNode;
+    children: ReactElement;
+  }) {
   return (
-    <HoverCard openDelay={OPEN_DELAY} closeDelay={CLOSE_DELAY}>
+    <HoverCard
+      open={open}
+      onOpenChange={onOpenChange}
+      openDelay={OPEN_DELAY}
+      closeDelay={CLOSE_DELAY}
+    >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent
         side={side}
@@ -96,7 +113,12 @@ export function ThreadPrHoverCard({
   thread,
   pr,
   ...props
-}: Placement & { thread: Thread; pr: PullRequest; children: ReactElement }) {
+}: Placement &
+  OpenControl & {
+    thread: Thread;
+    pr: PullRequest;
+    children: ReactElement;
+  }) {
   const item = useThreadPr(thread, pr);
   const switches = usePrSwitches(thread, item);
   const merge = useThreadPrMerge(thread, item);
