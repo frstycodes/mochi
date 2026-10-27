@@ -35,6 +35,7 @@ import { useDispatch } from '../store';
 import { nextTabId } from '../store/panes';
 import { portUrl } from '@mochi/domain/terminal/devServer';
 import { refreshPorts, usePorts } from '../terminal/ports';
+import { runTarget } from '../terminal/runTarget';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { TooltipIconButton } from '../ui';
 import { PlannedTab } from './PlannedTab';
@@ -306,27 +307,8 @@ function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
     listening,
     targets,
     threadPort,
-    /** Runs in the thread's terminal tab, opening one if there is none. */
-    async run(target: RunTarget) {
-      const { addShell } = await import('../terminal/sessions');
-      const terminal = pane.tabs.find(
-        (t) => t.kind === 'terminal' && !t.isPopped,
-      );
-      const tabId = terminal?.id ?? nextTabId(pane.tabs);
-      addShell(
-        `${thread.id}/${tabId}`,
-        { cwd, threadId: thread.id, links: openers },
-        { title: target.name, command: target.command },
-      );
-      if (terminal)
-        dispatch({ type: 'pane-select-tab', threadId: thread.id, tabId });
-      else
-        dispatch({
-          type: 'pane-open-tab',
-          threadId: thread.id,
-          kind: 'terminal',
-        });
-    },
+    run: (target: RunTarget) =>
+      runTarget(target, { threadId: thread.id, cwd, pane, dispatch }),
     openInPip(port: number) {
       const tabId = nextTabId(pane.tabs);
       openers.openPort(port);

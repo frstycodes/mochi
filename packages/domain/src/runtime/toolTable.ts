@@ -732,6 +732,18 @@ export const TOOL_TABLE = {
       ),
     },
   },
+  start_dev_server: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Start one of the project's dev servers by name, from .claude/launch.json (with its port) or a package.json script, in your thread's terminal; waits until it listens, opens it in your thread's browser and shows the user a card with it. Already listening: opens it without starting another. No entry fits: add one to .claude/launch.json first ({ name, runtimeExecutable, runtimeArgs, port }) and call this with its name; never start a dev server with a background shell command. Returns name, port, url and the terminal's last output if it never started.",
+    shape: {
+      name: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description:
+          'A configuration name in .claude/launch.json, or a package.json script like "dev"',
+      }),
+    },
+  },
   browser_batch: {
     tier: 'read',
     description:

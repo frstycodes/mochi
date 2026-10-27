@@ -1,10 +1,17 @@
-import { useDispatch } from '../store';
+import { useDispatch, type Action } from '../store';
 import { fileLink } from './links';
 import { portUrl } from '@mochi/domain/terminal/devServer';
 import type { TerminalLinks } from './sessions';
 
 export function usePaneOpeners(threadId: string) {
-  const dispatch = useDispatch();
+  return paneOpeners(useDispatch(), threadId);
+}
+
+/** `usePaneOpeners` outside React, for a tool call that has the store's `dispatch`. */
+export function paneOpeners(
+  dispatch: (action: Action) => void,
+  threadId: string,
+) {
   return {
     openUrl: (url: string) =>
       dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url }),

@@ -9,6 +9,8 @@ import type { BrowserHost } from '@mochi/domain/host/types/browser';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
+import type { DataHost } from '../host/types/data.ts';
+import type { PortsHost, RunTarget } from '@mochi/domain/host/types/ports';
 import type { ThemesHost } from '@mochi/domain/host/types/themes';
 import type { Project } from '@mochi/domain/host/types/projects';
 import {
@@ -23,6 +25,7 @@ import {
   authorName,
   isListed,
   PIN_SLOTS,
+  type DevServer,
   type EventGlyph,
   type Provider,
   type QueueItem,
@@ -48,6 +51,7 @@ import {
 import type { Action, State } from '../store/index.tsx';
 import { providerName } from '../secondOpinion/verdict.ts';
 import { BROWSER_TOOLS } from './browserTools.ts';
+import { DEV_SERVER_TOOLS } from './devServerTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS } from './controls.ts';
 import { resolveRun } from './models.ts';
@@ -143,7 +147,23 @@ export interface ToolEnv {
   isDesktop: boolean;
   /** Starts a second opinion on `thread` from the other provider, resolving with the reviewer; throws why it can't. */
   askSecondOpinion: (thread: Thread) => Promise<Provider>;
+  /** `start_dev_server`'s host: `cwd`'s run targets and listening ports, a target run in the thread's terminal, a screenshot kept on disk. */
+  devServers: {
+    targets: PortsHost['targets'];
+    list: PortsHost['list'];
+    run: (
+      target: RunTarget,
+      thread: Thread,
+      cwd: string,
+    ) => Promise<() => ShellOutput>;
+    saveImage: DataHost['saveImage'];
+  };
   now?: () => number;
+}
+
+export interface ShellOutput {
+  output: string;
+  hasFailed: boolean;
 }
 
 export interface ToolContext<A = Record<string, unknown>> {
@@ -209,6 +229,8 @@ export interface Outcome {
   /** Its line's icon and the page it acted on (favicon and host), for browser actions. */
   glyph?: EventGlyph;
   site?: string;
+  /** The dev server its line shows as a card. */
+  devServer?: DevServer;
 }
 
 export type Args<K extends ToolName> = ArgsOf<(typeof TOOL_TABLE)[K]['shape']>;
@@ -516,7 +538,7 @@ function record(
 ) {
   const changed = outcome.changed!;
   const asked = ctx.cards.at(-1);
-  const { glyph, site } = outcome;
+  const { glyph, site, devServer } = outcome;
   if (asked)
     return ctx.dispatch({
       type: 'card-record',
@@ -535,6 +557,7 @@ function record(
       text,
       ...(glyph && { glyph }),
       ...(site && { site }),
+      ...(devServer && { devServer }),
     },
   });
   if (!isQuiet(name))
@@ -1309,6 +1332,7 @@ const SPECS = {
   ...USER_SPECS,
   ...AGENT_SPECS,
   ...BROWSER_TOOLS,
+  ...DEV_SERVER_TOOLS,
   browser_batch: { run: runBatch },
   ...SETTINGS_TOOLS,
 } satisfies Specs;

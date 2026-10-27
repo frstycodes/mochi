@@ -1,5 +1,6 @@
 import { Effect, Schema, SchemaTransformation } from 'effect';
 import { JsonObject, Str } from './checks.ts';
+import { RunTarget } from './ipc/ports.ts';
 
 const opt = Schema.optional;
 
@@ -20,6 +21,13 @@ export const GeneratedImage = Schema.Struct({
   error: opt(Schema.String),
 });
 export type GeneratedImage = typeof GeneratedImage.Type;
+
+export const DevServer = Schema.Struct({
+  ...RunTarget.fields,
+  port: Schema.Number,
+  preview: opt(Schema.String),
+});
+export type DevServer = typeof DevServer.Type;
 
 export const McpCall = Schema.Struct({
   server: Schema.String,
@@ -652,6 +660,7 @@ export const ActivityEntry = Schema.Struct({
   ),
   images: opt(Schema.Array(Schema.String)),
   generated: opt(GeneratedImage),
+  devServer: opt(DevServer),
   widget: opt(McpWidget),
   turnUndo: opt(
     Schema.Struct({ start: Schema.Number, isUndone: Schema.Boolean }),

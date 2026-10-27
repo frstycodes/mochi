@@ -131,15 +131,17 @@ export function ensureGroup(
   });
 }
 
-/** Opens a new shell in the group, typing `command` into it, and shows it in the focused slot. */
+/** Opens a new shell in the group, typing `command` into it, and shows it in the focused slot. Returns the shell's session id. */
 export function addShell(
   key: string,
   context: GroupContext,
   options: ShellOptions = {},
 ) {
   // A brand-new group runs the command in its first shell instead of opening an idle one beside it.
-  if (!groups().has(key) && !loadGroup(key))
-    return ensureGroup(key, context, options);
+  if (!groups().has(key) && !loadGroup(key)) {
+    ensureGroup(key, context, options);
+    return groups().get(key)!.focused;
+  }
   ensureGroup(key, context);
   const session = createSession(
     key,
@@ -153,6 +155,20 @@ export function addShell(
     visible: replaceFocused(g, session.id),
     focused: session.id,
   }));
+  return session.id;
+}
+
+/** A shell's last lines of output, and whether its command failed, for an agent that has no view of the terminal. */
+export function sessionOutput(key: string, id: string) {
+  const session = groups()
+    .get(key)
+    ?.sessions.find((s) => s.id === id);
+  if (!session) return { output: '', hasFailed: true };
+  const { failure, term } = session;
+  return {
+    output: failure?.output ?? linesSince(term, 0),
+    hasFailed: !!failure,
+  };
 }
 
 export function showSession(key: string, id: string) {

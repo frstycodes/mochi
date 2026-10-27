@@ -93,6 +93,28 @@ test('run targets come from dev-ish package scripts and launch.json configs', ()
   });
 });
 
+test('a launch.json env goes in front of the command; names a shell cannot assign are dropped', () => {
+  const [target] = launchConfigs({
+    configurations: [
+      {
+        name: 'electron',
+        runtimeExecutable: 'pnpm',
+        runtimeArgs: ['electron:dev'],
+        env: {
+          MOCHI_USER_DATA: '/tmp/my data',
+          PORT: 5443,
+          'BAD-NAME': 'x',
+          NESTED: { a: 1 },
+        },
+      },
+    ],
+  });
+  assert.equal(
+    target!.command,
+    `MOCHI_USER_DATA='/tmp/my data' PORT=5443 pnpm electron:dev`,
+  );
+});
+
 test('one scan fans out to each watched root, a refused cwd keeps its error', () => {
   const scan = {
     listening: [

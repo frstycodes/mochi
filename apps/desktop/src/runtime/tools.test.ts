@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { onTestFinished, test, vi } from 'vite-plus/test';
 import type { Page } from '../browser/pages.ts';
+import type { ListeningPort, RunTarget } from '@mochi/domain/host/types/ports';
 import type { BrowserAct } from '@mochi/domain/host/types/browser';
 import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '@mochi/domain/layout/tree';
@@ -39,6 +40,7 @@ import { sidechatReducer } from '../store/sidechat.ts';
 import { scheduleReducer } from '../schedule/slice.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { CLAUDE_DEMO_MODELS } from './models.ts';
+import { pickTarget, startedPort } from './devServerTools.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import type { Project } from '@mochi/domain/host/types/projects';
 import {
@@ -117,6 +119,13 @@ function setup({
   const evals: string[] = [];
   const answers: boolean[] = [];
   const opened: string[] = [];
+  const devTargets: RunTarget[] = [
+    { name: 'web', command: 'pnpm dev', source: 'launch.json', port: 5173 },
+    { name: 'dev', command: 'pnpm run dev', source: 'package.json' },
+  ];
+  const listening: ListeningPort[] = [];
+  const devRuns: string[] = [];
+  let devShell = { output: 'ready', hasFailed: false };
   const drafted: { spaceId: string; prompt: string }[] = [];
   const pages = new Map<string, Page>([
     [
@@ -314,6 +323,22 @@ function setup({
       }),
     },
     isDesktop: true,
+    devServers: {
+      targets: async () => devTargets,
+      list: async () => [{ ports: [...listening] }],
+      run: async (target) => {
+        devRuns.push(target.name);
+        if (!devShell.hasFailed)
+          listening.push({
+            port: target.port ?? 5300,
+            pid: 4242,
+            command: 'node',
+            startedAt: 0,
+          });
+        return () => devShell;
+      },
+      saveImage: async () => '/images/dev-server.png',
+    },
   };
   const call = (
     name: string,
@@ -367,6 +392,11 @@ function setup({
     thread,
     card,
     state: () => state,
+    listening,
+    devRuns,
+    failDevServer: (output: string) => {
+      devShell = { output, hasFailed: true };
+    },
     prefs: () => prefs,
     profiles: () => profiles,
     settings,
@@ -1536,6 +1566,73 @@ test('browser_open navigates the active tab; a non-local origin is logged, never
   const out = await t.ok('browser_open', { url: 'example.com' });
   assert.match(out.changed, /outside your machine/);
   assert.equal(t.toasts.length, 0);
+});
+
+test('start_dev_server runs a launch.json target, opens it and leaves a card with its preview', async () => {
+  const t = setup();
+  const r = await t.ok('start_dev_server', { name: 'web' });
+  assert.deepEqual(t.devRuns, ['web']);
+  assert.equal(r.url, 'http://localhost:5173');
+  const card = t.thread('rl').activity.at(-1)!.devServer;
+  assert.equal(card?.port, 5173);
+  assert.equal(card?.preview, '/images/dev-server.png');
+});
+
+test('start_dev_server opens a server that is already listening without starting another', async () => {
+  const t = setup();
+  t.listening.push({ port: 5173, pid: 1, command: 'node', startedAt: 0 });
+  const r = await t.ok('start_dev_server', { name: 'web' });
+  assert.deepEqual(t.devRuns, []);
+  assert.match(r.note, /already running/);
+});
+
+test('start_dev_server names the targets there are, and returns the output of one that exited', async () => {
+  const t = setup();
+  assert.match(
+    await t.err('start_dev_server', { name: 'api' }),
+    /there is web, dev\. Add a configuration/,
+  );
+  t.failDevServer('Error: Cannot find module vite');
+  assert.match(
+    await t.err('start_dev_server', { name: 'web' }),
+    /web exited[\s\S]*Cannot find module vite/,
+  );
+});
+
+test("startedPort waits for a target's own port, else the first new one", () => {
+  const port = (p: number) => ({
+    port: p,
+    pid: 1,
+    command: 'node',
+    startedAt: 0,
+  });
+  const web = {
+    name: 'web',
+    command: '',
+    source: 'launch.json' as const,
+    port: 5173,
+  };
+  const dev = { name: 'dev', command: '', source: 'package.json' as const };
+  assert.equal(startedPort(web, [], [port(3000)]), undefined);
+  assert.equal(startedPort(web, [], [port(5173)]), 5173);
+  assert.equal(startedPort(dev, [port(3000)], [port(3000)]), undefined);
+  assert.equal(startedPort(dev, [port(3000)], [port(3000), port(5300)]), 5300);
+});
+
+test('pickTarget prefers a launch.json configuration over a script of the same name', () => {
+  const script = {
+    name: 'dev',
+    command: 'pnpm run dev',
+    source: 'package.json' as const,
+  };
+  const config = {
+    name: 'dev',
+    command: 'pnpm dev',
+    source: 'launch.json' as const,
+    port: 1,
+  };
+  assert.equal(pickTarget([script, config], 'dev'), config);
+  assert.equal(pickTarget([script], 'web'), undefined);
 });
 
 test('browser tools drive an off-screen thread without moving the user', async () => {

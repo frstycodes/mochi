@@ -11,6 +11,7 @@ import { saveDraft, settingsChatDraftKey } from '../chat/drafts.ts';
 import { openSettings } from '../routes/nav.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { agentAskSecondOpinion } from '../secondOpinion/run.ts';
+import { runTarget } from '../terminal/runTarget.ts';
 import type { Action, State } from '../store/index.tsx';
 import type { ToolEnv } from './tools.ts';
 
@@ -66,6 +67,22 @@ export function toolEnv(
     remote: host.remote,
     isDesktop: host.isDesktop,
     askSecondOpinion: (thread) => agentAskSecondOpinion(thread, dispatch),
+    devServers: {
+      targets: (cwd) => host.ports.targets(cwd),
+      list: (cwds) => host.ports.list(cwds),
+      run: async (target, thread, cwd) => {
+        const pane = getState().panes.find((p) => p.threadId === thread.id);
+        const { key, sessionId } = await runTarget(target, {
+          threadId: thread.id,
+          cwd,
+          pane,
+          dispatch,
+        });
+        const { sessionOutput } = await import('../terminal/sessions.ts');
+        return () => sessionOutput(key, sessionId);
+      },
+      saveImage: (type, base64) => host.data.saveImage(type, base64),
+    },
   };
 }
 
