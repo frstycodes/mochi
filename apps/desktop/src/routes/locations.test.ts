@@ -24,7 +24,7 @@ test('replay and remote routes are exclusive', () => {
   assert.equal(replayThreadOf(at('/settings/chat')), null);
   assert.deepEqual(remoteRouteOf(at('/remote/m1/t1')), {
     machineId: 'm1',
-    threadId: 't1',
+    threadId: 'm1~t1',
   });
   assert.equal(remoteRouteOf(at('/remote/m1')), null);
 });

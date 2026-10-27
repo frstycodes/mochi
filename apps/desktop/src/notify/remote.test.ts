@@ -58,14 +58,14 @@ function follower() {
   let baseline: RemoteBaseline | undefined;
   const alerts: string[] = [];
   const receive = (frame: MirrorFrame) => {
-    mirror = applyFrame(mirror, frame);
+    mirror = applyFrame('mac', mirror, frame);
     alerts.push(...remoteAlerts(baseline, mirror.state).map((a) => a.kind));
     baseline = baselineOf(mirror.state);
   };
   return {
     receive,
     alerts,
-    reconnect: () => (mirror = applyFrame(mirror, { type: 'reset' })),
+    reconnect: () => (mirror = applyFrame('mac', mirror, { type: 'reset' })),
   };
 }
 

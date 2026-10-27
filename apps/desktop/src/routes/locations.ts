@@ -1,4 +1,5 @@
 import type { SectionId } from '../settings/sections';
+import { remoteThreadId } from '../remote/ids.ts';
 
 /** `nonce` re-triggers the scroll-and-flash when the same setting is deep-linked twice. `subpage` is one item's own page inside the section (a connector). */
 export interface SettingsRoute {
@@ -10,6 +11,7 @@ export interface SettingsRoute {
 
 export interface RemoteThreadRoute {
   machineId: string;
+  /** Machine-aware (`remoteThreadId`), as the mirror holds it; the URL carries the machine's own id. */
   threadId: string;
 }
 
@@ -48,8 +50,9 @@ export function remoteRouteOf({
 }: PageLocation): RemoteThreadRoute | null {
   const [, root, machineId, threadId] = pathname.split('/');
   if (root !== 'remote' || !machineId || !threadId) return null;
+  const machine = decodeURIComponent(machineId);
   return {
-    machineId: decodeURIComponent(machineId),
-    threadId: decodeURIComponent(threadId),
+    machineId: machine,
+    threadId: remoteThreadId(machine, decodeURIComponent(threadId)),
   };
 }
