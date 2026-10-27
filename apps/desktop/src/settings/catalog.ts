@@ -44,11 +44,14 @@ import {
   ANIMATIONS,
   APP_ICONS,
   type AnimationArea,
+  DEFAULT_FONT_LABEL,
   DIFF_STYLES,
   ENGINES,
+  type FontKind,
   IDLE_ALERTS,
   MOTION,
   SPEEDS,
+  UI_TEXT_SIZES,
   WHILE_WORKING,
   WORKSPACE_MODES,
   WORKTREE_CLEANUP,
@@ -104,6 +107,8 @@ export type Control =
   | { type: 'model'; provider?: Provider; emptyLabel?: string }
   | { type: 'starredModels' }
   | { type: 'colorTheme'; slot: ThemeSlot }
+  /** A font family name; '' is the default. */
+  | { type: 'font'; kind: FontKind }
   | { type: 'simulator' }
   | { type: 'icon' }
   | { type: 'spaceColor' }
@@ -208,6 +213,7 @@ export function valueLabel(setting: Setting, value: string | undefined) {
   if (control.type === 'shortcut')
     return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
   // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
+  if (control.type === 'font') return value || DEFAULT_FONT_LABEL[control.kind];
   if (control.type === 'colorTheme')
     return value === MOCHI_THEME_ID ? 'Mochi' : value.split(':').pop()!;
   return value || 'Not set';
@@ -216,6 +222,10 @@ export function valueLabel(setting: Setting, value: string | undefined) {
 // {APP}
 
 const SWITCH = { type: 'switch' } as const;
+const FONT = {
+  ui: { type: 'font', kind: 'ui' },
+  mono: { type: 'font', kind: 'mono' },
+} as const;
 
 const choice = (options: readonly Option[]) =>
   ({ type: 'choice', options }) as const;
@@ -322,6 +332,7 @@ function parseValue(
       : null;
   }
   if (control.type === 'text') return value.trim() || control.fallback || '';
+  if (control.type === 'font') return value.trim();
   return value;
 }
 
@@ -442,6 +453,24 @@ const APP_SETTINGS: Setting[] = [
     group: 'Mode',
     description: 'System follows your OS setting',
   }),
+  pref('uiFont', 'Interface font', 'appearance', FONT.ui, {
+    group: 'Fonts',
+    description: 'Menus, sidebar and chat',
+  }),
+  pref('uiTextSize', 'Interface size', 'appearance', choice(UI_TEXT_SIZES), {
+    group: 'Fonts',
+  }),
+  pref('monoFont', 'Code font', 'appearance', FONT.mono, {
+    group: 'Fonts',
+    description: 'Code blocks, diffs and terminal output',
+  }),
+  pref(
+    'codeFontSize',
+    'Code size',
+    'appearance',
+    { type: 'number', min: 9, max: 24, step: 1 },
+    { group: 'Fonts', description: 'Code blocks and diffs' },
+  ),
   ...(Object.keys(ANIMATIONS) as AnimationArea[]).flatMap(animationSettings),
   hostSetting(
     'appIcon',

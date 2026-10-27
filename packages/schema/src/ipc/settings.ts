@@ -319,9 +319,12 @@ const AccountId = Str(128);
 const Void = Schema.Void;
 
 /** `SettingsHost` (`src/host/types/settings.ts`), with `electron/ipc/settings.ts`'s checks. */
+export const SystemFont = Schema.Struct({ family: S, isMono: Schema.Boolean });
+
 export const settingsRpc = {
   get: invoke(T([]), AgentSettings),
   set: invoke(T([AgentSettingsPatch]), AgentSettings),
+  systemFonts: invoke(T([]), Schema.NullOr(ArrayOf(SystemFont, 10_000))),
   detect: invoke(T([AccountId]), AgentInstall),
   latestVersion: invoke(T([Provider]), Schema.NullOr(S)),
   updateHarness: invoke(T([Provider]), AgentInstall),

@@ -1,0 +1,23 @@
+diff --git a/dist/useStickToBottom.js b/dist/useStickToBottom.js
+index 7d659edace3f497dc867d3ce24d31180e18cf909..7bfb4ccce8e8d2bc91a160a76c799bd1c2e364c9 100644
+--- a/dist/useStickToBottom.js
++++ b/dist/useStickToBottom.js
+@@ -343,12 +343,13 @@ export const useStickToBottom = (options = {}) => {
+             }
+             else {
+                 /**
+-                 * Else if it's a negative resize, check if we're near the bottom
+-                 * if we are want to un-escape from the lock, because the resize
+-                 * could have caused the container to be at the bottom.
++                 * Else if it's a negative resize near the bottom, re-pin, but
++                 * never after the reader scrolled up: a shrink within 70px (a
++                 * spinner row leaving) would re-pin them mid-scroll, and the
++                 * next growth would pull them back down. Only the reader
++                 * scrolling down (handleScroll) clears the escape.
+                  */
+-                if (state.isNearBottom) {
+-                    setEscapedFromLock(false);
++                if (state.isNearBottom && !state.escapedFromLock) {
+                     setIsAtBottom(true);
+                 }
+             }

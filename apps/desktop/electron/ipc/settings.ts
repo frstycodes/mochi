@@ -27,9 +27,13 @@ import {
 import { detect, latestVersion, updateHarness } from '../settings/detect.ts';
 import { noteLogin } from '../agents/events.ts';
 import { isNewerVersion } from '../../src/settings/parse.ts';
+import { listSystemFonts } from '../fonts/systemFonts.ts';
 import type { Handlers } from './handlers.ts';
 
 export const settings = {
+  async systemFonts() {
+    return listSystemFonts();
+  },
   async get() {
     return agentSettings();
   },

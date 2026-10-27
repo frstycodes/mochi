@@ -7,6 +7,7 @@ import type { RangeId } from './usage/report.ts';
 export const queryKeys = {
   account: () => ['mochi-account'] as const,
   schedules: () => ['schedules'] as const,
+  systemFonts: () => ['system-fonts'] as const,
   agent: {
     settings: () => ['agent-settings'] as const,
     accounts: () => ['accounts'] as const,

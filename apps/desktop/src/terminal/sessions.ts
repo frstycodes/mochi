@@ -14,6 +14,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal, type IMarker } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { host } from '../host';
+import { fontStack } from '../settings/fonts';
 import { getPrefs, subscribePrefs } from '../settings/prefs';
 import { filePathsIn } from './links';
 import { onThemeChange, terminalTheme } from './theme';
@@ -240,7 +241,7 @@ function createSession(
   options: { command?: string; restored?: string } = {},
 ): TerminalSession {
   const term = new Terminal({
-    fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+    fontFamily: fontStack('mono', getPrefs().monoFont),
     fontSize: getPrefs().terminalFontSize,
     lineHeight: 1.4,
     scrollback: getPrefs().terminalScrollback,
@@ -412,16 +413,19 @@ function wireHost() {
     );
   });
   subscribePrefs(() => {
-    const { terminalFontSize, terminalScrollback } = getPrefs();
+    const { terminalFontSize, terminalScrollback, monoFont } = getPrefs();
+    const fontFamily = fontStack('mono', monoFont);
     groups().forEach((g) =>
       g.sessions.forEach((s) => {
         if (
           s.term.options.fontSize === terminalFontSize &&
-          s.term.options.scrollback === terminalScrollback
+          s.term.options.scrollback === terminalScrollback &&
+          s.term.options.fontFamily === fontFamily
         )
           return;
         s.term.options.fontSize = terminalFontSize;
         s.term.options.scrollback = terminalScrollback;
+        s.term.options.fontFamily = fontFamily;
         // A hidden session's element is detached, so it has no size to fit to; it fits when it mounts again.
         if (s.element.isConnected) s.fit.fit();
       }),

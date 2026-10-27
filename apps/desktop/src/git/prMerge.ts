@@ -62,6 +62,7 @@ export function useThreadPrMerge(thread: Thread, item: ThreadPr) {
     ...flow,
     allowed,
     method: pickMethod(allowed, mergeMethod),
+    setMethod: (method: MergeMethod) => setPrefs({ mergeMethod: method }),
     isBusy,
     isConflicting: state.hasConflicts,
   };

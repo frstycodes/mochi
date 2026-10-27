@@ -44,6 +44,7 @@ import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
 import { ThemePicker } from './ThemePicker';
 import { AppIconPicker } from './AppIconPicker';
+import { FontNote, FontPicker } from './FontPicker';
 import { useShareSetting } from '../remote/SharedSettingsNotice';
 import { useRemoteStatus } from '../remote/useRemoteStatus';
 import { parseChord } from '../keymap';
@@ -208,6 +209,31 @@ function SettingRow({
   const description = suggestion
     ? (setting.description ?? setting.context)
     : setting.description;
+  if (control.type === 'font' && value !== undefined)
+    return (
+      <>
+        <SettingsRow
+          id={rowId}
+          label={setting.label}
+          description={
+            <FontNote kind={control.kind} family={value}>
+              {description}
+            </FontNote>
+          }
+          control={
+            <FontPicker
+              id={rowId}
+              kind={control.kind}
+              value={value}
+              onChange={set}
+            />
+          }
+        >
+          {line}
+        </SettingsRow>
+        {apply.dialog}
+      </>
+    );
   if (control.type === 'appIcon' && value !== undefined)
     return (
       <>

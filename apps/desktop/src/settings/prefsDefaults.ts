@@ -10,6 +10,13 @@ import type { ToolPolicies } from '../runtime/toolPolicy.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
+  /** Font families for the interface and for code (blocks, diffs, terminal); empty uses the default (`src/settings/fonts.ts`). */
+  uiFont: string;
+  monoFont: string;
+  /** Scales every text token, not spacing. */
+  uiTextSize: 'small' | 'default' | 'large';
+  /** Px for code blocks and diffs; the terminal keeps `terminalFontSize`. */
+  codeFontSize: number;
   /** Sidebar and side pane animations that run (`ANIMATIONS`); none by default. Reduce motion still stops them all. */
   animations: string[];
   /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
@@ -99,6 +106,10 @@ export const toggleStar = (starred: string[], id: string) =>
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
+  uiFont: '',
+  monoFont: '',
+  uiTextSize: 'default',
+  codeFontSize: 12,
   animations: [],
   lightTheme: 'mochi',
   darkTheme: 'mochi',

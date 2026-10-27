@@ -153,6 +153,26 @@ export const SETTINGS_SECTIONS = [
         keywords: 'animation accessibility',
       },
       { id: 'appIcon', label: 'App icon', keywords: 'dock icon logo variant' },
+      {
+        id: 'uiFont',
+        label: 'Interface font',
+        keywords: 'font typeface family sans text',
+      },
+      {
+        id: 'uiTextSize',
+        label: 'Interface size',
+        keywords: 'font text size bigger smaller zoom',
+      },
+      {
+        id: 'monoFont',
+        label: 'Code font',
+        keywords: 'font monospace mono typeface code diff terminal',
+      },
+      {
+        id: 'codeFontSize',
+        label: 'Code size',
+        keywords: 'font text size monospace code diff',
+      },
       ...Object.entries(ANIMATIONS).flatMap(([area, { label, items }]) => [
         {
           id: `animations${area[0]!.toUpperCase()}${area.slice(1)}`,
