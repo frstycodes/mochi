@@ -1,4 +1,5 @@
-import { Hierarchy } from '@/icons';
+import { Chat, Hierarchy } from '@/icons';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import type { Thread } from './model';
@@ -10,6 +11,8 @@ import { runningBackground } from './runtime/subagents';
 import { useHarnessSelector } from './store';
 import { isUnread } from './store/seen';
 import { LiveDot } from './ui';
+import { ProjectIcon } from './ProjectIcon';
+import { useProjectAt } from './projects';
 
 export type ThreadRow = ReturnType<typeof useThreadRow>;
 
@@ -88,6 +91,44 @@ const DOT_BG = {
   destructive: 'bg-destructive',
   unread: 'bg-unread',
 } satisfies Record<string, string>;
+
+/** The thread's project as its icon (a chat glyph when it has none), named in the tooltip. */
+export function ThreadProjectMark({ thread }: { thread: Thread }) {
+  const project = useProjectAt(thread.spaceId, thread.repo?.path);
+  return (
+    <span
+      className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]"
+      title={thread.repo?.project ?? 'No project'}
+    >
+      {thread.repo ? (
+        <ProjectIcon name={thread.repo.project} icon={project?.icon} />
+      ) : (
+        <Chat aria-label="No project" className="size-4 shrink-0" />
+      )}
+    </span>
+  );
+}
+
+/** The row's detail line: shimmering while the agent works, in the warning or destructive tone when it asks for you. */
+export function ThreadDetailText({ row }: { row: ThreadRow }) {
+  if (row.isWorking)
+    return (
+      <Shimmer as="span" className="min-w-0 flex-1 truncate">
+        {row.detail}
+      </Shimmer>
+    );
+  return (
+    <span
+      className={cn(
+        'min-w-0 flex-1 truncate',
+        row.tone === 'warning' && 'text-warning',
+        row.tone === 'destructive' && 'text-destructive',
+      )}
+    >
+      {row.detail}
+    </span>
+  );
+}
 
 /** How many background agents the thread has running; nothing when none do. */
 export function AgentsBadge({ thread }: { thread: Thread }) {
