@@ -181,7 +181,7 @@ export function ChatView({
   const rows = chatRows(
     thread.activity,
     thread.reviews,
-    shownTurnChanges(thread, anchor),
+    shownTurnChanges(anchor),
     anchor?.isLatest ? undefined : anchor,
   );
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
@@ -444,7 +444,6 @@ const ChatRowView = memo(function ChatRowView({
         thread={thread}
         anchor={row.anchor}
         record={row.record}
-        isReadOnly={isReadOnly}
       />
     );
   if (row.kind === 'subagent')
@@ -663,14 +662,9 @@ function AgentReply({
   );
 }
 
-/**
- * The latest turn's file changes when it anchors the widgets and no report card lists them; an earlier anchor's are in its
- * `EarlierTurnCard`. Older turns' cards are gone; their edits stay in the work log.
- */
-function shownTurnChanges(thread: Thread, anchor: TurnAnchor | undefined) {
-  return anchor?.isLatest && anchor.changes && !showsVerdictCard(thread)
-    ? [anchor.changes]
-    : [];
+/** The anchor turn's file changes, as their own card after the turn and never inside its report. Older turns' edits stay in the work log. */
+function shownTurnChanges(anchor: TurnAnchor | undefined) {
+  return anchor?.changes ? [anchor.changes] : [];
 }
 
 /** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */

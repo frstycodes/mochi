@@ -31,7 +31,6 @@ import { ProgressRing } from '../ui';
 import { RefChip } from '../chat/ChatLink';
 import type { RefTone } from '@mochi/domain/chat/refs';
 import type { TurnAnchor } from '../chat/turnAnchor';
-import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { OPEN_PR_PROMPT } from '../git/prs';
 import type { ThreadPr } from '../git/useThreadPrs';
 import { useHarness, useDispatch } from '../store';
@@ -94,7 +93,6 @@ export function ReportCard({
   );
   if (!isShown) return null;
   const { verdict, prs, tiles, question, report } = next;
-  const { changes } = anchor;
   return (
     // A goal-less idle turn with no summary, changes or question leaves every section below empty; the children decide that, so CSS hides the shell.
     <NextMoveCard
@@ -119,7 +117,6 @@ export function ReportCard({
         {verdict.gaps.length > 0 && (
           <GapList thread={thread} gaps={verdict.gaps} onJump={onJump} />
         )}
-        {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
         {verdict.kind === 'waiting' && (
           <p className="type-meta text-muted-foreground">
             Mochi asks when one finishes or needs you.
@@ -141,19 +138,17 @@ export function ReportCard({
 }
 
 /**
- * The widgets of the last turn that produced them, kept under it while a newer turn runs: its summary, the sub-threads (live), its
- * file changes, and the question you answered. No verdict and no answers: those describe the thread now, and the newer turn ends with its own.
+ * The widgets of the last turn that produced them, kept under it while a newer turn runs: its summary, the sub-threads (live)
+ * and the question you answered; its file changes are a card of their own just above. No verdict and no answers: those describe the thread now, and the newer turn ends with its own.
  */
 export function EarlierTurnCard({
   thread,
   anchor,
   record,
-  isReadOnly,
 }: {
   thread: Thread;
   anchor: TurnAnchor;
   record?: ActivityEntry['nextMove'];
-  isReadOnly?: boolean;
 }) {
   const summary = record?.summary ?? anchor.report?.summary;
   return (
@@ -164,13 +159,6 @@ export function EarlierTurnCard({
       <NextMoveContent>
         {!!summary && <NextMoveSummary>{summary}</NextMoveSummary>}
         <SubThreadList thread={thread} />
-        {!!anchor.changes && (
-          <TurnChangesCard
-            thread={thread}
-            turn={anchor.changes}
-            isReadOnly={isReadOnly}
-          />
-        )}
         {!!record && <NextMoveQuestion>{record.question}</NextMoveQuestion>}
         {!!record?.answer && <NextMoveAnswer>{record.answer}</NextMoveAnswer>}
       </NextMoveContent>
