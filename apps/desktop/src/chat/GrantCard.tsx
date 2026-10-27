@@ -78,29 +78,34 @@ export function GrantCard({
       aria-label="Orchestration grant"
       className="flex flex-col rounded-xl border p-1"
     >
-      <div className="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1 type-body">
-        <DiagramTree
-          aria-hidden
-          className="size-4 shrink-0 text-muted-foreground"
-        />
-        <span
-          className={isActive ? 'text-foreground' : 'text-muted-foreground'}
-        >
-          {`${agent} can start threads on its own`}
+      {/* Narrow, the budget and Revoke wrap under the title together rather than squeezing it. */}
+      <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2 px-2 py-1 type-body">
+        <span className="flex min-w-48 flex-1 items-center gap-2">
+          <DiagramTree
+            aria-hidden
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+          <span
+            className={isActive ? 'text-foreground' : 'text-muted-foreground'}
+          >
+            {`${agent} can start threads on its own`}
+          </span>
         </span>
-        <span
-          role="status"
-          className="ml-auto shrink-0 type-meta text-subtle-foreground tabular-nums"
-        >
-          {isActive
-            ? `${plural(threadsLeft(grant), '1 thread', `${threadsLeft(grant)} threads`)} left · ${durationText(minutesLeft)} left`
-            : CLOSED[status]}
+        <span className="ml-auto flex shrink-0 items-center gap-2 pl-6">
+          <span
+            role="status"
+            className="type-meta text-subtle-foreground tabular-nums"
+          >
+            {isActive
+              ? `${plural(threadsLeft(grant), '1 thread', `${threadsLeft(grant)} threads`)} left · ${durationText(minutesLeft)} left`
+              : CLOSED[status]}
+          </span>
+          {isActive && (
+            <Button size="sm" variant="ghost" onClick={onRevoke}>
+              Revoke
+            </Button>
+          )}
         </span>
-        {isActive && (
-          <Button size="sm" variant="ghost" onClick={onRevoke}>
-            Revoke
-          </Button>
-        )}
       </div>
       {isActive && (
         <p className="pr-2 pb-1 pl-8 type-caption text-subtle-foreground [overflow-wrap:anywhere]">
