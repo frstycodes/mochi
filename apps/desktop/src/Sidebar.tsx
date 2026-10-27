@@ -84,7 +84,6 @@ import {
   useDispatch,
   useGetState,
   useHarnessSelector,
-  useSpace,
   useSpaceListing,
   useSpaceQueue,
   useThread,
@@ -246,7 +245,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
 }
 
 function SpaceHeader() {
-  const space = useSpace();
+  const spaceId = useHarnessSelector((s) => s.spaceId);
   const { isMobile } = useSidebar();
   const isMulti = useIsMultiSplit();
   return (
@@ -255,28 +254,8 @@ function SpaceHeader() {
       {!isMobile && !isMulti && (
         <SidebarTrigger className="ml-1 text-muted-foreground" />
       )}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="flex min-w-0 items-center gap-2 px-1">
-            <SpaceIcon
-              space={space}
-              className="size-4 shrink-0 text-muted-foreground"
-            />
-            <span className="truncate type-meta font-medium">{space.name}</span>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="start">
-          {[
-            space.plans.claude && `Claude ${space.plans.claude}`,
-            space.plans.codex && `Codex ${space.plans.codex}`,
-            space.github && `GitHub ${space.github}`,
-          ]
-            .filter(Boolean)
-            .join(' · ') || `${space.name} profile`}
-        </TooltipContent>
-      </Tooltip>
       <span className="ml-auto" />
-      <NotificationBell spaceId={space.id} />
+      <NotificationBell spaceId={spaceId} />
     </SidebarHeader>
   );
 }
