@@ -226,10 +226,6 @@ const STEP_COLORS = {
   dropped: 'var(--subtle-foreground)',
 } satisfies Record<StepStatus, string>;
 
-export function stepLabel(status: StepStatus) {
-  return STEP_LABELS[status];
-}
-
 /**
  * One segment per criterion, filled as each is met and green once all are, so it reads as a count, never a share of the work.
  * No criteria: the ring shows state only. `isWorking` set: it spins in the line colour (a quarter arc when nothing is met yet,
