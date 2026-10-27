@@ -130,6 +130,12 @@ export const TOOL_GUIDE = {
     description:
       'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.',
   },
+  report_to_parent: {
+    group: 'Progress',
+    label: 'Report to the parent thread',
+    description:
+      'A sub-thread ends each turn with a short report to the thread that started it: done, blocked, needs input or failed, with its branch, PR, files and checks.',
+  },
   get_report: {
     group: 'Progress',
     label: 'Read reports',

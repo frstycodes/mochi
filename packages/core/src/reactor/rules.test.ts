@@ -117,6 +117,32 @@ test('sub-thread wakes: an idle parent with notes and idle children wakes, once 
   assert.notEqual(second?.key, first?.key, 'new notes wake it again');
 });
 
+test('sub-thread wakes: an urgent report wakes the parent while another child works; done waits', () => {
+  const parent = (notes: string[]) =>
+    thread('p', { live: { isWorking: false, notes } });
+  const child = (id: string, isWorking: boolean) =>
+    thread(id, { parent: { threadId: 'p' }, live: { isWorking } });
+  const busy = (note: string) =>
+    subThreadWakes(
+      saved('c'),
+      NONE,
+      state([parent([note]), child('c', false), child('d', true)]),
+    );
+  for (const status of ['blocked', 'needs_input', 'failed'])
+    assert.equal(
+      busy(`[Sub-thread "c" (c) reported: ${status}]\nNeed the key.`)[0]
+        ?.threadId,
+      'p',
+      status,
+    );
+  assert.deepEqual(busy('[Sub-thread "c" (c) reported: done]\nAll done.'), []);
+  assert.deepEqual(
+    busy('[Sub-thread "c" (c) reported: done]\nIt said reported: failed]'),
+    [],
+    'only the header line counts',
+  );
+});
+
 test('limit resumes: armed threads get a resume due at their reset, a new key per reset', () => {
   const armed = (resetsAt: string) =>
     thread('t1', {

@@ -43,6 +43,7 @@ const RECORDED = [
   'criterion-claim',
   'criterion-check',
   'report',
+  'parent-report',
   'similar-dismiss',
   'drift-verdict',
   'drift-keep',

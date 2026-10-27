@@ -7,7 +7,7 @@ import { scheduleReducer } from '../schedule/slice.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls } from './live.ts';
-import { dueWakes } from './due.ts';
+import { dueWakes, isUrgentNote } from './due.ts';
 import { WAKE_PROMPT } from './subThreadNotes.ts';
 
 const run = (s: State, action: Action) =>
@@ -207,5 +207,139 @@ test("a sub-thread's PR reaches its parent only when it ends or needs a decision
     dueWakes(s).map((t) => t.id),
     [parent],
     'the escalation wakes an idle parent',
+  );
+});
+
+const reported = (
+  s: State,
+  threadId: string,
+  report: Extract<Action, { type: 'parent-report' }>['report'],
+) => run(s, { type: 'parent-report', threadId, report });
+
+test("a turn's report_to_parent becomes the parent's note, compactly; a turn without one falls back to the excerpt", () => {
+  let { s, parent, a, thread } = family();
+  s = ended(s, parent);
+  s = agent(s, {
+    threadId: a,
+    type: 'message',
+    text: 'A long reply the report replaces.',
+    isDelta: false,
+  });
+  const files = Array.from({ length: 12 }, (_, i) => `src/f${i}.ts`);
+  s = reported(s, a, {
+    status: 'done',
+    summary: 'Added the endpoint.',
+    branch: 'piece-a',
+    pr: 7,
+    changedFiles: files,
+    checks: [
+      { command: 'pnpm test', result: 'passed' },
+      { command: 'pnpm lint', result: 'failed' },
+    ],
+  });
+  s = ended(s, a);
+  const note = thread(s, parent).live?.notes?.[0] ?? '';
+  assert.equal(
+    note.replace(/ \(.*?\) reported/, ' reported'),
+    [
+      '[Sub-thread "Piece A" reported: done]',
+      'Added the endpoint.',
+      'branch piece-a · PR #7',
+      `Changed: ${files.slice(0, 10).join(', ')} (+2 more)`,
+      'Checks: pnpm test passed; pnpm lint failed',
+    ].join('\n'),
+  );
+  assert.ok(!note.includes('A long reply'));
+
+  s = run(s, { type: 'send', threadId: a, text: 'one more thing', reason: '' });
+  s = agent(s, {
+    threadId: a,
+    type: 'message',
+    text: 'Done too.',
+    isDelta: false,
+  });
+  s = ended(s, a);
+  assert.match(
+    thread(s, parent).live?.notes?.at(-1) ?? '',
+    /ended a turn: done\]\nDone too\./,
+    "last turn's report doesn't describe this one",
+  );
+});
+
+test('blocked, needs_input and failed reports wake the parent at once; done reports wait for every sub-thread', () => {
+  for (const status of ['blocked', 'needs_input', 'failed'] as const) {
+    let { s, parent, a, thread } = family();
+    s = ended(s, parent);
+    s = ended(reported(s, a, { status, summary: 'Need the key.' }), a);
+    assert.ok(isUrgentNote(thread(s, parent).live!.notes![0]));
+    assert.deepEqual(
+      dueWakes(s).map((t) => t.id),
+      [parent],
+      `${status} doesn't wait for Piece B`,
+    );
+  }
+  let { s, parent, a, b } = family();
+  s = ended(s, parent);
+  s = ended(reported(s, a, { status: 'done', summary: 'Done.' }), a);
+  assert.deepEqual(dueWakes(s), [], 'done batches while Piece B works');
+  s = ended(s, b);
+  assert.deepEqual(
+    dueWakes(s).map((t) => t.id),
+    [parent],
+  );
+});
+
+test('a thread messaged with expectReply notes the sender at its next turn end, once, and wakes it', () => {
+  let { s, parent, a, b, thread } = family();
+  s = ended(ended(ended(s, parent), a), b);
+  s = run(s, {
+    type: 'send',
+    threadId: parent,
+    text: 'clear notes',
+    reason: '',
+  });
+  s = ended(s, parent);
+  const other = run(s, {
+    type: 'create',
+    title: 'Elsewhere',
+    provider: 'claude',
+    project: 'harness',
+    isLive: true,
+  });
+  const o = other.threads.at(-1)!.id;
+  s = ended(other, o);
+  s = run(s, {
+    type: 'send',
+    threadId: o,
+    text: 'Which table?',
+    reason: '',
+    from: { threadId: parent, title: 'Split the work' },
+    expectReply: true,
+  });
+  s = agent(s, {
+    threadId: o,
+    type: 'message',
+    text: 'The limits table.',
+    isDelta: false,
+  });
+  s = ended(s, o);
+  assert.match(
+    thread(s, parent).live?.notes?.at(-1) ?? '',
+    /^\[Reply from thread "Elsewhere" .* ended a turn: done\]\nThe limits table\.$/,
+  );
+  assert.equal(thread(s, o).replyTo, undefined);
+  assert.deepEqual(
+    dueWakes(s).map((t) => t.id),
+    [parent],
+  );
+  const notes = thread(s, parent).live?.notes?.length;
+  s = ended(
+    run(s, { type: 'send', threadId: o, text: 'thanks', reason: '' }),
+    o,
+  );
+  assert.equal(
+    thread(s, parent).live?.notes?.length,
+    notes,
+    'only the next turn end',
   );
 });

@@ -15,6 +15,7 @@ import type { WorkspaceDraft } from './git/workspace.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from '@mochi/domain/viz/fence';
 import type { RunTarget } from '@mochi/domain/host/types/ports';
+import type { SUB_THREAD_STATUSES } from '@mochi/domain/runtime/toolTable';
 import type { PaneLayout } from './pane/layout.ts';
 import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 import { vizGalleryThread } from './viz/fixtures.ts';
@@ -86,6 +87,21 @@ export interface TurnReport {
   isSuperseded?: true;
   /** The activity's length when it was made, which places it in its turn. Unset on reports saved before it was recorded. */
   index?: number;
+}
+
+export type SubThreadStatus = (typeof SUB_THREAD_STATUSES)[number];
+
+/** What a sub-thread's agent told the thread that started it (`report_to_parent`): its parent's note renders it instead of an excerpt. */
+export interface ParentReport {
+  at: number;
+  /** The activity's length when it was made: past the turn's `start` (the message that began it), it is that turn's. */
+  index: number;
+  status: SubThreadStatus;
+  summary: string;
+  branch?: string;
+  pr?: number;
+  changedFiles?: string[];
+  checks?: { command: string; result: 'passed' | 'failed' }[];
 }
 
 /** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
@@ -487,6 +503,10 @@ export interface Thread {
   isGoalOff?: boolean;
   /** The latest `report`; a newer message from you starts a turn it no longer describes. */
   report?: TurnReport;
+  /** A sub-thread's latest `report_to_parent`. */
+  parentReport?: ParentReport;
+  /** Threads that sent this one a message with `expectReply`: its next turn end goes to each as a note, then this clears. */
+  replyTo?: { threadId: string; title: string }[];
   /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
   idle?: IdleCheck;
   /** Where the latest turn began (an `activity` index) and whether another thread or an automated event began it, not you. */

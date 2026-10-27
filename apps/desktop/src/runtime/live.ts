@@ -410,6 +410,7 @@ function start(
         prompt,
         ...agentOptions(controls, provider, thread.spaceId),
         ...(thread.isSettingsChat && { isSettingsChat: true }),
+        ...(thread.parent && { isSubThread: true }),
         ...extra,
       },
     },
@@ -445,6 +446,7 @@ export function scheduledStart(
     cwd,
     workspace,
     ...agentOptions(controlsOf(thread), provider, thread.spaceId),
+    ...(thread.parent && { isSubThread: true }),
   };
 }
 

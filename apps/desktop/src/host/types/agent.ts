@@ -43,6 +43,8 @@ export interface AgentStartOptions {
   isGoalsOff?: boolean;
   /** The profile's settings chat (Settings › Ask Mochi): only the settings tools and their instructions, no files, shell or browser. */
   isSettingsChat?: boolean;
+  /** A sub-thread's session: it also gets `report_to_parent` and the instructions to end each turn with it. Read at session start. */
+  isSubThread?: boolean;
   /** The profile's turned-off Claude Code or Codex items for this harness (`NativeItem.id`); main leaves them out of this session only. Read at session start. */
   nativeOff?: string[];
 }

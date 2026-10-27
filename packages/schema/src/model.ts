@@ -527,6 +527,25 @@ export const TurnReport = Schema.Struct({
 });
 export type TurnReport = typeof TurnReport.Type;
 
+export const ParentReport = Schema.Struct({
+  at: Schema.Number,
+  index: Schema.Number,
+  status: Schema.Literals(['done', 'blocked', 'needs_input', 'failed']),
+  summary: Schema.String,
+  branch: opt(Schema.String),
+  pr: opt(Schema.Number),
+  changedFiles: opt(Schema.Array(Schema.String)),
+  checks: opt(
+    Schema.Array(
+      Schema.Struct({
+        command: Schema.String,
+        result: Schema.Literals(['passed', 'failed']),
+      }),
+    ),
+  ),
+});
+export type ParentReport = typeof ParentReport.Type;
+
 const GoalCriteria = Schema.Array(
   Schema.Struct({ text: Schema.String, command: opt(Schema.String) }),
 );
@@ -820,6 +839,12 @@ export const Thread = Schema.Struct({
   parent: opt(SubThreadLink),
   isGoalOff: opt(Schema.Boolean),
   report: opt(TurnReport),
+  parentReport: opt(ParentReport),
+  replyTo: opt(
+    Schema.Array(
+      Schema.Struct({ threadId: Schema.String, title: Schema.String }),
+    ),
+  ),
   idle: opt(IdleCheck),
   turn: opt(
     Schema.Struct({

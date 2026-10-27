@@ -67,6 +67,14 @@ export const MOCHI_SERVER = 'mochi';
 /** `update_plan`'s scope: this thread's first task, or more of the same work. Unrelated work is a `create_thread` offer. */
 export const PLAN_SCOPES = ['first_task', 'continuation'] as const;
 
+/** `report_to_parent`'s status. All but done wake the parent at once (`dueWakes`). */
+export const SUB_THREAD_STATUSES = [
+  'done',
+  'blocked',
+  'needs_input',
+  'failed',
+] as const;
+
 /** `create_thread`'s initiation (Claude Code Desktop's): who wants the thread, which decides whether it starts now. */
 export const THREAD_INITIATIONS = [
   'user_asked',
@@ -290,10 +298,16 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      "Send a message to another thread's agent, as if typed in its composer.",
+      "Send a message to another thread's agent, as if typed in its composer. Your own sub-threads' turn ends come back to you anyway; for any other thread, pass `expectReply` and its next turn end comes back to you as a note.",
     shape: {
       threadId: otherThread,
       text: Schema.String.check(Schema.isMinLength(1)),
+      expectReply: Schema.optionalKey(
+        Schema.Boolean.annotate({
+          description:
+            "true: that thread's next turn end comes back to you as a note, as a sub-thread's does",
+        }),
+      ),
     },
   },
   delete_thread: {
@@ -417,6 +431,52 @@ export const TOOL_TABLE = {
             description:
               "The answers to next, your pick first; written for this turn, not generic. The first one's reply is also suggested in the user's empty message box, so write it as their instruction, never as your question",
           }),
+      ),
+    },
+  },
+  report_to_parent: {
+    tier: 'change',
+    quiet: true,
+    description:
+      'Sub-threads only: end every turn with one report to the thread that started you; it reaches that thread as a compact note. blocked, needs_input or failed wakes it at once, even while its other sub-threads work; done waits until they are all idle. Facts only: leave out what you did not do or run.',
+    shape: {
+      status: Schema.Literals(SUB_THREAD_STATUSES).annotate({
+        description:
+          'done: your piece is finished; blocked: something outside your piece stops you; needs_input: a decision only the parent or the user can make; failed: you tried and it did not work',
+      }),
+      summary: Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(600),
+      ).annotate({
+        description:
+          'What happened, and for anything but done what you need, in 1 to 3 sentences',
+      }),
+      branch: Schema.optionalKey(
+        Schema.String.annotate({ description: 'The branch your work is on' }),
+      ),
+      pr: Schema.optionalKey(
+        Schema.Number.check(
+          Schema.isInt(),
+          Schema.isGreaterThanOrEqualTo(1),
+        ).annotate({ description: 'The number of the PR you opened, if any' }),
+      ),
+      changedFiles: Schema.optionalKey(
+        Schema.Array(Schema.String)
+          .check(Schema.isMaxLength(50))
+          .annotate({ description: 'Repo-relative paths you changed' }),
+      ),
+      checks: Schema.optionalKey(
+        Schema.Array(
+          Schema.Struct({
+            command: Schema.String.check(
+              Schema.isMinLength(1),
+              Schema.isMaxLength(200),
+            ).annotate({ description: 'What you ran, like "pnpm test"' }),
+            result: Schema.Literals(['passed', 'failed']),
+          }),
+        )
+          .check(Schema.isMaxLength(10))
+          .annotate({ description: 'The checks you ran and how each ended' }),
       ),
     },
   },
@@ -1083,18 +1143,31 @@ export const SETTINGS_CHAT_TOOLS = [
 export interface MochiScope {
   isGoalsOff?: boolean;
   isSettingsChat?: boolean;
+  isSubThread?: boolean;
 }
 
 const isSettingsChatTool = (name: ToolName) =>
   (SETTINGS_CHAT_TOOLS as readonly string[]).includes(name);
 
+/** Served only to a sub-thread's session: it reports to the thread it was started for. */
+export const SUB_THREAD_TOOLS = [
+  'report_to_parent',
+] as const satisfies ToolName[];
+
+const isSubThreadTool = (name: ToolName) =>
+  (SUB_THREAD_TOOLS as readonly string[]).includes(name);
+
 export function servedTools({
   isGoalsOff,
   isSettingsChat,
+  isSubThread,
 }: MochiScope): ToolName[] {
   if (isSettingsChat) return [...SETTINGS_CHAT_TOOLS];
   return TOOL_NAMES.filter(
-    (name) => !isSettingsChatTool(name) && !(isGoalsOff && isGoalTool(name)),
+    (name) =>
+      !isSettingsChatTool(name) &&
+      !(isGoalsOff && isGoalTool(name)) &&
+      !(!isSubThread && isSubThreadTool(name)),
   );
 }
 
@@ -1106,6 +1179,7 @@ export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
 export const TURN_TOOLS = [
   'update_plan',
   'report_turn',
+  'report_to_parent',
 ] as const satisfies ToolName[];
 
 export const isTurnTool = (name: string) =>

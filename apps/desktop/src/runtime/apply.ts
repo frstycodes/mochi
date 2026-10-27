@@ -36,7 +36,7 @@ import { switchDelivered, switchWriting } from '../rewind/switch.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
-import { noteParent } from './subThreadNotes.ts';
+import { noteParent, noteReplies } from './subThreadNotes.ts';
 import { applyTask } from './tasks.ts';
 
 const MAIN_EVENTS = new Set<AgentEvent['type']>([
@@ -269,7 +269,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       const isPaused =
         event.status === 'failed' ||
         (event.status === 'interrupted' && !thread.isInterruptedToSend);
-      return noteParent(
+      const noted = noteParent(
         endTurn(
           isPaused
             ? {
@@ -288,6 +288,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         thread,
         event.status,
       );
+      return noteReplies(noted, thread, event.status);
     }
   }
 }

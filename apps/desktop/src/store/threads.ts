@@ -9,6 +9,7 @@ import {
   type Handoff,
   type IdleCheck,
   type LineSlot,
+  type ParentReport,
   type PendingSteer,
   type Provider,
   type PullRequest,
@@ -180,6 +181,7 @@ export type ThreadsAction =
       steers?: boolean;
       /** The message as you typed it: sent into a turn in flight, it waits in `steering` until the agent reads it. */ typed?: QueuedMessage;
       /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef;
+      /** With `from`: the target's next turn end goes back to `from` as a note (`noteReplies`). */ expectReply?: true;
       /** An Auto-fix event; `prompt` is the event as the agent gets it. */ autofix?: ActivityEntry['autofix'];
       /** The verdict of a second opinion the agent asked for. */ secondOpinion?: ActivityEntry['secondOpinion'];
     }
@@ -249,6 +251,11 @@ export type ThreadsAction =
       by: Provider;
     }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
+  | {
+      type: 'parent-report';
+      threadId: string;
+      report: Omit<ParentReport, 'at' | 'index'>;
+    }
   /** The agent went idle: a fresh record replaces the last turn's, accepted gaps and Open anyway included. */
   /** The agent's `propose_goal`; `isApplied` when Settings › Goals and checks applies proposals with an undo instead of asking. */
   | {
@@ -845,6 +852,18 @@ function reduce(state: State, action: Action): State {
             ...s,
             hasReportBefore: true as const,
           })),
+        })),
+      };
+    case 'parent-report':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          parentReport: {
+            ...action.report,
+            at: state.now,
+            index: t.activity.length,
+          },
         })),
       };
     case 'simplified':
@@ -1576,8 +1595,19 @@ export function send(
         restart: undefined,
         movedFrom: undefined,
       };
+      const replier =
+        action.expectReply && from?.threadId
+          ? {
+              replyTo: [
+                ...(t.replyTo ?? []).filter(
+                  (r) => r.threadId !== from.threadId,
+                ),
+                { threadId: from.threadId, title: from.title },
+              ],
+            }
+          : {};
       const sent = withQueue(
-        { ...t, queuePause: undefined },
+        { ...t, queuePause: undefined, ...replier },
         (t.queued ?? []).filter((m) => m.id !== action.queuedId),
       );
       const entry: ActivityEntry = {

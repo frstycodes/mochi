@@ -1,17 +1,19 @@
 import { AUTOFIX_ATTEMPTS, type AutofixEvent } from '../git/autofix.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
-import type { PullRequest, Thread } from '../model.ts';
-import { NOTE_PREFIX } from './due.ts';
+import type { ParentReport, PullRequest, Thread } from '../model.ts';
+import { NOTE_PREFIX, REPLY_PREFIX, reportHeader } from './due.ts';
 import type { State } from '../store/types.ts';
 import { mapThread } from '../store/threads.ts';
 
 const EXCERPT_CHARS = 800;
+const FILES_SHOWN = 10;
 
 export const WAKE_PROMPT =
-  'Your sub-threads are idle; their notes are above. Carry on with your work.';
+  'Notes from your sub-threads, or threads you asked for a reply, are above; any still working sends more later. Carry on with your work.';
 
 /**
- * A sub-thread's turn end goes to its parent's agent as a note, delivered with its next message (`withNotes`) or by `dueWakes`.
+ * A sub-thread's turn end goes to its parent's agent as a note, delivered with its next message (`withNotes`) or by `dueWakes`:
+ * the turn's `report_to_parent` when it made one, else an excerpt of its last reply.
  * A turn an Auto-fix event started and that ended normally stays with the sub-thread: it owns its PR, and the parent hears only `notePr`'s escalations.
  */
 export function noteParent(
@@ -80,12 +82,37 @@ export function prEnded(
   );
 }
 
+/** A turn end of a thread messaged with `expectReply` goes to each sender as a note, once: `replyTo` clears. */
+export function noteReplies(
+  state: State,
+  thread: Thread,
+  status: string,
+): State {
+  const ended = state.threads.find((t) => t.id === thread.id);
+  if (!ended?.replyTo?.length) return state;
+  const note = `${REPLY_PREFIX}"${ended.title}" (${ended.id}) ended a turn: ${status}]${excerptOf(ended)}`;
+  const cleared = {
+    ...state,
+    threads: mapThread(state.threads, ended.id, (t) => ({
+      ...t,
+      replyTo: undefined,
+    })),
+  };
+  return ended.replyTo.reduce(
+    (s, r) => noteThread(s, r.threadId, note),
+    cleared,
+  );
+}
+
 function addNote(state: State, sub: Thread, note: string): State {
   const parentId = sub.parent?.threadId;
-  if (!parentId) return state;
+  return parentId ? noteThread(state, parentId, note) : state;
+}
+
+function noteThread(state: State, threadId: string, note: string): State {
   return {
     ...state,
-    threads: mapThread(state.threads, parentId, (t) =>
+    threads: mapThread(state.threads, threadId, (t) =>
       t.live && t.status !== 'settled' && !t.live.notes?.includes(note)
         ? { ...t, live: { ...t.live, notes: [...(t.live.notes ?? []), note] } }
         : t,
@@ -94,13 +121,39 @@ function addNote(state: State, sub: Thread, note: string): State {
 }
 
 function subThreadNote(sub: Thread, status: string) {
+  const report = sub.parentReport;
+  if (report && report.index > (sub.turn?.start ?? -1))
+    return reportNote(sub, report);
+  return `${NOTE_PREFIX}"${sub.title}" (${sub.id}) ended a turn: ${status}]${excerptOf(sub)}`;
+}
+
+/** A report as its parent reads it: the header, the summary, then one line each for what it has. */
+function reportNote(sub: Thread, report: ParentReport) {
+  const files = report.changedFiles ?? [];
+  const where = [
+    report.branch && `branch ${report.branch}`,
+    report.pr && `PR #${report.pr}`,
+  ].filter(Boolean);
+  const lines = [
+    reportHeader(sub, report.status),
+    report.summary,
+    where.length && where.join(' · '),
+    files.length &&
+      `Changed: ${files.slice(0, FILES_SHOWN).join(', ')}${files.length > FILES_SHOWN ? ` (+${files.length - FILES_SHOWN} more)` : ''}`,
+    report.checks?.length &&
+      `Checks: ${report.checks.map((c) => `${c.command} ${c.result}`).join('; ')}`,
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+function excerptOf(thread: Thread) {
   const said =
-    sub.activity.findLast(
+    thread.activity.findLast(
       (e) => e.kind === 'message' && (e.who === 'claude' || e.who === 'codex'),
     )?.text ?? '';
   const excerpt =
     said.length > EXCERPT_CHARS
       ? `${said.slice(0, EXCERPT_CHARS)}… (get_thread reads more)`
       : said;
-  return `${NOTE_PREFIX}"${sub.title}" (${sub.id}) ended a turn: ${status}]${excerpt && `\n${excerpt}`}`;
+  return excerpt && `\n${excerpt}`;
 }
