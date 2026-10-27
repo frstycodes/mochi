@@ -54,7 +54,7 @@ import { threadCwd } from '../host/cwd';
 import type { DiffFile } from '../host/types/git';
 import type { Subagent, Thread } from '../model';
 import { useDispatch } from '../store';
-import { TooltipIconButton } from '../ui';
+import { SectionLabel, TooltipIconButton } from '../ui';
 import { VizThreadProvider } from '../viz/WidgetVisual';
 import {
   CallList,
@@ -536,9 +536,9 @@ function SubagentSteps({ subagent }: { subagent: Subagent }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-0.5">
-      <h3 className="flex h-6 items-center px-2 type-caption font-medium text-subtle-foreground">
+      <SectionLabel className="flex h-6 items-center px-2">
         {title}
-      </h3>
+      </SectionLabel>
       {children}
     </section>
   );

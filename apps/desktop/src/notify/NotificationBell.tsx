@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { UnreadDot } from '../ui';
+import { StatusMark } from '../ui';
 import { host } from '../host';
 import { duration } from '../progress';
 import { openSettings } from '../routes/nav';
@@ -96,7 +96,9 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
           className="relative text-muted-foreground"
         >
           <Bell />
-          {unread > 0 && <UnreadDot className="absolute top-1 right-1" />}
+          {unread > 0 && (
+            <StatusMark status="unread" className="absolute top-1 right-1" />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -212,7 +214,9 @@ function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
         <span className="tabular type-caption text-subtle-foreground group-hover/notice:hidden">
           {now - head.at < 1 ? 'now' : duration(now - head.at)}
         </span>
-        {isUnread && <UnreadDot className="group-hover/notice:hidden" />}
+        {isUnread && (
+          <StatusMark status="unread" className="group-hover/notice:hidden" />
+        )}
         <Button
           variant="ghost"
           size="icon-xs"

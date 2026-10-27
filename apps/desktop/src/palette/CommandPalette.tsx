@@ -11,7 +11,7 @@ import {
 import { isListed } from '../model';
 import { profileById } from '../profiles';
 import { useHarness } from '../store';
-import { StepStatusIcon, ThreadStatusIcon, lineColor } from '../ui';
+import { STEP_MARKS, StatusMark, lineColor } from '../ui';
 import { ACTION_GROUPS, type PaletteAction } from './actions';
 import type { ActionScope } from './when';
 import { useActions } from './useActions';
@@ -74,7 +74,7 @@ export function CommandPalette({
                 value={`${t.title} ${t.repo?.branch ?? ''} ${t.id}`}
                 onSelect={() => go(t.id)}
               >
-                <ThreadStatusIcon status={t.status} />
+                <StatusMark status={t.status} size="icon" />
                 <span className="truncate">{t.title}</span>
                 <CommandShortcut className="tracking-normal">
                   {profileById(t.spaceId).name}
@@ -89,7 +89,7 @@ export function CommandPalette({
                 value={`${step.title} ${thread.title}`}
                 onSelect={() => go(thread.id)}
               >
-                <StepStatusIcon status={step.status} />
+                <StatusMark status={STEP_MARKS[step.status]} size="icon" />
                 <span className="truncate">{step.title}</span>
                 <span
                   aria-hidden

@@ -8,7 +8,8 @@ import { PrStack } from '../git/PrStack';
 import { ThreadPeek } from '../layout/ThreadPeek';
 import { subThreadsOf } from '../reorder';
 import { useHarness } from '../store';
-import { AgentsBadge, ThreadStatusDot, useThreadRow } from '../threadRow';
+import { AgentsBadge, rowStatusMark, useThreadRow } from '../threadRow';
+import { StatusMark } from '../ui';
 import { TONE_TEXT, useOpenThread } from './SubThreads';
 
 /**
@@ -51,6 +52,7 @@ function SubThreadCount({ subs }: { subs: Thread[] }) {
 
 function SubThreadRow({ sub }: { sub: Thread }) {
   const row = useThreadRow(sub);
+  const mark = rowStatusMark(row);
   const open = useOpenThread();
   const asks = row.tone === 'warning' || row.tone === 'destructive';
   // The peek opens above the row, not beside it: to the right is past the chat column.
@@ -72,7 +74,7 @@ function SubThreadRow({ sub }: { sub: Thread }) {
           >
             {sub.title}
           </span>
-          <ThreadStatusDot row={row} />
+          {mark && <StatusMark {...mark} />}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
           {row.isWorking ? (

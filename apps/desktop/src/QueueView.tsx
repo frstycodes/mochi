@@ -83,7 +83,7 @@ import { remoteDecisions } from './remote/mirror';
 import { RemoteScope, useMachines } from './remote/useMachines';
 import { Seen, useSeen } from './notify/useSeen';
 import { isQueueUnread } from './store/seen';
-import { UnreadDot } from './ui';
+import { StatusMark } from './ui';
 import { isCommand, listenKeydown } from './keymap';
 
 const KIND = {
@@ -241,7 +241,7 @@ export function QueueDecision({
         </CardDescription>
         <CardTitle>{item.title}</CardTitle>
         <CardAction className="flex items-center gap-1.5 tabular type-caption text-subtle-foreground">
-          {isQueueUnread(item) && <UnreadDot />}
+          {isQueueUnread(item) && <StatusMark status="unread" />}
           {age < 1 ? 'just now' : `${duration(age)} ago`}
         </CardAction>
       </CardHeader>

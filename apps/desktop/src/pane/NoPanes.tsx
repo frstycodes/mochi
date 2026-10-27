@@ -17,6 +17,7 @@ import { PINNABLE_KINDS } from './headerPins';
 import { PortIcon } from './PortIcon';
 import { useRecentFiles } from './recentFiles';
 import { PANE_TABS } from './tabs';
+import { SectionLabel } from '../ui';
 
 /** The panes are shown but every one is closed: what can open, running dev servers and recent files. */
 export function NoPanes({ thread }: { thread: Thread }) {
@@ -26,7 +27,7 @@ export function NoPanes({ thread }: { thread: Thread }) {
     <ScrollArea type="scroll" className="h-full">
       <div className="flex flex-col gap-6 p-4">
         <section className="flex flex-col gap-2">
-          <h2 className="type-caption text-subtle-foreground">Open a pane</h2>
+          <SectionLabel as="h2">Open a pane</SectionLabel>
           <div className="flex flex-wrap gap-1.5">
             {PINNABLE_KINDS.map((kind) => {
               const { title, icon: Icon } = PANE_TABS[kind];
@@ -64,7 +65,7 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
   if (!ports?.length) return null;
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="type-caption text-subtle-foreground">Running</h2>
+      <SectionLabel as="h2">Running</SectionLabel>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2">
         {ports.map((p) => (
           <Item
@@ -105,7 +106,7 @@ function RecentFiles({ thread, cwd }: { thread: Thread; cwd: string }) {
   if (!files.length) return null;
   return (
     <section className="flex flex-col gap-1">
-      <h2 className="type-caption text-subtle-foreground">Recent files</h2>
+      <SectionLabel as="h2">Recent files</SectionLabel>
       {files.map(({ path }) => {
         const slash = path.lastIndexOf('/');
         return (

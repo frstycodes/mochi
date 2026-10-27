@@ -230,7 +230,10 @@ function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
     <RefHoverCard item={item}>
       <Button variant="ghost" size="sm" asChild className="min-w-0">
         <a href={pr.url} target="_blank" rel="noreferrer">
-          <PrStateIcon state={PR_STATUS[pr.state] ?? 'unknown'} />
+          <PrStateIcon
+            state={PR_STATUS[pr.state] ?? 'unknown'}
+            hasConflicts={item.state?.hasConflicts}
+          />
           <span className="tabular">#{pr.number}</span>
           <span className="truncate text-muted-foreground lowercase">
             {pr.state}

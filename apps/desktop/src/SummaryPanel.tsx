@@ -77,6 +77,7 @@ import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { ThreadName } from './chat/ThreadMessage';
 import { refDescription, type ChecksState } from '@mochi/domain/chat/refs';
 import { usePrSwitches } from './git/prSwitches';
+import { CHECK } from './git/Checks';
 import { MergeSubmenu } from './git/MergeButton';
 import { useThreadPrMerge } from './git/prMerge';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
@@ -1304,12 +1305,6 @@ function PullRequestRow({
   );
 }
 
-const CHECK_DOT = {
-  pending: 'bg-subtle-foreground',
-  pass: 'bg-success',
-  fail: 'bg-destructive',
-} satisfies Record<ChecksState, string>;
-
 function CheckCount({
   checks,
   counts,
@@ -1324,7 +1319,10 @@ function CheckCount({
     >
       <span
         aria-hidden
-        className={cn('size-1.5 rounded-full', CHECK_DOT[checks ?? 'pending'])}
+        className={cn(
+          'size-1.5 rounded-full bg-current',
+          CHECK[checks ?? 'pending'].tone,
+        )}
       />
       {counts.passed}/{counts.total}
     </span>

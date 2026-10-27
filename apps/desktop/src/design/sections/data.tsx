@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ProviderMark, ThreadStatusIcon } from '../../ui';
+import { ProviderMark, StatusMark } from '../../ui';
 import { Block, Grid, Section } from '../layout';
 
 const ROWS = [
@@ -114,7 +114,7 @@ export function DataSection() {
                 <TableRow key={r.title}>
                   <TableCell className="max-w-[320px]">
                     <span className="flex min-w-0 items-center gap-2">
-                      <ThreadStatusIcon status={r.status} />
+                      <StatusMark status={r.status} size="icon" />
                       <span className="truncate">{r.title}</span>
                     </span>
                   </TableCell>
