@@ -1,4 +1,6 @@
+import { Fragment } from 'react';
 import { DiagramTree } from '@/icons';
+import { Separator } from '@/components/ui/separator';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
@@ -26,8 +28,15 @@ export function SubThreadList({ thread }: { thread: Thread }) {
     <div className="flex flex-col gap-1">
       {subs.length > 1 && <SubThreadCount subs={subs} />}
       <ul aria-label="Sub-threads" className="-mx-2 flex flex-col">
-        {subs.map((sub) => (
-          <SubThreadRow key={sub.id} sub={sub} />
+        {subs.map((sub, i) => (
+          <Fragment key={sub.id}>
+            {i > 0 && (
+              <li role="presentation" className="px-2">
+                <Separator />
+              </li>
+            )}
+            <SubThreadRow sub={sub} />
+          </Fragment>
         ))}
       </ul>
     </div>
