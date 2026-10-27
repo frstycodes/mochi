@@ -20,6 +20,9 @@ export interface AppWindow {
   icon?: string;
 }
 
+/** Where the macOS traffic lights sit: over the docked sidebar's header, over the hover peek's (inset with its floating panel), or hidden while the sidebar is collapsed. */
+export type LightsPlacement = 'header' | 'peek' | 'hidden';
+
 export const APPEARANCES = ['system', 'light', 'dark'] as const;
 export type Appearance = (typeof APPEARANCES)[number];
 
@@ -37,6 +40,8 @@ export interface WindowsHost {
   showAppMenu(x: number, y: number): Promise<void>;
   /** Back to 100%, like ⌘0. */
   resetZoom(): Promise<void>;
+  /** Moves or hides the macOS traffic lights with the sidebar; a no-op elsewhere. */
+  placeLights(placement: LightsPlacement): Promise<void>;
   /** Settings' Light / Dark / System for native chrome (menus), which otherwise follows the OS. */
   setAppearance(appearance: Appearance): Promise<void>;
   /** Other apps' windows on every Space (macOS) or on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
@@ -55,6 +60,7 @@ export const windowsMethods = {
   zoomFactor: 'invoke',
   showAppMenu: 'invoke',
   resetZoom: 'invoke',
+  placeLights: 'invoke',
   setAppearance: 'invoke',
   listApps: 'invoke',
   captureApp: 'invoke',

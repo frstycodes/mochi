@@ -485,7 +485,7 @@
 }
 
 /* The macOS traffic lights (`useCaptionInset`) cover the top-left corner: 9px past them, matching `LIGHTS_RESERVE`, less where the header already starts. */
-:root[data-traffic-lights] [data-under-lights] {
+:root[data-traffic-lights]:not([data-lights-hidden]) [data-under-lights] {
   padding-left: calc(var(--lights-end) + 9px - var(--header-left, 0px));
 }
 

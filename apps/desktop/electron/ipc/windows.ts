@@ -9,7 +9,7 @@ import type {
   ScreenAccess,
   WindowsHost,
 } from '../../src/host/types/windows.ts';
-import { fitWindowButtons, openRoute } from '../window.ts';
+import { fitWindowButtons, openRoute, placeLights } from '../window.ts';
 import { captureAppWindow, listAppWindows } from '../windows/appWindows.ts';
 import type { Handlers } from './handlers.ts';
 
@@ -43,6 +43,10 @@ export const windows = {
   },
   async resetZoom(sender) {
     sender.setZoomLevel(0);
+  },
+  async placeLights(sender, placement) {
+    const win = BrowserWindow.fromWebContents(sender);
+    if (win) placeLights(win, placement);
   },
   async setAppearance(_sender, appearance) {
     nativeTheme.themeSource = appearance;

@@ -25,6 +25,9 @@ export const AppWindow = Schema.Struct({
 });
 export type AppWindow = typeof AppWindow.Type;
 
+export const LightsPlacement = Schema.Literals(['header', 'peek', 'hidden']);
+export type LightsPlacement = typeof LightsPlacement.Type;
+
 export const Appearance = Schema.Literals(['system', 'light', 'dark']);
 export type Appearance = typeof Appearance.Type;
 
@@ -55,6 +58,7 @@ export const windowsRpc = {
   zoomFactor: invoke(T([]), Schema.Number),
   showAppMenu: invoke(T([Coordinate, Coordinate]), Void),
   resetZoom: invoke(T([]), Void),
+  placeLights: invoke(T([LightsPlacement]), Void),
   setAppearance: invoke(T([Appearance]), Void),
   listApps: invoke(
     T([]),

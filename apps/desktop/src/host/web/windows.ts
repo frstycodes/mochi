@@ -34,6 +34,7 @@ export const windows: WindowsHost = {
   },
   async showAppMenu() {},
   async resetZoom() {},
+  async placeLights() {},
   async setAppearance() {},
   async listApps() {
     return { access: 'unsupported', windows: [] };

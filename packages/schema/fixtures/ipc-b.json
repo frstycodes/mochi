@@ -2197,6 +2197,13 @@
     "input": []
    }
   ],
+  "windows.placeLights": [
+   {
+    "input": [
+     "peek"
+    ]
+   }
+  ],
   "windows.openScreenRecordingSettings": [
    {
     "input": []

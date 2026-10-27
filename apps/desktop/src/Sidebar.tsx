@@ -1,10 +1,12 @@
 import {
   Fragment,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import { motion } from 'motion/react';
@@ -68,6 +70,7 @@ import { DropLine } from './DropLine';
 import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
 import { useIsMultiSplit } from './SidebarToggle';
+import { LightsStandIn, placeLights } from './trafficLights';
 import {
   extendSelection,
   selectRange,
@@ -230,6 +233,9 @@ export function AppSidebar({
 }
 
 const PEEK_CLOSE_DELAY = 240;
+const PEEK_OPEN_MS = 240;
+// The sidebar header's height in CSS px: the peek's drag region, with the traffic lights in its corner.
+const HEADER_PX = 44;
 // Outlasts the 160ms morph and the chat's 260ms slide; the docked sidebar underneath is identical, so lingering costs nothing.
 const DOCK_MS = 300;
 
@@ -239,6 +245,8 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
   const [isOpen, setOpen] = useState(false);
   const [isDocking, setDocking] = useState(false);
   const closeTimer = useRef(0);
+  const panel = useRef<HTMLDivElement>(null);
+  const zone = useRef<HTMLDivElement>(null);
   const isCollapsed = state === 'collapsed' && !isMobile;
 
   const [wasCollapsed, setWasCollapsed] = useState(isCollapsed);
@@ -247,17 +255,62 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
     if (!isCollapsed) setOpen(false);
   }
 
+  // At most one pending close: pointermove asks on every move.
+  const scheduleClose = () => {
+    if (closeTimer.current) return;
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = 0;
+      setOpen(false);
+    }, PEEK_CLOSE_DELAY);
+  };
+
+  // Collapsed, the traffic lights live in the peek: hidden while it's away, in its header corner once it has slid in.
+  useEffect(() => {
+    if (!isCollapsed) {
+      placeLights('header');
+      return;
+    }
+    if (!isOpen) {
+      placeLights('hidden');
+      return;
+    }
+    const timer = window.setTimeout(() => placeLights('peek'), PEEK_OPEN_MS);
+    return () => window.clearTimeout(timer);
+  }, [isCollapsed, isOpen]);
+  useEffect(() => () => placeLights('header'), []);
+
+  const closeOutside = useEffectEvent((e: PointerEvent) => {
+    const target = e.target as Node;
+    if (!panel.current?.contains(target) && !zone.current?.contains(target))
+      scheduleClose();
+  });
+  // Leaving into the header's drag region (or onto the lights) is ignored below, and the page sees nothing more until the
+  // pointer comes back: if it comes back anywhere but the peek, that was the way out.
+  useEffect(() => {
+    if (!isOpen) return;
+    window.addEventListener('pointermove', closeOutside);
+    return () => window.removeEventListener('pointermove', closeOutside);
+  }, [isOpen]);
+
   if (!isCollapsed && !isDocking) return null;
   const open = () => {
     window.clearTimeout(closeTimer.current);
+    closeTimer.current = 0;
     setOpen(true);
   };
-  const close = () => {
-    window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(
-      () => setOpen(false),
-      PEEK_CLOSE_DELAY,
-    );
+  const close = (e: ReactPointerEvent) => {
+    // A drag region swallows pointer events, and the native lights aren't the page's: either reads as leaving the page,
+    // though the pointer is still on the peek's header.
+    const rect = panel.current?.getBoundingClientRect();
+    if (
+      rect &&
+      e.clientX > rect.left &&
+      e.clientX < rect.right &&
+      e.clientY > rect.top &&
+      e.clientY < rect.top + HEADER_PX
+    )
+      return;
+    scheduleClose();
   };
   const dock = (e: ReactMouseEvent) => {
     if (!(e.target as Element).closest('[data-sidebar="trigger"]')) return;
@@ -272,19 +325,21 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
     <>
       {!isDocking && (
         <div
+          ref={zone}
           aria-hidden
           onPointerEnter={open}
           onPointerLeave={close}
-          className="fixed inset-y-0 left-0 z-40 w-2"
+          className="app-no-drag fixed inset-y-0 left-0 z-40 w-2"
         />
       )}
       <div
+        ref={panel}
         onPointerEnter={open}
         onPointerLeave={close}
         onClickCapture={dock}
         inert={(!isOpen && !isDocking) || undefined}
         className={cn(
-          'fixed z-40 w-(--sidebar-width) overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
+          'app-no-drag fixed z-40 w-(--sidebar-width) overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
           isDocking
             ? 'inset-y-0 left-0 rounded-none border-sidebar-border shadow-none transition-[top,bottom,left,border-radius,border-color,box-shadow] duration-[160ms]'
             : 'inset-y-2 left-2 rounded-xl border-transparent shadow-float transition-[translate,opacity]',
@@ -294,6 +349,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
               : 'pointer-events-none -translate-x-[calc(100%+1rem)] opacity-0 duration-200'),
         )}
       >
+        <LightsStandIn />
         <AppSidebar onSearch={onSearch} collapsible="none" />
       </div>
     </>

@@ -582,6 +582,7 @@ add('windows.broadcast', { input: [{ type: 'focus', threadId: 't1' }] });
 add('windows.showAppMenu', { input: [12, 40] });
 add('windows.setAppearance', { input: ['dark'] });
 add('windows.resetZoom', { input: [] });
+add('windows.placeLights', { input: ['peek'] });
 add('windows.openScreenRecordingSettings', { input: [] });
 add('windows.onFullScreenChange', { event: true });
 add('windows.onMessage', { event: { type: 'focus', threadId: 't1' } });
