@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
+import { killGuard } from './killGuard.ts';
+import { killDecision } from '../processKill.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import {
@@ -61,6 +63,7 @@ import {
   userPath,
 } from '../config.ts';
 import { detect } from '../../../../../apps/desktop/electron/settings/detect.ts';
+import { exitEvent } from './exit.ts';
 import { spawnThroughRun } from './spawn.ts';
 import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
 import {
@@ -540,7 +543,10 @@ async function launch(session: Session) {
         },
         hooks: {
           ...compactHooks(threadId),
-          PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)],
+          PreToolUse: [
+            killGuard(threadId),
+            ...(options.isGoalsOff ? [] : [goalNudge(threadId)]),
+          ],
         },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
         // Deny rules alone only refuse a call; disallowedTools also takes an Off tool out of the model's context (sdk.d.ts).
@@ -635,13 +641,8 @@ async function launch(session: Session) {
       if (!session.isBusy && waiting.length) release(session);
     }
   } catch (error) {
-    if (!abort.signal.aborted)
-      emit({
-        threadId,
-        type: 'turn-end',
-        status: 'failed',
-        error: error instanceof Error ? error.message : String(error),
-      });
+    const ended = exitEvent(threadId, session.isBusy, error);
+    if (!abort.signal.aborted && ended) emit(ended);
   } finally {
     if (session.abort === abort) release(session);
   }
@@ -861,10 +862,24 @@ function approve(threadId: string): CanUseTool {
           toolName,
           input,
           title ?? toolName,
-          description ?? decisionReason ?? '',
+          // `killGuard` asked: the card says why, over the command's own description.
+          killReason(toolName, threadId, input) ??
+            description ??
+            decisionReason ??
+            '',
         ),
       );
     });
+}
+
+function killReason(
+  toolName: string,
+  threadId: string,
+  input: Record<string, unknown>,
+) {
+  if (toolName !== 'Bash') return undefined;
+  const decision = killDecision(threadId, input.command);
+  return decision.action === 'run' ? undefined : decision.reason;
 }
 
 function dropApprovals(threadId: string, message: string) {
