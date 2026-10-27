@@ -756,6 +756,7 @@ export const ActivityEntry = Schema.Struct({
       isQuiet: opt(Schema.Literal(true)),
       isReply: opt(Schema.Literal(true)),
       isDelivered: opt(Schema.Literal(true)),
+      isRestart: opt(Schema.Literal(true)),
       report: opt(ParentReport),
     }),
   ),
@@ -796,6 +797,7 @@ export const Subagent = Schema.Struct({
   status: SubagentStatus,
   startedAt: Schema.Number,
   endedAt: opt(Schema.Number),
+  lastEventAt: opt(Schema.Number),
   tokens: Schema.Number,
   activity: opt(Schema.String),
   steps: Schema.Array(
@@ -849,6 +851,9 @@ export const LiveRun = Schema.Struct({
   eventSeq: opt(Schema.Number),
   isOnApiKey: opt(Schema.Boolean),
   notes: opt(Schema.Array(Schema.String)),
+  sentReports: opt(Schema.Array(Schema.Number)),
+  lastEventAt: opt(Schema.Number),
+  isStalled: opt(Schema.Boolean),
   restart: opt(
     Schema.Union([
       Schema.Struct({ forkAt: Schema.String }),

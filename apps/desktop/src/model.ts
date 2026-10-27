@@ -124,6 +124,8 @@ export interface SubReport {
   isReply?: true;
   /** The parent's agent got it, with a message or a wake. */
   isDelivered?: true;
+  /** Says a restart stopped the sub-thread mid-turn (`reportStoppedAtQuit`); quiet, so it never wakes the parent. Grants (#433) may lift that. */
+  isRestart?: true;
   /** The `report_to_parent` it came from; unset for an excerpt, a PR event or a reply. */
   report?: ParentReport;
 }
@@ -674,6 +676,8 @@ export interface Subagent {
   /** Wall-clock ms, for elapsed time. */
   startedAt: number;
   endedAt?: number;
+  /** Wall-clock ms of its last event: a background one quiet for `STALL_MINUTES` is marked failed (`stallBackground`). */
+  lastEventAt?: number;
   tokens: number;
   activity?: string;
   steps: SubagentStep[];
@@ -740,6 +744,12 @@ export interface LiveRun {
   isOnApiKey?: boolean;
   /** Codex compaction restore notes, sent to the agent ahead of your next message. */
   notes?: string[];
+  /** Activity positions of the reports the last message delivered, until the agent shows it got it: a send that fails un-delivers them. */
+  sentReports?: number[];
+  /** `now` of the last agent event applied: the stall watchdog's clock (`reportStalls`). */
+  lastEventAt?: number;
+  /** Working, but no agent event for `STALL_MINUTES`: its parent was told, and it no longer holds the parent's batched wake. */
+  isStalled?: boolean;
   /**
    * A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as
    * `seed`. A provider switch: the next start runs `providers[0]`, and Core hands it the thread so far (`switchFrom` is the old one).

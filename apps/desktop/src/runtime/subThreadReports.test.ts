@@ -8,7 +8,13 @@ import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls } from './live.ts';
 import { dueWakes, undeliveredReports, wakingReports } from './due.ts';
-import { reportPrompt, WAKE_PROMPT } from './subThreadReports.ts';
+import {
+  reportPrompt,
+  STALL_MINUTES,
+  WAKE_PROMPT,
+  withReports,
+} from './subThreadReports.ts';
+import { restoreSavedThreads, toSaved } from '../store/saved.ts';
 
 const run = (s: State, action: Action) =>
   [threadsReducer, queueReducer, scheduleReducer].reduce(
@@ -512,5 +518,160 @@ test("an Auto-fix turn's done report is stored as no_change, so it stays with th
     undeliveredReports(thread(s, parent)).at(-1)?.subReport.isUrgent,
     true,
     'an Auto-fix turn that needs the parent still reaches it',
+  );
+});
+
+const tick = (s: State, minutes: number) => {
+  for (let i = 0; i < minutes; i++) s = run(s, { type: 'tick' });
+  return s;
+};
+const statuses = (s: State, threadId: string) =>
+  undeliveredReports(s.threads.find((t) => t.id === threadId)!).map(
+    (e) => `${e.subReport.title}: ${e.subReport.status}`,
+  );
+
+test('a sub-thread quiet for 10 minutes reports once, urgently, and its next event clears the stall', () => {
+  let { s, parent, a, b, thread } = family();
+  s = ended(s, parent);
+  s = ended(s, a);
+  s = tick(s, STALL_MINUTES - 1);
+  assert.deepEqual(dueWakes(s), [], 'Piece B is working, not yet quiet');
+
+  s = tick(s, 1);
+  const stall = undeliveredReports(thread(s, parent)).find(
+    (e) => e.subReport.threadId === b,
+  )!;
+  assert.equal(
+    stall.subReport.status,
+    'has had no activity for 10 min; it may be stuck',
+  );
+  assert.equal(stall.subReport.isUrgent, true);
+  assert.deepEqual(
+    dueWakes(s).map((t) => t.id),
+    [parent],
+  );
+  s = tick(s, 5);
+  assert.equal(
+    statuses(s, parent).filter((r) => r.includes('no activity')).length,
+    1,
+    'reported once',
+  );
+
+  s = agent(s, { threadId: b, type: 'notice', text: 'still here' });
+  assert.equal(thread(s, b).live?.isStalled, undefined);
+});
+
+test("a failed sub-thread's report says why and wakes its parent at once", () => {
+  let { s, parent, a, thread } = family();
+  s = ended(s, parent);
+  s = agent(s, {
+    threadId: a,
+    type: 'turn-end',
+    status: 'failed',
+    error: 'API overloaded',
+  });
+  const [row] = undeliveredReports(thread(s, parent));
+  assert.equal(row.subReport.status, 'failed');
+  assert.equal(row.subReport.isUrgent, true);
+  assert.match(row.text, /^Error: API overloaded/);
+  assert.deepEqual(
+    dueWakes(s).map((t) => t.id),
+    [parent],
+    "doesn't wait for Piece B",
+  );
+});
+
+test('a sub-thread whose turn ended at a usage limit reports when it resets', () => {
+  let { s, parent, a } = family();
+  s = agent(s, {
+    threadId: a,
+    type: 'limit',
+    resetsAt: '2026-10-27T18:00:00.000Z',
+    label: 'Weekly',
+  });
+  s = agent(s, { threadId: a, type: 'turn-end', status: 'failed' });
+  assert.deepEqual(statuses(s, parent), [
+    'Piece A: stopped at the weekly usage limit; resets 2026-10-27T18:00:00.000Z',
+  ]);
+});
+
+test('a sub-thread waiting on your approval reports once and wakes its parent', () => {
+  let { s, parent, a, thread } = family();
+  s = ended(s, parent);
+  const approval: AgentEvent = {
+    threadId: a,
+    type: 'approval',
+    requestId: 'r1',
+    kind: 'command',
+    title: 'Run rm -rf build',
+    detail: '',
+  };
+  s = agent(s, approval);
+  s = agent(s, approval);
+  const rows = undeliveredReports(thread(s, parent));
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].subReport.status, 'is waiting on you: approval');
+  assert.equal(rows[0].text, 'Run rm -rf build');
+  assert.equal(thread(s, a).live?.isWorking, true);
+  assert.deepEqual(
+    dueWakes(s).map((t) => t.id),
+    [parent],
+  );
+});
+
+test('reports a send carried come back when the send fails before the agent answers, not after', () => {
+  let { s, parent, a, b, thread } = family();
+  s = ended(s, parent);
+  s = ended(s, a);
+  s = ended(s, b);
+  const before = statuses(s, parent);
+  s = run(s, { type: 'subthread-wake', threadId: parent });
+  assert.deepEqual(statuses(s, parent), []);
+  const failed = (state: State) =>
+    agent(state, {
+      threadId: parent,
+      type: 'turn-end',
+      status: 'failed',
+      error: 'No agent process',
+    });
+  assert.deepEqual(statuses(failed(s), parent), before, 'never delivered');
+  assert.equal(thread(failed(s), parent).live?.sentReports, undefined);
+
+  s = agent(s, {
+    threadId: parent,
+    type: 'message',
+    text: 'Reading the reports',
+    isDelta: false,
+  });
+  assert.deepEqual(statuses(failed(s), parent), []);
+});
+
+test('after a restart, each stopped sub-thread reports it to its parent; that alone wakes nobody', () => {
+  let { s, parent, a, b, thread } = family();
+  s = ended(s, parent);
+  const restored = { ...s, ...restoreSavedThreads(toSaved(s)) } as State;
+  const rows = undeliveredReports(thread(restored, parent));
+  assert.deepEqual(
+    rows.map((e) => [e.subReport.threadId, e.subReport.status]),
+    [
+      [a, 'stopped mid-turn when Mochi quit'],
+      [b, 'stopped mid-turn when Mochi quit'],
+    ],
+  );
+  assert.ok(rows.every((e) => e.subReport.isRestart && !e.subReport.isUrgent));
+  assert.deepEqual(dueWakes(restored), [], 'the restart alone wakes nobody');
+  assert.match(
+    withReports(thread(restored, parent), 'status?'),
+    /"Piece A" .*: stopped mid-turn when Mochi quit[\s\S]*\n\nstatus\?$/,
+    'they go with your next message',
+  );
+
+  const due = ended(s, a);
+  assert.deepEqual(
+    dueWakes({ ...due, ...restoreSavedThreads(toSaved(due)) } as State).map(
+      (t) => t.id,
+    ),
+    [parent],
+    "Piece A's report was due before the quit",
   );
 });

@@ -36,7 +36,13 @@ import { switchDelivered, switchWriting } from '../rewind/switch.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
-import { reportParent, reportReplies } from './subThreadReports.ts';
+import {
+  reportLimit,
+  reportParent,
+  reportReplies,
+  reportWaiting,
+} from './subThreadReports.ts';
+import { undeliver } from './due.ts';
 import { applyTask } from './tasks.ts';
 
 const MAIN_EVENTS = new Set<AgentEvent['type']>([
@@ -48,19 +54,7 @@ const MAIN_EVENTS = new Set<AgentEvent['type']>([
 
 /** Folds one agent event into the store. The goal is Mochi's and yours; the agent's plan is mirrored as its steps, never the goal. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
-  // Any word from the agent means it's up; its folder being made, set up and named is main's, not the agent's.
-  if (
-    !MAIN_EVENTS.has(event.type) &&
-    state.threads.find((t) => t.id === event.threadId)?.live?.starting
-  ) {
-    state = {
-      ...state,
-      threads: mapThread(state.threads, event.threadId, (t) => ({
-        ...t,
-        live: { ...t.live!, starting: undefined },
-      })),
-    };
-  }
+  state = heard(state, event);
   const thread = state.threads.find((t) => t.id === event.threadId);
   if (!thread) return fromBackground(state, event, applyAgentEvent) ?? state;
   const now = state.now;
@@ -253,19 +247,25 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         ? update((t) =>
             closeCompaction(
               {
-                ...endSendNow(stopRunningSteps(t, now)),
+                ...endSendNow(
+                  stopRunningSteps(
+                    event.status === 'failed' ? undeliverSent(t) : t,
+                    now,
+                  ),
+                ),
                 live: {
                   ...t.live!,
                   isWorking: false,
                   turnEnd: event.status,
                   ...(t.live!.limit?.isTurnHeld && { limit: undefined }),
+                  ...(event.status === 'failed' && { sentReports: undefined }),
                 },
               },
               event,
             ),
           )
         : state;
-      if (isLimitEnd(thread)) return ended;
+      if (isLimitEnd(thread)) return reportLimit(ended, thread);
       const isPaused =
         event.status === 'failed' ||
         (event.status === 'interrupted' && !thread.isInterruptedToSend);
@@ -287,10 +287,50 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         ),
         thread,
         event.status,
+        event.error,
       );
       return reportReplies(reported, thread, event.status);
     }
   }
+}
+
+/**
+ * Any word from the agent means it's up; its folder being made, set up and named is main's, not the agent's. It also shows the
+ * agent got the message its reports rode with (`sentReports`), and resets the stall watchdog (`reportStalls`).
+ */
+function heard(state: State, event: AgentEvent): State {
+  if (MAIN_EVENTS.has(event.type)) return state;
+  const live = state.threads.find((t) => t.id === event.threadId)?.live;
+  const isSendFailed = event.type === 'turn-end' && event.status === 'failed';
+  if (
+    !live ||
+    (!live.starting &&
+      !live.isStalled &&
+      live.lastEventAt === state.now &&
+      (!live.sentReports || isSendFailed))
+  )
+    return state;
+  return {
+    ...state,
+    threads: mapThread(state.threads, event.threadId, (t) => ({
+      ...t,
+      live: {
+        ...t.live!,
+        starting: undefined,
+        isStalled: undefined,
+        lastEventAt: state.now,
+        ...(!isSendFailed && { sentReports: undefined }),
+      },
+    })),
+  };
+}
+
+/** A failed turn the agent never answered in: the reports its message carried go back to undelivered, for the next one. */
+function undeliverSent(t: Thread): Thread {
+  const sent = t.live?.sentReports;
+  return sent
+    ? { ...undeliver(t, sent), live: { ...t.live!, sentReports: undefined } }
+    : t;
 }
 
 /**
@@ -626,7 +666,14 @@ function waitOnYou(
   if (state.queue.some((q) => q.id === item.id)) return state;
   const now = state.now;
   const ready = thread.steps.filter((s) => s.status === 'ready').length;
+  const reported = reportWaiting(
+    state,
+    thread,
+    item.kind === 'question' ? 'question' : 'approval',
+    item.title,
+  );
   return {
+    ...reported,
     ...state,
     queue: [
       ...state.queue,
@@ -637,7 +684,7 @@ function waitOnYou(
         createdAt: now,
       },
     ],
-    threads: mapThread(state.threads, thread.id, (t) =>
+    threads: mapThread(reported.threads, thread.id, (t) =>
       log(
         {
           ...t,

@@ -13,6 +13,7 @@ import {
   prSync,
   queueRunner,
   react,
+  reactToRestore,
   subThreadWakes,
   type ReactorState,
 } from './rules.ts';
@@ -90,7 +91,12 @@ test('delegated reports: one command per due report, keyed by thread and subagen
 
 const report = (
   status: string,
-  fields: { isUrgent?: true; isDelivered?: true; isQuiet?: true } = {},
+  fields: {
+    isUrgent?: true;
+    isDelivered?: true;
+    isQuiet?: true;
+    isRestart?: true;
+  } = {},
 ) => ({
   at: 0,
   who: 'harness',
@@ -181,6 +187,53 @@ test('sub-thread wakes: a no_change report never wakes the parent, and leaves th
     without?.key,
     'a quiet report alone makes no new wake',
   );
+});
+
+test('sub-thread wakes: a stalled child or one waiting on you does not hold a batched wake', () => {
+  const waits = (live: Record<string, unknown>, queue: QueueItem[] = []) =>
+    subThreadWakes(
+      saved('c'),
+      NONE,
+      state(
+        [
+          parent([report('done')]),
+          thread('c', { parent: { threadId: 'p' }, live }),
+        ],
+        queue,
+      ),
+    ).length;
+  assert.equal(waits({ isWorking: true }), 0);
+  assert.equal(waits({ isWorking: true, isStalled: true }), 1);
+  const approval = { id: 'q', threadId: 'c', kind: 'approval' };
+  assert.equal(
+    waits({ isWorking: true }, [approval as unknown as QueueItem]),
+    1,
+  );
+});
+
+test("on boot the restored state's due commands run once, but a restart's report alone wakes nobody", () => {
+  const restart = report('stopped mid-turn when Mochi quit', {
+    isQuiet: true,
+    isRestart: true,
+  });
+  const restored = (activity: unknown[]) =>
+    state([
+      parent(activity),
+      child('c', false),
+      thread('t', {
+        live: { isWorking: false },
+        subagents: [{ id: 's1', isReportDue: true }],
+      }),
+    ]);
+  const due = (activity: unknown[]) =>
+    reactToRestore(restored(activity))
+      .filter((c) => c.type !== 'compact.instructions')
+      .map((c) => [c.type, c.threadId]);
+  assert.deepEqual(due([restart]), [['delegate.report', 't']]);
+  assert.deepEqual(due([report('done'), restart]), [
+    ['delegate.report', 't'],
+    ['subthread.wake', 'p'],
+  ]);
 });
 
 test('limit resumes: armed threads get a resume due at their reset, a new key per reset', () => {

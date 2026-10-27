@@ -173,6 +173,20 @@ export const STATE_RULES: ReadonlyArray<Rule> = [
   compactInstructions,
 ];
 
+/**
+ * The state rules over the state Core restored on boot, which no fold publishes: a wake, report or resume due then would
+ * otherwise wait for some later event.
+ */
+export const reactToRestore = (state: ReactorState) =>
+  STATE_RULES.flatMap((rule) => rule(RESTORED, state, state));
+
+const RESTORED: LoggedEvent = {
+  sequence: 0,
+  type: 'core.started',
+  threadId: null,
+  payload: null,
+};
+
 /** Rules by the event type they react to. */
 export const RULES: Readonly<Record<string, ReadonlyArray<Rule>>> = {
   'agent.turn-end': [idleChecks, autoSimplify],

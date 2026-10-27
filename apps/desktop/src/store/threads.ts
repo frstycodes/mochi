@@ -44,11 +44,16 @@ import { goalProgress } from '../progress.ts';
 import { nestBlocker, openSubtree, pinAt, reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
-import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
-import { markReportsDelivered } from '../runtime/due.ts';
+import {
+  stallBackground,
+  startBackground,
+  type BackgroundStart,
+} from '../runtime/subagents.ts';
+import { markReportsDelivered, undeliveredPositions } from '../runtime/due.ts';
 import {
   isAutofixTurn,
   reportPrsEnded,
+  reportStalls,
   reportTyped,
 } from '../runtime/subThreadReports.ts';
 import {
@@ -1144,6 +1149,7 @@ function reduce(state: State, action: Action): State {
                     isDetached: undefined,
                     notes: undefined,
                     restart: undefined,
+                    sentReports: sentReports(t),
                   },
                   activity: markReportsDelivered(t).activity,
                   turn: { start: t.activity.length, isAgentDriven: true },
@@ -1472,6 +1478,12 @@ export function log(thread: Thread, entry: ActivityEntry): Thread {
 }
 
 /** One simulated minute: the clock moves and every demo thread (no live session) reports what it did. */
+/** The reports a message delivers, kept until the agent answers so a failed send un-delivers them (`applyAgentEvent`). */
+function sentReports(t: Thread) {
+  const positions = undeliveredPositions(t);
+  return positions.length ? positions : t.live?.sentReports;
+}
+
 function tick(state: State): State {
   let next: State = { ...state, now: state.now + 1 };
   for (const { id } of state.threads) {
@@ -1479,7 +1491,7 @@ function tick(state: State): State {
     if (thread && !thread.session && !thread.live)
       next = applyAgentEvents(next, demoEvents(thread, next.now));
   }
-  return next;
+  return stallBackground(reportStalls(next));
 }
 
 /** A plan item the agent finished. The plan already shows it, so nothing is logged. */
@@ -1679,6 +1691,7 @@ export function send(
         notes: undefined,
         restart: undefined,
         movedFrom: undefined,
+        sentReports: sentReports(t),
       };
       // Its undelivered reports went with this message (`withReports`), as the notes did.
       const delivered = live ? markReportsDelivered(t) : t;

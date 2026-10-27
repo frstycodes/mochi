@@ -9,6 +9,8 @@ import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
 import { failDrafts } from '../rewind/handoff.ts';
+import { undeliver } from '../runtime/due.ts';
+import { reportStoppedAtQuit } from '../runtime/subThreadReports.ts';
 import type { State } from './types.ts';
 
 /** What the desktop app saves between launches: your own (live) threads and the slices that refer to them. Demo threads start fresh every launch. */
@@ -134,12 +136,21 @@ export function restoreSavedThreads(
       .map((q) => q.id),
   );
   // A save from before read state reads as all seen, not as every thread unread at once.
+  const stopped = saved.threads.filter(
+    (t) => t.live?.isWorking && !attached.has(t.id),
+  );
   const threads = migrateReceived(
-    saved.threads.map((t) =>
-      attached.has(t.id)
-        ? reattachThread(t, attached.get(t.id)!, reasked)
-        : restoreThread(t, saved.now),
-    ),
+    reportStoppedAtQuit(
+      {
+        now: saved.now,
+        threads: saved.threads.map((t) =>
+          attached.has(t.id)
+            ? reattachThread(t, attached.get(t.id)!, reasked)
+            : restoreThread(t, saved.now),
+        ),
+      },
+      stopped,
+    ).threads,
   )
     .map(migrateWaitingSteps)
     .map((t) => ({ ...t, seenActivity: t.seenActivity ?? t.activity.length }));
@@ -186,12 +197,17 @@ function reattachThread(
   };
 }
 
-function restoreThread(thread: Thread, now: number): Thread {
+function restoreThread(saved: Thread, now: number): Thread {
+  // Reports whose message the agent never answered before Mochi quit go with the next one.
+  const sent = saved.live!.sentReports;
+  const thread = sent ? undeliver(saved, sent) : saved;
   const live = {
     ...thread.live!,
     isWorking: false,
     isDetached: true,
     starting: undefined,
+    isStalled: undefined,
+    sentReports: undefined,
   };
   const reviews = thread.reviews?.map((r) =>
     r.status === 'running'

@@ -7,7 +7,8 @@ import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
 import { dueReports } from './due.ts';
-import { oneLine } from './subagents.ts';
+import { oneLine, reportOf } from './subagents.ts';
+import { DEFAULT_CONTEXT, withContext } from '../store/context.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { DEFAULT_PREFS } from '../settings/prefs.ts';
 import { runTool, type ToolEnv } from './tools.ts';
@@ -476,4 +477,60 @@ test("a subagent's steps keep what a work-group row shows: the agent's descripti
     output: '✖ add',
   });
   assert.equal(steps[1].patch, '--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b');
+});
+
+test('a background agent quiet for 10 minutes that never sent its end is marked failed and reported to its thread', () => {
+  const { id, event, dispatch, thread, state } = setup();
+  const T = Date.parse('2026-10-27T12:00:00Z');
+  const at = (ms: number, run: () => void) =>
+    withContext(DEFAULT_CONTEXT, run, ms);
+  const start = (subagentId: string, isBackground: boolean) =>
+    at(T, () =>
+      event({
+        threadId: id,
+        type: 'subagent',
+        id: subagentId,
+        phase: 'start',
+        name: subagentId,
+        isBackground,
+      }),
+    );
+  start('quiet', true);
+  start('busy', true);
+  start('inline', false);
+  at(T + 5 * 60_000, () =>
+    event({
+      threadId: id,
+      type: 'subagent',
+      id: 'busy',
+      phase: 'progress',
+      activity: 'Reading files',
+    }),
+  );
+  const status = () =>
+    Object.fromEntries((thread().subagents ?? []).map((s) => [s.id, s.status]));
+
+  at(T + 9 * 60_000, () => dispatch({ type: 'tick' }));
+  assert.deepEqual(status(), {
+    quiet: 'running',
+    busy: 'running',
+    inline: 'running',
+  });
+
+  at(T + 10 * 60_000, () => dispatch({ type: 'tick' }));
+  assert.deepEqual(
+    status(),
+    { quiet: 'failed', busy: 'running', inline: 'running' },
+    'a foreground subagent ends with its turn; one with recent events is fine',
+  );
+  const quiet = thread().subagents!.find((s) => s.id === 'quiet')!;
+  assert.equal(quiet.error, 'no activity for 10 min');
+  assert.deepEqual(
+    dueReports(state().threads).map((d) => d.subagent.id),
+    ['quiet'],
+  );
+  assert.equal(
+    reportOf(quiet),
+    '[Subagent "quiet" failed: no activity for 10 min]',
+  );
 });
