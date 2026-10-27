@@ -187,7 +187,7 @@ function SlotCard({ slot }: { slot: ThemeSlot }) {
         type="button"
         id={settingControlId(`${slot}Theme`)}
         data-setting-id={`${slot}Theme`}
-        className="flex flex-col gap-3 rounded-xl border bg-card p-3 text-left outline-none transition-colors duration-700 hover:bg-accent/40 hover:duration-150 focus-visible:ring-3 focus-visible:ring-ring/50 data-flash:bg-accent data-[state=open]:border-foreground/20"
+        className="flex flex-col gap-3 rounded-xl border bg-card p-3 text-left transition-colors duration-700 hover:bg-accent/60 hover:duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 data-flash:bg-accent data-[state=open]:border-foreground/20"
       >
         <ThemeMock theme={colorTheme[slot]} slot={slot} />
         <span className="flex items-center gap-2 px-1">
@@ -1088,7 +1088,7 @@ function Swatches({
               onFocus={() => onPreview(theme)}
               onBlur={() => onPreview(null)}
               onClick={() => onUse(theme)}
-              className="rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <ThemeSwatch theme={theme} slot={slotOf(theme.kind)} />
             </button>

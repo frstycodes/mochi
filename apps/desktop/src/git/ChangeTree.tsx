@@ -69,7 +69,7 @@ export function ChangeTree({
                     style={{ paddingLeft: 6 + depth * 16 }}
                     title={node.path}
                     className={cn(
-                      'flex h-6.5 w-full items-center gap-1 rounded-md pr-1.5 text-left type-meta text-muted-foreground outline-none hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
+                      'flex h-6.5 w-full items-center gap-1 rounded-md pr-1.5 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2',
                       isSelected && 'bg-accent text-foreground hover:bg-accent',
                     )}
                   >

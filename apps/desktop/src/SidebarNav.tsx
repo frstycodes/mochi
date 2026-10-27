@@ -148,7 +148,7 @@ function EditSidebar({ onDone }: { onDone: () => void }) {
       <ul className="flex flex-col">
         {SIDEBAR_ITEMS.map((item) => (
           <li key={item.id}>
-            <label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/40">
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60">
               <item.icon className="size-4 text-muted-foreground" />
               <span className="flex-1 type-body">{item.label}</span>
               <Switch

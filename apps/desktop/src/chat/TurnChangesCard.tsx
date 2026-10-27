@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, FileCode } from '@/icons';
+import { FileCode } from '@/icons';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -12,14 +11,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { PATCHES } from '../fixtures';
 import type { Thread } from '../model';
-import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { threadCwd } from '@/host/cwd';
-import { CallList, DiffStat, DiffView, Expand } from '../WorkLog';
+import { CallList, DiffStat, Expand } from '../WorkLog';
 import { countLabel, DisabledTooltip, FileList } from '../rewind/RewindLayer';
 import { useTurnUndo, type UndoConflicts } from '../rewind/useTurnUndo';
-import { patchSections, type TurnChanges, type TurnFile } from './turnChanges';
+import { FileRow, Chevron } from './FileRow';
+import type { TurnChanges } from './turnChanges';
 import { useTurnDiff } from './useTurnDiff';
 
 const ROWS_SHOWN = 3;
@@ -140,94 +138,6 @@ function ChangesCard({
         />
       )}
     </section>
-  );
-}
-
-/** One file: icon, dimmed directory and its name (a link to the file viewer), +/− with the change bar; the row opens to its diff. */
-function FileRow({
-  threadId,
-  root,
-  file,
-}: {
-  threadId: string;
-  root: string | null;
-  file: TurnFile;
-}) {
-  const [isOpen, setOpen] = useState(false);
-  const { openFile } = usePaneOpeners(threadId);
-  const patches = (
-    file.patches.length ? file.patches : [PATCHES[file.path] ?? '']
-  ).filter((p) => patchSections(p).length > 0);
-  const slash = file.path.lastIndexOf('/');
-  const name = file.path.slice(slash + 1);
-  // Calls logged before paths were made relative carry the absolute path; the Files tab takes paths inside the root.
-  const path =
-    root && file.path.startsWith(`${root}/`)
-      ? file.path.slice(root.length + 1)
-      : file.path;
-
-  return (
-    <li className="flex flex-col">
-      <div
-        className={cn(
-          'relative isolate flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta',
-          patches.length > 0 && 'hover:bg-accent/60',
-        )}
-      >
-        {patches.length > 0 && (
-          <button
-            type="button"
-            aria-expanded={isOpen}
-            aria-label={`Diff of ${name}`}
-            onClick={() => setOpen((o) => !o)}
-            className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2"
-          />
-        )}
-        <FileIcon
-          fileName={name}
-          autoAssign
-          aria-hidden
-          className="size-4 shrink-0"
-        />
-        <span className="min-w-0 flex-1 truncate" title={file.path}>
-          <span className="text-subtle-foreground">
-            {file.path.slice(0, slash + 1)}
-          </span>
-          <button
-            type="button"
-            onClick={() => openFile(path)}
-            className="relative z-10 cursor-pointer text-foreground underline-offset-2 hover:underline focus-visible:underline"
-          >
-            {name}
-          </button>
-        </span>
-        <DiffStat added={file.added} removed={file.removed} withBar />
-        {patches.length > 0 ? (
-          <Chevron isOpen={isOpen} />
-        ) : (
-          <span aria-hidden className="size-3.5 shrink-0" />
-        )}
-      </div>
-      {patches.length > 0 && (
-        <Expand isOpen={isOpen}>
-          <div className="px-3 pb-3">
-            <DiffView patch={patches.join('\n')} />
-          </div>
-        </Expand>
-      )}
-    </li>
-  );
-}
-
-function Chevron({ isOpen }: { isOpen: boolean }) {
-  return (
-    <ChevronRight
-      aria-hidden
-      className={cn(
-        'size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
-        isOpen && 'rotate-90',
-      )}
-    />
   );
 }
 

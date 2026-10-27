@@ -50,6 +50,13 @@ export interface Verdict {
   };
 }
 
+export const TONE_CLASS = {
+  success: 'text-success',
+  warning: 'text-warning',
+  destructive: 'text-destructive',
+  muted: 'text-muted-foreground',
+} satisfies Record<Verdict['tone'], string>;
+
 /** A sub-thread with its own verdict, for its parent's. */
 export interface SubThreadVerdict {
   thread: Thread;

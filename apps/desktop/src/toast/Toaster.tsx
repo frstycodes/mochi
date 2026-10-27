@@ -350,7 +350,7 @@ function ToastItem({
                   ref={openerRef}
                   type="button"
                   aria-expanded={isOpen}
-                  className="-my-1 -ml-1.5 flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 rounded-lg py-1 pl-1.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="-my-1 -ml-1.5 flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 rounded-lg py-1 pl-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
                   onClick={onOpen}
                 >
                   {summary}

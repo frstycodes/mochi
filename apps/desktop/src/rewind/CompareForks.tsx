@@ -1,4 +1,3 @@
-import { FileIcon } from '@react-symbols/icons/utils';
 import { toast } from '@/toast/store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,7 @@ import type { Thread } from '../model';
 import { goalProgress } from '../progress';
 import { useHarness } from '../store';
 import { lineColor, ProgressRing } from '../ui';
+import { FileRow } from '../chat/FileRow';
 import { DiffStat } from '../WorkLog';
 
 /** Two forks' branch diffs side by side; keeping one settles the other. */
@@ -140,7 +140,12 @@ function ForkSide({
           {files.length > 0 && <DiffStat added={added} removed={removed} />}
         </div>
       </header>
-      <SideFiles diff={diff} files={files} otherFiles={otherFiles} />
+      <SideFiles
+        thread={thread}
+        diff={diff}
+        files={files}
+        otherFiles={otherFiles}
+      />
       <Button variant="outline" className="self-start" onClick={onKeep}>
         Keep this one
       </Button>
@@ -149,10 +154,12 @@ function ForkSide({
 }
 
 function SideFiles({
+  thread,
   diff,
   files,
   otherFiles,
 }: {
+  thread: Thread;
   diff: ForkDiff;
   files: DiffFile[];
   otherFiles: DiffFile[] | undefined;
@@ -180,8 +187,10 @@ function SideFiles({
         {files.map((f) => (
           <FileRow
             key={`${f.staged}:${f.path}`}
-            file={f}
-            mark={otherFiles && markFor(f, otherFiles)}
+            threadId={thread.id}
+            root={threadCwd(thread)}
+            file={{ ...f, patches: f.patch ? [f.patch] : [] }}
+            badge={<MarkBadge mark={otherFiles && markFor(f, otherFiles)} />}
           />
         ))}
       </ul>
@@ -202,31 +211,9 @@ function markFor(file: DiffFile, otherFiles: DiffFile[]): Mark {
   return match.patch === file.patch ? 'same' : 'differs';
 }
 
-function FileRow({ file, mark }: { file: DiffFile; mark?: Mark }) {
-  const slash = file.path.lastIndexOf('/') + 1;
-  return (
-    <li className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 type-meta">
-      <FileIcon
-        fileName={file.path.slice(slash)}
-        autoAssign
-        aria-hidden
-        className="size-3.5 shrink-0"
-      />
-      <span
-        className="min-w-0 flex-1 truncate font-mono type-caption"
-        title={file.path}
-      >
-        <span className="text-subtle-foreground">
-          {file.path.slice(0, slash)}
-        </span>
-        {file.path.slice(slash)}
-      </span>
-      {!!mark && mark !== 'same' && (
-        <Badge variant="outline">{MARK_LABEL[mark]}</Badge>
-      )}
-      <DiffStat added={file.added} removed={file.removed} />
-    </li>
-  );
+function MarkBadge({ mark }: { mark?: Mark }) {
+  if (!mark || mark === 'same') return null;
+  return <Badge variant="outline">{MARK_LABEL[mark]}</Badge>;
 }
 
 function NoDiff({

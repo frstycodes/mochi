@@ -58,7 +58,7 @@ export function DeviceScreen({
         borderRadius: `${corner}% / ${(corner * size.width) / size.height}%`,
       }}
       className={cn(
-        'max-h-full max-w-full cursor-pointer touch-none bg-black object-contain outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50',
+        'max-h-full max-w-full cursor-pointer touch-none bg-black object-contain select-none focus-visible:outline-2 focus-visible:outline-offset-2',
         className,
       )}
     />

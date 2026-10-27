@@ -360,7 +360,7 @@ function Accounts({
         <button
           type="button"
           onClick={() => setConnecting(true)}
-          className="relative flex min-h-13 w-full items-center gap-3 px-4 py-2 text-left type-body text-muted-foreground outline-none transition-colors before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border last:rounded-b-xl hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/40 focus-visible:text-foreground"
+          className="relative flex min-h-13 w-full items-center gap-3 px-4 py-2 text-left type-body text-muted-foreground outline-none transition-colors before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border last:rounded-b-xl hover:bg-accent/60 hover:text-foreground focus-visible:bg-accent/60 focus-visible:text-foreground"
         >
           <Plus aria-hidden className="size-4" />
           Add a {connector.name} account

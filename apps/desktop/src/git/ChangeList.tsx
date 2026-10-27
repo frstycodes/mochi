@@ -5,11 +5,6 @@ import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronDown, MessageText, Minus, PlusBold, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type {
   ChangeTarget,
@@ -20,6 +15,7 @@ import type {
 import { DiffStat } from '../WorkLog';
 import { fileKey, hunkCovers, type ChangeSection } from './files';
 import { isMod } from '../keys';
+import { TooltipIconButton } from '../ui';
 
 export type DiffStyle = 'unified' | 'split';
 export type NoteSide = 'additions' | 'deletions';
@@ -137,7 +133,7 @@ function FileDiff({
           aria-expanded={isOpen}
           onClick={onToggle}
           title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-          className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <ChevronDown
             aria-hidden
@@ -173,57 +169,42 @@ function FileDiff({
         {actions.canStage && (
           <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/file:opacity-100 focus-within:opacity-100">
             {!file.staged && (
-              <IconAction
+              <TooltipIconButton
                 label="Revert file"
-                icon={Undo}
+                hint="Discard this file's changes"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => actions.revert(target)}
-              />
+              >
+                <Undo />
+              </TooltipIconButton>
             )}
             {file.staged ? (
-              <IconAction
+              <TooltipIconButton
                 label="Unstage file"
-                icon={Minus}
+                hint="Take it out of the next commit"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => actions.unstage(target)}
-              />
+              >
+                <Minus />
+              </TooltipIconButton>
             ) : (
-              <IconAction
+              <TooltipIconButton
                 label="Stage file"
-                icon={PlusBold}
+                hint="Include it in the next commit"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => actions.stage(target)}
-              />
+              >
+                <PlusBold />
+              </TooltipIconButton>
             )}
           </span>
         )}
       </div>
       {isOpen && <FileBody file={file} actions={actions} />}
     </div>
-  );
-}
-
-function IconAction({
-  label,
-  icon: Icon,
-  onClick,
-}: {
-  label: string;
-  icon: typeof PlusBold;
-  onClick: () => void;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={label}
-          onClick={onClick}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <Icon />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }
 

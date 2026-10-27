@@ -472,7 +472,7 @@ function ThreadCard({
         type="button"
         aria-expanded={isOpen}
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 text-left type-meta outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 text-left type-meta focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         <ChevronDown
           aria-hidden

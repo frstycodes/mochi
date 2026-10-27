@@ -121,7 +121,7 @@ function LevelPicker() {
           <label
             key={level}
             htmlFor={`level-${level}`}
-            className="flex cursor-pointer gap-3 rounded-xl border bg-card p-3.5 transition-colors hover:bg-accent/40 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50"
+            className="flex cursor-pointer gap-3 rounded-xl border bg-card p-3.5 transition-colors hover:bg-accent/60 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50"
           >
             <RadioGroupItem
               id={`level-${level}`}

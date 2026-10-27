@@ -91,7 +91,7 @@ export function Overview() {
                       data-snap-id={snap.id}
                       onClick={() => open(snap.id)}
                       aria-label={`Open ${snap.title}`}
-                      className="block h-44 w-full cursor-default rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="block h-44 w-full cursor-default rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       <SnapshotCard
                         snap={snap}

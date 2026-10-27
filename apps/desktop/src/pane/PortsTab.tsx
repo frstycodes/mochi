@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useConfirm } from '../git/useConfirm';
 import { formatDistanceToNowStrict } from 'date-fns';
 import {
   ArrowUpRight,
@@ -13,16 +13,6 @@ import {
   Trash,
 } from '@/icons';
 import { toast } from '@/toast/store';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import {
   Empty,
@@ -88,7 +78,7 @@ function Ports({
     cwd,
   );
   const openers = usePaneOpeners(thread.id);
-  const [killing, setKilling] = useState<ListeningPort | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   return (
     <ScrollArea type="scroll" className="h-full">
@@ -170,7 +160,22 @@ function Ports({
                         <TooltipIconButton
                           label="Stop process"
                           hint={`Asks before stopping pid ${p.pid}`}
-                          onClick={() => setKilling(p)}
+                          onClick={async () => {
+                            const isConfirmed = await confirm({
+                              title: `Stop localhost:${p.port}?`,
+                              description: (
+                                <>
+                                  Sends SIGTERM to pid {p.pid} (
+                                  <span className="font-mono">{p.command}</span>
+                                  ). Anything it hasn't saved is lost.
+                                </>
+                              ),
+                              confirm: 'Stop process',
+                              cancel: 'Keep running',
+                              isDestructive: true,
+                            });
+                            if (isConfirmed) void kill(p);
+                          }}
                         >
                           <Trash />
                         </TooltipIconButton>
@@ -212,30 +217,7 @@ function Ports({
           )}
         </PaneSection>
       </div>
-      <AlertDialog
-        open={!!killing}
-        onOpenChange={(open) => !open && setKilling(null)}
-      >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Stop localhost:{killing?.port}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Sends SIGTERM to pid {killing?.pid} (
-              <span className="font-mono">{killing?.command}</span>). Anything
-              it hasn't saved is lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep running</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => killing && kill(killing)}
-            >
-              Stop process
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {dialog}
     </ScrollArea>
   );
 }

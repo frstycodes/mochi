@@ -279,7 +279,7 @@ function ConnectAccountForm({
           <label
             key={m}
             htmlFor={`connect-${m}`}
-            className="flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors hover:bg-accent/40 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50 has-disabled:cursor-not-allowed has-disabled:opacity-60 has-disabled:hover:bg-transparent"
+            className="flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors hover:bg-accent/60 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50 has-disabled:cursor-not-allowed has-disabled:opacity-60 has-disabled:hover:bg-transparent"
           >
             <RadioGroupItem
               id={`connect-${m}`}

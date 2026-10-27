@@ -295,20 +295,30 @@ export function ProgressRing({
 }
 
 /**
- * Icon-only button with a real tooltip (never a native `title`). `label` is also its accessible name; `hint` adds a second line.
+ * Icon-only button with a real tooltip (never a native `title`). `label` is also its accessible name; `hint` adds a second line;
+ * `pressed` makes it a toggle.
  * A disabled button gets no pointer events, so the tooltip hangs on a wrapper and can still say why it is disabled.
  */
 export function TooltipIconButton({
   label,
   hint,
+  pressed,
+  className,
   children,
   ...props
-}: { label: string; hint?: ReactNode } & Omit<
+}: { label: string; hint?: ReactNode; pressed?: boolean } & Omit<
   ComponentProps<typeof Button>,
   'aria-label'
 >) {
   const button = (
-    <Button variant="ghost" size="icon-sm" aria-label={label} {...props}>
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      aria-pressed={pressed}
+      className={cn(pressed && 'bg-accent text-foreground', className)}
+      {...props}
+    >
       {children}
     </Button>
   );

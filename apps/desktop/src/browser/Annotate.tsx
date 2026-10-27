@@ -209,7 +209,7 @@ export function Annotator({
               aria-label={c.name}
               title={c.name}
               onClick={() => setColor(c.token)}
-              className="flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex size-6 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <span
                 className={cn(

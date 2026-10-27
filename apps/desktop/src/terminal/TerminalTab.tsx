@@ -17,7 +17,6 @@ import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { Thread } from '../model';
 import { AskInSideChat } from '../sidechat/AskInSideChat';
-import { IconAction } from './IconAction';
 import {
   addShell,
   closeSession,
@@ -29,6 +28,7 @@ import { PaneActions, PaneTitle } from '../pane/PaneHeader';
 import { PlannedTab } from '../pane/PlannedTab';
 import type { PaneTabProps } from '../pane/tabs';
 import { isCommand } from '../keymap';
+import { TooltipIconButton } from '../ui';
 
 export default function TerminalTab({ thread, tab }: PaneTabProps) {
   const cwd = threadCwd(thread);
@@ -111,8 +111,8 @@ function Terminals({
                   )}
                 </Button>
                 {s.kind === 'shell' && (
-                  <IconAction
-                    aria-label={`Close ${s.title}`}
+                  <TooltipIconButton
+                    label={`Close ${s.title}`}
                     onClick={() => closeSession(key, s.id)}
                     className={cn(
                       'mr-0.5 size-5 opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100',
@@ -120,18 +120,18 @@ function Terminals({
                     )}
                   >
                     <X />
-                  </IconAction>
+                  </TooltipIconButton>
                 )}
               </span>
             );
           })}
-          <IconAction
-            aria-label="New terminal"
+          <TooltipIconButton
+            label="New terminal"
             className="text-muted-foreground"
             onClick={() => addShell(key, context)}
           >
             <Plus />
-          </IconAction>
+          </TooltipIconButton>
         </div>
       </PaneTitle>
       <PaneActions>
@@ -155,13 +155,14 @@ function Terminals({
             }}
           />
         )}
-        <IconAction
-          aria-label="Search output"
+        <TooltipIconButton
+          label="Search output"
+          hint="Find text in this terminal"
           aria-keyshortcuts="Meta+F"
           onClick={() => setIsSearching((v) => !v)}
         >
           <Search />
-        </IconAction>
+        </TooltipIconButton>
       </PaneActions>
       {isSearching && !!focused && (
         <SearchBar session={focused} onClose={() => setIsSearching(false)} />
@@ -254,9 +255,13 @@ function SearchBar({
         onKeyDown={onKeyDown}
       />
       <InputGroupAddon align="inline-end">
-        <IconAction aria-label="Close search" size="icon-xs" onClick={onClose}>
+        <TooltipIconButton
+          label="Close search"
+          size="icon-xs"
+          onClick={onClose}
+        >
           <X />
-        </IconAction>
+        </TooltipIconButton>
       </InputGroupAddon>
     </InputGroup>
   );
