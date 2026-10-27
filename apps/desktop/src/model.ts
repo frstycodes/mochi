@@ -15,6 +15,7 @@ import type { WorkspaceDraft } from './git/workspace.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from '@mochi/domain/viz/fence';
 import type { RunTarget } from '@mochi/domain/host/types/ports';
+import type { SUB_THREAD_STATUSES } from '@mochi/domain/runtime/toolTable';
 import type { PaneLayout } from './pane/layout.ts';
 import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 import { vizGalleryThread } from './viz/fixtures.ts';
@@ -89,6 +90,42 @@ export interface TurnReport {
   isSuperseded?: true;
   /** The activity's length when it was made, which places it in its turn. Unset on reports saved before it was recorded. */
   index?: number;
+}
+
+export type SubThreadStatus = (typeof SUB_THREAD_STATUSES)[number];
+
+/** What a sub-thread's agent told the thread that started it (`report_to_parent`): its parent's report row renders it instead of an excerpt. */
+export interface ParentReport {
+  at: number;
+  /** The activity's length when it was made: past the turn's `start` (the message that began it), it is that turn's. */
+  index: number;
+  status: SubThreadStatus;
+  summary: string;
+  branch?: string;
+  pr?: number;
+  changedFiles?: string[];
+  checks?: { command: string; result: 'passed' | 'failed' }[];
+}
+
+/**
+ * A report in a parent's transcript, which is also what its agent gets: the row and the agent read the same entry. Undelivered
+ * ones ride with the next message or wake the agent (`dueWakes`), then are marked delivered.
+ */
+export interface SubReport {
+  threadId: string;
+  title: string;
+  /** What the row says after the name: "done", "blocked", "PR #12: merged", "interrupted". */
+  status: string;
+  /** Wakes the parent's agent at once instead of waiting for every sub-thread to go idle. */
+  isUrgent?: true;
+  /** A `no_change` report: never wakes the parent's agent, alone or in an all-idle wake; it goes out with its next message or wake. */
+  isQuiet?: true;
+  /** From a thread this one messaged with `expectReply`, not a sub-thread. */
+  isReply?: true;
+  /** The parent's agent got it, with a message or a wake. */
+  isDelivered?: true;
+  /** The `report_to_parent` it came from; unset for an excerpt, a PR event or a reply. */
+  report?: ParentReport;
 }
 
 /** A decision or assumption from `report_turn`, on the plan step it was made on: `step` is that step's title, as in update_plan. */
@@ -236,6 +273,8 @@ export interface ActivityEntry {
   autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
   /** Events only: a sub-thread handed its result back here. */
   subThread?: { threadId: string; title: string; text: string };
+  /** Events only: a sub-thread reported here (`reportParent`), or a thread messaged with `expectReply` answered; `text` is the body. */
+  subReport?: SubReport;
   /** Tool entries: the message this `send_to_thread` call delivered. */
   sent?: ThreadRef & { text: string };
   /** Events only: the harness compacted the conversation here. */
@@ -515,6 +554,10 @@ export interface Thread {
   isGoalOff?: boolean;
   /** The latest `report`; a newer message from you starts a turn it no longer describes. */
   report?: TurnReport;
+  /** A sub-thread's latest `report_to_parent`. */
+  parentReport?: ParentReport;
+  /** Threads that sent this one a message with `expectReply`: its next turn end goes to each as a reply, then this clears. */
+  replyTo?: { threadId: string; title: string }[];
   /** What the agent filled in that you didn't specify, from every report, kept until you accept or change each one. */
   assumptions?: Assumption[];
   /** The latest turn's plan changes, for its spine on the end-of-turn card. */

@@ -111,11 +111,72 @@ const providerSwitch = Effect.gen(function* () {
   `;
 });
 
+/**
+ * Sub-thread news used to wait in the parent's `live.notes` as `[Sub-thread "title" (id) …]` strings; it is now an event in the
+ * parent's transcript (`subReport`). Each saved thread's such notes move there, undelivered, in order. Codex compaction-restore
+ * notes share the field and stay.
+ */
+const subThreadReports = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = yield* sql<{
+    thread_id: string;
+    payload_json: string;
+  }>`SELECT thread_id, payload_json FROM threads`;
+  for (const row of rows) {
+    const moved = moveSubThreadNotes(JSON.parse(row.payload_json), Date.now());
+    if (moved)
+      yield* sql`UPDATE threads SET payload_json = ${JSON.stringify(moved)} WHERE thread_id = ${row.thread_id}`;
+  }
+});
+
+const NOTE =
+  /^\[(Sub-thread|Reply from thread) "(.*)" \(([^()\s]+)\) (.*?)\](?:\n([\s\S]*))?$/;
+const URGENT = /^reported: (blocked|needs_input|failed)$/;
+
+interface SavedThread {
+  activity?: unknown[];
+  live?: { notes?: string[] };
+}
+
+/** The thread with its sub-thread notes moved into its transcript, or undefined when it has none. */
+export function moveSubThreadNotes(thread: SavedThread, at: number) {
+  const notes = thread.live?.notes ?? [];
+  const parsed = notes.map((n) => NOTE.exec(n));
+  if (!parsed.some(Boolean)) return undefined;
+  const kept = notes.filter((_, i) => !parsed[i]);
+  const reports = parsed.flatMap((m) => {
+    if (!m) return [];
+    const [, kind, title, threadId, rest, body = ''] = m;
+    const status = rest.replace(/^(ended a turn|reported): /, '');
+    return [
+      {
+        at,
+        who: 'harness',
+        kind: 'event',
+        text: body,
+        subReport: {
+          threadId,
+          title,
+          status,
+          ...(URGENT.test(rest) && { isUrgent: true }),
+          ...(kind === 'Reply from thread' && { isReply: true }),
+        },
+      },
+    ];
+  });
+  return {
+    ...thread,
+    activity: [...(thread.activity ?? []), ...reports],
+    live: { ...thread.live, notes: kept.length ? kept : undefined },
+  };
+}
+
 export const migrate = Migrator.make({})({
   loader: Migrator.fromRecord({
     '1_initial': initial,
     '2_outbox_command_unique': outboxCommandUnique,
     '3_snapshot_sequence': snapshotSequence,
     '4_provider_switch': providerSwitch,
+    '5_sub_thread_reports': subThreadReports,
   }),
 });

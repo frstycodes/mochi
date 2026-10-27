@@ -43,6 +43,7 @@ const RECORDED = [
   'criterion-claim',
   'criterion-check',
   'report',
+  'parent-report',
   'pivot',
   'pivot-why',
   'similar-dismiss',

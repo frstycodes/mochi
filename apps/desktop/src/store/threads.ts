@@ -10,6 +10,7 @@ import {
   type Handoff,
   type IdleCheck,
   type LineSlot,
+  type ParentReport,
   type PendingSteer,
   type Pivot,
   type Provider,
@@ -44,7 +45,12 @@ import { nestBlocker, openSubtree, pinAt, reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
-import { notePrsEnded } from '../runtime/subThreadNotes.ts';
+import { markReportsDelivered } from '../runtime/due.ts';
+import {
+  isAutofixTurn,
+  reportPrsEnded,
+  reportTyped,
+} from '../runtime/subThreadReports.ts';
 import {
   recordCheckpoints,
   rewind,
@@ -183,6 +189,7 @@ export type ThreadsAction =
       steers?: boolean;
       /** The message as you typed it: sent into a turn in flight, it waits in `steering` until the agent reads it. */ typed?: QueuedMessage;
       /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef;
+      /** With `from`: the target's next turn end goes back to `from` as a note (`noteReplies`). */ expectReply?: true;
       /** An Auto-fix event; `prompt` is the event as the agent gets it. */ autofix?: ActivityEntry['autofix'];
       /** The verdict of a second opinion the agent asked for. */ secondOpinion?: ActivityEntry['secondOpinion'];
     }
@@ -252,6 +259,11 @@ export type ThreadsAction =
       by: Provider;
     }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
+  | {
+      type: 'parent-report';
+      threadId: string;
+      report: Omit<ParentReport, 'at' | 'index'>;
+    }
   /** update_plan dropped or renamed steps; `why` alone (`pivot-why`) gives the reason for the turn's last pivot that has none. */
   | { type: 'pivot'; threadId: string; pivot: Omit<Pivot, 'turn'> }
   | { type: 'pivot-why'; threadId: string; why: string }
@@ -905,6 +917,8 @@ function reduce(state: State, action: Action): State {
           })),
         })),
       };
+    case 'parent-report':
+      return parentReport(state, action);
     case 'simplified':
       return {
         ...state,
@@ -1131,13 +1145,14 @@ function reduce(state: State, action: Action): State {
                     notes: undefined,
                     restart: undefined,
                   },
+                  activity: markReportsDelivered(t).activity,
                   turn: { start: t.activity.length, isAgentDriven: true },
                 },
                 {
                   at: state.now,
                   who: 'harness',
                   kind: 'event',
-                  text: 'Sub-threads idle: sent their notes to the agent',
+                  text: 'Sent the sub-thread reports to the agent',
                 },
               )
             : t,
@@ -1296,7 +1311,7 @@ export function seePrs(
       }),
     { ...thread, prs: recorded },
   );
-  return notePrsEnded(
+  return reportPrsEnded(
     { ...state, threads: mapThread(state.threads, threadId, () => said) },
     thread,
   );
@@ -1419,6 +1434,37 @@ export function stampStep(
     ...(isDone && { doneMs: ms }),
     ...(isStopped && { stoppedMs: ms }),
   };
+}
+
+/** A `report_to_parent` call: kept on the sub-thread for `get_thread`, and logged in its parent's transcript (`reportTyped`). */
+function parentReport(
+  state: State,
+  action: Extract<Action, { type: 'parent-report' }>,
+): State {
+  const sub = state.threads.find((t) => t.id === action.threadId);
+  if (!sub) return state;
+  // An Auto-fix turn that needed nothing from the parent stays with the sub-thread, as its normal turn end does.
+  const status =
+    action.report.status === 'done' && isAutofixTurn(sub)
+      ? 'no_change'
+      : action.report.status;
+  const report = {
+    ...action.report,
+    status,
+    at: state.now,
+    index: sub.activity.length,
+  };
+  return reportTyped(
+    {
+      ...state,
+      threads: mapThread(state.threads, sub.id, (t) => ({
+        ...t,
+        parentReport: report,
+      })),
+    },
+    sub,
+    report,
+  );
 }
 
 export function log(thread: Thread, entry: ActivityEntry): Thread {
@@ -1634,11 +1680,14 @@ export function send(
         restart: undefined,
         movedFrom: undefined,
       };
+      // Its undelivered reports went with this message (`withReports`), as the notes did.
+      const delivered = live ? markReportsDelivered(t) : t;
       const isYours = !from && !action.autofix && !action.secondOpinion;
       const sent = withQueue(
         {
-          ...t,
+          ...delivered,
           queuePause: undefined,
+          ...replyTo(t, action),
           ...(isYours &&
             t.assumptions && {
               assumptions: changedBySend(t.assumptions, action.text),
@@ -1695,6 +1744,18 @@ export function send(
 
 /** The turn the thread's agent is in: one past its last idle record's, as a report counts it. */
 const turnOf = (t: Thread) => (t.idle?.turn ?? 0) + 1;
+
+/** A message sent with `expectReply` adds its sender to `replyTo`, once per sender (`reportReplies`). */
+function replyTo(t: Thread, action: Extract<Action, { type: 'send' }>) {
+  const sender = action.from?.threadId;
+  if (!action.expectReply || !sender) return {};
+  return {
+    replyTo: [
+      ...(t.replyTo ?? []).filter((r) => r.threadId !== sender),
+      { threadId: sender, title: action.from!.title },
+    ],
+  };
+}
 
 function addSource(
   state: State,

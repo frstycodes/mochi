@@ -99,7 +99,11 @@ import { ProposalEntry } from './chat/ThreadProposals';
 import { showsVerdictCard, suggestedReply } from './goals/report';
 import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
-import { AutofixEventRow, ReceivedMessageRow } from './chat/ThreadMessage';
+import {
+  AutofixEventRow,
+  ReceivedMessageRow,
+  SubReportRow,
+} from './chat/ThreadMessage';
 import {
   isTurnRunning,
   type TurnAnchor,
@@ -480,6 +484,8 @@ const ChatRowView = memo(function ChatRowView({
     return (
       <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />
     );
+  if (row.kind === 'event' && row.entry.subReport)
+    return <SubReportRow entry={row.entry} report={row.entry.subReport} />;
   if (row.kind === 'event' && row.entry.devServer)
     return <DevServerCard thread={thread} server={row.entry.devServer} />;
   if (row.kind === 'event' && row.entry.proposals)

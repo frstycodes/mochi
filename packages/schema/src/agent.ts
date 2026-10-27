@@ -236,6 +236,7 @@ export const AgentStartOptions = Schema.Struct({
   isGoalsOff: opt(B),
   isSpineOff: opt(B),
   isSettingsChat: opt(B),
+  isSubThread: opt(B),
   nativeOff: opt(Schema.Array(S)),
 }).check(
   Schema.makeFilter(

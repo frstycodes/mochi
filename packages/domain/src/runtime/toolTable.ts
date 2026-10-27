@@ -67,6 +67,22 @@ export const MOCHI_SERVER = 'mochi';
 /** `update_plan`'s scope: this thread's first task, or more of the same work. Unrelated work is a `create_thread` offer. */
 export const PLAN_SCOPES = ['first_task', 'continuation'] as const;
 
+/** `report_to_parent`'s status. Done waits for every sub-thread to be idle, no_change never wakes the parent, the rest wake it at once (`dueWakes`). */
+export const SUB_THREAD_STATUSES = [
+  'done',
+  'no_change',
+  'blocked',
+  'needs_input',
+  'failed',
+] as const;
+
+/** Statuses that wake the parent's agent at once, while its other sub-threads still work. */
+export const URGENT_STATUSES = [
+  'blocked',
+  'needs_input',
+  'failed',
+] as const satisfies (typeof SUB_THREAD_STATUSES)[number][];
+
 /** `create_thread`'s initiation (Claude Code Desktop's): who wants the thread, which decides whether it starts now. */
 export const THREAD_INITIATIONS = [
   'user_asked',
@@ -230,7 +246,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with New thread, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message). At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread notes) can only use own_initiative. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a note, and you are started with the notes once all your sub-threads are idle. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Pass `criterionId` to hand it one piece of your goal. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread doesn\'t start: it goes on this turn\'s card with the others, which the user starts (Start, or Start all) or dismisses, so don\'t retry or wait on it.',
+      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with New thread, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message). At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread reports) can only use own_initiative. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a report in your transcript, and you are started with the reports once all your sub-threads are idle, or at once for a blocked, needs_input or failed one. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Pass `criterionId` to hand it one piece of your goal. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread doesn\'t start: it goes on this turn\'s card with the others, which the user starts (Start, or Start all) or dismisses, so don\'t retry or wait on it.',
     shape: {
       initiation: Schema.optionalKey(
         Schema.Literals(THREAD_INITIATIONS).annotate({
@@ -316,10 +332,16 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      "Send a message to another thread's agent, as if typed in its composer.",
+      "Send a message to another thread's agent, as if typed in its composer. Your own sub-threads' turn ends come back to you anyway; for any other thread, pass `expectReply` and its next turn end comes back to you as a reply in your transcript.",
     shape: {
       threadId: otherThread,
       text: Schema.String.check(Schema.isMinLength(1)),
+      expectReply: Schema.optionalKey(
+        Schema.Boolean.annotate({
+          description:
+            "true: that thread's next turn end comes back to you as a reply, as a sub-thread's report does",
+        }),
+      ),
     },
   },
   delete_thread: {
@@ -411,7 +433,7 @@ export const TOOL_TABLE = {
       next: Schema.optionalKey(
         Schema.String.check(Schema.isMaxLength(160)).annotate({
           description:
-            'The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi\'s own UI. Leave it out when nothing waits on them, like a running sub-thread: its notes come back without a message',
+            'The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi\'s own UI. Leave it out when nothing waits on them, like a running sub-thread: its reports come back without a message',
         }),
       ),
       options: Schema.optionalKey(
@@ -443,6 +465,52 @@ export const TOOL_TABLE = {
             description:
               "The answers to next, your pick first; written for this turn, not generic. The first one's reply is also suggested in the user's empty message box, so write it as their instruction, never as your question",
           }),
+      ),
+    },
+  },
+  report_to_parent: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Sub-threads only: end every turn with one report to the thread that started you; it shows in that thread's transcript and reaches its agent. blocked, needs_input or failed wakes it at once, even while its other sub-threads work; done waits until they are all idle; no_change never wakes it and goes out with its next message. Facts only: leave out what you did not do or run.",
+    shape: {
+      status: Schema.Literals(SUB_THREAD_STATUSES).annotate({
+        description:
+          'done: your piece is finished; no_change: this turn changed nothing and needs nothing from the parent (a bot comment with nothing in it), so the parent agent is not woken for it; blocked: something outside your piece stops you; needs_input: a decision only the parent or the user can make; failed: you tried and it did not work',
+      }),
+      summary: Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(600),
+      ).annotate({
+        description:
+          'What happened, and for anything but done what you need, in 1 to 3 sentences',
+      }),
+      branch: Schema.optionalKey(
+        Schema.String.annotate({ description: 'The branch your work is on' }),
+      ),
+      pr: Schema.optionalKey(
+        Schema.Number.check(
+          Schema.isInt(),
+          Schema.isGreaterThanOrEqualTo(1),
+        ).annotate({ description: 'The number of the PR you opened, if any' }),
+      ),
+      changedFiles: Schema.optionalKey(
+        Schema.Array(Schema.String)
+          .check(Schema.isMaxLength(50))
+          .annotate({ description: 'Repo-relative paths you changed' }),
+      ),
+      checks: Schema.optionalKey(
+        Schema.Array(
+          Schema.Struct({
+            command: Schema.String.check(
+              Schema.isMinLength(1),
+              Schema.isMaxLength(200),
+            ).annotate({ description: 'What you ran, like "pnpm test"' }),
+            result: Schema.Literals(['passed', 'failed']),
+          }),
+        )
+          .check(Schema.isMaxLength(10))
+          .annotate({ description: 'The checks you ran and how each ended' }),
       ),
     },
   },
@@ -1118,6 +1186,7 @@ export const SETTINGS_CHAT_TOOLS = [
 export interface MochiScope {
   isGoalsOff?: boolean;
   isSettingsChat?: boolean;
+  isSubThread?: boolean;
   /** The turn spine is off (Settings): report_turn takes plain decisions and no assumptions, update_plan no why. */
   isSpineOff?: boolean;
 }
@@ -1151,13 +1220,25 @@ const PLAIN_DECISIONS = Schema.Array(
 const isSettingsChatTool = (name: ToolName) =>
   (SETTINGS_CHAT_TOOLS as readonly string[]).includes(name);
 
+/** Served only to a sub-thread's session: it reports to the thread it was started for. */
+export const SUB_THREAD_TOOLS = [
+  'report_to_parent',
+] as const satisfies ToolName[];
+
+const isSubThreadTool = (name: ToolName) =>
+  (SUB_THREAD_TOOLS as readonly string[]).includes(name);
+
 export function servedTools({
   isGoalsOff,
   isSettingsChat,
+  isSubThread,
 }: MochiScope): ToolName[] {
   if (isSettingsChat) return [...SETTINGS_CHAT_TOOLS];
   return TOOL_NAMES.filter(
-    (name) => !isSettingsChatTool(name) && !(isGoalsOff && isGoalTool(name)),
+    (name) =>
+      !isSettingsChatTool(name) &&
+      !(isGoalsOff && isGoalTool(name)) &&
+      !(!isSubThread && isSubThreadTool(name)),
   );
 }
 
@@ -1169,6 +1250,7 @@ export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
 export const TURN_TOOLS = [
   'update_plan',
   'report_turn',
+  'report_to_parent',
 ] as const satisfies ToolName[];
 
 export const isTurnTool = (name: string) =>

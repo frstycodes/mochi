@@ -45,6 +45,7 @@ import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import type { Project } from '@mochi/domain/host/types/projects';
 import {
   asks,
+  servedTools,
   TOOL_NAMES,
   tierOf,
   type ToolName,
@@ -3877,4 +3878,93 @@ test("an agent-started thread's first turn can only propose, until you write to 
     reason: '',
   });
   assert.equal(t.thread(sub).turn?.isAgentDriven, undefined);
+});
+
+test('report_to_parent is served only to sub-threads, refuses a thread with no parent, and get_thread returns the latest report', async () => {
+  assert.ok(servedTools({ isSubThread: true }).includes('report_to_parent'));
+  assert.ok(!servedTools({}).includes('report_to_parent'));
+  assert.ok(
+    !servedTools({ isSettingsChat: true }).includes('report_to_parent'),
+  );
+
+  const t = setup();
+  assert.match(
+    await t.err('report_to_parent', { status: 'done', summary: 'x' }, 'adm'),
+    /no parent thread/,
+  );
+  assert.match(
+    await t.err('report_to_parent', { status: 'stuck', summary: 'x' }, 'adm'),
+    /status/,
+  );
+  Object.assign(t.thread('adm'), { parent: { threadId: 'rl' } });
+  await t.ok(
+    'report_to_parent',
+    { status: 'done', summary: 'First pass' },
+    'adm',
+  );
+  const r = await t.ok(
+    'report_to_parent',
+    {
+      status: 'blocked',
+      summary: '  Needs the staging key ',
+      branch: 'adm-limits',
+      pr: 42,
+      changedFiles: ['src/limits.ts'],
+      checks: [{ command: 'pnpm test', result: 'failed' }],
+    },
+    'adm',
+  );
+  assert.deepEqual(r, {
+    changed: 'Reported blocked to the parent thread',
+    status: 'blocked',
+    parentThreadId: 'rl',
+    image: undefined,
+  });
+  const { report } = await t.ok('get_thread', { threadId: 'adm' });
+  assert.deepEqual(
+    { ...report, at: undefined, index: undefined },
+    {
+      status: 'blocked',
+      summary: 'Needs the staging key',
+      branch: 'adm-limits',
+      pr: 42,
+      changedFiles: ['src/limits.ts'],
+      checks: [{ command: 'pnpm test', result: 'failed' }],
+      at: undefined,
+      index: undefined,
+    },
+    'the latest report replaces the first',
+  );
+  assert.equal((await t.ok('get_thread', { threadId: 'rl' })).report, null);
+});
+
+test("send_to_thread with expectReply asks the target to note the sender, except the sender's own sub-thread", async () => {
+  const t = setup();
+  await t.ok('send_to_thread', {
+    threadId: 'adm',
+    text: 'Which limits table?',
+    expectReply: true,
+  });
+  assert.deepEqual(t.thread('adm').replyTo, [
+    { threadId: 'rl', title: t.thread('rl').title },
+  ]);
+  await t.ok('send_to_thread', {
+    threadId: 'adm',
+    text: 'And?',
+    expectReply: true,
+  });
+  assert.equal(t.thread('adm').replyTo?.length, 1, 'one reply per sender');
+
+  const child = t.state().threads.find((x) => x.id !== 'rl' && x.id !== 'adm')!;
+  Object.assign(child, { parent: { threadId: 'rl' } });
+  await t.ok('send_to_thread', {
+    threadId: child.id,
+    text: 'Status?',
+    expectReply: true,
+  });
+  assert.equal(
+    t.thread(child.id).replyTo,
+    undefined,
+    'its turn ends reach rl anyway',
+  );
 });

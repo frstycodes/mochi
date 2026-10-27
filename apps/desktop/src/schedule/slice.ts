@@ -10,10 +10,10 @@ import {
 } from '../git/autofix.ts';
 import { ciTitle } from '../notify/watch.ts';
 import {
-  notePr,
-  notePrsEnded,
   prEscalation,
-} from '../runtime/subThreadNotes.ts';
+  reportPr,
+  reportPrsEnded,
+} from '../runtime/subThreadReports.ts';
 import { log, mapThread, send } from '../store/threads.ts';
 
 export type ScheduleAction =
@@ -194,7 +194,7 @@ function autofixSet(
   return sent ? send(set, sent) : set;
 }
 
-/** An event from main, dropped when Auto-fix was turned off meanwhile; a parent thread hears of it only when `prEscalation` or `notePrsEnded` says so. */
+/** An event from main, dropped when Auto-fix was turned off meanwhile; a parent thread hears of it only when `prEscalation` or `reportPrsEnded` says so. */
 function autofixEvent(
   state: State,
   threadId: string,
@@ -209,8 +209,8 @@ function autofixEvent(
     return state;
   const escalation = prEscalation(thread, event);
   const next = autofixApply(state, thread, event);
-  return notePrsEnded(
-    escalation ? notePr(next, thread, event.pr, escalation) : next,
+  return reportPrsEnded(
+    escalation ? reportPr(next, thread, event.pr, escalation) : next,
     thread,
   );
 }

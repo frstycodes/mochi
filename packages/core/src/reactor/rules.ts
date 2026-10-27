@@ -4,6 +4,7 @@ import {
   dueQueued,
   dueReports,
   dueWakes,
+  wakingReports,
 } from '../../../../apps/desktop/src/runtime/due.ts';
 import { wordCount } from '../../../../apps/desktop/src/simplify/simplify.ts';
 import type { ProjectionContext } from '../../../../apps/desktop/src/store/context.ts';
@@ -47,11 +48,15 @@ export const delegatedReports: Rule = (_event, _before, after) =>
     subagentId: subagent.id,
   }));
 
-/** Each idle parent whose sub-threads are all idle, once per set of notes (`dueWakes`). */
+/** Each idle parent whose sub-threads are all idle, or with an urgent report, once per set of undelivered reports (`dueWakes`). */
 export const subThreadWakes: Rule = (_event, _before, after) =>
   dueWakes(after).map((t) => ({
     type: 'subthread.wake',
-    key: `wake:${t.id}:${hash((t.live?.notes ?? []).join('\n'))}`,
+    key: `wake:${t.id}:${hash(
+      wakingReports(t)
+        .map((e) => `${e.at} ${JSON.stringify(e.subReport)} ${e.text}`)
+        .join('\n'),
+    )}`,
     threadId: t.id,
   }));
 

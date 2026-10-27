@@ -611,6 +611,7 @@ const THREAD_SPECS = {
             text: a.text.slice(0, 300),
           })),
           pullRequests: thread.prs,
+          report: thread.parentReport ?? null,
           waitingOnUser: state()
             .queue.filter((q) => q.threadId === thread.id)
             .map((q) => ({ kind: q.kind, title: q.title })),
@@ -914,12 +915,16 @@ const THREAD_SPECS = {
       const [thread] = others(state(), caller, [args.threadId], 'message');
       const text = args.text.trim();
       const from = { threadId: caller.id, title: caller.title };
+      // A sub-thread's turn ends already reach its parent (`noteParent`).
+      const expectReply =
+        args.expectReply && thread.parent?.threadId !== caller.id;
       dispatch({
         type: 'send',
         threadId: thread.id,
         text,
         prompt: receivedPrompt(from, text),
         from,
+        ...(expectReply && { expectReply: true as const }),
         drift: 'on-goal',
         reason: `Sent by ${authorName(caller.providers[0])} from another thread`,
       });
@@ -1099,6 +1104,31 @@ const GOAL_SPECS = {
           ...reportOf(target(state(), caller, caller.id)),
           ...(note && { note }),
         },
+      };
+    },
+  },
+  report_to_parent: {
+    run: ({ caller, args, dispatch }) => {
+      if (!caller.parent)
+        throw new Error(
+          'This thread has no parent thread; report_turn reports to the user',
+        );
+      const { status, branch, pr, changedFiles, checks } = args;
+      dispatch({
+        type: 'parent-report',
+        threadId: caller.id,
+        report: {
+          status,
+          summary: args.summary.trim(),
+          ...(branch?.trim() && { branch: branch.trim() }),
+          ...(pr && { pr }),
+          ...(changedFiles?.length && { changedFiles }),
+          ...(checks?.length && { checks }),
+        },
+      });
+      return {
+        changed: `reported ${status} to the parent thread`,
+        result: { status, parentThreadId: caller.parent.threadId },
       };
     },
   },
