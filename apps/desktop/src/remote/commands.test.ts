@@ -651,6 +651,7 @@ test('a device’s clone lands in this machine’s projects folder, and its fail
         icon: null,
         favicon: null,
         isMissing: false,
+        favoriteOrder: null,
       };
     });
   const added = await runRemoteCommand(

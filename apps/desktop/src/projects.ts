@@ -18,14 +18,14 @@ export {
   repoFor,
 } from './projectRef.ts';
 
-/** This profile's projects, most recently used first by `threads` (the profile's); null until main answered. */
+/** This profile's projects: favorites first, in the order they were starred, then most recently used by `threads` (the profile's); null until main answered. */
 export function useProjects(
   spaceId: string,
   threads: readonly Thread[],
 ): Project[] | null {
   const projectsQuery = useQuery(projectsQueryOptions(spaceId, threads));
   const projects = projectsQuery.data ?? null;
-  return projects && byRecentUse(projects, threads);
+  return projects && favoritesFirst(byRecentUse(projects, threads));
 }
 
 /** The registry's entry for a folder, from what's already loaded; it starts no read of its own. */
@@ -125,6 +125,16 @@ export function byRecentUse(projects: Project[], threads: readonly Thread[]) {
       (lastUse.get(b.path) ?? 0) - (lastUse.get(a.path) ?? 0) ||
       b.addedAt - a.addedAt,
   );
+}
+
+/** Favorites in their order ahead of the rest, which keep theirs. */
+export function favoritesFirst<T extends { favoriteOrder: number | null }>(
+  projects: T[],
+): T[] {
+  const favorites = projects
+    .filter((p) => p.favoriteOrder !== null)
+    .sort((a, b) => a.favoriteOrder! - b.favoriteOrder!);
+  return [...favorites, ...projects.filter((p) => p.favoriteOrder === null)];
 }
 
 /**

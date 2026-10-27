@@ -56,6 +56,7 @@ function add(
     icon: null,
     favicon: null,
     isMissing: false,
+    favoriteOrder: null,
   };
   space.projects = [...space.projects, project];
   changeListeners.forEach((l) => l(spaceId));
@@ -127,6 +128,14 @@ export const projects: ProjectsHost = {
   },
   async relocate(spaceId, id, path) {
     return update(spaceId, id, { path, isMissing: false });
+  },
+  async setFavorites(spaceId, ids) {
+    const space = spaceOf(spaceId);
+    space.projects = space.projects.map((p) => ({
+      ...p,
+      favoriteOrder: ids.includes(p.id) ? ids.indexOf(p.id) : null,
+    }));
+    changeListeners.forEach((l) => l(spaceId));
   },
   async setIcon(spaceId, id, icon) {
     if (icon === 'auto' || icon === 'none')

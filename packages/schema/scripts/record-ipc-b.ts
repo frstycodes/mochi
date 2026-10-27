@@ -67,6 +67,9 @@ await record(
   added.id,
   '/Users/me/notes',
 );
+await record('projects.setFavorites', projects.setFavorites, 'personal', [
+  added.id,
+]);
 await record(
   'projects.setIcon',
   projects.setIcon,
