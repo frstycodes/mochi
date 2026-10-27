@@ -9,7 +9,7 @@ import {
   FileText,
   Devices,
   Globe,
-  Hierarchy2,
+  GitBranch,
   Info,
   Keyboard,
   MagicStar,
@@ -519,7 +519,7 @@ export const SETTINGS_SECTIONS = [
     id: 'git',
     group: 'Workspace',
     title: 'Git and worktrees',
-    icon: Hierarchy2,
+    icon: GitBranch,
     component: GitSection,
     settings: [
       {
