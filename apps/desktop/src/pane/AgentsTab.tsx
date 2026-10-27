@@ -165,7 +165,7 @@ function TaskCard({
 }) {
   const dispatch = useDispatch();
   return (
-    <li className="relative isolate flex flex-col gap-1 rounded-lg border bg-card px-3 py-2.5 transition-colors has-[>button:first-child:hover]:bg-accent/40">
+    <li className="relative isolate flex flex-col gap-1 rounded-lg bg-foreground/5 px-3 py-2.5 transition-colors has-[>button:first-child:hover]:bg-foreground/10">
       <button
         type="button"
         onClick={() =>

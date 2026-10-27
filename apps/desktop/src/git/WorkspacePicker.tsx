@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useDebounced } from '../hooks/useDebounced';
 import { useId, useState } from 'react';
-import { ChevronDown, Hierarchy2, WarningAlt } from '@/icons';
+import { ChevronDown, GitBranch, WarningAlt } from '@/icons';
 import {
   Command,
   CommandEmpty,
@@ -212,7 +212,7 @@ function BranchPicker({ workspace }: { workspace: Workspace }) {
           className="bg-transparent"
           aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}
         >
-          <Hierarchy2 />
+          <GitBranch />
           <span className="truncate">
             {isNew ? `from ${label ?? '…'}` : (label ?? 'Pick a branch')}
           </span>

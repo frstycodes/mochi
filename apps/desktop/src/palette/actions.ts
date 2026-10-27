@@ -24,7 +24,7 @@ import {
   FolderOpen,
   Fullscreen,
   Grid,
-  Hierarchy2,
+  GitBranch,
   History,
   Inbox,
   MagicStar,
@@ -462,7 +462,7 @@ export const ACTIONS = [
     id: 'thread-copy-branch',
     group: 'Thread',
     title: 'Copy branch name',
-    icon: Hierarchy2,
+    icon: GitBranch,
     when: when.repo,
     run: onThread((t) => copyBranches([t])),
     many: {

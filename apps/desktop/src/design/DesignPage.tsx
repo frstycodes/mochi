@@ -1451,7 +1451,15 @@ const RING_SAMPLES = [
 
 /** A fixture's report card, on the turn it anchors to. */
 function ReportCardDemo({ thread }: { thread: Thread }) {
-  return <ReportCard thread={thread} anchor={turnAnchor(thread)} />;
+  const anchor = turnAnchor(thread);
+  return (
+    <div className="flex flex-col gap-3">
+      {!!anchor?.changes && (
+        <TurnChangesCard thread={thread} turn={anchor.changes} />
+      )}
+      <ReportCard thread={thread} anchor={anchor} />
+    </div>
+  );
 }
 
 function metReportFixture(rl: Thread): Thread {

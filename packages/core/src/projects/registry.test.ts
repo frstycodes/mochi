@@ -164,3 +164,24 @@ test('a project shows the favicon its folder has, or the image you upload, or it
     'public/favicon.svg',
   );
 });
+
+test('setFavorites orders the favorites, unfavorites the rest, and survives a reload', async () => {
+  const { dir, repo, plain, icons } = scratch();
+  const registry = projectRegistry(icons, dir);
+  const [a, b] = await registry.migrate('personal', [repo, plain]);
+  assert.deepEqual([a.favoriteOrder, b.favoriteOrder], [null, null]);
+
+  await registry.setFavorites('personal', [b.id, a.id]);
+  const orders = async (r: typeof registry) =>
+    Object.fromEntries(
+      (await r.list('personal')).map((p) => [p.name, p.favoriteOrder]),
+    );
+  assert.deepEqual(await orders(projectRegistry(icons, dir)), {
+    notes: 0,
+    mochi: 1,
+  });
+
+  await registry.setFavorites('personal', [b.id]);
+  assert.deepEqual(await orders(registry), { notes: 0, mochi: null });
+  await assert.rejects(registry.setFavorites('personal', ['nope']));
+});

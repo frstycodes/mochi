@@ -12,7 +12,7 @@ import {
   XCircle,
   Edit,
   Eye,
-  Hierarchy2,
+  GitBranch,
   MagicStar,
   MessageEdit,
   CheckBadge,
@@ -274,7 +274,7 @@ function RefFacts({ state }: { state: RefState }) {
         </Fact>
       )}
       {!!state.branch && (
-        <Fact icon={Hierarchy2} label="Branch">
+        <Fact icon={GitBranch} label="Branch">
           <span className="flex min-w-0 items-center gap-1">
             <span className="min-w-0 truncate">{state.branch.head}</span>
             <ArrowRight
