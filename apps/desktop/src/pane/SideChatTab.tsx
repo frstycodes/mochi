@@ -7,8 +7,9 @@ import {
   SendAlt,
   X,
   type IconComponent,
+  Diff,
+  Terminal,
 } from '@/icons';
-import { DiffIcon, TerminalIcon } from '../icons/panes';
 import {
   Conversation,
   ConversationContent,
@@ -266,8 +267,8 @@ export function Answer({
 }
 
 const SOURCE_ICONS = {
-  diff: DiffIcon,
-  terminal: TerminalIcon,
+  diff: Diff,
+  terminal: Terminal,
   file: File,
 } satisfies Record<QuoteSource, IconComponent>;
 

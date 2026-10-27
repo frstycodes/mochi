@@ -93,6 +93,7 @@ export const Cursor = solar(Linear.CursorIcon, Bold.CursorIcon);
 export const Danger = solar(Linear.DangerTriangleIcon, Bold.DangerTriangleIcon);
 export const Database = solar(Linear.DatabaseIcon, Bold.DatabaseIcon);
 export const Devices = solar(Linear.DevicesIcon, Bold.DevicesIcon);
+export const Diff = solar(Linear.PlusMinusIcon, Bold.PlusMinusIcon);
 export const Download = solar(Linear.DownloadIcon, Bold.DownloadIcon);
 export const Edit = solar(Linear.PenNewSquareIcon, Bold.PenNewSquareIcon);
 export const ExitFullscreen = solar(

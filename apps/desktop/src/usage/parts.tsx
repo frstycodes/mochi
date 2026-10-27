@@ -1,7 +1,6 @@
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
-import { Coin, Commit } from '@/icons';
+import { Coin, Commit, Diff } from '@/icons';
 import { GitMergeIcon } from '@/icons/github';
-import { DiffIcon } from '@/icons/panes';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import type { Provider } from '../model';
@@ -185,7 +184,7 @@ export function StatStrip({
         />
       </Stat>
       <Stat
-        icon={DiffIcon}
+        icon={Diff}
         color="var(--color-success)"
         label="Lines added"
         sub={

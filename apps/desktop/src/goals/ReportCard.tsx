@@ -8,6 +8,7 @@ import {
   MessageText,
   CheckBadge,
   WarningAlt,
+  Terminal,
 } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,6 @@ import {
   REF_CHIP_CLASS,
   REF_TONE_CLASS,
 } from '@/icons/github';
-import { TerminalIcon } from '@/icons/panes';
 import { cn } from '@/lib/utils';
 import {
   type ActivityEntry,
@@ -469,7 +469,7 @@ function FactIcon({ thread, tile }: { thread: Thread; tile: Tile }) {
 
 const FACT_ICONS = {
   criteria: CheckBadge,
-  checks: TerminalIcon,
+  checks: Terminal,
   git: Hierarchy2,
   agent: MessageText,
 } satisfies Record<Exclude<Tile['id'], 'pr'>, unknown>;

@@ -1,6 +1,6 @@
 import { useNow } from '../useNow';
 import { Shimmer } from '@/components/ai-elements/shimmer';
-import { BackgroundTask } from '@/icons';
+import { BackgroundTask, Terminal } from '@/icons';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type MochiFlavor } from '../AgentLoader';
 import { toolLabel, toolPhase } from '../agentPhase';
@@ -8,7 +8,6 @@ import type { Provider, Subagent, Thread } from '../model';
 import { formatElapsed } from '../progress';
 import { oneLine } from '../runtime/subagents';
 import type { TaskRow } from '../runtime/tasks';
-import { TerminalIcon } from '../icons/panes';
 import { useModels } from '../ModelControls';
 import { optionFor } from '../runtime/models';
 import { useSpace } from '../store';
@@ -164,7 +163,7 @@ export function TaskIcon({ thread, task }: { thread: Thread; task: TaskRow }) {
         className="-mx-0.5 size-5"
       />
     );
-  const Icon = task.kind === 'shell' ? TerminalIcon : BackgroundTask;
+  const Icon = task.kind === 'shell' ? Terminal : BackgroundTask;
   return (
     <Icon
       aria-label={task.kind === 'shell' ? 'Command' : 'Task'}

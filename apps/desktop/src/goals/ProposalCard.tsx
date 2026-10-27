@@ -1,4 +1,4 @@
-import { Eye, Undo } from '@/icons';
+import { Eye, Undo, Terminal } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -6,7 +6,6 @@ import {
   CardFooter,
   CardHeader,
 } from '@/components/ui/card';
-import { TerminalIcon } from '@/icons/panes';
 import { authorName, type GoalProposal, type Thread } from '../model';
 import { usePrefs } from '../settings/prefs';
 import { useDispatch } from '../store';
@@ -99,7 +98,7 @@ function ProposedCriteria({
           className="flex min-h-9 items-center gap-2.5 px-3 py-2 type-meta"
         >
           {c.command ? (
-            <TerminalIcon
+            <Terminal
               aria-label="Mochi runs a command"
               className="size-3.5 shrink-0 text-muted-foreground"
             />
