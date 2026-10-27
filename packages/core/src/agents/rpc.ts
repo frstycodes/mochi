@@ -18,6 +18,11 @@ export class AgentRpcs extends RpcGroup.make(
     payload: { threadId: Schema.String, args: Schema.Unknown },
     success: Schema.Unknown,
   }),
+  /** Codex's pattern-kill hook input, which main's loopback route takes; the hook's stdout, or null to let it run. */
+  Rpc.make('agentKillHook', {
+    payload: { input: Schema.Unknown },
+    success: Schema.Unknown,
+  }),
   /** Main's detection saw this account's login. */
   Rpc.make('agentNoteLogin', {
     payload: { accountId: Schema.String, login: Schema.Unknown },

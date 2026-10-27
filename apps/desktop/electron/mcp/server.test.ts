@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { Server } from 'node:http';
 import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
@@ -12,6 +13,12 @@ import {
   mochiInstructions,
 } from '@mochi/core/agents/instructions';
 import { useAgentConfig } from '@mochi/core/agents/config';
+import {
+  KILL_GUARD_COMMAND,
+  KILL_GUARD_ENV,
+  killHookAnswer,
+} from '@mochi/core/agents/codex/killGuard';
+import { killDecision } from '@mochi/core/agents/processKill';
 import { claudeServer as coreClaudeServer } from '@mochi/core/agents/mochiTools';
 import {
   GOAL_TOOLS,
@@ -216,3 +223,81 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
     args: { url: 'about:blank' },
   });
 });
+
+// Runs the hook's own command (curl, through sh) as Codex would; the commands are only text in the JSON, nothing is killed.
+test.skipIf(process.platform === 'win32')(
+  "Codex's kill-guard hook denies a pattern kill and lets a PID kill run",
+  async () => {
+    // A fresh server.ts: an earlier test closed the one it started.
+    vi.resetModules();
+    vi.doMock('electron', () => ({ app: { isPackaged: true } }));
+    vi.doMock('../window.ts', () => ({ mainWindow: () => undefined }));
+    // Core's `agentKillHook`, for a session Mochi doesn't know.
+    const asked: unknown[] = [];
+    vi.doMock('@mochi/core/hostClient', () => ({
+      makeHostCaller: () => async (tag: string, args: { input: unknown }) => {
+        asked.push(tag);
+        return killHookAnswer('', args.input);
+      },
+    }));
+    vi.doMock('@mochi/core/host', () => ({ mainCoreClient: async () => ({}) }));
+    onTestFinished(() => {
+      vi.doUnmock('electron');
+      vi.doUnmock('../window.ts');
+      vi.doUnmock('@mochi/core/hostClient');
+      vi.doUnmock('@mochi/core/host');
+    });
+    // oxlint-disable-next-line typescript/unbound-method -- Invoked with the intercepted server as this.
+    const listen = Server.prototype.listen;
+    vi.spyOn(Server.prototype, 'listen').mockImplementation(function (
+      this: Server,
+      ...args: Parameters<typeof listen>
+    ) {
+      onTestFinished(
+        () =>
+          new Promise<void>((resolve) => {
+            this.close(() => resolve());
+            this.closeAllConnections();
+          }),
+      );
+      return listen.apply(this, args);
+    });
+    const { killGuardUrl } = await import('./server.ts');
+    const url = await killGuardUrl();
+    const hook = (command: string) =>
+      new Promise<string>((resolve, reject) => {
+        const child = spawn('sh', ['-c', KILL_GUARD_COMMAND], {
+          env: { ...process.env, [KILL_GUARD_ENV]: url },
+        });
+        let out = '';
+        child.stdout.on('data', (chunk) => (out += chunk));
+        child.on('error', reject);
+        child.on('close', (code) =>
+          code === 0 ? resolve(out) : reject(new Error(`curl exited ${code}`)),
+        );
+        child.stdin.end(
+          JSON.stringify({
+            hook_event_name: 'PreToolUse',
+            tool_name: 'Bash',
+            tool_input: { command },
+            permission_mode: 'bypassPermissions',
+            cwd: '/tmp',
+            session_id: 'codex-thread',
+            turn_id: 'turn',
+            tool_use_id: 'call',
+          }),
+        );
+      });
+    const denied = JSON.parse(await hook('pkill -f x .'));
+    assert.equal(denied.hookSpecificOutput.hookEventName, 'PreToolUse');
+    assert.equal(denied.hookSpecificOutput.permissionDecision, 'deny');
+    const decision = killDecision('', 'pkill -f x .');
+    assert.notEqual(decision.action, 'run');
+    assert.equal(
+      denied.hookSpecificOutput.permissionDecisionReason,
+      decision.action === 'run' ? undefined : decision.reason,
+    );
+    assert.equal(await hook('kill 123'), '');
+    assert.deepEqual(asked, ['agentKillHook', 'agentKillHook']);
+  },
+);

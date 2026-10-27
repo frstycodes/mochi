@@ -24,6 +24,7 @@ import { sessionLibrary } from '../library/store.ts';
 import {
   callMochi,
   codexUrl,
+  killGuardUrl,
   resolveToolCall,
   undeliveredToolCalls,
 } from '../mcp/server.ts';
@@ -171,6 +172,7 @@ export const mainForAgents = {
   toolResult: async (id: string, result: AgentToolResult) =>
     resolveToolCall(id, result),
   codexUrl: (thread: string, scope: MochiScope) => codexUrl(thread, scope),
+  killGuardUrl: () => killGuardUrl(),
   library: async (spaceId: string, provider: Provider) => {
     const [library, connectors, rules] = await Promise.all([
       sessionLibrary(spaceId, provider),

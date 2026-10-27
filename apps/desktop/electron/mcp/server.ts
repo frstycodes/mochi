@@ -80,6 +80,25 @@ const routes = new Map<
 
 const SECRET = randomBytes(24).toString('hex');
 
+/** Codex's PreToolUse hook (packages/core/src/agents/codex/killGuard.ts) POSTs its input here; a pattern kill gets a deny back. */
+export const killGuardUrl = () => loopbackUrl(HOOKS, 'kill-guard');
+
+const HOOKS = 'codex-hooks';
+
+addLoopbackRoute(HOOKS, async (req, res, [hook]) => {
+  if (req.method !== 'POST' || hook !== 'kill-guard')
+    return void res.writeHead(404).end();
+  let body = '';
+  for await (const chunk of req) body += chunk;
+  // Core decides, with the same rules and process registry as Claude's hook.
+  const answer = await makeHostCaller(await mainCoreClient())('agentKillHook', {
+    input: JSON.parse(body),
+  });
+  res
+    .writeHead(200, { 'Content-Type': 'application/json' })
+    .end(answer ? JSON.stringify(answer) : '');
+});
+
 function isSecret(value: string | undefined) {
   const given = Buffer.from(value ?? '');
   return (

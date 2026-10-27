@@ -23,6 +23,8 @@ export interface MainForAgents {
   pendingToolCalls(windowId: number | null): Promise<AgentToolCall[]>;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
   codexUrl(thread: string, scope: MochiScope): Promise<string>;
+  /** Where Codex's pattern-kill hook POSTs (packages/core/src/agents/codex/killGuard.ts). */
+  killGuardUrl(): Promise<string>;
   library(spaceId: string, provider: Provider): Promise<SessionLibrary>;
   settle(threadId: string): Promise<void>;
 }

@@ -42,6 +42,7 @@ import {
 } from './claude/sessions.ts';
 import { copyTranscript } from './claude/move.ts';
 import { CodexAdapter } from './codex/adapter.ts';
+import { killHookAnswer } from './codex/killGuard.ts';
 import type { HarnessAdapter } from './adapter.ts';
 import { reviewClaude, type ReviewUpdate } from './review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from './config.ts';
@@ -166,6 +167,7 @@ const codex = new CodexAdapter(
     return { ...kept, ...mochi, ...Object.assign({}, ...tools) };
   },
   (spaceId) => profileInstructions(spaceId, 'codex'),
+  () => main.killGuardUrl(),
 );
 const ADAPTERS = { claude, codex } satisfies Record<Provider, HarnessAdapter>;
 const adapters: HarnessAdapter[] = Object.values(ADAPTERS);
@@ -248,6 +250,15 @@ const required = <A>(service: A | undefined) => {
 setClaudeFreshRun((threadId, run) =>
   preparedRun(required(context), threadId, run, { provider: 'claude' }),
 );
+
+/** Codex's pattern-kill hook, through main's loopback route: the answer for the thread whose Codex session ran the command. */
+export function codexKillHook(input: unknown) {
+  const session = (input as { session_id?: unknown } | null)?.session_id;
+  const threadId =
+    typeof session === 'string' ? codex.threadOf(session) : undefined;
+  // A session Mochi doesn't know still gets the pattern rules; it just can't be agent-driven.
+  return killHookAnswer(threadId ?? '', input);
+}
 
 /** Mochi's `thread_history` tool for the thread's agent: Claude's in-process server calls it, Codex's through main. */
 export const threadHistory = (threadId: string, args: HistoryArgs) =>
