@@ -257,7 +257,7 @@ const relayHttp = <A, E>(
     ),
     Effect.flatMap(body),
     Effect.timeout(RELAY_TIMEOUT),
-    Effect.provide(NodeHttpClient.layerUndici),
+    Effect.provide(NodeHttpClient.layerNodeHttp),
     Effect.runPromise,
   );
 
