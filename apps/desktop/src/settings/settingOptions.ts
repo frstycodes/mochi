@@ -2,6 +2,20 @@ import { SEARCH_ENGINES } from '../browser/url.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
 import type { AgentControl, Prefs } from './prefs.ts';
 
+export type FontKind = 'ui' | 'mono';
+
+/** What an empty font pref shows as: the bundled Inter, or the OS's own monospace. */
+export const DEFAULT_FONT_LABEL = {
+  ui: 'Inter',
+  mono: 'System monospace',
+} satisfies Record<FontKind, string>;
+
+export const UI_TEXT_SIZES = [
+  { value: 'small', label: 'Small' },
+  { value: 'default', label: 'Default' },
+  { value: 'large', label: 'Large' },
+] as const;
+
 export const MOTION = [
   { value: 'system', label: 'System' },
   { value: 'on', label: 'On' },

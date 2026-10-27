@@ -17,6 +17,7 @@ export const settings: SettingsHost = {
   async get() {
     return current;
   },
+  systemFonts: async () => null,
   async set(patch) {
     current = mergeSettings(current, patch);
     return current;

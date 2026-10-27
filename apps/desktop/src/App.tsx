@@ -9,6 +9,7 @@ import { Toaster } from '@/toast/Toaster';
 import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
+import { useApplyFonts } from './settings/fonts';
 import { Orbit } from './Orbit';
 import { ThreadSwitcher } from './ThreadSwitcher';
 import { useAppZoom } from './appZoom';
@@ -62,6 +63,7 @@ export function App() {
 function AppContent() {
   const route = useHashRoute();
   useIdleScrollbars();
+  useApplyFonts();
   return (
     <ThemeProvider
       attribute="data-theme"

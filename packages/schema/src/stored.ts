@@ -102,6 +102,10 @@ export const AgentControl = Schema.Literals(['read', 'changes', 'everything']);
 /** `Prefs` (src/settings/prefs.ts). `toolPolicies` is keyed by tool name, which this package doesn't list. */
 const prefsFields = {
   reduceMotion: Schema.Literals(['system', 'on', 'off']),
+  uiFont: S,
+  monoFont: S,
+  uiTextSize: Schema.Literals(['small', 'default', 'large']),
+  codeFontSize: Schema.Number,
   animations: Strings,
   lightTheme: S,
   darkTheme: S,

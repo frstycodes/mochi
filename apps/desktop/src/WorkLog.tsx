@@ -1021,7 +1021,7 @@ function ExitBadge({ run }: { run: RunResult }) {
 
 const DIFF_STYLE = {
   '--diffs-font-family': 'var(--font-mono)',
-  '--diffs-font-size': '12px',
+  '--diffs-font-size': 'var(--code-font-size, 12px)',
   '--diffs-line-height': '20px',
 } as React.CSSProperties;
 

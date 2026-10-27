@@ -21,6 +21,7 @@ import { join } from 'node:path';
 const HELPERS = {
   haptic: ['electron/haptics/haptic.swift', '13.0'],
   windows: ['electron/windows/windows.swift', '14.0'],
+  fonts: ['electron/fonts/fonts.swift', '13.0'],
 };
 
 const MAC_ARCHS = { arm64: 'arm64', x64: 'x86_64' };

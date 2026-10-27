@@ -105,8 +105,16 @@ export interface AccountsState {
   links: Record<string, AccountLinks>;
 }
 
+/** An installed font family; `isMono` when any of its faces is fixed-pitch. */
+export interface SystemFont {
+  family: string;
+  isMono: boolean;
+}
+
 export interface SettingsHost {
   get(): Promise<AgentSettings>;
+  /** Installed font families, or null when this platform cannot list them (the UI then skips the "not installed" warning). */
+  systemFonts(): Promise<SystemFont[] | null>;
   set(patch: AgentSettingsPatch): Promise<AgentSettings>;
   /** The install plus the login it reports for this account's config folder. */
   detect(accountId: AccountId): Promise<AgentInstall>;
@@ -203,6 +211,7 @@ export interface ConfigPreview {
 export const settingsMethods = {
   get: 'invoke',
   set: 'invoke',
+  systemFonts: 'invoke',
   detect: 'invoke',
   latestVersion: 'invoke',
   updateHarness: 'invoke',

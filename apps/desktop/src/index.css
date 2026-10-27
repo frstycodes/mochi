@@ -239,11 +239,14 @@
   color-scheme: dark;
 }
 
-@theme inline {
+/* Not inline: Settings › Appearance › Fonts overrides these on the root at runtime. */
+@theme {
   --font-sans: 'Inter Variable', system-ui, -apple-system, sans-serif;
   --font-heading: var(--font-sans);
   --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
 
+@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -345,23 +348,26 @@
   --shadow-md: var(--elev-popover);
   --shadow-lg: var(--elev-popover);
 
-  --text-caption: 0.6875rem;
-  --text-caption--line-height: 1rem;
-  --text-meta: 0.75rem;
-  --text-meta--line-height: 1.125rem;
-  --text-body: 0.8125rem;
-  --text-body--line-height: 1.25rem;
-  --text-prose: 0.875rem;
-  --text-prose--line-height: 1.375rem;
-  --text-title: 0.875rem;
-  --text-title--line-height: 1.25rem;
-  --text-heading: 1.125rem;
-  --text-heading--line-height: 1.5rem;
-  --text-display: 1.5rem;
-  --text-display--line-height: 1.75rem;
+  /* --text-scale is Settings › Appearance › Interface size; it scales text, not spacing. */
+  --text-caption: calc(0.6875rem * var(--text-scale, 1));
+  --text-caption--line-height: calc(1rem * var(--text-scale, 1));
+  --text-meta: calc(0.75rem * var(--text-scale, 1));
+  --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
+  --text-body: calc(0.8125rem * var(--text-scale, 1));
+  --text-body--line-height: calc(1.25rem * var(--text-scale, 1));
+  --text-prose: calc(0.875rem * var(--text-scale, 1));
+  --text-prose--line-height: calc(1.375rem * var(--text-scale, 1));
+  --text-title: calc(0.875rem * var(--text-scale, 1));
+  --text-title--line-height: calc(1.25rem * var(--text-scale, 1));
+  --text-heading: calc(1.125rem * var(--text-scale, 1));
+  --text-heading--line-height: calc(1.5rem * var(--text-scale, 1));
+  --text-display: calc(1.5rem * var(--text-scale, 1));
+  --text-display--line-height: calc(1.75rem * var(--text-scale, 1));
+  --text-xs: calc(0.75rem * var(--text-scale, 1));
+  --text-xs--line-height: calc(1rem * var(--text-scale, 1));
   /* shadcn components size their text with text-sm; compact harness density puts it at 13px. */
-  --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.25rem;
+  --text-sm: calc(0.8125rem * var(--text-scale, 1));
+  --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
 }
 
 @utility type-display {
@@ -1044,4 +1050,8 @@
 }
 [data-streamdown='code-block-body'] [data-diff='del'] {
   color: color-mix(in oklab, var(--destructive), var(--foreground) 30%);
+}
+/* text-sm sits on the outer div; this sets the pre directly, so no class competes. */
+[data-streamdown='code-block-body'] pre {
+  font-size: var(--code-font-size, 12px);
 }
