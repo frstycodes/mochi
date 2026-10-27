@@ -9,6 +9,7 @@ import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
 import { startScheduler } from './schedule/scheduler.ts';
 import { startTray } from './tray.ts';
+import { startUpdates } from './updates/updater.ts';
 import { appIconImage, startAppIcon } from './appIcon.ts';
 import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
 import { serveFrames } from './frameProtocol.ts';
@@ -54,6 +55,7 @@ app
     startWatch();
     startScheduler();
     startLibraryUpdates();
+    startUpdates();
     // Before the first window: it watches every window's close.
     startRemote();
     createWindow();
