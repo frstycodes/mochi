@@ -329,6 +329,41 @@ export function TooltipIconButton({
   );
 }
 
+export interface Mode<T extends string> {
+  value: T;
+  label: string;
+  hint: string;
+  icon: ReactNode;
+}
+
+/** A two-way switch as one button: it shows the current mode, and pressing it swaps to the other. */
+export function ModeToggle<T extends string>({
+  value,
+  modes,
+  onSelect,
+  ...props
+}: {
+  value: T;
+  modes: readonly [Mode<T>, Mode<T>];
+  onSelect: (value: T) => void;
+} & Omit<
+  ComponentProps<typeof Button>,
+  'aria-label' | 'onClick' | 'onSelect' | 'value'
+>) {
+  const [current, other] =
+    modes[0].value === value ? modes : [modes[1], modes[0]];
+  return (
+    <TooltipIconButton
+      label={current.label}
+      hint={current.hint}
+      onClick={() => onSelect(other.value)}
+      {...props}
+    >
+      <IconSwap id={current.value}>{current.icon}</IconSwap>
+    </TooltipIconButton>
+  );
+}
+
 /**
  * The overflow-menu icon, filled. `vertical` (⋮, the same dots turned 90°) is for a menu that belongs
  * to one item or card and for the end of an address bar; horizontal (⋯) is for app headers and toolbars.

@@ -21,16 +21,32 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './editors';
 import { previewKind } from './kinds';
 import { FilePreview } from './previews';
 import { useOpenFile, type OpenFile } from './useFiles';
 import { isCommand } from '../keymap';
-import { TooltipIconButton } from '../ui';
+import { ModeToggle, TooltipIconButton, type Mode } from '../ui';
 
 // Lazy so CodeMirror parses only when a file is first opened as source.
 const CodeEditor = lazy(() => import('./CodeEditor'));
+
+type FileMode = 'preview' | 'source';
+
+const FILE_MODES = [
+  {
+    value: 'preview',
+    label: 'Preview',
+    hint: 'Click to see the source',
+    icon: <Eye />,
+  },
+  {
+    value: 'source',
+    label: 'Source',
+    hint: 'Click to see the preview',
+    icon: <Code />,
+  },
+] as const satisfies readonly [Mode<FileMode>, Mode<FileMode>];
 
 export function FileView({
   root,
@@ -48,7 +64,7 @@ export function FileView({
   const file = useOpenFile(root, path);
   const kind = previewKind(path);
   const hasSource = file.content?.kind === 'text';
-  const [mode, setMode] = useState<'preview' | 'source'>(
+  const [mode, setMode] = useState<FileMode>(
     kind && !line ? 'preview' : 'source',
   );
   const [isComparing, setIsComparing] = useState(false);
@@ -72,20 +88,12 @@ export function FileView({
         )}
         <span className="flex-1" />
         {!!kind && hasSource && (
-          <ToggleGroup
-            type="single"
-            size="sm"
+          <ModeToggle
             value={mode}
-            onValueChange={(v) => v && setMode(v as typeof mode)}
-            aria-label="View"
-          >
-            <ToggleGroupItem value="preview" aria-label="Preview">
-              <Eye />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="source" aria-label="Source">
-              <Code />
-            </ToggleGroupItem>
-          </ToggleGroup>
+            modes={FILE_MODES}
+            onSelect={setMode}
+            className="text-muted-foreground"
+          />
         )}
         {file.isDirty && (
           <Button
