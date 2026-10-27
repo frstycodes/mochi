@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react';
-import { CheckCircle, XCircle, Info, Loader, Warning, X } from '@/icons';
+import { CheckCircle, XCircle, Info, Warning, X } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import type { Toast, ToastType } from './store';
 
@@ -70,9 +71,7 @@ const ICONS = {
   info: <Info className="size-4 text-info" />,
   warning: <Warning className="size-4 text-warning" />,
   error: <XCircle className="size-4 text-destructive" />,
-  loading: (
-    <Loader className="size-4 animate-spin text-muted-foreground motion-reduce:animate-[spin_2s_linear_infinite]" />
-  ),
+  loading: <Spinner className="text-muted-foreground" />,
 } satisfies Record<ToastType, unknown>;
 
 function ToastIcon({ type }: { type: ToastType }) {
