@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Danger, History, StopCircle } from '@/icons';
+import { Warning, History, Stop } from '@/icons';
 import { ForkIcon } from '../ui';
 import {
   Alert,
@@ -253,7 +253,7 @@ function WorkingNotice({
 }) {
   return (
     <Alert>
-      <StopCircle aria-hidden />
+      <Stop aria-hidden />
       <AlertTitle>
         {isStopping ? 'Stopping the agent…' : STOP_TO_REWIND}
       </AlertTitle>
@@ -338,7 +338,7 @@ function FilesPreview({
       )}
       {outside.length > 0 && (
         <Alert>
-          <Danger aria-hidden className="text-warning" />
+          <Warning aria-hidden className="text-warning" />
           <AlertTitle>
             {countLabel(outside.length, 'file')} changed outside the agent
           </AlertTitle>

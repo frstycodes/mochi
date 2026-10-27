@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from 'react';
 import { flushSync } from 'react-dom';
-import { Danger } from '@/icons';
+import { XCircle } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -173,7 +173,7 @@ function PageError({ error, onRetry }: { error: string; onRetry: () => void }) {
     <Empty className="absolute inset-0">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Danger />
+          <XCircle />
         </EmptyMedia>
         <EmptyTitle>Can't reach this page</EmptyTitle>
         <EmptyDescription className="font-mono break-all">

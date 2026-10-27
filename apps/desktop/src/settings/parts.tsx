@@ -1,12 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import {
-  Check,
-  CopyStack,
-  Info,
-  Refresh,
-  CheckBadge,
-  WarningAlt,
-} from '@/icons';
+import { Check, Copy, Info, Refresh, CheckCircle, Warning } from '@/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -160,7 +153,7 @@ function StatusBadge({
   tone: 'success' | 'warning';
   children: ReactNode;
 }) {
-  const Icon = tone === 'success' ? CheckBadge : WarningAlt;
+  const Icon = tone === 'success' ? CheckCircle : Warning;
   return (
     <Badge variant="outline">
       <Icon
@@ -228,7 +221,7 @@ export function CommandLine({ command }: { command: string }) {
         onClick={copy}
       >
         <IconSwap id={isCopied ? 'copied' : 'copy'}>
-          {isCopied ? <Check /> : <CopyStack />}
+          {isCopied ? <Check /> : <Copy />}
         </IconSwap>
       </TooltipIconButton>
     </div>

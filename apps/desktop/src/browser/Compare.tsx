@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { toast } from '@/toast/store';
-import { Danger, X } from '@/icons';
+import { XCircle, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -356,7 +356,7 @@ function CompareError({
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Danger />
+          <XCircle />
         </EmptyMedia>
         <EmptyTitle>Couldn't serve the base branch</EmptyTitle>
         <EmptyDescription className="line-clamp-6 font-mono break-all whitespace-pre-wrap">

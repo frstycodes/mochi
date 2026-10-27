@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Bug, Eye, Pen } from '@/icons';
+import { Bug, Eye, Pencil } from '@/icons';
 import type { IconComponent } from '@/icons';
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
@@ -124,7 +124,7 @@ const STARTERS: {
     prompt: 'Find and fix the bug where ',
   },
   {
-    icon: Pen,
+    icon: Pencil,
     label: 'Explain how this codebase fits together',
     prompt: 'Explain how this codebase fits together',
   },

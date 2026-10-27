@@ -1,5 +1,5 @@
 import type { FallbackProps } from 'react-error-boundary';
-import { AlertTriangle, Refresh } from '@/icons';
+import { XCircle, Refresh } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -15,7 +15,7 @@ export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
     <Empty role="alert" className="h-full gap-3 border p-4">
       <EmptyHeader className="gap-1">
         <EmptyMedia variant="icon" className="mb-1 text-destructive">
-          <AlertTriangle />
+          <XCircle />
         </EmptyMedia>
         <EmptyTitle>This part failed to show</EmptyTitle>
         <EmptyDescription className="line-clamp-3 font-mono type-caption break-words">

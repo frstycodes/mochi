@@ -9,7 +9,6 @@ import {
 import {
   Check,
   Edit,
-  Pencil,
   Folder,
   FolderPlus,
   FolderMove,
@@ -383,7 +382,7 @@ function ProjectRow({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
-                <Pencil />
+                <Edit />
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={relocate}>

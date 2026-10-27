@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useState } from 'react';
-import { RotateLeft } from '@/icons';
+import { Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Popover,
@@ -76,7 +76,7 @@ export function ShortcutRecorder({
           onClick={() => assign(defaultKeys(command))}
           className="text-muted-foreground"
         >
-          <RotateLeft />
+          <Undo />
         </TooltipIconButton>
       )}
       <Popover

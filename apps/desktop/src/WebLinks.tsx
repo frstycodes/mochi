@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUpRight, CopyStack, Globe } from '@/icons';
+import { ArrowUpRight, Copy, Globe } from '@/icons';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -88,7 +88,7 @@ export function LinkRow({
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => copyText(link.url, 'Link copied')}>
-          <CopyStack />
+          <Copy />
           Copy link
         </ContextMenuItem>
       </ContextMenuContent>

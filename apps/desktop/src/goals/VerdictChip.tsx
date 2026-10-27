@@ -1,4 +1,4 @@
-import { Check, DiagramTree, Pause, WarningAlt } from '@/icons';
+import { Check, DiagramTree, Pause, Warning } from '@/icons';
 import { cn } from '@/lib/utils';
 import { useThreadPrs } from '../git/useThreadPrs';
 import type { LineSlot, Thread } from '../model';
@@ -65,7 +65,7 @@ export function VerdictIcon({
   className?: string;
 }) {
   if (kind === 'done') return <Check aria-hidden className={className} />;
-  if (kind === 'gaps') return <WarningAlt aria-hidden className={className} />;
+  if (kind === 'gaps') return <Warning aria-hidden className={className} />;
   if (kind === 'stalled') return <Pause aria-hidden className={className} />;
   if (kind === 'needs-you')
     return <span aria-hidden className="size-1.5 rounded-full bg-current" />;

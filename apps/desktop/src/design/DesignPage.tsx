@@ -8,9 +8,9 @@ import {
   Link,
   Monitor,
   Moon,
-  Pin,
+  Pushpin,
   Sun,
-  WarningAlt,
+  Warning,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
@@ -614,7 +614,7 @@ function Actions() {
               <ArrowUp data-icon="inline-end" />
             </Button>
             <Button variant="ghost" size="icon-sm" aria-label="Pin">
-              <Pin />
+              <Pushpin />
             </Button>
             <Button variant="outline" className="max-w-48">
               <span className="truncate">
@@ -904,7 +904,7 @@ function Feedback() {
               </AlertDescription>
             </Alert>
             <Alert variant="destructive">
-              <WarningAlt />
+              <Warning />
               <AlertTitle>Setup script failed in feat/admin-usage</AlertTitle>
               <AlertDescription>
                 pnpm install exited with code 1. The agent is paused until it
@@ -1353,7 +1353,7 @@ function Rules() {
         </Pair>
         <Pair rule="Status needs an icon or a word, not colour alone.">
           <span className="flex items-center gap-2 type-meta">
-            <WarningAlt className="size-4 text-warning" />
+            <Warning className="size-4 text-warning" />
             Needs you: answer the Stripe question
           </span>
           <span className="flex items-center gap-2 type-meta">

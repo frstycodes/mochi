@@ -6,16 +6,16 @@ import {
 } from 'react';
 import {
   Copy,
-  ExternalLink,
+  ArrowUpRight,
   FileCode,
   Folder,
   FolderOpen,
   Info,
   Lock,
   Refresh,
-  SearchAlt,
+  Search,
   Trash,
-  WarningAlt,
+  Warning,
 } from '@/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -241,7 +241,7 @@ function LibraryPagesMock({
         </ToggleGroup>
         <InputGroup className="h-8 sm:w-56">
           <InputGroupAddon>
-            <SearchAlt />
+            <Search />
           </InputGroupAddon>
           <InputGroupInput
             value={search}
@@ -525,7 +525,7 @@ function ItemStatus({
   if (item.error)
     return (
       <span className="flex items-start gap-1.5 type-caption text-warning">
-        <WarningAlt aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+        <Warning aria-hidden className="mt-0.5 size-3.5 shrink-0" />
         Couldn’t load: {item.error}
       </span>
     );
@@ -722,7 +722,7 @@ function ItemMenu({ item }: { item: ProfileItem }) {
           <DropdownMenuItem
             onSelect={say('Opens claude.ai › Settings › Connectors')}
           >
-            <ExternalLink />
+            <ArrowUpRight />
             Manage on claude.ai
           </DropdownMenuItem>
         ) : (

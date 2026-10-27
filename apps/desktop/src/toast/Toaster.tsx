@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { ChevronDownSmall, ChevronUpSmall } from '@/icons';
+import { ChevronDownSmall, ChevronUp } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ToastIdContext } from './context';
@@ -466,7 +466,7 @@ function ToastWidget({
           className="mt-2 mr-2 text-muted-foreground"
           onClick={onCollapse}
         >
-          <ChevronUpSmall />
+          <ChevronUp />
         </Button>
       </div>
       {children}

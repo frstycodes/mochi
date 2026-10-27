@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ArrowLeft, BackgroundTask, ChevronRight, Send, Stop } from '@/icons';
+import {
+  ArrowLeft,
+  BackgroundTask,
+  ChevronRight,
+  ArrowUp,
+  Stop,
+} from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import {
@@ -422,7 +428,7 @@ function AgentTranscript({
                   })
                 }
               >
-                <Send data-icon="inline-start" />
+                <ArrowUp data-icon="inline-start" />
                 Send to thread
               </Button>
             </div>

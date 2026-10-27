@@ -5,11 +5,11 @@ import {
   Ban,
   CheckCircle,
   ChevronDown,
-  Pen,
+  Edit,
   Plus,
   RaisedHand,
   Refresh,
-  SearchAlt,
+  Search,
   type IconComponent,
 } from '@/icons';
 import {
@@ -246,7 +246,7 @@ function ConnectorMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem onSelect={() => setRenaming(true)}>
-            <Pen />
+            <Edit />
             Rename…
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -404,7 +404,7 @@ function ToolPermissions({
         !settings.isOff && (
           <InputGroup className="h-7 w-48">
             <InputGroupAddon>
-              <SearchAlt />
+              <Search />
             </InputGroupAddon>
             <InputGroupInput
               value={search}

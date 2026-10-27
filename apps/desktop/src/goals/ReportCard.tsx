@@ -6,8 +6,8 @@ import {
   GitBranch,
   History,
   MessageText,
-  CheckBadge,
-  WarningAlt,
+  CheckCircle,
+  Warning,
   Terminal,
 } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -456,7 +456,7 @@ function FactIcon({ thread, tile }: { thread: Thread; tile: Tile }) {
 }
 
 const FACT_ICONS = {
-  criteria: CheckBadge,
+  criteria: CheckCircle,
   checks: Terminal,
   git: GitBranch,
   agent: MessageText,
@@ -591,7 +591,7 @@ function GapRow({
 function GapIcon({ gap }: { gap: Gap }) {
   if (gap.isAccepted)
     return (
-      <CheckBadge
+      <CheckCircle
         aria-hidden
         className="size-3.5 shrink-0 text-subtle-foreground"
       />
@@ -600,7 +600,7 @@ function GapIcon({ gap }: { gap: Gap }) {
     return (
       <XCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />
     );
-  return <WarningAlt aria-hidden className="size-3.5 shrink-0 text-warning" />;
+  return <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />;
 }
 
 function GapQuote({

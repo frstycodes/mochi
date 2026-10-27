@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { MultiFileDiff } from './Diffs';
-import { AlertTriangle, Code, File, Share, Eye } from '@/icons';
+import { Warning, Code, File, Share, Eye } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -217,7 +217,7 @@ function ConflictBar({
       title="The file changed on disk while you had unsaved edits"
       className="mx-2 mb-2 flex items-center gap-2 rounded-lg bg-card py-1.5 pr-1.5 pl-2.5 type-meta shadow-[0_0_0_1px_var(--border)]"
     >
-      <AlertTriangle aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />
       <span className="min-w-0 flex-1 truncate">Changed on disk</span>
       <Button size="sm" variant="ghost" onClick={onCompare}>
         {isComparing ? 'Hide diff' : 'Diff'}

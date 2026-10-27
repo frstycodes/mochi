@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronDown, SearchAlt, Users } from '@/icons';
+import { ChevronDown, Search, Users } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -98,7 +98,7 @@ export function LibraryPage({
           </TabsList>
           <InputGroup className="h-8 sm:mb-1.5 sm:w-64">
             <InputGroupAddon>
-              <SearchAlt />
+              <Search />
             </InputGroupAddon>
             <InputGroupInput
               value={search}

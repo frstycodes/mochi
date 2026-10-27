@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { CheckBadge, Download, Login, Refresh, Trash } from '@/icons';
+import { CheckCircle, Download, Login, Refresh, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -406,7 +406,7 @@ export function InstallControl({
   if (entry)
     return (
       <span className="flex h-7 w-24 items-center justify-end gap-1 type-meta text-muted-foreground">
-        <CheckBadge aria-hidden className="size-3.5 text-success" />
+        <CheckCircle aria-hidden className="size-3.5 text-success" />
         In library
       </span>
     );

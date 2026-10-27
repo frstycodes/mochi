@@ -5,7 +5,7 @@ import {
   type ComponentProps,
   type FormEvent,
 } from 'react';
-import { ArrowUp, CopyStack, RotateLeft, Stop, Trash, X } from '@/icons';
+import { ArrowUp, Copy, Undo, Stop, Trash, X } from '@/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -476,7 +476,7 @@ function RemoteMessageBar({
         onClick={() => copyText(entry.text, 'Copied')}
         className={BAR_BUTTON}
       >
-        <CopyStack />
+        <Copy />
       </TooltipIconButton>
       {entry.who === 'you' && (
         <DropdownMenu>
@@ -490,7 +490,7 @@ function RemoteMessageBar({
               disabled={!!blocked}
               className={BAR_BUTTON}
             >
-              <RotateLeft />
+              <Undo />
             </TooltipIconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">

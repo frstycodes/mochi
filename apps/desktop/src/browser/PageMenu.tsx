@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  ExternalLink,
+  ArrowUpRight,
   Clipboard,
   Code,
   Copy,
@@ -11,7 +11,7 @@ import {
   Link,
   Refresh,
   Scissors,
-  SearchAlt,
+  Search,
   TextSelect,
 } from '@/icons';
 import {
@@ -96,13 +96,13 @@ export function PageMenu({
         {!!menu.linkUrl && (
           <Section>
             <Item
-              icon={<ExternalLink />}
+              icon={<ArrowUpRight />}
               onSelect={() => openTab(menu.linkUrl)}
             >
               Open link in new tab
             </Item>
             <Item
-              icon={<ExternalLink />}
+              icon={<ArrowUpRight />}
               onSelect={() => openExternally(menu.linkUrl)}
             >
               {openInLabel('link')}
@@ -182,7 +182,7 @@ export function PageMenu({
                 Copy
               </Item>
               <Item
-                icon={<SearchAlt />}
+                icon={<Search />}
                 onSelect={() =>
                   openTab(engine.url + encodeURIComponent(selection))
                 }

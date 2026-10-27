@@ -4,14 +4,6 @@ import * as Bold from '@solar-icons/react/bold';
 import * as Linear from '@solar-icons/react/linear';
 import { customIcon, type IconComponent, type IconProps } from './glyph';
 
-export const AlertCircle = solar(
-  Linear.DangerCircleIcon,
-  Bold.DangerCircleIcon,
-);
-export const AlertTriangle = solar(
-  Linear.DangerTriangleIcon,
-  Bold.DangerTriangleIcon,
-);
 export const Archive = solar(Linear.ArchiveIcon, Bold.ArchiveIcon);
 export const ArrowDown = solar(Linear.ArrowDownIcon, Bold.ArrowDownIcon);
 export const ArrowLeft = solar(Linear.ArrowLeftIcon, Bold.ArrowLeftIcon);
@@ -45,7 +37,6 @@ export const Chart = solar(Linear.ChartIcon, Bold.ChartIcon);
 export const Chat = solar(Linear.ChatRoundIcon, Bold.ChatRoundIcon);
 export const Check = solar(Linear.CheckReadIcon, Bold.CheckReadIcon);
 export const CheckSingle = solar(Linear.CheckIcon, Bold.CheckIcon);
-export const CheckBadge = solar(Linear.CheckCircleIcon, Bold.CheckCircleIcon);
 export const CheckCircle = solar(Linear.CheckCircleIcon, Bold.CheckCircleIcon);
 export const ChevronDown = solar(
   Linear.AltArrowDownIcon,
@@ -64,7 +55,6 @@ export const ChevronRight = solar(
   Bold.AltArrowRightIcon,
 );
 export const ChevronUp = solar(Linear.AltArrowUpIcon, Bold.AltArrowUpIcon);
-export const ChevronUpSmall = solar(Linear.AltArrowUpIcon, Bold.AltArrowUpIcon);
 export const Clipboard = solar(Linear.ClipboardIcon, Bold.ClipboardIcon);
 export const ClipboardCheck = solar(
   Linear.ClipboardCheckIcon,
@@ -87,10 +77,8 @@ export const Columns = solar(Linear.PanelLeftIcon, Bold.PanelLeftIcon);
 export const Command = solar(Linear.CommandIcon, Bold.CommandIcon);
 export const Compass = solar(Linear.CompassIcon, Bold.CompassIcon);
 export const Copy = solar(Linear.CopyIcon, Bold.CopyIcon);
-export const CopyStack = solar(Linear.CopyIcon, Bold.CopyIcon);
 export const Cpu = solar(Linear.CpuIcon, Bold.CpuIcon);
 export const Cursor = solar(Linear.CursorIcon, Bold.CursorIcon);
-export const Danger = solar(Linear.DangerTriangleIcon, Bold.DangerTriangleIcon);
 export const Database = solar(Linear.DatabaseIcon, Bold.DatabaseIcon);
 export const Devices = solar(Linear.DevicesIcon, Bold.DevicesIcon);
 export const Diff = solar(Linear.PlusMinusIcon, Bold.PlusMinusIcon);
@@ -101,15 +89,9 @@ export const ExitFullscreen = solar(
   Bold.QuitFullScreenIcon,
 );
 export const ExitPip = solar(Linear.QuitPipIcon, Bold.QuitPipIcon);
-export const Expand = solar(Linear.MaximizeIcon, Bold.MaximizeIcon);
-export const ExternalLink = solar(
-  Linear.SquareArrowRightUpIcon,
-  Bold.SquareArrowRightUpIcon,
-);
 export const DiagramTree = solar(Linear.DiagramDownIcon, Bold.DiagramDownIcon);
 export const Eye = solar(Linear.EyeIcon, Bold.EyeIcon);
 export const EyeOff = solar(Linear.EyeClosedIcon, Bold.EyeClosedIcon);
-export const EyeSlash = solar(Linear.EyeClosedIcon, Bold.EyeClosedIcon);
 export const File = solar(Linear.FileIcon, Bold.FileIcon);
 export const FileCode = solar(Linear.CodeFileIcon, Bold.CodeFileIcon);
 export const FileCopy = solar(Linear.DocumentsIcon, Bold.DocumentsIcon);
@@ -130,7 +112,6 @@ export const Forward10 = solar(
 );
 export const Fullscreen = solar(Linear.FullScreenIcon, Bold.FullScreenIcon);
 export const Globe = solar(Linear.GlobalIcon, Bold.GlobalIcon);
-export const GlobeAlt = solar(Linear.GlobalIcon, Bold.GlobalIcon);
 export const GlobeSearch = solar(
   Linear.MapPointSearchIcon,
   Bold.MapPointSearchIcon,
@@ -160,7 +141,6 @@ export const Lock = solar(Linear.LockIcon, Bold.LockIcon);
 export const LockKeyhole = solar(Linear.LockKeyholeIcon, Bold.LockKeyholeIcon);
 export const Login = solar(Linear.LoginIcon, Bold.LoginIcon);
 export const Logout = solar(Linear.Logout2Icon, Bold.Logout2Icon);
-export const MagicStar = solar(Linear.MagicWand2Icon, Bold.MagicWand2Icon);
 export const Maximize = solar(Linear.MaximizeIcon, Bold.MaximizeIcon);
 export const Mention = solar(Linear.MentionCircleIcon, Bold.MentionCircleIcon);
 export const Menu = solar(Linear.HamburgerMenuIcon, Bold.HamburgerMenuIcon);
@@ -195,19 +175,15 @@ export const Notification = solar(
 export const Paperclip = solar(Linear.PaperclipIcon, Bold.PaperclipIcon);
 export const Pause = solar(Linear.PauseIcon, Bold.PauseIcon);
 export const PauseCircle = solar(Linear.PauseCircleIcon, Bold.PauseCircleIcon);
-export const Pen = solar(Linear.PenIcon, Bold.PenIcon);
 export const Pencil = solar(Linear.PenIcon, Bold.PenIcon);
 export const Phone = solar(Linear.SmartphoneIcon, Bold.SmartphoneIcon);
 export const PhoneRotate = solar(
   Linear.SmartphoneRotateOrientationIcon,
   Bold.SmartphoneRotateOrientationIcon,
 );
-export const Photo = solar(Linear.GalleryIcon, Bold.GalleryIcon);
-export const Pin = solar(Linear.MapPointIcon, Bold.MapPointIcon);
 export const PinOff = solar(Linear.PinCircleIcon, Bold.PinCircleIcon);
 export const Pip = solar(Linear.PipIcon, Bold.PipIcon);
 export const Play = solar(Linear.PlayIcon, Bold.PlayIcon);
-export const PlayCircle = solar(Linear.PlayCircleIcon, Bold.PlayCircleIcon);
 export const Plug = solar(Linear.PlugCircleIcon, Bold.PlugCircleIcon);
 export const Plus = solar(Linear.AddIcon, Bold.AddIcon);
 export const PlusBold = solar(Linear.AddCircleIcon, Bold.AddCircleIcon);
@@ -221,27 +197,17 @@ export const RecordCircle = solar(
 );
 export const Redo = solar(Linear.UndoRightIcon, Bold.UndoRightIcon);
 export const Refresh = solar(Linear.RefreshIcon, Bold.RefreshIcon);
-export const RefreshCircle = solar(
-  Linear.RefreshCircleIcon,
-  Bold.RefreshCircleIcon,
-);
 export const Rewind10 = solar(
   Linear.Rewind10SecondsBackIcon,
   Bold.Rewind10SecondsBackIcon,
 );
 export const Rocket = solar(Linear.RocketIcon, Bold.RocketIcon);
-export const RotateLeft = solar(Linear.UndoLeftIcon, Bold.UndoLeftIcon);
 export const Rotation = solar(Linear.RestartIcon, Bold.RestartIcon);
 export const Route = solar(Linear.RouteIcon, Bold.RouteIcon);
 export const Rows = solar(Linear.PanelTopIcon, Bold.PanelTopIcon);
 export const Scale = solar(Linear.ScalingIcon, Bold.ScalingIcon);
 export const Scissors = solar(Linear.ScissorsIcon, Bold.ScissorsIcon);
 export const Search = solar(Linear.MagnifierIcon, Bold.MagnifierIcon);
-export const SearchAlt = solar(
-  Linear.MinimalisticMagnifierIcon,
-  Bold.MinimalisticMagnifierIcon,
-);
-export const Send = solar(Linear.Plane2Icon, Bold.Plane2Icon);
 export const SendAlt = solar(Linear.PlaneIcon, Bold.PlaneIcon);
 export const Server = solar(Linear.ServerIcon, Bold.ServerIcon);
 export const Settings = solar(Linear.SettingsIcon, Bold.SettingsIcon);
@@ -251,7 +217,6 @@ export const ShieldAlert = solar(
   Bold.ShieldWarningIcon,
 );
 export const ShieldCheck = solar(Linear.ShieldCheckIcon, Bold.ShieldCheckIcon);
-export const ShieldTick = solar(Linear.ShieldCheckIcon, Bold.ShieldCheckIcon);
 export const ShieldX = solar(Linear.ShieldCrossIcon, Bold.ShieldCrossIcon);
 export const Sidebar = solar(
   Linear.PanelTextRightIcon,
@@ -273,9 +238,7 @@ export const Sparkles = solar(
   Bold.StarsMinimalisticIcon,
 );
 export const Star = solar(Linear.StarIcon, Bold.StarIcon);
-export const Stars = solar(Linear.StarsIcon, Bold.StarsIcon);
 export const Stop = solar(Linear.StopIcon, Bold.StopIcon);
-export const StopCircle = solar(Linear.StopCircleIcon, Bold.StopCircleIcon);
 export const Sun = solar(Linear.SunIcon, Bold.SunIcon);
 export const Table = solar(Linear.TableIcon, Bold.TableIcon);
 export const Tablet = solar(Linear.TabletIcon, Bold.TabletIcon);
@@ -304,7 +267,6 @@ export const UserCheck = solar(
   Bold.UserCheckRoundedIcon,
 );
 export const UserCircle = solar(Linear.UserCircleIcon, Bold.UserCircleIcon);
-export const UserEdit = solar(Linear.UserHandUpIcon, Bold.UserHandUpIcon);
 export const Users = solar(
   Linear.UsersGroupRoundedIcon,
   Bold.UsersGroupRoundedIcon,
@@ -315,10 +277,6 @@ export const VideoPlay = solar(
   Bold.VideoFramePlayHorizontalIcon,
 );
 export const Warning = solar(
-  Linear.DangerTriangleIcon,
-  Bold.DangerTriangleIcon,
-);
-export const WarningAlt = solar(
   Linear.DangerTriangleIcon,
   Bold.DangerTriangleIcon,
 );
@@ -363,7 +321,6 @@ export const Commit = customIcon(
   'Commit',
   `<circle cx="12" cy="12" r="3.25" stroke="currentColor" stroke-width="1.5"/><path d="M2.75 12h6M15.25 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
 );
-export const Control = solar(Linear.AltArrowUpIcon, Bold.AltArrowUpIcon);
 // Solar has no Return key glyph either; drawn on the same 24px grid at the same stroke.
 export const Return = customIcon(
   'Return',
