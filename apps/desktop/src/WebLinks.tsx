@@ -15,6 +15,7 @@ import { copyText } from './clipboard';
 import type { WebLink } from './model';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { useVizThreadId } from './viz/WidgetVisual';
+import { useOpenLink } from './chat/useOpenLink';
 
 const SHOWN = 4;
 
@@ -53,6 +54,7 @@ export function LinkRow({
   className?: string;
 }) {
   const { openUrl } = usePaneOpeners(useVizThreadId());
+  const openLink = useOpenLink();
   const host = hostname(link.url);
   return (
     <ContextMenu>
@@ -60,7 +62,8 @@ export function LinkRow({
         <button
           type="button"
           title={link.url}
-          onClick={() => openUrl(link.url)}
+          onClick={(e) => openLink(e, link.url)}
+          onAuxClick={(e) => openLink(e, link.url)}
           className={cn(
             'flex h-6 w-full min-w-0 cursor-default items-center gap-2 rounded-md px-2 text-left type-caption hover:bg-accent/60',
             className,

@@ -36,6 +36,8 @@ import {
 } from '@mochi/domain/chat/refs';
 import { REF_CHIP_CLASS } from '@/icons/github';
 import { useRefState, useRepoSlug } from './useRefState';
+import { isWebUrl } from './linkTarget';
+import { useOpenLink } from './useOpenLink';
 
 const DefaultLink = defaultComponents.a!;
 
@@ -65,7 +67,24 @@ export function ChatLink(props: LinkProps) {
     );
   if (textPath !== undefined || isRelative(href))
     return <PathLink path={href}>{children}</PathLink>;
+  if (isWebUrl(href)) return <WebLink href={href}>{children}</WebLink>;
   return <DefaultLink {...props} />;
+}
+
+/** A web page: the side pane's browser on click, the system browser on ⌘/Ctrl-click or middle click. */
+function WebLink({ href, children }: { href: string; children: ReactNode }) {
+  const openLink = useOpenLink();
+  return (
+    <a
+      href={href}
+      title={href}
+      onClick={(e) => openLink(e, href)}
+      onAuxClick={(e) => openLink(e, href)}
+      className="wrap-anywhere font-medium text-primary underline"
+    >
+      {children}
+    </a>
+  );
 }
 
 /** `owner/repo#n` or `#n` from prose; an empty owner is the thread's own repo, so `#n` stays text in a thread without one. */
@@ -103,6 +122,7 @@ export function RefChip({
   const home = useRepoSlug(cwd);
   const state = useRefState(githubRef, { cwd, githubUser });
   const dispatch = useDispatch();
+  const openLink = useOpenLink();
   const url = state?.url ?? refUrl(githubRef);
   const description = refDescription(githubRef.kind, state);
   const label = refLabel(githubRef, home);
@@ -113,15 +133,8 @@ export function RefChip({
         <ContextMenuTrigger asChild>
           <a
             href={url}
-            onClick={(e) => {
-              e.preventDefault();
-              dispatch({
-                type: 'pane-open-tab',
-                threadId,
-                kind: 'browser',
-                url,
-              });
-            }}
+            onClick={(e) => openLink(e, url)}
+            onAuxClick={(e) => openLink(e, url)}
             aria-label={`${children ? textOf(children) : label}: ${state?.title ? `${state.title}, ` : ''}${description}`}
             className={cn(
               'inline-flex max-w-full items-center gap-[0.3em] rounded-md px-[0.4em] align-baseline text-[0.9em] leading-snug font-medium no-underline transition-colors',
