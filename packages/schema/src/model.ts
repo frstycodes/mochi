@@ -707,6 +707,17 @@ export const ActivityEntry = Schema.Struct({
       text: Schema.String,
     }),
   ),
+  subReport: opt(
+    Schema.Struct({
+      threadId: Schema.String,
+      title: Schema.String,
+      status: Schema.String,
+      isUrgent: opt(Schema.Literal(true)),
+      isReply: opt(Schema.Literal(true)),
+      isDelivered: opt(Schema.Literal(true)),
+      report: opt(ParentReport),
+    }),
+  ),
   sent: opt(Schema.Struct({ ...ThreadRef.fields, text: Schema.String })),
   compaction: opt(Compaction),
   handoff: opt(Handoff),

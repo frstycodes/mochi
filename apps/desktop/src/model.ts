@@ -104,6 +104,25 @@ export interface ParentReport {
   checks?: { command: string; result: 'passed' | 'failed' }[];
 }
 
+/**
+ * A report in a parent's transcript, which is also what its agent gets: the row and the agent read the same entry. Undelivered
+ * ones ride with the next message or wake the agent (`dueWakes`), then are marked delivered.
+ */
+export interface SubReport {
+  threadId: string;
+  title: string;
+  /** What the row says after the name: "done", "blocked", "PR #12: merged", "interrupted". */
+  status: string;
+  /** Wakes the parent's agent at once instead of waiting for every sub-thread to go idle. */
+  isUrgent?: true;
+  /** From a thread this one messaged with `expectReply`, not a sub-thread. */
+  isReply?: true;
+  /** The parent's agent got it, with a message or a wake. */
+  isDelivered?: true;
+  /** The `report_to_parent` it came from; unset for an excerpt, a PR event or a reply. */
+  report?: ParentReport;
+}
+
 /** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
 export interface NextOption {
   label: string;
@@ -224,6 +243,8 @@ export interface ActivityEntry {
   autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
   /** Events only: a sub-thread handed its result back here. */
   subThread?: { threadId: string; title: string; text: string };
+  /** Events only: a sub-thread reported here (`reportParent`), or a thread messaged with `expectReply` answered; `text` is the body. */
+  subReport?: SubReport;
   /** Tool entries: the message this `send_to_thread` call delivered. */
   sent?: ThreadRef & { text: string };
   /** Events only: the harness compacted the conversation here. */

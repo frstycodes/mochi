@@ -42,7 +42,8 @@ import { nestBlocker, openSubtree, pinAt, reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
-import { notePrsEnded } from '../runtime/subThreadNotes.ts';
+import { markReportsDelivered } from '../runtime/due.ts';
+import { reportPrsEnded, reportTyped } from '../runtime/subThreadReports.ts';
 import {
   recordCheckpoints,
   rewind,
@@ -855,17 +856,7 @@ function reduce(state: State, action: Action): State {
         })),
       };
     case 'parent-report':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({
-          ...t,
-          parentReport: {
-            ...action.report,
-            at: state.now,
-            index: t.activity.length,
-          },
-        })),
-      };
+      return parentReport(state, action);
     case 'simplified':
       return {
         ...state,
@@ -1092,13 +1083,14 @@ function reduce(state: State, action: Action): State {
                     notes: undefined,
                     restart: undefined,
                   },
+                  activity: markReportsDelivered(t).activity,
                   turn: { start: t.activity.length, isAgentDriven: true },
                 },
                 {
                   at: state.now,
                   who: 'harness',
                   kind: 'event',
-                  text: 'Sub-threads idle: sent their notes to the agent',
+                  text: 'Sent the sub-thread reports to the agent',
                 },
               )
             : t,
@@ -1257,7 +1249,7 @@ export function seePrs(
       }),
     { ...thread, prs: recorded },
   );
-  return notePrsEnded(
+  return reportPrsEnded(
     { ...state, threads: mapThread(state.threads, threadId, () => said) },
     thread,
   );
@@ -1380,6 +1372,31 @@ export function stampStep(
     ...(isDone && { doneMs: ms }),
     ...(isStopped && { stoppedMs: ms }),
   };
+}
+
+/** A `report_to_parent` call: kept on the sub-thread for `get_thread`, and logged in its parent's transcript (`reportTyped`). */
+function parentReport(
+  state: State,
+  action: Extract<Action, { type: 'parent-report' }>,
+): State {
+  const sub = state.threads.find((t) => t.id === action.threadId);
+  if (!sub) return state;
+  const report = {
+    ...action.report,
+    at: state.now,
+    index: sub.activity.length,
+  };
+  return reportTyped(
+    {
+      ...state,
+      threads: mapThread(state.threads, sub.id, (t) => ({
+        ...t,
+        parentReport: report,
+      })),
+    },
+    sub,
+    report,
+  );
 }
 
 export function log(thread: Thread, entry: ActivityEntry): Thread {
@@ -1606,8 +1623,10 @@ export function send(
               ],
             }
           : {};
+      // Its undelivered reports went with this message (`withReports`), as the notes did.
+      const delivered = live ? markReportsDelivered(t) : t;
       const sent = withQueue(
-        { ...t, queuePause: undefined, ...replier },
+        { ...delivered, queuePause: undefined, ...replier },
         (t.queued ?? []).filter((m) => m.id !== action.queuedId),
       );
       const entry: ActivityEntry = {

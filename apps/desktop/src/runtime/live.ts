@@ -28,7 +28,7 @@ import {
 import { agentOptions } from './agentOptions.ts';
 import { moveCall, withMoveNote } from './move.ts';
 import { startEnv } from './startEnv.ts';
-import { WAKE_PROMPT } from './subThreadNotes.ts';
+import { WAKE_PROMPT, withReports } from './subThreadReports.ts';
 import {
   backgroundPrompt,
   backgroundSession,
@@ -115,7 +115,7 @@ export function agentCalls(
       if (!thread?.live) return [];
       const text = withMoveNote(
         thread,
-        withNotes(thread, action.prompt ?? action.text),
+        withNotes(thread, withReports(thread, action.prompt ?? action.text)),
       );
       const images = action.images?.length ? { images: action.images } : {};
       const skills = action.skills?.length ? { skills: action.skills } : {};

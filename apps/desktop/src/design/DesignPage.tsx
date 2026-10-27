@@ -95,6 +95,7 @@ import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
 import { SteerBlock } from './sections/steer';
+import { SubReportsBlock } from './sections/sub-reports';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { TiltedDragBlock } from './sections/tilted-drag';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
@@ -1146,6 +1147,7 @@ function Recipes() {
         <NextMoveBlock rl={rl} />
         <SteerBlock />
         <SubThreadsBlock rl={rl} />
+        <SubReportsBlock rl={rl} />
         <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
         <MergeButtonBlock />

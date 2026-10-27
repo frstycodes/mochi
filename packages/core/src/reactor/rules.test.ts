@@ -88,15 +88,26 @@ test('delegated reports: one command per due report, keyed by thread and subagen
   );
 });
 
-test('sub-thread wakes: an idle parent with notes and idle children wakes, once per set of notes', () => {
-  const parent = (notes: string[]) =>
-    thread('p', { live: { isWorking: false, notes } });
-  const child = (isWorking: boolean) =>
-    thread('c', { parent: { threadId: 'p' }, live: { isWorking } });
+const report = (
+  status: string,
+  fields: { isUrgent?: true; isDelivered?: true } = {},
+) => ({
+  at: 0,
+  who: 'harness',
+  kind: 'event',
+  text: '',
+  subReport: { threadId: 'c', title: 'c', status, ...fields },
+});
+const parent = (activity: unknown[]) =>
+  thread('p', { activity, live: { isWorking: false } });
+const child = (id: string, isWorking: boolean) =>
+  thread(id, { parent: { threadId: 'p' }, live: { isWorking } });
+
+test('sub-thread wakes: an idle parent with undelivered reports and idle children wakes, once per set of reports', () => {
   const [first] = subThreadWakes(
     saved('c'),
     NONE,
-    state([parent(['[Sub-thread "c" ended a turn: done]']), child(false)]),
+    state([parent([report('done')]), child('c', false)]),
   );
   assert.equal(first?.type, 'subthread.wake');
   assert.equal(first?.threadId, 'p');
@@ -104,43 +115,43 @@ test('sub-thread wakes: an idle parent with notes and idle children wakes, once 
     subThreadWakes(
       saved('c'),
       NONE,
-      state([parent(['[Sub-thread "c" ended a turn: done]']), child(true)]),
+      state([parent([report('done')]), child('c', true)]),
     ),
     [],
     'a working child holds the wake',
   );
-  const [second] = subThreadWakes(
-    saved('c'),
-    NONE,
-    state([parent(['[Sub-thread "c" ended a turn: failed]']), child(false)]),
-  );
-  assert.notEqual(second?.key, first?.key, 'new notes wake it again');
-});
-
-test('sub-thread wakes: an urgent report wakes the parent while another child works; done waits', () => {
-  const parent = (notes: string[]) =>
-    thread('p', { live: { isWorking: false, notes } });
-  const child = (id: string, isWorking: boolean) =>
-    thread(id, { parent: { threadId: 'p' }, live: { isWorking } });
-  const busy = (note: string) =>
+  assert.deepEqual(
     subThreadWakes(
       saved('c'),
       NONE,
-      state([parent([note]), child('c', false), child('d', true)]),
-    );
-  for (const status of ['blocked', 'needs_input', 'failed'])
-    assert.equal(
-      busy(`[Sub-thread "c" (c) reported: ${status}]\nNeed the key.`)[0]
-        ?.threadId,
-      'p',
-      status,
-    );
-  assert.deepEqual(busy('[Sub-thread "c" (c) reported: done]\nAll done.'), []);
-  assert.deepEqual(
-    busy('[Sub-thread "c" (c) reported: done]\nIt said reported: failed]'),
+      state([
+        parent([report('done', { isDelivered: true })]),
+        child('c', false),
+      ]),
+    ),
     [],
-    'only the header line counts',
+    'delivered reports wake nobody',
   );
+  const [second] = subThreadWakes(
+    saved('c'),
+    NONE,
+    state([
+      parent([report('done', { isDelivered: true }), report('failed')]),
+      child('c', false),
+    ]),
+  );
+  assert.notEqual(second?.key, first?.key, 'new reports wake it again');
+});
+
+test('sub-thread wakes: an urgent report wakes the parent while another child works; done waits', () => {
+  const busy = (r: unknown) =>
+    subThreadWakes(
+      saved('c'),
+      NONE,
+      state([parent([r]), child('c', false), child('d', true)]),
+    );
+  assert.equal(busy(report('blocked', { isUrgent: true }))[0]?.threadId, 'p');
+  assert.deepEqual(busy(report('done')), []);
 });
 
 test('limit resumes: armed threads get a resume due at their reset, a new key per reset', () => {
