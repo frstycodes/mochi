@@ -851,11 +851,31 @@ export const SPACE_ICON_NAMES = [
 ] as const;
 export type SpaceIconName = (typeof SPACE_ICON_NAMES)[number];
 
+export const SPACE_COLOR_NAMES = [
+  'green',
+  'blue',
+  'violet',
+  'amber',
+  'pink',
+  'teal',
+  'orange',
+  'red',
+] as const;
+export type SpaceColorName = (typeof SPACE_COLOR_NAMES)[number];
+/** `none` turns the sidebar halo off; unset picks one from the id (`spaceColor`). */
+export type SpaceColor = SpaceColorName | 'none';
+
+export const SPACE_HALO_MOTIONS = ['breathe', 'drift', 'still'] as const;
+export type SpaceHaloMotion = (typeof SPACE_HALO_MOTIONS)[number];
+
 /** A profile. Its Claude Code and Codex accounts are linked by id in the desktop host (`AccountLinks`), not stored here. */
 export interface Space {
   id: string;
   name: string;
   icon: SpaceIconName;
+  color?: SpaceColor;
+  /** How the halo moves; unset is `breathe`. */
+  haloMotion?: SpaceHaloMotion;
   /** GAP: demo plan names until usage reads the linked account's detected plan; empty for profiles made in Settings. */
   plans: Record<Provider, string>;
   /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */
@@ -877,6 +897,7 @@ export const DEFAULT_SPACES: Space[] = [
     id: 'latitude',
     name: 'Latitude',
     icon: 'work',
+    color: 'amber',
     plans: { claude: 'Team', codex: 'Business' },
     github: '',
   },
@@ -884,6 +905,7 @@ export const DEFAULT_SPACES: Space[] = [
     id: 'personal',
     name: 'Personal',
     icon: 'home',
+    color: 'green',
     plans: { claude: 'Max', codex: 'Plus' },
     github: '',
   },
@@ -891,6 +913,7 @@ export const DEFAULT_SPACES: Space[] = [
     id: 'liane',
     name: 'Liane',
     icon: 'layers',
+    color: 'violet',
     plans: { claude: 'Max', codex: 'Plus' },
     github: '',
   },

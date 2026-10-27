@@ -1,6 +1,8 @@
 import { hourLabel, type QuietHours } from '../notify/model.ts';
 import { ALERT_KINDS } from '../notify/model.ts';
 import { SPACE_ICON_NAMES, type Provider, type Space } from '../model.ts';
+import { haloMotion, isHaloMotion } from '../haloShape.ts';
+import { isSpaceColor, spaceColor } from '../spaceColor.ts';
 import { SHARED_ACCESS } from '../runtime/access.ts';
 import { EFFORTS } from '../runtime/controls.ts';
 import { effortName } from '../runtime/models.ts';
@@ -104,6 +106,8 @@ export type Control =
   | { type: 'colorTheme'; slot: ThemeSlot }
   | { type: 'simulator' }
   | { type: 'icon' }
+  | { type: 'spaceColor' }
+  | { type: 'haloMotion' }
   | { type: 'github' }
   | { type: 'account'; provider: Provider }
   | { type: 'mcp'; provider: Provider; name: string }
@@ -131,7 +135,12 @@ export type SettingWrite =
   | { to: 'quiet'; patch: Partial<QuietHours> }
   | { to: 'host'; patch: AgentSettingsPatch }
   | { to: 'remote'; patch: Partial<RemoteSettings> }
-  | { to: 'profile'; patch: Partial<Pick<Space, 'name' | 'icon' | 'github'>> }
+  | {
+      to: 'profile';
+      patch: Partial<
+        Pick<Space, 'name' | 'icon' | 'color' | 'haloMotion' | 'github'>
+      >;
+    }
   | { to: 'account'; provider: Provider; accountId: string }
   | { to: 'config'; title: string; changes: ConfigChange[] };
 
@@ -971,6 +980,28 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
       write: (value) =>
         (SPACE_ICON_NAMES as readonly string[]).includes(value)
           ? { to: 'profile', patch: { icon: value as Space['icon'] } }
+          : null,
+    },
+    {
+      key: 'profile.color',
+      label: 'Color',
+      description: 'The glow along the bottom of the sidebar in this profile',
+      section: 'profile',
+      control: { type: 'spaceColor' },
+      read: ({ profile }) => profile && spaceColor(profile),
+      write: (value) =>
+        isSpaceColor(value) ? { to: 'profile', patch: { color: value } } : null,
+    },
+    {
+      key: 'profile.haloMotion',
+      label: 'Glow motion',
+      description: 'Whether the glow breathes, drifts sideways or holds still',
+      section: 'profile',
+      control: { type: 'haloMotion' },
+      read: ({ profile }) => profile && haloMotion(profile),
+      write: (value) =>
+        isHaloMotion(value)
+          ? { to: 'profile', patch: { haloMotion: value } }
           : null,
     },
     field('github', 'GitHub account', { type: 'github' }),

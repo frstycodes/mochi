@@ -3,10 +3,13 @@ import { useSyncExternalStore } from 'react';
 import { showsDemoData } from './demoData.ts';
 import {
   DEFAULT_SPACES,
+  SPACE_COLOR_NAMES,
   SPACE_ICON_NAMES,
   type Space,
   type SpaceIconName,
 } from './model.ts';
+import { isHaloMotion } from './haloShape.ts';
+import { isSpaceColor, spaceColor } from './spaceColor.ts';
 import { setAmbientProfiles } from './store/context.ts';
 import type { Replica } from './store/replica.ts';
 
@@ -24,6 +27,7 @@ export const FIRST_PROFILE: Space = {
   id: 'personal',
   name: 'Personal',
   icon: 'home',
+  color: 'green',
   plans: { claude: '', codex: '' },
   github: '',
 };
@@ -63,7 +67,7 @@ export function storedProfiles(): Space[] {
   return storedSlice().getState().value;
 }
 
-/** A new profile, empty or with `from`'s own settings (GitHub login, what it turns off natively); a new id and icon either way. */
+/** A new profile, empty or with `from`'s own settings (GitHub login, what it turns off natively); a new id, icon and colour either way. */
 export function addProfile(name: string, from?: Space): Space {
   const profiles = getProfiles();
   if (profiles.length >= MAX_PROFILES)
@@ -85,6 +89,10 @@ export function addProfile(name: string, from?: Space): Space {
     icon:
       SPACE_ICON_NAMES.find((icon) => !profiles.some((p) => p.icon === icon)) ??
       'layers',
+    color:
+      SPACE_COLOR_NAMES.find(
+        (color) => !profiles.some((p) => spaceColor(p) === color),
+      ) ?? 'green',
   };
   write([...profiles, profile]);
   return profile;
@@ -93,7 +101,16 @@ export function addProfile(name: string, from?: Space): Space {
 export function updateProfile(
   id: string,
   patch: Partial<
-    Pick<Space, 'name' | 'icon' | 'github' | 'nativeOff' | 'nativeNew'>
+    Pick<
+      Space,
+      | 'name'
+      | 'icon'
+      | 'color'
+      | 'haloMotion'
+      | 'github'
+      | 'nativeOff'
+      | 'nativeNew'
+    >
   >,
 ) {
   write(getProfiles().map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -153,6 +170,8 @@ function isProfile(value: unknown): value is Space {
     /^[a-z0-9-]+$/.test(p.id) &&
     typeof p.name === 'string' &&
     SPACE_ICON_NAMES.includes(p.icon as SpaceIconName) &&
+    (p.color === undefined || isSpaceColor(p.color)) &&
+    (p.haloMotion === undefined || isHaloMotion(p.haloMotion)) &&
     typeof p.github === 'string' &&
     typeof p.plans?.claude === 'string' &&
     typeof p.plans?.codex === 'string'

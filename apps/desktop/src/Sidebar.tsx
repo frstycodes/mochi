@@ -9,7 +9,19 @@ import {
 } from 'react';
 import { motion } from 'motion/react';
 import { useDraggable } from '@dnd-kit/react';
-import { Archive, Eye, Menu, Plus, Search, Unarchive } from '@/icons';
+import { Archive, Eye, Menu, Plus, Search, Settings, Unarchive } from '@/icons';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover';
 import {
   Sidebar,
   SidebarContent,
@@ -35,8 +47,12 @@ import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
 import { SubThreadGuide } from './goals/SubThreads';
 import { nestWithUndo, unnestWithUndo } from './subThreadActions';
-import { PIN_SLOTS, type Thread } from './model';
-import { useProfiles } from './profiles';
+import { PIN_SLOTS, type Space, type Thread } from './model';
+import { MAX_PROFILES, useProfiles } from './profiles';
+import { NewProfileDialog } from './settings/sections/profiles';
+import { AgentSettingsProvider } from './settings/AgentSettings';
+import { SpaceEditor } from './SpaceEditor';
+import { SpaceHalo } from './SpaceHalo';
 import {
   cancelDrag,
   DragSurface,
@@ -111,7 +127,11 @@ import {
 import { BoundShortcut } from './Shortcut';
 import { spaceCommand } from './keymap';
 import { remoteDecisions, remoteThreads } from './remote/mirror';
-import { openRemoteThread, useRemoteThreadRoute } from './routes/nav';
+import {
+  openRemoteThread,
+  openSubpage,
+  useRemoteThreadRoute,
+} from './routes/nav';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';
@@ -140,9 +160,14 @@ export function AppSidebar({
 }) {
   const dispatch = useDispatch();
   const spaceId = useHarnessSelector((s) => s.spaceId);
+  const space = useSpace();
   const profiles = useProfiles();
   const index = profiles.findIndex((s) => s.id === spaceId);
   const pager = useRef<HTMLDivElement>(null);
+  const [isEditing, setEditing] = useState(false);
+  const [isAdding, setAdding] = useState(false);
+  const addProfile =
+    profiles.length < MAX_PROFILES ? () => setAdding(true) : undefined;
   useSnapPager(pager, {
     axis: 'x',
     index,
@@ -152,21 +177,51 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible={collapsible}>
-      <SpaceHeader />
-      {/* Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility. */}
-      <SidebarContent
-        ref={pager}
-        style={{ scrollbarWidth: 'none' }}
-        className="snap-x snap-mandatory flex-row gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain"
-      >
-        {/* Every space stays mounted so neighbours show mid-swipe; window to index ± 1 if the space count grows. */}
-        {profiles.map((s, i) => (
-          <SpacePanel key={s.id} isCurrent={i === index}>
-            <SpaceNav spaceId={s.id} onSearch={onSearch} />
-          </SpacePanel>
-        ))}
-      </SidebarContent>
-      <SpaceFooter />
+      <SpaceHalo profiles={profiles} currentId={spaceId} />
+      <ContextMenu>
+        {/* `contents`: the header, list and footer stay the sidebar's own flex children. */}
+        <ContextMenuTrigger asChild>
+          <div className="contents">
+            <SpaceHeader />
+            {/* Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility. */}
+            <SidebarContent
+              ref={pager}
+              style={{ scrollbarWidth: 'none' }}
+              className="relative snap-x snap-mandatory flex-row gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain"
+            >
+              {/* Every space stays mounted so neighbours show mid-swipe; window to index ± 1 if the space count grows. */}
+              {profiles.map((s, i) => (
+                <SpacePanel key={s.id} isCurrent={i === index}>
+                  <SpaceNav spaceId={s.id} onSearch={onSearch} />
+                </SpacePanel>
+              ))}
+            </SidebarContent>
+            <SpaceFooter
+              isEditing={isEditing}
+              onEditingChange={setEditing}
+              onAdd={addProfile}
+            />
+          </div>
+        </ContextMenuTrigger>
+        <SidebarContextMenu
+          space={space}
+          onEdit={() => setEditing(true)}
+          onAdd={addProfile}
+        />
+      </ContextMenu>
+      {/* Settings mounts this provider only while it's open; duplicating a profile needs its accounts. */}
+      {isAdding && (
+        <AgentSettingsProvider isDetecting={false}>
+          <NewProfileDialog
+            open
+            onClose={() => setAdding(false)}
+            onCreated={(profile) => {
+              dispatch({ type: 'space', id: profile.id });
+              setEditing(true);
+            }}
+          />
+        </AgentSettingsProvider>
+      )}
       {width !== undefined && !!onResize && (
         <SidebarResizer width={width} onCommit={onResize} />
       )}
@@ -1361,46 +1416,105 @@ function RowDetail({
   );
 }
 
-function SpaceFooter() {
+/** Right-click anywhere in the sidebar, like Arc: edit the current profile in place or add one. */
+function SidebarContextMenu({
+  space,
+  onEdit,
+  onAdd,
+}: {
+  space: Space;
+  onEdit: () => void;
+  onAdd?: () => void;
+}) {
+  return (
+    // Focus going back to the sidebar would close the editor the Edit item just opened.
+    <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
+      <ContextMenuItem onSelect={onEdit}>
+        <SpaceIcon space={space} />
+        Edit {space.name}…
+      </ContextMenuItem>
+      <ContextMenuItem disabled={!onAdd} onSelect={onAdd}>
+        <Plus />
+        New profile…
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => openSubpage('profiles', space.id)}>
+        <Settings />
+        Profile settings
+      </ContextMenuItem>
+    </ContextMenuContent>
+  );
+}
+
+function SpaceFooter({
+  isEditing,
+  onEditingChange,
+  onAdd,
+}: {
+  isEditing: boolean;
+  onEditingChange: (isOpen: boolean) => void;
+  onAdd?: () => void;
+}) {
   const dispatch = useDispatch();
   const spaceId = useHarnessSelector((s) => s.spaceId);
+  const space = useSpace();
   const profiles = useProfiles();
   return (
-    <SidebarFooter className="flex-row items-center gap-1 px-2 py-2">
-      <UserMenu />
+    <SidebarFooter className="relative flex-row items-center gap-1 px-2 py-2">
+      {/* Past three profiles the switcher and its + leave the chip too little room for a name. */}
+      <UserMenu isCompact={profiles.length > 3} />
       <span className="flex-1" />
-      <div
-        role="radiogroup"
-        aria-label="Profile"
-        className="flex items-center gap-0.5"
-      >
-        {profiles.map((s, i) => {
-          const isCurrent = s.id === spaceId;
-          return (
-            <Tooltip key={s.id}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={isCurrent}
-                  aria-label={`${s.name} profile`}
-                  onClick={() => dispatch({ type: 'space', id: s.id })}
-                  className={cn(
-                    'flex size-7 cursor-default items-center justify-center rounded-md text-subtle-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
-                    isCurrent && 'bg-sidebar-accent text-foreground',
-                  )}
-                >
-                  <SpaceIcon space={s} className="size-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {s.name}{' '}
-                <BoundShortcut command={spaceCommand(i + 1)} className="ml-1" />
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
-      </div>
+      <Popover open={isEditing} onOpenChange={onEditingChange}>
+        <PopoverAnchor asChild>
+          <div
+            role="radiogroup"
+            aria-label="Profile"
+            className="flex items-center gap-0.5"
+          >
+            {profiles.map((s, i) => {
+              const isCurrent = s.id === spaceId;
+              return (
+                <Tooltip key={s.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isCurrent}
+                      aria-label={`${s.name} profile`}
+                      onClick={() => dispatch({ type: 'space', id: s.id })}
+                      className={cn(
+                        'flex size-7 cursor-default items-center justify-center rounded-md text-subtle-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
+                        isCurrent && 'bg-sidebar-accent text-foreground',
+                      )}
+                    >
+                      <SpaceIcon space={s} className="size-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {s.name}{' '}
+                    <BoundShortcut
+                      command={spaceCommand(i + 1)}
+                      className="ml-1"
+                    />
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </PopoverAnchor>
+        <PopoverContent side="top" align="end" className="w-auto">
+          <SpaceEditor key={space.id} space={space} />
+        </PopoverContent>
+      </Popover>
+      {onAdd && (
+        <TooltipIconButton
+          label="New profile"
+          onClick={onAdd}
+          className="size-7 text-subtle-foreground"
+        >
+          <Plus />
+        </TooltipIconButton>
+      )}
     </SidebarFooter>
   );
 }

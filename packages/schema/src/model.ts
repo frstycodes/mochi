@@ -213,11 +213,29 @@ export const SpaceIconName = Schema.Literals([
 ]);
 export type SpaceIconName = typeof SpaceIconName.Type;
 
+export const SpaceColor = Schema.Literals([
+  'green',
+  'blue',
+  'violet',
+  'amber',
+  'pink',
+  'teal',
+  'orange',
+  'red',
+  'none',
+]);
+export type SpaceColor = typeof SpaceColor.Type;
+
+export const SpaceHaloMotion = Schema.Literals(['breathe', 'drift', 'still']);
+export type SpaceHaloMotion = typeof SpaceHaloMotion.Type;
+
 /** A profile, before `v` (`src/model.ts` `Space`); `stored.ts` versions it as a row. */
 export const Space = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   icon: SpaceIconName,
+  color: opt(SpaceColor),
+  haloMotion: opt(SpaceHaloMotion),
   plans: Schema.Struct({ claude: Schema.String, codex: Schema.String }),
   github: Schema.String,
   nativeOff: opt(Schema.Array(Schema.String)),
