@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
+import { killGuard } from './killGuard.ts';
+import { killDecision } from '../processKill.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import {
@@ -541,7 +543,10 @@ async function launch(session: Session) {
         },
         hooks: {
           ...compactHooks(threadId),
-          PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)],
+          PreToolUse: [
+            killGuard(threadId),
+            ...(options.isGoalsOff ? [] : [goalNudge(threadId)]),
+          ],
         },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
         // Deny rules alone only refuse a call; disallowedTools also takes an Off tool out of the model's context (sdk.d.ts).
@@ -857,10 +862,24 @@ function approve(threadId: string): CanUseTool {
           toolName,
           input,
           title ?? toolName,
-          description ?? decisionReason ?? '',
+          // `killGuard` asked: the card says why, over the command's own description.
+          killReason(toolName, threadId, input) ??
+            description ??
+            decisionReason ??
+            '',
         ),
       );
     });
+}
+
+function killReason(
+  toolName: string,
+  threadId: string,
+  input: Record<string, unknown>,
+) {
+  if (toolName !== 'Bash') return undefined;
+  const decision = killDecision(threadId, input.command);
+  return decision.action === 'run' ? undefined : decision.reason;
 }
 
 function dropApprovals(threadId: string, message: string) {
