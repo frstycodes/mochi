@@ -9,6 +9,7 @@ import {
   Pip,
   Route,
   SidebarRight,
+  Diff,
 } from '@/icons';
 import {
   Empty,
@@ -22,7 +23,6 @@ import { FileView } from '@/files/FileView';
 import { REVEAL_IN, revealPath } from '@/files/editors';
 import { splitPath } from '../chat/imageSrc';
 import { threadCwd } from '../host/cwd';
-import { DiffIcon } from '../icons/panes';
 import { timeAgo } from '../progress';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
@@ -160,7 +160,7 @@ const VISUAL_ICONS = {
   svg: Image,
   html: Code,
   'harness-metro': Route,
-  'harness-diff': DiffIcon,
+  'harness-diff': Diff,
 } satisfies Record<VizLanguage, unknown>;
 
 function VisualItem({

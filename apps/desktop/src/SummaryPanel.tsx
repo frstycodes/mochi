@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Danger,
   type IconComponent,
+  Diff,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import {
@@ -64,7 +65,6 @@ import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
 import { useWorktreePath } from './git/worktrees';
 import { useGitDiff } from './git/useGit';
-import { DiffIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import {
@@ -771,7 +771,7 @@ const VISUAL_ICONS = {
   svg: Image,
   html: Code,
   'harness-metro': Route,
-  'harness-diff': DiffIcon,
+  'harness-diff': Diff,
 } satisfies Record<VizLanguage, IconComponent>;
 
 function OutputsCard({
@@ -900,7 +900,7 @@ function ChangesBody({
         ))}
         {!!files && prs.length === 0 && (
           <SummaryRow
-            icon={DiffIcon}
+            icon={Diff}
             label={
               hasChanges
                 ? fileCount(files.length)
@@ -931,7 +931,7 @@ function DiffPendingRow({
   error?: string;
   onRetry?: () => void;
 }) {
-  if (!error) return <SummaryRow icon={DiffIcon} label="Reading changes…" />;
+  if (!error) return <SummaryRow icon={Diff} label="Reading changes…" />;
   return (
     <SummaryRow
       icon={<Danger className="size-4 text-destructive" />}

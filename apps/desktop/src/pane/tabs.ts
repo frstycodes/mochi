@@ -9,9 +9,10 @@ import {
   Phone,
   Plug,
   type IconComponent,
+  Diff,
+  Terminal,
 } from '@/icons';
 import type { Pane, PaneTab, PaneTabKind, Thread } from '../model';
-import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { GitPullRequestIcon } from '../icons/github';
 import { AgentsTab } from './AgentsTab';
 import { ArtifactsTab } from './ArtifactsTab';
@@ -33,8 +34,8 @@ export interface PaneTabProps {
 
 export const PANE_TABS = {
   browser: { title: 'Preview', icon: Globe, component: BrowserTab },
-  changes: { title: 'Changes', icon: DiffIcon, component: ChangesTab },
-  terminal: { title: 'Terminal', icon: TerminalIcon, component: TerminalTab },
+  changes: { title: 'Changes', icon: Diff, component: ChangesTab },
+  terminal: { title: 'Terminal', icon: Terminal, component: TerminalTab },
   files: { title: 'Files', icon: Folder, component: FilesTab },
   simulator: { title: 'Simulator', icon: Phone, component: SimulatorTab },
   ports: { title: 'Ports', icon: Plug, component: PortsTab },
