@@ -61,6 +61,7 @@ import {
   userPath,
 } from '../config.ts';
 import { detect } from '../../../../../apps/desktop/electron/settings/detect.ts';
+import { exitEvent } from './exit.ts';
 import { spawnThroughRun } from './spawn.ts';
 import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
 import {
@@ -635,13 +636,8 @@ async function launch(session: Session) {
       if (!session.isBusy && waiting.length) release(session);
     }
   } catch (error) {
-    if (!abort.signal.aborted)
-      emit({
-        threadId,
-        type: 'turn-end',
-        status: 'failed',
-        error: error instanceof Error ? error.message : String(error),
-      });
+    const ended = exitEvent(threadId, session.isBusy, error);
+    if (!abort.signal.aborted && ended) emit(ended);
   } finally {
     if (session.abort === abort) release(session);
   }
