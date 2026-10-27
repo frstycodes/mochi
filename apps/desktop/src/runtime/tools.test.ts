@@ -3329,37 +3329,6 @@ test('report_turn keeps decisions and assumptions on their step and adds assumpt
   );
 });
 
-test('report_turn asks once for assumptions when the turn changed files and reported none', async () => {
-  const t = spineSetup(['Edit src/import.ts  +3 −1']);
-  const report = { decisions: [], assumptions: [], left: [] };
-  assert.match(
-    (await t.ok('report_turn', report)).note,
-    /reported no assumptions/,
-  );
-  assert.equal(
-    (await t.ok('report_turn', report)).note,
-    undefined,
-    'never twice in a turn',
-  );
-
-  const quiet = spineSetup();
-  assert.equal(
-    (await quiet.ok('report_turn', report)).note,
-    undefined,
-    'no files changed',
-  );
-  const assumed = spineSetup(['Edit src/import.ts  +3 −1']);
-  assert.equal(
-    (
-      await assumed.ok('report_turn', {
-        ...report,
-        assumptions: ['Assumed UTC'],
-      })
-    ).note,
-    undefined,
-  );
-});
-
 test('update_plan records a pivot for dropped steps with its why, and asks for a why it lacks', async () => {
   const t = spineSetup();
   const plan = async (args: Record<string, unknown>) =>

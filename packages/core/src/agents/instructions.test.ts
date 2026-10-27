@@ -8,5 +8,13 @@ test('the turn spine asks for assumptions on report_turn and a why on plan chang
   assert.match(on, /pass "why"/);
   const off = mochiInstructions({ isGoalsOff: true, isSpineOff: true });
   assert.doesNotMatch(off, /assumptions|"why"/);
-  assert.match(off, /decisions \(a list\)/);
+  assert.match(off, /decisions \(a list: only choices/);
+});
+
+test('report_turn sets a bar for decisions and assumptions, on and off', () => {
+  for (const isSpineOff of [false, true]) {
+    const text = mochiInstructions({ isGoalsOff: true, isSpineOff });
+    assert.match(text, /never routine execution/);
+    assert.match(text, /usually empty/);
+  }
 });
