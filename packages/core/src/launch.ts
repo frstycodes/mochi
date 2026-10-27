@@ -20,7 +20,7 @@ export const launchCore = ({ logFile, otlpUrl, ...options }: LaunchOptions) => {
       Otlp.layerJson({
         baseUrl: url.href,
         resource: { serviceName: 'mochi-core' },
-      }).pipe(Layer.provide(NodeHttpClient.layerUndici)),
+      }).pipe(Layer.provide(NodeHttpClient.layerNodeHttp)),
   });
   return Effect.logInfo('Core started').pipe(
     Effect.annotateLogs({
