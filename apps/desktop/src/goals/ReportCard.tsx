@@ -27,7 +27,7 @@ import {
   type Thread,
   type TurnReport,
 } from '../model';
-import { ProgressRing } from '../ui';
+import { ProgressRing, SectionLabel } from '../ui';
 import { RefChip } from '../chat/ChatLink';
 import type { RefTone } from '@mochi/domain/chat/refs';
 import type { TurnAnchor } from '../chat/turnAnchor';
@@ -685,9 +685,7 @@ export function ReportList({
   if (!items.length) return null;
   return (
     <section aria-label={label} className="flex flex-col gap-1">
-      <h3 className="type-caption font-medium text-subtle-foreground">
-        {label}
-      </h3>
+      <SectionLabel>{label}</SectionLabel>
       <ul className="flex list-disc flex-col gap-0.5 pl-4 type-meta text-muted-foreground marker:text-subtle-foreground">
         {items.map((item) => (
           <li key={item} className="text-pretty">

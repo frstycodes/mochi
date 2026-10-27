@@ -15,7 +15,7 @@ import type {
 import { DiffStat } from '../WorkLog';
 import { fileKey, hunkCovers, type ChangeSection } from './files';
 import { isMod } from '../keys';
-import { TooltipIconButton } from '../ui';
+import { SectionLabel, TooltipIconButton } from '../ui';
 
 export type DiffStyle = 'unified' | 'split';
 export type NoteSide = 'additions' | 'deletions';
@@ -86,10 +86,10 @@ export function ChangeList({
           aria-label={section.title ?? 'Changed files'}
         >
           {!!section.title && (
-            <h3 className="flex h-7 items-center gap-1.5 px-3 type-caption text-subtle-foreground">
+            <SectionLabel className="flex h-7 items-center gap-1.5 px-3">
               {section.title}
               <span className="tabular">{section.files.length}</span>
-            </h3>
+            </SectionLabel>
           )}
           {section.files.map((file) => (
             <FileDiff

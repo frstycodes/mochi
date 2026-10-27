@@ -238,6 +238,20 @@ export const STEP_MARKS = {
   dropped: 'dropped',
 } satisfies Record<StepStatus, StatusMarkKind>;
 
+/** A section's heading: the caption step at its token weight, so headings don't drift between 400 and 500. */
+export function SectionLabel({
+  as: Heading = 'h3',
+  className,
+  ...props
+}: ComponentProps<'h3'> & { as?: 'h2' | 'h3' | 'h4' }) {
+  return (
+    <Heading
+      className={cn('type-caption text-subtle-foreground', className)}
+      {...props}
+    />
+  );
+}
+
 /**
  * One segment per criterion, filled as each is met and green once all are, so it reads as a count, never a share of the work.
  * No criteria: the ring shows state only. `isWorking` set: it spins in the line colour (a quarter arc when nothing is met yet,
