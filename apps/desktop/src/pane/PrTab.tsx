@@ -290,7 +290,11 @@ function PrHeader({ review }: { review: PrReview }) {
         <span className="tabular text-subtle-foreground">#{review.number}</span>
       </h2>
       <p className="flex flex-wrap items-center gap-1.5 type-meta text-muted-foreground">
-        <PrStateIcon state={status} className="size-3.5" />
+        <PrStateIcon
+          state={status}
+          hasConflicts={review.isConflicting}
+          className="size-3.5"
+        />
         <span>{STATUS_WORDS[status]}</span>
         <span>
           {review.author} wants to merge{' '}
