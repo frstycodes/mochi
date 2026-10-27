@@ -71,12 +71,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
-import {
-  CoinIcon,
-  McpServerIcon,
-  PluginIcon,
-  SkillIcon,
-} from '../icons/ObjectIcons';
+import { McpServerIcon, SkillIcon } from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
 import {
   seedQueue,
@@ -100,7 +95,6 @@ import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
 import { SteerBlock } from './sections/steer';
-import { ThreadRowVariantsBlock } from './sections/thread-rows';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { TiltedDragBlock } from './sections/tilted-drag';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
@@ -707,9 +701,7 @@ const DEVICE_SPECIMENS = [
 ] satisfies (DeviceKind | undefined)[];
 const OBJECT_ICONS = [
   ['Skill', SkillIcon],
-  ['Plugin', PluginIcon],
   ['MCP server', McpServerIcon],
-  ['Spend', CoinIcon],
 ] as const;
 
 function Display() {
@@ -782,7 +774,7 @@ function Display() {
         </Block>
         <Block
           title="Object icons"
-          use="Mochi's own concepts (skills, plugins, MCP servers, spend), lit like Mochi; the same in both themes."
+          use="Mochi's own concepts (skills, MCP servers), lit like Mochi; the same in both themes."
         >
           <div data-design="object-icons" className="flex flex-col gap-4">
             <div className="flex items-end gap-6">
@@ -1153,7 +1145,6 @@ function Recipes() {
         </Block>
         <NextMoveBlock rl={rl} />
         <SteerBlock />
-        <ThreadRowVariantsBlock rl={rl} />
         <SubThreadsBlock rl={rl} />
         <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
