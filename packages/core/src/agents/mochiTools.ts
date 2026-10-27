@@ -24,6 +24,7 @@ import {
   jsonSchemaOf,
   MOCHI_SERVER,
   servedTools,
+  shapeFor,
   TOOL_NAMES,
   TOOL_TABLE,
   type MochiScope,
@@ -44,7 +45,11 @@ import { agentSettings } from './config.ts';
 export const SERVER = MOCHI_SERVER;
 
 export const toolsFor = (scope: MochiScope) =>
-  servedTools(scope).map((name) => ({ name, ...TOOL_TABLE[name] }));
+  servedTools(scope).map((name) => ({
+    name,
+    ...TOOL_TABLE[name],
+    shape: shapeFor(name, scope),
+  }));
 
 /** Shown to the model as the server's instructions (MCP `initialize`); the same for every thread, so it reads its own goal. */
 const INSTRUCTIONS =

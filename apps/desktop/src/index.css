@@ -91,6 +91,7 @@
   --highlight: oklch(1 0 285 / 0.7);
 
   --sidebar: oklch(0.99 0.002 285);
+  --halo-strength: 0.3;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -156,6 +157,7 @@
     --ring: oklch(0.75 0.01 285);
     --highlight: oklch(0.98 0.005 285 / 0.06);
     --sidebar: oklch(0.175 0.007 285);
+    --halo-strength: 0.15;
     --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
     --chart-1: #3987e5;
     --chart-2: #d95926;
@@ -212,6 +214,7 @@
   --ring: oklch(0.75 0.01 285);
   --highlight: oklch(0.98 0.005 285 / 0.06);
   --sidebar: oklch(0.175 0.007 285);
+  --halo-strength: 0.15;
   --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
   --chart-1: #3987e5;
   --chart-2: #d95926;
@@ -527,6 +530,21 @@
 
 .station-pulse {
   animation: station-pulse 1.6s linear infinite;
+}
+
+/* The sidebar halo's Breathe pulse (src/SpaceHalo.tsx); the edge's own motion is drawn there, and both stop under Reduce motion. */
+@keyframes halo-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@utility halo-breathe {
+  animation: halo-breathe 6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

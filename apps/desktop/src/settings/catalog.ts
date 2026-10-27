@@ -1,6 +1,15 @@
 import { hourLabel, type QuietHours } from '../notify/model.ts';
 import { ALERT_KINDS } from '../notify/model.ts';
 import { SPACE_ICON_NAMES, type Provider, type Space } from '../model.ts';
+import {
+  HALO_KNOB_KEYS,
+  HALO_KNOBS,
+  haloKnob,
+  haloMotion,
+  isHaloMotion,
+  type HaloKnob,
+} from '../haloShape.ts';
+import { isSpaceColor, spaceColor } from '../spaceColor.ts';
 import { SHARED_ACCESS } from '../runtime/access.ts';
 import { EFFORTS } from '../runtime/controls.ts';
 import { effortName } from '../runtime/models.ts';
@@ -109,6 +118,8 @@ export type Control =
   | { type: 'font'; kind: FontKind }
   | { type: 'simulator' }
   | { type: 'icon' }
+  | { type: 'spaceColor' }
+  | { type: 'haloMotion' }
   | { type: 'github' }
   | { type: 'account'; provider: Provider }
   | { type: 'mcp'; provider: Provider; name: string }
@@ -136,7 +147,15 @@ export type SettingWrite =
   | { to: 'quiet'; patch: Partial<QuietHours> }
   | { to: 'host'; patch: AgentSettingsPatch }
   | { to: 'remote'; patch: Partial<RemoteSettings> }
-  | { to: 'profile'; patch: Partial<Pick<Space, 'name' | 'icon' | 'github'>> }
+  | {
+      to: 'profile';
+      patch: Partial<
+        Pick<
+          Space,
+          'name' | 'icon' | 'color' | 'haloMotion' | HaloKnob | 'github'
+        >
+      >;
+    }
   | { to: 'account'; provider: Provider; accountId: string }
   | { to: 'config'; title: string; changes: ConfigChange[] };
 
@@ -165,6 +184,7 @@ const SHARED_KEYS = new Set([
   'agent',
   'whileWorking',
   'promptSuggestions',
+  'turnSpine',
   'watchedToasts',
   'dockBadge',
   'quietHours',
@@ -646,6 +666,11 @@ const APP_SETTINGS: Setting[] = [
     description:
       "After each turn, the agent's suggested reply in the empty composer; Tab takes it",
   }),
+  pref('turnSpine', 'Show assumptions on the plan', 'general', SWITCH, {
+    group: 'End of turn',
+    description:
+      'Agents report what they assumed for you and why their plan changed; the end-of-turn card hangs them off the plan for you to accept or change. Agents already running pick it up in their next session',
+  }),
   pref(
     'whileWorking',
     'While the agent is working, new messages',
@@ -973,6 +998,24 @@ const APP_SETTINGS: Setting[] = [
 
 // {PROFILE}
 
+function haloKnobSetting(knob: HaloKnob): Setting {
+  const { label, description, min, max, step } = HALO_KNOBS[knob];
+  return {
+    key: `profile.${knob}`,
+    label: `Glow ${label.toLowerCase()}`,
+    description: `${description}, in percent`,
+    section: 'profile',
+    control: { type: 'number', min, max, step },
+    read: ({ profile }) => profile && String(haloKnob(profile, knob)),
+    write: (value) => {
+      const n = Number(value);
+      return Number.isInteger(n) && n >= min && n <= max
+        ? { to: 'profile', patch: { [knob]: n } }
+        : null;
+    },
+  };
+}
+
 function profileSettings(config: ProfileConfig | undefined): Setting[] {
   const field = (
     key: 'name' | 'github',
@@ -1002,6 +1045,29 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
           ? { to: 'profile', patch: { icon: value as Space['icon'] } }
           : null,
     },
+    {
+      key: 'profile.color',
+      label: 'Color',
+      description: 'The glow along the bottom of the sidebar in this profile',
+      section: 'profile',
+      control: { type: 'spaceColor' },
+      read: ({ profile }) => profile && spaceColor(profile),
+      write: (value) =>
+        isSpaceColor(value) ? { to: 'profile', patch: { color: value } } : null,
+    },
+    {
+      key: 'profile.haloMotion',
+      label: 'Glow motion',
+      description: 'Whether the glow breathes, drifts sideways or holds still',
+      section: 'profile',
+      control: { type: 'haloMotion' },
+      read: ({ profile }) => profile && haloMotion(profile),
+      write: (value) =>
+        isHaloMotion(value)
+          ? { to: 'profile', patch: { haloMotion: value } }
+          : null,
+    },
+    ...HALO_KNOB_KEYS.map(haloKnobSetting),
     field('github', 'GitHub account', { type: 'github' }),
     ...HARNESS_IDS.map((provider): Setting => ({
       key: `profile.${provider}Account`,

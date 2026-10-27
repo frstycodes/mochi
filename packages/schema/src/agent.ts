@@ -234,6 +234,7 @@ export const AgentStartOptions = Schema.Struct({
   ),
   useApiKey: opt(B),
   isGoalsOff: opt(B),
+  isSpineOff: opt(B),
   isSettingsChat: opt(B),
   nativeOff: opt(Schema.Array(S)),
 }).check(

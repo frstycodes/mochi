@@ -42,8 +42,8 @@ import { BoundShortcut } from './Shortcut';
 import { useDispatch, useHarnessSelector } from './store';
 import { IconSwap } from './ui';
 
-/** The sidebar's bottom-left chip: your first name, opening your Mochi account, settings and theme. */
-export function UserMenu() {
+/** The sidebar's bottom-left chip: your first name, opening your Mochi account, settings and theme. `isCompact` drops the name to make room. */
+export function UserMenu({ isCompact = false }: { isCompact?: boolean }) {
   const dispatch = useDispatch();
   const isPaused = useHarnessSelector((s) => s.paused);
   const mochiAccount = useMochiAccount();
@@ -68,7 +68,7 @@ export function UserMenu() {
               )}
             </AvatarFallback>
           </Avatar>
-          <span className="truncate">{name ?? 'Account'}</span>
+          {!isCompact && <span className="truncate">{name ?? 'Account'}</span>}
           <ChevronDown data-icon="inline-end" />
         </Button>
       </DropdownMenuTrigger>

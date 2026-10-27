@@ -74,6 +74,32 @@ export const THREAD_INITIATIONS = [
   'own_initiative',
 ] as const;
 
+/** Up to 5 short lines on report_turn, each on the plan step it belongs to; a plain string (older callers) counts as one with no step. */
+const reportItems = (description: string) =>
+  Schema.Array(
+    Schema.Union([
+      Schema.String.check(Schema.isMaxLength(160)),
+      Schema.Struct({
+        text: Schema.String.check(
+          Schema.isMinLength(1),
+          Schema.isMaxLength(160),
+        ),
+        step: Schema.optionalKey(
+          Schema.String.annotate({
+            description:
+              'The title of the plan step it was made on, as in update_plan',
+          }),
+        ),
+      }),
+    ]),
+  )
+    .check(Schema.isMaxLength(5))
+    .annotate({ description });
+
+const ASSUMPTIONS = reportItems(
+  'Things the user\'s request didn\'t specify that you chose for them, each stated as what you assumed ("Assumed timestamps are UTC"); empty when you assumed nothing. Ordinary choices within your remit go in decisions',
+);
+
 export const TOOL_TABLE = {
   // {THREADS}
   list_threads: {
@@ -369,11 +395,11 @@ export const TOOL_TABLE = {
           description: "What changed, in the user's terms, 1 to 3 sentences",
         }),
       ),
-      decisions: Schema.Array(Schema.String.check(Schema.isMaxLength(160)))
-        .check(Schema.isMaxLength(5))
-        .annotate({
-          description: 'Choices you made that the user should know about',
-        }),
+      decisions: reportItems(
+        'Choices you made that the user should know about, each on the plan step it was made on',
+      ),
+      // Required as served (`shapeFor`); optional here, so a session started before the turn spine was turned on still reports.
+      assumptions: Schema.optionalKey(ASSUMPTIONS),
       left: Schema.Array(Schema.String.check(Schema.isMaxLength(160)))
         .check(Schema.isMaxLength(5))
         .annotate({ description: 'What is still not done' }),
@@ -439,7 +465,7 @@ export const TOOL_TABLE = {
   update_plan: {
     tier: 'read',
     description:
-      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. Every {"items"} call says in "scope" what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, this one). A request that is unrelated work a fresh thread would do as well from the user\'s words alone gets no plan: offer it with create_thread initiation "offer" instead.',
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Send it in the same message as another tool call when there is one. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Each call returns the step now in progress and the next one: read it rather than counting your own advances, and advance again if you finished more than one step. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. "scope" says what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, or left out, this one). A request that is unrelated work a fresh thread would do as well from the user\'s words alone gets no plan: offer it with create_thread initiation "offer" instead.',
     shape: {
       items: Schema.optionalKey(
         Schema.Array(
@@ -459,6 +485,15 @@ export const TOOL_TABLE = {
               'The whole plan, in order; replaces the previous one, and steps left out are dropped',
           }),
       ),
+      why: Schema.optionalKey(
+        Schema.String.check(
+          Schema.isMinLength(1),
+          Schema.isMaxLength(160),
+        ).annotate({
+          description:
+            'With items that drop or rename steps: one line on why the plan changed. Alone, {"why": "..."} gives the reason for the last change',
+        }),
+      ),
       advance: Schema.optionalKey(
         Schema.Boolean.annotate({
           description:
@@ -468,7 +503,7 @@ export const TOOL_TABLE = {
       scope: Schema.optionalKey(
         Schema.Literals(PLAN_SCOPES).annotate({
           description:
-            'Required with items: what this request is to the thread',
+            'With items: what this request is to the thread; continuation when left out',
         }),
       ),
     },
@@ -1083,7 +1118,35 @@ export const SETTINGS_CHAT_TOOLS = [
 export interface MochiScope {
   isGoalsOff?: boolean;
   isSettingsChat?: boolean;
+  /** The turn spine is off (Settings): report_turn takes plain decisions and no assumptions, update_plan no why. */
+  isSpineOff?: boolean;
 }
+
+/** A tool's shape as this session is served it: with the turn spine off, without the spine's fields. */
+export function shapeFor(name: ToolName, { isSpineOff }: MochiScope) {
+  const { shape } = TOOL_TABLE[name] as { shape: Schema.Struct.Fields };
+  if (!isSpineOff)
+    return name === 'report_turn'
+      ? { ...shape, assumptions: ASSUMPTIONS }
+      : shape;
+  if (name === 'report_turn') {
+    const { assumptions: _, ...rest } = shape;
+    return { ...rest, decisions: PLAIN_DECISIONS };
+  }
+  if (name === 'update_plan') {
+    const { why: _, ...rest } = shape;
+    return rest;
+  }
+  return shape;
+}
+
+const PLAIN_DECISIONS = Schema.Array(
+  Schema.String.check(Schema.isMaxLength(160)),
+)
+  .check(Schema.isMaxLength(5))
+  .annotate({
+    description: 'Choices you made that the user should know about',
+  });
 
 const isSettingsChatTool = (name: ToolName) =>
   (SETTINGS_CHAT_TOOLS as readonly string[]).includes(name);

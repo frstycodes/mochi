@@ -94,6 +94,7 @@ import { SidePane } from '../SidePane';
 import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
+import { AssumptionsBlock } from './sections/assumptions';
 import { SteerBlock } from './sections/steer';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { TiltedDragBlock } from './sections/tilted-drag';
@@ -1144,6 +1145,7 @@ function Recipes() {
           </div>
         </Block>
         <NextMoveBlock rl={rl} />
+        <AssumptionsBlock rl={rl} />
         <SteerBlock />
         <SubThreadsBlock rl={rl} />
         <TiltedDragBlock rl={rl} />

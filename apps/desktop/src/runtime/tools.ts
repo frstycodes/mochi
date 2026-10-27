@@ -21,6 +21,8 @@ import {
   turnProposalCount,
 } from '../chat/proposals.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
+import { openTurn } from '../chat/turnChanges.ts';
+import { reportItems } from '../goals/ledger.ts';
 import {
   authorName,
   isListed,
@@ -1056,12 +1058,16 @@ const GOAL_SPECS = {
         if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
       }
       const { summary, next, options } = args;
+      const isSpineOn = env.prefs.get().turnSpine;
+      const decisions = reportItems(args.decisions);
+      const assumptions = reportItems(args.assumptions);
       dispatch({
         type: 'report',
         threadId: caller.id,
         report: {
           by: caller.providers[0],
-          decisions: args.decisions,
+          decisions: isSpineOn ? decisions : decisions.map((d) => d.text),
+          ...(isSpineOn && { assumptions }),
           left: args.left,
           ...(args.question?.trim() && { question: args.question.trim() }),
           ...(summary?.trim() && { summary: summary.trim() }),
@@ -1076,9 +1082,17 @@ const GOAL_SPECS = {
         },
       });
       const running = caller.steps.find((s) => s.status === 'running');
-      const note =
+      const note = [
         running &&
-        `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`;
+          `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`,
+        isSpineOn &&
+          !assumptions.length &&
+          isFirstReport(caller) &&
+          !!openTurn(caller.activity)?.files.length &&
+          NO_ASSUMPTIONS_NOTE,
+      ]
+        .filter(Boolean)
+        .join(' ');
       return {
         changed: 'reported',
         result: {
@@ -1249,14 +1263,10 @@ const USER_SPECS = {
 
 const AGENT_SPECS = {
   update_plan: {
-    run: ({ caller, args, dispatch }) => {
+    run: ({ state, caller, args, dispatch }) => {
       if (!args.items && !args.advance)
         throw new Error(
           'Pass {"items": [...]} (the whole plan) or {"advance": true}',
-        );
-      if (args.items && !args.scope)
-        throw new Error(
-          'Pass "scope" with "items": "first_task" or "continuation"',
         );
       const items = args.items
         ? args.items.map((i) => ({
@@ -1274,7 +1284,9 @@ const AGENT_SPECS = {
         },
         ms: Date.now(),
       });
-      return { result: `Plan shown (${items.length} steps).` };
+      return {
+        result: planStatus(target(state(), caller, caller.id).steps),
+      };
     },
   },
   start_subagent: {
@@ -1331,11 +1343,119 @@ const SPECS = {
   ...LAYOUT_SPECS,
   ...USER_SPECS,
   ...AGENT_SPECS,
+  update_plan: withPivots(AGENT_SPECS.update_plan),
   ...BROWSER_TOOLS,
   ...DEV_SERVER_TOOLS,
   browser_batch: { run: runBatch },
   ...SETTINGS_TOOLS,
 } satisfies Specs;
+
+const NO_ASSUMPTIONS_NOTE =
+  "You changed files and reported no assumptions; if you chose anything the user didn't specify, call report_turn again with it.";
+
+/** The turn's first report: a second one (answering a note) gets no note of its own, so notes never loop. */
+const isFirstReport = (t: Thread) => t.report?.turn !== (t.idle?.turn ?? 0) + 1;
+
+/**
+ * update_plan with the turn spine's pivots: a resent plan that drops or renames steps is recorded with its `why` where the
+ * spine places it, and the reply names what changed. Dropping steps without a why asks for one, once: a `{"why"}` alone
+ * answers it and drops nothing. Wraps the plan spec so the plan itself stays as it is.
+ */
+function withPivots(spec: ToolSpec<'update_plan'>): ToolSpec<'update_plan'> {
+  return {
+    run: async (ctx, options) => {
+      const { env, state, caller, args, dispatch } = ctx;
+      const why = env.prefs.get().turnSpine ? args.why?.trim() : undefined;
+      if (why && !args.items && !args.advance) {
+        dispatch({ type: 'pivot-why', threadId: caller.id, why });
+        return { result: 'Noted why the plan changed.' };
+      }
+      const outcome = await spec.run(ctx, options);
+      if (
+        !env.prefs.get().turnSpine ||
+        !args.items ||
+        args.scope === 'first_task'
+      )
+        return outcome;
+      const change = planChange(
+        caller.steps,
+        target(state(), caller, caller.id).steps,
+      );
+      if (!change.dropped.length && !change.renamed.length) return outcome;
+      if (change.dropped.length || why)
+        dispatch({
+          type: 'pivot',
+          threadId: caller.id,
+          pivot: {
+            ...(why && { why }),
+            dropped: [...change.dropped, ...change.renamed.map((r) => r.from)],
+            at: change.at,
+          },
+        });
+      const asks =
+        change.dropped.length && !why
+          ? ' Say why in one line: update_plan with {"why": "..."}.'
+          : '';
+      return {
+        ...outcome,
+        result: `${String(outcome.result)} ${describeChange(change)}${asks}`,
+      };
+    },
+  };
+}
+
+interface PlanChange {
+  dropped: string[];
+  renamed: { from: string; to: string }[];
+  added: string[];
+  /** Where the spine puts the pivot among the plan's steps: before the first step that replaced what was dropped. */
+  at: number;
+}
+
+/** What a resent plan changed, from the thread's steps before and after it. */
+export function planChange(before: Step[], after: Step[]): PlanChange {
+  const was = new Map(before.map((s) => [s.id, s]));
+  const kept = after.filter((s) => s.status !== 'dropped');
+  const dropped = after.filter(
+    (s) =>
+      s.status === 'dropped' &&
+      was.get(s.id)?.status !== 'dropped' &&
+      was.has(s.id),
+  );
+  const renamed = kept.flatMap((s) => {
+    const from = was.get(s.id)?.title;
+    return from !== undefined && from !== s.title
+      ? [{ from, to: s.title }]
+      : [];
+  });
+  const added = kept.filter((s) => !was.has(s.id));
+  const firstNew = kept.findIndex(
+    (s) => !was.has(s.id) || was.get(s.id)!.title !== s.title,
+  );
+  const open = before.filter((s) => s.status !== 'dropped');
+  const firstDropped = open.findIndex((s) =>
+    dropped.some((d) => d.id === s.id),
+  );
+  const keptBefore = open
+    .slice(0, Math.max(firstDropped, 0))
+    .filter((s) => kept.some((k) => k.id === s.id)).length;
+  return {
+    dropped: dropped.map((s) => s.title),
+    renamed,
+    added: added.map((s) => s.title),
+    at: firstNew >= 0 ? firstNew : keptBefore,
+  };
+}
+
+function describeChange({ dropped, renamed, added }: PlanChange) {
+  const quote = (titles: string[]) => titles.map((t) => `"${t}"`).join(', ');
+  const parts = [
+    dropped.length && `dropped ${quote(dropped)}`,
+    ...renamed.map((r) => `renamed "${r.from}" to "${r.to}"`),
+    added.length && `added ${quote(added)}`,
+  ].filter(Boolean);
+  return `You ${parts.join(', ')}.`;
+}
 
 /** Each step runs as its own call: its policy, its approvals and its line in the thread, until one fails. */
 async function runBatch(
@@ -1711,6 +1831,19 @@ function advanced(steps: Step[]): AgentPlanItem[] {
   const next = items.findIndex((i, k) => k > running && i.status === 'pending');
   if (next >= 0) items[next].status = 'running';
   return items;
+}
+
+/** The plan as the agent left it, so it never has to count its own advances to know which step is running. */
+function planStatus(steps: Step[]) {
+  const open = steps.filter((s) => s.status !== 'dropped');
+  const done = open.filter((s) => s.status === 'done').length;
+  const at = open.findIndex((s) => s.status === 'running');
+  const next = open.find((s, k) => k > at && s.status === 'ready');
+  const upNext = next ? ` Next: "${next.title}".` : '';
+  if (at >= 0)
+    return `Step ${at + 1}/${open.length} in progress: "${open[at].title}".${upNext || ' Last step: advance once more when it is done.'}`;
+  if (done === open.length) return `Plan done (${done}/${open.length}).`;
+  return `Nothing in progress; ${done}/${open.length} done.${upNext}`;
 }
 
 export function summary(thread: Thread) {

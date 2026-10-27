@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   type ActivityEntry,
+  type Assumption,
   authorName,
   isMet,
   type NextOption,
@@ -36,6 +37,11 @@ import type { ThreadPr } from '../git/useThreadPrs';
 import { useHarness, useDispatch } from '../store';
 import { CallList, Expand } from '../WorkLog';
 import { continuePrompt, withUnseenGaps, type Move } from './moves';
+import { AssumptionList } from './Assumptions';
+import { changeDraft } from './ledger';
+import { TurnSpine } from './Spine';
+import { turnSection } from './spineNodes';
+import { usePrefs } from '../settings/prefs';
 import { SubThreadLineage } from './SubThreads';
 import { SubThreadList } from './SubThreadList';
 import {
@@ -112,6 +118,7 @@ export function ReportCard({
         {!!report?.summary && (
           <NextMoveSummary>{report.summary}</NextMoveSummary>
         )}
+        {!isReadOnly && <TurnSection thread={thread} report={report} />}
         <Evidence thread={thread} tiles={tiles} prs={prs} />
         <SubThreadList thread={thread} />
         {verdict.gaps.length > 0 && (
@@ -134,6 +141,48 @@ export function ReportCard({
         )}
       </NextMoveContent>
     </NextMoveCard>
+  );
+}
+
+/**
+ * What the turn decided and assumed: on its plan as a spine when it had one, with older open assumptions under Still open;
+ * else as rows. Change drafts a message about the assumption; sending it marks it changed (`changedBySend`).
+ */
+function TurnSection({
+  thread,
+  report,
+}: {
+  thread: Thread;
+  report: TurnReport | undefined;
+}) {
+  const dispatch = useDispatch();
+  const { textInput } = usePromptInputController();
+  const { turnSpine } = usePrefs();
+  const section = turnSection(thread, report, turnSpine);
+  if (!section) return null;
+  const onSet = (a: Assumption, state: Assumption['state']) =>
+    dispatch({ type: 'assumption-set', threadId: thread.id, id: a.id, state });
+  const onChange = (a: Assumption) => textInput.setInput(changeDraft(a));
+  return (
+    <>
+      {section.kind === 'spine' && (
+        <TurnSpine
+          assumptions={thread.assumptions ?? []}
+          nodes={section.nodes}
+          onSet={onSet}
+          onChange={onChange}
+        />
+      )}
+      <AssumptionList
+        current={section.kind === 'rows' ? section.current : []}
+        earlier={section.earlier}
+        onSet={onSet}
+        onChange={onChange}
+      />
+      {section.kind === 'rows' && (
+        <ReportList label="Decided" items={section.decisions} />
+      )}
+    </>
   );
 }
 

@@ -53,6 +53,7 @@
   "driftGuard": true,
   "whileWorking": "steer",
   "promptSuggestions": true,
+  "turnSpine": true,
   "simplifyLength": "short",
   "simplifyNeedsFirst": true,
   "simplifyRules": "",

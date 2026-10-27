@@ -251,6 +251,7 @@ const ContextSchema = Schema.Struct({
     simplifyLength: Schema.optional(Schema.Literals(['short', 'detailed'])),
     simplifyNeedsFirst: Schema.optional(Schema.Boolean),
     simplifyRules: Schema.optional(Schema.String),
+    turnSpine: Schema.optional(Schema.Boolean),
     whileWorking: Schema.Literals(['queue', 'steer']),
   }),
   pins: Schema.Record(Schema.String, Schema.Array(Pin)),
