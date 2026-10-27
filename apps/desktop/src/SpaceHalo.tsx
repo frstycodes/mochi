@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 import type { Space } from './model';
-import { HALO_SPAN, haloAlpha, haloMotion } from './haloShape';
+import { HALO, HALO_SPAN, haloAlpha, haloMotion } from './haloShape';
 import { idSeed, spaceColor, spaceColorCss } from './spaceColor';
 
 /**
@@ -50,46 +51,65 @@ function HaloLayer({
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const color = spaceColorCss(spaceColor(space));
-  const motion = haloMotion(space);
-  const widths = motion === 'drift' ? 2 : 1;
+  const isReduced = useReducedMotionConfig();
+  const motion = isReduced ? 'still' : haloMotion(space);
   useEffect(() => {
-    if (!ref.current || !isCurrent || !size || !color) return;
-    drawHalo(ref.current, size, idSeed(space.id), color, widths);
-  }, [isCurrent, size, color, space.id, widths]);
+    const canvas = ref.current;
+    if (!canvas || !isCurrent || !size || !color) return;
+    const seed = idSeed(space.id);
+    const draw = (time: number) =>
+      drawHalo(canvas, size, seed, color, {
+        time,
+        shift: motion === 'drift' ? time * HALO.drift : 0,
+      });
+    draw(0);
+    if (motion === 'still') return;
+    let frame = 0;
+    let start: number | undefined;
+    let last = 0;
+    const tick = (now: number) => {
+      frame = requestAnimationFrame(tick);
+      start ??= now;
+      if (now - last < FRAME_MS) return;
+      last = now;
+      draw((now - start) / 1000);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [isCurrent, size, color, space.id, motion]);
   return (
     <div
       className={cn(
-        'absolute inset-0 overflow-hidden opacity-0 transition-opacity duration-200',
+        'absolute inset-0 opacity-0 transition-opacity duration-200',
         isCurrent && !!color && 'opacity-100',
       )}
     >
       <canvas
         ref={ref}
         className={cn(
-          'absolute inset-y-0 left-0 h-full w-full',
-          widths === 2 && 'w-[200%]',
-          isCurrent && motion === 'breathe' && 'motion-safe:halo-breathe',
-          isCurrent && motion === 'drift' && 'motion-safe:halo-drift',
+          'absolute inset-0 size-full',
+          isCurrent && motion === 'breathe' && 'halo-breathe',
         )}
       />
     </div>
   );
 }
 
+// 30fps: the edge moves a few pixels a second, so more frames only cost CPU.
+const FRAME_MS = 1000 / 30;
+
 function drawHalo(
   canvas: HTMLCanvasElement,
-  size: DeviceSize,
+  { width, height }: DeviceSize,
   seed: number,
   color: string,
-  widths: number,
+  at: { time: number; shift: number },
 ) {
-  const width = size.width * widths;
-  const { height } = size;
-  canvas.width = width;
-  canvas.height = height;
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) return;
-  const alpha = haloAlpha(width, height, seed, widths);
+  const alpha = haloAlpha(width, height, seed, at);
   const image = context.createImageData(width, height);
   for (let i = 0; i < alpha.length; i++) image.data[i * 4 + 3] = alpha[i];
   context.putImageData(image, 0, 0);

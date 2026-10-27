@@ -36,17 +36,16 @@ test('the edge stays in [-1, 1], repeats per seed and differs between profiles',
   assert.notEqual(haloEdge(0.5, 1), haloEdge(0.5, 2));
 });
 
-test('the edge repeats every sidebar width, so Drift loops without a seam', () => {
-  for (let x = 0; x < 1; x += 0.05)
-    assert.ok(Math.abs(haloEdge(x, 7) - haloEdge(x + 1, 7)) < 1e-9);
+test('over time the edge reshapes, not just slides', () => {
+  const later = haloAlpha(width, height, 1234, { time: 4 });
+  const slid = haloAlpha(width, height, 1234, { shift: 0.1 });
+  const differs = (a: Uint8ClampedArray, b: Uint8ClampedArray) =>
+    a.some((value, i) => value !== b[i]);
+  assert.ok(differs(alpha, later));
+  assert.ok(differs(later, slid));
 });
 
-test('a two-width canvas holds the same edge twice', () => {
-  const double = haloAlpha(width * 2, height, 1234, 2);
-  for (const x of columns)
-    for (let y = 0; y < height; y++)
-      assert.equal(
-        double[y * width * 2 + x],
-        double[y * width * 2 + x + width],
-      );
+test('the edge repeats every sidebar width, so Drift never shows a seam', () => {
+  for (let x = 0; x < 1; x += 0.05)
+    assert.ok(Math.abs(haloEdge(x, 7, 3) - haloEdge(x + 1, 7, 3)) < 1e-9);
 });

@@ -526,7 +526,7 @@
   animation: station-pulse 1.6s linear infinite;
 }
 
-/* The sidebar halo (src/SpaceHalo.tsx). Drift's canvas holds two copies of the edge, so sliding one width loops seamlessly. */
+/* The sidebar halo's Breathe pulse (src/SpaceHalo.tsx); the edge's own motion is drawn there, and both stop under Reduce motion. */
 @keyframes halo-breathe {
   0%,
   100% {
@@ -537,18 +537,8 @@
   }
 }
 
-@keyframes halo-drift {
-  to {
-    transform: translateX(-50%);
-  }
-}
-
 @utility halo-breathe {
   animation: halo-breathe 6s ease-in-out infinite;
-}
-
-@utility halo-drift {
-  animation: halo-drift 60s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
