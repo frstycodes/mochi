@@ -108,12 +108,8 @@ export function MergeButton({
   base,
   tally,
   checks,
-  isConflicting,
-  method,
-  allowed,
-  isBusy,
-  onMethodChange,
   onMerge,
+  ...props
 }: {
   head: string;
   base: string;
@@ -136,48 +132,72 @@ export function MergeButton({
   });
   return (
     <>
-      <ButtonGroup>
-        <Button
-          size="xs"
-          disabled={isBusy || isConflicting}
-          title={isConflicting ? 'Resolve the conflicts first' : undefined}
-          onClick={() => request(method)}
-        >
-          {isBusy && <Spinner data-icon="inline-start" />}
-          {MERGE_METHODS[method].action}
-        </Button>
-        <ButtonGroupSeparator />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              size="icon-xs"
-              disabled={isBusy}
-              aria-label="Choose how to merge"
-            >
-              <ChevronDown />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
-            <DropdownMenuRadioGroup
-              value={method}
-              onValueChange={(v) => onMethodChange(v as MergeMethod)}
-            >
-              {METHODS.map((m) => (
-                <DropdownMenuRadioItem
-                  key={m}
-                  value={m}
-                  disabled={!allowed.includes(m)}
-                  className="items-start"
-                >
-                  <MethodText method={m} isAllowed={allowed.includes(m)} />
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </ButtonGroup>
+      <MergeSplitButton onRequest={request} {...props} />
       {dialog}
     </>
+  );
+}
+
+/** `MergeButton` without its dialog, for a host that closes on focus moving away (a hover card): render the `useMergeFlow` dialog outside it. */
+export function MergeSplitButton({
+  isConflicting,
+  method,
+  allowed,
+  isBusy,
+  onMethodChange,
+  onMenuOpenChange,
+  onRequest,
+}: {
+  isConflicting: boolean;
+  method: MergeMethod;
+  allowed: readonly MergeMethod[];
+  isBusy: boolean;
+  onMethodChange: (method: MergeMethod) => void;
+  /** Lets a hover card stay open while the method menu, which sits outside it, is. */
+  onMenuOpenChange?: (open: boolean) => void;
+  onRequest: (method: MergeMethod) => void;
+}) {
+  return (
+    <ButtonGroup>
+      <Button
+        size="xs"
+        disabled={isBusy || isConflicting}
+        title={isConflicting ? 'Resolve the conflicts first' : undefined}
+        onClick={() => onRequest(method)}
+      >
+        {isBusy && <Spinner data-icon="inline-start" />}
+        {MERGE_METHODS[method].action}
+      </Button>
+      <ButtonGroupSeparator />
+      <DropdownMenu onOpenChange={onMenuOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon-xs"
+            disabled={isBusy}
+            aria-label="Choose how to merge"
+          >
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuRadioGroup
+            value={method}
+            onValueChange={(v) => onMethodChange(v as MergeMethod)}
+          >
+            {METHODS.map((m) => (
+              <DropdownMenuRadioItem
+                key={m}
+                value={m}
+                disabled={!allowed.includes(m)}
+                className="items-start"
+              >
+                <MethodText method={m} isAllowed={allowed.includes(m)} />
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </ButtonGroup>
   );
 }
 

@@ -129,7 +129,7 @@ export function RefChip({
 
   return (
     <ContextMenu>
-      <RefHoverCard item={{ githubRef, label, state }}>
+      <RefHoverCard item={{ githubRef, label, state }} threadId={threadId}>
         <ContextMenuTrigger asChild>
           <a
             href={url}
