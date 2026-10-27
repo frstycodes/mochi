@@ -111,7 +111,8 @@ export function reportStalls(state: State): State {
 
 /**
  * Sub-threads that were mid-turn when Mochi quit: each reports to its parent that it stopped, since none will end its turn now.
- * The reports are quiet and marked `isRestart`: they go with your next message and never wake the parent (`dueWakes`).
+ * The reports are quiet and marked `isRestart`: they go with your next message and wake the parent only while its orchestration
+ * grant is usable (`dueWakes`), since then you let it run phases without you.
  */
 export function reportStoppedAtQuit<S extends Pick<State, 'threads' | 'now'>>(
   state: S,

@@ -285,6 +285,29 @@ export interface ActivityEntry {
   handoff?: Handoff;
   /** Events only: side work the agent suggested or asked about in this turn (`create_thread`), one card. */
   proposals?: ThreadProposal[];
+  /** Events only: the agent's `request_orchestration_grant`, one card that turns into the grant's live state once answered. */
+  grant?: OrchestrationGrant;
+}
+
+/**
+ * A budget the user gave this thread's agent to start nested threads from turns it didn't start (sub-thread notes, Auto-fix,
+ * another thread), without a card each time. Usable while `active`, before `expiresAt` and under `maxThreads` (`src/chat/grants.ts`).
+ */
+export interface OrchestrationGrant {
+  id: string;
+  maxThreads: number;
+  /** Model ids a started thread may run on; the user can switch some off before allowing. */
+  models: string[];
+  /** How long it lasts once allowed. */
+  minutes: number;
+  /** The agent's why, shown on the card. */
+  reason: string;
+  /** `replaced`: a later grant on this thread was allowed. */
+  state: 'pending' | 'active' | 'denied' | 'revoked' | 'replaced';
+  /** App-clock minute it lapses, set when allowed. */
+  expiresAt?: number;
+  /** The threads it started, oldest first. */
+  started: ThreadRef[];
 }
 
 /**

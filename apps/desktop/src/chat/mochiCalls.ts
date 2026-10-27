@@ -22,6 +22,10 @@ export const MOCHI_CALLS = {
   settle_when_merged: ['Setting Auto-settle', 'Set Auto-settle'],
   move_to_project: ['Moving into a project', 'Moved into a project'],
   create_thread: ['Starting a new thread', 'Started a new thread'],
+  request_orchestration_grant: [
+    'Asking to start threads on its own',
+    'Asked to start threads on its own',
+  ],
   dismiss_thread_proposal: [
     'Withdrawing a thread suggestion',
     'Withdrew a thread suggestion',
