@@ -42,6 +42,7 @@ import {
   type ThreadState,
 } from './map.ts';
 import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
+import { KILL_GUARD_ENV, killGuardFlags, trustKillGuard } from './killGuard.ts';
 import {
   CODEX_BROWSER_PLUGINS_OFF,
   mochiInstructions,
@@ -217,10 +218,11 @@ export class CodexAdapter implements HarnessAdapter {
     options: AgentRunOptions,
   ) => Promise<Record<string, unknown>>;
   private profileText?: (spaceId: string) => Promise<string>;
+  private killGuardUrl?: () => Promise<string>;
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
-  /** `toolsUrl` is the thread's Mochi tools server (main's loopback HTTP, `electron/mcp/server.ts`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. `profileText` is the profile's own instructions for Codex (its folder's mochi.md and codex.md). */
+  /** `toolsUrl` is the thread's Mochi tools server (main's loopback HTTP, `electron/mcp/server.ts`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. `profileText` is the profile's own instructions for Codex (its folder's mochi.md and codex.md). `killGuardUrl` is main's route for the hook that blocks pattern kills (./killGuard.ts). */
   constructor(
     emit: (event: AgentEvent) => void,
     accountFor: AccountFor = defaultAccountFor,
@@ -230,6 +232,7 @@ export class CodexAdapter implements HarnessAdapter {
       options: AgentRunOptions,
     ) => Promise<Record<string, unknown>>,
     profileText?: (spaceId: string) => Promise<string>,
+    killGuardUrl?: () => Promise<string>,
   ) {
     this.emit = emit;
     this.accountFor = accountFor;
@@ -237,6 +240,15 @@ export class CodexAdapter implements HarnessAdapter {
     this.toolsUrl = toolsUrl;
     this.libraryConfig = libraryConfig;
     this.profileText = profileText;
+    this.killGuardUrl = killGuardUrl;
+  }
+
+  /** The Mochi thread a Codex thread belongs to: its own, or for a spawned agent its parent's. */
+  threadOf(codexId: string) {
+    for (const server of this.servers.values()) {
+      const owner = server.byCodex.get(codexId) ?? server.children.get(codexId);
+      if (owner) return owner.state.threadId;
+    }
   }
 
   has(threadId: string) {
@@ -670,6 +682,7 @@ export class CodexAdapter implements HarnessAdapter {
         this.request(server!, id, method, params),
       exited: (message) => this.exited(server!, message),
       findCodex: this.findCodex,
+      killGuardUrl: this.killGuardUrl,
     });
     this.servers.set(account.id, server);
     return server;
@@ -1080,6 +1093,7 @@ interface ServerHooks {
   request(id: RpcId, method: string, params: unknown): void;
   exited(message: string): void;
   findCodex: FindCodex;
+  killGuardUrl?: () => Promise<string>;
 }
 
 /** One account's `codex app-server` child, started lazily with that account's `CODEX_HOME`. */
@@ -1149,10 +1163,22 @@ class CodexServer {
 
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
-    const target = spawnable(install.path, ['app-server']);
+    // The hook's command is POSIX shell; Windows threads go without it.
+    const guardUrl =
+      process.platform === 'win32'
+        ? undefined
+        : // Headless (`mochi serve`) has no main to answer the hook.
+          await this.hooks.killGuardUrl?.().catch(() => undefined);
+    const target = spawnable(install.path, [
+      'app-server',
+      ...(guardUrl ? killGuardFlags() : []),
+    ]);
     const child = spawnCommand(target.file, target.args, {
       cwd: os.homedir(),
-      env: accountEnv(this.account, install.env),
+      env: {
+        ...accountEnv(this.account, install.env),
+        ...(guardUrl && { [KILL_GUARD_ENV]: guardUrl }),
+      },
       shell: target.shell,
     });
     const gen = ++this.gen;
@@ -1189,6 +1215,18 @@ class CodexServer {
       throw error;
     }
     rpc.notify('initialized');
+    if (guardUrl)
+      await trustKillGuard(rpc).then(
+        (isTrusted) =>
+          isTrusted ||
+          console.warn(
+            `[codex ${this.account.id}] the pattern-kill hook isn't trusted, so it won't run`,
+          ),
+        (error: Error) =>
+          console.warn(
+            `[codex ${this.account.id}] couldn't trust the pattern-kill hook: ${error.message}`,
+          ),
+      );
     return rpc;
   }
 

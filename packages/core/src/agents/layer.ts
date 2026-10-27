@@ -20,7 +20,12 @@ import {
   type SeqEvent,
 } from './events.ts';
 import type { HistoryArgs } from '../switch/history.ts';
-import { disposeAgents, threadHistory, useAgentServices } from './handlers.ts';
+import {
+  codexKillHook,
+  disposeAgents,
+  threadHistory,
+  useAgentServices,
+} from './handlers.ts';
 import { useLimitDocs } from './limits.ts';
 import { useMain } from './main.ts';
 import { setThreadHistory } from './mochiTools.ts';
@@ -161,6 +166,8 @@ export const agentRpcHandlers = {
     threadId: string;
     args: unknown;
   }) => Effect.promise(() => threadHistory(threadId, args as HistoryArgs)),
+  agentKillHook: ({ input }: { input: unknown }) =>
+    Effect.sync(() => codexKillHook(input)),
   agentNoteLogin: ({
     accountId,
     login,
