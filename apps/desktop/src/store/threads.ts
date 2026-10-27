@@ -1378,27 +1378,16 @@ function tick(state: State): State {
   return next;
 }
 
-/** A plan item the agent finished, logged as it does it. */
+/** A plan item the agent finished. The plan already shows it, so nothing is logged. */
 export function completeStep(
   threads: Thread[],
   threadId: string,
   stepId: string,
   now: number,
 ): Thread[] {
-  return mapThread(threads, threadId, (t) => {
-    const step = t.steps.find((s) => s.id === stepId);
-    return step
-      ? log(
-          mapStep(t, stepId, (s) => ({ ...s, status: 'done', doneAt: now })),
-          {
-            at: now,
-            who: t.providers[0],
-            kind: 'event',
-            text: `Finished "${step.title}"`,
-          },
-        )
-      : t;
-  });
+  return mapThread(threads, threadId, (t) =>
+    mapStep(t, stepId, (s) => ({ ...s, status: 'done', doneAt: now })),
+  );
 }
 
 export function freeLine(threads: Thread[]): LineSlot {
