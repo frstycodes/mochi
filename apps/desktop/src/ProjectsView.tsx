@@ -16,6 +16,7 @@ import {
   Image,
   Link,
   Search,
+  Star,
   Trash,
 } from '@/icons';
 import { toast } from '@/toast/store';
@@ -63,6 +64,7 @@ import {
   requestNewThreadIn,
   useProjects,
 } from './projects';
+import { toggleFavorite } from './toggleFavorite';
 import { useMachines } from './remote/useMachines';
 import { useHarness, useSpaceThreads, useHarnessSelector } from './store';
 import { OverflowIcon } from './ui';
@@ -141,6 +143,7 @@ function ThisComputerProjects() {
                 key={p.id}
                 spaceId={spaceId}
                 project={p}
+                all={projects}
                 usage={usage.get(p.path)}
               />
             ))}
@@ -273,10 +276,12 @@ type Usage =
 function ProjectRow({
   spaceId,
   project,
+  all,
   usage,
 }: {
   spaceId: string;
   project: Project;
+  all: Project[];
   usage?: Usage;
 }) {
   const { state, dispatch } = useHarness();
@@ -356,6 +361,14 @@ function ProjectRow({
               >
                 <Edit />
                 New thread here
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => void toggleFavorite(spaceId, all, project.id)}
+              >
+                <Star filled={project.favoriteOrder !== null} />
+                {project.favoriteOrder === null
+                  ? 'Add to favorites'
+                  : 'Remove from favorites'}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={project.isMissing}

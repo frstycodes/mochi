@@ -16,11 +16,11 @@ import {
 import { runGit } from '../git/run.ts';
 import { readDoc, writeDoc } from '../store/client.ts';
 
-/** `iconMode` is unset on rows saved before icons: those read as `auto`. */
+/** `iconMode` is unset on rows saved before icons: those read as `auto`. `favoriteOrder` is unset on a project that isn't a favorite. */
 type StoredProject = Omit<
   Project,
-  'isMissing' | 'icon' | 'iconMode' | 'favicon'
-> & { iconMode?: ProjectIconMode };
+  'isMissing' | 'icon' | 'iconMode' | 'favicon' | 'favoriteOrder'
+> & { iconMode?: ProjectIconMode; favoriteOrder?: number };
 
 interface Saved {
   version: 1;
@@ -78,6 +78,7 @@ export function projectRegistry(iconDir: string, key = 'registry') {
     return {
       ...project,
       iconMode,
+      favoriteOrder: project.favoriteOrder ?? null,
       isMissing,
       favicon,
       icon: isMissing ? null : await iconOf(project, iconMode, favicon),
@@ -140,6 +141,17 @@ export function projectRegistry(iconDir: string, key = 'registry') {
         find(space, id);
         space.projects = space.projects.filter((p) => p.id !== id);
         await removeCustomIcon(iconDir, id);
+      });
+    },
+    setFavorites(spaceId: string, ids: string[]) {
+      return change(spaceId, async (space) => {
+        const order = [...new Set(ids)];
+        for (const id of order) find(space, id);
+        for (const project of space.projects) {
+          const place = order.indexOf(project.id);
+          if (place < 0) delete project.favoriteOrder;
+          else project.favoriteOrder = place;
+        }
       });
     },
     async setIcon(spaceId: string, id: string, icon: string) {

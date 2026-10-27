@@ -23,8 +23,8 @@ type Current<S extends { members: readonly [Schema.Top, ...unknown[]] }> =
 type StoredPrefs = Partial<SchemaPrefs>;
 type StoredProject = Omit<
   Project,
-  'isMissing' | 'icon' | 'iconMode' | 'favicon'
-> & { iconMode?: ProjectIconMode };
+  'isMissing' | 'icon' | 'iconMode' | 'favicon' | 'favoriteOrder'
+> & { iconMode?: ProjectIconMode; favoriteOrder?: number };
 
 export type RowsCarryV = Check<
   Current<typeof Stored.Pin> extends Row<Pin> ? true : false

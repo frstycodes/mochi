@@ -12,7 +12,7 @@ const TO = '/Users/me/.mochi/worktrees/app.v2/new-12';
 test("a folder's transcripts live under its path with every non-alphanumeric as -", () => {
   assert.equal(
     transcriptFolder('/cfg', TO),
-    '/cfg/projects/-Users-me--mochi-worktrees-app-v2-new-12',
+    join('/cfg', 'projects', '-Users-me--mochi-worktrees-app-v2-new-12'),
   );
 });
 

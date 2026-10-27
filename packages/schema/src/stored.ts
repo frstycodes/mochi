@@ -62,7 +62,7 @@ export type StoredThemes = typeof StoredThemes.Type;
 
 // {PROJECTS}
 
-/** A project row in main's `projects.json` (`StoredProject`, electron/projects/registry.ts); unset `iconMode` predates icons and reads as `auto`. */
+/** A project row in main's `projects.json` (`StoredProject`, electron/projects/registry.ts); unset `iconMode` predates icons and reads as `auto`; unset `favoriteOrder` is not a favorite. */
 export const StoredProject = versioned(
   1,
   Schema.Struct({
@@ -72,6 +72,7 @@ export const StoredProject = versioned(
     origin: Schema.NullOr(S),
     addedAt: Schema.Number,
     iconMode: key(ProjectIconMode),
+    favoriteOrder: key(Schema.Number),
   }),
 );
 export type StoredProject = typeof StoredProject.Type;

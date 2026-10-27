@@ -16,6 +16,8 @@ export interface Project {
   favicon: string | null;
   /** The folder is gone from `path`: moved or deleted outside Mochi. Relocate fixes it. */
   isMissing: boolean;
+  /** Place among the favorites (0 first); null when it isn't one. */
+  favoriteOrder: number | null;
 }
 
 export type ProjectIconMode = 'auto' | 'custom' | 'none';
@@ -59,6 +61,8 @@ export interface ProjectsHost {
   remove(spaceId: string, id: string): Promise<void>;
   /** Points a project at the folder it moved to; refused when that folder is a different repository. */
   relocate(spaceId: string, id: string, path: string): Promise<Project>;
+  /** The favorites, in order; every other project stops being one. */
+  setFavorites(spaceId: string, ids: string[]): Promise<void>;
   /** An uploaded image (a data URL, up to 512 KB), `auto` to use the folder's favicon, or `none` for the letter. */
   setIcon(spaceId: string, id: string, icon: string): Promise<Project>;
   githubRepos(githubUser?: string): Promise<GithubRepo[]>;
@@ -78,6 +82,7 @@ export const projectsMethods = {
   remove: 'invoke',
   relocate: 'invoke',
   setIcon: 'invoke',
+  setFavorites: 'invoke',
   githubRepos: 'invoke',
   onChange: 'event',
   onProgress: 'event',

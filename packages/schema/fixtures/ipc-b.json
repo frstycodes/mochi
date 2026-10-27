@@ -19,7 +19,8 @@
       "iconMode": "auto",
       "icon": null,
       "favicon": null,
-      "isMissing": false
+      "isMissing": false,
+      "favoriteOrder": null
      },
      {
       "id": "62b00a15-1fe9-4f57-8f28-29a3e7bb24f6",
@@ -30,7 +31,8 @@
       "iconMode": "auto",
       "icon": null,
       "favicon": null,
-      "isMissing": false
+      "isMissing": false,
+      "favoriteOrder": null
      }
     ]
    }
@@ -50,7 +52,8 @@
      "iconMode": "auto",
      "icon": null,
      "favicon": null,
-     "isMissing": false
+     "isMissing": false,
+     "favoriteOrder": null
     }
    }
   ],
@@ -76,7 +79,8 @@
      "iconMode": "auto",
      "icon": null,
      "favicon": null,
-     "isMissing": false
+     "isMissing": false,
+     "favoriteOrder": null
     }
    },
    {
@@ -99,7 +103,8 @@
      "iconMode": "auto",
      "icon": null,
      "favicon": null,
-     "isMissing": false
+     "isMissing": false,
+     "favoriteOrder": null
     }
    }
   ],
@@ -123,7 +128,8 @@
      "iconMode": "auto",
      "icon": null,
      "favicon": null,
-     "isMissing": false
+     "isMissing": false,
+     "favoriteOrder": null
     }
    }
   ],
@@ -152,8 +158,19 @@
      "iconMode": "auto",
      "icon": null,
      "favicon": null,
-     "isMissing": false
+     "isMissing": false,
+     "favoriteOrder": null
     }
+   }
+  ],
+  "projects.setFavorites": [
+   {
+    "input": [
+     "personal",
+     [
+      "60a1a905-df0c-432a-8c91-47acbec001a7"
+     ]
+    ]
    }
   ],
   "projects.setIcon": [
@@ -175,7 +192,8 @@
       "source": "custom"
      },
      "favicon": null,
-     "isMissing": false
+     "isMissing": false,
+     "favoriteOrder": null
     }
    }
   ],
@@ -194,7 +212,8 @@
       "iconMode": "auto",
       "icon": null,
       "favicon": null,
-      "isMissing": false
+      "isMissing": false,
+      "favoriteOrder": null
      },
      {
       "id": "62b00a15-1fe9-4f57-8f28-29a3e7bb24f6",
@@ -205,7 +224,8 @@
       "iconMode": "auto",
       "icon": null,
       "favicon": null,
-      "isMissing": false
+      "isMissing": false,
+      "favoriteOrder": null
      },
      {
       "id": "60a1a905-df0c-432a-8c91-47acbec001a7",
@@ -219,7 +239,8 @@
        "source": "custom"
       },
       "favicon": null,
-      "isMissing": false
+      "isMissing": false,
+      "favoriteOrder": null
      },
      {
       "id": "008918ca-1efb-461c-96e4-8d46a960936a",
@@ -230,7 +251,8 @@
       "iconMode": "auto",
       "icon": null,
       "favicon": null,
-      "isMissing": false
+      "isMissing": false,
+      "favoriteOrder": null
      },
      {
       "id": "430950bc-3b34-4b34-8629-5376559e1724",
@@ -241,7 +263,8 @@
       "iconMode": "auto",
       "icon": null,
       "favicon": null,
-      "isMissing": false
+      "isMissing": false,
+      "favoriteOrder": null
      }
     ]
    }

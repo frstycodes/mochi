@@ -63,6 +63,9 @@ export const projectsHost = (userData: string) => {
     async relocate(_caller, spaceId, projectId, path) {
       return changing(spaceId, registry.relocate(spaceId, projectId, path));
     },
+    async setFavorites(_caller, spaceId, ids) {
+      await changing(spaceId, registry.setFavorites(spaceId, ids));
+    },
     async setIcon(_caller, spaceId, projectId, icon) {
       return changing(spaceId, registry.setIcon(spaceId, projectId, icon));
     },
