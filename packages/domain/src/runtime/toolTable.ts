@@ -250,7 +250,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with New thread, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message). At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread reports) can only use own_initiative. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a report in your transcript, and you are started with the reports once all your sub-threads are idle, or at once for a blocked, needs_input or failed one. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Pass `criterionId` to hand it one piece of your goal. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread doesn\'t start: it goes on this turn\'s card with the others, which the user starts (Start, or Start all) or dismisses, so don\'t retry or wait on it.',
+      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with New thread, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message). At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread reports) can only use own_initiative, unless the user allowed an orchestration grant (request_orchestration_grant): then a nested user_asked thread on a model the grant allows starts at once while its budget lasts, and once it runs out the call puts the thread on a card instead. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a report in your transcript, and you are started with the reports once all your sub-threads are idle, or at once for a blocked, needs_input or failed one. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Pass `criterionId` to hand it one piece of your goal. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread doesn\'t start: it goes on this turn\'s card with the others, which the user starts (Start, or Start all) or dismisses, so don\'t retry or wait on it.',
     shape: {
       initiation: Schema.optionalKey(
         Schema.Literals(THREAD_INITIATIONS).annotate({
@@ -313,6 +313,39 @@ export const TOOL_TABLE = {
             "A provider-supported effort id; defaults to the originating session's at start",
         }),
       ),
+    },
+  },
+  request_orchestration_grant: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Ask the user, once, for a budget to start nested threads from turns they didn't start (sub-thread reports, Auto-fix, another thread's message), so a multi-phase plan keeps going when they're away: phase 2's threads start when phase 1's reports come back. Only in a turn the user started, only when you will run later phases yourself. The user sees a card with your reason, the thread count, each model (they can switch some off) and how long it lasts, then Allow or Don't allow; this returns at once, so carry on. Allowed, create_thread with initiation user_asked starts nested threads directly in agent-driven turns while threads and time remain, each logged in this thread; never top-level, permissions stay yours, and the user can revoke it on the card. One pending grant at a time; allowing a new one replaces the old.",
+    shape: {
+      maxThreads: Schema.Number.check(
+        Schema.isInt(),
+        Schema.isBetween({ minimum: 1, maximum: 10 }),
+      ).annotate({
+        description:
+          'Most threads it may start in all, across every later phase',
+      }),
+      models: Schema.Array(Schema.String)
+        .check(Schema.isMinLength(1))
+        .annotate({
+          description:
+            'Model ids the started threads may run on, like ["claude-sonnet-5-5"]; each must be one the account offers',
+        }),
+      hours: Schema.Number.check(
+        Schema.isBetween({ minimum: 1, maximum: 24 }),
+      ).annotate({
+        description: 'How long it lasts once allowed',
+      }),
+      reason: Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(200),
+      ).annotate({
+        description:
+          'One line the user reads on the card: the phases and why they need to start without them, like "Phase 2: 3 migrations once the schema PRs land"',
+      }),
     },
   },
   dismiss_thread_proposal: {

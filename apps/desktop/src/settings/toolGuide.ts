@@ -87,6 +87,12 @@ export const TOOL_GUIDE = {
     description:
       'Start a thread you asked for, or suggest one as a card you start or dismiss. You stay where you are and can undo a start.',
   },
+  request_orchestration_grant: {
+    group: 'Threads',
+    label: 'Ask to start threads on its own',
+    description:
+      'Ask on a card for a budget (threads, models, hours) to start nested threads while you are away. You allow or revoke it on the card.',
+  },
   dismiss_thread_proposal: {
     group: 'Threads',
     label: 'Withdraw thread suggestions',

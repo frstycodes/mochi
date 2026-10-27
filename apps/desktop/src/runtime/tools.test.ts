@@ -3937,3 +3937,168 @@ test("send_to_thread with expectReply asks the target to note the sender, except
     'its turn ends reach rl anyway',
   );
 });
+
+// {ORCHESTRATION GRANT}
+
+const grantOf = (thread: Thread) =>
+  thread.activity.findLast((e) => e.grant)!.grant!;
+const fromNotes = (t: ReturnType<typeof setup>) =>
+  t.env.dispatch({
+    type: 'send',
+    threadId: 'rl',
+    text: 'Sub-thread notes',
+    reason: '',
+    from: { threadId: 'e2e', title: 'Fix e2e' },
+  });
+const nested = (title: string, model = 'claude-sonnet-5-5') => ({
+  initiation: 'user_asked',
+  model,
+  ...brief(title),
+});
+
+test('an orchestration grant is asked for only in your turn, one pending at a time, on offered models', async () => {
+  const t = setup();
+  assert.match(
+    await t.err('request_orchestration_grant', {
+      maxThreads: 3,
+      models: ['gpt-9'],
+      hours: 2,
+      reason: 'Phase 2',
+    }),
+    /gpt-9 isn't offered/,
+  );
+  const { grantId } = await t.ok('request_orchestration_grant', {
+    maxThreads: 3,
+    models: ['claude-sonnet-5-5', 'claude-haiku-5-5'],
+    hours: 2,
+    reason: 'Phase 2',
+  });
+  assert.deepEqual(grantOf(t.thread('rl')), {
+    id: grantId,
+    maxThreads: 3,
+    models: ['claude-sonnet-5-5', 'claude-haiku-5-5'],
+    minutes: 120,
+    reason: 'Phase 2',
+    state: 'pending',
+    started: [],
+  });
+  assert.match(
+    await t.err('request_orchestration_grant', {
+      maxThreads: 1,
+      models: ['claude-sonnet-5-5'],
+      hours: 1,
+      reason: 'again',
+    }),
+    /still waits/,
+  );
+  fromNotes(t);
+  assert.match(
+    await t.err('request_orchestration_grant', {
+      maxThreads: 1,
+      models: ['claude-sonnet-5-5'],
+      hours: 1,
+      reason: 'from notes',
+    }),
+    /turn the user started/,
+  );
+});
+
+test('an allowed grant starts nested threads from agent-driven turns, on its models only, then falls back to a card', async () => {
+  const t = setup();
+  const { grantId } = await t.ok('request_orchestration_grant', {
+    maxThreads: 2,
+    models: ['claude-sonnet-5-5', 'claude-haiku-5-5'],
+    hours: 1,
+    reason: 'Phase 2',
+  });
+  fromNotes(t);
+  assert.match(
+    await t.err('create_thread', nested('Before allowing')),
+    /can't start threads/,
+    'pending is not allowed',
+  );
+  t.env.dispatch({
+    type: 'grant-answer',
+    threadId: 'rl',
+    grantId,
+    answer: 'allow',
+    models: ['claude-sonnet-5-5'],
+  });
+  assert.match(
+    await t.err('create_thread', nested('Haiku one', 'claude-haiku-5-5')),
+    /allows claude-sonnet-5-5, not claude-haiku-5-5/,
+    'a model you switched off is refused',
+  );
+  assert.match(
+    await t.err('create_thread', { ...nested('Top'), isTopLevel: true }),
+    /nested threads only/,
+  );
+  const first = await t.ok('create_thread', nested('Migrate orders'));
+  assert.equal(t.thread(first.id).parent?.threadId, 'rl');
+  assert.equal(first.grant.threadsLeft, 1);
+  assert.match(
+    t.thread('rl').activity.at(-1)!.text,
+    /started "Migrate orders" on the orchestration grant \(1 thread left\)/,
+  );
+  await t.ok('create_thread', nested('Migrate invoices'));
+  assert.deepEqual(
+    grantOf(t.thread('rl')).started.map((s) => s.title),
+    ['Migrate orders', 'Migrate invoices'],
+  );
+  const before = t.state().threads.length;
+  const card = await t.ok('create_thread', nested('Backfill'));
+  assert.equal(t.state().threads.length, before, 'spent: nothing starts');
+  assert.match(card.note, /spent, expired or revoked/);
+  assert.equal(cardsOf(t.thread('rl')).at(-1)!.title, 'Backfill');
+  assert.match(
+    await t.err('create_thread', { initiation: 'offer', ...brief('x') }),
+    /can't start threads/,
+    'offers stay refused',
+  );
+});
+
+test('a grant lapses at its hour and a revoked one starts nothing', async () => {
+  const t = setup();
+  const { grantId } = await t.ok('request_orchestration_grant', {
+    maxThreads: 5,
+    models: ['claude-sonnet-5-5'],
+    hours: 1,
+    reason: 'Phase 2',
+  });
+  t.env.dispatch({
+    type: 'grant-answer',
+    threadId: 'rl',
+    grantId,
+    answer: 'allow',
+  });
+  fromNotes(t);
+  for (let i = 0; i < 60; i++) t.env.dispatch({ type: 'tick' });
+  const before = t.state().threads.length;
+  assert.match((await t.ok('create_thread', nested('Late'))).note, /expired/);
+  assert.equal(t.state().threads.length, before);
+
+  const u = setup();
+  const second = await u.ok('request_orchestration_grant', {
+    maxThreads: 5,
+    models: ['claude-sonnet-5-5'],
+    hours: 1,
+    reason: 'Phase 2',
+  });
+  u.env.dispatch({
+    type: 'grant-answer',
+    threadId: 'rl',
+    grantId: second.grantId,
+    answer: 'allow',
+  });
+  u.env.dispatch({
+    type: 'grant-answer',
+    threadId: 'rl',
+    grantId: second.grantId,
+    answer: 'revoke',
+  });
+  assert.equal(grantOf(u.thread('rl')).state, 'revoked');
+  fromNotes(u);
+  const count = u.state().threads.length;
+  await u.ok('create_thread', nested('After revoke'));
+  assert.equal(u.state().threads.length, count);
+});

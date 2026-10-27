@@ -128,6 +128,7 @@ export function chatRows(
         !!entry.subThread ||
         !!entry.subReport ||
         !!entry.proposals ||
+        !!entry.grant ||
         !!entry.devServer;
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
       // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread's result, a sub-thread's report, thread cards) stay in view: the turn continues in a new accordion after one.
