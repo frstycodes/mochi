@@ -192,10 +192,7 @@ export function LimitChip({ thread }: { thread: Thread }) {
   const label = limitStatus(thread);
   if (!label) return null;
   return (
-    <Badge
-      variant="secondary"
-      className="hidden bg-warning/12 tabular text-warning @md:inline-flex dark:bg-warning/20"
-    >
+    <Badge tone="warning" className="hidden tabular @md:inline-flex">
       <Hourglass aria-hidden />
       {label}
     </Badge>

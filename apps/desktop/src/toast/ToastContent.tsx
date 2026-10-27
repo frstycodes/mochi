@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import type { MouseEvent, ReactNode } from 'react';
 import { CheckCircle, XCircle, Info, Warning, X } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -87,11 +88,8 @@ function ToastIcon({ type }: { type: ToastType }) {
 
 function RepeatCount({ count }: { count: number }) {
   return (
-    <span
-      aria-label={`Shown ${count} times`}
-      className="shrink-0 rounded-full bg-muted px-1.5 type-caption font-medium text-muted-foreground tabular"
-    >
+    <Badge tone="muted" aria-label={`Shown ${count} times`} className="tabular">
       {count}
-    </span>
+    </Badge>
   );
 }

@@ -107,24 +107,24 @@ const VERDICT = {
   approve: {
     label: 'Approve',
     icon: ShieldCheck,
-    className: 'bg-success/10 text-success',
+    tone: 'success',
   },
   concerns: {
     label: 'Concerns',
     icon: Warning,
-    className: 'bg-warning/8 text-warning',
+    tone: 'warning',
   },
   block: {
     label: 'Block',
     icon: ShieldX,
-    className: 'bg-destructive/10 text-destructive',
+    tone: 'destructive',
   },
-} satisfies Record<VerdictKind, unknown>;
+} as const satisfies Record<VerdictKind, unknown>;
 
 function VerdictBadge({ verdict }: { verdict: VerdictKind }) {
-  const { label, icon: Icon, className } = VERDICT[verdict];
+  const { label, icon: Icon, tone } = VERDICT[verdict];
   return (
-    <Badge variant="secondary" className={className}>
+    <Badge tone={tone}>
       <Icon aria-hidden />
       {label}
     </Badge>

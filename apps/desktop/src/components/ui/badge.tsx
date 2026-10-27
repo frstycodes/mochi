@@ -19,6 +19,15 @@ const badgeVariants = cva(
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      tone: {
+        success:
+          "bg-success/12 text-[color-mix(in_oklab,var(--success)_75%,var(--foreground))] [a]:hover:bg-success/20",
+        warning:
+          "bg-warning/12 text-[color-mix(in_oklab,var(--warning)_75%,var(--foreground))] [a]:hover:bg-warning/20",
+        destructive:
+          "bg-destructive/12 text-[color-mix(in_oklab,var(--destructive)_75%,var(--foreground))] [a]:hover:bg-destructive/20",
+        muted: "bg-muted text-muted-foreground [a]:hover:bg-muted/80",
+      },
     },
     defaultVariants: {
       variant: "default",
@@ -29,6 +38,7 @@ const badgeVariants = cva(
 function Badge({
   className,
   variant = "default",
+  tone,
   asChild = false,
   ...props
 }: React.ComponentProps<"span"> &
@@ -38,8 +48,13 @@ function Badge({
   return (
     <Comp
       data-slot="badge"
-      data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
+      data-variant={tone ? undefined : variant}
+      data-tone={tone}
+      className={cn(
+        // A tone is the whole colour, so it replaces the variant's fill rather than fighting it.
+        badgeVariants({ variant: tone ? null : variant, tone }),
+        className
+      )}
       {...props}
     />
   )
