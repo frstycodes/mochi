@@ -420,6 +420,24 @@ export const ForkIcon = customIcon(
   `<path d="M3.75 12h5.5l6.5-6.25M9.25 12l6.5 6.25M13.25 5.75h2.5v2.5M13.25 18.25h2.5v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
 );
 
+/** The app icon's dome with its eye cut out, in the text colour so it reads on any surface. */
+export function MochiMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="14 26 72 56"
+      className={cn('w-auto shrink-0 text-foreground', className)}
+      role="img"
+      aria-label="Mochi"
+    >
+      <path
+        d="M18 70 C18 44 32 30 50 30 C68 30 82 44 82 70 C82 76 78 78 72 78 L28 78 C22 78 18 76 18 70 Z M63 52 A5 5 0 1 0 53 52 A5 5 0 1 0 63 52 Z"
+        fill="currentColor"
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+}
+
 export const ICON_SWAP = {
   initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' },
   animate: { opacity: 1, scale: 1, filter: 'blur(0px)' },

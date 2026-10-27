@@ -9,6 +9,7 @@ import {
   StatStrip,
 } from './parts';
 import type { UsageView } from './report';
+import { MochiMark } from '../ui';
 
 /** The social image's size in CSS pixels; exported at 2×. */
 export const CARD = { width: 1200, height: 675 };
@@ -29,7 +30,7 @@ export const ShareCard = forwardRef<
     >
       <section className="flex min-h-0 flex-col gap-5 bg-sidebar py-10 pr-9 pl-10 shadow-[inset_-1px_0_0_var(--color-sidebar-border)]">
         <p className="type-prose flex items-center gap-2.5 text-muted-foreground">
-          <MochiMark />
+          <MochiMark className="h-[18px]" />
           <span className="truncate">
             <b className="font-medium text-foreground">{period}</b>
             {!!projectName && ` · ${projectName}`}
@@ -76,21 +77,3 @@ export const ShareCard = forwardRef<
     </div>
   );
 });
-
-/** The app icon's dome, in the text colour so it reads on either theme. */
-function MochiMark() {
-  return (
-    <svg
-      viewBox="14 26 72 56"
-      className="h-[18px] w-auto shrink-0 text-foreground"
-      role="img"
-      aria-label="Mochi"
-    >
-      <path
-        d="M18 70 C18 44 32 30 50 30 C68 30 82 44 82 70 C82 76 78 78 72 78 L28 78 C22 78 18 76 18 70 Z"
-        fill="currentColor"
-      />
-      <circle cx="58" cy="52" r="5" fill="var(--sidebar)" />
-    </svg>
-  );
-}

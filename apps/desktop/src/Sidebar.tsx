@@ -115,7 +115,7 @@ import {
   useRenameSurface,
 } from './rename';
 import type { FollowedMachine } from './host/types/remote';
-import { SpaceIcon, StatusMark, TooltipIconButton } from './ui';
+import { MochiMark, SpaceIcon, StatusMark, TooltipIconButton } from './ui';
 import {
   AgentsBadge,
   ThreadDetailText,
@@ -310,6 +310,7 @@ function SpaceHeader() {
       {!isMobile && !isMulti && (
         <SidebarTrigger className="ml-1 text-muted-foreground" />
       )}
+      <MochiMark className="ml-1 h-4" />
       <span className="ml-auto" />
       <NotificationBell spaceId={spaceId} />
     </SidebarHeader>
