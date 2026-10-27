@@ -17,6 +17,8 @@ import {
   TICTACTOE_WIDGET,
 } from '../embedFixtures';
 import { Block, Grid, Section } from '../layout';
+import { DEMO_PHOTOS } from '../imageFixtures';
+import { DevServerCard } from '../../chat/DevServerCard';
 
 export function EmbedsSection() {
   const { state } = useHarness();
@@ -106,6 +108,32 @@ export function EmbedsSection() {
                 language="html"
                 code={TICTACTOE_WIDGET}
                 title="Tic-tac-toe with a long name that truncates"
+              />
+            </div>
+          </Block>
+          <Block
+            title="Dev server"
+            use="start_dev_server's card: the page as it first loaded, the configuration's name, its port and whether it still listens. Open shows it in Preview; stopped, the button starts it again in the thread's terminal."
+          >
+            <div className="flex flex-col gap-4">
+              <DevServerCard
+                thread={state.threads[0]!}
+                server={{
+                  name: 'web',
+                  command: 'pnpm dev',
+                  source: 'launch.json',
+                  port: 5173,
+                  preview: DEMO_PHOTOS.screenshot.src,
+                }}
+              />
+              <DevServerCard
+                thread={state.threads[0]!}
+                server={{
+                  name: 'harness-app-with-a-long-configuration-name',
+                  command: 'pnpm dev --port 5191 --strictPort',
+                  source: 'launch.json',
+                  port: 5191,
+                }}
               />
             </div>
           </Block>

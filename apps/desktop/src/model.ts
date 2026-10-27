@@ -14,6 +14,7 @@ import type { ThreadControls } from './runtime/controls.ts';
 import type { WorkspaceDraft } from './git/workspace.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from '@mochi/domain/viz/fence';
+import type { RunTarget } from '@mochi/domain/host/types/ports';
 import type { PaneLayout } from './pane/layout.ts';
 import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 import { vizGalleryThread } from './viz/fixtures.ts';
@@ -191,6 +192,8 @@ export interface ActivityEntry {
   images?: string[];
   /** Tool entries: the image this call made, shown as its own card in the transcript. */
   generated?: GeneratedImage;
+  /** Events only: the dev server `start_dev_server` started or found listening, shown as its own card. */
+  devServer?: DevServer;
   /** Tool entries: the MCP App view this call declared, shown as its own card after the call's group. */
   widget?: McpWidget;
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
@@ -302,6 +305,12 @@ export interface ThreadRef {
 }
 
 /** An image an agent generated. `src` is a file path or a data URL; `aspect` (width / height) is the size it asked for, square when unknown. */
+export interface DevServer extends RunTarget {
+  port: number;
+  /** A screenshot of the page once it loaded, as `saveImage` kept it. */
+  preview?: string;
+}
+
 export interface GeneratedImage {
   status: 'running' | 'done' | 'failed';
   prompt?: string;

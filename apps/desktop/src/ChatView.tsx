@@ -132,6 +132,7 @@ import {
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
+import { DevServerCard } from './chat/DevServerCard';
 import { McpAppCard } from './chat/McpAppCard';
 import { MessageImages } from './chat/MessageImages';
 import { toast } from '@/toast/store';
@@ -477,6 +478,8 @@ const ChatRowView = memo(function ChatRowView({
     return (
       <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />
     );
+  if (row.kind === 'event' && row.entry.devServer)
+    return <DevServerCard thread={thread} server={row.entry.devServer} />;
   if (row.kind === 'event' && row.entry.proposals)
     return <ProposalEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.handoff)

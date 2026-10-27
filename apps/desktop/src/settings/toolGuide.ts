@@ -197,6 +197,12 @@ export const TOOL_GUIDE = {
     description:
       'Open an address in the thread’s browser, in the current tab or a new one.',
   },
+  start_dev_server: {
+    group: 'Using the browser',
+    label: 'Start dev servers',
+    description:
+      'Run one of the project’s dev servers from .claude/launch.json or package.json in the thread’s terminal, then open it.',
+  },
   browser_click: {
     group: 'Using the browser',
     label: 'Click',
