@@ -33,7 +33,7 @@ test('the halo edge is ragged: columns reach different heights', () => {
     while (y < height && at(x, y) === 0) y++;
     return y;
   });
-  assert.ok(Math.max(...tops) - Math.min(...tops) > height / 4);
+  assert.ok(Math.max(...tops) - Math.min(...tops) > height / 8);
 });
 
 test('the edge stays in [-1, 1], repeats per seed and differs between profiles', () => {

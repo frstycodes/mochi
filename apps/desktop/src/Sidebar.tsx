@@ -177,7 +177,9 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible={collapsible}>
-      <SpaceHalo profiles={profiles} currentId={spaceId} />
+      {profiles.length > 1 && (
+        <SpaceHalo profiles={profiles} currentId={spaceId} />
+      )}
       <ContextMenu>
         {/* `contents`: the header, list and footer stay the sidebar's own flex children. */}
         <ContextMenuTrigger asChild>

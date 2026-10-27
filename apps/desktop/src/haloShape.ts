@@ -22,7 +22,7 @@ export const HALO_KNOBS = {
     min: 4,
     max: 30,
     step: 1,
-    fallback: 10,
+    fallback: 12,
   },
   haloRaggedness: {
     label: 'Raggedness',
@@ -30,7 +30,7 @@ export const HALO_KNOBS = {
     min: 0,
     max: 100,
     step: 5,
-    fallback: 80,
+    fallback: 25,
   },
   haloIntensity: {
     label: 'Intensity',
@@ -38,7 +38,7 @@ export const HALO_KNOBS = {
     min: 25,
     max: 200,
     step: 5,
-    fallback: 100,
+    fallback: 75,
   },
 };
 export type HaloKnob = keyof typeof HALO_KNOBS;
