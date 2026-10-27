@@ -1240,12 +1240,6 @@ function adminDashboard(): Thread {
         text: 'Related work: #45 is open, #49 is still a draft, #47 merged and #30 was closed. #46 has conflicts with main and #48 is failing CI. Issues: #12 is open, #9 was fixed, #8 closed as not planned, and #999 is one gh cannot read. Upstream there is vercel/streamdown#120 and https://github.com/frstycodes/mochi/pull/45. The header lives in src/App.tsx:3 and styles in [the stylesheet](src/index.css); src/missing.ts stays plain, and this is our #1 priority. On GitHub: frstycodes/mochi#45, frstycodes/mochi#47, frstycodes/mochi#7 and frstycodes/mochi#50.',
       },
       {
-        at: at(s, 40),
-        who: 'harness',
-        kind: 'event',
-        text: 'Finished "Usage query endpoint"',
-      },
-      {
         at: at(s, 41),
         who: 'codex',
         kind: 'tool',
