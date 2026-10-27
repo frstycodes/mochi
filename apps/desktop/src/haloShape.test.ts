@@ -9,8 +9,17 @@ const at = (x: number, y: number) => alpha[y * width + x];
 const columns = Array.from({ length: width }, (_, x) => x);
 
 test('the halo is strongest along the bottom and fades upward', () => {
+  const row = (y: number) => columns.reduce((sum, x) => sum + at(x, y), 0);
+  assert.ok(row(height - 1) > row(height - 4));
+  assert.ok(row(height - 4) > row(height - 8));
+});
+
+test('the glow dissolves at its edge instead of stopping on a step', () => {
   for (const x of columns) {
-    assert.ok(at(x, height - 1) > at(x, height - 4));
+    let y = 0;
+    while (y < height && at(x, y) === 0) y++;
+    if (y < height)
+      assert.ok(at(x, y) < 24, `column ${x} starts at ${at(x, y)}`);
   }
 });
 
