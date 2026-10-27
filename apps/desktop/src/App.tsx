@@ -10,6 +10,7 @@ import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
+import { ThreadSwitcher } from './ThreadSwitcher';
 import { useAppZoom } from './appZoom';
 import { ZoomChip } from './ZoomChip';
 import { host } from './host';
@@ -87,6 +88,7 @@ function AppContent() {
                   </ErrorBoundary>
                 </MachinesProvider>
                 <Orbit />
+                <ThreadSwitcher />
                 <PhotoViewer />
                 <FileViewer />
                 <ScheduleLayer />

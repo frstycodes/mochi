@@ -21,9 +21,13 @@ export const COMMAND_GROUPS = [
   'Orbit',
 ] as const;
 
-/** Commands clash within a scope or with a global command. Viewer shortcuts listen only while that viewer is active. */
+/**
+ * Commands clash within a scope or with a global command. Viewer shortcuts listen only while that viewer is active.
+ * `app` commands listen on the window after every viewer, so a viewer's own command on the same chord wins while it has focus.
+ */
 export type CommandScope =
   | 'global'
+  | 'app'
   | 'pane'
   | 'list'
   | 'replay'
@@ -141,6 +145,19 @@ export const COMMANDS = {
     group: 'Threads',
     scope: 'global',
     keys: ['mod', 'shift', ']'],
+  },
+  // ⌃Tab on macOS, Ctrl Tab elsewhere: the side pane's own Next pane takes the same chord while it has focus.
+  'thread-next': {
+    title: 'Next thread (hold to pick)',
+    group: 'Threads',
+    scope: 'app',
+    keys: (isMac) => [isMac ? 'nav' : 'mod', 'Tab'],
+  },
+  'thread-previous': {
+    title: 'Previous thread (hold to pick)',
+    group: 'Threads',
+    scope: 'app',
+    keys: (isMac) => [isMac ? 'nav' : 'mod', 'shift', 'Tab'],
   },
   ...numbered(PINS, (n) => [
     `pinned-${n}`,
@@ -728,6 +745,21 @@ export function isCommand(
     command.whileTyping ||
     !(isPlain(keys) && isTyping(e.target, command.inDialog))
   );
+}
+
+/** Whether the modifiers `id`'s chord is held with (Shift aside) are all still down; false for a chord without one. */
+export function isHeld(
+  e: Pick<KeyEventLike, 'metaKey' | 'ctrlKey' | 'altKey'>,
+  id: CommandId,
+  overrides?: Overrides,
+  isMac = IS_MAC,
+) {
+  const [mods] = physical(bindingOf(id, overrides, isMac) ?? [], isMac).split(
+    '|',
+  );
+  const down = { meta: e.metaKey, ctrl: e.ctrlKey, alt: e.altKey };
+  const held = mods.split('+').filter((m): m is keyof typeof down => m in down);
+  return held.length > 0 && held.every((m) => down[m]);
 }
 
 /** The first of `ids` whose chord `e` is. */

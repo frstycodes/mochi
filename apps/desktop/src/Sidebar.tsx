@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { motion } from 'motion/react';
 import { useDraggable } from '@dnd-kit/react';
-import { Archive, Chat, Eye, Menu, Plus, Search, Unarchive } from '@/icons';
+import { Archive, Eye, Menu, Plus, Search, Unarchive } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -31,7 +31,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
-import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
 import { SubThreadGuide } from './goals/SubThreads';
@@ -64,6 +63,7 @@ import { NotificationBell } from './notify/NotificationBell';
 import {
   dropAt,
   dropPin,
+  flattenGroups,
   lastActivityAt,
   nestBlocker,
   orderBetween,
@@ -102,6 +102,8 @@ import type { FollowedMachine } from './host/types/remote';
 import { SpaceIcon, TooltipIconButton } from './ui';
 import {
   AgentsBadge,
+  ThreadDetailText,
+  ThreadProjectMark,
   ThreadStatusDot,
   useThreadRow,
   type ThreadRow,
@@ -115,8 +117,6 @@ import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';
 import { UserMenu } from './UserMenu';
 import { FoldGroup } from './SidebarFold';
-import { ProjectIcon } from './ProjectIcon';
-import { useProjectAt } from './projects';
 import {
   filteredSidebarLists,
   matchesProjectFilter,
@@ -345,10 +345,9 @@ function SpaceNav({
   } = filteredSidebarLists(threads, spaceId, projectFilter.selected);
   const settled = allSettled.slice(0, SIDEBAR_SETTLED);
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
-  const order = [
-    ...[...pinned, ...active].flatMap((g) => [g.thread, ...g.subs]),
-    ...settled,
-  ].map((t) => t.id);
+  const order = [...flattenGroups([...pinned, ...active]), ...settled].map(
+    (t) => t.id,
+  );
   const selection = useThreadSelection(
     order,
     view.kind === 'thread' ? view.id : undefined,
@@ -1341,7 +1340,6 @@ function RowDetail({
   machine?: FollowedMachine;
   isProjectHidden?: boolean;
 }) {
-  const project = useProjectAt(thread.spaceId, thread.repo?.path);
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
   return (
     <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
@@ -1351,33 +1349,8 @@ function RowDetail({
           <span className="sr-only">On {machine.name}</span>
         </>
       )}
-      {!isProjectHidden && (
-        <span
-          className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]"
-          title={thread.repo?.project ?? 'No project'}
-        >
-          {thread.repo ? (
-            <ProjectIcon name={thread.repo.project} icon={project?.icon} />
-          ) : (
-            <Chat aria-label="No project" className="size-4 shrink-0" />
-          )}
-        </span>
-      )}
-      {row.isWorking ? (
-        <Shimmer as="span" className="min-w-0 flex-1 truncate">
-          {row.detail}
-        </Shimmer>
-      ) : (
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate',
-            row.tone === 'warning' && 'text-warning',
-            row.tone === 'destructive' && 'text-destructive',
-          )}
-        >
-          {row.detail}
-        </span>
-      )}
+      {!isProjectHidden && <ThreadProjectMark thread={thread} />}
+      <ThreadDetailText row={row} />
       {row.isWatched && (
         <Eye aria-label="Watched" className="size-3 shrink-0" />
       )}
