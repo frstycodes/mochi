@@ -44,7 +44,8 @@ import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { useDispatch } from '../store';
-import { ChangesSkeleton, DiffError, useChangeActions } from './ChangesTab';
+import { DiffError, useChangeActions } from './ChangesTab';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
@@ -128,7 +129,15 @@ function PrView({
     return (
       <DiffError message={reviewQuery.error} onRetry={reviewQuery.refresh} />
     );
-  if (review === undefined) return <ChangesSkeleton />;
+  if (review === undefined)
+    return (
+      <SkeletonRows
+        shape="change"
+        count={4}
+        label="Loading changes"
+        className="px-2"
+      />
+    );
   if (review === null) return <NoPr />;
 
   const actions: ChangeActions = {

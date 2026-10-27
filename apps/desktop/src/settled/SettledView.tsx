@@ -337,7 +337,7 @@ function SettledRow({
 
 function NoSettled() {
   return (
-    <Empty className="rounded-xl border bg-card">
+    <Empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Archive />

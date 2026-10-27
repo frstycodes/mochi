@@ -57,7 +57,7 @@ rounded:
 elevation:
   {
     flat: canvas sidebar side pane,
-    hairline: cards (1px ring),
+    hairline: cards (1px border),
     popover: menus tooltips hover cards summary card,
     float: goal timeline window and the PiP,
   }
@@ -151,7 +151,7 @@ The one exception to Inter is `figure`: big totals (the Usage page and its share
 | Level    | Surface                                              | Used by                                     |
 | -------- | ---------------------------------------------------- | ------------------------------------------- |
 | Flat     | `background` (darkest), `sidebar` (one step lighter) | Chat canvas; sidebar and side pane          |
-| Hairline | `card` + 1px ring                                    | Cards, queue decisions, tool runs, composer |
+| Hairline | `card` + 1px `border`                                | Cards, queue decisions, tool runs, composer |
 | Popover  | `popover` + `shadow-popover`                         | Tooltips, hover cards, popovers, menus      |
 | Float    | `float` (translucent) + blur + `shadow-float`        | The expanded goal timeline window           |
 

@@ -168,9 +168,7 @@ function HarnessSettings({ provider }: { provider: Provider }) {
                   <span className="flex items-center gap-2">
                     Version{' '}
                     {isUpdateAvailable(provider) && (
-                      <Badge variant="outline" className="text-warning">
-                        Update available
-                      </Badge>
+                      <Badge tone="warning">Update available</Badge>
                     )}
                   </span>
                 }

@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { useState, type ReactNode } from 'react';
 import { Check, Copy, Info, Refresh, CheckCircle, Warning } from '@/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -11,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from '@/toast/store';
@@ -69,7 +69,7 @@ export function SettingsGroup({
 }
 
 export function SettingsCard({ children }: { children: ReactNode }) {
-  return <div className="rounded-xl border bg-card">{children}</div>;
+  return <Card className="gap-0 py-0">{children}</Card>;
 }
 
 /**
@@ -457,22 +457,4 @@ export function ListIcon({
       className="size-8 shrink-0 rounded-lg object-contain"
     />
   );
-}
-
-const SKELETON_WIDTHS = ['w-40', 'w-28', 'w-48', 'w-32'];
-
-export function SkeletonRows({ count }: { count: number }) {
-  return Array.from({ length: count }, (_, i) => (
-    <SettingsRow
-      key={i}
-      label={
-        <span className="flex items-center gap-2.5">
-          <Skeleton className="size-8 rounded-lg" />
-          <Skeleton
-            className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`}
-          />
-        </span>
-      }
-    />
-  ));
 }

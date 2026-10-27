@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { useEffect, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { toast } from '@/toast/store';
@@ -316,11 +318,14 @@ function SliderLabel({
   children: string;
 }) {
   return (
-    <span
-      className={`pointer-events-none absolute top-2 max-w-[40%] truncate rounded-full bg-popover px-2 py-0.5 type-caption text-foreground shadow-popover ${side === 'left' ? 'left-2' : 'right-2'}`}
+    <Badge
+      className={cn(
+        'pointer-events-none absolute top-2 max-w-[40%] justify-start bg-popover text-foreground shadow-popover',
+        side === 'left' ? 'left-2' : 'right-2',
+      )}
     >
-      {children}
-    </span>
+      <span className="truncate">{children}</span>
+    </Badge>
   );
 }
 

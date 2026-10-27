@@ -1,3 +1,4 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
 import { useState } from 'react';
 import { XCircle, Keyboard, Search } from '@/icons';
 import { toast } from '@/toast/store';
@@ -159,16 +160,18 @@ export function KeyboardSection() {
 
 function NoShortcutMatch({ filter }: { filter: ShortcutFilter }) {
   return (
-    <p className="flex flex-wrap items-center gap-1 px-1 type-meta text-muted-foreground">
-      {filter.chord ? (
-        <>
-          Nothing uses <Shortcut keys={filter.chord} /> yet, so it's free to
-          give a command.
-        </>
-      ) : (
-        `No shortcut matches “${filter.query.trim()}”.`
-      )}
-    </p>
+    <Empty>
+      <EmptyDescription className="flex flex-wrap items-center justify-center gap-1">
+        {filter.chord ? (
+          <>
+            Nothing uses <Shortcut keys={filter.chord} /> yet, so it's free to
+            give a command.
+          </>
+        ) : (
+          `No shortcut matches “${filter.query.trim()}”.`
+        )}
+      </EmptyDescription>
+    </Empty>
   );
 }
 

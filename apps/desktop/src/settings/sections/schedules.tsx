@@ -47,7 +47,7 @@ function NoSchedules() {
     dispatch({ type: 'go', view: { kind: 'new' } });
   };
   return (
-    <Empty data-setting-id="schedules" className="rounded-xl border bg-card">
+    <Empty data-setting-id="schedules">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Clock />

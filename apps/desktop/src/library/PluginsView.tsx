@@ -1,3 +1,5 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
@@ -32,7 +34,6 @@ import {
   SettingsRow,
   SettingsSection,
   SettingsSelect,
-  SkeletonRows,
 } from '../settings/parts';
 import { OverflowIcon } from '../ui';
 import { FEATURED_MARKETPLACES, type MarketplaceCatalog } from './library';
@@ -42,7 +43,6 @@ import {
   ALL,
   CatalogErrorRow,
   CategoryChips,
-  EmptyRow,
   filterBy,
   InstallControl,
   InstalledList,
@@ -244,13 +244,13 @@ function PluginList({
       )}
       <SettingsCard>
         {!matches.length && (
-          <EmptyRow
-            text={
-              query
+          <Empty>
+            <EmptyDescription>
+              {query
                 ? `No plugin in ${catalog.displayName} matches “${query}”`
-                : `${catalog.displayName} lists no plugins here`
-            }
-          />
+                : `${catalog.displayName} lists no plugins here`}
+            </EmptyDescription>
+          </Empty>
         )}
         {matches.slice(0, limit).map((plugin) => (
           <LibraryRow

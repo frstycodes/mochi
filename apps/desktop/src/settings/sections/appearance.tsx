@@ -1,3 +1,5 @@
+import { Card } from '@/components/ui/card';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   ChevronDown,
@@ -78,7 +80,6 @@ import {
   SettingsRow,
   SettingsSection,
   settingControlId,
-  SkeletonRows,
 } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
 import { ANIMATIONS, type AnimationArea } from '../settingOptions';
@@ -183,33 +184,37 @@ function SlotCard({ slot }: { slot: ThemeSlot }) {
   const isOnScreen = colorTheme.mode === slot;
   return (
     <ThemePicker slot={slot}>
-      <button
-        type="button"
-        id={settingControlId(`${slot}Theme`)}
-        data-setting-id={`${slot}Theme`}
-        className="flex flex-col gap-3 rounded-xl border bg-card p-3 text-left transition-colors duration-700 hover:bg-accent/60 hover:duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 data-flash:bg-accent data-[state=open]:border-foreground/20"
+      <Card
+        asChild
+        className="gap-3 p-3 text-left transition-colors duration-700 hover:bg-accent/60 hover:duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 data-flash:bg-accent data-[state=open]:border-foreground/20"
       >
-        <ThemeMock theme={colorTheme[slot]} slot={slot} />
-        <span className="flex items-center gap-2 px-1">
-          <span className="min-w-0 flex-1">
-            <span className="block type-body font-medium">
-              {slot === 'light' ? 'Light' : 'Dark'}
+        <button
+          type="button"
+          id={settingControlId(`${slot}Theme`)}
+          data-setting-id={`${slot}Theme`}
+        >
+          <ThemeMock theme={colorTheme[slot]} slot={slot} />
+          <span className="flex items-center gap-2 px-1">
+            <span className="min-w-0 flex-1">
+              <span className="block type-body font-medium">
+                {slot === 'light' ? 'Light' : 'Dark'}
+              </span>
+              <span className="block truncate type-meta text-muted-foreground">
+                {chosen?.label ?? 'Mochi'}
+              </span>
             </span>
-            <span className="block truncate type-meta text-muted-foreground">
-              {chosen?.label ?? 'Mochi'}
-            </span>
+            {isOnScreen && (
+              <span className="shrink-0 type-caption text-muted-foreground">
+                On screen
+              </span>
+            )}
+            <ChevronDown
+              aria-hidden
+              className="size-4 shrink-0 text-muted-foreground"
+            />
           </span>
-          {isOnScreen && (
-            <span className="shrink-0 type-caption text-muted-foreground">
-              On screen
-            </span>
-          )}
-          <ChevronDown
-            aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-        </span>
-      </button>
+        </button>
+      </Card>
     </ThemePicker>
   );
 }

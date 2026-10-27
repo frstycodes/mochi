@@ -1,14 +1,11 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState } from 'react';
 import { CheckCircle, ChevronRight, Plus } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { openSubpage } from '../routes/nav';
-import {
-  SettingsCard,
-  SettingsRow,
-  SettingsSection,
-  SkeletonRows,
-} from '../settings/parts';
+import { SettingsCard, SettingsRow, SettingsSection } from '../settings/parts';
 import { ConnectAccountDialog } from './ConnectDialog';
 import {
   CONNECTORS,
@@ -26,7 +23,6 @@ import {
   ALL,
   CategoryChips,
   countOf,
-  EmptyRow,
   filterBy,
   InstalledList,
   LibraryIcon,
@@ -100,7 +96,9 @@ function Connected({ library, query, showDiscover }: Parameters<PagePart>[0]) {
           {!services && <SkeletonRows count={2} />}
           {isEmpty &&
             (query ? (
-              <EmptyRow text={`Nothing in your library matches “${query}”`} />
+              <Empty>
+                <EmptyDescription>{`Nothing in your library matches “${query}”`}</EmptyDescription>
+              </Empty>
             ) : (
               <NothingConnected onDiscover={showDiscover} />
             ))}
@@ -285,13 +283,13 @@ function Directory({ library, query }: Parameters<PagePart>[0]) {
         )}
         <SettingsCard>
           {!shown.length && (
-            <EmptyRow
-              text={
-                query
+            <Empty>
+              <EmptyDescription>
+                {query
                   ? `No connector matches “${query}”`
-                  : 'No connector in this category'
-              }
-            />
+                  : 'No connector in this category'}
+              </EmptyDescription>
+            </Empty>
           )}
           {shown.map((connector) => (
             <ConnectorRow

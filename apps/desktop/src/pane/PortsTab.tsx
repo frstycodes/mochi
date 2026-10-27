@@ -192,10 +192,7 @@ function Ports({
           <PaneSectionHeader>
             <PaneSectionTitle count={targets?.length}>Run</PaneSectionTitle>
             {!!threadPort && (
-              <Badge
-                variant="secondary"
-                className="h-4 rounded-sm px-1.5 font-mono type-caption font-normal text-muted-foreground tabular-nums"
-              >
+              <Badge tone="muted" className="font-mono tabular-nums">
                 PORT={threadPort}
               </Badge>
             )}
@@ -244,12 +241,7 @@ function RunTargetItem({
       <ItemContent className="min-w-0 gap-0">
         <ItemTitle className="w-full min-w-0 font-normal">
           <span className="truncate">{target.name}</span>
-          <Badge
-            variant="secondary"
-            className="h-4 rounded-sm px-1.5 type-caption font-normal text-muted-foreground"
-          >
-            {target.source}
-          </Badge>
+          <Badge tone="muted">{target.source}</Badge>
         </ItemTitle>
         <ItemDescription
           className="line-clamp-1 font-mono type-caption break-all"

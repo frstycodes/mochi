@@ -1,3 +1,5 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState, type ReactNode } from 'react';
 import { CheckCircle, Download, Login, Refresh, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -20,7 +22,7 @@ import { IconImage } from '../IconImage';
 import type { Space } from '../model';
 import { useProfiles } from '../profiles';
 import { timeAgo } from '../progress';
-import { SettingsCard, SettingsRow, SkeletonRows } from '../settings/parts';
+import { SettingsCard, SettingsRow } from '../settings/parts';
 import { HARNESSES } from '../settings/harnesses';
 import { OverflowIcon, ProviderMark, SpaceIcon } from '../ui';
 import { isSameServer } from '@mochi/domain/library/connectors';
@@ -50,7 +52,9 @@ export function InstalledList({
       {!shown && <SkeletonRows count={2} />}
       {shown?.length === 0 &&
         (query ? (
-          <EmptyRow text={`Nothing in your library matches “${query}”`} />
+          <Empty>
+            <EmptyDescription>{`Nothing in your library matches “${query}”`}</EmptyDescription>
+          </Empty>
         ) : (
           empty
         ))}
@@ -382,14 +386,6 @@ export function filterBy<T>(
         fields(item).some((text) => text?.toLowerCase().includes(q)),
       )
     : [...items];
-}
-
-export function EmptyRow({ text }: { text: string }) {
-  return (
-    <p className="px-4 py-6 text-center type-meta text-muted-foreground">
-      {text}
-    </p>
-  );
 }
 
 /** Install, or a quiet "In library" once it's there; which profiles get it is chosen there. */

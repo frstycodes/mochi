@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -208,13 +209,13 @@ function AgentCursor({ provider }: { provider: Thread['providers'][number] }) {
           strokeLinejoin="round"
         />
       </svg>
-      <span
-        className="mt-0.5 ml-3 flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-white"
+      <Badge
+        className="mt-0.5 ml-3 text-white"
         style={{ background: 'var(--page-fg)' }}
       >
         <ProviderMark provider={provider} size={11} />
         {target.target}
-      </span>
+      </Badge>
     </motion.div>
   );
 }

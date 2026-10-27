@@ -1,3 +1,4 @@
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { EventLine, MochiWidget } from '../chat/MochiWidget';
 import {
@@ -63,7 +64,6 @@ import {
 import { Kbd } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/toast/Toaster';
 import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
@@ -458,7 +458,7 @@ function Foundations() {
             <ElevationTile
               label="Hairline"
               detail="Cards, composer"
-              className="bg-card ring-1 ring-foreground/10"
+              className="border bg-card"
             />
             <ElevationTile
               label="Popover"
@@ -640,6 +640,12 @@ function Actions() {
             <Badge variant="secondary" className="max-w-40">
               <span className="truncate">packages/cache/redis.ts</span>
             </Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="success">Approve</Badge>
+            <Badge tone="warning">Update available</Badge>
+            <Badge tone="destructive">Block</Badge>
+            <Badge tone="muted">3</Badge>
           </div>
         </Block>
         <Block
@@ -927,14 +933,7 @@ function Feedback() {
           <div className="flex items-center gap-3 type-meta text-muted-foreground">
             <Spinner /> Starting Codex in feat/admin-usage
           </div>
-          <div className="flex flex-col gap-2.5">
-            {[64, 48, 72].map((w) => (
-              <div key={w} className="flex items-center gap-2">
-                <Skeleton className="size-4 rounded-full" />
-                <Skeleton className="h-3" style={{ width: `${w}%` }} />
-              </div>
-            ))}
-          </div>
+          <SkeletonRows shape="change" count={4} label="Loading changes" />
         </Block>
         <AgentLoaderBlock />
         <Block title="Empty" use="Acknowledge, explain, offer one action.">

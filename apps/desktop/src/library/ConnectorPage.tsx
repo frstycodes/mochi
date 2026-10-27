@@ -1,3 +1,5 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState } from 'react';
 import { useNow } from '../useNow';
 import {
@@ -54,12 +56,7 @@ import {
 } from '@/components/ui/tooltip';
 import { timeAgo } from '../progress';
 import { openSettings } from '../routes/nav';
-import {
-  SettingsCard,
-  SettingsRow,
-  SettingsSection,
-  SkeletonRows,
-} from '../settings/parts';
+import { SettingsCard, SettingsRow, SettingsSection } from '../settings/parts';
 import { useHarnessSelector } from '../store';
 import { OverflowIcon } from '../ui';
 import { ConnectAccountDialog } from './ConnectDialog';
@@ -74,13 +71,7 @@ import {
   type ToolPermission,
 } from '@mochi/domain/library/connectorTools';
 import type { LibraryEntry } from './library';
-import {
-  countOf,
-  EmptyRow,
-  EntryActions,
-  filterBy,
-  LibraryIcon,
-} from './LibraryParts';
+import { countOf, EntryActions, filterBy, LibraryIcon } from './LibraryParts';
 import { deslug } from './names';
 import { useConnectorTools, type ToolsConnector } from './useConnectorTools';
 import { useLibrary, type Library } from './useLibrary';
@@ -420,9 +411,9 @@ function ToolPermissions({
     >
       <SettingsCard>
         {settings.isOff ? (
-          <EmptyRow
-            text={`Off: threads don’t load ${connector.name}. Turn it on to choose per tool.`}
-          />
+          <Empty>
+            <EmptyDescription>{`Off: threads don’t load ${connector.name}. Turn it on to choose per tool.`}</EmptyDescription>
+          </Empty>
         ) : (
           <ToolRows
             connector={connector}
@@ -468,8 +459,17 @@ function ToolRows({
       />
     );
   if (!toolList.tools.length)
-    return <EmptyRow text={`${connector.name} lists no tools.`} />;
-  if (!tools.length) return <EmptyRow text={`No tool matches “${query}”`} />;
+    return (
+      <Empty>
+        <EmptyDescription>{`${connector.name} lists no tools.`}</EmptyDescription>
+      </Empty>
+    );
+  if (!tools.length)
+    return (
+      <Empty>
+        <EmptyDescription>{`No tool matches “${query}”`}</EmptyDescription>
+      </Empty>
+    );
   const groups = toolGroups(tools).filter((group) => group.tools.length > 0);
   return (
     <Accordion type="multiple" defaultValue={groups.map((g) => g.id)}>

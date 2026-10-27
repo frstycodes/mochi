@@ -1,3 +1,4 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
 import { lazy, Suspense, useState } from 'react';
 import {
   ChevronDown,
@@ -189,7 +190,11 @@ function AddSkillsForm({
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto sm:flex-row sm:overflow-hidden">
         {!source ? (
-          <EmptyBody text="Type a repository and press Enter to see its skills." />
+          <Empty>
+            <EmptyDescription>
+              Type a repository and press Enter to see its skills.
+            </EmptyDescription>
+          </Empty>
         ) : state.status === 'error' ? (
           <div className="flex-1 p-4">
             <CatalogErrorRow
@@ -199,7 +204,9 @@ function AddSkillsForm({
             />
           </div>
         ) : state.status === 'done' && !found.length ? (
-          <EmptyBody text={`No SKILL.md in ${source}`} />
+          <Empty>
+            <EmptyDescription>{`No SKILL.md in ${source}`}</EmptyDescription>
+          </Empty>
         ) : (
           <>
             <SkillList
@@ -248,14 +255,6 @@ function AddSkillsForm({
         </div>
       </footer>
     </form>
-  );
-}
-
-function EmptyBody({ text }: { text: string }) {
-  return (
-    <p className="flex flex-1 items-center justify-center p-8 text-center type-meta text-muted-foreground">
-      {text}
-    </p>
   );
 }
 

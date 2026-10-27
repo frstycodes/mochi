@@ -21,6 +21,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import {
   Select,
   SelectContent,
@@ -49,7 +50,6 @@ import type { DiffScope } from '../host/types/git';
 import type { FollowedMachine, RemoteCommand } from '../host/types/remote';
 import type { Thread } from '../model';
 import {
-  ChangesSkeleton,
   DiffError,
   DIFF_STYLES,
   NoChanges,
@@ -281,7 +281,14 @@ function RemoteChanges({
           onRetry={() => void diffQuery.refresh()}
         />
       )}
-      {diffQuery.isLoading && <ChangesSkeleton />}
+      {diffQuery.isLoading && (
+        <SkeletonRows
+          shape="change"
+          count={4}
+          label="Loading changes"
+          className="px-2"
+        />
+      )}
       {isEmpty && (
         <NoChanges
           scope={checkpoint === undefined ? (scope as DiffScope) : 'branch'}

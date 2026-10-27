@@ -211,7 +211,7 @@ export function QueueDecision({
   const age = state.now - item.createdAt;
 
   return (
-    <Card size="sm" className={cn(isSelected && 'ring-ring', className)}>
+    <Card size="sm" className={cn(isSelected && 'border-ring', className)}>
       <CardHeader>
         <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 type-caption">
           <span
