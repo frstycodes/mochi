@@ -274,7 +274,7 @@ function SettledRow({
       <button
         type="button"
         onClick={open}
-        className="flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         <span className="w-full truncate type-body font-medium text-foreground">
           {thread.title}

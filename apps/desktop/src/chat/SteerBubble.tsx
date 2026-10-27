@@ -136,7 +136,7 @@ export function ReadMark({
           role="img"
           aria-label={label}
           tabIndex={0}
-          className="inline-flex size-6 items-center justify-center rounded-sm text-subtle-foreground opacity-0 outline-none transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex size-6 items-center justify-center rounded-sm text-subtle-foreground opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <Icon aria-hidden className="size-3.5" />
         </span>

@@ -176,7 +176,7 @@ function TaskCard({
           })
         }
         aria-label={label}
-        className="absolute inset-0 cursor-default rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2"
       />
       <div className="flex min-w-0 items-start gap-2">
         <span className="min-w-0 flex-1 truncate type-body text-foreground">

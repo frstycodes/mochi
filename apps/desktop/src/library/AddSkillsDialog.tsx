@@ -313,7 +313,7 @@ function SkillList({
                 key={skill.source}
                 className={cn(
                   'flex items-start gap-2.5 rounded-lg px-2 py-2 transition-colors',
-                  isShown ? 'bg-accent' : 'hover:bg-accent/50',
+                  isShown ? 'bg-accent' : 'hover:bg-accent/60',
                 )}
               >
                 <Checkbox

@@ -43,4 +43,4 @@ export function PrStack({ thread }: { thread: Thread }) {
 }
 
 const MARK =
-  'flex shrink-0 cursor-default items-center gap-1 rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring';
+  'flex shrink-0 cursor-default items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-ring';

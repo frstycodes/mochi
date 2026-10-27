@@ -322,7 +322,7 @@ function WidgetCard({
       role="group"
       aria-label={item.title}
       onKeyDown={onKeyDown}
-      className="outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       {children}
     </Card>

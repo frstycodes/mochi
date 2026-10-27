@@ -286,7 +286,7 @@ function ProfileLinkRow({
     <button
       type="button"
       onClick={onClick}
-      className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
+      className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/60 focus-visible:bg-accent/60"
     >
       <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
       <span className="flex-1 type-body">{label}</span>

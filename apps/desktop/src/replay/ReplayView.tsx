@@ -604,7 +604,7 @@ function Timeline({ playback }: { playback: Playback }) {
       aria-valuemax={Math.round(total / 1000)}
       aria-valuenow={Math.round(clock / 1000)}
       aria-valuetext={`${duration(clock)} of ${duration(total)}`}
-      className="relative h-7 cursor-pointer touch-none rounded-md outline-none select-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative h-7 cursor-pointer touch-none rounded-md select-none focus-visible:outline-2 focus-visible:outline-offset-2"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         onPointer(e);

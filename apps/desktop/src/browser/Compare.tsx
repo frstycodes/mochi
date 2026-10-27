@@ -289,7 +289,7 @@ function SliderCompare({
           />
           <span
             aria-hidden
-            className="absolute top-1/2 left-1/2 size-5 -translate-1/2 rounded-full bg-popover shadow-float group-focus-visible:ring-2 group-focus-visible:ring-ring"
+            className="absolute top-1/2 left-1/2 size-5 -translate-1/2 rounded-full bg-popover shadow-float group-focus-visible:outline-2 group-focus-visible:outline-offset-2"
           />
         </Separator>
         <Panel id="head" />

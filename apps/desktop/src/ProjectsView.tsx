@@ -516,7 +516,7 @@ function IconPicker({
         <button
           type="button"
           aria-label={`Change ${project.name}’s icon`}
-          className="group/tile relative rounded-lg focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="group/tile relative rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <IconTile project={project} />
           <span
@@ -582,7 +582,7 @@ function IconChoice({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent disabled:pointer-events-none disabled:opacity-50"
     >
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="type-body">{title}</span>

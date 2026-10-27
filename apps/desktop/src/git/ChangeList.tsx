@@ -133,7 +133,7 @@ function FileDiff({
           aria-expanded={isOpen}
           onClick={onToggle}
           title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-          className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <ChevronDown
             aria-hidden
