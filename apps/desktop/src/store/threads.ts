@@ -5,6 +5,7 @@ import {
   NOW0,
   seedThreads,
   type ActivityEntry,
+  type Assumption,
   type Author,
   type Handoff,
   type IdleCheck,
@@ -272,6 +273,13 @@ export type ThreadsAction =
       threadId: string;
       patch: Partial<Omit<IdleCheck, 'at'>>;
       turn?: number;
+    }
+  /** You accepted an assumption the agent made, or asked to change it. */
+  | {
+      type: 'assumption-set';
+      threadId: string;
+      id: string;
+      state: Assumption['state'];
     }
   /** You answered the turn's next-move card, or wrote instead: it's kept in the chat as a record and the card goes. */
   | {
@@ -829,6 +837,16 @@ function reduce(state: State, action: Action): State {
             ? { ...t, idle: { ...t.idle, ...action.patch } }
             : t,
         ),
+      };
+    case 'assumption-set':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          assumptions: t.assumptions?.map((a) =>
+            a.id === action.id ? { ...a, state: action.state } : a,
+          ),
+        })),
       };
     case 'report':
       return {

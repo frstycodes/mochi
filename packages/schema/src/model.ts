@@ -512,11 +512,19 @@ export const NextOption = Schema.Struct({
   isDraft: opt(Schema.Boolean),
 });
 
+export const Assumption = Schema.Struct({
+  id: Schema.String,
+  text: Schema.String,
+  turn: Schema.Number,
+  state: Schema.Literals(['open', 'accepted', 'changed']),
+});
+
 export const TurnReport = Schema.Struct({
   at: Schema.Number,
   turn: opt(Schema.Number),
   by: Provider,
   decisions: Schema.Array(Schema.String),
+  assumptions: opt(Schema.Array(Schema.String)),
   left: Schema.Array(Schema.String),
   question: opt(Schema.String),
   summary: opt(Schema.String),
@@ -820,6 +828,7 @@ export const Thread = Schema.Struct({
   parent: opt(SubThreadLink),
   isGoalOff: opt(Schema.Boolean),
   report: opt(TurnReport),
+  assumptions: opt(Schema.Array(Assumption)),
   idle: opt(IdleCheck),
   turn: opt(
     Schema.Struct({

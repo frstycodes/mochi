@@ -36,6 +36,7 @@ import type { ThreadPr } from '../git/useThreadPrs';
 import { useHarness, useDispatch } from '../store';
 import { CallList, Expand } from '../WorkLog';
 import { continuePrompt, withUnseenGaps, type Move } from './moves';
+import { AssumptionList, changeDraft, splitAssumptions } from './Assumptions';
 import { SubThreadLineage } from './SubThreads';
 import { SubThreadList } from './SubThreadList';
 import {
@@ -80,6 +81,7 @@ export function ReportCard({
   const next = useNextMove(thread);
   const answers = useMoveAnswers(thread);
   const { textInput } = usePromptInputController();
+  const dispatch = useDispatch();
   const isShown = !!next && !!anchor?.isLatest && showsVerdictCard(thread);
   // The agent wrote it before reading your message, so its answers may already be moot.
   const isSuperseded = !!next?.report?.isSuperseded;
@@ -111,6 +113,20 @@ export function ReportCard({
         <SubThreadLineage thread={thread} />
         {!!report?.summary && (
           <NextMoveSummary>{report.summary}</NextMoveSummary>
+        )}
+        {!isReadOnly && (
+          <AssumptionList
+            {...splitAssumptions(thread)}
+            onSet={(a, state) =>
+              dispatch({
+                type: 'assumption-set',
+                threadId: thread.id,
+                id: a.id,
+                state,
+              })
+            }
+            onChange={(a) => textInput.setInput(changeDraft(a))}
+          />
         )}
         <Evidence thread={thread} tiles={tiles} prs={prs} />
         <SubThreadList thread={thread} />

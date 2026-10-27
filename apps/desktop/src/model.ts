@@ -73,6 +73,8 @@ export interface TurnReport {
   turn?: number;
   by: Provider;
   decisions: string[];
+  /** Gaps in your request it filled for you; unset on reports from before assumptions, or with them off. */
+  assumptions?: string[];
   left: string[];
   /** The one thing that needs you, if anything. */
   question?: string;
@@ -86,6 +88,15 @@ export interface TurnReport {
   isSuperseded?: true;
   /** The activity's length when it was made, which places it in its turn. Unset on reports saved before it was recorded. */
   index?: number;
+}
+
+/** A gap in your request the agent filled without asking ("Assumed timestamps are UTC"), from a `report_turn`. */
+export interface Assumption {
+  id: string;
+  text: string;
+  /** The report's turn it came from: the card shows this turn's under Assumptions, older open ones under Still open. */
+  turn: number;
+  state: 'open' | 'accepted' | 'changed';
 }
 
 /** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
@@ -487,6 +498,8 @@ export interface Thread {
   isGoalOff?: boolean;
   /** The latest `report`; a newer message from you starts a turn it no longer describes. */
   report?: TurnReport;
+  /** What the agent filled in that you didn't specify, from every report, kept until you accept or change each one. */
+  assumptions?: Assumption[];
   /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
   idle?: IdleCheck;
   /** Where the latest turn began (an `activity` index) and whether another thread or an automated event began it, not you. */
