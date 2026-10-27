@@ -8,6 +8,7 @@ import {
   Archive,
   ArrowRight,
   ArrowUpRight,
+  Copy,
   ClockCircle,
   XCircle,
   Edit,
@@ -31,6 +32,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { GitMergeIcon, GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
+import { copyText } from '../clipboard';
 import { plural } from '@mochi/domain/lib/format';
 import {
   usePrSwitches,
@@ -260,15 +262,24 @@ function RefPreview({ item }: { item: RefItem }) {
       </div>
       {!!state && <RefFacts state={state} />}
       {!!url && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start"
-          onClick={() => window.open(url, '_blank', 'noreferrer')}
-        >
-          Open on GitHub
-          <ArrowUpRight data-icon="inline-end" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open(url, '_blank', 'noreferrer')}
+          >
+            Open on GitHub
+            <ArrowUpRight data-icon="inline-end" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => copyText(url, 'Link copied')}
+          >
+            Copy link
+            <Copy data-icon="inline-end" />
+          </Button>
+        </div>
       )}
     </>
   );
