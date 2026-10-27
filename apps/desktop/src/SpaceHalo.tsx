@@ -2,13 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 import type { Space } from './model';
-import {
-  HALO,
-  HALO_SPAN,
-  haloAlpha,
-  haloMotion,
-  haloRaggedness,
-} from './haloShape';
+import { HALO, haloAlpha, haloKnob, haloMotion, haloSpan } from './haloShape';
 import { idSeed, spaceColor, spaceColorCss } from './spaceColor';
 
 /**
@@ -22,21 +16,16 @@ export function SpaceHalo({
   profiles: Space[];
   currentId: string;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const size = useDeviceSize(ref);
   return (
     <div
-      ref={ref}
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 bottom-0 opacity-(--halo-strength)"
-      style={{ height: `${HALO_SPAN * 100}%` }}
+      className="pointer-events-none absolute inset-0 opacity-(--halo-strength)"
     >
       {profiles.map((space) => (
         <HaloLayer
           key={space.id}
           space={space}
           isCurrent={space.id === currentId}
-          size={size}
         />
       ))}
     </div>
@@ -46,20 +35,16 @@ export function SpaceHalo({
 type DeviceSize = { width: number; height: number };
 
 // Only the current layer draws and moves; the others keep their last frame to fade out on, and redraw when they come back.
-function HaloLayer({
-  space,
-  isCurrent,
-  size,
-}: {
-  space: Space;
-  isCurrent: boolean;
-  size: DeviceSize | undefined;
-}) {
+// Each is as tall as its own profile's reach allows, so a high reach never makes every profile draw a tall canvas.
+function HaloLayer({ space, isCurrent }: { space: Space; isCurrent: boolean }) {
+  const layer = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLCanvasElement>(null);
+  const size = useDeviceSize(layer);
   const color = spaceColorCss(spaceColor(space));
   const isReduced = useReducedMotionConfig();
   const motion = isReduced ? 'still' : haloMotion(space);
-  const raggedness = haloRaggedness(space);
+  const raggedness = haloKnob(space, 'haloRaggedness');
+  const intensity = haloKnob(space, 'haloIntensity') / 100;
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas || !isCurrent || !size || !color) return;
@@ -87,10 +72,12 @@ function HaloLayer({
   }, [isCurrent, size, color, space.id, motion, raggedness]);
   return (
     <div
-      className={cn(
-        'absolute inset-0 opacity-0 transition-opacity duration-200',
-        isCurrent && !!color && 'opacity-100',
-      )}
+      ref={layer}
+      className="absolute inset-x-0 bottom-0 transition-opacity duration-200"
+      style={{
+        height: `${haloSpan(space) * 100}%`,
+        opacity: isCurrent && color ? intensity : 0,
+      }}
     >
       <canvas
         ref={ref}

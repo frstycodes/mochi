@@ -10,11 +10,18 @@ import {
   IconPicker,
   SpaceColorPicker,
 } from './settings/sections/profiles';
-import { haloMotion, haloRaggedness, isHaloMotion } from './haloShape';
+import {
+  HALO_KNOB_KEYS,
+  HALO_KNOBS,
+  haloKnob,
+  haloMotion,
+  isHaloMotion,
+  type HaloKnob,
+} from './haloShape';
 import { Slider } from '@/components/ui/slider';
 import { isSpaceColor, spaceColor } from './spaceColor';
 
-/** The profile's name, icon and halo colour and motion, edited in place from the sidebar like Arc's space editor; the rest stays in Settings. */
+/** The profile's name, icon and halo (colour, motion, reach, raggedness, intensity), edited in place from the sidebar like Arc's space editor; the rest stays in Settings. */
 export function SpaceEditor({ space }: { space: Space }) {
   return (
     <div className="flex w-72 flex-col gap-4">
@@ -53,7 +60,10 @@ export function SpaceEditor({ space }: { space: Space }) {
           />
         </Field>
       )}
-      {spaceColor(space) !== 'none' && <RaggednessField space={space} />}
+      {spaceColor(space) !== 'none' &&
+        HALO_KNOB_KEYS.map((knob) => (
+          <KnobField key={knob} space={space} knob={knob} />
+        ))}
       <Button
         variant="ghost"
         size="xs"
@@ -66,27 +76,28 @@ export function SpaceEditor({ space }: { space: Space }) {
   );
 }
 
-// Saves per 5% step while dragging, so the halo follows the thumb; 21 values at most per drag.
-function RaggednessField({ space }: { space: Space }) {
-  const raggedness = haloRaggedness(space);
+// Saves per step while dragging, so the halo follows the thumb; a few dozen values at most per drag.
+function KnobField({ space, knob }: { space: Space; knob: HaloKnob }) {
+  const { label, min, max, step } = HALO_KNOBS[knob];
+  const value = haloKnob(space, knob);
+  const id = `space-editor-${knob}`;
   return (
     <Field>
       <div className="flex items-center justify-between">
-        <FieldLabel htmlFor="space-editor-raggedness">Raggedness</FieldLabel>
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
         <span className="type-caption text-muted-foreground tabular-nums">
-          {raggedness}%
+          {value}%
         </span>
       </div>
       <Slider
-        id="space-editor-raggedness"
-        aria-label="Raggedness"
-        min={0}
-        max={100}
-        step={5}
-        value={[raggedness]}
-        onValueChange={([value]) =>
-          value !== raggedness &&
-          updateProfile(space.id, { haloRaggedness: value })
+        id={id}
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={[value]}
+        onValueChange={([next]) =>
+          next !== value && updateProfile(space.id, { [knob]: next })
         }
       />
     </Field>

@@ -2,10 +2,12 @@ import { hourLabel, type QuietHours } from '../notify/model.ts';
 import { ALERT_KINDS } from '../notify/model.ts';
 import { SPACE_ICON_NAMES, type Provider, type Space } from '../model.ts';
 import {
+  HALO_KNOB_KEYS,
+  HALO_KNOBS,
+  haloKnob,
   haloMotion,
-  haloRaggedness,
   isHaloMotion,
-  isHaloRaggedness,
+  type HaloKnob,
 } from '../haloShape.ts';
 import { isSpaceColor, spaceColor } from '../spaceColor.ts';
 import { SHARED_ACCESS } from '../runtime/access.ts';
@@ -150,7 +152,7 @@ export type SettingWrite =
       patch: Partial<
         Pick<
           Space,
-          'name' | 'icon' | 'color' | 'haloMotion' | 'haloRaggedness' | 'github'
+          'name' | 'icon' | 'color' | 'haloMotion' | HaloKnob | 'github'
         >
       >;
     }
@@ -990,6 +992,24 @@ const APP_SETTINGS: Setting[] = [
 
 // {PROFILE}
 
+function haloKnobSetting(knob: HaloKnob): Setting {
+  const { label, description, min, max, step } = HALO_KNOBS[knob];
+  return {
+    key: `profile.${knob}`,
+    label: `Glow ${label.toLowerCase()}`,
+    description: `${description}, in percent`,
+    section: 'profile',
+    control: { type: 'number', min, max, step },
+    read: ({ profile }) => profile && String(haloKnob(profile, knob)),
+    write: (value) => {
+      const n = Number(value);
+      return Number.isInteger(n) && n >= min && n <= max
+        ? { to: 'profile', patch: { [knob]: n } }
+        : null;
+    },
+  };
+}
+
 function profileSettings(config: ProfileConfig | undefined): Setting[] {
   const field = (
     key: 'name' | 'github',
@@ -1041,20 +1061,7 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
           ? { to: 'profile', patch: { haloMotion: value } }
           : null,
     },
-    {
-      key: 'profile.haloRaggedness',
-      label: 'Glow raggedness',
-      description: 'How far the glow’s top edge rises and falls, in percent',
-      section: 'profile',
-      control: { type: 'number', min: 0, max: 100, step: 5 },
-      read: ({ profile }) => profile && String(haloRaggedness(profile)),
-      write: (value) => {
-        const raggedness = Number(value);
-        return isHaloRaggedness(raggedness)
-          ? { to: 'profile', patch: { haloRaggedness: raggedness } }
-          : null;
-      },
-    },
+    ...HALO_KNOB_KEYS.map(haloKnobSetting),
     field('github', 'GitHub account', { type: 'github' }),
     ...HARNESS_IDS.map((provider): Setting => ({
       key: `profile.${provider}Account`,

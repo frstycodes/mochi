@@ -227,6 +227,8 @@ export const SpaceColor = Schema.Literals([
 export type SpaceColor = typeof SpaceColor.Type;
 
 export const SpaceHaloMotion = Schema.Literals(['breathe', 'drift', 'still']);
+
+const HaloPercent = Int.check(Schema.isGreaterThanOrEqualTo(0));
 export type SpaceHaloMotion = typeof SpaceHaloMotion.Type;
 
 /** A profile, before `v` (`src/model.ts` `Space`); `stored.ts` versions it as a row. */
@@ -236,12 +238,10 @@ export const Space = Schema.Struct({
   icon: SpaceIconName,
   color: opt(SpaceColor),
   haloMotion: opt(SpaceHaloMotion),
-  haloRaggedness: opt(
-    Int.check(
-      Schema.isGreaterThanOrEqualTo(0),
-      Schema.isLessThanOrEqualTo(100),
-    ),
-  ),
+  // Percent; the app clamps each to its own range (`HALO_KNOBS`), so a range can change without failing old rows.
+  haloReach: opt(HaloPercent),
+  haloRaggedness: opt(HaloPercent),
+  haloIntensity: opt(HaloPercent),
   plans: Schema.Struct({ claude: Schema.String, codex: Schema.String }),
   github: Schema.String,
   nativeOff: opt(Schema.Array(Schema.String)),

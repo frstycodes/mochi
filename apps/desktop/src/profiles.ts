@@ -8,7 +8,7 @@ import {
   type Space,
   type SpaceIconName,
 } from './model.ts';
-import { isHaloMotion, isHaloRaggedness } from './haloShape.ts';
+import { HALO_KNOB_KEYS, isHaloMotion, type HaloKnob } from './haloShape.ts';
 import { isSpaceColor, spaceColor } from './spaceColor.ts';
 import { setAmbientProfiles } from './store/context.ts';
 import type { Replica } from './store/replica.ts';
@@ -107,7 +107,7 @@ export function updateProfile(
       | 'icon'
       | 'color'
       | 'haloMotion'
-      | 'haloRaggedness'
+      | HaloKnob
       | 'github'
       | 'nativeOff'
       | 'nativeNew'
@@ -173,7 +173,9 @@ function isProfile(value: unknown): value is Space {
     SPACE_ICON_NAMES.includes(p.icon as SpaceIconName) &&
     (p.color === undefined || isSpaceColor(p.color)) &&
     (p.haloMotion === undefined || isHaloMotion(p.haloMotion)) &&
-    (p.haloRaggedness === undefined || isHaloRaggedness(p.haloRaggedness)) &&
+    HALO_KNOB_KEYS.every(
+      (knob) => p[knob] === undefined || typeof p[knob] === 'number',
+    ) &&
     typeof p.github === 'string' &&
     typeof p.plans?.claude === 'string' &&
     typeof p.plans?.codex === 'string'

@@ -4,16 +4,56 @@ import {
   type SpaceHaloMotion,
 } from './model.ts';
 
-/** The sidebar halo: a linear glow up from the bottom whose top edge rises and falls along the width, one shape per profile. */
+/** The sidebar halo: a glow up from the bottom whose top edge rises and falls along the width, one shape per profile. */
 export const HALO = {
-  /** Average height, as a share of the sidebar's. */
-  reach: 0.1,
   /** Drift's sideways travel, in sidebar widths per second. */
   drift: 0.02,
 };
 
+/**
+ * The halo's per-profile sliders, all in percent. Reach is the glow's average height as a share of the sidebar's,
+ * raggedness how far its edge swings either way as a share of that reach, intensity a multiplier on the theme's
+ * `--halo-strength` (index.css).
+ */
+export const HALO_KNOBS = {
+  haloReach: {
+    label: 'Reach',
+    description: 'How high the glow rises, as a share of the sidebar',
+    min: 4,
+    max: 30,
+    step: 1,
+    fallback: 10,
+  },
+  haloRaggedness: {
+    label: 'Raggedness',
+    description: 'How far the glow’s top edge rises and falls',
+    min: 0,
+    max: 100,
+    step: 5,
+    fallback: 80,
+  },
+  haloIntensity: {
+    label: 'Intensity',
+    description: 'How strong the glow is, against the theme’s default',
+    min: 25,
+    max: 200,
+    step: 5,
+    fallback: 100,
+  },
+};
+export type HaloKnob = keyof typeof HALO_KNOBS;
+export const HALO_KNOB_KEYS = Object.keys(HALO_KNOBS) as HaloKnob[];
+
+/** The profile's value for `knob`, clamped to its range: stored values outside it (an older range) still read sensibly. */
+export function haloKnob(space: Pick<Space, HaloKnob>, knob: HaloKnob) {
+  const { min, max, fallback } = HALO_KNOBS[knob];
+  return Math.min(max, Math.max(min, space[knob] ?? fallback));
+}
+
 /** The canvas's height as a share of the sidebar's: the tallest the edge gets at full raggedness. */
-export const HALO_SPAN = HALO.reach * 2;
+export function haloSpan(space: Pick<Space, 'haloReach'>) {
+  return (haloKnob(space, 'haloReach') / 100) * 2;
+}
 
 export function haloMotion(space: Pick<Space, 'haloMotion'>): SpaceHaloMotion {
   return space.haloMotion ?? 'breathe';
@@ -21,17 +61,6 @@ export function haloMotion(space: Pick<Space, 'haloMotion'>): SpaceHaloMotion {
 
 export function isHaloMotion(value: unknown): value is SpaceHaloMotion {
   return (SPACE_HALO_MOTIONS as readonly unknown[]).includes(value);
-}
-
-const DEFAULT_RAGGEDNESS = 80;
-
-/** The profile's raggedness in percent: how far the edge swings either way, as a share of the average reach. */
-export function haloRaggedness(space: Pick<Space, 'haloRaggedness'>) {
-  return space.haloRaggedness ?? DEFAULT_RAGGEDNESS;
-}
-
-export function isHaloRaggedness(value: unknown): value is number {
-  return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 100;
 }
 
 // Whole numbers of waves per sidebar width, so the edge repeats every width and Drift's shift never shows a seam.
@@ -67,10 +96,10 @@ export function haloAlpha(
   width: number,
   height: number,
   seed: number,
-  { time = 0, shift = 0, raggedness = DEFAULT_RAGGEDNESS } = {},
+  { time = 0, shift = 0, raggedness = HALO_KNOBS.haloRaggedness.fallback } = {},
 ) {
   const alpha = new Uint8ClampedArray(width * height);
-  // The canvas fits full raggedness (`HALO_SPAN`), so the average reach is always half its height.
+  // The canvas is twice the reach (`haloSpan`), room for full raggedness, so the average reach is half its height.
   const baseReach = height / 2;
   const swing = raggedness / 100;
   for (let x = 0; x < width; x++) {

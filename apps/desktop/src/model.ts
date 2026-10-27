@@ -876,8 +876,10 @@ export interface Space {
   color?: SpaceColor;
   /** How the halo moves; unset is `breathe`. */
   haloMotion?: SpaceHaloMotion;
-  /** How far the halo's edge swings, in percent (0 is a flat line, 100 the most); unset is 80. */
+  /** The halo's knobs in percent, clamped and defaulted by `HALO_KNOBS` (src/haloShape.ts). */
+  haloReach?: number;
   haloRaggedness?: number;
+  haloIntensity?: number;
   /** GAP: demo plan names until usage reads the linked account's detected plan; empty for profiles made in Settings. */
   plans: Record<Provider, string>;
   /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { haloAlpha, haloEdge } from './haloShape.ts';
+import { HALO_KNOBS, haloAlpha, haloEdge, haloKnob } from './haloShape.ts';
 
 const width = 64;
 const height = 40;
@@ -73,4 +73,17 @@ test('raggedness 0 is a flat edge and 100 swings further than the default', () =
   assert.ok(
     spread(haloAlpha(width, height, 1234, { raggedness: 100 })) > spread(alpha),
   );
+});
+
+test('knobs fall back to their default and clamp stored values into range', () => {
+  assert.equal(haloKnob({}, 'haloReach'), HALO_KNOBS.haloReach.fallback);
+  assert.equal(
+    haloKnob({ haloReach: 999 }, 'haloReach'),
+    HALO_KNOBS.haloReach.max,
+  );
+  assert.equal(
+    haloKnob({ haloIntensity: 0 }, 'haloIntensity'),
+    HALO_KNOBS.haloIntensity.min,
+  );
+  assert.equal(haloKnob({ haloRaggedness: 35 }, 'haloRaggedness'), 35);
 });
