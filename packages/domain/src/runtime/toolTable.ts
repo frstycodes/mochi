@@ -439,7 +439,7 @@ export const TOOL_TABLE = {
   update_plan: {
     tier: 'read',
     description:
-      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. Every {"items"} call says in "scope" what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, this one). A request that is unrelated work a fresh thread would do as well from the user\'s words alone gets no plan: offer it with create_thread initiation "offer" instead.',
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Send it in the same message as another tool call when there is one. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Each call returns the step now in progress and the next one: read it rather than counting your own advances, and advance again if you finished more than one step. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. "scope" says what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, or left out, this one). A request that is unrelated work a fresh thread would do as well from the user\'s words alone gets no plan: offer it with create_thread initiation "offer" instead.',
     shape: {
       items: Schema.optionalKey(
         Schema.Array(
@@ -468,7 +468,7 @@ export const TOOL_TABLE = {
       scope: Schema.optionalKey(
         Schema.Literals(PLAN_SCOPES).annotate({
           description:
-            'Required with items: what this request is to the thread',
+            'With items: what this request is to the thread; continuation when left out',
         }),
       ),
     },

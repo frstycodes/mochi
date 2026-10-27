@@ -2873,13 +2873,22 @@ test("update_plan is the thread's plan, even read-only: resent lists move steps 
   assert.match(await t.err('update_plan', {}), /advance/);
 });
 
-test('update_plan needs a scope with items, and new_task is gone: unrelated work is a create_thread offer', async () => {
+test('update_plan scope defaults to continuation, and new_task is gone: unrelated work is a create_thread offer', async () => {
   const t = setup({ control: 'read' });
-  assert.match(
-    await t.err('update_plan', {
-      items: [{ title: 'Read the limiter', status: 'in_progress' }],
-    }),
-    /scope/,
+  await t.ok('update_plan', {
+    scope: 'first_task',
+    items: [{ title: 'Read the limiter', status: 'in_progress' }],
+  });
+  await t.ok('update_plan', {
+    items: [
+      { title: 'Read the limiter', status: 'completed' },
+      { title: 'Add Retry-After', status: 'in_progress' },
+    ],
+  });
+  assert.equal(
+    t.thread('rl').steps.find((s) => s.title === 'Read the limiter')?.status,
+    'done',
+    'no scope keeps the step it matches, as continuation does',
   );
   assert.match(
     await t.err('update_plan', {
@@ -2887,6 +2896,37 @@ test('update_plan needs a scope with items, and new_task is gone: unrelated work
       items: [{ title: 'Write the billing page', status: 'in_progress' }],
     }),
     /scope/,
+  );
+});
+
+test('update_plan answers with the step now in progress, so the agent never counts its advances', async () => {
+  const t = setup({ control: 'read' });
+  const plan = async (args: Record<string, unknown>) =>
+    JSON.parse((await t.call('update_plan', args)).text);
+  assert.equal(
+    await plan({
+      scope: 'first_task',
+      items: [
+        { title: 'Read the limiter', status: 'in_progress' },
+        { title: 'Add Retry-After', status: 'pending' },
+      ],
+    }),
+    'Step 1/2 in progress: "Read the limiter". Next: "Add Retry-After".',
+  );
+  assert.equal(
+    await plan({ advance: true }),
+    'Step 2/2 in progress: "Add Retry-After". Last step: advance once more when it is done.',
+  );
+  assert.equal(await plan({ advance: true }), 'Plan done (2/2).');
+  assert.equal(
+    await plan({
+      scope: 'first_task',
+      items: [
+        { title: 'Read the limiter', status: 'completed' },
+        { title: 'Add Retry-After', status: 'pending' },
+      ],
+    }),
+    'Nothing in progress; 1/2 done. Next: "Add Retry-After".',
   );
 });
 
