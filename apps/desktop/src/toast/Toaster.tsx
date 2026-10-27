@@ -320,7 +320,7 @@ function ToastItem({
         onKeyDown={onKeyDown}
         className={cn(
           motionClass,
-          'bg-popover text-popover-foreground shadow-[0_0_0_1px_var(--border)] select-none',
+          'toast-inverse bg-popover text-popover-foreground shadow-[0_0_0_1px_var(--border)] select-none',
           // Clipped only while it morphs, and with `overflow-clip`, not `hidden`: a hidden box is still scrollable, so a widget
           // focusing a field below the card's animating height scrolled the content up, then back down as the card grew. Otherwise
           // unclipped, as in Sonner: a toast shrinking behind the front one lets its content fade out past the edge.
