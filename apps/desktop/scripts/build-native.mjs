@@ -1,26 +1,53 @@
 // Compiles the Swift helpers for the packaged app, which ships them as resources (electron-builder `extraResources`): a Mac
 // without Xcode can't compile them on first use the way `pnpm electron:dev` does (electron/native.ts).
+// macOS releases pack arm64 and x64 apps from one run (one update feed lists both), so every Mac binary here is universal.
 // On Linux, node-pty ships no prebuild, so its install compiled one into build/Release (N-API, so the same binary loads in
 // Electron); copying it to where the other platforms' prebuilds sit lets package.json pack `prebuilds/${platform}-${arch}` everywhere.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+// Each helper's minimum macOS; without a target, swiftc requires the build machine's. Haptics run on Electron's own
+// minimum (LSMinimumSystemVersion 13.0); the window helper needs ScreenCaptureKit's screenshots, so it won't start on 13.
 const HELPERS = {
-  haptic: 'electron/haptics/haptic.swift',
-  windows: 'electron/windows/windows.swift',
+  haptic: ['electron/haptics/haptic.swift', '13.0'],
+  windows: ['electron/windows/windows.swift', '14.0'],
 };
+
+const MAC_ARCHS = { arm64: 'arm64', x64: 'x86_64' };
 
 if (process.platform === 'darwin') {
   mkdirSync('build/native', { recursive: true });
-  for (const [name, source] of Object.entries(HELPERS))
-    execFileSync(
-      'xcrun',
-      ['swiftc', '-O', source, '-o', `build/native/${name}`],
-      { stdio: 'inherit' },
-    );
+  const scratch = mkdtempSync(join(tmpdir(), 'helpers-'));
+  for (const [name, [source, minimum]] of Object.entries(HELPERS)) {
+    const slices = Object.values(MAC_ARCHS).map((arch) => {
+      const out = join(scratch, `${name}-${arch}`);
+      execFileSync(
+        'xcrun',
+        [
+          'swiftc',
+          '-O',
+          '-target',
+          `${arch}-apple-macos${minimum}`,
+          source,
+          '-o',
+          out,
+        ],
+        { stdio: 'inherit' },
+      );
+      return out;
+    });
+    lipo(slices, `build/native/${name}`);
+  }
 }
 
 // uv runs the Google Workspace connector's server (electron/library/googleWorkspace.ts). GAP: Windows (a .zip) isn't fetched yet.
@@ -44,10 +71,83 @@ const UV_TARGETS = {
     'be9878e9d08ebcb621a683aba52e7fb8bbf92b2532e0d759026ffcc067673042',
   ],
 };
-const uv = UV_TARGETS[`${process.platform}-${process.arch}`];
-if (uv) {
-  const [uvTarget, sha256] = uv;
+if (process.platform === 'darwin') {
+  const scratch = mkdtempSync(join(tmpdir(), 'uv-'));
+  const slices = await Promise.all(
+    Object.keys(MAC_ARCHS).map(async (arch) => {
+      const dir = join(scratch, arch);
+      mkdirSync(dir);
+      await fetchUv(UV_TARGETS[`darwin-${arch}`], dir);
+      return join(dir, 'uv');
+    }),
+  );
+  lipo(slices, 'build/native/uv');
+} else if (UV_TARGETS[`${process.platform}-${process.arch}`]) {
   mkdirSync('build/native', { recursive: true });
+  await fetchUv(
+    UV_TARGETS[`${process.platform}-${process.arch}`],
+    'build/native',
+  );
+}
+
+// pnpm installs only this machine's @parcel/watcher prebuild; the other Mac architecture's comes straight from npm.
+if (process.platform === 'darwin') {
+  const { version } = JSON.parse(
+    readFileSync('node_modules/@parcel/watcher/package.json', 'utf8'),
+  );
+  for (const arch of Object.keys(MAC_ARCHS)) {
+    const target = `../../node_modules/@parcel/watcher-darwin-${arch}`;
+    if (existsSync(target)) continue;
+    const scratch = mkdtempSync(join(tmpdir(), 'watcher-'));
+    execFileSync(
+      'npm',
+      [
+        'pack',
+        `@parcel/watcher-darwin-${arch}@${version}`,
+        '--pack-destination',
+        scratch,
+      ],
+      { stdio: 'inherit' },
+    );
+    const tarball = join(
+      scratch,
+      `parcel-watcher-darwin-${arch}-${version}.tgz`,
+    );
+    const integrity = `sha512-${createHash('sha512').update(readFileSync(tarball)).digest('base64')}`;
+    if (
+      lockfileIntegrity(`@parcel/watcher-darwin-${arch}@${version}`) !==
+      integrity
+    )
+      throw new Error(
+        `@parcel/watcher-darwin-${arch}@${version} doesn't match pnpm-lock.yaml`,
+      );
+    mkdirSync(target);
+    execFileSync(
+      'tar',
+      ['-xzf', tarball, '-C', target, '--strip-components=1'],
+      {
+        stdio: 'inherit',
+      },
+    );
+  }
+}
+
+function lockfileIntegrity(name) {
+  const lock = readFileSync('../../pnpm-lock.yaml', 'utf8');
+  return (
+    lock.match(
+      new RegExp(`'${name}':\\n\\s+resolution: \\{integrity: (\\S+)\\}`),
+    )?.[1] ?? ''
+  );
+}
+
+function lipo(slices, out) {
+  execFileSync('lipo', ['-create', ...slices, '-output', out], {
+    stdio: 'inherit',
+  });
+}
+
+async function fetchUv([uvTarget, sha256], dir) {
   const url = `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uvTarget}.tar.gz`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`uv download failed: ${response.status}`);
@@ -61,15 +161,7 @@ if (uv) {
   writeFileSync(file, archive);
   execFileSync(
     'tar',
-    [
-      '-xz',
-      '-f',
-      file,
-      '-C',
-      'build/native',
-      '--strip-components=1',
-      `uv-${uvTarget}/uv`,
-    ],
+    ['-xz', '-f', file, '-C', dir, '--strip-components=1', `uv-${uvTarget}/uv`],
     { stdio: 'inherit' },
   );
 }
