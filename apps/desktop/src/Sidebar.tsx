@@ -100,6 +100,7 @@ import {
   useDispatch,
   useGetState,
   useHarnessSelector,
+  useSpace,
   useSpaceListing,
   useSpaceQueue,
   useThread,
