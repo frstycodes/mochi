@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { Folder, Hierarchy2, Unlink } from '@/icons';
+import { Folder, GitBranch, Unlink } from '@/icons';
 import type { Repo } from '../model.ts';
 import { cn } from '@/lib/utils';
 import { branchText } from './workspace.ts';
@@ -29,7 +29,7 @@ export function BranchIcon({
       <Folder aria-label="Project folder" className={iconClass} {...props} />
     );
   return (
-    <Hierarchy2 aria-label="Own worktree" className={iconClass} {...props} />
+    <GitBranch aria-label="Own worktree" className={iconClass} {...props} />
   );
 }
 

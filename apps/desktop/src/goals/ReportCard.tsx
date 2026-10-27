@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ChevronRight,
   XCircle,
-  Hierarchy2,
+  GitBranch,
   History,
   MessageText,
   CheckBadge,
@@ -470,7 +470,7 @@ function FactIcon({ thread, tile }: { thread: Thread; tile: Tile }) {
 const FACT_ICONS = {
   criteria: CheckBadge,
   checks: TerminalIcon,
-  git: Hierarchy2,
+  git: GitBranch,
   agent: MessageText,
 } satisfies Record<Exclude<Tile['id'], 'pr'>, unknown>;
 

@@ -138,10 +138,7 @@ export const GlobeSearch = solar(
 export const Grid = solar(Linear.WidgetIcon, Bold.WidgetIcon);
 export const Hand = solar(Linear.HandStarsIcon, Bold.HandStarsIcon);
 export const Hierarchy = solar(Linear.StructureIcon, Bold.StructureIcon);
-export const Hierarchy2 = solar(
-  Linear.BranchingPathsUpIcon,
-  Bold.BranchingPathsUpIcon,
-);
+export const GitBranch = solar(Linear.GitBranchIcon, Bold.GitBranchIcon);
 export const Hierarchy3 = solar(Linear.Routing2Icon, Bold.Routing2Icon);
 export const History = solar(Linear.HistoryIcon, Bold.HistoryIcon);
 export const Home = solar(Linear.HomeIcon, Bold.HomeIcon);
