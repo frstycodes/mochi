@@ -23,6 +23,9 @@ patchedDependencies:
   '@effect/vitest@4.0.5':
     hash: 2731c9c3761c595f25ddc625a7d61ca376b389d5b3049ecb837c8940f21cfa02
     path: patches/@effect__vitest@4.0.5.patch
+  use-stick-to-bottom@1.1.6:
+    hash: 6d8d0e3cbdf8abe0f39639f8f5c5b1811d719a0409d878fe01dd340b8adac6ca
+    path: patches/use-stick-to-bottom@1.1.6.patch
 
 importers:
 
@@ -276,7 +279,7 @@ importers:
         version: 1.4.0
       use-stick-to-bottom:
         specifier: ^1.1.6
-        version: 1.1.6(react@19.3.0)
+        version: 1.1.6(patch_hash=6d8d0e3cbdf8abe0f39639f8f5c5b1811d719a0409d878fe01dd340b8adac6ca)(react@19.3.0)
       use-sync-external-store:
         specifier: ^1.7.0
         version: 1.7.0(react@19.3.0)
@@ -14712,7 +14715,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  use-stick-to-bottom@1.1.6(react@19.3.0):
+  use-stick-to-bottom@1.1.6(patch_hash=6d8d0e3cbdf8abe0f39639f8f5c5b1811d719a0409d878fe01dd340b8adac6ca)(react@19.3.0):
     dependencies:
       react: 19.3.0
 
