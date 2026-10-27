@@ -24,6 +24,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { isTextEntry } from '@/lib/textEntry';
 import { cn } from '@/lib/utils';
 import { copyText } from '../clipboard';
 import { Shortcut } from '../Shortcut';
@@ -102,13 +103,6 @@ export function FileViewer() {
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
-  );
-}
-
-function isTextEntry(target: EventTarget) {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || target.matches('input, textarea, select'))
   );
 }
 

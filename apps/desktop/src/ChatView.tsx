@@ -11,6 +11,7 @@ import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
+import { isKeyUp, isWheelUp } from './chat/scrollIntent';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
@@ -32,6 +33,7 @@ import {
   usePromptInputController,
 } from '@/components/ai-elements/prompt-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { isTextEntry } from '@/lib/textEntry';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
 import {
@@ -706,7 +708,11 @@ function useTrayState(count: number) {
 
 const SCROLL_INTENT_PX = 24;
 
-// Listens to wheel and touch, not scroll: stick-to-bottom scrolls programmatically, and those scroll events aren't the reader's intent.
+/**
+ * Listens to the reader's input, not scroll: stick-to-bottom scrolls programmatically, and those scroll events aren't the reader's intent.
+ * Any upward input releases the bottom pin at once. The library escapes on its own only when its wheel walk reaches the scroller and no
+ * resize is in flight, so mid-stream a slow trackpad scroll could stay pinned and be pulled back down.
+ */
 function ScrollIntent({
   onScrollUp,
   onReachBottom,
@@ -714,15 +720,18 @@ function ScrollIntent({
   onScrollUp: () => void;
   onReachBottom: () => void;
 }) {
-  const { scrollRef, isAtBottom } = useStickToBottomContext();
+  const { scrollRef, isAtBottom, stopScroll } = useStickToBottomContext();
   const scrolledUp = useEffectEvent(onScrollUp);
   const reachedBottom = useEffectEvent(onReachBottom);
+  const release = useEffectEvent(stopScroll);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     let up = 0;
     let touchY = 0;
+    let isDraggingBar = false;
+    let lastTop = el.scrollTop;
     const atBottom = () => el.scrollHeight - el.scrollTop - el.clientHeight < 4;
     const intent = (dy: number) => {
       if (dy > 0 && atBottom()) return reachedBottom();
@@ -731,19 +740,43 @@ function ScrollIntent({
       up = 0;
       scrolledUp();
     };
-    const onWheel = (e: WheelEvent) => intent(e.deltaY);
+    const onWheel = (e: WheelEvent) => {
+      if (isWheelUp(e)) release();
+      intent(e.deltaY);
+    };
     const onTouchStart = (e: TouchEvent) => (touchY = e.touches[0].clientY);
     const onTouchMove = (e: TouchEvent) => {
-      intent(touchY - e.touches[0].clientY);
+      const dy = touchY - e.touches[0].clientY;
+      if (dy < 0) release();
+      intent(dy);
       touchY = e.touches[0].clientY;
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isKeyUp(e) && !isTextEntry(e.target)) release();
+    };
+    // The scroller's own box, not its content, is only hit on the scrollbar.
+    const onPointerDown = (e: PointerEvent) =>
+      (isDraggingBar = e.target === el);
+    const onPointerUp = () => (isDraggingBar = false);
+    const onScroll = () => {
+      if (isDraggingBar && el.scrollTop < lastTop) release();
+      lastTop = el.scrollTop;
     };
     el.addEventListener('wheel', onWheel, { passive: true });
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('keydown', onKeyDown);
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('pointerup', onPointerUp);
     return () => {
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('keydown', onKeyDown);
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('pointerup', onPointerUp);
     };
   }, [scrollRef]);
 

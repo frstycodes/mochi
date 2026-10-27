@@ -22,6 +22,7 @@ packageExtensions:
       vite-plus: 1.1.0
 patchedDependencies:
   '@effect/vitest@4.0.5': patches/@effect__vitest@4.0.5.patch
+  use-stick-to-bottom@1.1.6: patches/use-stick-to-bottom@1.1.6.patch
 peerDependencyRules:
   allowAny:
     - typescript
