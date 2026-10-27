@@ -74,6 +74,32 @@ export const THREAD_INITIATIONS = [
   'own_initiative',
 ] as const;
 
+/** Up to 5 short lines on report_turn, each on the plan step it belongs to; a plain string (older callers) counts as one with no step. */
+const reportItems = (description: string) =>
+  Schema.Array(
+    Schema.Union([
+      Schema.String.check(Schema.isMaxLength(160)),
+      Schema.Struct({
+        text: Schema.String.check(
+          Schema.isMinLength(1),
+          Schema.isMaxLength(160),
+        ),
+        step: Schema.optionalKey(
+          Schema.String.annotate({
+            description:
+              'The title of the plan step it was made on, as in update_plan',
+          }),
+        ),
+      }),
+    ]),
+  )
+    .check(Schema.isMaxLength(5))
+    .annotate({ description });
+
+const ASSUMPTIONS = reportItems(
+  'Things the user\'s request didn\'t specify that you chose for them, each stated as what you assumed ("Assumed timestamps are UTC"); empty when you assumed nothing. Ordinary choices within your remit go in decisions',
+);
+
 export const TOOL_TABLE = {
   // {THREADS}
   list_threads: {
@@ -369,11 +395,11 @@ export const TOOL_TABLE = {
           description: "What changed, in the user's terms, 1 to 3 sentences",
         }),
       ),
-      decisions: Schema.Array(Schema.String.check(Schema.isMaxLength(160)))
-        .check(Schema.isMaxLength(5))
-        .annotate({
-          description: 'Choices you made that the user should know about',
-        }),
+      decisions: reportItems(
+        'Choices you made that the user should know about, each on the plan step it was made on',
+      ),
+      // Required as served (`shapeFor`); optional here, so a session started before the turn spine was turned on still reports.
+      assumptions: Schema.optionalKey(ASSUMPTIONS),
       left: Schema.Array(Schema.String.check(Schema.isMaxLength(160)))
         .check(Schema.isMaxLength(5))
         .annotate({ description: 'What is still not done' }),
@@ -458,6 +484,15 @@ export const TOOL_TABLE = {
             description:
               'The whole plan, in order; replaces the previous one, and steps left out are dropped',
           }),
+      ),
+      why: Schema.optionalKey(
+        Schema.String.check(
+          Schema.isMinLength(1),
+          Schema.isMaxLength(160),
+        ).annotate({
+          description:
+            'With items that drop or rename steps: one line on why the plan changed. Alone, {"why": "..."} gives the reason for the last change',
+        }),
       ),
       advance: Schema.optionalKey(
         Schema.Boolean.annotate({
@@ -1083,7 +1118,35 @@ export const SETTINGS_CHAT_TOOLS = [
 export interface MochiScope {
   isGoalsOff?: boolean;
   isSettingsChat?: boolean;
+  /** The turn spine is off (Settings): report_turn takes plain decisions and no assumptions, update_plan no why. */
+  isSpineOff?: boolean;
 }
+
+/** A tool's shape as this session is served it: with the turn spine off, without the spine's fields. */
+export function shapeFor(name: ToolName, { isSpineOff }: MochiScope) {
+  const { shape } = TOOL_TABLE[name] as { shape: Schema.Struct.Fields };
+  if (!isSpineOff)
+    return name === 'report_turn'
+      ? { ...shape, assumptions: ASSUMPTIONS }
+      : shape;
+  if (name === 'report_turn') {
+    const { assumptions: _, ...rest } = shape;
+    return { ...rest, decisions: PLAIN_DECISIONS };
+  }
+  if (name === 'update_plan') {
+    const { why: _, ...rest } = shape;
+    return rest;
+  }
+  return shape;
+}
+
+const PLAIN_DECISIONS = Schema.Array(
+  Schema.String.check(Schema.isMaxLength(160)),
+)
+  .check(Schema.isMaxLength(5))
+  .annotate({
+    description: 'Choices you made that the user should know about',
+  });
 
 const isSettingsChatTool = (name: ToolName) =>
   (SETTINGS_CHAT_TOOLS as readonly string[]).includes(name);

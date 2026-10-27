@@ -22,6 +22,9 @@ export function GeneralSection() {
       <SettingsGroup title="Composer">
         <CatalogRow settingKey="promptSuggestions" />
       </SettingsGroup>
+      <SettingsGroup title="End of turn">
+        <CatalogRow settingKey="turnSpine" />
+      </SettingsGroup>
       <SettingsGroup title="Running agents">
         <CatalogRow settingKey="concurrency" />
         <SettingsRow

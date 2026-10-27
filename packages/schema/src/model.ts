@@ -536,11 +536,31 @@ export const NextOption = Schema.Struct({
   isDraft: opt(Schema.Boolean),
 });
 
+export const Assumption = Schema.Struct({
+  id: Schema.String,
+  text: Schema.String,
+  turn: Schema.Number,
+  state: Schema.Literals(['open', 'accepted', 'changed']),
+});
+
+export const ReportItem = Schema.Struct({
+  text: Schema.String,
+  step: opt(Schema.String),
+});
+
+export const Pivot = Schema.Struct({
+  why: opt(Schema.String),
+  dropped: Schema.Array(Schema.String),
+  at: Schema.Number,
+  turn: Schema.Number,
+});
+
 export const TurnReport = Schema.Struct({
   at: Schema.Number,
   turn: opt(Schema.Number),
   by: Provider,
-  decisions: Schema.Array(Schema.String),
+  decisions: Schema.Array(Schema.Union([Schema.String, ReportItem])),
+  assumptions: opt(Schema.Array(ReportItem)),
   left: Schema.Array(Schema.String),
   question: opt(Schema.String),
   summary: opt(Schema.String),
@@ -844,6 +864,8 @@ export const Thread = Schema.Struct({
   parent: opt(SubThreadLink),
   isGoalOff: opt(Schema.Boolean),
   report: opt(TurnReport),
+  assumptions: opt(Schema.Array(Assumption)),
+  pivots: opt(Schema.Array(Pivot)),
   idle: opt(IdleCheck),
   turn: opt(
     Schema.Struct({

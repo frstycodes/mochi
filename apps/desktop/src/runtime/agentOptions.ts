@@ -23,6 +23,8 @@ export function agentOptions(
     ...(controls.speed && { speed: controls.speed }),
     permissionMode: permissionModeOf(provider, controls.access),
     ...(!prefsNow().goals && { isGoalsOff: true }),
+    // Core's context saved before the turn spine joined it has none: on, like the default.
+    ...(prefsNow().turnSpine === false && { isSpineOff: true }),
     ...(nativeOff.length && { nativeOff }),
   };
 }

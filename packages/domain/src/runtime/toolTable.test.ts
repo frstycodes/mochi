@@ -4,6 +4,7 @@ import {
   decodeArgs,
   DEV_TOOL_TABLE,
   jsonSchemaOf,
+  shapeFor,
   TOOL_TABLE,
 } from './toolTable.ts';
 
@@ -45,6 +46,35 @@ test('bad args come back as one path: message line per field, for the agent', ()
       decodeArgs(DEV_TOOL_TABLE.continue_task.shape, {
         threadId: 't',
         text: '   ',
+      }),
+  );
+});
+
+test('the turn spine serves report_turn with required assumptions and update_plan with why; off, neither, and plain decisions', () => {
+  const on = jsonSchemaOf(shapeFor('report_turn', {}));
+  assert.ok((on.required as string[]).includes('assumptions'));
+  assert.ok(
+    'why' in (jsonSchemaOf(shapeFor('update_plan', {})).properties as object),
+  );
+  const off = jsonSchemaOf(shapeFor('report_turn', { isSpineOff: true }));
+  assert.ok(!('assumptions' in (off.properties as object)));
+  assert.deepEqual(
+    (off.properties as Record<string, { items?: unknown }>).decisions.items,
+    { type: 'string', maxLength: 160 },
+  );
+  assert.ok(
+    !(
+      'why' in
+      (jsonSchemaOf(shapeFor('update_plan', { isSpineOff: true }))
+        .properties as object)
+    ),
+  );
+  // Decoding takes either: plain strings, and no assumptions from a session started with the spine off.
+  assert.ok(
+    'args' in
+      decodeArgs(TOOL_TABLE.report_turn.shape, {
+        decisions: ['Kept it', { text: 'Used X', step: 'Parse' }],
+        left: [],
       }),
   );
 });

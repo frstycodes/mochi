@@ -184,6 +184,7 @@ const SHARED_KEYS = new Set([
   'agent',
   'whileWorking',
   'promptSuggestions',
+  'turnSpine',
   'watchedToasts',
   'dockBadge',
   'quietHours',
@@ -664,6 +665,11 @@ const APP_SETTINGS: Setting[] = [
     group: 'Composer',
     description:
       "After each turn, the agent's suggested reply in the empty composer; Tab takes it",
+  }),
+  pref('turnSpine', 'Show assumptions on the plan', 'general', SWITCH, {
+    group: 'End of turn',
+    description:
+      'Agents report what they assumed for you and why their plan changed; the end-of-turn card hangs them off the plan for you to accept or change. Agents already running pick it up in their next session',
   }),
   pref(
     'whileWorking',
