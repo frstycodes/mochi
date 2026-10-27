@@ -46,7 +46,11 @@ import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
 import { markReportsDelivered } from '../runtime/due.ts';
-import { reportPrsEnded, reportTyped } from '../runtime/subThreadReports.ts';
+import {
+  isAutofixTurn,
+  reportPrsEnded,
+  reportTyped,
+} from '../runtime/subThreadReports.ts';
 import {
   recordCheckpoints,
   rewind,
@@ -1439,8 +1443,14 @@ function parentReport(
 ): State {
   const sub = state.threads.find((t) => t.id === action.threadId);
   if (!sub) return state;
+  // An Auto-fix turn that needed nothing from the parent stays with the sub-thread, as its normal turn end does.
+  const status =
+    action.report.status === 'done' && isAutofixTurn(sub)
+      ? 'no_change'
+      : action.report.status;
   const report = {
     ...action.report,
+    status,
     at: state.now,
     index: sub.activity.length,
   };

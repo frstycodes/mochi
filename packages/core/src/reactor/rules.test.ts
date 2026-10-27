@@ -90,7 +90,7 @@ test('delegated reports: one command per due report, keyed by thread and subagen
 
 const report = (
   status: string,
-  fields: { isUrgent?: true; isDelivered?: true } = {},
+  fields: { isUrgent?: true; isDelivered?: true; isQuiet?: true } = {},
 ) => ({
   at: 0,
   who: 'harness',
@@ -152,6 +152,35 @@ test('sub-thread wakes: an urgent report wakes the parent while another child wo
     );
   assert.equal(busy(report('blocked', { isUrgent: true }))[0]?.threadId, 'p');
   assert.deepEqual(busy(report('done')), []);
+});
+
+test('sub-thread wakes: a no_change report never wakes the parent, and leaves the wake key alone', () => {
+  const quiet = report('no_change', { isQuiet: true });
+  assert.deepEqual(
+    subThreadWakes(
+      saved('c'),
+      NONE,
+      state([parent([quiet]), child('c', false)]),
+    ),
+    [],
+    'all idle, only a quiet report',
+  );
+  const [withQuiet] = subThreadWakes(
+    saved('c'),
+    NONE,
+    state([parent([report('done'), quiet]), child('c', false)]),
+  );
+  const [without] = subThreadWakes(
+    saved('c'),
+    NONE,
+    state([parent([report('done')]), child('c', false)]),
+  );
+  assert.equal(withQuiet?.threadId, 'p');
+  assert.equal(
+    withQuiet?.key,
+    without?.key,
+    'a quiet report alone makes no new wake',
+  );
 });
 
 test('limit resumes: armed threads get a resume due at their reset, a new key per reset', () => {

@@ -4,7 +4,7 @@ import {
   dueQueued,
   dueReports,
   dueWakes,
-  undeliveredReports,
+  wakingReports,
 } from '../../../../apps/desktop/src/runtime/due.ts';
 import { wordCount } from '../../../../apps/desktop/src/simplify/simplify.ts';
 import type { ProjectionContext } from '../../../../apps/desktop/src/store/context.ts';
@@ -53,7 +53,7 @@ export const subThreadWakes: Rule = (_event, _before, after) =>
   dueWakes(after).map((t) => ({
     type: 'subthread.wake',
     key: `wake:${t.id}:${hash(
-      undeliveredReports(t)
+      wakingReports(t)
         .map((e) => `${e.at} ${JSON.stringify(e.subReport)} ${e.text}`)
         .join('\n'),
     )}`,

@@ -1,6 +1,7 @@
 import { AUTOFIX_ATTEMPTS, type AutofixEvent } from '../git/autofix.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { ParentReport, PullRequest, SubReport, Thread } from '../model.ts';
+import { URGENT_STATUSES } from '@mochi/domain/runtime/toolTable';
 import { undeliveredReports } from './due.ts';
 import type { State } from '../store/types.ts';
 import { log, mapThread } from '../store/threads.ts';
@@ -23,8 +24,7 @@ export function reportParent(
   sub: Thread,
   status: Extract<AgentEvent, { type: 'turn-end' }>['status'],
 ): State {
-  if (status === 'done' && sub.turn && sub.activity[sub.turn.start]?.autofix)
-    return state;
+  if (status === 'done' && isAutofixTurn(sub)) return state;
   const ended = state.threads.find((t) => t.id === sub.id) ?? sub;
   const isReported = isThisTurns(ended, ended.parentReport);
   if (isReported && status === 'done') return state;
@@ -36,7 +36,7 @@ export function reportParent(
   );
 }
 
-/** A `report_to_parent` call, logged in the parent's transcript as it's made; anything but done is urgent. */
+/** A `report_to_parent` call, logged in the parent's transcript as it's made: blocked, needs_input and failed are urgent, no_change quiet. */
 export function reportTyped(
   state: State,
   sub: Thread,
@@ -48,7 +48,8 @@ export function reportTyped(
     {
       status: report.status,
       report,
-      ...(report.status !== 'done' && { isUrgent: true }),
+      ...(isUrgentStatus(report.status) && { isUrgent: true }),
+      ...(report.status === 'no_change' && { isQuiet: true }),
     },
     reportBody(report),
   );
@@ -171,6 +172,13 @@ export function reportBody(report: ParentReport) {
   ];
   return lines.filter(Boolean).join('\n');
 }
+
+/** A turn an Auto-fix event started: its own PR's business, which stays with the sub-thread unless it needs the parent. */
+export const isAutofixTurn = (thread: Thread) =>
+  !!thread.turn && !!thread.activity[thread.turn.start]?.autofix;
+
+const isUrgentStatus = (status: string) =>
+  (URGENT_STATUSES as readonly string[]).includes(status);
 
 /** A report made in the thread's current turn: past the message that began it. */
 const isThisTurns = (thread: Thread, report?: ParentReport) =>

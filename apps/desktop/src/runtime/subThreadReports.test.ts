@@ -7,7 +7,7 @@ import { scheduleReducer } from '../schedule/slice.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls } from './live.ts';
-import { dueWakes, undeliveredReports } from './due.ts';
+import { dueWakes, undeliveredReports, wakingReports } from './due.ts';
 import { reportPrompt, WAKE_PROMPT } from './subThreadReports.ts';
 
 const run = (s: State, action: Action) =>
@@ -403,5 +403,114 @@ test("report_to_parent shows in the parent's transcript at once; a message of yo
   assert.equal(
     thread(s, parent).activity.find((e) => e.subReport)?.subReport?.isDelivered,
     true,
+  );
+});
+
+test('a no_change report logs its row but never wakes the parent, alone or for an all-idle wake; it rides with the next real one', () => {
+  let { s, parent, a, b, thread } = family();
+  s = ended(s, parent);
+  s = ended(
+    reported(s, a, {
+      status: 'no_change',
+      summary: 'Bot comment, nothing to do.',
+    }),
+    a,
+  );
+  const [row] = undeliveredReports(thread(s, parent));
+  assert.equal(row.subReport.status, 'no_change');
+  assert.equal(row.subReport.isQuiet, true);
+  assert.equal(row.subReport.isUrgent, undefined);
+  assert.deepEqual(wakingReports(thread(s, parent)), []);
+  assert.deepEqual(
+    dueWakes(s),
+    [],
+    'Piece B still works, and no_change never wakes',
+  );
+
+  s = run(s, { type: 'send', threadId: b, text: 'stop', reason: '' });
+  s = ended(
+    reported(s, b, { status: 'no_change', summary: 'Nothing either.' }),
+    b,
+  );
+  assert.deepEqual(
+    dueWakes(s),
+    [],
+    'every sub-thread idle, but only no_change reports',
+  );
+
+  s = run(s, { type: 'send', threadId: b, text: 'go on', reason: '' });
+  s = ended(reported(s, b, { status: 'done', summary: 'Piece B done.' }), b);
+  assert.deepEqual(
+    dueWakes(s).map((t) => t.id),
+    [parent],
+  );
+  const wake: Action = { type: 'subthread-wake', threadId: parent };
+  const [call] = agentCalls(s, wake, () => run(s, wake));
+  assert.ok(
+    call.method === 'send' &&
+      call.text.includes('Bot comment, nothing to do.') &&
+      call.text.includes('Piece B done.'),
+    'the quiet report goes out with the real wake',
+  );
+  s = run(s, wake);
+  assert.deepEqual(reports(s, parent), []);
+});
+
+test("an Auto-fix turn's done report is stored as no_change, so it stays with the sub-thread", () => {
+  let { s, parent, a, thread } = family();
+  s = ended(ended(s, parent), a);
+  s = ended(
+    run(s, { type: 'send', threadId: parent, text: 'ok', reason: '' }),
+    parent,
+  );
+  assert.deepEqual(reports(s, parent), [], 'the first turn end went out');
+  s = run(s, {
+    type: 'prs-seen',
+    threadId: a,
+    prs: [
+      {
+        number: 12,
+        state: 'open',
+        title: 'Piece A',
+        url: 'https://github.com/o/r/pull/12',
+      },
+    ],
+  });
+  s = run(s, { type: 'autofix-set', threadId: a, pr: 12, since: 1 });
+  s = run(s, {
+    type: 'autofix',
+    threadId: a,
+    event: {
+      kind: 'review',
+      pr: 12,
+      url: 'u',
+      comments: [{ id: '1', author: 'bot', body: 'LGTM' }],
+    },
+  });
+  assert.equal(thread(s, a).live?.isWorking, true, 'the event started a turn');
+  s = ended(
+    reported(s, a, { status: 'done', summary: 'Nothing to change.' }),
+    a,
+  );
+  assert.equal(thread(s, a).parentReport?.status, 'no_change');
+  const [row] = undeliveredReports(thread(s, parent));
+  assert.equal(row.subReport.isQuiet, true);
+  assert.deepEqual(dueWakes(s), []);
+
+  s = run(s, {
+    type: 'autofix',
+    threadId: a,
+    event: {
+      kind: 'review',
+      pr: 12,
+      url: 'u',
+      comments: [{ id: '2', author: 'rev', body: 'Rename it?' }],
+    },
+  });
+  s = reported(s, a, { status: 'needs_input', summary: 'Rename to what?' });
+  assert.equal(
+    undeliveredReports(thread(s, parent)).at(-1)?.subReport.isUrgent,
+    true,
+    'an Auto-fix turn that needs the parent still reaches it',
   );
 });

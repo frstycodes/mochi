@@ -574,7 +574,13 @@ export type TurnReport = typeof TurnReport.Type;
 export const ParentReport = Schema.Struct({
   at: Schema.Number,
   index: Schema.Number,
-  status: Schema.Literals(['done', 'blocked', 'needs_input', 'failed']),
+  status: Schema.Literals([
+    'done',
+    'no_change',
+    'blocked',
+    'needs_input',
+    'failed',
+  ]),
   summary: Schema.String,
   branch: opt(Schema.String),
   pr: opt(Schema.Number),
@@ -757,6 +763,7 @@ export const ActivityEntry = Schema.Struct({
       title: Schema.String,
       status: Schema.String,
       isUrgent: opt(Schema.Literal(true)),
+      isQuiet: opt(Schema.Literal(true)),
       isReply: opt(Schema.Literal(true)),
       isDelivered: opt(Schema.Literal(true)),
       report: opt(ParentReport),

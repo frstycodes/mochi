@@ -186,7 +186,9 @@ export function SubReportRow({
 const STATUS_FITS = 24;
 
 function subReportStatus(status: string) {
-  return status === 'needs_input' ? 'needs input' : status;
+  return status === 'needs_input' || status === 'no_change'
+    ? status.replace('_', ' ')
+    : status;
 }
 
 function subReportTone(report: SubReport) {

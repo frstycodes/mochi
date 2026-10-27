@@ -19,6 +19,10 @@ export const undeliveredReports = (thread: Pick<Thread, 'activity'>) =>
     (e): e is ReportEntry => !!e.subReport && !e.subReport.isDelivered,
   );
 
+/** The undelivered reports that can wake the agent: all but `no_change` ones, which wait for a message or another wake. */
+export const wakingReports = (thread: Pick<Thread, 'activity'>) =>
+  undeliveredReports(thread).filter((e) => !e.subReport.isQuiet);
+
 /** The agent got its undelivered reports (with a message or a wake): they stay in the transcript, marked delivered. */
 export function markReportsDelivered(thread: Thread): Thread {
   if (!undeliveredReports(thread).length) return thread;
@@ -72,7 +76,8 @@ export function dueReports(threads: ReadonlyArray<Thread>) {
 
 /**
  * Threads holding sub-thread reports or replies that nothing else will deliver: idle, nothing queued or waiting on you, and every
- * sub-thread idle, so done reports batch. An urgent report (blocked, needs_input, failed) doesn't wait for the other sub-threads.
+ * sub-thread idle, so done reports batch. An urgent report (blocked, needs_input, failed) doesn't wait for the other sub-threads;
+ * a quiet one (no_change) never wakes it, but goes out with the wake.
  */
 export function dueWakes(state: Threads): Thread[] {
   return state.threads.filter((t) => {
@@ -84,7 +89,7 @@ export function dueWakes(state: Threads): Thread[] {
       t.queued?.length
     )
       return false;
-    const reports = undeliveredReports(t);
+    const reports = wakingReports(t);
     if (!reports.length) return false;
     if (isWaitingOnYou(state, t.id)) return false;
     if (reports.some((e) => e.subReport.isUrgent)) return true;
