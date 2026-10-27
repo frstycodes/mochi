@@ -17,6 +17,7 @@ import { scheduleRpc } from './ipc/schedule.ts';
 import { settingsRpc } from './ipc/settings.ts';
 import { simRpc } from './ipc/sim.ts';
 import { themesRpc } from './ipc/themes.ts';
+import { updatesRpc } from './ipc/updates.ts';
 import { usageRpc } from './ipc/usage.ts';
 import { windowsRpc } from './ipc/windows.ts';
 
@@ -40,6 +41,7 @@ export const hostMethods = {
   projects: projectsRpc,
   library: libraryRpc,
   usage: usageRpc,
+  updates: updatesRpc,
 };
 
 type Invoke = { readonly input: Schema.Top; readonly output: Schema.Top };

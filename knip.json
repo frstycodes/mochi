@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "ignoreDependencies": ["@effect/language-service", "cloudflare"],
-  "ignoreBinaries": ["mkfifo"],
+  "ignoreBinaries": ["mkfifo", "lipo"],
   "rules": {
     "exports": "off",
     "types": "off",

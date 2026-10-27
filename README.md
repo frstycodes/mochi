@@ -45,6 +45,15 @@ pnpm dev
 | `vp run test`         | Vitest over every `*.test.ts`; `vp run test --changed <ref>` runs only the tests a diff reaches |
 | `pnpm artifact`       | Single-file HTML build in `apps/desktop/artifact/`                                              |
 
+## Releases
+
+Two channels, both GitHub Releases built by `.github/workflows/release.yml` for macOS (Apple silicon and Intel), Windows and Linux (AppImage):
+
+- **Stable**: push a `v<version>` tag matching `apps/desktop/package.json`'s `version`, then bump `version` to the next one, which nightlies build towards.
+- **Nightly**: `<next version>-nightly.<yyyymmdd>.<run>` from main every day at 04:00 UTC when main has moved (or Run workflow by hand); published as prereleases, the newest 14 kept.
+
+Installed builds check a minute after launch and every 4 hours, download in the background and install on restart (Settings › About, or the user menu). Settings › About switches channel; leaving Nightly installs the latest stable even though it's older. GAP: macOS updates need a signed build: add the `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` secrets.
+
 ## Layout
 
 ```

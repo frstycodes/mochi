@@ -1,6 +1,6 @@
 {
   "name": "harness-proto",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -66,6 +66,7 @@
     "codemirror": "^6.0.2",
     "date-fns": "^4.4.0",
     "effect": "4.0.5",
+    "electron-updater": "6.8.10",
     "html-to-image": "1.11.13",
     "katex": "0.16.47",
     "libsodium-wrappers": "0.8.4",
@@ -123,7 +124,7 @@
       "node_modules/node-pty/lib/**/*.js",
       "node_modules/node-pty/prebuilds/${platform}-${arch}/**",
       "node_modules/playwright-core/**",
-      "node_modules/@parcel/watcher-*/**"
+      "node_modules/@parcel/watcher-${platform}-${arch}*/**"
     ],
     "afterPack": "scripts/after-pack.mjs",
     "electronFuses": {
@@ -143,8 +144,16 @@
     "directories": {
       "output": "release"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "frstycodes",
+      "repo": "mochi"
+    },
     "mac": {
-      "target": "dir",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.icns",
       "identity": null,
       "extraResources": [
@@ -171,6 +180,7 @@
     },
     "win": {
       "target": "nsis",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
       "icon": "build/icon.png",
       "extraResources": [
         {

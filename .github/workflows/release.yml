@@ -1,0 +1,110 @@
+name: Release
+
+# Stable: pushing a `v<version>` tag that matches apps/desktop/package.json. Nightly: every day at 04:00 UTC from main,
+# skipped when main hasn't moved since the last nightly, or on demand. Both publish GitHub releases electron-updater reads
+# (`latest*.yml` on the newest release, `nightly*.yml` on the newest prerelease; electron/updates/updater.ts).
+on:
+  push:
+    tags: ['v*']
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      version: ${{ steps.plan.outputs.version }}
+      skip: ${{ steps.plan.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - id: plan
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          channel=${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'nightly' }}
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "version=$(node scripts/release.ts version "$channel")" >> "$GITHUB_OUTPUT"
+          skip=false
+          if [ "$channel" = nightly ] && [ "${{ github.event_name }}" = schedule ]; then
+            last=$(gh release list --json tagName,isPrerelease --jq '[.[] | select(.isPrerelease and (.tagName | contains("-nightly.")))][0].tagName // empty')
+            if [ -n "$last" ] && [ "$(gh api "repos/${{ github.repository }}/commits/$last" --jq .sha)" = "$GITHUB_SHA" ]; then
+              skip=true
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        # macos-latest packs both arm64 and x64 (scripts/release.ts), so one latest-mac.yml lists both.
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: voidzero-dev/setup-vp@v1.21.2
+        with:
+          node-version: '24'
+          cache: true
+      - working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Signing and notarizing turn on once these secrets exist (scripts/release.ts).
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release.ts build ${{ needs.prepare.outputs.channel }} ${{ needs.prepare.outputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/*.yml
+            !apps/desktop/release/builder-debug.yml
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          if [ "$CHANNEL" = stable ]; then
+            gh release create "v$VERSION" dist/* --repo "${{ github.repository }}" --verify-tag --title "Mochi $VERSION" --generate-notes --latest
+          else
+            gh release create "v$VERSION" dist/* --repo "${{ github.repository }}" --target "$GITHUB_SHA" --title "Mochi Nightly $VERSION" --notes "Nightly build of ${GITHUB_SHA::7}." --prerelease --latest=false
+          fi
+      # Nightlies are disposable: keep the newest 14.
+      - if: needs.prepare.outputs.channel == 'nightly'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "${{ github.repository }}" --limit 200 --json tagName,isPrerelease \
+            --jq '[.[] | select(.isPrerelease and (.tagName | contains("-nightly.")))][14:][].tagName' |
+            xargs -r -n 1 gh release delete --repo "${{ github.repository }}" --cleanup-tag --yes

@@ -1,5 +1,7 @@
+import { Button } from '@/components/ui/button';
 import { host } from '../../host';
-import { SettingsGroup, SettingsRow } from '../parts';
+import { SettingsChoice, SettingsGroup, SettingsRow } from '../parts';
+import { useUpdates } from '../../updates/useUpdates';
 import pkg from '../../../package.json';
 
 export function AboutSection() {
@@ -20,6 +22,7 @@ export function AboutSection() {
           }
         />
       </SettingsGroup>
+      {host.isDesktop && <UpdatesGroup />}
       <SettingsGroup title="Docs">
         {DOCS.map((d) => (
           <SettingsRow
@@ -42,6 +45,48 @@ export function AboutSection() {
     </div>
   );
 }
+
+function UpdatesGroup() {
+  const { state, summary, action, setChannel } = useUpdates();
+  if (!state) return null;
+  return (
+    <SettingsGroup title="Updates">
+      <SettingsRow
+        label="Release channel"
+        description="Stable follows tagged releases; Nightly is built from main every day"
+        control={
+          <SettingsChoice
+            id="releaseChannel"
+            aria-label="Release channel"
+            value={state.channel}
+            options={CHANNELS}
+            onChange={(channel) => void setChannel(channel)}
+          />
+        }
+      />
+      <SettingsRow
+        label={`Mochi ${state.version}`}
+        description={summary}
+        control={
+          !!action && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void action.run()}
+            >
+              {action.label}
+            </Button>
+          )
+        }
+      />
+    </SettingsGroup>
+  );
+}
+
+const CHANNELS = [
+  { value: 'stable', label: 'Stable' },
+  { value: 'nightly', label: 'Nightly' },
+] as const;
 
 function Version({ children }: { children: string }) {
   return (

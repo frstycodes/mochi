@@ -188,6 +188,8 @@ Stored on this computer: Storage used, Clear pins / side chats / terminal histor
 
 Versions (Mochi, Electron, Chromium) and links to the README, RUNTIME and SETTINGS docs (`src/settings/sections/about.tsx`).
 
+Updates (desktop): Release channel (Stable / Nightly, default the channel the build came from, kept in `userData/updates.json`), and the running version with the updater's state and its one action (Check for updates / Restart to update), also in the user menu (`electron/updates/updater.ts`, README › Releases). Not in the catalog: agents can't switch it.
+
 ## Not settings
 
 ### Projects page
