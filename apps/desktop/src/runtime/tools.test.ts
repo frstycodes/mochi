@@ -2874,13 +2874,22 @@ test("update_plan is the thread's plan, even read-only: resent lists move steps 
   assert.match(await t.err('update_plan', {}), /advance/);
 });
 
-test('update_plan needs a scope with items, and new_task is gone: unrelated work is a create_thread offer', async () => {
+test('update_plan scope defaults to continuation, and new_task is gone: unrelated work is a create_thread offer', async () => {
   const t = setup({ control: 'read' });
-  assert.match(
-    await t.err('update_plan', {
-      items: [{ title: 'Read the limiter', status: 'in_progress' }],
-    }),
-    /scope/,
+  await t.ok('update_plan', {
+    scope: 'first_task',
+    items: [{ title: 'Read the limiter', status: 'in_progress' }],
+  });
+  await t.ok('update_plan', {
+    items: [
+      { title: 'Read the limiter', status: 'completed' },
+      { title: 'Add Retry-After', status: 'in_progress' },
+    ],
+  });
+  assert.equal(
+    t.thread('rl').steps.find((s) => s.title === 'Read the limiter')?.status,
+    'done',
+    'no scope keeps the step it matches, as continuation does',
   );
   assert.match(
     await t.err('update_plan', {
@@ -2888,6 +2897,37 @@ test('update_plan needs a scope with items, and new_task is gone: unrelated work
       items: [{ title: 'Write the billing page', status: 'in_progress' }],
     }),
     /scope/,
+  );
+});
+
+test('update_plan answers with the step now in progress, so the agent never counts its advances', async () => {
+  const t = setup({ control: 'read' });
+  const plan = async (args: Record<string, unknown>) =>
+    JSON.parse((await t.call('update_plan', args)).text);
+  assert.equal(
+    await plan({
+      scope: 'first_task',
+      items: [
+        { title: 'Read the limiter', status: 'in_progress' },
+        { title: 'Add Retry-After', status: 'pending' },
+      ],
+    }),
+    'Step 1/2 in progress: "Read the limiter". Next: "Add Retry-After".',
+  );
+  assert.equal(
+    await plan({ advance: true }),
+    'Step 2/2 in progress: "Add Retry-After". Last step: advance once more when it is done.',
+  );
+  assert.equal(await plan({ advance: true }), 'Plan done (2/2).');
+  assert.equal(
+    await plan({
+      scope: 'first_task',
+      items: [
+        { title: 'Read the limiter', status: 'completed' },
+        { title: 'Add Retry-After', status: 'pending' },
+      ],
+    }),
+    'Nothing in progress; 1/2 done. Next: "Add Retry-After".',
   );
 });
 
@@ -2928,7 +2968,7 @@ test('claim_criterion records evidence; report and get_report give the turn as d
     [
       'curl -i shows Retry-After: 30',
       'Switch the 429 body to JSON?',
-      ['Kept the old 429 body'],
+      [{ text: 'Kept the old 429 body' }],
     ],
   );
   await t.ok('report_turn', {
@@ -3230,6 +3270,165 @@ test('report_turn reminds the agent of a step left in progress, and says nothing
     (await t.ok('report_turn', { decisions: [], left: [] })).note,
     undefined,
   );
+});
+
+// {TURN SPINE}
+
+/** A goal-less thread whose open turn has `edits`: your message, then the agent's Edit rows the turn's changes read. */
+function spineSetup(edits: string[] = []) {
+  const t = setup();
+  t.env.prefs.set({ goals: false });
+  const rl = t.thread('rl');
+  Object.assign(rl, {
+    goal: undefined,
+    proposal: undefined,
+    steps: [],
+    activity: [
+      ...rl.activity,
+      { at: 0, who: 'you', kind: 'message', text: 'Import the CSV' },
+      ...edits.map((text) => ({ at: 0, who: 'claude', kind: 'tool', text })),
+    ],
+  });
+  return t;
+}
+
+test('report_turn keeps decisions and assumptions on their step and adds assumptions to the ledger once', async () => {
+  const t = spineSetup();
+  await t.ok('report_turn', {
+    decisions: [
+      'Kept the parser',
+      { text: 'Used the csv helper', step: 'Parse' },
+    ],
+    assumptions: [
+      { text: 'Assumed timestamps are UTC', step: 'Parse' },
+      { text: 'Assumed amounts are cents' },
+    ],
+    left: [],
+  });
+  const rl = t.thread('rl');
+  assert.deepEqual(rl.report?.decisions, [
+    { text: 'Kept the parser' },
+    { text: 'Used the csv helper', step: 'Parse' },
+  ]);
+  assert.deepEqual(
+    rl.assumptions?.map((a) => [a.text, a.state, a.turn]),
+    [
+      ['Assumed timestamps are UTC', 'open', rl.report?.turn],
+      ['Assumed amounts are cents', 'open', rl.report?.turn],
+    ],
+  );
+  await t.ok('report_turn', {
+    decisions: [],
+    assumptions: [{ text: 'Assumed timestamps are UTC' }],
+    left: [],
+  });
+  assert.equal(
+    t.thread('rl').assumptions?.length,
+    2,
+    'an open repeat is not added again',
+  );
+});
+
+test('report_turn asks once for assumptions when the turn changed files and reported none', async () => {
+  const t = spineSetup(['Edit src/import.ts  +3 −1']);
+  const report = { decisions: [], assumptions: [], left: [] };
+  assert.match(
+    (await t.ok('report_turn', report)).note,
+    /reported no assumptions/,
+  );
+  assert.equal(
+    (await t.ok('report_turn', report)).note,
+    undefined,
+    'never twice in a turn',
+  );
+
+  const quiet = spineSetup();
+  assert.equal(
+    (await quiet.ok('report_turn', report)).note,
+    undefined,
+    'no files changed',
+  );
+  const assumed = spineSetup(['Edit src/import.ts  +3 −1']);
+  assert.equal(
+    (
+      await assumed.ok('report_turn', {
+        ...report,
+        assumptions: ['Assumed UTC'],
+      })
+    ).note,
+    undefined,
+  );
+});
+
+test('update_plan records a pivot for dropped steps with its why, and asks for a why it lacks', async () => {
+  const t = spineSetup();
+  const plan = async (args: Record<string, unknown>) =>
+    JSON.parse((await t.call('update_plan', args)).text) as string;
+  await plan({
+    scope: 'first_task',
+    items: [
+      { title: 'Reproduce the crash', status: 'completed' },
+      { title: 'Patch the CSV parser', status: 'in_progress' },
+    ],
+  });
+  const asked = await plan({
+    scope: 'continuation',
+    items: [
+      { title: 'Reproduce the crash', status: 'completed' },
+      { title: 'Fix quoted fields in the tokenizer', status: 'in_progress' },
+    ],
+  });
+  assert.match(
+    asked,
+    /You dropped "Patch the CSV parser", added "Fix quoted fields in the tokenizer"\./,
+  );
+  assert.match(asked, /"why"/);
+  assert.deepEqual(
+    t.thread('rl').pivots?.map((p) => [p.dropped, p.at, p.why]),
+    [[['Patch the CSV parser'], 1, undefined]],
+  );
+  assert.equal(
+    await plan({ why: 'The crash is in the tokenizer' }),
+    'Noted why the plan changed.',
+  );
+  assert.equal(t.thread('rl').pivots?.[0].why, 'The crash is in the tokenizer');
+
+  const given = await plan({
+    scope: 'continuation',
+    why: 'Tests cover it already',
+    items: [
+      { title: 'Fix quoted fields in the tokenizer', status: 'in_progress' },
+    ],
+  });
+  assert.doesNotMatch(
+    given,
+    /"why"/,
+    'a why given with the plan is not asked for',
+  );
+  assert.equal(t.thread('rl').pivots?.at(-1)?.why, 'Tests cover it already');
+});
+
+test('with the turn spine off, reports take no assumptions, give no nudge, and update_plan records no pivot', async () => {
+  const t = spineSetup(['Edit src/import.ts  +3 −1']);
+  t.env.prefs.set({ turnSpine: false });
+  const r = await t.ok('report_turn', {
+    decisions: [{ text: 'Kept the parser', step: 'Parse' }],
+    assumptions: [{ text: 'Assumed UTC' }],
+    left: [],
+  });
+  assert.equal(r.note, undefined);
+  assert.deepEqual(t.thread('rl').report?.decisions, ['Kept the parser']);
+  assert.equal(t.thread('rl').report?.assumptions, undefined);
+  assert.equal(t.thread('rl').assumptions, undefined);
+  await t.ok('update_plan', {
+    scope: 'first_task',
+    items: [{ title: 'A', status: 'in_progress' }],
+  });
+  await t.ok('update_plan', {
+    scope: 'continuation',
+    items: [{ title: 'B', status: 'in_progress' }],
+  });
+  assert.equal(t.thread('rl').pivots, undefined);
 });
 
 // {THREAD PROPOSALS}

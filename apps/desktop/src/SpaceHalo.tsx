@@ -1,0 +1,134 @@
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useReducedMotionConfig } from 'motion/react';
+import { cn } from '@/lib/utils';
+import type { Space } from './model';
+import { HALO, haloAlpha, haloKnob, haloMotion, haloSpan } from './haloShape';
+import { idSeed, spaceColor, spaceColorCss } from './spaceColor';
+
+/**
+ * The current profile's halo along the bottom of the sidebar, crossfading on a switch. Absolute, so the sidebar must be
+ * positioned, and whatever sits over it (content, footer) positioned too so it paints above.
+ */
+export function SpaceHalo({
+  profiles,
+  currentId,
+}: {
+  profiles: Space[];
+  currentId: string;
+}) {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 opacity-(--halo-strength)"
+    >
+      {profiles.map((space) => (
+        <HaloLayer
+          key={space.id}
+          space={space}
+          isCurrent={space.id === currentId}
+        />
+      ))}
+    </div>
+  );
+}
+
+type DeviceSize = { width: number; height: number };
+
+// Only the current layer draws and moves; the others keep their last frame to fade out on, and redraw when they come back.
+// Each is as tall as its own profile's reach allows, so a high reach never makes every profile draw a tall canvas.
+function HaloLayer({ space, isCurrent }: { space: Space; isCurrent: boolean }) {
+  const layer = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLCanvasElement>(null);
+  const size = useDeviceSize(layer);
+  const color = spaceColorCss(spaceColor(space));
+  const isReduced = useReducedMotionConfig();
+  const motion = isReduced ? 'still' : haloMotion(space);
+  const raggedness = haloKnob(space, 'haloRaggedness');
+  const intensity = haloKnob(space, 'haloIntensity') / 100;
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas || !isCurrent || !size || !color) return;
+    const seed = idSeed(space.id);
+    const draw = (time: number) =>
+      drawHalo(canvas, size, seed, color, {
+        time,
+        shift: motion === 'drift' ? time * HALO.drift : 0,
+        raggedness,
+      });
+    draw(0);
+    if (motion === 'still') return;
+    let frame = 0;
+    let start: number | undefined;
+    let last = 0;
+    const tick = (now: number) => {
+      frame = requestAnimationFrame(tick);
+      start ??= now;
+      if (now - last < FRAME_MS) return;
+      last = now;
+      draw((now - start) / 1000);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [isCurrent, size, color, space.id, motion, raggedness]);
+  return (
+    <div
+      ref={layer}
+      className="absolute inset-x-0 bottom-0 transition-opacity duration-200"
+      style={{
+        height: `${haloSpan(space) * 100}%`,
+        opacity: isCurrent && color ? intensity : 0,
+      }}
+    >
+      <canvas
+        ref={ref}
+        className={cn(
+          'absolute inset-0 size-full',
+          isCurrent && motion === 'breathe' && 'halo-breathe',
+        )}
+      />
+    </div>
+  );
+}
+
+// 30fps: the edge moves a few pixels a second, so more frames only cost CPU.
+const FRAME_MS = 1000 / 30;
+
+function drawHalo(
+  canvas: HTMLCanvasElement,
+  { width, height }: DeviceSize,
+  seed: number,
+  color: string,
+  at: { time: number; shift: number; raggedness: number },
+) {
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return;
+  const alpha = haloAlpha(width, height, seed, at);
+  const image = context.createImageData(width, height);
+  for (let i = 0; i < alpha.length; i++) image.data[i * 4 + 3] = alpha[i];
+  context.putImageData(image, 0, 0);
+  // Keeps the mask's alpha and takes the colour, so oklch() never has to be converted by hand.
+  context.globalCompositeOperation = 'source-in';
+  context.fillStyle = color;
+  context.fillRect(0, 0, width, height);
+}
+
+function useDeviceSize(ref: RefObject<HTMLElement | null>) {
+  const [size, setSize] = useState<DeviceSize>();
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const ratio = window.devicePixelRatio || 1;
+      const width = Math.round(entry.contentRect.width * ratio);
+      const height = Math.round(entry.contentRect.height * ratio);
+      setSize((now) =>
+        now?.width === width && now.height === height ? now : { width, height },
+      );
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return size;
+}

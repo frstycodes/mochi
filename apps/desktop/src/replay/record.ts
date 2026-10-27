@@ -44,6 +44,8 @@ const RECORDED = [
   'criterion-check',
   'report',
   'parent-report',
+  'pivot',
+  'pivot-why',
   'similar-dismiss',
   'drift-verdict',
   'drift-keep',

@@ -41,6 +41,8 @@ export interface AgentStartOptions {
   useApiKey?: boolean;
   /** Goals are off (always, now they're retired): the session gets no goal instructions, tools or nudge. Read at session start. */
   isGoalsOff?: boolean;
+  /** The turn spine is off (Settings): report_turn and update_plan without its fields, no instructions for them. Read at session start. */
+  isSpineOff?: boolean;
   /** The profile's settings chat (Settings › Ask Mochi): only the settings tools and their instructions, no files, shell or browser. */
   isSettingsChat?: boolean;
   /** A sub-thread's session: it also gets `report_to_parent` and the instructions to end each turn with it. Read at session start. */

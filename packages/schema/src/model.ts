@@ -1,5 +1,5 @@
 import { Effect, Schema, SchemaTransformation } from 'effect';
-import { JsonObject, Str } from './checks.ts';
+import { Int, JsonObject, Str } from './checks.ts';
 import { RunTarget } from './ipc/ports.ts';
 
 const opt = Schema.optional;
@@ -213,11 +213,35 @@ export const SpaceIconName = Schema.Literals([
 ]);
 export type SpaceIconName = typeof SpaceIconName.Type;
 
+export const SpaceColor = Schema.Literals([
+  'green',
+  'blue',
+  'violet',
+  'amber',
+  'pink',
+  'teal',
+  'orange',
+  'red',
+  'none',
+]);
+export type SpaceColor = typeof SpaceColor.Type;
+
+export const SpaceHaloMotion = Schema.Literals(['breathe', 'drift', 'still']);
+
+const HaloPercent = Int.check(Schema.isGreaterThanOrEqualTo(0));
+export type SpaceHaloMotion = typeof SpaceHaloMotion.Type;
+
 /** A profile, before `v` (`src/model.ts` `Space`); `stored.ts` versions it as a row. */
 export const Space = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   icon: SpaceIconName,
+  color: opt(SpaceColor),
+  haloMotion: opt(SpaceHaloMotion),
+  // Percent; the app clamps each to its own range (`HALO_KNOBS`), so a range can change without failing old rows.
+  haloReach: opt(HaloPercent),
+  haloRaggedness: opt(HaloPercent),
+  haloIntensity: opt(HaloPercent),
   plans: Schema.Struct({ claude: Schema.String, codex: Schema.String }),
   github: Schema.String,
   nativeOff: opt(Schema.Array(Schema.String)),
@@ -512,11 +536,31 @@ export const NextOption = Schema.Struct({
   isDraft: opt(Schema.Boolean),
 });
 
+export const Assumption = Schema.Struct({
+  id: Schema.String,
+  text: Schema.String,
+  turn: Schema.Number,
+  state: Schema.Literals(['open', 'accepted', 'changed']),
+});
+
+export const ReportItem = Schema.Struct({
+  text: Schema.String,
+  step: opt(Schema.String),
+});
+
+export const Pivot = Schema.Struct({
+  why: opt(Schema.String),
+  dropped: Schema.Array(Schema.String),
+  at: Schema.Number,
+  turn: Schema.Number,
+});
+
 export const TurnReport = Schema.Struct({
   at: Schema.Number,
   turn: opt(Schema.Number),
   by: Provider,
-  decisions: Schema.Array(Schema.String),
+  decisions: Schema.Array(Schema.Union([Schema.String, ReportItem])),
+  assumptions: opt(Schema.Array(ReportItem)),
   left: Schema.Array(Schema.String),
   question: opt(Schema.String),
   summary: opt(Schema.String),
@@ -856,6 +900,8 @@ export const Thread = Schema.Struct({
       Schema.Struct({ threadId: Schema.String, title: Schema.String }),
     ),
   ),
+  assumptions: opt(Schema.Array(Assumption)),
+  pivots: opt(Schema.Array(Pivot)),
   idle: opt(IdleCheck),
   turn: opt(
     Schema.Struct({

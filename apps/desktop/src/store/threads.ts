@@ -5,12 +5,14 @@ import {
   NOW0,
   seedThreads,
   type ActivityEntry,
+  type Assumption,
   type Author,
   type Handoff,
   type IdleCheck,
   type LineSlot,
   type ParentReport,
   type PendingSteer,
+  type Pivot,
   type Provider,
   type PullRequest,
   type QueuedMessage,
@@ -24,6 +26,7 @@ import {
   type ThreadRef,
   type TurnReport,
 } from '../model.ts';
+import { changedBySend, withAssumptions } from '../goals/ledger.ts';
 import {
   addProposal,
   findProposal,
@@ -257,6 +260,9 @@ export type ThreadsAction =
       threadId: string;
       report: Omit<ParentReport, 'at' | 'index'>;
     }
+  /** update_plan dropped or renamed steps; `why` alone (`pivot-why`) gives the reason for the turn's last pivot that has none. */
+  | { type: 'pivot'; threadId: string; pivot: Omit<Pivot, 'turn'> }
+  | { type: 'pivot-why'; threadId: string; why: string }
   /** The agent went idle: a fresh record replaces the last turn's, accepted gaps and Open anyway included. */
   /** The agent's `propose_goal`; `isApplied` when Settings › Goals and checks applies proposals with an undo instead of asking. */
   | {
@@ -280,6 +286,13 @@ export type ThreadsAction =
       threadId: string;
       patch: Partial<Omit<IdleCheck, 'at'>>;
       turn?: number;
+    }
+  /** You accepted an assumption the agent made, or asked to change it. */
+  | {
+      type: 'assumption-set';
+      threadId: string;
+      id: string;
+      state: Assumption['state'];
     }
   /** You answered the turn's next-move card, or wrote instead: it's kept in the chat as a record and the card goes. */
   | {
@@ -838,6 +851,44 @@ function reduce(state: State, action: Action): State {
             : t,
         ),
       };
+    case 'pivot':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          pivots: [
+            ...(t.pivots ?? []).filter((p) => p.turn === turnOf(t)),
+            { ...action.pivot, turn: turnOf(t) },
+          ],
+        })),
+      };
+    case 'pivot-why':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => {
+          const k = (t.pivots ?? []).findLastIndex(
+            (p) => p.turn === turnOf(t) && !p.why,
+          );
+          return k < 0
+            ? t
+            : {
+                ...t,
+                pivots: t.pivots!.map((p, i) =>
+                  i === k ? { ...p, why: action.why } : p,
+                ),
+              };
+        }),
+      };
+    case 'assumption-set':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          assumptions: t.assumptions?.map((a) =>
+            a.id === action.id ? { ...a, state: action.state } : a,
+          ),
+        })),
+      };
     case 'report':
       return {
         ...state,
@@ -846,9 +897,16 @@ function reduce(state: State, action: Action): State {
           report: {
             ...action.report,
             at: state.now,
-            turn: (t.idle?.turn ?? 0) + 1,
+            turn: turnOf(t),
             index: t.activity.length,
           },
+          ...(action.report.assumptions?.length && {
+            assumptions: withAssumptions(
+              t.assumptions,
+              action.report.assumptions,
+              turnOf(t),
+            ),
+          }),
           steering: t.steering?.map((s) => ({
             ...s,
             hasReportBefore: true as const,
@@ -1612,21 +1670,19 @@ export function send(
         restart: undefined,
         movedFrom: undefined,
       };
-      const replier =
-        action.expectReply && from?.threadId
-          ? {
-              replyTo: [
-                ...(t.replyTo ?? []).filter(
-                  (r) => r.threadId !== from.threadId,
-                ),
-                { threadId: from.threadId, title: from.title },
-              ],
-            }
-          : {};
       // Its undelivered reports went with this message (`withReports`), as the notes did.
       const delivered = live ? markReportsDelivered(t) : t;
+      const isYours = !from && !action.autofix && !action.secondOpinion;
       const sent = withQueue(
-        { ...delivered, queuePause: undefined, ...replier },
+        {
+          ...delivered,
+          queuePause: undefined,
+          ...replyTo(t, action),
+          ...(isYours &&
+            t.assumptions && {
+              assumptions: changedBySend(t.assumptions, action.text),
+            }),
+        },
         (t.queued ?? []).filter((m) => m.id !== action.queuedId),
       );
       const entry: ActivityEntry = {
@@ -1673,6 +1729,21 @@ export function send(
         ? applyDrift(said, action.drift, action.reason, now)
         : said;
     }),
+  };
+}
+
+/** The turn the thread's agent is in: one past its last idle record's, as a report counts it. */
+const turnOf = (t: Thread) => (t.idle?.turn ?? 0) + 1;
+
+/** A message sent with `expectReply` adds its sender to `replyTo`, once per sender (`reportReplies`). */
+function replyTo(t: Thread, action: Extract<Action, { type: 'send' }>) {
+  const sender = action.from?.threadId;
+  if (!action.expectReply || !sender) return {};
+  return {
+    replyTo: [
+      ...(t.replyTo ?? []).filter((r) => r.threadId !== sender),
+      { threadId: sender, title: action.from!.title },
+    ],
   };
 }
 

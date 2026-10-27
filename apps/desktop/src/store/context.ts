@@ -18,6 +18,7 @@ export type ProjectionPrefs = Pick<
   | 'simplifyNeedsFirst'
   | 'simplifyRules'
   | 'whileWorking'
+  | 'turnSpine'
 >;
 
 /**
@@ -45,6 +46,7 @@ export const projectionPrefs = ({
   simplifyNeedsFirst,
   simplifyRules,
   whileWorking,
+  turnSpine,
 }: ProjectionPrefs): ProjectionPrefs => ({
   goals,
   driftGuard,
@@ -59,6 +61,7 @@ export const projectionPrefs = ({
   simplifyNeedsFirst,
   simplifyRules,
   whileWorking,
+  turnSpine,
 });
 
 /**

@@ -73,7 +73,10 @@ export interface TurnReport {
   /** The turn it was made in: one past the last idle record's `turn`. Unset on reports saved before turns were counted. */
   turn?: number;
   by: Provider;
-  decisions: string[];
+  /** Plain strings on reports from before decisions named their step; `reportItems` reads both. */
+  decisions: (string | ReportItem)[];
+  /** Gaps in your request it filled for you; unset on reports from before assumptions, or with the turn spine off. */
+  assumptions?: ReportItem[];
   left: string[];
   /** The one thing that needs you, if anything. */
   question?: string;
@@ -91,7 +94,7 @@ export interface TurnReport {
 
 export type SubThreadStatus = (typeof SUB_THREAD_STATUSES)[number];
 
-/** What a sub-thread's agent told the thread that started it (`report_to_parent`): its parent's note renders it instead of an excerpt. */
+/** What a sub-thread's agent told the thread that started it (`report_to_parent`): its parent's report row renders it instead of an excerpt. */
 export interface ParentReport {
   at: number;
   /** The activity's length when it was made: past the turn's `start` (the message that began it), it is that turn's. */
@@ -121,6 +124,31 @@ export interface SubReport {
   isDelivered?: true;
   /** The `report_to_parent` it came from; unset for an excerpt, a PR event or a reply. */
   report?: ParentReport;
+}
+
+/** A decision or assumption from `report_turn`, on the plan step it was made on: `step` is that step's title, as in update_plan. */
+export interface ReportItem {
+  text: string;
+  step?: string;
+}
+
+/** Where the agent changed its plan in a turn (update_plan dropped or retitled steps): what it dropped, why, and `at`, the plan position of the steps that replaced them. */
+export interface Pivot {
+  /** Unset until the agent says; update_plan asks once. */
+  why?: string;
+  dropped: string[];
+  at: number;
+  /** The turn it was made in, counted like `TurnReport.turn`: a thread keeps only the latest turn's. */
+  turn: number;
+}
+
+/** A gap in your request the agent filled without asking ("Assumed timestamps are UTC"), from a `report_turn`. */
+export interface Assumption {
+  id: string;
+  text: string;
+  /** The report's turn it came from: the card shows this turn's under Assumptions, older open ones under Still open. */
+  turn: number;
+  state: 'open' | 'accepted' | 'changed';
 }
 
 /** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
@@ -526,8 +554,12 @@ export interface Thread {
   report?: TurnReport;
   /** A sub-thread's latest `report_to_parent`. */
   parentReport?: ParentReport;
-  /** Threads that sent this one a message with `expectReply`: its next turn end goes to each as a note, then this clears. */
+  /** Threads that sent this one a message with `expectReply`: its next turn end goes to each as a reply, then this clears. */
   replyTo?: { threadId: string; title: string }[];
+  /** What the agent filled in that you didn't specify, from every report, kept until you accept or change each one. */
+  assumptions?: Assumption[];
+  /** The latest turn's plan changes, for its spine on the end-of-turn card. */
+  pivots?: Pivot[];
   /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
   idle?: IdleCheck;
   /** Where the latest turn began (an `activity` index) and whether another thread or an automated event began it, not you. */
@@ -892,11 +924,35 @@ export const SPACE_ICON_NAMES = [
 ] as const;
 export type SpaceIconName = (typeof SPACE_ICON_NAMES)[number];
 
+export const SPACE_COLOR_NAMES = [
+  'green',
+  'blue',
+  'violet',
+  'amber',
+  'pink',
+  'teal',
+  'orange',
+  'red',
+] as const;
+export type SpaceColorName = (typeof SPACE_COLOR_NAMES)[number];
+/** `none` turns the sidebar halo off; unset picks one from the id (`spaceColor`). */
+export type SpaceColor = SpaceColorName | 'none';
+
+export const SPACE_HALO_MOTIONS = ['breathe', 'drift', 'still'] as const;
+export type SpaceHaloMotion = (typeof SPACE_HALO_MOTIONS)[number];
+
 /** A profile. Its Claude Code and Codex accounts are linked by id in the desktop host (`AccountLinks`), not stored here. */
 export interface Space {
   id: string;
   name: string;
   icon: SpaceIconName;
+  color?: SpaceColor;
+  /** How the halo moves; unset is `breathe`. */
+  haloMotion?: SpaceHaloMotion;
+  /** The halo's knobs in percent, clamped and defaulted by `HALO_KNOBS` (src/haloShape.ts). */
+  haloReach?: number;
+  haloRaggedness?: number;
+  haloIntensity?: number;
   /** GAP: demo plan names until usage reads the linked account's detected plan; empty for profiles made in Settings. */
   plans: Record<Provider, string>;
   /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */
@@ -918,6 +974,7 @@ export const DEFAULT_SPACES: Space[] = [
     id: 'latitude',
     name: 'Latitude',
     icon: 'work',
+    color: 'amber',
     plans: { claude: 'Team', codex: 'Business' },
     github: '',
   },
@@ -925,6 +982,7 @@ export const DEFAULT_SPACES: Space[] = [
     id: 'personal',
     name: 'Personal',
     icon: 'home',
+    color: 'green',
     plans: { claude: 'Max', codex: 'Plus' },
     github: '',
   },
@@ -932,6 +990,7 @@ export const DEFAULT_SPACES: Space[] = [
     id: 'liane',
     name: 'Liane',
     icon: 'layers',
+    color: 'violet',
     plans: { claude: 'Max', codex: 'Plus' },
     github: '',
   },
