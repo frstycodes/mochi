@@ -11,7 +11,12 @@ import { HandedCriterion } from './SubThreads';
 import { subThreadsOf } from '../reorder';
 import { useHarness } from '../store';
 import { VerdictIcon } from './VerdictChip';
-import { failureLine, verdictHeading, type Verdict } from './verdict';
+import {
+  failureLine,
+  TONE_CLASS,
+  verdictHeading,
+  type Verdict,
+} from './verdict';
 
 /**
  * The goal at the top of the summary: Mochi's verdict (the sidebar chip's words), the outcome, then what done means with each
@@ -165,13 +170,6 @@ function StatusLine({
     </p>
   );
 }
-
-const TONE_CLASS = {
-  success: 'text-success',
-  warning: 'text-warning',
-  destructive: 'text-destructive',
-  muted: 'text-muted-foreground',
-} satisfies Record<Verdict['tone'], string>;
 
 /** The outcome itself, the panel's headline. */
 export function SummaryGoalText({ className, ...props }: ComponentProps<'p'>) {
