@@ -148,6 +148,7 @@ export function launchConfigs(launch: unknown): RunTarget[] {
       runtimeExecutable,
       runtimeArgs = [],
       port,
+      env,
     } = c as Record<string, unknown>;
     if (
       typeof name !== 'string' ||
@@ -155,9 +156,10 @@ export function launchConfigs(launch: unknown): RunTarget[] {
       !Array.isArray(runtimeArgs)
     )
       return [];
-    const command = [runtimeExecutable, ...runtimeArgs.map(String)]
-      .map(shellQuote)
-      .join(' ');
+    const command = [
+      ...envAssignments(env),
+      ...[runtimeExecutable, ...runtimeArgs.map(String)].map(shellQuote),
+    ].join(' ');
     return [
       {
         name,
@@ -167,6 +169,17 @@ export function launchConfigs(launch: unknown): RunTarget[] {
       },
     ];
   });
+}
+
+/** `env` as `NAME=value` prefixes, the one form sh, bash, zsh and fish (3.1+) all take; names a shell can't assign are dropped. */
+function envAssignments(env: unknown) {
+  if (!env || typeof env !== 'object') return [];
+  return Object.entries(env).flatMap(([name, value]) =>
+    /^[A-Za-z_]\w*$/.test(name) &&
+    (typeof value === 'string' || typeof value === 'number')
+      ? [`${name}=${shellQuote(String(value))}`]
+      : [],
+  );
 }
 
 function shellQuote(arg: string) {
