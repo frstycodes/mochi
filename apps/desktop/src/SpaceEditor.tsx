@@ -5,23 +5,10 @@ import { Input } from '@/components/ui/input';
 import { SPACE_ICON_NAMES, type Space } from './model';
 import { updateProfile } from './profiles';
 import { openSubpage } from './routes/nav';
-import {
-  HaloMotionPicker,
-  IconPicker,
-  SpaceColorPicker,
-} from './settings/sections/profiles';
-import {
-  HALO_KNOB_KEYS,
-  HALO_KNOBS,
-  haloKnob,
-  haloMotion,
-  isHaloMotion,
-  type HaloKnob,
-} from './haloShape';
-import { Slider } from '@/components/ui/slider';
+import { IconPicker, SpaceColorPicker } from './settings/sections/profiles';
 import { isSpaceColor, spaceColor } from './spaceColor';
 
-/** The profile's name, icon and halo (colour, motion, reach, raggedness, intensity), edited in place from the sidebar like Arc's space editor; the rest stays in Settings. */
+/** The profile's name, icon and halo (colour), edited in place from the sidebar like Arc's space editor; the rest stays in Settings. */
 export function SpaceEditor({ space }: { space: Space }) {
   return (
     <div className="flex w-72 flex-col gap-4">
@@ -47,23 +34,6 @@ export function SpaceEditor({ space }: { space: Space }) {
           }}
         />
       </Field>
-      {spaceColor(space) !== 'none' && (
-        <Field>
-          <FieldLabel htmlFor="space-editor-motion">Motion</FieldLabel>
-          <HaloMotionPicker
-            id="space-editor-motion"
-            value={haloMotion(space)}
-            onChange={(motion) => {
-              if (isHaloMotion(motion))
-                updateProfile(space.id, { haloMotion: motion });
-            }}
-          />
-        </Field>
-      )}
-      {spaceColor(space) !== 'none' &&
-        HALO_KNOB_KEYS.map((knob) => (
-          <KnobField key={knob} space={space} knob={knob} />
-        ))}
       <Button
         variant="ghost"
         size="xs"
@@ -73,34 +43,6 @@ export function SpaceEditor({ space }: { space: Space }) {
         All profile settings
       </Button>
     </div>
-  );
-}
-
-// Saves per step while dragging, so the halo follows the thumb; a few dozen values at most per drag.
-function KnobField({ space, knob }: { space: Space; knob: HaloKnob }) {
-  const { label, min, max, step } = HALO_KNOBS[knob];
-  const value = haloKnob(space, knob);
-  const id = `space-editor-${knob}`;
-  return (
-    <Field>
-      <div className="flex items-center justify-between">
-        <FieldLabel htmlFor={id}>{label}</FieldLabel>
-        <span className="type-caption text-muted-foreground tabular-nums">
-          {value}%
-        </span>
-      </div>
-      <Slider
-        id={id}
-        aria-label={label}
-        min={min}
-        max={max}
-        step={step}
-        value={[value]}
-        onValueChange={([next]) =>
-          next !== value && updateProfile(space.id, { [knob]: next })
-        }
-      />
-    </Field>
   );
 }
 

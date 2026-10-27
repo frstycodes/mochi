@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
-import { cn } from '@/lib/utils';
 import type { Space } from './model';
-import { HALO, haloAlpha, haloKnob, haloMotion, haloSpan } from './haloShape';
+import { HALO, HALO_SPAN, haloAlpha } from './haloShape';
 import { idSeed, spaceColor, spaceColorCss } from './spaceColor';
 
 /**
@@ -35,16 +34,12 @@ export function SpaceHalo({
 type DeviceSize = { width: number; height: number };
 
 // Only the current layer draws and moves; the others keep their last frame to fade out on, and redraw when they come back.
-// Each is as tall as its own profile's reach allows, so a high reach never makes every profile draw a tall canvas.
 function HaloLayer({ space, isCurrent }: { space: Space; isCurrent: boolean }) {
   const layer = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLCanvasElement>(null);
   const size = useDeviceSize(layer);
   const color = spaceColorCss(spaceColor(space));
-  const isReduced = useReducedMotionConfig();
-  const motion = isReduced ? 'still' : haloMotion(space);
-  const raggedness = haloKnob(space, 'haloRaggedness');
-  const intensity = haloKnob(space, 'haloIntensity') / 100;
+  const isStill = useReducedMotionConfig();
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas || !isCurrent || !size || !color) return;
@@ -52,11 +47,10 @@ function HaloLayer({ space, isCurrent }: { space: Space; isCurrent: boolean }) {
     const draw = (time: number) =>
       drawHalo(canvas, size, seed, color, {
         time,
-        shift: motion === 'drift' ? time * HALO.drift : 0,
-        raggedness,
+        shift: time * HALO.drift,
       });
     draw(0);
-    if (motion === 'still') return;
+    if (isStill) return;
     let frame = 0;
     let start: number | undefined;
     let last = 0;
@@ -69,23 +63,17 @@ function HaloLayer({ space, isCurrent }: { space: Space; isCurrent: boolean }) {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [isCurrent, size, color, space.id, motion, raggedness]);
+  }, [isCurrent, size, color, space.id, isStill]);
   return (
     <div
       ref={layer}
       className="absolute inset-x-0 bottom-0 transition-opacity duration-200"
       style={{
-        height: `${haloSpan(space) * 100}%`,
-        opacity: isCurrent && color ? intensity : 0,
+        height: `${HALO_SPAN * 100}%`,
+        opacity: isCurrent && color ? HALO.intensity / 100 : 0,
       }}
     >
-      <canvas
-        ref={ref}
-        className={cn(
-          'absolute inset-0 size-full',
-          isCurrent && motion === 'breathe' && 'halo-breathe',
-        )}
-      />
+      <canvas ref={ref} className="absolute inset-0 size-full" />
     </div>
   );
 }
@@ -98,7 +86,7 @@ function drawHalo(
   { width, height }: DeviceSize,
   seed: number,
   color: string,
-  at: { time: number; shift: number; raggedness: number },
+  at: { time: number; shift: number },
 ) {
   if (canvas.width !== width) canvas.width = width;
   if (canvas.height !== height) canvas.height = height;

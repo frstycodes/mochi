@@ -38,7 +38,6 @@ import {
   GitHubAccountSelect,
   IconPicker,
   SpaceColorPicker,
-  HaloMotionPicker,
 } from './sections/profiles';
 import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
@@ -407,8 +406,6 @@ export function SettingControl({
       return <IconPicker id={id} value={value} onChange={onChange} />;
     case 'spaceColor':
       return <SpaceColorPicker id={id} value={value} onChange={onChange} />;
-    case 'haloMotion':
-      return <HaloMotionPicker id={id} value={value} onChange={onChange} />;
     case 'github':
       return (
         <GitHubAccountSelect id={rowId} value={value} onChange={onChange} />

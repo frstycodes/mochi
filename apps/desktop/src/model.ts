@@ -897,21 +897,12 @@ export type SpaceColorName = (typeof SPACE_COLOR_NAMES)[number];
 /** `none` turns the sidebar halo off; unset picks one from the id (`spaceColor`). */
 export type SpaceColor = SpaceColorName | 'none';
 
-export const SPACE_HALO_MOTIONS = ['breathe', 'drift', 'still'] as const;
-export type SpaceHaloMotion = (typeof SPACE_HALO_MOTIONS)[number];
-
 /** A profile. Its Claude Code and Codex accounts are linked by id in the desktop host (`AccountLinks`), not stored here. */
 export interface Space {
   id: string;
   name: string;
   icon: SpaceIconName;
   color?: SpaceColor;
-  /** How the halo moves; unset is `breathe`. */
-  haloMotion?: SpaceHaloMotion;
-  /** The halo's knobs in percent, clamped and defaulted by `HALO_KNOBS` (src/haloShape.ts). */
-  haloReach?: number;
-  haloRaggedness?: number;
-  haloIntensity?: number;
   /** GAP: demo plan names until usage reads the linked account's detected plan; empty for profiles made in Settings. */
   plans: Record<Provider, string>;
   /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */
