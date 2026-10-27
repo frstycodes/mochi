@@ -18,6 +18,8 @@ import type { ReactorCommand } from './commands.ts';
 export interface ReactorState {
   readonly threads: ReadonlyArray<Thread>;
   readonly queue: ReadonlyArray<QueueItem>;
+  /** The app clock, for what expires on it, like an orchestration grant (`wakingReports`). */
+  readonly now: number;
   readonly context: ProjectionContext;
   readonly boot: string;
 }
@@ -53,7 +55,7 @@ export const subThreadWakes: Rule = (_event, _before, after) =>
   dueWakes(after).map((t) => ({
     type: 'subthread.wake',
     key: `wake:${t.id}:${hash(
-      wakingReports(t)
+      wakingReports(t, after.now)
         .map((e) => `${e.at} ${JSON.stringify(e.subReport)} ${e.text}`)
         .join('\n'),
     )}`,

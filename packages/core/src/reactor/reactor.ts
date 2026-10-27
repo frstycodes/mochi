@@ -26,9 +26,15 @@ export const runReactor = (
       (key) => (enqueued.delete(key), onForget(key)),
     );
     const boot = randomUUID();
-    const stateOf = ({ threads, queue, context }: Domain): ReactorState => ({
+    const stateOf = ({
       threads,
       queue,
+      now,
+      context,
+    }: Domain): ReactorState => ({
+      threads,
+      queue,
+      now,
       context,
       boot,
     });

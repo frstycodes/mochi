@@ -36,7 +36,7 @@ const state = (
   queue: QueueItem[] = [],
   boot = 'b1',
   context = DEFAULT_CONTEXT,
-): ReactorState => ({ threads, queue, context, boot });
+): ReactorState => ({ threads, queue, now: 0, context, boot });
 const event = (
   type: string,
   threadId: string | null,

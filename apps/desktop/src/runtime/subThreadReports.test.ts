@@ -426,7 +426,7 @@ test('a no_change report logs its row but never wakes the parent, alone or for a
   assert.equal(row.subReport.status, 'no_change');
   assert.equal(row.subReport.isQuiet, true);
   assert.equal(row.subReport.isUrgent, undefined);
-  assert.deepEqual(wakingReports(thread(s, parent)), []);
+  assert.deepEqual(wakingReports(thread(s, parent), s.now), []);
   assert.deepEqual(
     dueWakes(s),
     [],
@@ -674,4 +674,78 @@ test('after a restart, each stopped sub-thread reports it to its parent; that al
     [parent],
     "Piece A's report was due before the quit",
   );
+});
+
+/** The parent's agent asked for an orchestration grant in your turn; `answer` is what you did with it. */
+function withGrant(
+  s: State,
+  parent: string,
+  answer?: 'allow' | 'deny' | 'revoke',
+) {
+  const grantId = `${parent}-g1`;
+  s = run(s, {
+    type: 'grant-add',
+    threadId: parent,
+    grant: {
+      id: grantId,
+      maxThreads: 3,
+      models: ['claude-sonnet-5-5'],
+      minutes: 60,
+      reason: 'Phase 2 once these report',
+      state: 'pending',
+      started: [],
+    },
+    by: 'claude',
+  });
+  if (answer === 'allow' || answer === 'revoke')
+    s = run(s, {
+      type: 'grant-answer',
+      threadId: parent,
+      grantId,
+      answer: 'allow',
+    });
+  if (answer === 'revoke' || answer === 'deny')
+    s = run(s, { type: 'grant-answer', threadId: parent, grantId, answer });
+  return s;
+}
+
+const restart = (s: State) =>
+  ({ ...s, ...restoreSavedThreads(toSaved(s)) }) as State;
+
+test('after a restart, a parent with an active orchestration grant wakes on its own to carry on', () => {
+  let { s, parent, a, b, thread } = family();
+  s = ended(s, parent);
+  s = withGrant(s, parent, 'allow');
+  const restored = restart(s);
+  assert.deepEqual(
+    dueWakes(restored).map((t) => t.id),
+    [parent],
+    'the grant lets it run phases without you',
+  );
+  assert.deepEqual(
+    wakingReports(thread(restored, parent), restored.now).map(
+      (e) => e.subReport.threadId,
+    ),
+    [a, b],
+    'both restart reports go with the wake',
+  );
+});
+
+test('after a restart, a parent without a usable grant waits for you: none, pending, denied, revoked or expired', () => {
+  const cases: [string, (s: State, parent: string) => State][] = [
+    ['no grant', (s) => s],
+    ['pending', (s, p) => withGrant(s, p)],
+    ['denied', (s, p) => withGrant(s, p, 'deny')],
+    ['revoked', (s, p) => withGrant(s, p, 'revoke')],
+    [
+      'expired',
+      // The clock moves on without ticks: an hour of ticks would also report the mid-turn sub-threads stalled, which wakes it anyway.
+      (s, p) => ({ ...withGrant(s, p, 'allow'), now: s.now + 60 }),
+    ],
+  ];
+  for (const [label, give] of cases) {
+    let { s, parent } = family();
+    s = ended(s, parent);
+    assert.deepEqual(dueWakes(restart(give(s, parent))), [], label);
+  }
 });

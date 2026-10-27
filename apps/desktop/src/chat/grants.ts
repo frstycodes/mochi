@@ -20,19 +20,19 @@ export function grantStatus(
   return 'active';
 }
 
-export function findGrant(thread: Thread, id: string) {
+export function findGrant(thread: Pick<Thread, 'activity'>, id: string) {
   return thread.activity.find((e) => e.grant?.id === id)?.grant;
 }
 
 /** The thread's latest allowed grant, usable or not; a newer allowed one replaces it, so there is at most one. */
-export const allowedGrant = (thread: Thread) =>
+export const allowedGrant = (thread: Pick<Thread, 'activity'>) =>
   thread.activity.findLast((e) => e.grant?.state === 'active')?.grant;
 
 export const pendingGrant = (thread: Thread) =>
   thread.activity.find((e) => e.grant?.state === 'pending')?.grant;
 
 /** The grant an agent-driven turn may start a thread on now, if any. */
-export function usableGrant(thread: Thread, now: number) {
+export function usableGrant(thread: Pick<Thread, 'activity'>, now: number) {
   const grant = allowedGrant(thread);
   return grant && grantStatus(grant, now) === 'active' ? grant : undefined;
 }
