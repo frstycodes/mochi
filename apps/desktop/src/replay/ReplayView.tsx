@@ -22,6 +22,7 @@ import {
   X,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import {
   Empty,
   EmptyDescription,
@@ -712,7 +713,7 @@ function ReplayFiles({
       >
         <div className="flex flex-col gap-0.5 px-1.5 pb-2">
           {files === undefined && checkpoint ? (
-            <FileRowsSkeleton />
+            <SkeletonRows shape="file" count={3} label="Loading files" />
           ) : files?.length ? (
             files.map((f) => <DiffFileRow key={f.path} file={f} />)
           ) : touched.length ? (
@@ -794,19 +795,6 @@ function TouchedRow({ path }: { path: string }) {
       />
       <FilePath path={path} />
     </div>
-  );
-}
-
-function FileRowsSkeleton() {
-  return (
-    <>
-      {['w-3/4', 'w-1/2', 'w-2/3'].map((w) => (
-        <div key={w} className="flex h-7 items-center gap-2 px-2">
-          <Skeleton className="size-4 rounded-sm" />
-          <Skeleton className={cn('h-2.5', w)} />
-        </div>
-      ))}
-    </>
   );
 }
 

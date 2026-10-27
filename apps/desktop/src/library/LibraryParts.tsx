@@ -1,3 +1,4 @@
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState, type ReactNode } from 'react';
 import { CheckCircle, Download, Login, Refresh, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,7 @@ import { IconImage } from '../IconImage';
 import type { Space } from '../model';
 import { useProfiles } from '../profiles';
 import { timeAgo } from '../progress';
-import { SettingsCard, SettingsRow, SkeletonRows } from '../settings/parts';
+import { SettingsCard, SettingsRow } from '../settings/parts';
 import { HARNESSES } from '../settings/harnesses';
 import { OverflowIcon, ProviderMark, SpaceIcon } from '../ui';
 import { isSameServer } from '@mochi/domain/library/connectors';

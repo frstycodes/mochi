@@ -1,3 +1,4 @@
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState } from 'react';
 import { useNow } from '../useNow';
 import {
@@ -54,12 +55,7 @@ import {
 } from '@/components/ui/tooltip';
 import { timeAgo } from '../progress';
 import { openSettings } from '../routes/nav';
-import {
-  SettingsCard,
-  SettingsRow,
-  SettingsSection,
-  SkeletonRows,
-} from '../settings/parts';
+import { SettingsCard, SettingsRow, SettingsSection } from '../settings/parts';
 import { useHarnessSelector } from '../store';
 import { OverflowIcon } from '../ui';
 import { ConnectAccountDialog } from './ConnectDialog';

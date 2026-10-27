@@ -1,3 +1,4 @@
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState } from 'react';
 import {
   CheckCircle,
@@ -23,12 +24,7 @@ import { toast } from '@/toast/store';
 import { useDebounced } from '@/hooks/useDebounced';
 import { host } from '../host';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
-import {
-  SettingsCard,
-  SettingsRow,
-  SettingsSection,
-  SkeletonRows,
-} from '../settings/parts';
+import { SettingsCard, SettingsRow, SettingsSection } from '../settings/parts';
 import { ProviderMark } from '../ui';
 import { AddSkillsDialog } from './AddSkillsDialog';
 import { LibraryPage, type PagePart } from './LibraryPage';

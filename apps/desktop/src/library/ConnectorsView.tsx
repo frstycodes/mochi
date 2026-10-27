@@ -1,14 +1,10 @@
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState } from 'react';
 import { CheckCircle, ChevronRight, Plus } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { openSubpage } from '../routes/nav';
-import {
-  SettingsCard,
-  SettingsRow,
-  SettingsSection,
-  SkeletonRows,
-} from '../settings/parts';
+import { SettingsCard, SettingsRow, SettingsSection } from '../settings/parts';
 import { ConnectAccountDialog } from './ConnectDialog';
 import {
   CONNECTORS,

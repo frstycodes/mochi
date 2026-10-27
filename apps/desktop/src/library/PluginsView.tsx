@@ -1,3 +1,4 @@
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
@@ -32,7 +33,6 @@ import {
   SettingsRow,
   SettingsSection,
   SettingsSelect,
-  SkeletonRows,
 } from '../settings/parts';
 import { OverflowIcon } from '../ui';
 import { FEATURED_MARKETPLACES, type MarketplaceCatalog } from './library';

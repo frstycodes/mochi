@@ -1,3 +1,4 @@
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   ChevronDown,
@@ -78,7 +79,6 @@ import {
   SettingsRow,
   SettingsSection,
   settingControlId,
-  SkeletonRows,
 } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
 import { ANIMATIONS, type AnimationArea } from '../settingOptions';
