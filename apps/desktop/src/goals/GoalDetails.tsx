@@ -12,6 +12,7 @@ import { clock } from '../progress';
 import { PROVIDER_NAME } from '../rewind/handoff';
 import { CriteriaList } from './CriteriaList';
 import { revisionDiff } from './edit';
+import { reportItems } from './ledger';
 import { currentReport } from './report';
 import { ReportList, ReportQuestion } from './ReportCard';
 
@@ -66,7 +67,10 @@ function LatestReport({ thread }: { thread: Thread }) {
         ) : (
           <ReportQuestion report={report} />
         )}
-        <ReportList label="Decided" items={report.decisions} />
+        <ReportList
+          label="Decided"
+          items={reportItems(report.decisions).map((d) => d.text)}
+        />
         <ReportList label="Left" items={report.left} />
       </div>
     </DetailSection>

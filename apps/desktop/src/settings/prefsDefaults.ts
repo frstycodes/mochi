@@ -43,6 +43,8 @@ export interface Prefs {
   whileWorking: 'queue' | 'steer';
   /** After a turn, the report's first next-move answer in the empty composer (`suggestedReply`). */
   promptSuggestions: boolean;
+  /** The end-of-turn card's turn spine: agents report assumptions and why their plan changed, the card shows them on the plan. Read at session start by agents. */
+  turnSpine: boolean;
   simplifyLength: 'short' | 'detailed';
   simplifyNeedsFirst: boolean;
   simplifyRules: string;
@@ -130,6 +132,7 @@ export const DEFAULT_PREFS: Prefs = {
   driftGuard: true,
   whileWorking: 'steer',
   promptSuggestions: true,
+  turnSpine: true,
   simplifyLength: 'short',
   simplifyNeedsFirst: true,
   simplifyRules: '',

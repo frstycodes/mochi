@@ -1,5 +1,7 @@
 import { isMet, type Thread, type TurnReport } from '../model.ts';
 import { openTurn } from '../chat/turnChanges.ts';
+import { prefsNow } from '../store/context.ts';
+import { openAssumptions } from './ledger.ts';
 import type { RefStatus } from '@mochi/domain/chat/refs';
 
 /** The latest report while it still describes the thread: it isn't working, and you haven't written since. */
@@ -62,12 +64,21 @@ export function showsVerdictCard(t: Thread) {
   return !lastYou || lastYou.at <= since;
 }
 
-/** The sidebar card's one line from the report: the question first, then readiness, then what's left. */
-export function reportHeadline(t: Thread) {
+const PLURAL = new Intl.PluralRules('en');
+const ASSUMPTION_WORDS = { one: 'assumption', other: 'assumptions' };
+
+/** The sidebar card's one line from the report: the question first, then open assumptions (turn spine on), readiness, what's left. */
+export function reportHeadline(
+  t: Thread,
+  isSpineOn = prefsNow().turnSpine !== false,
+) {
   const view = currentReport(t);
   if (!view) return null;
   if (view.report.question && !view.report.isSuperseded)
     return `Needs you: ${view.report.question}`;
+  const toCheck = isSpineOn ? openAssumptions(t.assumptions).length : 0;
+  if (toCheck)
+    return `${toCheck} ${ASSUMPTION_WORDS[PLURAL.select(toCheck) === 'one' ? 'one' : 'other']} to check`;
   if (view.isReady)
     return NEXT_STEP_TITLES[nextStep(t.prs.map((p) => p.state))];
   if (view.criteria.length)

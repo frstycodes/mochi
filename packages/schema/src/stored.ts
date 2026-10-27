@@ -122,6 +122,7 @@ const prefsFields = {
   driftGuard: B,
   whileWorking: Schema.Literals(['queue', 'steer']),
   promptSuggestions: B,
+  turnSpine: B,
   simplifyLength: Schema.Literals(['short', 'detailed']),
   simplifyNeedsFirst: B,
   simplifyRules: S,

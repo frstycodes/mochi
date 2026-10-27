@@ -5,11 +5,8 @@ import {
   usePromptInputController,
 } from '@/components/ai-elements/prompt-input';
 import type { Assumption, Thread } from '../../model';
-import {
-  AssumptionList,
-  changeDraft,
-  splitAssumptions,
-} from '../../goals/Assumptions';
+import { AssumptionList, splitAssumptions } from '../../goals/Assumptions';
+import { changeDraft } from '../../goals/ledger';
 import { TurnSpine, type SpineNode } from '../../goals/Spine';
 import {
   NextMoveActions,

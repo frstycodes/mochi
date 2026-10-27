@@ -154,6 +154,3 @@ function AssumptionIcon({ state }: { state: Assumption['state'] }) {
     );
   return <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />;
 }
-
-/** What Change puts in the message box, for you to finish. */
-export const changeDraft = (a: Assumption) => `About "${a.text}": `;

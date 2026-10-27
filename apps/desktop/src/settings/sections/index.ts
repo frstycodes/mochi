@@ -114,6 +114,12 @@ export const SETTINGS_SECTIONS = [
           'prompt suggestion autocomplete ghost placeholder tab next message composer',
       },
       {
+        id: 'turnSpine',
+        label: 'Show assumptions on the plan',
+        keywords:
+          'turn spine assumptions decisions pivots plan report end of turn card accept change',
+      },
+      {
         id: 'concurrency',
         label: 'Agents running at once',
         keywords: 'concurrency limit parallel',

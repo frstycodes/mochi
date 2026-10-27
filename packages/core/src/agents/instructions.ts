@@ -4,12 +4,28 @@ import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 export function mochiInstructions({
   isGoalsOff,
   isSettingsChat,
+  isSpineOff,
 }: MochiScope = {}) {
   if (isSettingsChat) return SETTINGS_CHAT_INSTRUCTIONS;
-  return isGoalsOff
+  const main = isSpineOff
     ? MOCHI_INSTRUCTIONS
-    : `${MOCHI_INSTRUCTIONS}\n\n${GOAL_INSTRUCTIONS}`;
+    : MOCHI_INSTRUCTIONS.replace(TURN_REPORT, SPINE_TURN_REPORT).replace(
+        PLAN_STATUSES,
+        `${PLAN_WHY} ${PLAN_STATUSES}`,
+      );
+  return isGoalsOff ? main : `${main}\n\n${GOAL_INSTRUCTIONS}`;
 }
+
+const TURN_REPORT =
+  'Its arguments: summary, decisions (a list), left (a list),';
+
+const PLAN_STATUSES = 'Statuses: pending, in_progress, completed.';
+const PLAN_WHY =
+  'When a resent plan drops or renames steps, pass "why": one line on why the plan changed.';
+
+/** With the turn spine on (Settings), each decision and assumption names its plan step, and assumptions are asked for. */
+const SPINE_TURN_REPORT =
+  "Its arguments: summary, decisions (a list of {text, step}, step being the plan step's title it was made on), assumptions (a list of {text, step}: what the user's request didn't specify that you chose for them, each stated as what you assumed, like \"Assumed timestamps are UTC\"; empty when you assumed nothing; ordinary choices within your remit stay in decisions), left (a list),";
 
 const SETTINGS_CHAT_INSTRUCTIONS = `You are Mochi's settings assistant, in Mochi's Settings. Mochi is a desktop app that runs Claude Code and Codex agents in threads. Here you only help the user read and change Mochi's own settings; you have no files, shell or browser.
 
