@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   ChangeList,
   type ChangeActions,
@@ -32,7 +31,7 @@ import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
 import { cn } from '@/lib/utils';
-import { TooltipIconButton } from '../ui';
+import { ModeToggle, TooltipIconButton, type Mode } from '../ui';
 import type { Thread } from '../model';
 import { useDispatch } from '../store';
 import { DiffStat } from '../WorkLog';
@@ -43,6 +42,21 @@ import {
   usePaneMenu,
 } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
+
+export const DIFF_STYLES = [
+  {
+    value: 'unified',
+    label: 'Unified diff',
+    hint: 'Click for side by side',
+    icon: <Rows />,
+  },
+  {
+    value: 'split',
+    label: 'Split diff',
+    hint: 'Click for one column',
+    icon: <Columns />,
+  },
+] as const satisfies readonly [Mode<DiffStyle>, Mode<DiffStyle>];
 
 export function ChangesTab({ thread, tab }: PaneTabProps) {
   const cwd = useWorktreePath(thread.id) ?? threadCwd(thread);
@@ -125,22 +139,12 @@ function Changes({
           </span>
         )}
         <AskAboutHunk threadId={thread.id} files={files} />
-        <ToggleGroup
-          type="single"
-          size="sm"
-          variant="outline"
-          spacing={0}
+        <ModeToggle
           value={diffStyle}
-          onValueChange={(v) => v && setPrefs({ diffStyle: v as DiffStyle })}
-          aria-label="Diff layout"
-        >
-          <ToggleGroupItem value="unified" aria-label="Unified diff">
-            <Rows />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="split" aria-label="Split diff">
-            <Columns />
-          </ToggleGroupItem>
-        </ToggleGroup>
+          modes={DIFF_STYLES}
+          onSelect={(v) => setPrefs({ diffStyle: v })}
+          className="text-muted-foreground"
+        />
         <WorktreeMenu
           cwd={cwd}
           base={thread.repo?.base}

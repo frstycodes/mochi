@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useState, type ReactNode } from 'react';
-import { ArrowUp, Columns, Rows, X } from '@/icons';
+import { ArrowUp, X } from '@/icons';
 import {
   ConversationContent,
   Conversation,
@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ComposerCard } from '../Composer';
 import { FileTree } from '../files/FileTree';
 import { FilePath } from '../files/FileView';
@@ -52,6 +51,7 @@ import type { Thread } from '../model';
 import {
   ChangesSkeleton,
   DiffError,
+  DIFF_STYLES,
   NoChanges,
   revertRequest,
 } from '../pane/ChangesTab';
@@ -68,7 +68,7 @@ import { setPrefs, usePrefs } from '../settings/prefs';
 import { chatFor } from '../store/sidechat';
 import { useHarness } from '../store';
 import { DiffStat } from '../WorkLog';
-import { TooltipIconButton } from '../ui';
+import { ModeToggle, TooltipIconButton } from '../ui';
 import { REMOTE_SIDE_CHAT_TAB } from './commands';
 import { useMachines } from './useMachines';
 import { queryKeys } from '../queryKeys';
@@ -111,7 +111,7 @@ export function RemotePane({
       <PaneSlots>
         <header
           data-pane-header
-          className="flex h-9 shrink-0 items-center gap-0.5 pr-1.5 pl-3 select-none"
+          className="flex h-9 shrink-0 items-center gap-0.5 pl-3 select-none"
         >
           <PaneTitleSlot>
             <Icon
@@ -125,7 +125,8 @@ export function RemotePane({
             label={`Close ${title}`}
             hint={`Reads from ${machine.name} again when you open it`}
             onClick={onClose}
-            className="text-muted-foreground"
+            data-pane-edge
+            className="mr-1.5 text-muted-foreground"
           >
             <X />
           </TooltipIconButton>
@@ -266,22 +267,12 @@ function RemoteChanges({
             />
           </span>
         )}
-        <ToggleGroup
-          type="single"
-          size="sm"
-          variant="outline"
-          spacing={0}
+        <ModeToggle
           value={diffStyle}
-          onValueChange={(v) => v && setPrefs({ diffStyle: v as DiffStyle })}
-          aria-label="Diff layout"
-        >
-          <ToggleGroupItem value="unified" aria-label="Unified diff">
-            <Rows />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="split" aria-label="Split diff">
-            <Columns />
-          </ToggleGroupItem>
-        </ToggleGroup>
+          modes={DIFF_STYLES}
+          onSelect={(v) => setPrefs({ diffStyle: v })}
+          className="text-muted-foreground"
+        />
       </PaneActions>
       {machine.status !== 'online' && <OfflineState machine={machine} />}
       {!!diffQuery.error && !diffQuery.data && (
