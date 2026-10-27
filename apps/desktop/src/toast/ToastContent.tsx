@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from 'react';
-import { CheckCircle, XCircle, Info, Loader, WarningAlt, X } from '@/icons';
+import { CheckCircle, XCircle, Info, Loader, Warning, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Toast, ToastType } from './store';
@@ -68,7 +68,7 @@ const ICONS = {
   default: null,
   success: <CheckCircle className="size-4 text-success" />,
   info: <Info className="size-4 text-info" />,
-  warning: <WarningAlt className="size-4 text-warning" />,
+  warning: <Warning className="size-4 text-warning" />,
   error: <XCircle className="size-4 text-destructive" />,
   loading: (
     <Loader className="size-4 animate-spin text-muted-foreground motion-reduce:animate-[spin_2s_linear_infinite]" />

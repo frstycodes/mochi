@@ -12,11 +12,11 @@ import {
   Play,
   Power,
   Record,
-  StopCircle,
+  Stop,
   Sun,
   Tablet,
   Text,
-  CheckBadge,
+  CheckCircle,
   X,
 } from '@/icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -221,7 +221,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
         >
           <IconSwap id={capture.isRecording ? 'stop' : 'record'}>
             {capture.isRecording ? (
-              <StopCircle className="text-destructive" />
+              <Stop className="text-destructive" />
             ) : (
               <Record />
             )}
@@ -484,7 +484,7 @@ function BuildStatus({
         />
       )}
       {result?.isOk && (
-        <CheckBadge aria-hidden className="size-3.5 shrink-0 text-success" />
+        <CheckCircle aria-hidden className="size-3.5 shrink-0 text-success" />
       )}
       {result && !result.isOk && (
         <XCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />

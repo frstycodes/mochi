@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { Pin } from '@/icons';
+import { Pushpin } from '@/icons';
 import {
   HoverCard,
   HoverCardContent,
@@ -67,7 +67,7 @@ export function ThreadMinimap({
                 key={j}
                 className="flex items-start gap-1.5 type-caption text-muted-foreground"
               >
-                <Pin className="mt-0.5 size-3 shrink-0" aria-hidden />
+                <Pushpin className="mt-0.5 size-3 shrink-0" aria-hidden />
                 <span className="line-clamp-3">{pin}</span>
               </span>
             ))}

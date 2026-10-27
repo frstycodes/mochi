@@ -3,11 +3,11 @@ import {
   ChevronDown,
   ClipboardText,
   Download,
-  Pencil,
+  Edit,
   Import,
-  SearchAlt,
+  Search,
   Star,
-  CheckBadge,
+  CheckCircle,
   Trash,
 } from '@/icons';
 import { toast } from '@/toast/store';
@@ -334,7 +334,7 @@ function Library() {
       {packages.length >= FILTER_FROM && (
         <InputGroup>
           <InputGroupAddon>
-            <SearchAlt />
+            <Search />
           </InputGroupAddon>
           <InputGroupInput
             value={query}
@@ -713,7 +713,7 @@ function ThemeRow({
         >
           {isUsed ? (
             <span className="flex h-6 items-center gap-1 px-2.5 type-meta text-muted-foreground">
-              <CheckBadge aria-hidden className="size-3.5 text-success" />
+              <CheckCircle aria-hidden className="size-3.5 text-success" />
               In use
             </span>
           ) : (
@@ -796,7 +796,7 @@ function CustomThemeActions({
         }
         onClick={() => void edit()}
       >
-        <Pencil />
+        <Edit />
       </TooltipIconButton>
       <TooltipIconButton
         label="Delete"
@@ -878,7 +878,7 @@ function Marketplace() {
     <>
       <InputGroup data-setting-id="themeMarketplace">
         <InputGroupAddon>
-          <SearchAlt />
+          <Search />
         </InputGroupAddon>
         <InputGroupInput
           id={settingControlId('themeSearch')}
@@ -1005,7 +1005,7 @@ function ExtensionRow({ extension }: { extension: MarketplaceExtension }) {
           />
           {isInstalled ? (
             <span className="flex h-6 w-20 items-center justify-end gap-1 type-meta text-muted-foreground">
-              <CheckBadge aria-hidden className="size-3.5 text-success" />
+              <CheckCircle aria-hidden className="size-3.5 text-success" />
               Installed
             </span>
           ) : (

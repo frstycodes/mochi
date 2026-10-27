@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { memo } from 'react';
-import { GlobeAlt } from '@/icons';
+import { Globe } from '@/icons';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { pageKey, usePage } from '../browser/pages';
@@ -100,7 +100,7 @@ function PreviewFrame({
   return (
     <div className="flex min-h-0 shrink flex-col overflow-hidden bg-sidebar">
       <span className="flex items-center gap-1 px-3 py-1 font-mono type-caption text-subtle-foreground">
-        <GlobeAlt className="size-3 shrink-0" />
+        <Globe className="size-3 shrink-0" />
         <span className="truncate">{url}</span>
       </span>
       {!!frame && (

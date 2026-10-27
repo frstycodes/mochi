@@ -3,14 +3,14 @@ import {
   ClockCircle,
   XCircle,
   MinusCircle,
-  CheckBadge,
+  CheckCircle,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { CheckState, PrCheck } from '../host/types/git';
 
 const CHECK = {
-  pass: { icon: CheckBadge, className: 'text-success', label: 'Passed' },
+  pass: { icon: CheckCircle, className: 'text-success', label: 'Passed' },
   fail: { icon: XCircle, className: 'text-destructive', label: 'Failed' },
   pending: { icon: ClockCircle, className: 'text-warning', label: 'Running' },
   skipping: {
@@ -25,7 +25,7 @@ const CHECK = {
   },
 } satisfies Record<
   CheckState,
-  { icon: typeof CheckBadge; className: string; label: string }
+  { icon: typeof CheckCircle; className: string; label: string }
 >;
 
 // Worst state first, so the summary icon is the one that needs you.

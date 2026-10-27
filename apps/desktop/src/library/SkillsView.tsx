@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import {
-  CheckBadge,
+  CheckCircle,
   Download,
-  ExternalLink,
+  ArrowUpRight,
   FileText,
   Folder,
   Import,
-  Pen,
+  Edit,
   Plus,
 } from '@/icons';
 import { GithubMarkIcon } from '@/icons/github';
@@ -160,7 +160,7 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
       action={
         <Button variant="ghost" size="xs" asChild>
           <a href={SKILLS_SH} target="_blank" rel="noreferrer">
-            <ExternalLink data-icon="inline-start" />
+            <ArrowUpRight data-icon="inline-start" />
             skills.sh
           </a>
         </Button>
@@ -211,7 +211,7 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
                       rel="noreferrer"
                       aria-label={`${skill.name} on skills.sh`}
                     >
-                      <ExternalLink />
+                      <ArrowUpRight />
                     </a>
                   </Button>
                   <AddControl
@@ -258,7 +258,7 @@ function AddControl({
   if (isInstalled)
     return (
       <span className="flex h-7 w-24 items-center justify-end gap-1 type-meta text-muted-foreground">
-        <CheckBadge aria-hidden className="size-3.5 text-success" />
+        <CheckCircle aria-hidden className="size-3.5 text-success" />
         In library
       </span>
     );
@@ -296,7 +296,7 @@ function AddSkillMenu({ library }: { library: Library }) {
             From GitHub
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setWriting(true)}>
-            <Pen />
+            <Edit />
             Write a skill
           </DropdownMenuItem>
           <DropdownMenuSeparator />

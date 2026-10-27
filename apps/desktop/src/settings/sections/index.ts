@@ -12,14 +12,13 @@ import {
   GitBranch,
   Info,
   Keyboard,
-  MagicStar,
+  Sparkles,
   Notification,
   Plugin,
   Skill,
   Users,
   Settings,
   ShieldCheck,
-  Stars,
   Terminal,
   type IconComponent,
 } from '@/icons';
@@ -329,7 +328,7 @@ export const SETTINGS_SECTIONS = [
     id: 'models',
     group: 'Agents',
     title: 'Models',
-    icon: MagicStar,
+    icon: Sparkles,
     component: ModelsSection,
     settings: [
       {
@@ -385,7 +384,7 @@ export const SETTINGS_SECTIONS = [
     id: 'simplify',
     group: 'Agents',
     title: 'Simplify',
-    icon: Stars,
+    icon: Sparkles,
     component: SimplifySection,
     settings: [
       {

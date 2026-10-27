@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, WarningAlt } from '@/icons';
+import { ChevronDown, Warning } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { plural } from '@mochi/domain/lib/format';
 import {
@@ -127,7 +127,7 @@ function SwitchBranchContent({
       </DialogHeader>
       {sharers.length > 0 && (
         <p className="flex gap-1.5 text-foreground">
-          <WarningAlt
+          <Warning
             aria-hidden
             className="mt-0.5 size-4 shrink-0 text-warning"
           />

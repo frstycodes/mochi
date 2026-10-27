@@ -1,4 +1,5 @@
 import { account as desktopAccount } from './desktop/account.ts';
+import { updates as desktopUpdates } from './desktop/updates.ts';
 import { agent as desktopAgent } from './desktop/agent.ts';
 import { data as desktopData } from './desktop/data.ts';
 import { browser as desktopBrowser } from './desktop/browser.ts';
@@ -18,6 +19,7 @@ import { windows as desktopWindows } from './desktop/windows.ts';
 import { usage as desktopUsage } from './desktop/usage.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
 import { account as webAccount } from './web/account.ts';
+import { updates as webUpdates } from './web/updates.ts';
 import { agent as webAgent } from './web/agent.ts';
 import { data as webData } from './web/data.ts';
 import { browser as webBrowser } from './web/browser.ts';
@@ -65,6 +67,7 @@ export const registry: Registry = {
   projects: { web: webProjects, desktop: desktopProjects },
   library: { web: webLibrary, desktop: desktopLibrary },
   usage: { web: webUsage, desktop: desktopUsage },
+  updates: { web: webUpdates, desktop: desktopUpdates },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -98,4 +101,5 @@ export const host = {
   projects: pick('projects'),
   library: pick('library'),
   usage: pick('usage'),
+  updates: pick('updates'),
 } satisfies HostBridge & { isDesktop: boolean; hasCore: boolean };

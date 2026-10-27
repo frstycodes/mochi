@@ -6,7 +6,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useConfirm } from '../git/useConfirm';
-import { ArrowUp, CopyStack, RotateLeft, Stop, Trash, X } from '@/icons';
+import { ArrowUp, Copy, Undo, Stop, Trash, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -467,7 +467,7 @@ function RemoteMessageBar({
         onClick={() => copyText(entry.text, 'Copied')}
         className={BAR_BUTTON}
       >
-        <CopyStack />
+        <Copy />
       </TooltipIconButton>
       {entry.who === 'you' && (
         <DropdownMenu>
@@ -481,7 +481,7 @@ function RemoteMessageBar({
               disabled={!!blocked}
               className={BAR_BUTTON}
             >
-              <RotateLeft />
+              <Undo />
             </TooltipIconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">

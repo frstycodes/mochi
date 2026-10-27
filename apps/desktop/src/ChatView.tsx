@@ -16,7 +16,7 @@ import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Hourglass, Stars } from '@/icons';
+import { ChevronDown, ChevronUp, Hourglass, Sparkles } from '@/icons';
 import {
   Conversation,
   ConversationContent,
@@ -646,7 +646,7 @@ function AgentReply({
     >
       {simplified !== null && (
         <span className="flex items-center gap-1 type-caption text-subtle-foreground">
-          <Stars aria-hidden className="size-3" />
+          <Sparkles aria-hidden className="size-3" />
           Simplified for you
         </span>
       )}

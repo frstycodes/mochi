@@ -8,11 +8,12 @@ import {
   Pause,
   Play,
   Refresh,
+  Rotation,
   Settings,
   Chart,
   Sun,
   UserCircle,
-  UserEdit,
+  RaisedHand,
 } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { useMochiAccount } from './account/useMochiAccount';
+import { host } from './host';
+import { useUpdates } from './updates/useUpdates';
 import { showsDemoData } from './demoData';
 import type { MochiUser } from '@mochi/domain/host/types/account';
 import { openSettings } from './routes/nav';
@@ -83,6 +86,7 @@ export function UserMenu() {
           <BoundShortcut command="go-settings" className="ml-auto" />
         </DropdownMenuItem>
         <ThemeSubmenu />
+        {host.isDesktop && <UpdateItems />}
         {showsDemoData() && (
           <>
             <DropdownMenuSeparator />
@@ -107,6 +111,27 @@ export function UserMenu() {
         </DropdownMenuLabel>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** The running version with the updater's state, and its one next step. */
+function UpdateItems() {
+  const { state, summary, action } = useUpdates();
+  if (!state) return null;
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
+        <span className="tabular">Mochi {state.version}</span>
+        <span className="text-subtle-foreground">{summary}</span>
+      </DropdownMenuLabel>
+      {!!action && (
+        <DropdownMenuItem onSelect={() => void action.run()}>
+          {action.kind === 'install' ? <Rotation /> : <Refresh />}
+          {action.label}
+        </DropdownMenuItem>
+      )}
+    </>
   );
 }
 
@@ -146,7 +171,7 @@ function AccountItems({
             isPersistent={account.isPersistent}
           />
           <DropdownMenuItem onSelect={() => void openAccountPortal()}>
-            <UserEdit />
+            <RaisedHand />
             Manage account
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void signOut()}>

@@ -1,4 +1,4 @@
-import { ChevronRight, XCircle, CheckBadge } from '@/icons';
+import { ChevronRight, XCircle, CheckCircle } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import {
   Collapsible,
@@ -213,7 +213,7 @@ function CriterionEventRow({
   kind: 'claim' | 'check';
 }) {
   const event = kind === 'claim' ? claimEvent(c) : checkEvent(c);
-  const Icon = event.isFailed ? XCircle : CheckBadge;
+  const Icon = event.isFailed ? XCircle : CheckCircle;
   return (
     <div className="flex min-w-0 items-start gap-2 px-1 py-1 type-meta">
       <Icon

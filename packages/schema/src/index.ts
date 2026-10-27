@@ -20,6 +20,7 @@ export * as Schedule from './ipc/schedule.ts';
 export * as SettingsIpc from './ipc/settings.ts';
 export * as Sim from './ipc/sim.ts';
 export * as Themes from './ipc/themes.ts';
+export * as Updates from './ipc/updates.ts';
 export * as Usage from './ipc/usage.ts';
 export * as Windows from './ipc/windows.ts';
 export { upgrade, versioned, versionedUnion } from './version.ts';

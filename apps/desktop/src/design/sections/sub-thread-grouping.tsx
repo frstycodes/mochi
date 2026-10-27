@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type ReactNode } from 'react';
-import { XSquare, CopyStack, DiagramTree } from '@/icons';
+import { XSquare, Copy, DiagramTree } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../../model';
@@ -98,7 +98,7 @@ function SimilarRow({
 }) {
   return (
     <li className="flex items-center gap-2 rounded-lg bg-muted/40 py-1 pr-1 pl-2.5">
-      <CopyStack aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <Copy aria-hidden className="size-3.5 shrink-0 text-warning" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate type-meta">
           <span className="text-muted-foreground">{relation}</span>

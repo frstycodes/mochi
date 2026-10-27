@@ -11,7 +11,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui';
 import {
   ClipboardCheck,
   Clock,
-  CopyStack,
+  Copy,
   Inbox,
   MessageQuestion as MessageCircleQuestion,
   Settings,
@@ -70,7 +70,7 @@ const QUEUE_ICONS = {
   question: MessageCircleQuestion,
   review: ClipboardCheck,
   ci: GitPullRequestIcon,
-  collision: CopyStack,
+  collision: Copy,
   run: Clock,
   setting: Settings,
 } satisfies Record<QueueKind, LucideIcon>;

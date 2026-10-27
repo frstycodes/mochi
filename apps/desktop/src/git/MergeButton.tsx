@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, WarningAlt } from '@/icons';
+import { ChevronDown, Warning } from '@/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -265,7 +265,7 @@ function BypassChecksDialog({
       <AlertDialogContent className="sm:max-w-lg">
         <AlertDialogHeader>
           <AlertDialogMedia className="bg-warning/10 text-warning">
-            <WarningAlt />
+            <Warning />
           </AlertDialogMedia>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>

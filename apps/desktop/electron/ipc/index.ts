@@ -23,6 +23,7 @@ import { remote } from './remote.ts';
 import { settings } from './settings.ts';
 import { sim } from './sim.ts';
 import { themes } from './themes.ts';
+import { updates } from './updates.ts';
 import { windows } from './windows.ts';
 
 // Core serves these itself (packages/core/src/{agents,schedule,hosted.ts}); main never gets their calls.
@@ -50,6 +51,7 @@ const handlers = {
   remote,
   account,
   library,
+  updates,
 } satisfies {
   [K in Exclude<Namespace, InCore>]: Handlers<
     K extends keyof InMain

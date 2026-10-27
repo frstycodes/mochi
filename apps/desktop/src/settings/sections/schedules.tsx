@@ -1,4 +1,4 @@
-import { Clock, Edit, Pause, Play, PlayCircle, Trash } from '@/icons';
+import { Clock, Edit, Pause, Play, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -115,7 +115,7 @@ function TriggerRow({ trigger }: { trigger: Trigger }) {
                 )
               }
             >
-              <PlayCircle />
+              <Play />
             </TooltipIconButton>
           )}
           <TooltipIconButton

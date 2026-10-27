@@ -8,11 +8,9 @@ import {
   Link,
   Monitor,
   Moon,
-  Pin,
+  Pushpin,
   Sun,
-  TextBold,
-  TextItalic,
-  WarningAlt,
+  Warning,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
@@ -70,17 +68,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/toast/Toaster';
 import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
-import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
-import {
-  CoinIcon,
-  McpServerIcon,
-  PluginIcon,
-  SkillIcon,
-} from '../icons/ObjectIcons';
+import { McpServerIcon, SkillIcon } from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
 import {
   seedQueue,
@@ -105,7 +97,6 @@ import { proposalFixture, verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
 import { SteerBlock } from './sections/steer';
 import { SummaryGoalBlock } from './sections/summary-goal';
-import { ThreadRowVariantsBlock } from './sections/thread-rows';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { SubThreadGroupingBlock } from './sections/sub-thread-grouping';
 import { TiltedDragBlock } from './sections/tilted-drag';
@@ -628,7 +619,7 @@ function Actions() {
               <ArrowUp data-icon="inline-end" />
             </Button>
             <Button variant="ghost" size="icon-sm" aria-label="Pin">
-              <Pin />
+              <Pushpin />
             </Button>
             <Button variant="outline" className="max-w-48">
               <span className="truncate">
@@ -699,17 +690,6 @@ function Actions() {
                 Codex
               </ToggleGroupItem>
             </ToggleGroup>
-            <Toggle variant="outline" size="sm" aria-label="Bold">
-              <TextBold />
-            </Toggle>
-            <Toggle
-              variant="outline"
-              size="sm"
-              defaultPressed
-              aria-label="Italic"
-            >
-              <TextItalic />
-            </Toggle>
           </div>
         </Block>
       </Grid>
@@ -726,9 +706,7 @@ const DEVICE_SPECIMENS = [
 ] satisfies (DeviceKind | undefined)[];
 const OBJECT_ICONS = [
   ['Skill', SkillIcon],
-  ['Plugin', PluginIcon],
   ['MCP server', McpServerIcon],
-  ['Spend', CoinIcon],
 ] as const;
 
 function Display() {
@@ -801,7 +779,7 @@ function Display() {
         </Block>
         <Block
           title="Object icons"
-          use="Mochi's own concepts (skills, plugins, MCP servers, spend), lit like Mochi; the same in both themes."
+          use="Mochi's own concepts (skills, MCP servers), lit like Mochi; the same in both themes."
         >
           <div data-design="object-icons" className="flex flex-col gap-4">
             <div className="flex items-end gap-6">
@@ -931,7 +909,7 @@ function Feedback() {
               </AlertDescription>
             </Alert>
             <Alert variant="destructive">
-              <WarningAlt />
+              <Warning />
               <AlertTitle>Setup script failed in feat/admin-usage</AlertTitle>
               <AlertDescription>
                 pnpm install exited with code 1. The agent is paused until it
@@ -1183,7 +1161,6 @@ function Recipes() {
         <NextMoveBlock rl={rl} />
         <SteerBlock />
         <SummaryGoalBlock rl={rl} />
-        <ThreadRowVariantsBlock rl={rl} />
         <SubThreadsBlock rl={rl} />
         <SubThreadGroupingBlock rl={rl} />
         <TiltedDragBlock rl={rl} />
@@ -1393,7 +1370,7 @@ function Rules() {
         </Pair>
         <Pair rule="Status needs an icon or a word, not colour alone.">
           <span className="flex items-center gap-2 type-meta">
-            <WarningAlt className="size-4 text-warning" />
+            <Warning className="size-4 text-warning" />
             Needs you: answer the Stripe question
           </span>
           <span className="flex items-center gap-2 type-meta">

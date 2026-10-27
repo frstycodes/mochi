@@ -5,11 +5,10 @@ import {
   Bug,
   Camera,
   Cursor,
-  Danger,
+  XCircle,
   Phone,
   PhoneRotate,
   Refresh,
-  RefreshCircle,
   Warning,
   X,
 } from '@/icons';
@@ -211,7 +210,7 @@ function ConsoleButton({
             {page.console.map((c, i) => (
               <li key={i} className="flex gap-2 rounded-md px-1.5 py-1">
                 {c.level === 'error' ? (
-                  <Danger
+                  <XCircle
                     aria-label="Error"
                     className="mt-0.5 size-3.5 shrink-0 text-destructive"
                   />
@@ -334,7 +333,7 @@ function MoreMenu({
           checked={page.isAutoReloading}
           onCheckedChange={() => toggleAutoReload(pageId, page, thread)}
         >
-          <RefreshCircle />
+          <Refresh />
           Reload when files change
           {(!isNative || !hasFolder) && (
             <DropdownMenuShortcut>

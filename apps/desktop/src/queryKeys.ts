@@ -136,6 +136,9 @@ export const queryKeys = {
     read: (machineId: string, key: readonly unknown[]) =>
       ['machine-read', machineId, ...key] as const,
   },
+  updates: {
+    state: () => ['update-state'] as const,
+  },
   notify: {
     permission: () => ['notify-permission'] as const,
     pendingOpen: () => ['pending-open'] as const,

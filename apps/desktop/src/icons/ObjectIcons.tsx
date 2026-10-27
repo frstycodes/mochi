@@ -34,20 +34,6 @@ export function SkillIcon({ className }: { className?: string }) {
   );
 }
 
-/** A plugin adds a piece: a mint puzzle piece with depth. */
-export function PluginIcon({ className }: { className?: string }) {
-  return (
-    <LitObject className={className}>
-      <g transform="translate(1.2 0)">
-        <Solid
-          d="M5.5 8H8.4a2.3 2.3 0 1 1 3.6 0H15a1.5 1.5 0 0 1 1.5 1.5V12a2.3 2.3 0 1 1 0 3.6V18a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18V9.5A1.5 1.5 0 0 1 5.5 8Z"
-          material={MATERIALS.plugin}
-        />
-      </g>
-    </LitObject>
-  );
-}
-
 /** An MCP server is tools the agent calls: a steel wrench with a blue grip. */
 export function McpServerIcon({ className }: { className?: string }) {
   return (
@@ -70,37 +56,6 @@ export function McpServerIcon({ className }: { className?: string }) {
   );
 }
 
-/** Spend: two gold coins, the back one peeking out top-right. */
-export function CoinIcon({ className }: { className?: string }) {
-  const coins = [
-    { cx: 14.6, cy: 8.8, r: 6 },
-    { cx: 10, cy: 13.2, r: 6.6 },
-  ];
-  return (
-    <LitObject className={className}>
-      {coins.map(({ cx, cy, r }) => (
-        <g key={cx}>
-          <Solid d={circle(cx, cy, r)} material={MATERIALS.coin} />
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r * 0.72}
-            fill="none"
-            stroke={MATERIALS.coin.edge}
-            strokeWidth="0.7"
-            opacity="0.55"
-          />
-          <path
-            d={sparkle(cx, cy, r * 0.38)}
-            fill={MATERIALS.coin.edge}
-            opacity="0.5"
-          />
-        </g>
-      ))}
-    </LitObject>
-  );
-}
-
 interface Material {
   light: string;
   shade: string;
@@ -110,9 +65,7 @@ interface Material {
 const MATERIALS = {
   bulb: { light: '#fff6c2', shade: '#f2c230', edge: '#a87f0c' },
   steel: { light: '#eef1f6', shade: '#9aa3b3', edge: '#5d6577' },
-  plugin: { light: '#c8f5dc', shade: '#3fbf82', edge: '#23845a' },
   mcp: { light: '#cfe0ff', shade: '#5f8de6', edge: '#3a62bd' },
-  coin: { light: '#ffeeb0', shade: '#e5ac2e', edge: '#a8761b' },
 } satisfies Record<string, Material>;
 
 /** `d` as a solid: its extruded side in the edge colour, then the face lit from the top-left, then the sheen. */
@@ -160,15 +113,4 @@ function LitObject({
       {children}
     </svg>
   );
-}
-
-function circle(cx: number, cy: number, r: number) {
-  return `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${r * 2} 0a${r} ${r} 0 1 0 ${-r * 2} 0Z`;
-}
-
-/** A four-point star of radius `r`, its sides pinched toward the centre. */
-function sparkle(cx: number, cy: number, r: number) {
-  const k = r * 0.18;
-  const n = (v: number) => +v.toFixed(2);
-  return `M${n(cx)} ${n(cy - r)}C${n(cx + k)} ${n(cy - k)} ${n(cx + k)} ${n(cy - k)} ${n(cx + r)} ${n(cy)}C${n(cx + k)} ${n(cy + k)} ${n(cx + k)} ${n(cy + k)} ${n(cx)} ${n(cy + r)}C${n(cx - k)} ${n(cy + k)} ${n(cx - k)} ${n(cy + k)} ${n(cx - r)} ${n(cy)}C${n(cx - k)} ${n(cy - k)} ${n(cx - k)} ${n(cy - k)} ${n(cx)} ${n(cy - r)}Z`;
 }
