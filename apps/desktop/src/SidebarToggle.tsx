@@ -2,7 +2,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { displayRoot, leaves } from '@mochi/domain/layout/tree';
 import { useHarnessSelector } from './store';
 
-/** A page header carries the sidebar trigger while the sidebar is hidden (always on phones, where it's a sheet), never once several splits are on screen. While collapsed on desktop, the first header also clears the traffic lights. */
+/** A page header carries the sidebar trigger while the sidebar is hidden (always on phones, where it's a sheet), never once several splits are on screen. While collapsed on desktop, the first header also clears the traffic lights, unless the peek has hidden them. */
 export function useToggleSlot(isFirst: boolean, isMulti: boolean) {
   const { state, isMobile } = useSidebar();
   const isCollapsed = state === 'collapsed' && !isMobile;
@@ -19,6 +19,6 @@ export function useIsMultiSplit() {
   );
 }
 
-// An even 9px from the traffic lights to the trigger, matching the sidebar header's.
+// An even 9px from the traffic lights to the trigger, matching the sidebar header's; none while the collapsed sidebar has hidden them.
 export const LIGHTS_RESERVE =
-  'in-data-traffic-lights:pl-[calc(var(--lights-end)+9px)]';
+  '[:root[data-traffic-lights]:not([data-lights-hidden])_&]:pl-[calc(var(--lights-end)+9px)]';

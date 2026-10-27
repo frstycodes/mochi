@@ -9,6 +9,7 @@ import {
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
+import type { LightsPlacement } from '../src/host/types/windows.ts';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
 const background = () =>
@@ -52,9 +53,24 @@ export function showMainWindow() {
 const HEADER_PX = 44;
 const LIGHTS_PX = 14;
 
-/** Centres the lights on the 44px headers, which scale with the page zoom while the lights stay native size; `--lights-end` in CSS follows. */
-export function trafficLightsAt(zoom: number) {
-  return { x: 16, y: Math.round((HEADER_PX * zoom - LIGHTS_PX) / 2) };
+/** The hover peek's floating panel sits this far in from the window's top-left (`inset-2`), in CSS px. */
+const PEEK_INSET_PX = 8;
+
+/** Centres the lights on the 44px headers, which scale with the page zoom while the lights stay native size; `--lights-end` in CSS follows. `isPeek`: on the floating peek's header, shifted with its panel. */
+export function trafficLightsAt(zoom: number, isPeek = false) {
+  const inset = isPeek ? Math.round(PEEK_INSET_PX * zoom) : 0;
+  return {
+    x: 16 + inset,
+    y: Math.round((HEADER_PX * zoom - LIGHTS_PX) / 2) + inset,
+  };
+}
+
+const placements = new WeakMap<BrowserWindow, LightsPlacement>();
+
+/** The renderer moves the lights with the sidebar: over its header, over the peek's, or hidden while it's collapsed. */
+export function placeLights(win: BrowserWindow, placement: LightsPlacement) {
+  placements.set(win, placement);
+  fitWindowButtons(win);
 }
 
 /** Windows' min / max / close drawn over the page's top-right corner, as tall as the 44px headers at the page zoom; symbols in DESIGN.md `foreground`. */
@@ -78,8 +94,13 @@ const titleBar = (): Electron.BrowserWindowConstructorOptions =>
 /** Re-fits the native window buttons to the page's current zoom and theme. */
 export function fitWindowButtons(win: BrowserWindow) {
   const zoom = win.webContents.getZoomFactor();
-  if (process.platform === 'darwin')
-    win.setWindowButtonPosition(trafficLightsAt(zoom));
+  if (process.platform === 'darwin') {
+    const placement = placements.get(win) ?? 'header';
+    // Full screen shows the lights in the menu bar's reveal, which the sidebar has no say over.
+    // Shown before they're moved: a position set while they're hidden doesn't stick.
+    win.setWindowButtonVisibility(win.isFullScreen() || placement !== 'hidden');
+    win.setWindowButtonPosition(trafficLightsAt(zoom, placement === 'peek'));
+  }
   if (process.platform === 'win32') win.setTitleBarOverlay(captionsAt(zoom));
 }
 
@@ -102,12 +123,14 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     },
   });
   win.once('ready-to-show', () => !isHidden && win.show());
-  win.on('enter-full-screen', () =>
-    win.webContents.send('windows:onFullScreenChange', true),
-  );
-  win.on('leave-full-screen', () =>
-    win.webContents.send('windows:onFullScreenChange', false),
-  );
+  win.on('enter-full-screen', () => {
+    fitWindowButtons(win);
+    win.webContents.send('windows:onFullScreenChange', true);
+  });
+  win.on('leave-full-screen', () => {
+    fitWindowButtons(win);
+    win.webContents.send('windows:onFullScreenChange', false);
+  });
   // writeDoc logs a failure; the window opens at its default size next time.
   if (isMain)
     win.on(
