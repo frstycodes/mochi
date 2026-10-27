@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { Pin } from '@/icons';
+import { Pushpin } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { normalise, togglePin, type Pin as PinData } from './pins';
 
@@ -39,7 +39,7 @@ export function SelectionPin({
       style={{ left: target.x, top: target.y }}
       className="fixed z-50 -translate-x-1/2 -translate-y-[calc(100%+6px)] gap-1.5 rounded-full shadow-popover"
     >
-      <Pin />
+      <Pushpin />
       Pin
     </Button>,
     document.body,

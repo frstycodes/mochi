@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { CopyStack, Pushpin, RotateLeft, Stars, type IconProps } from '@/icons';
+import { Copy, Pushpin, Undo, Sparkles, type IconProps } from '@/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,7 +52,7 @@ export function useMessageActions(
   const copy: MessageAction = {
     id: 'copy',
     label: 'Copy',
-    icon: CopyStack,
+    icon: Copy,
     run: () => copyText(entry.text, 'Copied', 'Could not copy'),
   };
   const disabledReason = rewindBlockedReason(thread);
@@ -100,7 +100,7 @@ export function useMessageActions(
     hint: isShown
       ? undefined
       : 'A plainer version for you to read, made by your Simplify settings. The agent never sees it.',
-    icon: Stars,
+    icon: Sparkles,
     isActive: isShown,
     disabledReason: isSimplifying ? 'Simplifying…' : undefined,
     run: () => void simplifyReply(thread, index, dispatch),
@@ -193,7 +193,7 @@ function RewindModeMenu({ actions }: { actions: MessageAction[] }) {
             disabled={!!reason}
             className="size-6 text-subtle-foreground hover:text-foreground [&_svg]:size-3.5"
           >
-            <RotateLeft />
+            <Undo />
           </TooltipIconButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ChevronRight, DiagramTree, CheckBadge } from '@/icons';
+import { ChevronRight, DiagramTree, CheckCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { GitPullRequestIcon, REF_TONE_CLASS } from '@/icons/github';
@@ -553,7 +553,7 @@ function SummaryWithHandoffs({ slot }: { slot: LineSlot }) {
 function OwnCriterion({ text, proof }: { text: string; proof: string }) {
   return (
     <li className="flex gap-2 type-meta">
-      <CheckBadge
+      <CheckCircle
         aria-label="Verified"
         className="mt-0.5 size-3.5 shrink-0 text-success"
       />

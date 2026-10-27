@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { XCircle, Keyboard, SearchAlt } from '@/icons';
+import { XCircle, Keyboard, Search } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import {
@@ -62,7 +62,7 @@ export function KeyboardSection() {
         <div className="flex flex-wrap items-center gap-2">
           <InputGroup className="min-w-56 flex-1">
             <InputGroupAddon>
-              <SearchAlt />
+              <Search />
             </InputGroupAddon>
             {filter.chord ? (
               <span className="flex flex-1 items-center gap-1.5 px-1.5 type-body">

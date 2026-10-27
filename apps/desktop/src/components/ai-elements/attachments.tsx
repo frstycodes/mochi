@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 import type { FileUIPart, SourceDocumentUIPart } from "ai";
-import { FileText as FileTextIcon, Globe as GlobeIcon, Photo as ImageIcon, Music as Music2Icon, Paperclip as PaperclipIcon, Video as VideoIcon, X as XIcon, type IconComponent } from "@/icons";
+import { FileText as FileTextIcon, Globe as GlobeIcon, Image as ImageIcon, Music as Music2Icon, Paperclip as PaperclipIcon, Video as VideoIcon, X as XIcon, type IconComponent } from "@/icons";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { createContext, useCallback, useContext, useMemo } from "react";
 

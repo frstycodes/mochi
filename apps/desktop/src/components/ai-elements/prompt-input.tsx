@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
-import { SendAlt as CornerDownLeftIcon, Photo as ImageIcon, Monitor, Plus as PlusIcon, Stop as SquareIcon, X as XIcon } from '@/icons';
+import { SendAlt as CornerDownLeftIcon, Image as ImageIcon, Monitor, Plus as PlusIcon, Stop as SquareIcon, X as XIcon } from '@/icons';
 import type {
   ChangeEvent,
   ChangeEventHandler,

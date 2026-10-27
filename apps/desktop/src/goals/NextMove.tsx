@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { useNow } from '../useNow';
-import { AlertCircle, CheckCircle, PauseCircle } from '@/icons';
+import { Warning, CheckCircle, PauseCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -342,9 +342,7 @@ function PlanIcon({
       />
     );
   if (status === 'blocked')
-    return (
-      <AlertCircle aria-hidden className="size-3.5 shrink-0 text-warning" />
-    );
+    return <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />;
   return (
     <span
       aria-hidden

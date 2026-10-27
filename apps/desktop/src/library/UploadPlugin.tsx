@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { AlertTriangle, Terminal, Upload } from '@/icons';
+import { Terminal, Upload, Warning, XCircle } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -233,7 +233,7 @@ function UploadErrorState({
         role="alert"
         className="flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/8 px-3 py-2 type-meta text-destructive"
       >
-        <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
+        <XCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
         <span className="min-w-0 break-words">{message}</span>
       </p>
       <DialogFooter>
@@ -318,7 +318,7 @@ function ReviewForm({
             role="status"
             className="flex items-start gap-2.5 rounded-xl border border-warning/40 bg-warning/8 px-3 py-2 type-meta text-warning"
           >
-            <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <Warning aria-hidden className="mt-0.5 size-4 shrink-0" />
             <span>
               It runs {countOf(runs, 'command')} on your computer once it’s in a
               thread. Read them below before you install it.

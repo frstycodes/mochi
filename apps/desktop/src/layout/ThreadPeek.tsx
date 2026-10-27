@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { Eye, EyeOff, MagicStar } from '@/icons';
+import { Eye, EyeOff, Sparkles } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   HoverCard,
@@ -129,7 +129,7 @@ function PeekCard({
                 ) : a.from ? (
                   <ThreadMessageIcon direction="from" />
                 ) : a.autofix ? (
-                  <MagicStar
+                  <Sparkles
                     aria-hidden
                     className="size-4 text-muted-foreground"
                   />

@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { useTheme } from 'next-themes';
-import { CheckBadge } from '@/icons';
+import { CheckCircle } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -479,7 +479,7 @@ function SuggestionLine({
   if (value === suggestion.value)
     return (
       <p className="flex items-center gap-1.5 type-meta text-muted-foreground">
-        <CheckBadge aria-hidden className="size-3.5 text-success" />
+        <CheckCircle aria-hidden className="size-3.5 text-success" />
         Set to {who}'s suggestion
       </p>
     );

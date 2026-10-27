@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { FolderOpen, Pencil } from '@/icons';
+import { FolderOpen, Edit } from '@/icons';
 import mochiIcon from '../../build/icon.svg';
 import { Button } from '@/components/ui/button';
 import { plural } from '@mochi/domain/lib/format';
@@ -95,7 +95,7 @@ export function ProfileInstructions({ profile }: { profile: Space }) {
                   disabled={editing === file.name}
                   onClick={() => setEditing(file.name)}
                 >
-                  <Pencil data-icon="inline-start" />
+                  <Edit data-icon="inline-start" />
                   Edit
                 </Button>
                 <Button

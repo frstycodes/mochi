@@ -1,10 +1,10 @@
 import {
   Copy,
   Download,
-  Expand,
+  Maximize,
   FolderOpen,
   ImageSparkle,
-  WarningAlt,
+  Warning,
 } from '@/icons';
 import { toast } from '@/toast/store';
 import { Shimmer } from '@/components/ai-elements/shimmer';
@@ -140,7 +140,7 @@ function Elapsed({ startedMs }: { startedMs: number }) {
 function FailedFrame({ error }: { error?: string }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-muted px-6 text-center">
-      <WarningAlt aria-hidden className="size-5 text-warning" />
+      <Warning aria-hidden className="size-5 text-warning" />
       <span className="type-meta text-foreground">
         Couldn’t generate the image
       </span>
@@ -166,7 +166,7 @@ function ImageActions({
         hint="Zoom and pan in the viewer"
         onClick={() => openPhotos({ photos: [photo], index: 0 })}
       >
-        <Expand />
+        <Maximize />
       </TooltipIconButton>
       <TooltipIconButton
         label="Copy image"

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useDebounced } from '../hooks/useDebounced';
 import { useId, useState } from 'react';
-import { ChevronDown, GitBranch, WarningAlt } from '@/icons';
+import { ChevronDown, GitBranch, Warning } from '@/icons';
 import {
   Command,
   CommandEmpty,
@@ -438,7 +438,7 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
     >
       {notes.map((note) => (
         <li key={note} className="flex gap-1.5">
-          <WarningAlt
+          <Warning
             className="mt-0.5 size-3.5 shrink-0 text-warning"
             aria-hidden
           />

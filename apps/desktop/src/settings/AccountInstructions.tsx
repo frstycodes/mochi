@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil } from '@/icons';
+import { Edit } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/toast/store';
@@ -91,7 +91,7 @@ export function AccountInstructions({ profile }: { profile: Space }) {
                       disabled={editing === provider}
                       onClick={() => setEditing(provider)}
                     >
-                      <Pencil data-icon="inline-start" />
+                      <Edit data-icon="inline-start" />
                       Edit
                     </Button>
                   </div>

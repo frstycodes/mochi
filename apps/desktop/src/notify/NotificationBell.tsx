@@ -3,7 +3,7 @@ import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
 import { useState } from 'react';
 import {
-  AlertCircle,
+  Warning,
   Bell,
   Hourglass,
   Clock,
@@ -11,7 +11,6 @@ import {
   CheckCircle,
   XCircle,
   Settings,
-  Warning,
   Trash,
   type IconComponent,
 } from '@/icons';
@@ -55,7 +54,7 @@ import { useJump } from './useNotifications';
 import type { VerdictKind } from '../goals/verdict';
 
 const KIND_ICONS = {
-  'needs-you': { icon: AlertCircle, className: 'text-warning' },
+  'needs-you': { icon: Warning, className: 'text-warning' },
   limit: { icon: Hourglass, className: 'text-warning' },
   'step-done': { icon: CheckCircle, className: 'text-success' },
   ci: { icon: XCircle, className: 'text-destructive' },
@@ -67,7 +66,7 @@ const KIND_ICONS = {
 /** An idle notice takes its verdict's look; done keeps the `idle` default. */
 const VERDICT_ICONS = {
   gaps: { icon: Warning, className: 'text-warning' },
-  'needs-you': { icon: AlertCircle, className: 'text-warning' },
+  'needs-you': { icon: Warning, className: 'text-warning' },
   stalled: { icon: Hourglass, className: 'text-destructive' },
 } satisfies Partial<
   Record<VerdictKind, { icon: IconComponent; className: string }>

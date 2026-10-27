@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUpRight, ChevronDown, MessageText, Send } from '@/icons';
+import { ArrowUpRight, ChevronDown, MessageText, ArrowUp } from '@/icons';
 import { GitPullRequestIcon, PrStateIcon } from '@/icons/github';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Badge } from '@/components/ui/badge';
@@ -558,7 +558,7 @@ function ThreadCard({
               variant="outline"
               onClick={() => actions.send(thread, review)}
             >
-              <Send data-icon="inline-start" />
+              <ArrowUp data-icon="inline-start" />
               Send to {actions.agentName}
             </Button>
           </div>

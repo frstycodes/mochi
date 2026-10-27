@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import {
-  Plus,
-  AlertTriangle,
-  Lock,
-  Search,
-  SendAlt,
-  Terminal,
-  X,
-} from '@/icons';
+import { Plus, XCircle, Lock, Search, SendAlt, Terminal, X } from '@/icons';
 import {
   Alert,
   AlertAction,
@@ -112,7 +104,7 @@ function Terminals({
                   {s.kind !== 'shell' && <Lock aria-hidden />}
                   {s.title}
                   {!!s.failure && (
-                    <AlertTriangle
+                    <XCircle
                       className="text-destructive"
                       aria-label="Last command failed"
                     />
@@ -178,7 +170,7 @@ function Terminals({
       {/* A failed command reads under the output it came from, where your eye already is. */}
       {!!focused?.failure && (
         <Alert variant="destructive">
-          <AlertTriangle />
+          <XCircle />
           <AlertTitle>Exited with {focused.failure.exitCode}</AlertTitle>
           <AlertDescription className="truncate font-mono">
             {focused.failure.output.split('\n').findLast(Boolean)}

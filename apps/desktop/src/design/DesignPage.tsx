@@ -8,11 +8,9 @@ import {
   Link,
   Monitor,
   Moon,
-  Pin,
+  Pushpin,
   Sun,
-  TextBold,
-  TextItalic,
-  WarningAlt,
+  Warning,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
@@ -70,7 +68,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/toast/Toaster';
 import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
-import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
@@ -622,7 +619,7 @@ function Actions() {
               <ArrowUp data-icon="inline-end" />
             </Button>
             <Button variant="ghost" size="icon-sm" aria-label="Pin">
-              <Pin />
+              <Pushpin />
             </Button>
             <Button variant="outline" className="max-w-48">
               <span className="truncate">
@@ -693,17 +690,6 @@ function Actions() {
                 Codex
               </ToggleGroupItem>
             </ToggleGroup>
-            <Toggle variant="outline" size="sm" aria-label="Bold">
-              <TextBold />
-            </Toggle>
-            <Toggle
-              variant="outline"
-              size="sm"
-              defaultPressed
-              aria-label="Italic"
-            >
-              <TextItalic />
-            </Toggle>
           </div>
         </Block>
       </Grid>
@@ -923,7 +909,7 @@ function Feedback() {
               </AlertDescription>
             </Alert>
             <Alert variant="destructive">
-              <WarningAlt />
+              <Warning />
               <AlertTitle>Setup script failed in feat/admin-usage</AlertTitle>
               <AlertDescription>
                 pnpm install exited with code 1. The agent is paused until it
@@ -1384,7 +1370,7 @@ function Rules() {
         </Pair>
         <Pair rule="Status needs an icon or a word, not colour alone.">
           <span className="flex items-center gap-2 type-meta">
-            <WarningAlt className="size-4 text-warning" />
+            <Warning className="size-4 text-warning" />
             Needs you: answer the Stripe question
           </span>
           <span className="flex items-center gap-2 type-meta">

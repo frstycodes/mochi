@@ -4,10 +4,10 @@ import {
   ChevronRight,
   XCircle,
   Refresh,
-  Send,
+  ArrowUp,
   ShieldX,
-  ShieldTick,
-  WarningAlt,
+  ShieldCheck,
+  Warning,
 } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Badge } from '@/components/ui/badge';
@@ -105,12 +105,12 @@ function stepLabel(step: string) {
 const VERDICT = {
   approve: {
     label: 'Approve',
-    icon: ShieldTick,
+    icon: ShieldCheck,
     className: 'bg-success/10 text-success',
   },
   concerns: {
     label: 'Concerns',
-    icon: WarningAlt,
+    icon: Warning,
     className: 'bg-warning/8 text-warning',
   },
   block: {
@@ -185,7 +185,7 @@ function VerdictCard({ thread, review }: { thread: Thread; review: Review }) {
             disabled={review.isSent}
             onClick={() => sendFindings(thread, review, dispatch)}
           >
-            <Send aria-hidden />
+            <ArrowUp aria-hidden />
             {review.isSent
               ? 'Sent to this thread'
               : 'Send findings to this thread'}

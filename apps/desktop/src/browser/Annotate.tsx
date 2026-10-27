@@ -6,7 +6,7 @@ import {
   useState,
   type PointerEvent,
 } from 'react';
-import { ArrowUpRight, Pen, Redo, Stop, TextTool, Undo } from '@/icons';
+import { ArrowUpRight, Pencil, Redo, Stop, TextTool, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
@@ -32,7 +32,7 @@ import {
 import { updatePage } from './pages';
 
 const TOOLS = [
-  { id: 'pen', label: 'Pen', icon: Pen },
+  { id: 'pen', label: 'Pen', icon: Pencil },
   { id: 'arrow', label: 'Arrow', icon: ArrowUpRight },
   { id: 'box', label: 'Box', icon: Stop },
   { id: 'note', label: 'Note', icon: TextTool },
