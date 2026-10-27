@@ -27,6 +27,10 @@ import {
   themesMethods,
   type ThemesHost,
 } from '@mochi/domain/host/types/themes';
+import {
+  updatesMethods,
+  type UpdatesHost,
+} from '@mochi/domain/host/types/updates';
 import { usageMethods, type UsageHost } from './usage.ts';
 import { windowsMethods, type WindowsHost } from './windows.ts';
 
@@ -49,6 +53,7 @@ export interface HostBridge {
   projects: ProjectsHost;
   library: LibraryHost;
   usage: UsageHost;
+  updates: UpdatesHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -73,4 +78,5 @@ export const manifest = {
   projects: projectsMethods,
   library: libraryMethods,
   usage: usageMethods,
+  updates: updatesMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

@@ -4,6 +4,7 @@ import type * as Sc from '../../../../packages/schema/src/ipc/schedule.ts';
 import type * as Si from '../../../../packages/schema/src/ipc/sim.ts';
 import type * as Th from '../../../../packages/schema/src/ipc/themes.ts';
 import type * as U from '../../../../packages/schema/src/ipc/usage.ts';
+import type * as Up from '../../../../packages/schema/src/ipc/updates.ts';
 import type * as W from '../../../../packages/schema/src/ipc/windows.ts';
 import type {
   ProjectsHost,
@@ -20,6 +21,10 @@ import type {
 import type { SimHost } from '@mochi/domain/host/types/sim';
 import type { ThemesHost } from '@mochi/domain/host/types/themes';
 import type { UsageHost, UsageReport } from '../host/types/usage.ts';
+import type {
+  UpdatesHost,
+  UpdateState,
+} from '@mochi/domain/host/types/updates';
 import type { WindowsHost } from '../host/types/windows.ts';
 import type { ColorTheme } from '@mochi/domain/themes/model';
 import type { Check, Decoded, Rpc, Same } from './check.ts';
@@ -41,4 +46,6 @@ export type Conformance = [
   Check<Rpc<UsageHost, typeof U.usageRpc>>,
   Check<Same<Decoded<typeof U.UsageReport>, UsageReport>>,
   Check<Rpc<WindowsHost, typeof W.windowsRpc>>,
+  Check<Rpc<UpdatesHost, typeof Up.updatesRpc>>,
+  Check<Same<Decoded<typeof Up.UpdateState>, UpdateState>>,
 ];
