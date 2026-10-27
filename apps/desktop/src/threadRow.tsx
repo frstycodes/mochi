@@ -1,4 +1,4 @@
-import { Chat, Hierarchy } from '@/icons';
+import { BackgroundTask, Chat } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
@@ -145,7 +145,7 @@ export function AgentsBadge({ thread }: { thread: Thread }) {
       title={label}
       className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground"
     >
-      <Hierarchy aria-hidden className="size-3" />
+      <BackgroundTask aria-hidden className="size-3" />
       {running}
     </span>
   );
