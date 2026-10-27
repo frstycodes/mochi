@@ -1,6 +1,13 @@
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Button } from '@/components/ui/button';
 import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import {
   Item,
   ItemContent,
   ItemDescription,
@@ -25,35 +32,38 @@ export function NoPanes({ thread }: { thread: Thread }) {
   const cwd = threadCwd(thread);
   return (
     <ScrollArea type="scroll" className="h-full">
-      <div className="flex flex-col gap-6 p-4">
-        <section className="flex flex-col gap-2">
-          <SectionLabel as="h2">Open a pane</SectionLabel>
-          <div className="flex flex-wrap gap-1.5">
-            {PINNABLE_KINDS.map((kind) => {
-              const { title, icon: Icon } = PANE_TABS[kind];
-              return (
-                <Button
-                  key={kind}
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    dispatch({
-                      type: 'pane-show-tab',
-                      threadId: thread.id,
-                      kind,
-                    })
-                  }
-                >
-                  <Icon />
-                  {title}
-                </Button>
-              );
-            })}
-          </div>
-        </section>
+      <Empty className="justify-start gap-6 p-4">
+        <EmptyHeader>
+          <EmptyTitle>Every pane is closed</EmptyTitle>
+          <EmptyDescription>
+            Open one again, or preview what this thread is running.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent className="max-w-none flex-row flex-wrap justify-center gap-1.5">
+          {PINNABLE_KINDS.map((kind) => {
+            const { title, icon: Icon } = PANE_TABS[kind];
+            return (
+              <Button
+                key={kind}
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  dispatch({
+                    type: 'pane-show-tab',
+                    threadId: thread.id,
+                    kind,
+                  })
+                }
+              >
+                <Icon />
+                {title}
+              </Button>
+            );
+          })}
+        </EmptyContent>
         {!!cwd && <DetectedPorts thread={thread} cwd={cwd} />}
         {!!cwd && <RecentFiles thread={thread} cwd={cwd} />}
-      </div>
+      </Empty>
     </ScrollArea>
   );
 }
@@ -64,7 +74,7 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
   const { ports } = usePorts(thread.id, cwd);
   if (!ports?.length) return null;
   return (
-    <section className="flex flex-col gap-2">
+    <section className="flex flex-col gap-2 self-stretch text-left">
       <SectionLabel as="h2">Running</SectionLabel>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2">
         {ports.map((p) => (
@@ -105,7 +115,7 @@ function RecentFiles({ thread, cwd }: { thread: Thread; cwd: string }) {
   const files = useRecentFiles(thread, cwd);
   if (!files.length) return null;
   return (
-    <section className="flex flex-col gap-1">
+    <section className="flex flex-col gap-1 self-stretch text-left">
       <SectionLabel as="h2">Recent files</SectionLabel>
       {files.map(({ path }) => {
         const slash = path.lastIndexOf('/');

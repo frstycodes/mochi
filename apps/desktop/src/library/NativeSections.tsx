@@ -1,3 +1,4 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
 import { Copy, Import } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -19,7 +20,7 @@ import { HARNESSES } from '../settings/harnesses';
 import { SettingsCard, SettingsSection } from '../settings/parts';
 import { useHarnessSelector } from '../store';
 import { OverflowIcon, ProviderMark, SpaceIcon } from '../ui';
-import { EmptyRow, filterBy, LibraryRow, LIST } from './LibraryParts';
+import { filterBy, LibraryRow, LIST } from './LibraryParts';
 import {
   accountDir,
   NATIVE_KIND_LABELS,
@@ -152,9 +153,9 @@ function AccountSection({
     >
       <SettingsCard>
         {native.error && (
-          <EmptyRow
-            text={`Couldn’t read all of ${accountDir(account)}: ${native.error}`}
-          />
+          <Empty>
+            <EmptyDescription>{`Couldn’t read all of ${accountDir(account)}: ${native.error}`}</EmptyDescription>
+          </Empty>
         )}
         {shown.map((item) => (
           <NativeRow

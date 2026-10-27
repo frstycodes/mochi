@@ -191,13 +191,15 @@ function MachineProjects({ machine }: { machine: FollowedMachine }) {
     >
       <SettingsCard>
         {projects.length === 0 && (
-          <p className="px-4 py-6 text-center type-meta text-muted-foreground">
-            No projects yet
-            {canAdd
-              ? `; add one and it’s cloned or created on ${machine.name}`
-              : ''}
-            .
-          </p>
+          <Empty>
+            <EmptyDescription>
+              No projects yet
+              {canAdd
+                ? `; add one and it’s cloned or created on ${machine.name}`
+                : ''}
+              .
+            </EmptyDescription>
+          </Empty>
         )}
         {projects.map((p) => (
           <ProjectLayout

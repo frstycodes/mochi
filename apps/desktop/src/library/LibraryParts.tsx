@@ -1,3 +1,4 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
 import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState, type ReactNode } from 'react';
 import { CheckCircle, Download, Login, Refresh, Trash } from '@/icons';
@@ -51,7 +52,9 @@ export function InstalledList({
       {!shown && <SkeletonRows count={2} />}
       {shown?.length === 0 &&
         (query ? (
-          <EmptyRow text={`Nothing in your library matches “${query}”`} />
+          <Empty>
+            <EmptyDescription>{`Nothing in your library matches “${query}”`}</EmptyDescription>
+          </Empty>
         ) : (
           empty
         ))}
@@ -383,14 +386,6 @@ export function filterBy<T>(
         fields(item).some((text) => text?.toLowerCase().includes(q)),
       )
     : [...items];
-}
-
-export function EmptyRow({ text }: { text: string }) {
-  return (
-    <p className="px-4 py-6 text-center type-meta text-muted-foreground">
-      {text}
-    </p>
-  );
 }
 
 /** Install, or a quiet "In library" once it's there; which profiles get it is chosen there. */
