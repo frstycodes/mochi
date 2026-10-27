@@ -1,4 +1,9 @@
 import { BackgroundTask, Chat } from '@/icons';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
@@ -96,16 +101,18 @@ const DOT_BG = {
 export function ThreadProjectMark({ thread }: { thread: Thread }) {
   const project = useProjectAt(thread.spaceId, thread.repo?.path);
   return (
-    <span
-      className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]"
-      title={thread.repo?.project ?? 'No project'}
-    >
-      {thread.repo ? (
-        <ProjectIcon name={thread.repo.project} icon={project?.icon} />
-      ) : (
-        <Chat aria-label="No project" className="size-4 shrink-0" />
-      )}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]">
+          {thread.repo ? (
+            <ProjectIcon name={thread.repo.project} icon={project?.icon} />
+          ) : (
+            <Chat aria-label="No project" className="size-4 shrink-0" />
+          )}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{thread.repo?.project ?? 'No project'}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -140,13 +147,17 @@ export function AgentsBadge({ thread }: { thread: Thread }) {
     `${running} background agents running`,
   );
   return (
-    <span
-      aria-label={label}
-      title={label}
-      className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground"
-    >
-      <BackgroundTask aria-hidden className="size-3" />
-      {running}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          aria-label={label}
+          className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground"
+        >
+          <BackgroundTask aria-hidden className="size-3" />
+          {running}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }

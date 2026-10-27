@@ -1,4 +1,9 @@
 import { useNow } from '../useNow';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { BackgroundTask, Terminal } from '@/icons';
 import { cn } from '@/lib/utils';
@@ -71,11 +76,16 @@ export function SubagentLine({ subagent }: { subagent: Subagent }) {
       subagent.activity ??
       (subagent.message || subagent.steps.length ? 'Thinking' : 'Starting');
     return (
-      <span className="flex min-w-0 flex-1" title={text}>
-        <Shimmer as="span" className="min-w-0 truncate">
-          {text}
-        </Shimmer>
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="flex min-w-0 flex-1">
+            <Shimmer as="span" className="min-w-0 truncate">
+              {text}
+            </Shimmer>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{text}</TooltipContent>
+      </Tooltip>
     );
   }
   if (subagent.status === 'failed')

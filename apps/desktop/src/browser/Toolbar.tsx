@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -69,7 +69,7 @@ import { deviceSize, isDemoUrl } from './PageSurface';
 import { AddressBar } from './AddressBar';
 import { reloadPage, updatePage, type Page } from './pages';
 import { displayUrl } from './url';
-import { OverflowIcon } from '../ui';
+import { OverflowIcon, TooltipIconButton } from '../ui';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const DPRS = [0, 1, 2, 3];
@@ -94,39 +94,41 @@ export function BrowserToolbar({
 
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 px-2">
-      <IconAction
+      <TooltipIconButton
         label="Back"
+        hint={page.canGoBack ? undefined : 'No earlier page in this tab'}
         disabled={!page.canGoBack}
         onClick={() => command('back')}
       >
         <ArrowLeft />
-      </IconAction>
-      <IconAction
+      </TooltipIconButton>
+      <TooltipIconButton
         label="Forward"
+        hint={page.canGoForward ? undefined : 'No later page in this tab'}
         disabled={!page.canGoForward}
         onClick={() => command('forward')}
       >
         <ArrowRight />
-      </IconAction>
+      </TooltipIconButton>
       {page.isLoading ? (
-        <IconAction label="Stop loading" onClick={() => command('stop')}>
+        <TooltipIconButton label="Stop loading" onClick={() => command('stop')}>
           <X />
-        </IconAction>
+        </TooltipIconButton>
       ) : (
-        <IconAction
-          label="Reload (Shift for hard reload)"
+        <TooltipIconButton
+          label="Reload"
+          hint="Hold Shift for a hard reload"
           onClick={(e) => command(e.shiftKey ? 'hard-reload' : 'reload')}
         >
           <Refresh />
-        </IconAction>
+        </TooltipIconButton>
       )}
       <AddressBar thread={thread} pageId={pageId} page={page} />
-      <IconAction
-        label={
+      <TooltipIconButton
+        label={page.isPicking ? 'Stop picking' : 'Pick an element'}
+        hint={
           canPick
-            ? page.isPicking
-              ? 'Stop picking'
-              : 'Pick an element to comment on'
+            ? 'Click an element on the page to comment on it'
             : DESKTOP_ONLY
         }
         pressed={page.isPicking}
@@ -134,7 +136,7 @@ export function BrowserToolbar({
         onClick={() => togglePick(pageId, page, thread)}
       >
         <Cursor />
-      </IconAction>
+      </TooltipIconButton>
       <ScreenshotMenu pageId={pageId} page={page} />
       {page.console.length > 0 && (
         <ConsoleButton thread={thread} pageId={pageId} page={page} />
@@ -468,13 +470,14 @@ export function DeviceBar({ pageId, page }: { pageId: string; page: Page }) {
         value={page.isRotated ? size.width : size.height}
         onChange={(v) => setSide(page.isRotated ? 'width' : 'height', v)}
       />
-      <IconAction
+      <TooltipIconButton
         label="Rotate"
+        hint="Swap width and height"
         pressed={page.isRotated}
         onClick={() => updatePage(pageId, { isRotated: !page.isRotated })}
       >
         <PhoneRotate />
-      </IconAction>
+      </TooltipIconButton>
       <Select
         value={String(page.dpr)}
         onValueChange={(dpr) => updatePage(pageId, { dpr: Number(dpr) })}
@@ -579,43 +582,6 @@ export function DriveBar({
             : 'Take over'}
       </Button>
     </div>
-  );
-}
-
-function IconAction({
-  label,
-  pressed,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string;
-  pressed?: boolean;
-  disabled?: boolean;
-  onClick?: (e: MouseEvent) => void;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {/* The span keeps the tooltip working on disabled buttons, which get no pointer events. */}
-        <span className="inline-flex shrink-0">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={label}
-            aria-pressed={pressed}
-            disabled={disabled}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={onClick}
-            className={cn(pressed && 'bg-accent text-foreground')}
-          >
-            {children}
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }
 

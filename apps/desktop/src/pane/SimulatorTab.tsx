@@ -71,7 +71,6 @@ import {
   type SimContentSize,
   type Simulator,
 } from '@mochi/domain/host/types/sim';
-import { cn } from '@/lib/utils';
 import { DeviceScreen } from '@/sim/DeviceScreen';
 import { useBuild, type BuildState } from '@/sim/useBuild';
 import { useCapture } from '@/sim/useCapture';
@@ -81,7 +80,7 @@ import { usePrefs } from '@/settings/prefs';
 import { useSimStream } from '@/sim/useSimStream';
 import { toast } from '@/toast/store';
 import type { PaneTabProps } from './tabs';
-import { IconSwap } from '../ui';
+import { IconSwap, TooltipIconButton } from '../ui';
 
 export function SimulatorTab({ thread }: PaneTabProps) {
   const { simulators, error, refresh } = useSimulators();
@@ -128,20 +127,22 @@ export function SimulatorTab({ thread }: PaneTabProps) {
           value={device.udid}
           onChange={setPickedUdid}
         />
-        <IconAction
-          label={isBooted ? `Shut down ${device.name}` : `Boot ${device.name}`}
+        <TooltipIconButton
+          label={isBooted ? 'Shut down' : 'Boot'}
+          hint={device.name}
           onClick={() => setPower(!isBooted)}
         >
           <Power />
-        </IconAction>
+        </TooltipIconButton>
       </PaneTitle>
       <PaneActions>
-        <IconAction
+        <TooltipIconButton
           label={
             settings.appearance === 'dark'
               ? 'Switch to light appearance'
               : 'Switch to dark appearance'
           }
+          hint={isBooted ? undefined : BOOT_FIRST}
           disabled={!isBooted}
           onClick={() =>
             settings.setAppearance(
@@ -152,7 +153,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
           <IconSwap id={settings.appearance === 'dark' ? 'dark' : 'light'}>
             {settings.appearance === 'dark' ? <Moon /> : <Sun />}
           </IconSwap>
-        </IconAction>
+        </TooltipIconButton>
         <ContentSizeMenu
           value={settings.contentSize}
           disabled={!isBooted}
@@ -199,19 +200,21 @@ export function SimulatorTab({ thread }: PaneTabProps) {
         >
           <LockKeyhole />
         </HardwareButton>
-        <IconAction
+        <TooltipIconButton
           label="Screenshot into the chat"
+          hint={isBooted ? undefined : BOOT_FIRST}
           disabled={!isBooted}
           onClick={capture.screenshot}
         >
           <Camera />
-        </IconAction>
-        <IconAction
+        </TooltipIconButton>
+        <TooltipIconButton
           label={
             capture.isRecording
               ? 'Stop recording and post it'
               : 'Record the screen'
           }
+          hint={isBooted ? undefined : BOOT_FIRST}
           pressed={capture.isRecording}
           disabled={!isBooted}
           onClick={capture.toggleRecording}
@@ -223,7 +226,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
               <Record />
             )}
           </IconSwap>
-        </IconAction>
+        </TooltipIconButton>
         <Tooltip>
           <TooltipTrigger asChild>
             <span>
@@ -248,6 +251,8 @@ export function SimulatorTab({ thread }: PaneTabProps) {
     </div>
   );
 }
+
+const BOOT_FIRST = 'Boot the simulator first';
 
 const FAMILIES = [
   { family: 'iphone', label: 'iPhone', icon: Phone },
@@ -438,48 +443,16 @@ function HardwareButton({
   children: ReactNode;
 }) {
   return (
-    <IconAction
+    <TooltipIconButton
       label={label}
+      hint={disabled ? BOOT_FIRST : undefined}
       disabled={disabled}
       onClick={() =>
         host.sim.button(udid, button).catch((e) => toast.error(message(e)))
       }
     >
       {children}
-    </IconAction>
-  );
-}
-
-function IconAction({
-  label,
-  pressed,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string;
-  pressed?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          aria-pressed={pressed}
-          disabled={disabled}
-          onClick={onClick}
-          className={cn(pressed && 'bg-accent text-foreground')}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    </TooltipIconButton>
   );
 }
 
@@ -530,9 +503,13 @@ function BuildStatus({
         Show log
       </Button>
       {!isBuilding && (
-        <IconAction label="Dismiss" onClick={onDismiss}>
+        <TooltipIconButton
+          label="Dismiss"
+          hint="Hide this status line"
+          onClick={onDismiss}
+        >
           <X />
-        </IconAction>
+        </TooltipIconButton>
       )}
     </div>
   );
