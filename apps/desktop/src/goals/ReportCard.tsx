@@ -179,9 +179,7 @@ function TurnSection({
         onSet={onSet}
         onChange={onChange}
       />
-      {section.kind === 'rows' && (
-        <ReportList label="Decided" items={section.decisions} />
-      )}
+      {section.kind === 'rows' && <FoldedDecisions items={section.decisions} />}
     </>
   );
 }
@@ -721,6 +719,40 @@ export function ReportQuestion({ report }: { report: TurnReport }) {
         {report.question}
       </span>
     </p>
+  );
+}
+
+/** The no-plan card's decisions, folded to their count like the spine's steps: rarely worth reading, there when you want them. */
+export function FoldedDecisions({ items }: { items: string[] }) {
+  const [isOpen, setOpen] = useState(false);
+  if (!items.length) return null;
+  return (
+    <section aria-label="Decided" className="flex flex-col gap-1">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        onClick={() => setOpen((was) => !was)}
+        className="flex w-fit cursor-default items-center gap-1 rounded-sm type-caption text-subtle-foreground transition-colors hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
+        {`${items.length} ${items.length === 1 ? 'decision' : 'decisions'}`}
+        <ChevronRight
+          aria-hidden
+          className={cn(
+            'size-3.5 transition-transform duration-150',
+            isOpen && 'rotate-90',
+          )}
+        />
+      </button>
+      <Expand isOpen={isOpen}>
+        <ul className="flex list-disc flex-col gap-0.5 pl-4 type-meta text-muted-foreground marker:text-subtle-foreground">
+          {items.map((item) => (
+            <li key={item} className="text-pretty">
+              {item}
+            </li>
+          ))}
+        </ul>
+      </Expand>
+    </section>
   );
 }
 

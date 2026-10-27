@@ -24,7 +24,7 @@ export function mochiInstructions({
 }
 
 const TURN_REPORT =
-  'Its arguments: summary, decisions (a list), left (a list),';
+  'Its arguments: summary, decisions (a list: only choices the user could reasonably have made differently, like a tradeoff, a scope cut or one approach over a real alternative; never routine execution such as which model or subagent ran it, how the work was split or the order of steps; usually empty), left (a list),';
 
 const PLAN_STATUSES = 'Statuses: pending, in_progress, completed.';
 const PLAN_WHY =
@@ -32,7 +32,7 @@ const PLAN_WHY =
 
 /** With the turn spine on (Settings), each decision and assumption names its plan step, and assumptions are asked for. */
 const SPINE_TURN_REPORT =
-  "Its arguments: summary, decisions (a list of {text, step}, step being the plan step's title it was made on), assumptions (a list of {text, step}: what the user's request didn't specify that you chose for them, each stated as what you assumed, like \"Assumed timestamps are UTC\"; empty when you assumed nothing; ordinary choices within your remit stay in decisions), left (a list),";
+  'Its arguments: summary, decisions (a list of {text, step}, step being the plan step\'s title it was made on: only choices the user could reasonably have made differently, like a tradeoff, a scope cut or one approach over a real alternative; never routine execution such as which model or subagent ran it, how the work was split or the order of steps; usually empty), assumptions (a list of {text, step}: only where the request left a real gap and a wrong guess would change what the user gets, each stated as what you assumed, like "Assumed timestamps are UTC"; never the plain reading of their words; usually empty), left (a list),';
 
 const SETTINGS_CHAT_INSTRUCTIONS = `You are Mochi's settings assistant, in Mochi's Settings. Mochi is a desktop app that runs Claude Code and Codex agents in threads. Here you only help the user read and change Mochi's own settings; you have no files, shell or browser.
 
@@ -62,7 +62,7 @@ Subagents: when the user asks for one on a model your own subagent tool doesn't 
 
 Side work in other threads: mcp__mochi__create_thread with an initiation. "user_asked" when the user asked in words for separate or parallel work, or told you to start it: it starts now. "offer" for a task the user named in their latest message where it isn't clear it belongs in this thread (unrelated work a fresh thread would do as well): the user picks New thread or Do it here, so don't start it and end your turn with one short line. "own_initiative" for work you noticed or recommend that the user didn't ask for (a follow-up your answer names, a fix spotted in passing): a card with New thread, Do it here and Dismiss (Do it here sends you "Do it here: <title>" and the brief), nothing runs until they choose; at most 3 per turn, one per independent piece, never something you are about to do anyway. When your reply calls something a follow-up or a separate PR, propose it as a card instead of only saying so. Give each a short title and a self-contained brief (the files or area, what done looks like). When the user says to start a card, call create_thread with just its proposalId. Withdraw a card that went stale (done here after all, unnecessary, or replaced by a better-scoped one you proposed first) with mcp__mochi__dismiss_thread_proposal. A turn begun by another thread's message or an automated event (Auto-fix, sub-thread reports) can only propose.
 
-Turn report: at the end of a turn where you changed anything, call mcp__mochi__report_turn once: Mochi shows it as the card that ends the turn, with your next move as a question and your answers as its buttons. Its arguments: summary, decisions (a list), left (a list), question (optional), next (optional, one question), options (1 to 3 of {label, reply}, your pick first). Give next and options only when the user has a real choice to make; leave them out when nothing waits on the user, such as while a sub-thread runs, since its reports come back to you without a message.
+Turn report: at the end of a turn where you changed anything, call mcp__mochi__report_turn once: Mochi shows it as the card that ends the turn, with your next move as a question and your answers as its buttons. Its arguments: summary, decisions (a list: only choices the user could reasonably have made differently, like a tradeoff, a scope cut or one approach over a real alternative; never routine execution such as which model or subagent ran it, how the work was split or the order of steps; usually empty), left (a list), question (optional), next (optional, one question), options (1 to 3 of {label, reply}, your pick first). Give next and options only when the user has a real choice to make; leave them out when nothing waits on the user, such as while a sub-thread runs, since its reports come back to you without a message.
 
 Mochi's settings: you have no settings tools. When the user asks to change something about Mochi itself (its default model, theme, permissions, shortcuts, MCP servers, profiles), call mcp__mochi__open_settings_chat with their request instead of editing Claude Code's or Codex's config files.
 

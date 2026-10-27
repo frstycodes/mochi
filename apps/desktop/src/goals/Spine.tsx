@@ -24,7 +24,8 @@ export type SpineNode =
 /**
  * The plan is the spine: one rail with a node per step, decisions and assumptions hanging off the step they were made on.
  * A pivot is a node on the rail with its reason; the steps it dropped fork off it, dashed, before the steps that replaced them.
- * Each step folds to one row that says what it holds; steps with something to check, and pivots, start open.
+ * Only what asks for you stays out: assumptions open when the card mounts hang below their step whether it's folded or not,
+ * and stay there once answered. Decisions, answered assumptions and dropped steps start folded behind their row's count.
  */
 export function TurnSpine({
   assumptions,
@@ -38,53 +39,54 @@ export function TurnSpine({
   onChange: (a: Assumption) => void;
 }) {
   const ledger = new Map(assumptions.map((a) => [a.id, a]));
-  const isOpenItem = (i: SpineItem) =>
-    i.kind === 'assumption' && ledger.get(i.id)?.state === 'open';
-  const [open, setOpen] = useState(
+  // Captured once, so an assumption you just accepted doesn't fold away under your cursor.
+  const [pinnedIds] = useState(
     () =>
-      new Set(
-        nodes.flatMap((n, i) =>
-          n.kind === 'pivot' || n.items?.some(isOpenItem) ? [i] : [],
-        ),
-      ),
+      new Set(assumptions.flatMap((a) => (a.state === 'open' ? [a.id] : []))),
   );
+  const isPinned = (i: SpineItem) =>
+    i.kind === 'assumption' && pinnedIds.has(i.id);
+  const [open, setOpen] = useState(() => new Set<number>());
   const toggle = (i: number) =>
     setOpen((was) => {
       const next = new Set(was);
       if (!next.delete(i)) next.add(i);
       return next;
     });
-  const childCount = (n: SpineNode) =>
-    n.kind === 'pivot' ? n.dropped.length : (n.items?.length ?? 0);
+  const itemRow = (item: SpineItem, j: number) => {
+    if (item.kind === 'decision')
+      return <DecisionRow key={j} text={item.text} />;
+    const a = ledger.get(item.id);
+    return (
+      !!a && (
+        <ItemRail key={j}>
+          <AssumptionLine
+            assumption={a}
+            onAccept={() => onSet(a, 'accepted')}
+            onChange={() => onChange(a)}
+          />
+        </ItemRail>
+      )
+    );
+  };
   const last = nodes.length - 1;
-  const endsInChildren = open.has(last) && childCount(nodes[last]) > 0;
   const groups = nodes.map((node, i) => {
     const isOpen = open.has(i);
-    const header = {
-      isFirst: i === 0,
-      isLast: i === last && !endsInChildren,
-      isOpen,
-      onToggle: childCount(node) > 0 ? () => toggle(i) : undefined,
-    };
-    const children =
+    const items = node.kind === 'step' ? (node.items ?? []) : [];
+    const pinned = items.filter(isPinned);
+    const folded =
       node.kind === 'pivot'
         ? node.dropped.map((title) => <DroppedRow key={title} title={title} />)
-        : (node.items ?? []).map((item, j) => {
-            if (item.kind === 'decision')
-              return <DecisionRow key={j} text={item.text} />;
-            const a = ledger.get(item.id);
-            return (
-              !!a && (
-                <ItemRail key={j}>
-                  <AssumptionLine
-                    assumption={a}
-                    onAccept={() => onSet(a, 'accepted')}
-                    onChange={() => onChange(a)}
-                  />
-                </ItemRail>
-              )
-            );
-          });
+        : items.filter((item) => !isPinned(item)).map(itemRow);
+    const endsFolded = isOpen && folded.length > 0;
+    const header = {
+      isFirst: i === 0,
+      isLast: i === last && !pinned.length && !endsFolded,
+      isOpen,
+      onToggle: folded.length > 0 ? () => toggle(i) : undefined,
+    };
+    const endRail =
+      '[&>*:last-child>[data-rail]]:bottom-auto [&>*:last-child>[data-rail]]:h-[18px]';
     return (
       <li key={i} className="flex flex-col">
         {node.kind === 'pivot' ? (
@@ -92,48 +94,33 @@ export function TurnSpine({
         ) : (
           <StepRow
             node={node}
-            toCheck={node.items?.filter(isOpenItem).length ?? 0}
+            folded={items.filter((it) => !isPinned(it))}
             {...header}
           />
         )}
+        {pinned.length > 0 && (
+          <div
+            className={cn(
+              'flex flex-col',
+              i === last && !endsFolded && endRail,
+            )}
+          >
+            {pinned.map(itemRow)}
+          </div>
+        )}
         {!!header.onToggle && (
           <Expand isOpen={isOpen}>
-            <div
-              className={cn(
-                'flex flex-col',
-                i === last &&
-                  '[&>*:last-child>[data-rail]]:bottom-auto [&>*:last-child>[data-rail]]:h-[18px]',
-              )}
-            >
-              {children}
+            <div className={cn('flex flex-col', i === last && endRail)}>
+              {folded}
             </div>
           </Expand>
         )}
       </li>
     );
   });
-  const items = nodes.flatMap((n) =>
-    n.kind === 'step' ? (n.items ?? []) : [],
-  );
-  const toCheck = items.filter(isOpenItem).length;
-  const counts = [
-    toCheck > 0 && (
-      <span key="check" className="text-warning">{`${toCheck} to check`}</span>
-    ),
-    plural(nodes.filter((n) => n.kind === 'pivot').length, 'pivot'),
-    plural(items.filter((i) => i.kind === 'decision').length, 'decision'),
-  ].filter(Boolean);
   return (
     <section aria-label="Plan" className="flex flex-col gap-1.5">
-      <SectionLabel className="flex flex-wrap gap-x-1.5">
-        <span>Plan</span>
-        {counts.map((c, i) => (
-          <span key={i} className="flex gap-x-1.5">
-            <span aria-hidden>·</span>
-            {c}
-          </span>
-        ))}
-      </SectionLabel>
+      <SectionLabel>Plan</SectionLabel>
       <ol className="flex flex-col">{groups}</ol>
     </section>
   );
@@ -245,22 +232,20 @@ function HeaderRail({
   );
 }
 
+/** `folded` is what sits behind the chevron; the row counts it, since pinned assumptions already show. */
 function StepRow({
   node,
-  toCheck,
+  folded,
   ...header
 }: HeaderProps & {
   node: Extract<SpineNode, { kind: 'step' }>;
-  toCheck: number;
+  folded: SpineItem[];
 }) {
-  const { title, status, items = [] } = node;
-  const decisions = items.filter((i) => i.kind === 'decision').length;
-  const answered = items.length - decisions - toCheck;
+  const { title, status } = node;
+  const decisions = folded.filter((i) => i.kind === 'decision').length;
+  const answered = folded.length - decisions;
   const meta = [
     status === 'pending' && 'Not done',
-    toCheck > 0 && (
-      <span key="c" className="text-warning">{`${toCheck} to check`}</span>
-    ),
     plural(decisions, 'decision'),
     answered > 0 && `${answered} answered`,
   ]
@@ -340,9 +325,6 @@ function DroppedRow({ title }: { title: string }) {
         <span className="min-w-0 flex-1 text-pretty">
           <span className="sr-only">Dropped: </span>
           {title}
-        </span>
-        <span aria-hidden className="shrink-0 pr-8 type-caption leading-5">
-          Dropped
         </span>
       </div>
     </Rail>

@@ -112,8 +112,12 @@ const reportItems = (description: string) =>
     .check(Schema.isMaxLength(5))
     .annotate({ description });
 
+/** Kept to choices worth reversing: routine calls the agent logged anyway buried the few that mattered. */
+const DECISIONS =
+  'Only choices the user could reasonably have made differently: a tradeoff, a scope cut, one approach over a real alternative. Never routine execution (which model or subagent ran it, how the work was split, the order of steps). Usually empty';
+
 const ASSUMPTIONS = reportItems(
-  'Things the user\'s request didn\'t specify that you chose for them, each stated as what you assumed ("Assumed timestamps are UTC"); empty when you assumed nothing. Ordinary choices within your remit go in decisions',
+  'Only where the request left a real gap and a wrong guess would change what the user gets, each stated as what you assumed ("Assumed timestamps are UTC"). Never the plain reading of their words. Usually empty',
 );
 
 export const TOOL_TABLE = {
@@ -410,7 +414,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'At the end of a turn where you changed anything, report once so the user can skip reading your reply: what changed, decisions you made, what is left, at most one question that needs them, and, when the user has a real choice to make, the next move as a question with the answers you offer as buttons. Short lines, no prose.',
+      'At the end of a turn where you changed anything, report once so the user can skip reading your reply: what changed, decisions worth reversing, what is left, at most one question that needs them, and, when the user has a real choice to make, the next move as a question with the answers you offer as buttons. Short lines, no prose.',
     shape: {
       summary: Schema.optionalKey(
         Schema.String.check(Schema.isMaxLength(360)).annotate({
@@ -418,7 +422,7 @@ export const TOOL_TABLE = {
         }),
       ),
       decisions: reportItems(
-        'Choices you made that the user should know about, each on the plan step it was made on',
+        `${DECISIONS}, each on the plan step it was made on`,
       ),
       // Required as served (`shapeFor`); optional here, so a session started before the turn spine was turned on still reports.
       assumptions: Schema.optionalKey(ASSUMPTIONS),
@@ -1214,7 +1218,7 @@ const PLAIN_DECISIONS = Schema.Array(
 )
   .check(Schema.isMaxLength(5))
   .annotate({
-    description: 'Choices you made that the user should know about',
+    description: DECISIONS,
   });
 
 const isSettingsChatTool = (name: ToolName) =>

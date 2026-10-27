@@ -7,6 +7,7 @@ import {
 import type { Assumption, Thread } from '../../model';
 import { AssumptionList, splitAssumptions } from '../../goals/Assumptions';
 import { changeDraft } from '../../goals/ledger';
+import { FoldedDecisions } from '../../goals/ReportCard';
 import { TurnSpine, type SpineNode } from '../../goals/Spine';
 import {
   NextMoveActions,
@@ -23,7 +24,7 @@ export function AssumptionsBlock({ rl }: { rl: Thread }) {
   return (
     <Block
       title="Turn spine"
-      use="After the summary, before the question: the turn's plan as a rail. The label indexes it (N to check · pivots · decisions). Each step folds to one row saying what it holds; steps with something to check, and pivots, start open. Decisions (dot) and assumptions (amber icon and “Assumed”, Accept or Change, actions on the caption column) hang off their step; a pivot is a rail node with its reason, the steps it dropped forking off below it, dashed. Earlier turns' open assumptions stay under Still open. Second card: a turn with no plan falls back to rows."
+      use="After the summary, before the question: the turn's plan as a rail. Each step folds to one row counting what it holds, and everything starts folded except open assumptions, which hang below their step either way and stay once answered. Decisions (dot) and assumptions (amber icon and “Assumed”, Accept or Change, actions on the caption column) hang off their step; a pivot is a rail node with its reason, the steps it dropped forking off below it, dashed. Earlier turns' open assumptions stay under Still open. Second card: a turn with no plan falls back to rows, its decisions folded to their count."
       wide
     >
       <VizThreadProvider value={rl.id}>
@@ -108,6 +109,12 @@ function AssumptionsMock({ rl }: { rl: Thread }) {
               textInput.setInput(changeDraft(a));
               set(a, 'changed');
             }}
+          />
+          <FoldedDecisions
+            items={[
+              'Kept the old column names as aliases so saved reports still load',
+              'Renamed in the export only, not in the database',
+            ]}
           />
         </NextMoveContent>
       </NextMoveCard>

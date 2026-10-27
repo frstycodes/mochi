@@ -21,7 +21,6 @@ import {
   turnProposalCount,
 } from '../chat/proposals.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { openTurn } from '../chat/turnChanges.ts';
 import { reportItems } from '../goals/ledger.ts';
 import {
   authorName,
@@ -1087,22 +1086,13 @@ const GOAL_SPECS = {
         },
       });
       const running = caller.steps.find((s) => s.status === 'running');
-      const note = [
-        running &&
-          `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`,
-        isSpineOn &&
-          !assumptions.length &&
-          isFirstReport(caller) &&
-          !!openTurn(caller.activity)?.files.length &&
-          NO_ASSUMPTIONS_NOTE,
-      ]
-        .filter(Boolean)
-        .join(' ');
       return {
         changed: 'reported',
         result: {
           ...reportOf(target(state(), caller, caller.id)),
-          ...(note && { note }),
+          ...(running && {
+            note: `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`,
+          }),
         },
       };
     },
@@ -1379,12 +1369,6 @@ const SPECS = {
   browser_batch: { run: runBatch },
   ...SETTINGS_TOOLS,
 } satisfies Specs;
-
-const NO_ASSUMPTIONS_NOTE =
-  "You changed files and reported no assumptions; if you chose anything the user didn't specify, call report_turn again with it.";
-
-/** The turn's first report: a second one (answering a note) gets no note of its own, so notes never loop. */
-const isFirstReport = (t: Thread) => t.report?.turn !== (t.idle?.turn ?? 0) + 1;
 
 /**
  * update_plan with the turn spine's pivots: a resent plan that drops or renames steps is recorded with its `why` where the
