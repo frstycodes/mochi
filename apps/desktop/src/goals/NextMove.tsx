@@ -139,7 +139,12 @@ export function NextMoveContent({
 
 /** The agent's own words for what changed, from its report. */
 export function NextMoveSummary({ className, ...props }: ComponentProps<'p'>) {
-  return <p className={cn('type-prose text-pretty', className)} {...props} />;
+  return (
+    <p
+      className={cn('type-prose text-pretty text-muted-foreground', className)}
+      {...props}
+    />
+  );
 }
 
 export function NextMoveQuestion({ className, ...props }: ComponentProps<'p'>) {
@@ -161,7 +166,7 @@ export function NextMoveAnswer({ className, ...props }: ComponentProps<'p'>) {
   );
 }
 
-/** An answered card, kept in the chat: the summary dimmed, the question, what you chose (none when you wrote instead). */
+/** An answered card, kept in the chat: the summary, the question, what you chose (none when you wrote instead). */
 export function NextMoveRecord({
   record,
 }: {
@@ -171,9 +176,7 @@ export function NextMoveRecord({
     <NextMoveCard aria-label="Next move, answered">
       <NextMoveContent>
         {!!record.summary && (
-          <NextMoveSummary className="text-muted-foreground">
-            {record.summary}
-          </NextMoveSummary>
+          <NextMoveSummary>{record.summary}</NextMoveSummary>
         )}
         <NextMoveQuestion>{record.question}</NextMoveQuestion>
         {!!record.answer && <NextMoveAnswer>{record.answer}</NextMoveAnswer>}

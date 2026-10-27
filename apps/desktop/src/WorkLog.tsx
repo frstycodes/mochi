@@ -209,7 +209,8 @@ export function CallList({ className, ...props }: ComponentProps<'ol'>) {
   return (
     <ol
       className={cn(
-        'flex flex-col divide-y overflow-hidden rounded-xl border',
+        // Inside a card the list turns into a filled well, so it never draws a second outline within the card's.
+        'flex flex-col divide-y overflow-hidden rounded-xl border in-data-[slot=card]:divide-y-0 in-data-[slot=card]:rounded-lg in-data-[slot=card]:border-0 in-data-[slot=card]:bg-foreground/5',
         className,
       )}
       {...props}
