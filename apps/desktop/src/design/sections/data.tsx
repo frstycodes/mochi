@@ -5,7 +5,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 import {
   Avatar,
   AvatarBadge,
@@ -14,14 +13,6 @@ import {
   AvatarGroupCount,
   AvatarImage,
 } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from '@/components/ui/carousel';
 import {
   ChartContainer,
   ChartLegend,
@@ -236,29 +227,6 @@ export function DataSection() {
           </Accordion>
         </Block>
         <Block
-          title="Carousel"
-          use="Before and after screenshots an agent attaches to a PR."
-        >
-          <Carousel className="mx-12">
-            <CarouselContent>
-              {['Before', 'After', 'Mobile'].map((label) => (
-                <CarouselItem key={label}>
-                  <AspectRatio
-                    ratio={16 / 10}
-                    className="flex items-center justify-center rounded-xl border bg-muted"
-                  >
-                    <span className="type-meta text-muted-foreground">
-                      {label}
-                    </span>
-                  </AspectRatio>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <CarouselPrevious />
-            <CarouselNext />
-          </Carousel>
-        </Block>
-        <Block
           title="Resizable"
           use="Split views: chat beside a diff or terminal. Drag the handle."
           wide
@@ -279,17 +247,6 @@ export function DataSection() {
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
-        </Block>
-        <Block
-          title="Aspect ratio"
-          use="Media that must keep its shape: screenshots, previews."
-        >
-          <AspectRatio
-            ratio={16 / 9}
-            className="flex items-center justify-center rounded-xl border bg-muted"
-          >
-            <Badge variant="secondary">16 : 9 preview</Badge>
-          </AspectRatio>
         </Block>
       </Grid>
     </Section>

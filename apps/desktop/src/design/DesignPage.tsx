@@ -10,8 +10,6 @@ import {
   Moon,
   Pin,
   Sun,
-  TextBold,
-  TextItalic,
   WarningAlt,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -25,7 +23,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Marker, MarkerContent } from '@/components/ui/marker';
 import {
   Questionnaire,
   QuestionnaireActions,
@@ -70,7 +67,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/toast/Toaster';
 import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
-import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
@@ -104,10 +100,8 @@ import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
 import { SteerBlock } from './sections/steer';
-import { SummaryGoalBlock } from './sections/summary-goal';
 import { ThreadRowVariantsBlock } from './sections/thread-rows';
 import { SubThreadsBlock } from './sections/sub-threads';
-import { SubThreadGroupingBlock } from './sections/sub-thread-grouping';
 import { TiltedDragBlock } from './sections/tilted-drag';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
 import { MergeButtonBlock } from './sections/merge-button';
@@ -122,7 +116,6 @@ import {
   StepStatusIcon,
   ThreadStatusIcon,
   lineColor,
-  stepLabel,
 } from '../ui';
 import { ColorPair } from './color-pair';
 import { Block, Grid, Section } from './layout';
@@ -532,7 +525,6 @@ function Foundations() {
                   className="flex items-center gap-1.5 type-caption text-muted-foreground"
                 >
                   <StepStatusIcon status={s} />
-                  {stepLabel(s)}
                 </span>
               ),
             )}
@@ -699,17 +691,6 @@ function Actions() {
                 Codex
               </ToggleGroupItem>
             </ToggleGroup>
-            <Toggle variant="outline" size="sm" aria-label="Bold">
-              <TextBold />
-            </Toggle>
-            <Toggle
-              variant="outline"
-              size="sm"
-              defaultPressed
-              aria-label="Italic"
-            >
-              <TextItalic />
-            </Toggle>
           </div>
         </Block>
       </Grid>
@@ -1083,16 +1064,6 @@ function Conversation() {
             />
           </div>
         </Block>
-        <Block
-          title="Event marker"
-          use="Mochi events you would scroll back to: finished steps, goal revisions, handoffs."
-        >
-          <Marker variant="separator">
-            <MarkerContent className="type-caption">
-              Goal v2: + Done when: Every 429 carries Retry-After
-            </MarkerContent>
-          </Marker>
-        </Block>
       </Grid>
     </Section>
   );
@@ -1182,10 +1153,8 @@ function Recipes() {
         </Block>
         <NextMoveBlock rl={rl} />
         <SteerBlock />
-        <SummaryGoalBlock rl={rl} />
         <ThreadRowVariantsBlock rl={rl} />
         <SubThreadsBlock rl={rl} />
-        <SubThreadGroupingBlock rl={rl} />
         <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
         <MergeButtonBlock />

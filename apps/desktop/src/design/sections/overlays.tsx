@@ -39,16 +39,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from '@/components/ui/drawer';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -237,8 +227,8 @@ export function OverlaysSection() {
           </div>
         </Block>
         <Block
-          title="Sheet and drawer"
-          use="Sheets slide from the side (the summary panel on narrow screens); drawers come up from the bottom on phones."
+          title="Sheet"
+          use="Sheets slide from the side (the summary panel on narrow screens)."
         >
           <div className="flex flex-wrap items-center gap-3">
             <Sheet>
@@ -254,25 +244,6 @@ export function OverlaysSection() {
                 </SheetHeader>
               </SheetContent>
             </Sheet>
-            <Drawer>
-              <DrawerTrigger asChild>
-                <Button variant="outline">Open drawer</Button>
-              </DrawerTrigger>
-              <DrawerContent>
-                <DrawerHeader>
-                  <DrawerTitle>Answer from your phone</DrawerTitle>
-                  <DrawerDescription>
-                    The queue on a phone opens decisions in a drawer.
-                  </DrawerDescription>
-                </DrawerHeader>
-                <DrawerFooter>
-                  <Button>Record fixtures</Button>
-                  <DrawerClose asChild>
-                    <Button variant="outline">Not now</Button>
-                  </DrawerClose>
-                </DrawerFooter>
-              </DrawerContent>
-            </Drawer>
           </div>
         </Block>
         <Block

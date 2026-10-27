@@ -336,21 +336,3 @@ export function SummaryNextMove({
     </button>
   );
 }
-
-/** A settled goal in numbers: criteria verified, not steps finished. */
-export function SummaryGoalOutcome({
-  rows,
-}: {
-  rows: [label: string, value: string][];
-}) {
-  return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-1 type-meta">
-      {rows.map(([label, value]) => (
-        <div key={label} className="contents">
-          <dt className="text-subtle-foreground">{label}</dt>
-          <dd className="tabular">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}

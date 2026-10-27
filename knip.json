@@ -17,12 +17,7 @@
         "tests/e2e/*.{ts,js,mjs}",
         "src/lib/{shiki-slim,no-wasm}.ts"
       ],
-      "ignore": [
-        "src/schemaConformance/**",
-        "src/schedule/RunMenu.tsx",
-        "src/goals/outcome.ts",
-        "src/settings/sections/goals.tsx"
-      ],
+      "ignore": ["src/schemaConformance/**"],
       "ignoreDependencies": ["@parcel/watcher", "node-pty"]
     },
     "packages/schema": {

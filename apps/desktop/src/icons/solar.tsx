@@ -120,7 +120,6 @@ export const FileDownload = solar(
 export const FileText = solar(Linear.FileTextIcon, Bold.FileTextIcon);
 export const Filter = solar(Linear.FilterIcon, Bold.FilterIcon);
 export const Flag = solar(Linear.FlagIcon, Bold.FlagIcon);
-export const Flash = solar(Linear.BoltIcon, Bold.BoltIcon);
 export const Folder = solar(Linear.FolderIcon, Bold.FolderIcon);
 export const FolderMove = solar(Linear.MoveToFolderIcon, Bold.MoveToFolderIcon);
 export const FolderOpen = solar(Linear.FolderOpenIcon, Bold.FolderOpenIcon);
@@ -140,7 +139,6 @@ export const Grid = solar(Linear.WidgetIcon, Bold.WidgetIcon);
 export const Hand = solar(Linear.HandStarsIcon, Bold.HandStarsIcon);
 export const Hierarchy = solar(Linear.StructureIcon, Bold.StructureIcon);
 export const GitBranch = solar(Linear.GitBranchIcon, Bold.GitBranchIcon);
-export const Hierarchy3 = solar(Linear.Routing2Icon, Bold.Routing2Icon);
 export const History = solar(Linear.HistoryIcon, Bold.HistoryIcon);
 export const Home = solar(Linear.HomeIcon, Bold.HomeIcon);
 export const Hourglass = solar(Linear.HourglassIcon, Bold.HourglassIcon);
@@ -248,10 +246,6 @@ export const Send = solar(Linear.Plane2Icon, Bold.Plane2Icon);
 export const SendAlt = solar(Linear.PlaneIcon, Bold.PlaneIcon);
 export const Server = solar(Linear.ServerIcon, Bold.ServerIcon);
 export const Settings = solar(Linear.SettingsIcon, Bold.SettingsIcon);
-export const SettingsGear = solar(
-  Linear.SettingsMinimalisticIcon,
-  Bold.SettingsMinimalisticIcon,
-);
 export const Share = solar(Linear.ExportIcon, Bold.ExportIcon);
 export const ShieldAlert = solar(
   Linear.ShieldWarningIcon,
@@ -270,7 +264,6 @@ export const SidebarLeft = solar(
 );
 export const SidebarRight = solar(Linear.PanelRightIcon, Bold.PanelRightIcon);
 export const SkipBack = solar(Linear.SkipPreviousIcon, Bold.SkipPreviousIcon);
-export const SkipForward = solar(Linear.SkipNextIcon, Bold.SkipNextIcon);
 export const SkipForwardAlt = solar(Linear.SkipNextIcon, Bold.SkipNextIcon);
 export const SortVertical = solar(
   Linear.SortVerticalIcon,
@@ -287,15 +280,9 @@ export const StopCircle = solar(Linear.StopCircleIcon, Bold.StopCircleIcon);
 export const Sun = solar(Linear.SunIcon, Bold.SunIcon);
 export const Table = solar(Linear.TableIcon, Bold.TableIcon);
 export const Tablet = solar(Linear.TabletIcon, Bold.TabletIcon);
-export const TaskSquare = solar(
-  Linear.ChecklistMinimalisticIcon,
-  Bold.ChecklistMinimalisticIcon,
-);
 export const Terminal = solar(Linear.ProgrammingIcon, Bold.ProgrammingIcon);
 export const Text = solar(Linear.TextSquareIcon, Bold.TextSquareIcon);
 export const TextAlignLeft = solar(Linear.AlignLeftIcon, Bold.AlignLeftIcon);
-export const TextBold = solar(Linear.TextBoldIcon, Bold.TextBoldIcon);
-export const TextItalic = solar(Linear.TextItalicIcon, Bold.TextItalicIcon);
 export const TextSelect = solar(
   Linear.TextSelectionIcon,
   Bold.TextSelectionIcon,

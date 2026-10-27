@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ArrowUp, ChevronDown, Search } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Command,
@@ -10,7 +9,6 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { DirectionProvider } from '@/components/ui/direction';
 import {
   Field,
   FieldContent,
@@ -30,12 +28,6 @@ import {
   InputGroupInput,
   InputGroupTextarea,
 } from '@/components/ui/input-group';
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSeparator,
-  InputOTPSlot,
-} from '@/components/ui/input-otp';
 import { Kbd } from '@/components/ui/kbd';
 import { Label } from '@/components/ui/label';
 import {
@@ -182,31 +174,6 @@ export function InputsSection() {
         <SwitchBlock />
         <SliderBlock />
         <Block
-          title="Input OTP"
-          use="Pairing a device: the 6-digit code from the other machine."
-        >
-          <Field>
-            <FieldLabel htmlFor="pair-code">Pairing code</FieldLabel>
-            <InputOTP id="pair-code" maxLength={6} defaultValue="4821">
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-              </InputOTPGroup>
-              <InputOTPSeparator />
-              <InputOTPGroup>
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-            <FieldDescription>
-              Shown on the machine you're pairing with.
-            </FieldDescription>
-          </Field>
-        </Block>
-        <CalendarBlock />
-        <Block
           title="Label"
           use="Standalone labels outside a Field, like next to a switch in a toolbar."
         >
@@ -214,20 +181,6 @@ export function InputsSection() {
             <Switch id="auto-settle" defaultChecked />
             <Label htmlFor="auto-settle">Auto-settle after 3 idle days</Label>
           </div>
-        </Block>
-        <Block
-          title="Right to left"
-          use="Every field mirrors inside a DirectionProvider."
-        >
-          <DirectionProvider dir="rtl">
-            <div dir="rtl" className="flex flex-col gap-3">
-              <Input aria-label="RTL input" defaultValue="مرحبا بالعالم" />
-              <div className="flex items-center gap-2">
-                <Checkbox id="rtl-check" defaultChecked />
-                <Label htmlFor="rtl-check">تفعيل</Label>
-              </div>
-            </div>
-          </DirectionProvider>
         </Block>
       </Grid>
     </Section>
@@ -462,24 +415,6 @@ function SliderBlock() {
           Past 6, review becomes the bottleneck.
         </FieldDescription>
       </Field>
-    </Block>
-  );
-}
-
-function CalendarBlock() {
-  const [date, setDate] = useState<Date | undefined>(new Date(2026, 9, 14));
-  return (
-    <Block
-      title="Calendar"
-      use="Scheduling: snooze a thread, run a task later."
-    >
-      <Calendar
-        mode="single"
-        selected={date}
-        onSelect={setDate}
-        defaultMonth={new Date(2026, 9, 1)}
-        className="w-fit rounded-xl border"
-      />
     </Block>
   );
 }
