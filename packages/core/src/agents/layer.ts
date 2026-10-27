@@ -5,6 +5,7 @@ import type { AgentLogin } from '../../../../apps/desktop/src/host/types/setting
 import { Capabilities } from '../hostServer.ts';
 import { clientFromRun, useCoreClient } from '../runClient.ts';
 import { Run } from '../run.ts';
+import { Projection } from '../store/projection.ts';
 import { Store } from '../store/store.ts';
 import { ThreadContext } from '../switch/context.ts';
 import { UtilityQueue } from '../utility/queue.ts';
@@ -26,6 +27,7 @@ import { setThreadHistory } from './mochiTools.ts';
 import { noteLogin } from './models.ts';
 import { setDataDir } from './paths.ts';
 import { setImageDir } from './images.ts';
+import { useAgentDriven } from './processKill.ts';
 import { Turns } from './turns.ts';
 
 let settingsDoc: unknown;
@@ -122,6 +124,13 @@ export const layerAgents = (userData: string | undefined) =>
           Effect.runPromise(store.setDoc('limits', accountId, limits)),
       });
       useAgentServices({ turns, queue, context });
+      const projection = yield* Projection;
+      useAgentDriven(
+        (threadId) =>
+          !!Effect.runSync(projection.current).domain.threads.find(
+            (t) => t.id === threadId,
+          )?.turn?.isAgentDriven,
+      );
       setThreadHistory(threadHistory);
       yield* Effect.addFinalizer(() => Effect.sync(disposeAgents));
     }),
