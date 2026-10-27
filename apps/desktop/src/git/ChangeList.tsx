@@ -292,37 +292,41 @@ function HunkBlock({
       metadata: { thread },
     })),
   ];
+  const showHeader = file.hunks.length > 1;
+  const showToolbar = showHeader || actions.canStage;
   return (
     <div className="group/hunk">
-      <div className="flex h-6 items-center gap-2 pr-1.5 pl-3">
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-subtle-foreground">
-          {hunk.header}
-        </span>
-        {actions.canStage && (
-          <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/hunk:opacity-100 focus-within:opacity-100">
-            {!file.staged && (
+      {showToolbar && (
+        <div className="flex h-6 items-center gap-2 pr-1.5 pl-3">
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-subtle-foreground">
+            {showHeader && hunk.header}
+          </span>
+          {actions.canStage && (
+            <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/hunk:opacity-100 focus-within:opacity-100">
+              {!file.staged && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => actions.revert(target)}
+                  className="text-muted-foreground"
+                >
+                  Revert
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => actions.revert(target)}
+                onClick={() =>
+                  file.staged ? actions.unstage(target) : actions.stage(target)
+                }
                 className="text-muted-foreground"
               >
-                Revert
+                {file.staged ? 'Unstage' : 'Stage'}
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() =>
-                file.staged ? actions.unstage(target) : actions.stage(target)
-              }
-              className="text-muted-foreground"
-            >
-              {file.staged ? 'Unstage' : 'Stage'}
-            </Button>
-          </span>
-        )}
-      </div>
+            </span>
+          )}
+        </div>
+      )}
       <HunkDiff
         patch={hunk.patch}
         diffStyle={actions.diffStyle}
