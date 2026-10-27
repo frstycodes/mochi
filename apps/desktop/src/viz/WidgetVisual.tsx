@@ -144,6 +144,6 @@ function widgetDocument(source: string, id: string, scheme: 'light' | 'dark') {
   addEventListener('DOMContentLoaded', () => { new ResizeObserver(size).observe(document.documentElement); size(); });
 })();`;
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}">
-<style>:root{${root};color-scheme:${scheme}}html,body{margin:0;background:transparent;color:var(--foreground);font:13px/20px 'Inter Variable',system-ui,sans-serif}body>svg{display:block;max-width:100%;height:auto;margin:auto}</style>
+<style>:root{${root};color-scheme:${scheme}}html,body{margin:0;background:transparent;color:var(--foreground);font:13px/20px system-ui,sans-serif}body>svg{display:block;max-width:100%;height:auto;margin:auto}</style>
 <script>${bootstrap.replaceAll('</', '<\\/')}</script></head><body>${source}</body></html>`;
 }

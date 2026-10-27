@@ -6,16 +6,21 @@ import { host } from '../host';
 import type { SystemFont } from '../host/types/settings.ts';
 import { queryKeys } from '../queryKeys.ts';
 import { usePrefs, type Prefs } from './prefs.ts';
-import type { FontKind } from './settingOptions.ts';
+import { SYSTEM_FONT, type FontKind } from './settingOptions.ts';
 
 // The same stacks as --font-sans and --font-mono in index.css, which apply while no font is picked.
 const FALLBACK_STACK = {
-  ui: "'Inter Variable', system-ui, -apple-system, sans-serif",
-  mono: "ui-monospace, 'SF Mono', Menlo, monospace",
+  ui: 'system-ui, -apple-system, sans-serif',
+  mono: "'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace",
 } satisfies Record<FontKind, string>;
 
 /** A CSS font-family list for a picked family ('' is the default), ending in the default so a missing font falls back. */
 export function fontStack(kind: FontKind, family: string) {
+  if (family === SYSTEM_FONT[kind]) {
+    return kind === 'ui'
+      ? 'system-ui, -apple-system, sans-serif'
+      : "ui-monospace, 'SF Mono', Menlo, monospace";
+  }
   const name = family.replace(/["\\]/g, '');
   return name ? `"${name}", ${FALLBACK_STACK[kind]}` : FALLBACK_STACK[kind];
 }
@@ -71,6 +76,7 @@ export function isMissingFont(
   fonts: SystemFont[] | null | undefined,
 ) {
   if (!family || !fonts) return false;
+  if (family === SYSTEM_FONT.ui || family === SYSTEM_FONT.mono) return false;
   const name = family.toLowerCase();
   return !fonts.some((f) => f.family.toLowerCase() === name);
 }

@@ -5,18 +5,22 @@ import { fontStack, isMissingFont } from './fonts.ts';
 test('a picked family leads the stack and falls back to the default', () => {
   assert.equal(
     fontStack('mono', 'JetBrains Mono'),
-    `"JetBrains Mono", ui-monospace, 'SF Mono', Menlo, monospace`,
+    `"JetBrains Mono", 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace`,
   );
   assert.equal(
     fontStack('mono', ''),
-    "ui-monospace, 'SF Mono', Menlo, monospace",
+    "'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace",
+  );
+  assert.equal(
+    fontStack('ui', 'system-ui'),
+    'system-ui, -apple-system, sans-serif',
   );
 });
 
 test('quotes in a typed family cannot break out of the stack', () => {
   assert.equal(
     fontStack('ui', 'Evil", serif; x: "'),
-    `"Evil, serif; x: ", 'Inter Variable', system-ui, -apple-system, sans-serif`,
+    `"Evil, serif; x: ", system-ui, -apple-system, sans-serif`,
   );
 });
 

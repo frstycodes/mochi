@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { FileLinkButton, useWorktreeLink } from '../chat/ChatLink';
 import { isFilePath } from './kinds';
 
-// em-relative so code sits in whatever text it's in (prose 14px, captions 11px); mono reads larger than Inter at the same size.
+// em-relative so code sits in whatever text it's in (prose 14px, captions 11px); mono reads larger than the UI font at the same size.
 const INLINE_CODE =
   'rounded-md bg-foreground/7 dark:bg-muted px-[0.4em] py-[0.1em] font-mono text-[max(0.85em,11px)]';
 

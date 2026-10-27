@@ -4,9 +4,20 @@ import type { AgentControl, Prefs } from './prefs.ts';
 
 export type FontKind = 'ui' | 'mono';
 
-/** What an empty font pref shows as: the bundled Inter, or the OS's own monospace. */
+/** What an empty font pref shows as: the OS interface font or the bundled JetBrains Mono. */
 export const DEFAULT_FONT_LABEL = {
-  ui: 'Inter',
+  ui: 'System font',
+  mono: 'JetBrains Mono',
+} satisfies Record<FontKind, string>;
+
+/** Pref values that pick the OS's own face (San Francisco on macOS) instead of a named family. */
+export const SYSTEM_FONT = {
+  ui: 'system-ui',
+  mono: 'ui-monospace',
+} satisfies Record<FontKind, string>;
+
+export const SYSTEM_FONT_LABEL = {
+  ui: 'System font',
   mono: 'System monospace',
 } satisfies Record<FontKind, string>;
 
