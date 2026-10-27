@@ -65,15 +65,10 @@ export function AssumptionList({
   );
 }
 
-/** One assumption as its own row: an open one sits on a warning wash, the same as on the turn's spine. */
+/** One assumption as its own row, its icon on the spine's node column and its text on the step titles'. */
 export function AssumptionRow(props: AssumptionLineProps) {
   return (
-    <li
-      className={cn(
-        'min-h-9 rounded-md px-3 py-2',
-        props.assumption.state === 'open' && 'bg-warning/8',
-      )}
-    >
+    <li className="min-h-9 py-2">
       <AssumptionLine {...props} />
     </li>
   );
@@ -85,7 +80,10 @@ export type AssumptionLineProps = {
   onChange: () => void;
 };
 
-/** An assumption's icon, text and answers. It wraps instead of truncating: you can't accept what you can't read. */
+/**
+ * An assumption's icon, text and answers. It wraps instead of truncating: you can't accept what you can't read. An open one
+ * leads with "Assumed" in amber, the way a pivot leads with its name; its answers end on the spine's caption column.
+ */
 export function AssumptionLine({
   assumption: a,
   onAccept,
@@ -105,14 +103,20 @@ export function AssumptionLine({
       <span
         className={cn(
           'min-w-0 flex-1 text-pretty [overflow-wrap:anywhere]',
-          isOpen && 'text-foreground',
+          isOpen && 'text-foreground/80',
         )}
       >
-        <span className="sr-only">{`${STATE_LABEL[a.state]}: `}</span>
-        {a.text}
+        {isOpen ? (
+          <AssumedText text={a.text} />
+        ) : (
+          <>
+            <span className="sr-only">{`${STATE_LABEL[a.state]}: `}</span>
+            {a.text}
+          </>
+        )}
       </span>
       {isOpen ? (
-        <span className="flex shrink-0 items-center gap-0.5">
+        <span className="flex shrink-0 items-center gap-0.5 pr-6">
           <Button size="xs" variant="ghost" onClick={onChange}>
             Change
           </Button>
@@ -122,12 +126,23 @@ export function AssumptionLine({
         </span>
       ) : (
         a.state === 'changed' && (
-          <span aria-hidden className="shrink-0 pr-2 type-caption leading-5">
+          <span aria-hidden className="shrink-0 pr-8 type-caption leading-5">
             Changed
           </span>
         )
       )}
     </div>
+  );
+}
+
+/** "Assumed timestamps are UTC" with its first word in amber; text that doesn't start with it gets "Assumed ·" before it. */
+function AssumedText({ text }: { text: string }) {
+  const rest = /^assumed\b/i.test(text) ? text.slice(7) : ` · ${text}`;
+  return (
+    <>
+      <span className="font-medium text-warning">Assumed</span>
+      {rest}
+    </>
   );
 }
 

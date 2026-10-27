@@ -75,7 +75,7 @@ export function TurnSpine({
             const a = ledger.get(item.id);
             return (
               !!a && (
-                <ItemRail key={j} isTinted={a.state === 'open'}>
+                <ItemRail key={j}>
                   <AssumptionLine
                     assumption={a}
                     onAccept={() => onSet(a, 'accepted')}
@@ -293,29 +293,15 @@ function StepRow({
   );
 }
 
-/** Hangs off the step above: a short tick from the rail, then the item. `isTinted`: it waits for you, so it sits on a warning wash. */
-function ItemRail({
-  isTinted,
-  children,
-}: {
-  isTinted?: boolean;
-  children: ReactNode;
-}) {
+/** Hangs off the step above: a short tick from the rail, then the item. */
+function ItemRail({ children }: { children: ReactNode }) {
   return (
     <Rail className="pl-0">
       <span
         aria-hidden
         className="absolute top-[18px] left-[7px] h-px w-[13px] bg-border"
       />
-      <div
-        className={cn(
-          isTinted
-            ? '-my-1 ml-1.5 rounded-md bg-warning/8 py-1 pr-1 pl-1.5'
-            : 'pl-3',
-        )}
-      >
-        {children}
-      </div>
+      <div className="pl-3">{children}</div>
     </Rail>
   );
 }
@@ -355,7 +341,7 @@ function DroppedRow({ title }: { title: string }) {
           <span className="sr-only">Dropped: </span>
           {title}
         </span>
-        <span aria-hidden className="shrink-0 pr-2 type-caption leading-5">
+        <span aria-hidden className="shrink-0 pr-8 type-caption leading-5">
           Dropped
         </span>
       </div>

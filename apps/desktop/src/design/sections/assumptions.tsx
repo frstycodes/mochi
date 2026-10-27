@@ -23,7 +23,7 @@ export function AssumptionsBlock({ rl }: { rl: Thread }) {
   return (
     <Block
       title="Turn spine"
-      use="After the summary, before the question: the turn's plan as a rail. The label indexes it (N to check · pivots · decisions). Each step folds to one row saying what it holds; steps with something to check, and pivots, start open. Decisions (dot) and assumptions (amber wash, Accept or Change) hang off their step; a pivot is a rail node with its reason, the steps it dropped forking off below it, dashed. Earlier turns' open assumptions stay under Still open. Second card: a turn with no plan falls back to rows."
+      use="After the summary, before the question: the turn's plan as a rail. The label indexes it (N to check · pivots · decisions). Each step folds to one row saying what it holds; steps with something to check, and pivots, start open. Decisions (dot) and assumptions (amber icon and “Assumed”, Accept or Change, actions on the caption column) hang off their step; a pivot is a rail node with its reason, the steps it dropped forking off below it, dashed. Earlier turns' open assumptions stay under Still open. Second card: a turn with no plan falls back to rows."
       wide
     >
       <VizThreadProvider value={rl.id}>
