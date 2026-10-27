@@ -1249,14 +1249,10 @@ const USER_SPECS = {
 
 const AGENT_SPECS = {
   update_plan: {
-    run: ({ caller, args, dispatch }) => {
+    run: ({ state, caller, args, dispatch }) => {
       if (!args.items && !args.advance)
         throw new Error(
           'Pass {"items": [...]} (the whole plan) or {"advance": true}',
-        );
-      if (args.items && !args.scope)
-        throw new Error(
-          'Pass "scope" with "items": "first_task" or "continuation"',
         );
       const items = args.items
         ? args.items.map((i) => ({
@@ -1274,7 +1270,9 @@ const AGENT_SPECS = {
         },
         ms: Date.now(),
       });
-      return { result: `Plan shown (${items.length} steps).` };
+      return {
+        result: planStatus(target(state(), caller, caller.id).steps),
+      };
     },
   },
   start_subagent: {
@@ -1711,6 +1709,19 @@ function advanced(steps: Step[]): AgentPlanItem[] {
   const next = items.findIndex((i, k) => k > running && i.status === 'pending');
   if (next >= 0) items[next].status = 'running';
   return items;
+}
+
+/** The plan as the agent left it, so it never has to count its own advances to know which step is running. */
+function planStatus(steps: Step[]) {
+  const open = steps.filter((s) => s.status !== 'dropped');
+  const done = open.filter((s) => s.status === 'done').length;
+  const at = open.findIndex((s) => s.status === 'running');
+  const next = open.find((s, k) => k > at && s.status === 'ready');
+  const upNext = next ? ` Next: "${next.title}".` : '';
+  if (at >= 0)
+    return `Step ${at + 1}/${open.length} in progress: "${open[at].title}".${upNext || ' Last step: advance once more when it is done.'}`;
+  if (done === open.length) return `Plan done (${done}/${open.length}).`;
+  return `Nothing in progress; ${done}/${open.length} done.${upNext}`;
 }
 
 export function summary(thread: Thread) {
