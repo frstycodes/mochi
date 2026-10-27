@@ -84,7 +84,7 @@ The signature artifacts are the chat (main view), the summary card with its floa
 - **No brand accent.** Primary actions are the inverted neutral (near-white on dark, near-black on light), like Raycast. Selection is the `accent` wash, never a hue.
 - **Spaces** carry no color. The sidebar stays the same neutral in every space; a space is told apart by its icon (briefcase, home, layers) and name, like Arc's space icons. Space hues tinted too much of the UI and fought the thread line colors.
 - **Thread lines** use the validated categorical order `chart-1…5`. A thread keeps its colour for life. Line colour marks identity only: the metro line, the progress ring, the dot next to a thread name. Text never wears a line colour.
-- **Status** is reserved: success (running), warning (needs you), destructive (failed). Always paired with an icon or label.
+- **Status** is reserved: warning (needs you), destructive (failed), success (passed: checks, met criteria). Running is a muted pulse, never a colour; pending checks are a grey dot. Always paired with an icon or label (`StatusMark` in `ui.tsx`).
 
 ## Color themes
 

@@ -15,7 +15,7 @@ import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { runningBackground } from './runtime/subagents';
 import { useHarnessSelector } from './store';
 import { isUnread } from './store/seen';
-import { LiveDot } from './ui';
+import type { StatusMarkKind } from './ui';
 import { ProjectIcon } from './ProjectIcon';
 import { useProjectAt } from './projects';
 
@@ -53,49 +53,20 @@ export function threadDetail(thread: Thread, question?: string) {
 }
 
 /**
- * A thread row's one status, at the title line's end: a quiet pulse while working, else a dot for what asks for you (needs you,
- * failed), else blue for unread; nothing for an idle thread you've seen.
+ * A dense row's one mark, at the title line's end: a pulse while working, else what asks for you (needs you, failed), else unread;
+ * nothing for an idle thread you've seen.
  */
-export function ThreadStatusDot({
-  row,
-  isActive,
-  className,
-}: {
-  row: ThreadRow;
-  isActive?: boolean;
-  className?: string;
-}) {
-  if (row.isWorking)
-    return (
-      <span
-        role="img"
-        aria-label="Working"
-        className={cn('flex shrink-0', className)}
-      >
-        <LiveDot className="size-1.5 text-muted-foreground" />
-      </span>
-    );
-  const dot =
-    row.tone === 'warning' || row.tone === 'destructive'
-      ? row.tone
-      : row.isUnread && !isActive
-        ? 'unread'
-        : null;
-  if (!dot) return null;
-  return (
-    <span
-      role="img"
-      aria-label={dot === 'unread' ? 'Unread' : row.status}
-      className={cn('size-1.5 shrink-0 rounded-full', DOT_BG[dot], className)}
-    />
-  );
+export function rowStatusMark(
+  row: Pick<ThreadRow, 'isWorking' | 'tone' | 'status' | 'isUnread'>,
+  isActive?: boolean,
+): { status: StatusMarkKind; label: string } | null {
+  if (row.isWorking) return { status: 'running', label: row.status };
+  if (row.tone === 'warning') return { status: 'needs-you', label: row.status };
+  if (row.tone === 'destructive')
+    return { status: 'failed', label: row.status };
+  if (row.isUnread && !isActive) return { status: 'unread', label: 'Unread' };
+  return null;
 }
-
-const DOT_BG = {
-  warning: 'bg-warning',
-  destructive: 'bg-destructive',
-  unread: 'bg-unread',
-} satisfies Record<string, string>;
 
 /** The thread's project as its icon (a chat glyph when it has none), named in the tooltip. */
 export function ThreadProjectMark({ thread }: { thread: Thread }) {

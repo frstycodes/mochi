@@ -107,8 +107,8 @@ import { HarnessProvider, useHarness } from '../store';
 import {
   ProgressRing,
   ProviderMark,
-  StepStatusIcon,
-  ThreadStatusIcon,
+  STEP_MARKS,
+  StatusMark,
   lineColor,
 } from '../ui';
 import { ColorPair } from './color-pair';
@@ -518,7 +518,8 @@ function Foundations() {
                   key={s}
                   className="flex items-center gap-1.5 type-caption text-muted-foreground"
                 >
-                  <StepStatusIcon status={s} />
+                  <StatusMark status={STEP_MARKS[s]} size="icon" />
+                  {s}
                 </span>
               ),
             )}
@@ -1293,26 +1294,31 @@ function Recipes() {
         </Block>
         <Block
           title="Thread states"
-          use="Status icons always sit next to a word or a title."
+          use="Dot in dense rows (sidebar, switcher, queue); dot or icon in ⌘K and peek. Always next to a word or a title."
         >
           <div className="flex flex-col gap-2">
-            {(['running', 'needs-you', 'review', 'settled'] as const).map(
-              (s) => (
-                <span key={s} className="flex items-center gap-2 type-meta">
-                  <span className="flex w-4 justify-center">
-                    <ThreadStatusIcon status={s} />
-                  </span>
-                  {
-                    {
-                      running: 'Running',
-                      'needs-you': 'Needs you',
-                      review: 'Ready for review',
-                      settled: 'Settled',
-                    }[s]
-                  }
+            {(
+              [
+                'running',
+                'needs-you',
+                'failed',
+                'unread',
+                'review',
+                'settled',
+                'ready',
+                'dropped',
+              ] as const
+            ).map((s) => (
+              <span key={s} className="flex items-center gap-2 type-meta">
+                <span className="flex w-4 justify-center">
+                  <StatusMark status={s} />
                 </span>
-              ),
-            )}
+                <span className="flex w-4 justify-center">
+                  <StatusMark status={s} size="icon" />
+                </span>
+                {s}
+              </span>
+            ))}
           </div>
         </Block>
       </Grid>

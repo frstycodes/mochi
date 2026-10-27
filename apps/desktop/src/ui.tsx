@@ -21,7 +21,6 @@ import {
   RecordCircle as Circle,
   CheckCircle as CircleCheck,
   Ban as CircleSlash,
-  Hand,
   customIcon,
   MessageQuestion as MessageCircleQuestion,
   type IconComponent as LucideIcon,
@@ -152,79 +151,92 @@ export function LiveDot({
   );
 }
 
-/** Something new since you last looked; the same mark wherever read state shows. */
-export function UnreadDot({ className }: { className?: string }) {
+export type StatusMarkKind =
+  | ThreadStatus
+  | 'unread'
+  | 'failed'
+  | 'ready'
+  | 'dropped';
+
+/**
+ * A thread's or step's status: `dot` in dense rows, where an icon's detail can't be made out that small; `icon` (the dot where a
+ * state has no icon) in ⌘K and peek. Warning is only ever "needs you".
+ */
+export function StatusMark({
+  status,
+  size = 'dot',
+  label,
+  className,
+}: {
+  status: StatusMarkKind;
+  size?: 'dot' | 'icon';
+  label?: string;
+  className?: string;
+}) {
+  const mark = STATUS_MARKS[status];
+  const name = label ?? mark.label;
+  if (size === 'icon' && 'icon' in mark)
+    return (
+      <mark.icon
+        aria-label={name}
+        className={cn('size-4 shrink-0', mark.tone, className)}
+      />
+    );
+  const dotSize = size === 'icon' ? 'size-2' : 'size-1.5';
   return (
     <span
-      aria-label="Unread"
-      className={cn('size-1.5 shrink-0 rounded-full bg-foreground', className)}
-    />
+      role="img"
+      aria-label={name}
+      className={cn(
+        'flex shrink-0',
+        size === 'icon' && 'mx-1',
+        mark.tone,
+        className,
+      )}
+    >
+      {status === 'running' ? (
+        <LiveDot className={dotSize} />
+      ) : (
+        <span className={cn('rounded-full bg-current', dotSize)} />
+      )}
+    </span>
   );
 }
 
-export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
-  if (status === 'running') return <LiveDot className="mx-1 text-success" />;
-  if (status === 'needs-you')
-    return (
-      <MessageCircleQuestion
-        aria-label="Needs you"
-        className="size-4 shrink-0 text-warning"
-      />
-    );
-  if (status === 'review')
-    return (
-      <ClipboardCheck
-        aria-label="Ready for review"
-        className="size-4 shrink-0 text-muted-foreground"
-      />
-    );
-  return (
-    <CircleCheck
-      aria-label="Settled"
-      className="size-4 shrink-0 text-subtle-foreground"
-    />
-  );
-}
+const STATUS_MARKS = {
+  running: { label: 'Working', tone: 'text-muted-foreground' },
+  'needs-you': {
+    label: 'Needs you',
+    tone: 'text-warning',
+    icon: MessageCircleQuestion,
+  },
+  failed: { label: 'Failed', tone: 'text-destructive' },
+  unread: { label: 'Unread', tone: 'text-unread' },
+  review: {
+    label: 'Ready for review',
+    tone: 'text-muted-foreground',
+    icon: ClipboardCheck,
+  },
+  settled: { label: 'Done', tone: 'text-subtle-foreground', icon: CircleCheck },
+  ready: { label: 'Up next', tone: 'text-muted-foreground', icon: Circle },
+  dropped: {
+    label: 'Dropped',
+    tone: 'text-subtle-foreground',
+    icon: CircleSlash,
+  },
+} satisfies Record<
+  StatusMarkKind,
+  { label: string; tone: string; icon?: LucideIcon }
+>;
 
-const STEP_ICONS = {
-  done: CircleCheck,
-  ready: Circle,
-  blocked: Hand,
-  dropped: CircleSlash,
-} satisfies Record<Exclude<StepStatus, 'running'>, LucideIcon>;
-
-const STEP_LABELS = {
-  done: 'Done',
-  running: 'Running',
-  ready: 'Up next',
-  blocked: 'Needs you',
-  dropped: 'Dropped',
-} satisfies Record<StepStatus, string>;
-
-export function StepStatusIcon({ status }: { status: StepStatus }) {
-  if (status === 'running')
-    return <LiveDot className="mx-1" style={{ color: stepColor(status) }} />;
-  const Icon = STEP_ICONS[status];
-  return (
-    <Icon
-      aria-label={STEP_LABELS[status]}
-      className="size-4 shrink-0"
-      style={{ color: stepColor(status) }}
-    />
-  );
-}
-
-function stepColor(status: StepStatus) {
-  return STEP_COLORS[status];
-}
-
-const STEP_COLORS = {
-  done: 'var(--success)',
-  running: 'var(--chart-1)',
-  ready: 'var(--muted-foreground)',
-  blocked: 'var(--warning)',
-  dropped: 'var(--subtle-foreground)',
-} satisfies Record<StepStatus, string>;
+/** Steps share the thread marks; only up next and dropped have no thread equivalent. */
+export const STEP_MARKS = {
+  done: 'settled',
+  running: 'running',
+  ready: 'ready',
+  blocked: 'needs-you',
+  dropped: 'dropped',
+} satisfies Record<StepStatus, StatusMarkKind>;
 
 /**
  * One segment per criterion, filled as each is met and green once all are, so it reads as a count, never a share of the work.

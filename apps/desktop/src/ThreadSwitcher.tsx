@@ -19,10 +19,11 @@ import {
 import {
   ThreadDetailText,
   ThreadProjectMark,
-  ThreadStatusDot,
+  rowStatusMark,
   useThreadRow,
 } from './threadRow';
 import { stepThread } from './threadSwitch';
+import { StatusMark } from './ui';
 
 /** A quick tap switches without the panel flashing up, like Windows' Alt Tab. */
 const SHOW_DELAY = 120;
@@ -129,6 +130,7 @@ function SwitcherRow({
   onPick: () => void;
 }) {
   const row = useThreadRow(thread);
+  const mark = rowStatusMark(row, isCurrent);
   return (
     <div
       id={`switch-${thread.id}`}
@@ -153,7 +155,7 @@ function SwitcherRow({
           <ThreadDetailText row={row} />
         </span>
       </span>
-      <ThreadStatusDot row={row} isActive={isCurrent} />
+      {mark && <StatusMark {...mark} />}
     </div>
   );
 }
