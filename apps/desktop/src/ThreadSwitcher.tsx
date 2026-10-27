@@ -140,10 +140,10 @@ function SwitcherRow({
       }}
       onClick={onPick}
       className={cn(
-        'flex shrink-0 cursor-default items-center gap-3 rounded-xl px-3 py-2 text-foreground/75',
+        'flex shrink-0 cursor-default items-center gap-3 rounded-md px-3 py-2 text-sidebar-foreground/75',
         isPicked
-          ? 'bg-foreground/[0.08] text-foreground'
-          : 'hover:bg-foreground/[0.04]',
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
       )}
     >
       <ThreadProjectMark thread={thread} />
