@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { setPrefs, usePrefs } from '../settings/prefs';
-import { Danger, File, Folder, Columns, List, Rows } from '@/icons';
+import { XCircle, File, Folder, Columns, List, Rows } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -370,7 +370,7 @@ export function DiffError({
     <Empty className="flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Danger />
+          <XCircle />
         </EmptyMedia>
         <EmptyTitle>Couldn't read the diff</EmptyTitle>
         <EmptyDescription className="font-mono text-xs break-words">

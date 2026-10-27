@@ -20,13 +20,13 @@ import {
   Grip,
   Image,
   Link,
-  Pin,
+  Pushpin,
   PinOff,
   Route,
   Stop,
   ShieldAlert,
   ShieldCheck,
-  Danger,
+  XCircle,
   type IconComponent,
   Diff,
 } from '@/icons';
@@ -934,7 +934,7 @@ function DiffPendingRow({
   if (!error) return <SummaryRow icon={Diff} label="Reading changes…" />;
   return (
     <SummaryRow
-      icon={<Danger className="size-4 text-destructive" />}
+      icon={<XCircle className="size-4 text-destructive" />}
       label={<span title={error}>Couldn't read changes</span>}
       onClick={onRetry}
     />
@@ -1596,7 +1596,7 @@ function GoalSection({ thread }: { thread: Thread }) {
             {isPinned ? (
               <PinOff data-icon="inline-start" />
             ) : (
-              <Pin data-icon="inline-start" />
+              <Pushpin data-icon="inline-start" />
             )}
             {isPinned ? 'Unpin' : 'Keep open'}
           </Button>

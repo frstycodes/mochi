@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Grid, WarningAlt } from '@/icons';
+import { Grid, Warning } from '@/icons';
 import {
   AppBridge,
   buildAllowAttribute,
@@ -140,7 +140,7 @@ const hostContext = (theme: ThemeSlot): McpUiHostContext => ({
 function WidgetError({ title, error }: { title: string; error: string }) {
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
-      <WarningAlt aria-hidden className="mt-px size-3.5 shrink-0" />
+      <Warning aria-hidden className="mt-px size-3.5 shrink-0" />
       <p className="min-w-0">
         Couldn't open {title}'s view
         <span className="block text-subtle-foreground">{error}</span>

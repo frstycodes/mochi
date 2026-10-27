@@ -13,7 +13,7 @@ import {
   Chart,
   Sun,
   UserCircle,
-  UserEdit,
+  RaisedHand,
 } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -171,7 +171,7 @@ function AccountItems({
             isPersistent={account.isPersistent}
           />
           <DropdownMenuItem onSelect={() => void openAccountPortal()}>
-            <UserEdit />
+            <RaisedHand />
             Manage account
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void signOut()}>

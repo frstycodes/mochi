@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, SearchAlt } from '@/icons';
+import { ChevronDown, Search } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -69,7 +69,7 @@ export function AccessSection() {
       >
         <InputGroup>
           <InputGroupAddon>
-            <SearchAlt />
+            <Search />
           </InputGroupAddon>
           <InputGroupInput
             value={query}

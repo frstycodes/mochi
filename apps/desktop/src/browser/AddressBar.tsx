@@ -7,7 +7,7 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
 } from 'react';
-import { ArrowUpRight, Globe, Monitor, SearchAlt } from '@/icons';
+import { ArrowUpRight, Globe, Monitor, Search } from '@/icons';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import {
@@ -342,7 +342,7 @@ function OpenExternalButton({ url }: { url: string }) {
 
 function RowIcon({ row }: { row: Row }) {
   if (row.icon === 'search')
-    return <SearchAlt className="text-muted-foreground" />;
+    return <Search className="text-muted-foreground" />;
   if (row.icon === 'go') return <Globe className="text-muted-foreground" />;
   if (row.icon === 'server' || isLocal(row.url))
     return <Monitor className="text-muted-foreground" />;

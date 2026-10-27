@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { ChevronRight, Edit, Maximize, CheckBadge } from '@/icons';
+import { ChevronRight, Edit, Maximize, CheckCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { authorName, isMet, type Criterion, type Thread } from '../model';
@@ -104,7 +104,7 @@ export function SummaryGoalStatus({
   if (thread.status === 'settled')
     return (
       <StatusLine
-        icon={<CheckBadge className="size-3.5 text-subtle-foreground" />}
+        icon={<CheckCircle className="size-3.5 text-subtle-foreground" />}
       >
         Settled
       </StatusLine>

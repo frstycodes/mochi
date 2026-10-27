@@ -4,7 +4,7 @@ import {
   ArrowRight,
   ArrowUp,
   Command,
-  Control,
+  ChevronUp,
   Option,
   Return,
   Shift,
@@ -60,7 +60,7 @@ const MAC_ICONS = {
   mod: Command,
   shift: Shift,
   alt: Option,
-  nav: Control,
+  nav: ChevronUp,
   Enter: Return,
 } satisfies Record<string, IconComponent>;
 const ARROW_ICONS = {

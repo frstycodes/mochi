@@ -1,4 +1,4 @@
-import { Play, XCircle, CheckBadge } from '@/icons';
+import { Play, XCircle, CheckCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { type Criterion, type Thread } from '../model';
@@ -137,14 +137,14 @@ export function CriterionIcon({ state }: { state: CriterionState }) {
     );
   if (state === 'verified')
     return (
-      <CheckBadge
+      <CheckCircle
         aria-label={label}
         className="mt-0.5 size-3.5 shrink-0 text-success"
       />
     );
   if (state === 'claimed')
     return (
-      <CheckBadge
+      <CheckCircle
         aria-label={label}
         className="mt-0.5 size-3.5 shrink-0 text-info"
       />

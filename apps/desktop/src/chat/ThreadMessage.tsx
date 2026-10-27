@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, InboxIn, InboxOut, MagicStar } from '@/icons';
+import { ChevronRight, InboxIn, InboxOut, Sparkles } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, ThreadRef } from '../model';
@@ -70,7 +70,7 @@ export function AutofixEventRow({
         onClick={() => setOpen((o) => !o)}
         className="flex h-7 w-fit max-w-full min-w-0 cursor-default items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
       >
-        <MagicStar
+        <Sparkles
           aria-hidden
           className="size-4 shrink-0 text-muted-foreground"
         />

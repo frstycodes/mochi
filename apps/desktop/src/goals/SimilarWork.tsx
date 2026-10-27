@@ -1,4 +1,4 @@
-import { XSquare, CopyStack } from '@/icons';
+import { XSquare, Copy } from '@/icons';
 import { Button } from '@/components/ui/button';
 import type { Similar, Thread } from '../model';
 import { nestBlocker } from '../reorder';
@@ -47,7 +47,7 @@ function SimilarRow({
     !nestBlocker(state.threads, thread.id, other.id);
   return (
     <li className="flex items-center gap-2 rounded-lg bg-muted/40 py-1 pr-1 pl-2.5">
-      <CopyStack aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <Copy aria-hidden className="size-3.5 shrink-0 text-warning" />
       <span className="min-w-0 flex-1 truncate type-meta">
         <span className="text-muted-foreground">
           {similar.relation === 'same' ? 'Already in ' : 'Related: '}

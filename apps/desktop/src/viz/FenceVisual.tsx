@@ -6,7 +6,7 @@ import {
   type PluginConfig,
   type StreamdownProps,
 } from 'streamdown';
-import { WarningAlt } from '@/icons';
+import { Warning } from '@/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHarness } from '../store';
 import { CodeFrame } from './CodeFrame';
@@ -245,7 +245,7 @@ function BrokenVisual({
 }) {
   return (
     <EmbedFrame
-      icon={WarningAlt}
+      icon={Warning}
       iconClassName="text-warning"
       title={`Couldn't render this ${language.replace('harness-', '')}`}
       className="my-3"

@@ -7,9 +7,9 @@ import {
   CheckCircle,
   ClipboardCheck,
   Clock,
-  CopyStack,
+  Copy,
   MessageQuestion,
-  Send,
+  ArrowUp,
   Settings,
   ShieldCheck,
   type IconComponent,
@@ -91,7 +91,7 @@ const KIND = {
   question: { icon: MessageQuestion, label: 'Question' },
   review: { icon: ClipboardCheck, label: 'Ready for review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
-  collision: { icon: CopyStack, label: 'Same files' },
+  collision: { icon: Copy, label: 'Same files' },
   run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Settings, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
@@ -524,7 +524,7 @@ function CiActions({ item }: { item: QueueItem }) {
     <>
       {!!item.ci?.check?.link && (
         <Button onClick={send} disabled={isSending}>
-          <Send data-icon="inline-start" />
+          <ArrowUp data-icon="inline-start" />
           {isSending ? 'Fetching log…' : 'Send failing log to agent'}
         </Button>
       )}

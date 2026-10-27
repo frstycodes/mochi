@@ -13,9 +13,9 @@ import {
   Edit,
   Eye,
   GitBranch,
-  MagicStar,
+  Sparkles,
   MessageEdit,
-  CheckBadge,
+  CheckCircle,
   UserCheck,
   type IconComponent,
 } from '@/icons';
@@ -139,7 +139,7 @@ export function ThreadPrHoverCard({
 }
 
 const SWITCH_ICONS = {
-  autofix: MagicStar,
+  autofix: Sparkles,
   merge: GitMergeIcon,
   archive: Archive,
 } satisfies Record<PrSwitchId, unknown>;
@@ -308,7 +308,7 @@ function RefFacts({ state }: { state: RefState }) {
 }
 
 const CHECKS = {
-  pass: { icon: CheckBadge, tone: 'text-success', children: 'Checks passing' },
+  pass: { icon: CheckCircle, tone: 'text-success', children: 'Checks passing' },
   fail: { icon: XCircle, tone: 'text-destructive', children: 'Checks failing' },
   pending: {
     icon: ClockCircle,
@@ -321,7 +321,7 @@ const CHECKS = {
 >;
 
 const REVIEWS = {
-  approved: { icon: CheckBadge, tone: 'text-success', children: 'Approved' },
+  approved: { icon: CheckCircle, tone: 'text-success', children: 'Approved' },
   changes: {
     icon: MessageEdit,
     tone: 'text-warning',
