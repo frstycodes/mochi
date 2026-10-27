@@ -11,7 +11,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import {
   ChangeList,
   type ChangeActions,
@@ -158,7 +158,14 @@ function Changes({
       {!!diffQuery.error && !diff && (
         <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />
       )}
-      {diffQuery.isLoading && <ChangesSkeleton />}
+      {diffQuery.isLoading && (
+        <SkeletonRows
+          shape="change"
+          count={4}
+          label="Loading changes"
+          className="px-2"
+        />
+      )}
       {isEmpty && <NoChanges scope={compare.scope} />}
       {files.length > 0 && (
         <div className="flex min-h-0 flex-1 border-t">
@@ -305,24 +312,6 @@ export function revertRequest(target: ChangeTarget) {
 
 function sum(files: DiffFile[], key: 'added' | 'removed') {
   return files.reduce((n, f) => n + f[key], 0);
-}
-
-export function ChangesSkeleton() {
-  return (
-    <div
-      className="flex flex-col gap-0.5 px-2"
-      aria-busy
-      aria-label="Loading changes"
-    >
-      {[52, 38, 64, 44].map((w) => (
-        <div key={w} className="flex h-7 items-center gap-1.5 px-1.5">
-          <Skeleton className="size-3.5" />
-          <Skeleton className="h-2.5" style={{ width: `${w}%` }} />
-          <Skeleton className="ml-auto h-2.5 w-10" />
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function NoFolder() {

@@ -99,12 +99,12 @@ import {
   useRenameSurface,
 } from './rename';
 import type { FollowedMachine } from './host/types/remote';
-import { SpaceIcon, TooltipIconButton } from './ui';
+import { SpaceIcon, StatusMark, TooltipIconButton } from './ui';
 import {
   AgentsBadge,
   ThreadDetailText,
   ThreadProjectMark,
-  ThreadStatusDot,
+  rowStatusMark,
   useThreadRow,
   type ThreadRow,
 } from './threadRow';
@@ -1186,6 +1186,7 @@ export function ThreadItem({
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
   const isRenaming = useRenameSurface(thread.id) === 'row';
+  const mark = rowStatusMark(row, isActive);
   const asks = row.tone === 'warning' || row.tone === 'destructive';
   const body = (
     <>
@@ -1203,10 +1204,9 @@ export function ThreadItem({
           </span>
         )}
         {isSub && <PrStack thread={thread} />}
-        {!isRenaming && (
-          <ThreadStatusDot
-            row={row}
-            isActive={isActive}
+        {!isRenaming && mark && (
+          <StatusMark
+            {...mark}
             className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden"
           />
         )}

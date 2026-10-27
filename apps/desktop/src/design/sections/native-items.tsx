@@ -1,3 +1,4 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
 import {
   useState,
   type Dispatch,
@@ -58,7 +59,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { toast } from '@/toast/store';
-import { countOf, EmptyRow, LibraryIcon } from '../../library/LibraryParts';
+import { countOf, LibraryIcon } from '../../library/LibraryParts';
 import type { Provider } from '../../model';
 import { HARNESS_IDS, HARNESSES } from '../../settings/harnesses';
 import {
@@ -263,13 +264,13 @@ function LibraryPagesMock({
             />
           ))}
           {!mochi.length && (
-            <EmptyRow
-              text={
-                isFiltered
+            <Empty>
+              <EmptyDescription>
+                {isFiltered
                   ? 'Nothing here matches'
-                  : `No ${page} in Mochi’s library yet`
-              }
-            />
+                  : `No ${page} in Mochi’s library yet`}
+              </EmptyDescription>
+            </Empty>
           )}
         </SettingsCard>
       </SettingsSection>
@@ -402,13 +403,13 @@ function HarnessSection({
           />
         ))}
         {!rows.length && (
-          <EmptyRow
-            text={
-              isFiltered
+          <Empty>
+            <EmptyDescription>
+              {isFiltered
                 ? 'Nothing here matches'
-                : `${harness} has none on this account`
-            }
-          />
+                : `${harness} has none on this account`}
+            </EmptyDescription>
+          </Empty>
         )}
       </SettingsCard>
     </SettingsSection>
@@ -1114,7 +1115,11 @@ function FirstRunMock() {
         footer="Read from ~/.codex and ~/.agents, used by every profile."
       >
         <SettingsCard>
-          <EmptyRow text="Codex has no skills on this account" />
+          <Empty>
+            <EmptyDescription>
+              Codex has no skills on this account
+            </EmptyDescription>
+          </Empty>
         </SettingsCard>
       </SettingsSection>
       <p className="px-1 type-caption text-muted-foreground">

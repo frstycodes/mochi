@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { listenKeydown, commandOf, type CommandId } from '../keymap';
 import {
   memo,
@@ -22,6 +23,7 @@ import {
   X,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import {
   Empty,
   EmptyDescription,
@@ -239,18 +241,17 @@ function ReplayPlayer({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!!thread && <ReplayTranscript state={scratch} thread={thread} />}
         </div>
-        <aside
-          aria-label="Files at this point"
-          className="mb-3 hidden min-h-0 flex-col rounded-xl border bg-card md:flex"
-        >
-          {!!thread && (
-            <ReplayFiles
-              source={checkpoints}
-              thread={thread}
-              now={scratch.now}
-            />
-          )}
-        </aside>
+        <Card asChild className="mb-3 hidden min-h-0 gap-0 py-0 md:flex">
+          <aside aria-label="Files at this point">
+            {!!thread && (
+              <ReplayFiles
+                source={checkpoints}
+                thread={thread}
+                now={scratch.now}
+              />
+            )}
+          </aside>
+        </Card>
       </div>
       <Transport
         playback={playback}
@@ -712,7 +713,7 @@ function ReplayFiles({
       >
         <div className="flex flex-col gap-0.5 px-1.5 pb-2">
           {files === undefined && checkpoint ? (
-            <FileRowsSkeleton />
+            <SkeletonRows shape="file" count={3} label="Loading files" />
           ) : files?.length ? (
             files.map((f) => <DiffFileRow key={f.path} file={f} />)
           ) : touched.length ? (
@@ -794,19 +795,6 @@ function TouchedRow({ path }: { path: string }) {
       />
       <FilePath path={path} />
     </div>
-  );
-}
-
-function FileRowsSkeleton() {
-  return (
-    <>
-      {['w-3/4', 'w-1/2', 'w-2/3'].map((w) => (
-        <div key={w} className="flex h-7 items-center gap-2 px-2">
-          <Skeleton className="size-4 rounded-sm" />
-          <Skeleton className={cn('h-2.5', w)} />
-        </div>
-      ))}
-    </>
   );
 }
 

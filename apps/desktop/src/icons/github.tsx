@@ -138,21 +138,26 @@ export const REF_CHIP_CLASS = {
   info: 'bg-info/12 text-[color-mix(in_oklab,var(--info)_75%,var(--foreground))] hover:bg-info/20 [--ref-surface:color-mix(in_oklab,var(--info)_12%,var(--background))]',
 } satisfies Record<RefTone, string>;
 
-/** A thread's PR (sidebar card, summary row, ship bar) in its state's icon and colour. */
+/** A thread's PR (sidebar card, summary row, ship bar) in its state's icon and colour; `hasConflicts` turns an open PR amber with the corner mark. */
 export function PrStateIcon({
   state,
+  hasConflicts,
   className,
 }: {
   state: RefStatus;
+  hasConflicts?: boolean;
   className?: string;
 }) {
   const tone = refTone(
-    state === 'unknown' ? null : bareState('pr', state, '', ''),
+    state === 'unknown'
+      ? null
+      : { ...bareState('pr', state, '', ''), hasConflicts: !!hasConflicts },
   );
   return (
     <GithubStateIcon
       kind="pr"
       status={state}
+      hasConflicts={hasConflicts}
       className={cn(className, REF_TONE_CLASS[tone])}
     />
   );

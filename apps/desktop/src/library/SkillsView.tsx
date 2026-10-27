@@ -1,3 +1,5 @@
+import { Empty, EmptyDescription } from '@/components/ui/empty';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useState } from 'react';
 import {
   CheckCircle,
@@ -23,12 +25,7 @@ import { toast } from '@/toast/store';
 import { useDebounced } from '@/hooks/useDebounced';
 import { host } from '../host';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
-import {
-  SettingsCard,
-  SettingsRow,
-  SettingsSection,
-  SkeletonRows,
-} from '../settings/parts';
+import { SettingsCard, SettingsRow, SettingsSection } from '../settings/parts';
 import { ProviderMark } from '../ui';
 import { AddSkillsDialog } from './AddSkillsDialog';
 import { LibraryPage, type PagePart } from './LibraryPage';
@@ -37,7 +34,6 @@ import type { NativeItem } from './nativeItems';
 import { useSkillUpload, WriteSkillDialog } from './NewSkillDialog';
 import {
   CatalogErrorRow,
-  EmptyRow,
   EntryRow,
   filterBy,
   GroupControl,
@@ -91,7 +87,9 @@ function InstalledSkills({
           {!skills && <SkeletonRows count={2} />}
           {skills?.length === 0 &&
             (query ? (
-              <EmptyRow text={`Nothing in your library matches “${query}”`} />
+              <Empty>
+                <EmptyDescription>{`Nothing in your library matches “${query}”`}</EmptyDescription>
+              </Empty>
             ) : (
               <SettingsRow
                 label="No skills yet"
@@ -180,13 +178,13 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
           />
         )}
         {state.status === 'done' && !skills.length && (
-          <EmptyRow
-            text={
-              isSearch
+          <Empty>
+            <EmptyDescription>
+              {isSearch
                 ? `Nothing on skills.sh matches “${search}”`
-                : 'skills.sh listed nothing'
-            }
-          />
+                : 'skills.sh listed nothing'}
+            </EmptyDescription>
+          </Empty>
         )}
         {skills.slice(0, limit).map((skill) => {
           const isInstalled = !!installedEntry(

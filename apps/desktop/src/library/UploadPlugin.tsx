@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { useQuery } from '@tanstack/react-query';
@@ -515,10 +516,10 @@ function CommandRow({
       <span className="flex items-center gap-2">
         <span className="min-w-0 truncate type-meta font-medium">{name}</span>
         {isCommand && (
-          <span className="flex shrink-0 items-center gap-1 rounded-md bg-warning/12 px-1.5 py-0.5 type-caption text-[color-mix(in_oklab,var(--warning)_75%,var(--foreground))]">
-            <Terminal aria-hidden className="size-3" />
+          <Badge tone="warning">
+            <Terminal aria-hidden />
             Runs a command
-          </span>
+          </Badge>
         )}
       </span>
       <code className="rounded-[6px] bg-muted px-2 py-1.5 font-mono type-caption break-all whitespace-pre-wrap [corner-shape:round]!">

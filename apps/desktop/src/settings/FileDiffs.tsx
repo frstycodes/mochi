@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { MultiFileDiff } from '../files/Diffs';
 import { Badge } from '@/components/ui/badge';
 import type { FileEdit } from '../host/types/settings';
@@ -12,7 +13,7 @@ export function FileDiffs({ edits }: { edits: FileEdit[] }) {
         {e.path}
         {!e.before && <Badge variant="outline">New file</Badge>}
       </h4>
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <Card className="gap-0 py-0 in-data-[slot=card]:rounded-lg in-data-[slot=card]:border-0 in-data-[slot=card]:bg-foreground/5">
         <MultiFileDiff
           oldFile={{ name: e.path, contents: e.before }}
           newFile={{ name: e.path, contents: e.after }}
@@ -27,7 +28,7 @@ export function FileDiffs({ edits }: { edits: FileEdit[] }) {
           }
           className="max-h-80 overflow-auto"
         />
-      </div>
+      </Card>
     </section>
   ));
 }

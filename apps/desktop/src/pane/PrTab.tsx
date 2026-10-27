@@ -44,7 +44,8 @@ import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { useDispatch } from '../store';
-import { ChangesSkeleton, DiffError, useChangeActions } from './ChangesTab';
+import { DiffError, useChangeActions } from './ChangesTab';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
@@ -128,7 +129,15 @@ function PrView({
     return (
       <DiffError message={reviewQuery.error} onRetry={reviewQuery.refresh} />
     );
-  if (review === undefined) return <ChangesSkeleton />;
+  if (review === undefined)
+    return (
+      <SkeletonRows
+        shape="change"
+        count={4}
+        label="Loading changes"
+        className="px-2"
+      />
+    );
   if (review === null) return <NoPr />;
 
   const actions: ChangeActions = {
@@ -290,7 +299,11 @@ function PrHeader({ review }: { review: PrReview }) {
         <span className="tabular text-subtle-foreground">#{review.number}</span>
       </h2>
       <p className="flex flex-wrap items-center gap-1.5 type-meta text-muted-foreground">
-        <PrStateIcon state={status} className="size-3.5" />
+        <PrStateIcon
+          state={status}
+          hasConflicts={review.isConflicting}
+          className="size-3.5"
+        />
         <span>{STATUS_WORDS[status]}</span>
         <span>
           {review.author} wants to merge{' '}

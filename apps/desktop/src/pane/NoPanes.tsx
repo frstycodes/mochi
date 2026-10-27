@@ -1,6 +1,13 @@
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Button } from '@/components/ui/button';
 import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import {
   Item,
   ItemContent,
   ItemDescription,
@@ -17,6 +24,7 @@ import { PINNABLE_KINDS } from './headerPins';
 import { PortIcon } from './PortIcon';
 import { useRecentFiles } from './recentFiles';
 import { PANE_TABS } from './tabs';
+import { SectionLabel } from '../ui';
 
 /** The panes are shown but every one is closed: what can open, running dev servers and recent files. */
 export function NoPanes({ thread }: { thread: Thread }) {
@@ -24,35 +32,38 @@ export function NoPanes({ thread }: { thread: Thread }) {
   const cwd = threadCwd(thread);
   return (
     <ScrollArea type="scroll" className="h-full">
-      <div className="flex flex-col gap-6 p-4">
-        <section className="flex flex-col gap-2">
-          <h2 className="type-caption text-subtle-foreground">Open a pane</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {PINNABLE_KINDS.map((kind) => {
-              const { title, icon: Icon } = PANE_TABS[kind];
-              return (
-                <Button
-                  key={kind}
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    dispatch({
-                      type: 'pane-show-tab',
-                      threadId: thread.id,
-                      kind,
-                    })
-                  }
-                >
-                  <Icon />
-                  {title}
-                </Button>
-              );
-            })}
-          </div>
-        </section>
+      <Empty className="justify-start gap-6 p-4">
+        <EmptyHeader>
+          <EmptyTitle>Every pane is closed</EmptyTitle>
+          <EmptyDescription>
+            Open one again, or preview what this thread is running.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent className="max-w-none flex-row flex-wrap justify-center gap-1.5">
+          {PINNABLE_KINDS.map((kind) => {
+            const { title, icon: Icon } = PANE_TABS[kind];
+            return (
+              <Button
+                key={kind}
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  dispatch({
+                    type: 'pane-show-tab',
+                    threadId: thread.id,
+                    kind,
+                  })
+                }
+              >
+                <Icon />
+                {title}
+              </Button>
+            );
+          })}
+        </EmptyContent>
         {!!cwd && <DetectedPorts thread={thread} cwd={cwd} />}
         {!!cwd && <RecentFiles thread={thread} cwd={cwd} />}
-      </div>
+      </Empty>
     </ScrollArea>
   );
 }
@@ -63,8 +74,8 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
   const { ports } = usePorts(thread.id, cwd);
   if (!ports?.length) return null;
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="type-caption text-subtle-foreground">Running</h2>
+    <section className="flex flex-col gap-2 self-stretch text-left">
+      <SectionLabel as="h2">Running</SectionLabel>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2">
         {ports.map((p) => (
           <Item
@@ -104,8 +115,8 @@ function RecentFiles({ thread, cwd }: { thread: Thread; cwd: string }) {
   const files = useRecentFiles(thread, cwd);
   if (!files.length) return null;
   return (
-    <section className="flex flex-col gap-1">
-      <h2 className="type-caption text-subtle-foreground">Recent files</h2>
+    <section className="flex flex-col gap-1 self-stretch text-left">
+      <SectionLabel as="h2">Recent files</SectionLabel>
       {files.map(({ path }) => {
         const slash = path.lastIndexOf('/');
         return (

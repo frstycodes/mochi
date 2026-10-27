@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
 import {
   isValidElement,
@@ -74,6 +75,7 @@ import { openFiles } from './files/viewer';
 import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { ThreadName } from './chat/ThreadMessage';
 import { refDescription, type ChecksState } from '@mochi/domain/chat/refs';
+import { CHECK } from './git/Checks';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import { OPEN_PR_PROMPT } from './git/prs';
@@ -174,7 +176,7 @@ export function SummaryPanel({
 }
 
 const CARD =
-  'rounded-xl border bg-card group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
+  'gap-0 py-0 group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
 
 /** What needs you first, then a card per thing the right side holds, each only once it has something: like Claude's. */
 function SummaryBody({
@@ -247,8 +249,8 @@ function SummaryBody({
               {id === 'goal' ? (
                 BODIES.goal
               ) : (
-                <AccordionItem value={id} className={CARD}>
-                  {BODIES[id]}
+                <AccordionItem value={id} asChild>
+                  <Card className={CARD}>{BODIES[id]}</Card>
                 </AccordionItem>
               )}
             </DraggableCard>
@@ -331,7 +333,7 @@ function DraggableCard({
       layout="position"
       transition={CARD_MOVE}
       whileDrag={{ scale: 1.01 }}
-      className="group/card relative data-[dragging]:z-10"
+      className="group/summary-card relative data-[dragging]:z-10"
     >
       {children}
       <button
@@ -341,7 +343,7 @@ function DraggableCard({
         aria-keyshortcuts="ArrowUp ArrowDown"
         onPointerDown={(e) => controls.start(e)}
         onKeyDown={onKeyDown}
-        className="absolute top-2 right-2 z-20 flex size-6 cursor-grab touch-none items-center justify-center rounded-md text-subtle-foreground opacity-0 transition-opacity duration-150 group-hover/card:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 active:cursor-grabbing pointer-coarse:opacity-100"
+        className="absolute top-2 right-2 z-20 flex size-6 cursor-grab touch-none items-center justify-center rounded-md text-subtle-foreground opacity-0 transition-opacity duration-150 group-hover/summary-card:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 active:cursor-grabbing pointer-coarse:opacity-100"
       >
         <Grip className="size-3.5" aria-hidden />
       </button>
@@ -374,7 +376,7 @@ interface CardProps {
 
 /** The top-right corner holds only read-outs: the drag handle takes their place while the card is hovered or the handle focused. */
 const UNDER_HANDLE =
-  'transition-opacity duration-150 group-hover/card:opacity-0 group-has-[[data-drag-handle]:focus-visible]/card:opacity-0 pointer-coarse:opacity-0';
+  'transition-opacity duration-150 group-hover/summary-card:opacity-0 group-has-[[data-drag-handle]:focus-visible]/summary-card:opacity-0 pointer-coarse:opacity-0';
 
 function CardHeader({ title, meta }: { title: string; meta?: ReactNode }) {
   return (
@@ -1281,12 +1283,6 @@ function PullRequestRow({
   );
 }
 
-const CHECK_DOT = {
-  pending: 'bg-subtle-foreground',
-  pass: 'bg-success',
-  fail: 'bg-destructive',
-} satisfies Record<ChecksState, string>;
-
 function CheckCount({
   checks,
   counts,
@@ -1301,7 +1297,10 @@ function CheckCount({
     >
       <span
         aria-hidden
-        className={cn('size-1.5 rounded-full', CHECK_DOT[checks ?? 'pending'])}
+        className={cn(
+          'size-1.5 rounded-full bg-current',
+          CHECK[checks ?? 'pending'].tone,
+        )}
       />
       {counts.passed}/{counts.total}
     </span>
@@ -1483,17 +1482,19 @@ function GoalSection({ thread }: { thread: Thread }) {
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <SummaryGoal ref={block} className={cn(CARD, 'px-3 py-2.5')}>
-          <SummaryGoalHeader
-            thread={thread}
-            onEdit={() => openGoalEditor(thread.id)}
-            onOpen={() => setOpen((o) => !o)}
-            countClassName={UNDER_HANDLE}
-          />
-          <SummaryGoalStatus thread={thread} verdict={verdict} step={step} />
-          <SummaryGoalText>{thread.goal}</SummaryGoalText>
-          <SummaryCriteria thread={thread} />
-        </SummaryGoal>
+        <Card asChild className={cn(CARD, 'gap-2.5 px-3 py-2.5')}>
+          <SummaryGoal ref={block}>
+            <SummaryGoalHeader
+              thread={thread}
+              onEdit={() => openGoalEditor(thread.id)}
+              onOpen={() => setOpen((o) => !o)}
+              countClassName={UNDER_HANDLE}
+            />
+            <SummaryGoalStatus thread={thread} verdict={verdict} step={step} />
+            <SummaryGoalText>{thread.goal}</SummaryGoalText>
+            <SummaryCriteria thread={thread} />
+          </SummaryGoal>
+        </Card>
       </PopoverAnchor>
       <PopoverContent
         side="left"

@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { useState } from 'react';
 import { ChevronDown, Search } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -118,25 +119,27 @@ function LevelPicker() {
     >
       <div className="grid gap-2 @lg:grid-cols-3">
         {AGENT_CONTROLS.map((level) => (
-          <label
+          <Card
             key={level}
-            htmlFor={`level-${level}`}
-            className="flex cursor-pointer gap-3 rounded-xl border bg-card p-3.5 transition-colors hover:bg-accent/60 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50"
+            asChild
+            className="cursor-pointer flex-row gap-3 p-3.5 transition-colors hover:bg-accent/60 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50"
           >
-            <RadioGroupItem
-              id={`level-${level}`}
-              value={level}
-              className="mt-0.5"
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="type-body font-medium">
-                {LEVELS[level].title}
+            <label htmlFor={`level-${level}`}>
+              <RadioGroupItem
+                id={`level-${level}`}
+                value={level}
+                className="mt-0.5"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="type-body font-medium">
+                  {LEVELS[level].title}
+                </span>
+                <span className="type-meta text-muted-foreground text-pretty">
+                  {LEVELS[level].body}
+                </span>
               </span>
-              <span className="type-meta text-muted-foreground text-pretty">
-                {LEVELS[level].body}
-              </span>
-            </span>
-          </label>
+            </label>
+          </Card>
         ))}
       </div>
     </RadioGroup>

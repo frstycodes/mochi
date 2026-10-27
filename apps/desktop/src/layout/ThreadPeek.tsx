@@ -12,7 +12,7 @@ import type { Thread } from '../model';
 import { BrowserTab } from '../pane/BrowserTab';
 import { useDispatch, useHarnessSelector, useThread } from '../store';
 import { PreviewContext } from './SplitContext';
-import { ProviderMark, ThreadStatusIcon } from '../ui';
+import { ProviderMark, StatusMark } from '../ui';
 import { BoundShortcut } from '../Shortcut';
 import { isCommandId, pinnedCommand } from '../keymap';
 import { ThreadMessageIcon } from '../chat/ThreadMessage';
@@ -105,7 +105,7 @@ function PeekCard({
   return (
     <>
       <div className="flex items-center gap-2">
-        <ThreadStatusIcon status={thread.status} />
+        <StatusMark status={thread.status} size="icon" />
         <span className="min-w-0 flex-1 truncate type-title">
           {thread.title}
         </span>

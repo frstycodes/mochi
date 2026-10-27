@@ -65,6 +65,7 @@ export const MOCHI_CALLS = {
     'Waited on you in the browser',
   ],
   browser_batch: ['Running browser steps', 'Ran browser steps'],
+  start_dev_server: ['Starting a dev server', 'Started a dev server'],
   open_pane_tab: ['Opening a side pane tab', 'Opened a side pane tab'],
   split_with: ['Opening a split', 'Opened a split'],
   close_pane: ['Closing the side pane', 'Closed the side pane'],

@@ -83,7 +83,7 @@ import { remoteDecisions } from './remote/mirror';
 import { RemoteScope, useMachines } from './remote/useMachines';
 import { Seen, useSeen } from './notify/useSeen';
 import { isQueueUnread } from './store/seen';
-import { UnreadDot } from './ui';
+import { StatusMark } from './ui';
 import { isCommand, listenKeydown } from './keymap';
 
 const KIND = {
@@ -211,7 +211,7 @@ export function QueueDecision({
   const age = state.now - item.createdAt;
 
   return (
-    <Card size="sm" className={cn(isSelected && 'ring-ring', className)}>
+    <Card size="sm" className={cn(isSelected && 'border-ring', className)}>
       <CardHeader>
         <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 type-caption">
           <span
@@ -241,7 +241,7 @@ export function QueueDecision({
         </CardDescription>
         <CardTitle>{item.title}</CardTitle>
         <CardAction className="flex items-center gap-1.5 tabular type-caption text-subtle-foreground">
-          {isQueueUnread(item) && <UnreadDot />}
+          {isQueueUnread(item) && <StatusMark status="unread" />}
           {age < 1 ? 'just now' : `${duration(age)} ago`}
         </CardAction>
       </CardHeader>
