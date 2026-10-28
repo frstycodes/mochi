@@ -1163,7 +1163,7 @@ function QuestionTray({
                 <QueueDecision
                   key={item.id}
                   item={item}
-                  className="bg-transparent shadow-none ring-0 *:data-[slot=card-footer]:border-t-0 *:data-[slot=card-footer]:bg-transparent *:data-[slot=card-footer]:pt-0"
+                  className="border-0 bg-transparent shadow-none ring-0*:data-[slot=card-footer]:border-t-0 *:data-[slot=card-footer]:bg-transparent *:data-[slot=card-footer]:pt-0"
                 />
               ))}
             </div>

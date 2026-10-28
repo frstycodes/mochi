@@ -338,7 +338,11 @@ function ApprovalRequest({
   const dispatch = useDispatch();
   const withUndo = useUndoable();
   return (
-    <Confirmation approval={{ id: item.id }} state="approval-requested">
+    <Confirmation
+      approval={{ id: item.id }}
+      state="approval-requested"
+      className="rounded-none border-0 bg-transparent p-0"
+    >
       {/* A described request (a web search) says what it does in the card's title; only raw code needs repeating. */}
       {!!item.code && (
         <ConfirmationTitle className="flex flex-col gap-2">
