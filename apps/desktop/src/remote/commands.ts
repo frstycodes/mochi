@@ -40,6 +40,7 @@ import { switchHere } from '../rewind/switch.ts';
 import type { Action, State } from '../store/index.tsx';
 import { nextThreadId } from '../store/threads.ts';
 import { storeCommand, type StoreCommand } from './storeCommands.ts';
+import { githubUserOf, isThreadOp, runThreadOp } from './threadOps.ts';
 
 export interface CommandEnv {
   state: State;
@@ -91,6 +92,8 @@ export async function runRemoteCommand(
   if (command.type === 'add-project' || command.type === 'clone-project')
     return addProject(command, state);
   if (command.type === 'create') return create(command, env);
+  if (isThreadOp(command))
+    return runThreadOp(command, state, dispatch, () => projectsHere(state));
   if (command.type === 'setting') return setting(command, env);
   const thread = state.threads.find(
     (t) => t.id === (command as { threadId?: string }).threadId,
@@ -559,8 +562,7 @@ async function ship(
 ): Promise<CommandResult> {
   const cwd = threadCwd(thread);
   if (!cwd) return fail('This thread has no folder on this machine');
-  const githubUser =
-    getProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
+  const githubUser = githubUserOf(thread);
   if (command.type === 'commit')
     return { isOk: true, detail: await host.git.commit(cwd, command.message) };
   if (command.type === 'push') {

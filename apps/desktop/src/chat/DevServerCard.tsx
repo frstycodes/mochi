@@ -17,6 +17,10 @@ import { runTarget } from '../terminal/runTarget';
 import { paneOpeners } from '../terminal/usePaneOpeners';
 import { OverflowIcon, TooltipIconButton } from '../ui';
 import { useImageUrls } from './imageSrc';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../queryKeys';
+import { elsewhereReason, useRemoteMachine } from '../remote/origin';
+import { useThreadCalls } from '../remote/threadCalls';
 
 /** A dev server `start_dev_server` started: the page as it first loaded, whether it still listens, and Open or Start. */
 export function DevServerCard({
@@ -26,7 +30,7 @@ export function DevServerCard({
   thread: Thread;
   server: DevServer;
 }) {
-  const { url, status, listener, open, start, stop } = useDevServer(
+  const { url, status, listener, open, start, stop, elsewhere } = useDevServer(
     thread,
     server,
   );
@@ -38,6 +42,8 @@ export function DevServerCard({
       <button
         type="button"
         aria-label={`Open ${server.name}`}
+        disabled={!!elsewhere}
+        title={elsewhere}
         onClick={isStopped ? start : open}
         className="flex aspect-video w-full items-center justify-center overflow-hidden border-b bg-muted/40 text-muted-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
       >
@@ -62,6 +68,8 @@ export function DevServerCard({
         <Button
           variant="secondary"
           size="sm"
+          disabled={!!elsewhere}
+          title={elsewhere}
           onClick={isStopped ? start : open}
         >
           {isStopped && <Play aria-hidden />}
@@ -75,12 +83,14 @@ export function DevServerCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
+              disabled={!!elsewhere}
               onSelect={() => window.open(url, '_blank', 'noopener')}
             >
               <ArrowUpRight aria-hidden />
               Open in your browser
             </DropdownMenuItem>
             <DropdownMenuItem
+              disabled={!!elsewhere}
               onSelect={() =>
                 void navigator.clipboard
                   .writeText(url)
@@ -106,8 +116,11 @@ export function DevServerCard({
 function useDevServer(thread: Thread, server: DevServer) {
   const dispatch = useDispatch();
   const getState = useGetState();
-  const cwd = threadCwd(thread);
-  const { ports } = usePorts(thread.id, cwd);
+  const machine = useRemoteMachine();
+  const cwd = machine ? null : threadCwd(thread);
+  const local = usePorts(thread.id, cwd).ports;
+  const remote = useRemotePorts(thread, !!machine);
+  const ports = machine ? remote.ports : local;
   const listener = ports?.find((p) => p.port === server.port);
   // Unknown until the first scan lands: no status rather than a wrong one.
   const status = ports && (listener ? 'Running' : 'Stopped');
@@ -115,6 +128,8 @@ function useDevServer(thread: Thread, server: DevServer) {
     url: portUrl(server.port),
     status,
     listener,
+    /** Why it can't open or start from here: its localhost is another computer's. */
+    elsewhere: machine ? elsewhereReason(machine) : undefined,
     open: () => paneOpeners(dispatch, thread.id).openPort(server.port),
     start: () => {
       if (!cwd) return;
@@ -125,13 +140,33 @@ function useDevServer(thread: Thread, server: DevServer) {
     },
     stop: async (pid: number) => {
       try {
-        await host.ports.kill(pid);
+        await (machine ? remote.kill(pid) : host.ports.kill(pid));
       } catch (error) {
         toast.error(`Could not stop ${server.name}`, {
           description: (error as Error).message,
         });
       }
-      refreshPorts();
+      if (machine) void remote.refresh();
+      else refreshPorts();
     },
+  };
+}
+
+const REMOTE_PORTS_MS = 10_000;
+
+/** What listens in another computer's thread folder, read from it while the card is on screen. */
+function useRemotePorts(thread: Thread, isRemote: boolean) {
+  const calls = useThreadCalls(thread);
+  const portsQuery = useQuery({
+    queryKey: queryKeys.ports.listening(thread.id),
+    queryFn: () => calls!.ports(),
+    enabled: isRemote && !!calls,
+    refetchInterval: REMOTE_PORTS_MS,
+  });
+  const listing = portsQuery.data;
+  return {
+    ports: listing && 'ports' in listing ? listing.ports : undefined,
+    kill: (pid: number) => calls!.killPort(pid),
+    refresh: () => portsQuery.refetch(),
   };
 }

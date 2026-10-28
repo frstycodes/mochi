@@ -19,11 +19,18 @@ import { host } from '../host';
 import type { Trigger } from '../host/types/schedule';
 import { firstPrompt, type Thread } from '../model';
 import { useHarness } from '../store';
-import { triggerInput } from './calls';
+import { triggerInput, type TriggerDraft } from './calls';
 import { describeTrigger } from './describe';
 import { DEFAULT_FORM, fromWhen, toWhen } from './form';
 import { ScheduleFields } from './ScheduleFields';
-import { useTrigger } from './useSchedules';
+import {
+  refreshRemoteTriggers,
+  useRemoteTrigger,
+  useTrigger,
+} from './useSchedules';
+import { parseRemoteThreadId } from '../remote/ids';
+import { OwnerScope } from '../remote/RemoteThreadScope';
+import { useOptionalMachines } from '../remote/useMachines';
 
 const openStore = createStore<{ threadId: string | null }>(() => ({
   threadId: null,
@@ -37,9 +44,20 @@ export function openSchedule(threadId: string | null) {
 /** Mounted once at the app root. */
 export function ScheduleLayer() {
   const threadId = useStore(openStore, (s) => s.threadId);
+  return (
+    <OwnerScope threadId={threadId}>
+      <ScheduleFor threadId={threadId} />
+    </OwnerScope>
+  );
+}
+
+function ScheduleFor({ threadId }: { threadId: string | null }) {
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
-  const trigger = useTrigger(threadId ?? '');
+  const remote = threadId ? parseRemoteThreadId(threadId) : null;
+  const own = useTrigger(threadId ?? '');
+  const theirs = useRemoteTrigger(remote ?? { machineId: '', threadId: '' });
+  const trigger = remote ? theirs : own;
   if (!thread) return null;
   // Keyed: reopening for another thread starts from that thread's trigger.
   return (
@@ -67,23 +85,20 @@ function ScheduleDialog({
   const [name, setName] = useState(trigger?.name ?? thread.title);
   const [prompt, setPrompt] = useState(trigger?.prompt ?? firstPrompt(thread));
   const [error, setError] = useState<string | null>(null);
+  const calls = useScheduleCalls(thread);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     const result = toWhen(form);
     if ('error' in result) return setError(result.error);
-    const input = triggerInput(thread, {
-      when: result.when,
-      missed: form.missed,
-      name: name.trim() || thread.title,
-      prompt: prompt.trim() || firstPrompt(thread),
-    });
-    if (!input)
-      return setError(
-        "This thread's project folder isn't on this computer, so it can't run here.",
-      );
     try {
-      await host.schedule.set(input);
+      const failure = await calls.set({
+        when: result.when,
+        missed: form.missed,
+        name: name.trim() || thread.title,
+        prompt: prompt.trim() || firstPrompt(thread),
+      });
+      if (failure) return setError(failure);
       toast.success(`Scheduled: ${describeTrigger(result.when)}`);
       onClose();
     } catch (err) {
@@ -92,8 +107,12 @@ function ScheduleDialog({
   };
 
   const remove = async () => {
-    await host.schedule.remove(thread.id);
-    onClose();
+    try {
+      await calls.remove();
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    }
   };
 
   return (
@@ -159,4 +178,40 @@ function ScheduleDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+type ScheduleDraft = TriggerDraft & { name: string; prompt: string };
+
+/** Saving and removing the thread's trigger where it runs: here, or on the computer that owns it. `set` answers why it can't. */
+function useScheduleCalls(thread: Thread) {
+  const machines = useOptionalMachines();
+  const remote = parseRemoteThreadId(thread.id);
+  if (remote && machines)
+    return {
+      set: async (draft: ScheduleDraft) => {
+        await machines.ask(remote.machineId, {
+          type: 'schedule-set',
+          threadId: thread.id,
+          ...draft,
+        });
+        void refreshRemoteTriggers(remote.machineId);
+      },
+      remove: async () => {
+        await machines.ask(remote.machineId, {
+          type: 'schedule',
+          threadId: thread.id,
+          action: 'remove',
+        });
+        void refreshRemoteTriggers(remote.machineId);
+      },
+    };
+  return {
+    set: async (draft: ScheduleDraft) => {
+      const input = triggerInput(thread, draft);
+      if (!input)
+        return "This thread's project folder isn't on this computer, so it can't run here.";
+      await host.schedule.set(input);
+    },
+    remove: () => host.schedule.remove(thread.id),
+  };
 }

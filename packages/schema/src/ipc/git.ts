@@ -112,7 +112,7 @@ export const ReviewThread = Schema.Struct({
 
 export const MergeMethod = Schema.Literals(['squash', 'merge', 'rebase']);
 export type MergeMethod = typeof MergeMethod.Type;
-const MergeMode = Schema.Literals(['now', 'bypass', 'auto']);
+export const MergeMode = Schema.Literals(['now', 'bypass', 'auto']);
 
 export const ReviewVerdict = Schema.Literals([
   'approve',

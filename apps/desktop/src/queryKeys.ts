@@ -109,10 +109,9 @@ export const queryKeys = {
     checkpointDiff: (cwd: string | null, threadId: string, n: number) =>
       ['git-checkpoint-diff', cwd, threadId, n] as const,
     branches: (root: string) => ['git-branches', root] as const,
-    pr: (cwd: string, githubUser: string | undefined) =>
-      ['git-pr', cwd, githubUser] as const,
-    review: (cwd: string, pr: number, githubUser: string | undefined) =>
-      ['git-review', cwd, pr, githubUser] as const,
+    /** `source`: a `ThreadCalls` key, the folder here or another computer's thread. */
+    pr: (source: string) => ['git-pr', source] as const,
+    review: (source: string, pr: number) => ['git-review', source, pr] as const,
     branchPrs: (cwd: string, githubUser: string | undefined) =>
       ['github-pr', cwd, githubUser] as const,
     branchNameError: (root: string, name: string | undefined) =>
@@ -138,6 +137,7 @@ export const queryKeys = {
       ['machine-catalog', machineId, isOnline] as const,
     read: (machineId: string, key: readonly unknown[]) =>
       ['machine-read', machineId, ...key] as const,
+    schedules: (machineId: string) => ['machine-schedules', machineId] as const,
   },
   updates: {
     state: () => ['update-state'] as const,

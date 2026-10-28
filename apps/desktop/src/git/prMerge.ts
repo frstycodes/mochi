@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from '@/toast/store';
 import { refreshRef } from '../chat/useRefState';
-import { host } from '../host';
+import { useThreadCalls } from '../remote/threadCalls';
 import type { MergeMethod, MergeMode } from '../host/types/git';
 import type { Thread } from '../model';
 import { setPrefs, usePrefs } from '../settings/prefs';
@@ -15,22 +15,17 @@ import { useGithubScope, type ThreadPr } from './useThreadPrs';
  */
 export function useThreadPrMerge(thread: Thread, item: ThreadPr) {
   const scope = useGithubScope(thread);
+  const calls = useThreadCalls(thread);
   const { mergeMethod } = usePrefs();
   const [isBusy, setBusy] = useState(false);
   const { state, pr, githubRef, label } = item;
 
   const merge = async (method: MergeMethod, mode: MergeMode) => {
-    if (!scope.cwd) return;
+    if (!calls) return;
     setPrefs({ mergeMethod: method });
     setBusy(true);
     try {
-      await host.git.mergePr(
-        scope.cwd,
-        pr.number,
-        method,
-        mode,
-        scope.githubUser,
-      );
+      await calls.prAct(pr.number, { kind: 'merge', method, mode });
       toast.success(
         mode === 'auto'
           ? `${label} merges once its checks pass`
@@ -56,8 +51,7 @@ export function useThreadPrMerge(thread: Thread, item: ThreadPr) {
     onMerge: merge,
   });
   const allowed = state.mergeMethods ?? [];
-  if (state.status !== 'open' || allowed.length === 0 || !scope.cwd)
-    return null;
+  if (state.status !== 'open' || allowed.length === 0 || !calls) return null;
   return {
     ...flow,
     allowed,

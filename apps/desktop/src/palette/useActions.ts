@@ -46,6 +46,7 @@ const REMOTE_THREAD_ACTIONS = new Set([
   'thread-delete',
   'thread-copy-branch',
   'thread-summary',
+  'thread-schedule',
 ]);
 
 /** On another computer's thread, a thread action that would run on this computer is shown disabled with why, never run here. */

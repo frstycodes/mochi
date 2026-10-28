@@ -22,6 +22,13 @@ export function commandFor(
       };
     case 'send':
       return sendCommand(action);
+    // A message the shared views write for you (a PR review thread, a line note): sent there as you'd type it.
+    case 'say':
+      return action.entry.who === 'you' &&
+        action.entry.kind === 'message' &&
+        !action.entry.images?.length
+        ? { type: 'send', threadId: action.threadId, text: action.entry.text }
+        : null;
     case 'interrupt':
       return { type: 'interrupt', threadId: action.threadId };
     // The side chat's question, asked and answered on that computer (`useSideChat` dispatches it for a remote thread).

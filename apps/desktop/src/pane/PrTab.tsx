@@ -27,10 +27,7 @@ import { changeSections } from '../git/files';
 import { threadPlace, threadPrompt } from '../git/prReview';
 import { useConfirm } from '../git/useConfirm';
 import { useGitAction, usePr, usePrReview } from '../git/useGit';
-import { useGithubScope, useThreadPrs } from '../git/useThreadPrs';
-import { useWorktreePath } from '../git/worktrees';
-import { host } from '../host';
-import { threadCwd } from '../host/cwd';
+import { useThreadPrs } from '../git/useThreadPrs';
 import type {
   MergeMethod,
   MergeMode,
@@ -39,7 +36,10 @@ import type {
   ReviewThread,
   ReviewVerdict,
 } from '../host/types/git';
+import type { PrAction } from '../host/types/remote';
 import { isMod } from '../keys';
+import { useThreadCalls, type ThreadCalls } from '../remote/threadCalls';
+import { useThreadIo, type ThreadIo } from '../remote/threadIo';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
@@ -50,13 +50,21 @@ import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
 export function PrTab({ thread }: PaneTabProps) {
-  const cwd = useWorktreePath(thread.id) ?? threadCwd(thread);
-  if (!cwd) return <NoPr />;
-  return <PrPicker thread={thread} cwd={cwd} />;
+  const calls = useThreadCalls(thread);
+  const io = useThreadIo(thread);
+  if (!calls || !io || io.kind === 'denied') return <NoPr />;
+  return <PrPicker thread={thread} calls={calls} io={io} />;
 }
 
-function PrPicker({ thread, cwd }: { thread: Thread; cwd: string }) {
-  const prs = usePrChoices(thread, cwd);
+interface PrSource {
+  thread: Thread;
+  calls: ThreadCalls;
+  /** Where its line notes go: the thread here, or a `comment` to the computer that owns it. */
+  io: ThreadIo;
+}
+
+function PrPicker({ thread, calls, io }: PrSource) {
+  const prs = usePrChoices(thread, calls);
   const [picked, setPicked] = useState<number | null>(null);
   if (prs.length === 0) return <NoPr />;
   const number = prs.some((p) => p.number === picked) ? picked! : prs[0].number;
@@ -78,15 +86,21 @@ function PrPicker({ thread, cwd }: { thread: Thread; cwd: string }) {
           </NativeSelect>
         </PaneTitle>
       )}
-      <PrView key={number} thread={thread} cwd={cwd} number={number} />
+      <PrView
+        key={number}
+        thread={thread}
+        calls={calls}
+        io={io}
+        number={number}
+      />
     </>
   );
 }
 
 /** The thread's recorded PRs, most-needs-you first; before it has recorded one, the PR gh finds on the worktree's branch. */
-function usePrChoices(thread: Thread, cwd: string) {
+function usePrChoices(thread: Thread, calls: ThreadCalls) {
   const recorded = useThreadPrs(thread);
-  const branchQuery = usePr(cwd, useGithubScope(thread).githubUser);
+  const branchQuery = usePr(calls);
   if (recorded.length > 0)
     return recorded.map((p) => ({ number: p.pr.number, title: p.pr.title }));
   return branchQuery.data
@@ -94,35 +108,20 @@ function usePrChoices(thread: Thread, cwd: string) {
     : [];
 }
 
-function PrView({
-  thread,
-  cwd,
-  number,
-}: {
-  thread: Thread;
-  cwd: string;
-  number: number;
-}) {
-  const { githubUser } = useGithubScope(thread);
-  const reviewQuery = usePrReview(cwd, number, githubUser);
+function PrView({ thread, calls, io, number }: PrSource & { number: number }) {
+  const reviewQuery = usePrReview(calls, number);
   const { run, pending } = useGitAction(reviewQuery.refresh);
   const { confirm, dialog } = useConfirm();
   const { diffStyle, mergeMethod: preferred } = usePrefs();
   const changeActions = useChangeActions({
     thread,
-    io: { kind: 'local', root: cwd },
+    io,
     canStage: false,
     diffStyle,
     run,
     confirm,
   });
-  const prActions = usePrActions({
-    thread,
-    cwd,
-    number,
-    githubUser,
-    run,
-  });
+  const prActions = usePrActions({ thread, calls, number, run });
 
   const review = reviewQuery.data;
   if (reviewQuery.error && !review)
@@ -233,37 +232,31 @@ function PrView({
 
 interface PrActionsInput {
   thread: Thread;
-  cwd: string;
+  calls: ThreadCalls;
   number: number;
-  githubUser?: string;
   run: ReturnType<typeof useGitAction>['run'];
 }
 
 type PrActions = ReturnType<typeof usePrActions>;
 
-function usePrActions({
-  thread,
-  cwd,
-  number,
-  githubUser,
-  run,
-}: PrActionsInput) {
+function usePrActions({ thread, calls, number, run }: PrActionsInput) {
   const dispatch = useDispatch();
   const agentName = thread.providers[0] === 'codex' ? 'Codex' : 'Claude';
+  const act = (label: string, action: PrAction) =>
+    run(label, () => calls.prAct(number, action));
   return {
     agentName,
-    comment: (body: string) =>
-      run('Comment', () => host.git.commentPr(cwd, number, body, githubUser)),
+    comment: (body: string) => act('Comment', { kind: 'comment', body }),
     review: (verdict: ReviewVerdict, body: string) =>
-      run(VERDICT_LABELS[verdict], () =>
-        host.git.reviewPr(cwd, number, verdict, body, githubUser),
-      ),
+      act(VERDICT_LABELS[verdict], { kind: 'review', verdict, body }),
     reply: (t: ReviewThread, body: string) =>
-      run('Reply', () => host.git.replyThread(cwd, t.id, body, githubUser)),
+      act('Reply', { kind: 'reply', reviewThreadId: t.id, body }),
     resolve: (t: ReviewThread) =>
-      run(t.isResolved ? 'Unresolve' : 'Resolve', () =>
-        host.git.resolveThread(cwd, t.id, !t.isResolved, githubUser),
-      ),
+      act(t.isResolved ? 'Unresolve' : 'Resolve', {
+        kind: 'resolve',
+        reviewThreadId: t.id,
+        isResolved: !t.isResolved,
+      }),
     send: (t: ReviewThread, review: PrReview) =>
       dispatch({
         type: 'say',
@@ -271,9 +264,11 @@ function usePrActions({
         entry: { who: 'you', kind: 'message', text: threadPrompt(t, review) },
       }),
     merge: (method: MergeMethod, mode: MergeMode) =>
-      run(mode === 'auto' ? 'Merge when ready' : 'Merge', () =>
-        host.git.mergePr(cwd, number, method, mode, githubUser),
-      ),
+      act(mode === 'auto' ? 'Merge when ready' : 'Merge', {
+        kind: 'merge',
+        method,
+        mode,
+      }),
   };
 }
 

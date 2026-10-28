@@ -4,6 +4,7 @@ import { toast } from '../toast/store.ts';
 import { host } from '../host/index.ts';
 import type { DiffScope, GitDiff } from '../host/types/git.ts';
 import { queryKeys } from '../queryKeys.ts';
+import type { ThreadCalls } from '../remote/threadCalls.ts';
 import { useWatchQuery } from '../watch/useWatchQuery.ts';
 import { askMachine, remoteQuery, type ThreadIo } from '../remote/threadIo.ts';
 
@@ -97,22 +98,22 @@ export function useBranches(root: string) {
 }
 
 /** `githubUser` is the thread's profile GitHub account; gh's active account when undefined. */
-export function usePr(cwd: string, githubUser?: string) {
+export function usePr(calls: ThreadCalls) {
   return gitResult(
     useQuery({
-      queryKey: queryKeys.git.pr(cwd, githubUser),
-      queryFn: () => host.git.pr(cwd, githubUser),
+      queryKey: queryKeys.git.pr(calls.key),
+      queryFn: () => calls.pr(),
       refetchInterval: host.isDesktop ? PR_POLL_MS : false,
     }),
   );
 }
 
 /** One PR's review page, re-read like `usePr`. */
-export function usePrReview(cwd: string, pr: number, githubUser?: string) {
+export function usePrReview(calls: ThreadCalls, pr: number) {
   return gitResult(
     useQuery({
-      queryKey: queryKeys.git.review(cwd, pr, githubUser),
-      queryFn: () => host.git.prReview(cwd, pr, githubUser),
+      queryKey: queryKeys.git.review(calls.key, pr),
+      queryFn: () => calls.prReview(pr),
       refetchInterval: host.isDesktop ? PR_POLL_MS : false,
     }),
   );

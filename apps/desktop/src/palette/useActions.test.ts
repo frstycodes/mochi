@@ -8,9 +8,14 @@ const byId = (id: string) => ACTIONS.find((a) => a.id === id)!;
 const machine = { name: 'Studio' };
 
 test('another computer’s thread: actions with a command stay, the rest say why instead of running here', () => {
-  for (const id of ['thread-rename', 'thread-fork', 'thread-settle'])
+  for (const id of [
+    'thread-rename',
+    'thread-fork',
+    'thread-settle',
+    'thread-schedule',
+  ])
     assert.equal(onAnotherComputer(byId(id), machine), byId(id), id);
-  for (const id of ['thread-reveal', 'thread-replay', 'thread-schedule'])
+  for (const id of ['thread-reveal', 'thread-replay'])
     assert.equal(
       onAnotherComputer(byId(id), machine).disabledReason?.({} as ActionScope),
       'Do this on Studio itself for now',
