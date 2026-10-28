@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { toast } from '@/toast/store';
+import { MachineModelsContext } from '../ModelControls';
 import type { FollowedMachine } from '../host/types/remote';
 import {
   shallowEqual,
@@ -18,7 +19,7 @@ import {
   isScreenAction,
   localSlices,
 } from './threadScope';
-import { useMachines } from './useMachines';
+import { useMachineCatalog, useMachines } from './useMachines';
 
 /**
  * Another computer's thread in the app's own thread view: this window's splits, panes and side chats around that computer's
@@ -36,6 +37,7 @@ export function RemoteThreadScope({
   const local = useHarnessSelector(localSlices, shallowEqual);
   const localDispatch = useDispatch();
   const { run, ask } = useMachines();
+  const { catalog } = useMachineCatalog(machine);
   const dispatch = (action: Action) => {
     if (isScreenAction(action)) return localDispatch(action);
     if (isQuietAction(action)) return;
@@ -53,12 +55,17 @@ export function RemoteThreadScope({
   };
   return (
     <ThreadOriginContext.Provider value={{ kind: 'remote', machine }}>
-      <StoreScope state={hybridState(local, mirror)} dispatch={dispatch}>
-        {children}
-      </StoreScope>
+      <MachineModelsContext.Provider value={catalog ?? NO_CATALOG}>
+        <StoreScope state={hybridState(local, mirror)} dispatch={dispatch}>
+          {children}
+        </StoreScope>
+      </MachineModelsContext.Provider>
     </ThreadOriginContext.Provider>
   );
 }
+
+/** Before the catalog comes (or while that computer is offline) the pickers list nothing rather than this computer's models. */
+const NO_CATALOG = { models: {}, defaults: { claude: '', codex: '' } };
 
 /** `children` under the store of the computer that owns `threadId`: as they are for this computer's own; nothing while another's hasn't streamed yet. */
 export function OwnerScope({

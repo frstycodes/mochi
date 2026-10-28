@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 import { invoke, Str } from './checks.ts';
-import { COMMAND_SCOPES, type RemoteCommand } from './relay.ts';
+import { commandScope } from './relay.ts';
 
 /** Core refuses a WebSocket upgrade whose `v` differs, with HTTP 426. Bump on any breaking change to Core's RPCs. */
 export const PROTOCOL_VERSION = 2;
@@ -137,8 +137,5 @@ const deviceScopes: Record<string, AuthScope> = {
  */
 export const scopeOf = (tag: string, payload?: unknown): AuthScope =>
   tag === 'device.command'
-    ? (COMMAND_SCOPES[
-        (payload as { command?: { type?: RemoteCommand['type'] } } | undefined)
-          ?.command?.type!
-      ] ?? 'local')
+    ? commandScope((payload as { command?: unknown } | undefined)?.command)
     : (deviceScopes[tag] ?? 'local');

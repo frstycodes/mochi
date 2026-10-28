@@ -9,6 +9,7 @@ import {
   ContextTrigger,
 } from '@/components/ai-elements/context';
 import type { Provider } from './model';
+import { useRemoteMachine } from './remote/origin';
 import { ProviderMark } from './ui';
 import { LimitBars, UpdatedAt } from './usage/LimitBars';
 import { hottest, TONE_COLORS, toneFor } from './usage/limits';
@@ -37,7 +38,9 @@ export function ContextRing({
   context: { used: number; max: number };
   usage?: Usage;
 }) {
-  const { limits, refresh } = useAccountLimits(provider, spaceId);
+  // Another computer's thread runs on that computer's account: this one's plan windows would be the wrong ones.
+  const isRemote = !!useRemoteMachine();
+  const { limits, refresh } = useAccountLimits(provider, spaceId, !isRemote);
   const [isOpen, setOpen] = useState(false);
   const open = (next: boolean) => {
     setOpen(next);
@@ -121,17 +124,19 @@ export function ContextRing({
               </p>
             </Section>
           )}
-          <Section
-            label={
-              <span className="flex items-center gap-1.5">
-                <ProviderMark provider={provider} size={14} />
-                {PROVIDER_NAMES[provider]} plan limits
-              </span>
-            }
-            aside={<UpdatedAt limits={limits} />}
-          >
-            <LimitBars limits={limits} />
-          </Section>
+          {!isRemote && (
+            <Section
+              label={
+                <span className="flex items-center gap-1.5">
+                  <ProviderMark provider={provider} size={14} />
+                  {PROVIDER_NAMES[provider]} plan limits
+                </span>
+              }
+              aside={<UpdatedAt limits={limits} />}
+            >
+              <LimitBars limits={limits} />
+            </Section>
+          )}
         </ContextContentBody>
       </ContextContent>
     </Context>

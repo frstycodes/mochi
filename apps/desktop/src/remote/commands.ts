@@ -1,4 +1,6 @@
 import type { Dispatch } from 'react';
+import { configuredCommands } from '../chat/slash.ts';
+import { sendSteerNow } from '../chat/outbox.ts';
 import { openedPr } from '../git/prs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
@@ -8,7 +10,8 @@ import type {
   RemoteCommand,
 } from '../host/types/remote.ts';
 import type { Project } from '@mochi/domain/host/types/projects';
-import type { Thread } from '../model.ts';
+import { offItems } from '../library/nativeOverrides.ts';
+import { authorName, type Thread } from '../model.ts';
 import { getProfiles } from '../profiles.ts';
 import {
   byRecentUse,
@@ -121,6 +124,11 @@ export async function runRemoteCommand(
     }
     case 'side-chat':
       return sideChat(thread, command.text, env);
+    case 'unsteer':
+      return unsteer(thread, command, dispatch);
+    case 'setup-choice':
+      await host.agent.setupChoice(thread.id, command.choice);
+      return ok;
   }
   const cwd = threadCwd(thread);
   if (!cwd) return fail('This thread has no folder on this machine');
@@ -214,6 +222,11 @@ async function catalog(state: State): Promise<MachineCatalog> {
         [h, await host.agent.models(h, state.spaceId).catch(() => [])] as const,
     ),
   );
+  const config = await host.settings
+    .agentConfig(state.spaceId)
+    .catch(() => undefined);
+  const nativeOff =
+    getProfiles().find((p) => p.id === state.spaceId)?.nativeOff ?? [];
   return {
     projects: (await projectsHere(state))
       .filter((p) => !p.isMissing)
@@ -223,7 +236,34 @@ async function catalog(state: State): Promise<MachineCatalog> {
       claude: settings.harnesses.claude.model,
       codex: settings.harnesses.codex.model,
     },
+    ...(config && {
+      commands: Object.fromEntries(
+        HARNESS_IDS.map((h) => [
+          h,
+          configuredCommands(config[h], offItems(config[h], nativeOff)),
+        ]),
+      ),
+    }),
   };
+}
+
+/** Steer Take back and Send now, as the bubble under the live turn runs them here. */
+async function unsteer(
+  thread: Thread,
+  { steerId, sendNow }: Extract<RemoteCommand, { type: 'unsteer' }>,
+  dispatch: Dispatch<Action>,
+): Promise<CommandResult> {
+  const reading = fail(
+    `${authorName(thread.providers[0])} is already reading it`,
+  );
+  if (!thread.steering?.some((s) => s.message.id === steerId)) return reading;
+  if (sendNow)
+    return (await sendSteerNow(dispatch, thread, steerId, host.agent.unsteer))
+      ? ok
+      : reading;
+  if (!(await host.agent.unsteer(thread.id, steerId))) return reading;
+  dispatch({ type: 'steer-take-back', threadId: thread.id, id: steerId });
+  return ok;
 }
 
 /** `useProjects` outside React: the registry, most recently used first. */

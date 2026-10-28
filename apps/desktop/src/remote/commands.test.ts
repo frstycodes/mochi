@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
 import { host } from '../host/index.ts';
-import type { MachineCatalog } from '../host/types/remote.ts';
+import type {
+  MachineCatalog,
+  RemoteThreadAction,
+} from '../host/types/remote.ts';
 import type { QueueItem } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialNotifications } from '../notify/slice.ts';
@@ -199,6 +202,126 @@ test('send goes out now to an idle agent and queues behind a working one, like t
   assert.deepEqual(
     queued.map((a) => a.type),
     ['queued-add'],
+  );
+});
+
+test('a send carries the composer’s images inline, saves nothing on this machine, and steers or queues as the device chose', async () => {
+  const { state, threadId } = machine();
+  const saveImage = vi.spyOn(host.data, 'saveImage');
+  const png = {
+    mediaType: 'image/png' as const,
+    data: 'aGk=',
+    thumb: 'data:image/png;base64,aGk=',
+  };
+  const sent: Action[] = [];
+  assert.deepEqual(
+    await runRemoteCommand(
+      {
+        type: 'send',
+        threadId,
+        text: 'what is this /simplify',
+        images: [png],
+        typedSkills: ['simplify'],
+        steers: true,
+      },
+      device(state, 'Laptop', sent),
+    ),
+    { isOk: true },
+  );
+  const send = sent[0] as Extract<Action, { type: 'send' }>;
+  assert.equal(send.type, 'send');
+  assert.deepEqual(send.images, [{ mediaType: 'image/png', data: 'aGk=' }]);
+  assert.deepEqual(send.shownImages, [png.thumb]);
+  assert.deepEqual(send.typed?.images, [png]);
+  assert.deepEqual(send.typed?.typedSkills, ['simplify']);
+  assert.equal(send.steers, true);
+  assert.equal(saveImage.mock.calls.length, 0);
+
+  // Idle, but the device held mod to queue it: it waits in this machine's queue, with its images.
+  const queued: Action[] = [];
+  await runRemoteCommand(
+    { type: 'send', threadId, text: 'later', images: [png], steers: false },
+    device(state, 'Laptop', queued),
+  );
+  const add = queued[0] as Extract<Action, { type: 'queued-add' }>;
+  assert.equal(add.type, 'queued-add');
+  assert.deepEqual(add.message.images, [png]);
+
+  // Send now on a queued message sends this machine's copy and takes it off the queue.
+  const withQueue = threadsReducer(state, add);
+  const id = withQueue.threads.find((t) => t.id === threadId)!.queued![0].id;
+  const now: Action[] = [];
+  await runRemoteCommand(
+    { type: 'send', threadId, text: '', queuedId: id },
+    device(withQueue, 'Laptop', now),
+  );
+  const fromQueue = now[0] as Extract<Action, { type: 'send' }>;
+  assert.equal(fromQueue.queuedId, id);
+  assert.equal(fromQueue.text, 'later');
+  assert.deepEqual(
+    await runRemoteCommand(
+      { type: 'send', threadId, text: '', queuedId: 'm-gone' },
+      device(withQueue, 'Laptop', []),
+    ),
+    { isOk: false, error: 'That message already left the queue' },
+  );
+});
+
+test('a thread action dispatches the thread’s own action, stamped on this machine', async () => {
+  const { state, threadId } = machine();
+  const dispatched: Action[] = [];
+  const env = device(state, 'Laptop', dispatched);
+  const controls = {
+    model: 'opus',
+    effort: 'high',
+    speed: '',
+    access: 'Manual',
+  } as const;
+  for (const action of [
+    { type: 'controls', controls },
+    { type: 'queued-add', message: { draft: 'next' } },
+    { type: 'queued-order', ids: ['m-2', 'm-1'] },
+    { type: 'goal-remove' },
+    { type: 'autofix-set', pr: 7, isOn: true },
+    { type: 'autofix-set', pr: 7, isOn: false },
+  ] satisfies RemoteThreadAction[])
+    assert.deepEqual(
+      await runRemoteCommand({ type: 'thread-action', threadId, action }, env),
+      { isOk: true },
+      action.type,
+    );
+  const [set, add, order, goal, on, off] = dispatched;
+  assert.deepEqual(set, { type: 'controls', threadId, controls });
+  assert.equal(add.type, 'queued-add');
+  const message = (add as Extract<Action, { type: 'queued-add' }>).message;
+  assert.match(message.id, /^m-/);
+  assert.deepEqual(
+    { ...message, id: '' },
+    { id: '', draft: 'next', mentions: [], isCommand: false, typedSkills: [] },
+  );
+  assert.deepEqual(order, {
+    type: 'queued-order',
+    threadId,
+    ids: ['m-2', 'm-1'],
+  });
+  assert.deepEqual(goal, { type: 'goal-remove', threadId });
+  assert.equal((on as { since?: number }).since !== undefined, true);
+  assert.deepEqual(off, { type: 'autofix-set', threadId, pr: 7 });
+  assert.deepEqual(
+    await runRemoteCommand(
+      {
+        type: 'thread-action',
+        threadId: 'nope',
+        action: { type: 'goal-remove' },
+      },
+      env,
+    ),
+    { isOk: false, error: 'No such thread on this machine' },
+  );
+  const applied = threadsReducer(state, set);
+  assert.equal(
+    applied.threads.find((t) => t.id === threadId)!.controls?.model,
+    'opus',
   );
 });
 

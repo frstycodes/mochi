@@ -6,10 +6,15 @@ import { host } from '../host/index.ts';
 import type { Provider } from '../model.ts';
 
 /** The profile's `provider` account windows as main keeps them, live; `refresh` asks the provider again (main throttles it). */
-export function useAccountLimits(provider: Provider, spaceId: string) {
+export function useAccountLimits(
+  provider: Provider,
+  spaceId: string,
+  isEnabled = true,
+) {
   const limitsQuery = useQuery({
     queryKey: queryKeys.agent.limits(provider, spaceId),
     queryFn: () => host.agent.limits(provider, spaceId),
+    enabled: isEnabled,
   });
   const limits = limitsQuery.data ?? null;
   useEffect(
@@ -25,6 +30,7 @@ export function useAccountLimits(provider: Provider, spaceId: string) {
   return {
     limits,
     refresh: () =>
+      isEnabled &&
       queryClient.fetchQuery({
         queryKey: queryKeys.agent.limits(provider, spaceId),
         queryFn: () => host.agent.limits(provider, spaceId, true),

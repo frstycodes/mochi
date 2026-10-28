@@ -13,6 +13,8 @@ import type {
   WorktreeSetup,
 } from '../host/types/agent';
 import type { Thread } from '../model';
+import { useRemoteMachine } from '../remote/origin';
+import { useOptionalMachines } from '../remote/useMachines';
 import { useDispatch } from '../store';
 import { CallList, Expand, RunOutput, TrailIcon } from '../WorkLog';
 import { outputLines } from './output';
@@ -184,12 +186,20 @@ function StepStatus({ step }: { step: SetupStep }) {
 
 function SetupFailedActions({ threadId }: { threadId: string }) {
   const dispatch = useDispatch();
+  const machine = useRemoteMachine();
+  const machines = useOptionalMachines();
   const choose = (choice: SetupChoice) =>
-    host.agent.setupChoice(threadId, choice).catch((error: Error) =>
-      toast.error('Could not continue the setup', {
-        description: error.message,
-      }),
-    );
+    machine && machines
+      ? void machines.run(machine.id, {
+          type: 'setup-choice',
+          threadId,
+          choice,
+        })
+      : host.agent.setupChoice(threadId, choice).catch((error: Error) =>
+          toast.error('Could not continue the setup', {
+            description: error.message,
+          }),
+        );
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <Button

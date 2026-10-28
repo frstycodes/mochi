@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'vite-plus/test';
 import { Schema } from 'effect';
+import { scopeOf } from './capabilities.ts';
 import {
+  commandScope,
   CommandResult,
   DeviceLinkFrame,
   HelloFrame,
@@ -220,8 +222,8 @@ test('malformed commands are refused, never half-read', () => {
 
 test('a hello on another protocol is refused, and a device frame must be an RPC message or its members', () => {
   assert.throws(
-    () => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 3 }),
-    /protocol 4/,
+    () => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 4 }),
+    /protocol 5/,
   );
   const isDeviceFrame = Schema.is(DeviceLinkFrame);
   assert.ok(
@@ -242,4 +244,158 @@ test('a hello on another protocol is refused, and a device frame must be an RPC 
     'Request',
   ])
     assert.ok(!isDeviceFrame(bad), JSON.stringify(bad));
+});
+
+test('a thread action is one of the whitelisted store actions, read field by field, never one the device names freely', () => {
+  const png = { mediaType: 'image/png', data: 'x', thumb: 'x' };
+  assert.deepEqual(
+    decode({
+      type: 'thread-action',
+      threadId: 't',
+      action: { type: 'queued-remove', id: 'm-1', threadId: 'other' },
+    }),
+    {
+      type: 'thread-action',
+      threadId: 't',
+      action: { type: 'queued-remove', id: 'm-1' },
+    },
+    'the thread is the command’s, not one the action names',
+  );
+  assert.deepEqual(
+    decode({
+      type: 'thread-action',
+      threadId: 't',
+      action: {
+        type: 'queued-add',
+        message: {
+          draft: 'look',
+          images: [{ ...png, original: '/Users/me/shot.png' }],
+          id: 'm-9',
+        },
+      },
+    }),
+    {
+      type: 'thread-action',
+      threadId: 't',
+      action: {
+        type: 'queued-add',
+        message: { draft: 'look', images: [png] },
+      },
+    },
+    'no path of the sending computer, and the machine picks the id',
+  );
+  for (const bad of [
+    { type: 'thread-action', threadId: 't', action: { type: 'delete' } },
+    { type: 'thread-action', threadId: 't', action: { type: 'tick' } },
+    { type: 'thread-action', threadId: 't', action: { type: 'say' } },
+    { type: 'thread-action', threadId: 't' },
+    {
+      type: 'thread-action',
+      threadId: 't',
+      action: { type: 'controls', controls: { model: 'x' } },
+    },
+    {
+      type: 'thread-action',
+      threadId: 't',
+      action: { type: 'grant-answer', grantId: 'g', answer: 'always' },
+    },
+    {
+      type: 'thread-action',
+      threadId: 't',
+      action: { type: 'queued-add', message: { draft: '  ' } },
+    },
+    {
+      type: 'thread-action',
+      threadId: 't',
+      action: { type: 'autofix-set', pr: -1, isOn: true },
+    },
+  ])
+    assert.ok(isRefused(bad), JSON.stringify(bad));
+});
+
+test('each thread action needs its own scope, and one Core doesn’t know needs a scope no device has', () => {
+  const action = (type: string) => ({
+    type: 'thread-action',
+    threadId: 't',
+    action: { type },
+  });
+  assert.equal(commandScope(action('controls')), 'operate');
+  assert.equal(commandScope(action('queued-add')), 'operate');
+  assert.equal(commandScope(action('grant-answer')), 'operate');
+  assert.equal(commandScope(action('goal-remove')), 'manage');
+  assert.equal(commandScope(action('autofix-set')), 'manage');
+  assert.equal(commandScope(action('proposal-start')), 'manage');
+  for (const unknown of ['delete', 'toString', '__proto__', 'constructor'])
+    assert.equal(commandScope(action(unknown)), 'local', unknown);
+  assert.equal(commandScope({ type: 'thread-action', threadId: 't' }), 'local');
+  assert.equal(commandScope({ type: 'hasOwnProperty' }), 'local');
+  assert.equal(commandScope({ type: 'send' }), 'operate');
+  assert.equal(commandScope(undefined), 'local');
+  assert.equal(
+    scopeOf('device.command', { command: action('goal-remove') }),
+    'manage',
+  );
+});
+
+test('a send carries the composer’s images and references, and needs something to send', () => {
+  const png = { mediaType: 'image/png', data: 'x', thumb: 'x' };
+  const send = { type: 'send', threadId: 't' };
+  assert.deepEqual(
+    decode({
+      ...send,
+      text: '',
+      images: [{ ...png, original: '/Users/me/a.png' }],
+      mentions: [
+        {
+          kind: 'file',
+          id: 'file:src/a.ts',
+          title: 'src/a.ts',
+          path: 'src/a.ts',
+          isDir: false,
+        },
+      ],
+      typedSkills: ['simplify'],
+      steers: true,
+    }),
+    {
+      ...send,
+      text: '',
+      images: [png],
+      mentions: [
+        {
+          kind: 'file',
+          id: 'file:src/a.ts',
+          title: 'src/a.ts',
+          path: 'src/a.ts',
+          isDir: false,
+        },
+      ],
+      typedSkills: ['simplify'],
+      steers: true,
+    },
+  );
+  assert.deepEqual(decode({ ...send, text: '', queuedId: 'm-1' }), {
+    ...send,
+    text: '',
+    queuedId: 'm-1',
+  });
+  for (const bad of [
+    { ...send, text: '  ' },
+    { ...send, text: 'x', images: Array.from({ length: 9 }, () => png) },
+    {
+      ...send,
+      text: 'x',
+      mentions: [
+        {
+          kind: 'file',
+          id: 'f',
+          title: 'f',
+          path: '/etc/passwd',
+          isDir: false,
+        },
+      ],
+    },
+    { ...send, text: 'x', mentions: [{ kind: 'shell', id: 'x', title: 'x' }] },
+  ])
+    assert.ok(isRefused(bad), JSON.stringify(bad));
 });

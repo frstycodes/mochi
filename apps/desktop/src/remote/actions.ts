@@ -1,4 +1,9 @@
-import type { RemoteCommand } from '../host/types/remote.ts';
+import type {
+  RemoteCommand,
+  RemoteMessage,
+  RemoteThreadAction,
+} from '../host/types/remote.ts';
+import type { QueuedMessage } from '../model.ts';
 import type { Action } from '../store/index.tsx';
 
 /**
@@ -15,11 +20,8 @@ export function commandFor(
         queueId: action.queueId,
         ...(action.answers && { answers: action.answers }),
       };
-    // Text only for now: images and skills don't cross yet, so a message with them isn't sent without them.
     case 'send':
-      return action.images?.length || action.skills?.length
-        ? null
-        : { type: 'send', threadId: action.threadId, text: action.text };
+      return sendCommand(action);
     case 'interrupt':
       return { type: 'interrupt', threadId: action.threadId };
     case 'seen':
@@ -76,6 +78,111 @@ export function commandFor(
       return action.view.kind === 'thread'
         ? { type: 'open', threadId: action.view.id }
         : null;
+    default: {
+      const threadAction = threadActionFor(action);
+      return threadAction
+        ? {
+            type: 'thread-action',
+            threadId: (action as { threadId: string }).threadId,
+            action: threadAction,
+          }
+        : null;
+    }
+  }
+}
+
+/**
+ * The composer's send as typed, for the thread's computer to resolve as its own composer would. Send now on a queued
+ * message names it: that computer sends its own copy. A send not typed here (a card's) goes as its text, when that's all it is.
+ */
+function sendCommand(
+  action: Extract<Action, { type: 'send' }>,
+): RemoteCommand | null {
+  const { threadId, typed, queuedId } = action;
+  if (queuedId) return { type: 'send', threadId, text: '', queuedId };
+  if (typed) {
+    const { draft, ...message } = wireMessage(typed);
+    return { type: 'send', threadId, text: draft, ...message, steers: true };
+  }
+  return action.images?.length || action.skills?.length || action.prompt
+    ? null
+    : { type: 'send', threadId, text: action.text };
+}
+
+/** A message as it crosses: no id (the other computer gives it one) and no path of this computer's for an image. */
+export function wireMessage(message: QueuedMessage): RemoteMessage {
+  return {
+    draft: message.draft,
+    ...(message.images?.length && {
+      images: message.images.map(({ mediaType, data, thumb }) => ({
+        mediaType,
+        data,
+        thumb,
+      })),
+    }),
+    ...(message.mentions.length > 0 && { mentions: message.mentions }),
+    ...(message.isCommand && { isCommand: true }),
+    ...(message.typedSkills.length > 0 && {
+      typedSkills: message.typedSkills,
+    }),
+  };
+}
+
+/** The thread's own actions that cross as `thread-action`; null for the rest. */
+function threadActionFor(action: Action): RemoteThreadAction | null {
+  switch (action.type) {
+    case 'controls':
+      return { type: 'controls', controls: action.controls };
+    case 'provider-switch':
+      return {
+        type: 'provider-switch',
+        to: action.to,
+        ...(action.model !== undefined && { model: action.model }),
+      };
+    case 'compact':
+      return {
+        type: 'compact',
+        focus: action.focus,
+        ...(action.queuedId && { queuedId: action.queuedId }),
+      };
+    case 'queued-add':
+      return { type: 'queued-add', message: wireMessage(action.message) };
+    case 'queued-remove':
+      return { type: 'queued-remove', id: action.id };
+    case 'queued-order':
+      return { type: 'queued-order', ids: action.ids };
+    case 'queued-resume':
+      return { type: 'queued-resume' };
+    // On its API key is that computer's to choose, where the key is; a reset's resume is its own timer's.
+    case 'resume':
+      return action.onApiKey || action.atReset ? null : { type: 'resume' };
+    case 'limit-auto-resume':
+      return { type: 'limit-auto-resume', isOn: action.isOn };
+    case 'grant-answer':
+      return {
+        type: 'grant-answer',
+        grantId: action.grantId,
+        answer: action.answer,
+        ...(action.models && { models: action.models }),
+      };
+    case 'proposal-answer':
+      return {
+        type: 'proposal-answer',
+        proposalId: action.proposalId,
+        state: action.state,
+      };
+    case 'proposal-start':
+      return { type: 'proposal-start', proposalId: action.proposalId };
+    case 'goal-remove':
+      return { type: 'goal-remove' };
+    case 'autofix-set':
+      return {
+        type: 'autofix-set',
+        pr: action.pr,
+        isOn: action.since !== undefined,
+      };
+    case 'auto-archive-set':
+      return { type: 'auto-archive-set', pr: action.pr, isOn: action.isOn };
     default:
       return null;
   }

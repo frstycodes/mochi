@@ -1,4 +1,4 @@
-import type { RemoteCommand } from '../host/types/remote.ts';
+import type { RemoteCommand, RemoteMessage } from '../host/types/remote.ts';
 
 /** Ids of another computer's threads as this one holds them (`remote/mirror.ts`), and back for the wire. */
 
@@ -28,5 +28,21 @@ export function toWire<C extends RemoteCommand>(command: C): C {
   if ('queueId' in wire) wire.queueId = wireId(wire.queueId);
   if ('queueIds' in wire && wire.queueIds)
     wire.queueIds = wire.queueIds.map(wireId);
+  if (wire.type === 'send' && wire.mentions)
+    wire.mentions = wireMentions(wire.mentions);
+  if (wire.type === 'thread-action' && wire.action.type === 'queued-add') {
+    const { message } = wire.action;
+    wire.action = {
+      ...wire.action,
+      message: {
+        ...message,
+        ...(message.mentions && { mentions: wireMentions(message.mentions) }),
+      },
+    };
+  }
   return wire;
 }
+
+/** A referenced thread is one of the same machine's: its own id there. */
+const wireMentions = (mentions: NonNullable<RemoteMessage['mentions']>) =>
+  mentions.map((m) => (m.kind === 'thread' ? { ...m, id: wireId(m.id) } : m));
