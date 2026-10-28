@@ -50,10 +50,7 @@ export function cachedMirror(
   );
 }
 
-/**
- * GAP: the machine's queue (approvals and questions) is in its index, which no stream carries yet, so a mirror has none;
- * `remoteDecisions` and ask alerts stay empty until the `shell` stream sends it.
- */
+/** Its queue is each thread file's open approvals and questions, ids machine-aware like the threads'. */
 export function mirrorOf(
   machineId: string,
   threads: Record<string, MirroredThread>,
@@ -70,7 +67,12 @@ export function mirrorOf(
     now: 0,
     seq: 0,
     threads: files.map((f) => f.thread),
-    queue: [],
+    queue: files.flatMap((f) =>
+      (f.queue ?? []).map((q) => ({
+        ...q,
+        id: remoteThreadId(machineId, q.id),
+      })),
+    ),
     checkpoints,
     checkpointSeq: 0,
     forks,
@@ -89,7 +91,7 @@ const prefixedFiles = new WeakMap<
 
 /**
  * The file with every thread id in it machine-aware: its own id, and any `threadId` / `otherThreadId` / `parentId` it
- * holds. The queue, once mirrored (GAP above), takes the same prefix on its items' `threadId` and `id`.
+ * holds, its queue items' too (their own `id` is prefixed in `mirrorOf`).
  */
 function prefixed(machineId: string, file: MirroredThread): MirroredThread {
   const known = prefixedFiles.get(file);

@@ -34,6 +34,8 @@ export interface SavedThread {
   thread: Thread;
   checkpoints?: Checkpoint[];
   fork?: Fork;
+  /** Its open approvals and questions, for devices that follow it (also in the index). */
+  queue?: QueueItem[];
 }
 
 export function toSaved(
@@ -305,6 +307,8 @@ function stoppedSetup(setup: WorktreeSetup): WorktreeSetup {
 }
 
 export function splitSaved({ threads, checkpoints, forks, ...rest }: Saved) {
+  const queues: Record<string, QueueItem[]> = {};
+  for (const q of rest.queue) (queues[q.threadId] ??= []).push(q);
   const index = JSON.stringify({
     ...rest,
     threadIds: threads.map((t) => t.id),
@@ -314,7 +318,7 @@ export function splitSaved({ threads, checkpoints, forks, ...rest }: Saved) {
     threads: Object.fromEntries(
       threads.map((t) => [
         t.id,
-        encodeThread(t, checkpoints[t.id], forks[t.id]),
+        encodeThread(t, checkpoints[t.id], forks[t.id], queues[t.id]),
       ]),
     ),
   };
@@ -360,19 +364,30 @@ export function joinSaved({ index, threads }: SavedFiles): Saved | null {
 // Reducers replace a thread only when it changes, so an unchanged thread skips JSON.stringify and compares as the same string.
 const encoded = new WeakMap<Thread, SavedThread & { json: string }>();
 
+const sameItems = (a: QueueItem[] | undefined, b: QueueItem[] | undefined) =>
+  a === b ||
+  (a?.length === b?.length && (a ?? []).every((item, i) => item === b?.[i]));
+
 function encodeThread(
   thread: Thread,
   checkpoints: Checkpoint[] | undefined,
   fork: Fork | undefined,
+  queue: QueueItem[] | undefined,
 ): string {
   const hit = encoded.get(thread);
-  if (hit && hit.checkpoints === checkpoints && hit.fork === fork)
+  if (
+    hit &&
+    hit.checkpoints === checkpoints &&
+    hit.fork === fork &&
+    sameItems(hit.queue, queue)
+  )
     return hit.json;
   const json = JSON.stringify({
     thread,
     checkpoints,
     fork,
+    queue,
   } satisfies SavedThread);
-  encoded.set(thread, { thread, checkpoints, fork, json });
+  encoded.set(thread, { thread, checkpoints, fork, queue, json });
   return json;
 }
