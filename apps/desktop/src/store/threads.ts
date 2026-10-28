@@ -1570,12 +1570,15 @@ export function freeLine(threads: Thread[]): LineSlot {
   return ([1, 2, 3, 4, 5] as const).find((l) => !used.has(l)) ?? 5;
 }
 
+/** The id the next `create` gives its thread. */
+export const nextThreadId = (state: Pick<State, 'seq'>) => `new-${state.seq}`;
+
 function create(
   state: State,
   action: Extract<Action, { type: 'create' }>,
 ): State {
   const now = state.now;
-  const id = `new-${state.seq}`;
+  const id = nextThreadId(state);
   const spaceId = action.spaceId ?? state.spaceId;
   const base = (sid: string, title: string): Step => ({
     id: sid,

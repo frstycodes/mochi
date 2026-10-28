@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useReducer, type ReactNode } from 'react';
 import {
   Empty,
   EmptyDescription,
@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import type { FollowedMachine } from '../host/types/remote';
 import { LeafBar } from '../layout/SplitControls';
 import { findAnyThread } from '../store/anyThread';
+import { expectedFor } from './expecting';
 import { parseRemoteThreadId } from './ids';
 import { DeviceIndicator } from './origin';
 import { RemoteThreadScope } from './RemoteThreadScope';
@@ -30,6 +31,14 @@ export function RemoteThreadLeaf({
   const machineId = parseRemoteThreadId(threadId)?.machineId;
   const followed = machines.find((m) => m.machine.id === machineId);
   const found = findAnyThread(undefined, machines, threadId);
+  // Just started there: the mirror gets it a moment after the command answers.
+  const waitMs = found ? 0 : expectedFor(threadId);
+  const [, recheck] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (waitMs <= 0) return;
+    const timer = setTimeout(recheck, waitMs);
+    return () => clearTimeout(timer);
+  }, [waitMs]);
   if (!followed)
     return (
       <Missing
@@ -51,6 +60,15 @@ export function RemoteThreadLeaf({
           machineStatus(machine) ?? 'Its threads show here once it sends them.'
         }
         isLoading={machine.status === 'connecting'}
+      />
+    );
+  if (!found && waitMs > 0)
+    return (
+      <Missing
+        machine={machine}
+        title="Starting…"
+        description={`Waiting for ${machine.name} to send the thread.`}
+        isLoading
       />
     );
   if (!found)

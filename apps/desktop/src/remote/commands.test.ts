@@ -6,7 +6,11 @@ import type { QueueItem } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialNotifications } from '../notify/slice.ts';
 import { initialQueue } from '../store/queue.ts';
-import { initialThreads, threadsReducer } from '../store/threads.ts';
+import {
+  initialThreads,
+  nextThreadId,
+  threadsReducer,
+} from '../store/threads.ts';
 import { runRemoteCommand } from './commands.ts';
 import { closeIdleShells, shellOf, terminalCore } from './terminals.ts';
 import { markOwnAnswer } from '@mochi/domain/remote/answers';
@@ -223,7 +227,9 @@ test('operate and manage commands dispatch the same actions the UI does, and the
   ] as const) {
     assert.deepEqual(
       await runRemoteCommand(command, env),
-      { isOk: true },
+      command.type === 'create'
+        ? { isOk: true, data: { threadId: nextThreadId(state as State) } }
+        : { isOk: true },
       command.type,
     );
   }
@@ -619,7 +625,6 @@ test('a new thread starts only in a project the machine listed, by its id, with 
     },
     device(withProject, 'Laptop', dispatched),
   );
-  assert.deepEqual(sent, { isOk: true });
   const create = dispatched[0] as Extract<Action, { type: 'create' }>;
   assert.equal(
     create.project,
@@ -632,6 +637,15 @@ test('a new thread starts only in a project the machine listed, by its id, with 
     'model, effort, speed and permissions as picked on the device',
   );
   assert.deepEqual(create.images, images);
+  assert.deepEqual(sent, {
+    isOk: true,
+    data: { threadId: nextThreadId(withProject) },
+  });
+  assert.equal(
+    threadsReducer(withProject, create).threads.at(-1)!.id,
+    nextThreadId(withProject),
+    'the id it answers with is the one the thread gets',
+  );
 });
 
 test('a device’s clone lands in this machine’s projects folder, and its failure comes back as git said it', async () => {
