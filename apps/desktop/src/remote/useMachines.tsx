@@ -223,6 +223,14 @@ export function useMachines() {
   return machines;
 }
 
+/** A followed computer by id; undefined for none, or outside `MachinesProvider` (the design page, a torn-off window). */
+export function useFollowedMachine(machineId: string | undefined) {
+  const machines = useContext(MachinesContext);
+  return machineId === undefined
+    ? undefined
+    : machines?.machines.find((m) => m.machine.id === machineId)?.machine;
+}
+
 /** What a new thread on that computer can start in and with; null while it's read, offline or when it can't be read. */
 /** That machine's catalog, read when it comes online; `reload` reads it again (after adding a project there). */
 export function useMachineCatalog(machine: FollowedMachine | undefined) {
@@ -257,10 +265,23 @@ export function RemoteScope({
   onOpenTab?: (action: Extract<Action, { type: 'pane-open-tab' }>) => void;
   children: ReactNode;
 }) {
-  const { run, ask } = useMachines();
+  const dispatchOn = useRemoteDispatch();
   const dispatch = (action: Action) => {
     // A link in its transcript: the thread view opens its own pane, reading from that computer.
     if (action.type === 'pane-open-tab' && onOpenTab) return onOpenTab(action);
+    dispatchOn(machine, action);
+  };
+  return (
+    <StoreScope state={state} dispatch={dispatch}>
+      {children}
+    </StoreScope>
+  );
+}
+
+/** A store action on one of that computer's threads, as the command that does it there (`commandFor`); a toast for what it can't. */
+export function useRemoteDispatch() {
+  const { run, ask } = useMachines();
+  return (machine: FollowedMachine, action: Action) => {
     const command = commandFor(action);
     if (!command)
       return void toast(`Do this on ${machine.name} itself for now`);
@@ -274,11 +295,6 @@ export function RemoteScope({
       return void ask(machine.id, command).catch(() => undefined);
     void run(machine.id, command);
   };
-  return (
-    <StoreScope state={state} dispatch={dispatch}>
-      {children}
-    </StoreScope>
-  );
 }
 
 const COMMAND_VERBS = {

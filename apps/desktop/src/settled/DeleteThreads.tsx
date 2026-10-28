@@ -17,8 +17,9 @@ import { Label } from '@/components/ui/label';
 import { plural } from '@mochi/domain/lib/format';
 import { removeThreadWorktree, useWorktreePaths } from '../git/worktrees';
 import type { Thread } from '../model';
+import { parseRemoteThreadId } from '../remote/ids';
+import { useMachines, useRemoteDispatch } from '../remote/useMachines';
 import { useHarness } from '../store';
-import { OwnerScope } from '../remote/RemoteThreadScope';
 import { deleteTitle } from './settled';
 
 const openStore = createStore<{ threadIds: string[] }>(() => ({
@@ -30,19 +31,16 @@ export function requestDelete(threadIds: string[]) {
   openStore.setState({ threadIds });
 }
 
-/** Mounted once at the app root. */
+/** Mounted once at the app root. A selection can span computers (the sidebar's merged list): each deletes its own. */
 export function DeleteThreadsLayer() {
   const threadIds = useStore(openStore, (s) => s.threadIds);
-  return (
-    <OwnerScope threadId={threadIds[0]}>
-      <DeleteThreadsFor threadIds={threadIds} />
-    </OwnerScope>
-  );
-}
-
-function DeleteThreadsFor({ threadIds }: { threadIds: string[] }) {
   const { state } = useHarness();
-  const threads = state.threads.filter((t) => threadIds.includes(t.id));
+  const { machines } = useMachines();
+  // Another computer's threads (the sidebar's merged list) by their machine-aware ids, from what it last streamed.
+  const threads = [
+    ...state.threads,
+    ...machines.flatMap((m) => m.state?.threads ?? []),
+  ].filter((t) => threadIds.includes(t.id));
   return (
     <AlertDialog
       open={threads.length > 0}
@@ -58,6 +56,8 @@ function DeleteThreadsFor({ threadIds }: { threadIds: string[] }) {
 
 function DeleteThreadsDialog({ threads }: { threads: Thread[] }) {
   const { dispatch } = useHarness();
+  const { machines } = useMachines();
+  const dispatchOn = useRemoteDispatch();
   const paths = useWorktreePaths();
   const [isRemovingTrees, setRemovingTrees] = useState(false);
   const withTrees = threads.filter((t) => !!paths[t.id]);
@@ -65,7 +65,17 @@ function DeleteThreadsDialog({ threads }: { threads: Thread[] }) {
 
   const remove = async () => {
     requestDelete([]);
-    dispatch({ type: 'delete', threadIds: threads.map((t) => t.id) });
+    const remote = threads.filter((t) => parseRemoteThreadId(t.id));
+    const here = threads.filter((t) => !remote.includes(t)).map((t) => t.id);
+    if (here.length > 0) dispatch({ type: 'delete', threadIds: here });
+    // Another computer deletes its own, one command each; its worktrees stay its own business.
+    for (const t of remote) {
+      const followed = machines.find(
+        (m) => m.machine.id === parseRemoteThreadId(t.id)!.machineId,
+      );
+      if (followed)
+        dispatchOn(followed.machine, { type: 'delete', threadIds: [t.id] });
+    }
     const removing = isRemovingTrees ? withTrees : [];
     const failed = (
       await Promise.allSettled(removing.map((t) => removeThreadWorktree(t.id)))

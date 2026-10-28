@@ -61,13 +61,6 @@ export function commandFor(
         threadId: action.threadId,
         goal: action.draft.goal,
       };
-    case 'pin-at':
-      return {
-        type: 'pin',
-        threadId: action.threadId,
-        isPinned: true,
-        order: action.order,
-      };
     case 'delete':
       return action.threadIds.length === 1
         ? { type: 'delete', threadId: action.threadIds[0] }

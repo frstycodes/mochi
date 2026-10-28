@@ -87,7 +87,6 @@ import {
   nestBlocker,
   orderBetween,
   rootOf,
-  pinnedThreads,
   pinOrderOf,
   stepPin,
   type DropAt,
@@ -108,7 +107,6 @@ import {
   useSpaceQueue,
   useThread,
   useView,
-  type State,
   type View,
 } from './store';
 import {
@@ -117,7 +115,8 @@ import {
   titleToSave,
   useRenameSurface,
 } from './rename';
-import type { FollowedMachine } from './host/types/remote';
+import { parseRemoteThreadId } from './remote/ids';
+import { MergedScope } from './remote/MergedScope';
 import { MochiMark, SpaceIcon, StatusMark, TooltipIconButton } from './ui';
 import {
   AgentsBadge,
@@ -129,23 +128,11 @@ import {
 } from './threadRow';
 import { BoundShortcut } from './Shortcut';
 import { spaceCommand } from './keymap';
-import { remoteDecisions, remoteThreads } from './remote/mirror';
-import {
-  openRemoteThread,
-  openSubpage,
-  useRemoteThreadRoute,
-} from './routes/nav';
-import { DeviceIcon } from './remote/DeviceIcon';
-import { MachinePresence } from './remote/MachinePresence';
-import { RemoteScope, useMachines } from './remote/useMachines';
+import { openSubpage } from './routes/nav';
+import { ThreadMachineMark } from './remote/MachineMark';
 import { UserMenu } from './UserMenu';
 import { FoldGroup } from './SidebarFold';
-import {
-  filteredSidebarLists,
-  matchesProjectFilter,
-  useProjectFilter,
-  type ProjectFilter,
-} from './projectFilter';
+import { filteredSidebarLists, useProjectFilter } from './projectFilter';
 import { ProjectFilterMenu } from './ProjectFilterMenu';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { host } from './host';
@@ -195,11 +182,13 @@ export function AppSidebar({
               className="relative snap-x snap-mandatory flex-row gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain"
             >
               {/* Every space stays mounted so neighbours show mid-swipe; window to index ± 1 if the space count grows. */}
-              {profiles.map((s, i) => (
-                <SpacePanel key={s.id} isCurrent={i === index}>
-                  <SpaceNav spaceId={s.id} onSearch={onSearch} />
-                </SpacePanel>
-              ))}
+              <MergedScope>
+                {profiles.map((s, i) => (
+                  <SpacePanel key={s.id} isCurrent={i === index}>
+                    <SpaceNav spaceId={s.id} onSearch={onSearch} />
+                  </SpacePanel>
+                ))}
+              </MergedScope>
             </SidebarContent>
             <SpaceFooter
               isEditing={isEditing}
@@ -421,10 +410,6 @@ function SpaceNav({
   const view = useView(spaceId);
   const threads = useSpaceListing(spaceId);
   const queue = useSpaceQueue(spaceId);
-  const remoteQueueCount = useMachines().machines.reduce(
-    (n, m) => n + (m.state ? remoteDecisions(m.state).length : 0),
-    0,
-  );
   const { setOpenMobile } = useSidebar();
   const go = (v: View) => {
     dispatch({ type: 'go', view: v });
@@ -487,11 +472,7 @@ function SpaceNav({
                 />
               }
             />
-            <SidebarNav
-              view={view}
-              go={go}
-              queueCount={queue.length + remoteQueueCount}
-            />
+            <SidebarNav view={view} go={go} queueCount={queue.length} />
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -500,7 +481,6 @@ function SpaceNav({
       <div className="contents" onKeyDown={selection.onKeyDown}>
         <ThreadList
           pinned={pinned}
-          remotePins={useRemotePins(projectFilter.selected)}
           active={active}
           row={row}
           selectedIds={selection.ids}
@@ -541,7 +521,6 @@ function SpaceNav({
           </FoldGroup>
         )}
       </div>
-      <MachineThreads />
     </>
   );
 }
@@ -551,57 +530,6 @@ const SIDEBAR_SETTLED = 10;
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
-
-/** Your other computers' threads, each under its computer's name: they run there, and open here to follow and steer. */
-function MachineThreads() {
-  const { machines } = useMachines();
-  const route = useRemoteThreadRoute();
-  return machines.map(({ machine, state }) => {
-    const { active, settled } = state
-      ? remoteThreads(state)
-      : { active: [], settled: [] };
-    const row = (t: Thread) => (
-      <SidebarMenuItem key={t.id} data-remote-thread-row={t.id}>
-        <ThreadItem
-          thread={t}
-          isActive={route?.machineId === machine.id && route.threadId === t.id}
-          onSelect={() =>
-            openRemoteThread({ machineId: machine.id, threadId: t.id })
-          }
-        />
-      </SidebarMenuItem>
-    );
-    const label = (
-      <SidebarGroupLabel className="gap-1.5">
-        <DeviceIcon kind={machine.kind} className="size-3.5! shrink-0" />
-        <span className="min-w-0 truncate">{machine.name}</span>
-        <MachinePresence machine={machine} />
-      </SidebarGroupLabel>
-    );
-    if (!state) return <SidebarGroup key={machine.id}>{label}</SidebarGroup>;
-    // Settled folds below as its own group, level with the machine's, as this computer's own does.
-    return (
-      <RemoteScope key={machine.id} machine={machine} state={state}>
-        <SidebarGroup>
-          {label}
-          <SidebarMenu>
-            {active.map(row)}
-            {active.length === 0 && (
-              <li className="px-2 type-caption text-subtle-foreground">
-                No active threads
-              </li>
-            )}
-          </SidebarMenu>
-        </SidebarGroup>
-        {settled.length > 0 && (
-          <FoldGroup label="Settled" count={settled.length}>
-            {settled.map(row)}
-          </FoldGroup>
-        )}
-      </RemoteScope>
-    );
-  });
-}
 
 /**
  * Finder-style selection over the space's thread rows: a plain click opens the thread and clears it, Shift-click selects a range
@@ -665,14 +593,13 @@ function useThreadSelection(order: string[], openId: string | undefined) {
 }
 
 /**
- * Pinned threads in your order (your other computers' among them), then the rest by recent activity, split by the Threads label;
+ * Pinned threads in your order (your other computers' among them, pinned on this screen), then the rest by recent activity, split by the Threads label;
  * sub-threads hang under their parent on an L-shaped guide. Drag a row across the label to pin or unpin, within Pinned to reorder,
  * out onto a split to open it there, or drag it right past the indent to nest it under the row above the line; drag a sub-thread out of its
  * group to make it a thread of its own. Alt ↑/↓ reorders from the keyboard, the row menu nests.
  */
 function ThreadList({
   pinned,
-  remotePins,
   active,
   row,
   selectedIds,
@@ -680,7 +607,6 @@ function ThreadList({
   isFiltered,
 }: {
   pinned: ThreadGroup[];
-  remotePins: RemotePin[];
   active: ThreadGroup[];
   row: (t: Thread, isSub?: boolean) => ReactNode;
   selectedIds: string[];
@@ -689,10 +615,8 @@ function ThreadList({
 }) {
   const dispatch = useDispatch();
   const getState = useGetState();
-  const { run } = useMachines();
-  const route = useRemoteThreadRoute();
   const listRef = useRef<HTMLUListElement>(null);
-  const pins = mergePins(pinned, remotePins);
+  const pins = pinned.map(localRow);
   const pinnedIds = pinned.map((g) => g.thread.id);
   const activeIds = active.map((g) => g.thread.id);
   const reorder = (lists: { pinned: string[]; unpinned: string[] } | null) =>
@@ -704,7 +628,7 @@ function ThreadList({
       at: Date.now(),
     });
   const drop = (dragged: ListRow, slot: NonNullable<RowDragState['slot']>) => {
-    if (!dragged.remote && !slot.toPinned)
+    if (!slot.toPinned)
       return reorder(
         dropPin(pinnedIds, activeIds, dragged.thread.id, false, slot.index),
       );
@@ -715,14 +639,7 @@ function ThreadList({
       // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
       Date.now(),
     );
-    if (!dragged.remote)
-      return dispatch({ type: 'pin-at', threadId: dragged.thread.id, order });
-    void run(
-      dragged.remote.machine.id,
-      slot.toPinned
-        ? { type: 'pin', threadId: dragged.thread.id, isPinned: true, order }
-        : { type: 'pin', threadId: dragged.thread.id, isPinned: false },
-    );
+    dispatch({ type: 'pin-at', threadId: dragged.thread.id, order });
   };
   const nest = (dragged: ListRow, parentId: string) =>
     nestWithUndo(dispatch, getState().threads, dragged.thread, parentId);
@@ -806,35 +723,7 @@ function ThreadList({
           'data-pinned': isPinned || undefined,
         } as const;
         const subs = (r.subs ?? []).filter((s) => s.id !== drag.state?.id);
-        if (r.remote)
-          return (
-            <SidebarMenuItem
-              key={r.rowId}
-              asChild
-              {...rowProps}
-              data-remote-thread-row={t.id}
-            >
-              <motion.li {...glide} layoutId={rowLayoutId(r.rowId)}>
-                <RemoteScope machine={r.remote.machine} state={r.remote.state}>
-                  <ThreadItem
-                    thread={t}
-                    machine={r.remote.machine}
-                    isActive={
-                      route?.machineId === r.remote.machine.id &&
-                      route.threadId === t.id
-                    }
-                    onSelect={() =>
-                      openRemoteThread({
-                        machineId: r.remote!.machine.id,
-                        threadId: t.id,
-                      })
-                    }
-                  />
-                </RemoteScope>
-              </motion.li>
-            </SidebarMenuItem>
-          );
-        // The number is this computer's Orbit slot: another computer's pins have their own there.
+        // The number is the pin's place in Pinned, other computers' threads among them (mod 1–5).
         const pinNumber = isPinned ? pinnedIds.indexOf(t.id) + 1 : undefined;
         // A dragged parent takes its sub-threads with it; a dragged sub-thread leaves its group's guide.
         return (
@@ -941,55 +830,20 @@ function ThreadList({
   );
 }
 
-/** Another computer's pinned thread, shown in this computer's Pinned list. */
-interface RemotePin {
-  machine: FollowedMachine;
-  state: State;
-  thread: Thread;
-}
-
-/** A row of the thread list; another computer's carries where it runs, and a row id that can't clash with a thread here. A row here carries its sub-threads. */
+/** A row of the thread list and its sub-threads. */
 interface ListRow {
   rowId: string;
   thread: Thread;
-  remote?: RemotePin;
   subs?: Thread[];
 }
+
+/** Another computer's thread (a machine-aware id): it never nests, nor drops into a composer as a mention. */
+const isRemoteRow = (row: ListRow) => !!parseRemoteThreadId(row.thread.id);
 
 const localRow = (group: ThreadGroup): ListRow => ({
   rowId: group.thread.id,
   ...group,
 });
-
-/** Every computer's pins as one list, by pin order (`pinOrderOf`); this computer's first among equal keys. */
-function mergePins(pinned: ThreadGroup[], remotePins: RemotePin[]): ListRow[] {
-  const rows = [
-    ...pinned.map(localRow),
-    ...remotePins.map((remote) => ({
-      rowId: `${remote.machine.id}:${remote.thread.id}`,
-      thread: remote.thread,
-      remote,
-    })),
-  ];
-  return rows
-    .map((row, i) => ({ row, i }))
-    .sort(
-      (a, b) =>
-        pinOrderOf(a.row.thread) - pinOrderOf(b.row.thread) || a.i - b.i,
-    )
-    .map(({ row }) => row);
-}
-
-/** Your other computers' pinned threads, from what each last streamed. */
-function useRemotePins(filter: ProjectFilter): RemotePin[] {
-  return useMachines().machines.flatMap(({ machine, state }) =>
-    state
-      ? pinnedThreads(state.threads, state.spaceId)
-          .filter((thread) => matchesProjectFilter(thread, filter))
-          .map((thread) => ({ machine, state, thread }))
-      : [],
-  );
-}
 
 function NoFilteredThreads({ filterMenu }: { filterMenu: ReactNode }) {
   return (
@@ -1108,15 +962,9 @@ function useRowDrag(
       const rect = el.getBoundingClientRect();
       const grab = operation.position.initial;
       const { x, y } = operation.position.current;
-      // Another computer's thread opens over the app, never in one of this computer's splits.
-      if (!row.remote)
-        startDrag(
-          { kind: 'thread', id: row.thread.id },
-          row.thread.title,
-          x,
-          y,
-          { hasOwnGhost: true },
-        );
+      startDrag({ kind: 'thread', id: row.thread.id }, row.thread.title, x, y, {
+        hasOwnGhost: true,
+      });
       session.current = {
         row,
         startX: grab.x,
@@ -1138,7 +986,7 @@ function useRowDrag(
       const s = session.current;
       if (!s) return;
       const { x, y } = operation.position.current;
-      if (!s.row.remote) moveDrag(x, y);
+      moveDrag(x, y);
       const at = dropOver(
         listRef.current,
         s.row,
@@ -1162,10 +1010,11 @@ function useRowDrag(
       session.current = null;
       setDrag(null);
       if (canceled) return cancelDrag();
-      const mentionDrop = s.row.remote
+      // A mention names this computer's thread to its agent: another computer's isn't one it can read.
+      const mentionDrop = isRemoteRow(s.row)
         ? null
         : mentionDropAt(s.state.x, s.state.y);
-      const landed = s.row.remote ? null : endDrag();
+      const landed = endDrag();
       if (mentionDrop)
         return void mentionDrop.dispatchEvent(
           new CustomEvent(MENTION_DROP_EVENT, { detail: s.row.thread.id }),
@@ -1195,10 +1044,11 @@ function ListDraggable({
   return null;
 }
 
-/** Whether the dragged row may become a sub-thread of `parentId`; another computer's row never nests. */
+/** Whether the dragged row may become a sub-thread of `parentId`; another computer's row never nests, nor nests one. */
 function canNestUnder(row: ListRow, parentId: string, threads: Thread[]) {
   return (
-    !row.remote &&
+    !isRemoteRow(row) &&
+    !parseRemoteThreadId(parentId) &&
     parentId !== row.thread.parent?.threadId &&
     parentId !== rootOf(threads, row.thread).id &&
     threads.some((t) => t.id === parentId) &&
@@ -1209,8 +1059,7 @@ function canNestUnder(row: ListRow, parentId: string, threads: Thread[]) {
 /**
  * Where the dragged row would go, from the rows as rendered (the placeholder included), so moving the placeholder never flips the
  * answer back. Positions come from `offsetTop` within the (relative) list, not `getBoundingClientRect`: rows gliding to their new
- * place carry a transform that would flip the slot mid-animation. Another computer's row only reorders, and counts only its own
- * five pins, so its machine decides. Null when the pointer is off the list.
+ * place carry a transform that would flip the slot mid-animation. Null when the pointer is off the list.
  */
 function dropOver(
   list: HTMLUListElement | null,
@@ -1236,10 +1085,9 @@ function dropOver(
     }),
   );
   const isFull =
-    !row.remote &&
     pinnedIds.filter((id) => id !== row.rowId).length >= PIN_SLOTS.length;
   const canNest = (parentId: string) => canNestUnder(row, parentId, threads);
-  const root = row.remote ? row.thread : rootOf(threads, row.thread);
+  const root = isRemoteRow(row) ? row.thread : rootOf(threads, row.thread);
   return dropAt(
     rows,
     label.offsetTop + label.offsetHeight / 2,
@@ -1253,13 +1101,11 @@ function dropOver(
 
 /**
  * A thread's sidebar row: its title and one status dot, then the project, what it's doing or why it stopped, and its badges.
- * `isSub`: a sub-thread under its parent, one line unless it asks for you. `machine`: the computer it runs on, for another
- * computer's thread among this one's (Pinned).
+ * `isSub`: a sub-thread under its parent, one line unless it asks for you. Another computer's thread shows that computer's icon.
  */
 export function ThreadItem({
   thread: listed,
   isSub,
-  machine,
   isActive,
   isSelected,
   isProjectHidden,
@@ -1268,7 +1114,6 @@ export function ThreadItem({
 }: {
   thread: Thread;
   isSub?: boolean;
-  machine?: FollowedMachine;
   /** Listed under its own project already (new thread's Recent): the detail line drops the project icon. */
   isProjectHidden?: boolean;
   isActive: boolean;
@@ -1327,7 +1172,6 @@ export function ThreadItem({
         <RowDetail
           thread={thread}
           row={row}
-          machine={machine}
           isProjectHidden={isProjectHidden}
         />
       )}
@@ -1426,23 +1270,16 @@ function RowTitleField({ thread }: { thread: Thread }) {
 function RowDetail({
   thread,
   row,
-  machine,
   isProjectHidden,
 }: {
   thread: Thread;
   row: ThreadRow;
-  machine?: FollowedMachine;
   isProjectHidden?: boolean;
 }) {
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
   return (
     <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
-      {!!machine && (
-        <>
-          <DeviceIcon kind={machine.kind} className="size-3.5 shrink-0" />
-          <span className="sr-only">On {machine.name}</span>
-        </>
-      )}
+      <ThreadMachineMark threadId={thread.id} />
       {!isProjectHidden && <ThreadProjectMark thread={thread} />}
       <ThreadDetailText row={row} />
       {row.isWatched && (

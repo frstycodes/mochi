@@ -24,6 +24,8 @@ import {
 } from './threadRow';
 import { stepThread } from './threadSwitch';
 import { StatusMark } from './ui';
+import { ThreadMachineMark } from './remote/MachineMark';
+import { MergedScope } from './remote/MergedScope';
 
 /** A quick tap switches without the panel flashing up, like Windows' Alt Tab. */
 const SHOW_DELAY = 120;
@@ -35,6 +37,15 @@ const STEPS = ['thread-next', 'thread-previous'] as const;
  * shows the threads and Tab steps the pick; letting go opens it, Esc keeps the thread you're on.
  */
 export function ThreadSwitcher() {
+  // The sidebar's list, other computers' threads among this one's; opening one goes to its computer's page.
+  return (
+    <MergedScope>
+      <Switcher />
+    </MergedScope>
+  );
+}
+
+function Switcher() {
   const dispatch = useDispatch();
   const threads = useSwitcherThreads();
   const view = useView();
@@ -151,7 +162,8 @@ function SwitcherRow({
       <ThreadProjectMark thread={thread} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium">{thread.title}</span>
-        <span className="flex min-w-0 type-caption text-subtle-foreground">
+        <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
+          <ThreadMachineMark threadId={thread.id} />
           <ThreadDetailText row={row} />
         </span>
       </span>
