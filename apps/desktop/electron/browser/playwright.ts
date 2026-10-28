@@ -1,6 +1,6 @@
 import type { WebContents, WebContentsView } from 'electron';
 import { chromium, type Browser, type Page } from 'playwright-core';
-import { withTimeout } from './evaluate.ts';
+import { withTimeout } from '@mochi/core/browser/evaluate';
 import { serveRelay } from './relay.ts';
 
 /** What a view needs to be driven by Playwright; `views.ts`'s Entry carries it. */

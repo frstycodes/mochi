@@ -6,6 +6,7 @@ import { Command, Flag } from 'effect/cli';
 import { NodeRuntime, NodeServices } from '@effect/platform-node';
 import { Capabilities } from '@mochi/schema';
 import { version } from '../../../../package.json' with { type: 'json' };
+import { chromiumLauncher, headlessBrowser } from '../browser/headless.ts';
 import { launchCore } from '../launch.ts';
 import { resolveAuth } from './auth.ts';
 
@@ -65,6 +66,10 @@ const serve = Command.make(
         userData: flags.data,
         // Built beside this file: dist-electron/serve.js and the renderer's dist/.
         ui: path.join(import.meta.dirname, '..', 'dist'),
+        // No main to own browser views: agents drive headless Chromium, downloaded here on first use.
+        browserView: headlessBrowser(
+          chromiumLauncher(path.join(flags.data, 'browsers')),
+        ),
         logFile: path.join(flags.data, 'logs', 'mochi.log'),
         otlpUrl: yield* Config.option(Config.URL('MOCHI_OTLP_URL')),
       });

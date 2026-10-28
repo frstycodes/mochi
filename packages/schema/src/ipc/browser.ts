@@ -36,7 +36,7 @@ export const AbsolutePath = Str(4096).check(
 );
 
 export const ViewId = Str(32).check(Schema.isPattern(/^view-\d+$/));
-/** A ref from the latest snapshot, like `g3-e12` (`electron/browser/ariaRefs.ts` `AGENT_REF`). */
+/** A ref from the latest snapshot, like `g3-e12` (`packages/core/src/browser/ariaRefs.ts` `AGENT_REF`). */
 const Ref = Str(32).check(Schema.isPattern(/^g\d+-(?:f\d+)?e\d+$/));
 /** It names the compare worktree's folder. */
 const ThreadKey = Str(64).check(Schema.isPattern(/^[\w-]+$/));
