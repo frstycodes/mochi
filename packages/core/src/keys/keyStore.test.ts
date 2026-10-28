@@ -26,8 +26,11 @@ it.effect(
       await keys.set('session', 'secret-1');
       await keys.set('device', 'secret-2');
       assert.equal(await keys.get('session'), 'secret-1');
-      assert.equal(statSync(keysFile(dir)).mode & 0o777, 0o600);
-      assert.equal(statSync(path.join(dir, 'keys')).mode & 0o777, 0o700);
+      // Windows has no POSIX modes: the file's ACL is the user's profile's.
+      if (process.platform !== 'win32') {
+        assert.equal(statSync(keysFile(dir)).mode & 0o777, 0o600);
+        assert.equal(statSync(path.join(dir, 'keys')).mode & 0o777, 0o700);
+      }
       await keys.delete('session');
       assert.equal(await keys.get('session'), undefined);
       assert.equal(await fileKeys(dir, noKeychain).get('device'), 'secret-2');
