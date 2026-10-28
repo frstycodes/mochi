@@ -98,8 +98,9 @@ export interface Shell {
 
 /**
  * The device key's seed. It moves into `Keys` from main's `<userData>/device-key` (sealed with `safeStorage`) on first use,
- * waiting for main's keychain when that file is there: a new key would end every pairing. With neither, a new one, which
- * waits for the keychain too when `hasKeychain` (desktop), so it is sealed from the start.
+ * waiting for main when that file is there: a new key would end every pairing. With neither, a new one. When `hasKeychain`
+ * (desktop), both wait for main to connect, so the key is sealed from the start whenever main offers `secureStorage`; main
+ * leaves it out where `safeStorage` can't seal (Linux with `basic_text`), and the key is kept plain in `Keys`' 0600 file.
  */
 export async function deviceSeed(
   keys: Keys,
@@ -112,9 +113,11 @@ export async function deviceSeed(
   const file = joinPath(dir, 'device-key');
   const legacy = await readFile(file).catch(() => undefined);
   await sodium.ready;
-  const seed = legacy
-    ? await capabilities.whenOffered('secureStorage').then(() =>
-        Effect.runPromise(
+  // Main registers every capability it serves at once, so once it connects `secureStorage` is offered or never will be.
+  if (legacy || hasKeychain) await capabilities.whenOffered('main');
+  const seed =
+    legacy && capabilities.offers('secureStorage')
+      ? await Effect.runPromise(
           capabilities
             .call({
               capability: 'secureStorage',
@@ -126,10 +129,9 @@ export async function deviceSeed(
                 Effect.die(typeof e === 'string' ? new Error(e) : e),
               ),
             ),
-        ).then(String),
-      )
-    : sodium.to_base64(sodium.randombytes_buf(sodium.crypto_sign_SEEDBYTES));
-  if (hasKeychain) await capabilities.whenOffered('secureStorage');
+        ).then(String)
+      : // Weak storage never wrote that file, but one it can't open now is no key: a new one.
+        sodium.to_base64(sodium.randombytes_buf(sodium.crypto_sign_SEEDBYTES));
   await keys.set(DEVICE_KEY, seed);
   await rm(file, { force: true });
   return seed;

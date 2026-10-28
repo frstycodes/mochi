@@ -85,9 +85,9 @@ const legacyKey = (seed: string) => {
   return { dir, keys };
 };
 
-/** Main's `secureStorage`: decrypts what `legacyKey` wrote. */
+/** Main, with its `secureStorage`: decrypts what `legacyKey` wrote. */
 const serveKeychain = (capabilities: Capabilities['Service']) =>
-  capabilities.serve(['secureStorage']).pipe(
+  capabilities.serve(['main', 'secureStorage']).pipe(
     Stream.runForEach((call) =>
       capabilities.reply({
         id: call.id,
@@ -348,5 +348,43 @@ it.live(
         /^closed: /,
       );
       yield* hostCall('remote.set', [{ isEnabled: false }]);
+    }),
+);
+
+it.live(
+  'where main can’t seal (Linux `basic_text`) it offers no `secureStorage`: the key is kept plain and remote access starts',
+  () =>
+    Effect.gen(function* () {
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-weak-keyring-'));
+      const context = yield* Layer.build(
+        layerCore({
+          port: 0,
+          tokens: new Map([[TOKEN, Contract.allScopes]]),
+          origins: [],
+          remotePort: 0,
+          userData,
+          hasKeychain: true,
+        }),
+      );
+      const port = (
+        Context.get(context, HttpServer.HttpServer).address as { port: number }
+      ).port;
+      const main = yield* makeCoreClient(coreUrl(port, TOKEN));
+      yield* main['capabilities.serve']({ names: ['main'] }).pipe(
+        Stream.runDrain,
+        Effect.forkChild,
+      );
+      const seed = yield* main['remote.deviceKey']();
+      const file = JSON.parse(
+        readFileSync(path.join(userData, 'keys', 'keys.json'), 'utf8'),
+      ) as { keys: Record<string, unknown> };
+      assert.deepEqual(file.keys[DEVICE_KEY], { plain: seed });
+      const call = makeHostCaller(main);
+      const status = (yield* Effect.promise(() =>
+        call('remote.set', [{ isEnabled: true }]),
+      )) as RemoteStatus;
+      assert.equal(status.error, undefined);
+      assert.match(status.addresses[0] ?? '', /^127\.0\.0\.1:[1-9]\d*$/);
+      yield* Effect.promise(() => call('remote.set', [{ isEnabled: false }]));
     }),
 );
