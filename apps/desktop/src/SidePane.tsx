@@ -82,9 +82,7 @@ export function SidePane({
   const visible = useVisibleLayout(thread.id, pane);
   const layout = draft ? { ...visible, ...draft } : visible;
   const chatMin = chat ? CHAT_MIN_W : 0;
-  // The panes sit GAP below the window's top edge (the layout already leaves GAP at the bottom), so their cards never touch it.
-  const paneH = Math.max(0, size.h - GAP);
-  const resolved = belowTopGap(resolveLayout(layout, size.w, paneH, chatMin));
+  const resolved = resolveLayout(layout, size.w, size.h, chatMin);
   const kinds = layout.columns.flat();
   const isAnimating = useLayoutAnimation(layout, pane.isOpen);
   const leaving = useLeavingPanes(kinds, resolved.rects);
@@ -102,13 +100,11 @@ export function SidePane({
   useEscapeExpand(thread.id, !!layout.expanded);
   const isEmpty = pane.isOpen && !kinds.length;
   const emptyResolved = isEmpty
-    ? belowTopGap(
-        resolveLayout(
-          { columns: [['changes']], share: layout.share },
-          size.w,
-          paneH,
-          chatMin,
-        ),
+    ? resolveLayout(
+        { columns: [['changes']], share: layout.share },
+        size.w,
+        size.h,
+        chatMin,
       )
     : undefined;
   const placeholder = emptyResolved?.rects.changes;
@@ -150,6 +146,7 @@ export function SidePane({
               pane={pane}
               kind={kind}
               rect={resolved.rects[kind]!}
+              area={size}
               isFocused={layout.focused === kind}
               showFocus={showFocus}
               isExpanded={layout.expanded === kind}
@@ -168,10 +165,13 @@ export function SidePane({
             key={`leaving:${kind}`}
             kind={kind}
             rect={rect}
+            area={size}
             isSlide={isSlide}
           />
         ))}
-        {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
+        {!!placeholder && (
+          <EmptyPanes thread={thread} rect={placeholder} area={size} />
+        )}
         {!layout.expanded && (
           <Dividers
             threadId={thread.id}
@@ -193,17 +193,6 @@ export function SidePane({
       </div>
     </DragSurface>
   );
-}
-
-/** The layout moved down by GAP, so cards, dividers and drop targets share one frame; never a wrapper over the chat to do it. */
-function belowTopGap(resolved: ResolvedLayout): ResolvedLayout {
-  const rects = Object.fromEntries(
-    Object.entries(resolved.rects).map(([kind, r]) => [
-      kind,
-      r && { ...r, y: r.y + GAP },
-    ]),
-  ) as ResolvedLayout['rects'];
-  return { ...resolved, rects };
 }
 
 /** Tabs dragged out into their own split live there, not in a pane, until they're dropped back or their split closes. */
@@ -283,14 +272,26 @@ function useEnteringPanes(kinds: PaneTabKind[]) {
   return entering;
 }
 
+/** A card touching the area's top, right or bottom edge sits flush with it: no border or rounding on that side. */
+function edgeClass(rect: PaneRect, area: { w: number; h: number }) {
+  return cn(
+    'rounded-lg',
+    rect.y <= 1 && 'rounded-t-none border-t-0',
+    rect.x + rect.w >= area.w - 1 && 'rounded-r-none border-r-0',
+    rect.y + rect.h >= area.h - 1 && 'rounded-b-none border-b-0',
+  );
+}
+
 /** A closing pane's card: its header so it doesn't read as a blank box, then the exit (a slide out when it was the last one). */
 function LeavingPane({
   kind,
   rect,
+  area,
   isSlide,
 }: {
   kind: PaneTabKind;
   rect: PaneRect;
+  area: { w: number; h: number };
   isSlide: boolean;
 }) {
   const { title, icon: Icon } = PANE_TABS[kind];
@@ -298,12 +299,15 @@ function LeavingPane({
     <div
       aria-hidden
       data-motion={isSlide ? 'slide' : 'fade'}
-      className="pane-card pane-card-leaving pointer-events-none absolute flex flex-col overflow-hidden rounded-lg border border-border bg-card"
+      className={cn(
+        'pane-card pane-card-leaving pointer-events-none absolute flex flex-col overflow-hidden border border-border bg-card',
+        edgeClass(rect, area),
+      )}
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
     >
       <div
         data-pane-header
-        className="flex h-9 shrink-0 items-center gap-1.5 pl-3"
+        className="flex h-9 shrink-0 items-center gap-1.5 border-b pl-3"
       >
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate type-meta font-medium">{title}</span>
@@ -348,6 +352,7 @@ function PaneCard({
   pane,
   kind,
   rect,
+  area,
   isFocused,
   showFocus,
   isExpanded,
@@ -358,6 +363,7 @@ function PaneCard({
   pane: Pane;
   kind: PaneTabKind;
   rect: PaneRect;
+  area: { w: number; h: number };
   isFocused: boolean;
   showFocus: boolean;
   isExpanded: boolean;
@@ -395,7 +401,8 @@ function PaneCard({
         isExpanded
           ? 'z-20'
           : cn(
-              'rounded-lg border',
+              'border',
+              edgeClass(rect, area),
               showFocus && isFocused ? 'border-foreground/20' : 'border-border',
             ),
         isMoving && 'opacity-60',
@@ -578,14 +585,25 @@ function TabFavicon({ threadId, tab }: { threadId: string; tab: PaneTab }) {
   );
 }
 
-function EmptyPanes({ thread, rect }: { thread: Thread; rect: PaneRect }) {
+function EmptyPanes({
+  thread,
+  rect,
+  area,
+}: {
+  thread: Thread;
+  rect: PaneRect;
+  area: { w: number; h: number };
+}) {
   return (
     <section
       aria-label="Panes"
       data-panes-of={thread.id}
       data-side-pane
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-      className="pane-card absolute overflow-hidden rounded-lg border bg-card"
+      className={cn(
+        'pane-card absolute overflow-hidden border bg-card',
+        edgeClass(rect, area),
+      )}
     >
       <NoPanes thread={thread} />
     </section>
@@ -645,10 +663,15 @@ function Dividers({
       {hasChat && (
         <Divider
           axis="x"
-          style={{ left: columns[0].x - GAP, top: 0, bottom: 0, width: GAP }}
+          style={{
+            left: columns[0].x - GAP / 2,
+            top: 0,
+            bottom: 0,
+            width: GAP,
+          }}
           label="Resize the panes"
           onResizing={onResizing}
-          onMove={(x) => onPreview({ share: shareAt(width, x + GAP / 2) })}
+          onMove={(x) => onPreview({ share: shareAt(width, x) })}
           onReset={() => reset({ share: undefined })}
         />
       )}

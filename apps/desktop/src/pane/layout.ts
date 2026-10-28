@@ -178,18 +178,18 @@ export function resolveLayout(
   height: number,
   chatMinWidth = CHAT_MIN_W,
 ): ResolvedLayout {
-  const room = width - chatMinWidth - GAP;
+  const room = width - chatMinWidth;
   const fits = Math.max(1, Math.floor((room + GAP) / (COLUMN_MIN_W + GAP)));
   const columns = fitColumns(layout, fits, height);
   if (!columns.length) return { chatWidth: width, columns: [], rects: {} };
 
   const minTotal = columns.length * COLUMN_MIN_W + (columns.length - 1) * GAP;
-  const maxTotal = Math.max(minTotal, width - chatMinWidth - GAP);
+  const maxTotal = Math.max(minTotal, width - chatMinWidth);
   const total =
     chatMinWidth === 0
-      ? width - 2 * GAP
+      ? width
       : clamp((layout.share ?? DEFAULT_SHARE) * width, minTotal, maxTotal);
-  const left = width - GAP - total;
+  const left = width - total;
   const colWeights = columns.map((c) => c.weight);
   const colWidths = distribute(
     total - (columns.length - 1) * GAP,
@@ -202,7 +202,7 @@ export function resolveLayout(
   let x = left;
   columns.forEach((c, i) => {
     const w = colWidths[i];
-    const heights = columnHeights(c.kinds, layout, height - GAP);
+    const heights = columnHeights(c.kinds, layout, height);
     let y = 0;
     c.kinds.forEach((kind, row) => {
       rects[kind] = {
@@ -225,10 +225,10 @@ export function resolveLayout(
     for (const kind of Object.keys(rects) as PaneTabKind[])
       rects[kind] = { ...rects[kind]!, isHidden: kind !== expanded };
     rects[expanded] = {
-      x: GAP,
+      x: 0,
       y: 0,
-      w: width - 2 * GAP,
-      h: height - GAP,
+      w: width,
+      h: height,
       isCollapsed: false,
       isHidden: false,
     };
@@ -263,7 +263,7 @@ function fitColumns(layout: PaneLayout, fits: number, height: number) {
     const { kinds } = cols[i];
     if (
       kinds.some(wantsFullHeight) ||
-      kinds.length * PANE_MIN_H + (kinds.length - 1) * GAP <= height - GAP
+      kinds.length * PANE_MIN_H + (kinds.length - 1) * GAP <= height
     )
       continue;
     const half = Math.ceil(kinds.length / 2);
@@ -385,7 +385,7 @@ export function resizeColumns(
 
 /** The share of the width the columns take when the chat/pane divider sits at `x`. */
 export function shareAt(width: number, x: number) {
-  return clamp((width - GAP - x) / width, 0.2, 0.8);
+  return clamp((width - x) / width, 0.2, 0.8);
 }
 
 /** How close to the outer edge of the first or last column a released pane makes a new column there. */
@@ -410,13 +410,13 @@ export function dropTarget(
     return {
       col: -1,
       row: 0,
-      line: bar(first.x - GAP / 2 - 1, 0, 2, rects[first.kinds[0]]!.h),
+      line: bar(first.x - 1, 0, 2, rects[first.kinds[0]]!.h),
     };
   if (x > last.x + last.w - EDGE)
     return {
       col: columns.length,
       row: 0,
-      line: bar(last.x + last.w + GAP / 2 - 1, 0, 2, rects[last.kinds[0]]!.h),
+      line: bar(last.x + last.w - 2, 0, 2, rects[last.kinds[0]]!.h),
     };
   const col = Math.max(
     0,

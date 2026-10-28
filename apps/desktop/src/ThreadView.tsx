@@ -1,3 +1,4 @@
+import { HAS_CAPTIONS } from './windowCaptions';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { AddToProject } from './AddToProject';
@@ -114,13 +115,21 @@ export function ThreadView({ thread }: { thread: Thread }) {
       onToggleKind={toggleKind}
     />
   );
-  // The header belongs to the chat column, so the panes run to the top of the window beside it, like Claude's.
+  // Under Windows' caption buttons the header spans the window and the panes dock beneath it, so they never reach the buttons. Elsewhere it belongs to the chat column and the panes run to the top of the window beside it.
+  const isHeaderAbove = isWide ? HAS_CAPTIONS : isPaneTabOpen;
   const chat = (
-    <div className="relative flex h-full min-w-0 flex-col [--chat-top:2.75rem]">
+    <div
+      className={cn(
+        'relative flex h-full min-w-0 flex-col',
+        isHeaderAbove ? '[--chat-top:0px]' : '[--chat-top:2.75rem]',
+      )}
+    >
       {/* Opaque; the transcript starts below it and fades in through scroll-fade-y. */}
-      <div className="absolute inset-x-0 top-0 z-20 bg-background">
-        {header}
-      </div>
+      {!isHeaderAbove && (
+        <div className="absolute inset-x-0 top-0 z-20 bg-background">
+          {header}
+        </div>
+      )}
       <div
         className={cn(
           'grid min-h-0 flex-1 overflow-hidden',
@@ -157,7 +166,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
-      {isChatHidden && header}
+      {isHeaderAbove && <div className="z-20 bg-background">{header}</div>}
       <div className="min-h-0 flex-1">
         {isWide || isChatHidden ? (
           <SidePane

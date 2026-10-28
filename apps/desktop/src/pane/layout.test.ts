@@ -91,15 +91,15 @@ test('moving reorders within a column, moves between columns and makes new ones'
 test('one pane fills the column beside the chat, which keeps its minimum width', () => {
   const r = resolveLayout(open('browser'), 1400, 900);
   const rect = r.rects.browser!;
-  assert.equal(rect.h, 900 - GAP);
-  assert.equal(rect.x + rect.w, 1400 - GAP);
+  assert.equal(rect.h, 900);
+  assert.equal(rect.x + rect.w, 1400);
   assert.ok(r.chatWidth >= CHAT_MIN_W);
   assert.equal(rect.x, r.chatWidth);
 });
 
 test('two and three panes share the column height evenly, gaps included', () => {
   const two = resolveLayout(open('browser', 'files'), 1400, 900);
-  assert.equal(two.rects.browser!.h + two.rects.files!.h + GAP, 900 - GAP);
+  assert.equal(two.rects.browser!.h + two.rects.files!.h + GAP, 900);
   assert.equal(two.rects.files!.y, two.rects.browser!.h + GAP);
   const three = resolveLayout(open('browser', 'files', 'terminal'), 1400, 900);
   assert.ok(
@@ -139,21 +139,21 @@ test('with no room for another column, panes fold to their header, never the foc
   );
   const total =
     Object.values(r.rects).reduce((a, rect) => a + rect.h, 0) + 2 * GAP;
-  assert.equal(total, 600 - GAP);
+  assert.equal(total, 600);
 });
 
 test('a full-height pane folds into the other column’s pane headers when the two don’t fit side by side', () => {
   const l = open('browser', 'simulator');
   const wide = resolveLayout(l, 1600, 900);
   assert.equal(wide.columns.length, 2);
-  assert.equal(wide.rects.simulator!.h, 900 - GAP);
+  assert.equal(wide.rects.simulator!.h, 900);
   const narrow = resolveLayout(l, 1000, 900);
   assert.equal(narrow.columns.length, 1);
   assert.deepEqual(
     [narrow.rects.browser!.isCollapsed, narrow.rects.simulator!.isCollapsed],
     [true, false],
   );
-  assert.equal(narrow.rects.simulator!.h, 900 - GAP - PANE_HEADER_H - GAP);
+  assert.equal(narrow.rects.simulator!.h, 900 - PANE_HEADER_H - GAP);
   const picked = resolveLayout({ ...l, focused: 'browser' }, 1000, 900);
   assert.deepEqual(
     [picked.rects.browser!.isCollapsed, picked.rects.simulator!.isCollapsed],
@@ -168,10 +168,10 @@ test('expand fills the whole box over the chat and hides the other panes', () =>
     900,
   );
   assert.deepEqual(r.rects.terminal, {
-    x: GAP,
+    x: 0,
     y: 0,
-    w: 1400 - 2 * GAP,
-    h: 900 - GAP,
+    w: 1400,
+    h: 900,
     isCollapsed: false,
     isHidden: false,
   });
@@ -182,7 +182,7 @@ test('with the chat hidden (narrow split) the column takes the whole width', () 
   const r = resolveLayout(open('browser'), 500, 800, 0);
   assert.deepEqual(
     [r.rects.browser!.x, r.rects.browser!.w, r.chatWidth],
-    [GAP, 500 - 2 * GAP, GAP],
+    [0, 500, 0],
   );
 });
 
