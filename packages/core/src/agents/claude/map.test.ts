@@ -1433,3 +1433,30 @@ test('a mode switch on a live session: Auto falls back to acceptEdits where refu
   assert.equal(isPreApproved(undefined, 'WebSearch'), false);
   assert.equal(isPreApproved('nonsense', 'WebSearch'), false);
 });
+
+test('the context window grows to 1M when usage passes the 200K the model reported', () => {
+  const { map } = createMapper('t1', CWD);
+  const assistant = (input: number) =>
+    ({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { usage: { input_tokens: input }, content: [] },
+    }) as unknown as SDKMessage;
+  map(assistant(276_800));
+  const [result] = map({
+    type: 'result',
+    subtype: 'success',
+    parent_tool_use_id: null,
+    total_cost_usd: 0,
+    modelUsage: {
+      m: {
+        inputTokens: 276_800,
+        outputTokens: 1,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        contextWindow: 200_000,
+      },
+    },
+  } as unknown as SDKMessage);
+  assert.equal(result?.type === 'usage' && result.contextMax, 1_000_000);
+});
