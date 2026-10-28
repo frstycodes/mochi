@@ -31,6 +31,7 @@ import {
 import { useToggleSlot } from '../SidebarToggle';
 import { DragStrip, TitleBar } from '../TitleBar';
 import { useDispatch, useHarnessSelector } from '../store';
+import { parseRemoteThreadId } from '../remote/ids';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from '@mochi/domain/layout/tree';
 import { BoundShortcut } from '../Shortcut';
@@ -49,8 +50,10 @@ export function SplitControls() {
     dispatch({ type: 'layout-focus', leafId });
     dispatch(action);
   };
+  // A torn-off window is a store of its own that never follows other computers, so their threads stay in the main window.
+  const isRemote = view?.kind === 'thread' && !!parseRemoteThreadId(view.id);
   const tearOff =
-    view?.kind === 'thread'
+    view?.kind === 'thread' && !isRemote
       ? () => {
           void host.windows.open(`window/${view.id}`);
           dispatch({ type: 'layout-close', leafId });
@@ -103,6 +106,17 @@ export function SplitControls() {
               <DropdownMenuItem onSelect={tearOff}>
                 <Share />
                 Move to a new window
+              </DropdownMenuItem>
+            )}
+            {isRemote && (
+              <DropdownMenuItem disabled>
+                <Share />
+                <span className="flex flex-col">
+                  Move to a new window
+                  <span className="text-xs text-muted-foreground">
+                    It runs on another computer, so it stays in this window.
+                  </span>
+                </span>
               </DropdownMenuItem>
             )}
           </DropdownMenuGroup>
