@@ -36,7 +36,9 @@ import { AccountService } from './account/service.ts';
 import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
+import { scopeOf } from './scopes.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
+import { directCall, type DirectCall } from './remote/adapter.ts';
 import {
   isJoinDone,
   layerRemote,
@@ -45,7 +47,7 @@ import {
 } from './remote/service.ts';
 import { Remote } from './remote/tag.ts';
 import { Terminals } from './remote/terminals.ts';
-import { visibleItem } from './remote/visible.ts';
+import { visibleItem, visibleSnapshot } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
 import { storeHandlers } from './store/handlers.ts';
 import type { DocTable } from './store/migrations.ts';
@@ -370,11 +372,19 @@ function identify(
 // Pattern from T3 Code's `apps/server/src/auth/RpcAuthorization.ts`.
 const layerScopes = (scopes: ReadonlyArray<Contract.AuthScope>) =>
   Layer.succeed(ScopeAuthorization)((effect, { rpc, payload }) => {
-    const scope = Contract.scopeOf(rpc._tag, payload);
-    return scopes.includes(scope)
-      ? effect
-      : Effect.fail(new Unauthorized({ scope }));
+    const missing = refusal(scopes, rpc._tag, payload);
+    return missing ? Effect.fail(missing) : effect;
   });
+
+/** Why a connection holding `scopes` may not call `tag`, or undefined when it may: the one decision for windows and devices alike. */
+export const refusal = (
+  scopes: ReadonlyArray<Contract.AuthScope>,
+  tag: string,
+  payload?: unknown,
+) => {
+  const scope = scopeOf(tag, payload);
+  return scopes.includes(scope) ? undefined : new Unauthorized({ scope });
+};
 
 const layerHandlers = (windowId: number | undefined, identity: Identity) =>
   CoreWsRpcs.toLayer(
@@ -404,7 +414,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
         windowId === undefined && !identity.device
           ? Effect.tryPromise({ try: run, catch: messageOf })
           : Effect.fail('Only main may ask for this');
-      return {
+      const handlers: Record<string, (payload: never) => unknown> = {
         ping: () => Effect.succeed('pong'),
         'backend.info': () => backend.describe(identity.scopes),
         'backend.watch': () => backend.watch(identity.scopes),
@@ -583,6 +593,8 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
         ...agentHandlers(windowId),
         ...agentRpcHandlers,
         ...stored,
+        replica: (input: { afterSequence: number }) =>
+          visibleReplica(stored.replica, input, identity.scopes),
         thread: (input: { threadId: string; afterSequence: number }) =>
           stored.thread(input).pipe(
             Stream.map((item) => visibleItem(item, identity.scopes)),
@@ -595,6 +607,12 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
             projection,
             identity.device,
             command,
+            ({ tag, payload }) =>
+              (
+                handlers[tag] as (
+                  payload: unknown,
+                ) => Effect.Effect<unknown, unknown>
+              )(payload),
           ),
         // Main's settings writes land here; the agents read them without a restart.
         'docs.set': (input: {
@@ -613,13 +631,43 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
             ),
           ),
         ...githubHandlers(github),
-      } as never;
+      };
+      return handlers as never;
     }),
   );
 
+/** How long a connection without `code` waits for the store to settle before it gets the next snapshot. */
+const REPLICA_SETTLE = '500 millis';
+
+type Replica = ReturnType<ReturnType<typeof storeHandlers>['replica']>;
+
 /**
- * A device's command: Core applies one that is store actions itself (`storeCommand`); one that needs a window's host (a diff,
- * a terminal, a push) runs in a window, through main's `remote` capability.
+ * The store as `scopes` may see it. With `code`, the window's stream (without `context` for a device). Without it, events
+ * may carry diffs (agent patches, checkpoints), so each burst of them becomes a fresh filtered snapshot instead.
+ */
+const visibleReplica = (
+  replica: (input: { afterSequence: number }) => Replica,
+  input: { afterSequence: number },
+  scopes: ReadonlyArray<Contract.AuthScope>,
+): Replica => {
+  const visible = Stream.map((item: Stream.Success<Replica>) =>
+    item._tag === 'snapshot' ? visibleSnapshot(item, scopes) : item,
+  );
+  if (scopes.includes('code')) return replica(input).pipe(visible);
+  const snapshot = replica({ afterSequence: 0 }).pipe(Stream.take(1));
+  return replica({ afterSequence: 0 }).pipe(
+    Stream.groupedWithin(Number.MAX_SAFE_INTEGER, REPLICA_SETTLE),
+    Stream.flatMap((burst) =>
+      burst.at(-1)?._tag === 'snapshot' ? Stream.make(burst.at(-1)!) : snapshot,
+    ),
+    visible,
+  );
+};
+
+/**
+ * A device's command, an adapter until devices call RPCs themselves: one that is a single RPC runs that RPC's own handler
+ * (`directCall`); Core applies one that is store actions itself (`storeCommand`); one that needs a window's host (a diff, a
+ * terminal, a push) runs in a window, through main's `remote` capability.
  */
 const deviceCommand = (
   capabilities: Capabilities['Service'],
@@ -627,6 +675,7 @@ const deviceCommand = (
   projection: Projection['Service'],
   device: DeviceGrant | undefined,
   command: Relay.RemoteCommand,
+  call: (direct: DirectCall) => Effect.Effect<unknown, unknown>,
 ) =>
   Effect.gen(function* () {
     if (!device)
@@ -634,6 +683,26 @@ const deviceCommand = (
         isOk: false,
         error: 'Only a paired device sends device commands',
       } satisfies Relay.CommandResult;
+    const direct = directCall(command);
+    if (direct) {
+      const { threadId } = command as { threadId: string };
+      const { threads } = (yield* projection.current)
+        .domain as unknown as State;
+      if (!threads.some((t) => t.id === threadId))
+        return { isOk: false, error: 'No such thread on this machine' };
+      if (
+        command.type === 'schedule' &&
+        !(
+          (yield* call({
+            tag: 'schedule.list',
+            payload: [],
+          })) as ReadonlyArray<{ threadId: string }>
+        ).some((t) => t.threadId === threadId)
+      )
+        return { isOk: false, error: 'This thread has no schedule' };
+      yield* call(direct);
+      return { isOk: true } satisfies Relay.CommandResult;
+    }
     // Decoded (`Relay.RemoteCommand`), so the store's mutable `RemoteCommand` shape, readonly.
     const stored = storeCommand(
       command as RemoteCommand,

@@ -1,0 +1,347 @@
+import type { AuthScope } from './names.ts';
+import type { hostMethods } from './rpc.ts';
+
+// What each `host.<namespace>.<method>` needs; Core's own RPCs are classified next to them (`packages/core/src/scopes.ts`).
+
+type Methods<N extends keyof typeof hostMethods> = {
+  [
+    M in keyof (typeof hostMethods)[N] as (typeof hostMethods)[N][M] extends {
+      readonly input: unknown;
+    }
+      ? M
+      : never
+  ]: AuthScope;
+};
+
+/** One scope per method, every method listed: a new one fails to compile until it is classified. */
+export type HostScopes = { [N in keyof typeof hostMethods]: Methods<N> };
+
+const L = 'local';
+
+/**
+ * `local` is everything that must never leave this computer: it takes a path or cwd the caller names, holds or returns a
+ * credential, or belongs to this screen. A device reaches those through `device.command`, which resolves the folder from
+ * the thread here. When unsure, the stricter scope.
+ */
+export const HOST_SCOPES = {
+  // A shell the caller places by cwd. Devices get theirs through `terminal-open` (a shell in the thread's folder).
+  pty: {
+    spawn: L,
+    write: L,
+    resize: L,
+    kill: L,
+  },
+  // Every method takes a cwd the caller names; a device never names a folder (`code` commands resolve it from the thread).
+  git: {
+    status: L,
+    diff: L,
+    stage: L,
+    unstage: L,
+    revert: L,
+    commit: L,
+    push: L,
+    createPr: L,
+    pr: L,
+    worktreePrs: L,
+    setAutoMerge: L,
+    prReview: L,
+    commentPr: L,
+    replyThread: L,
+    resolveThread: L,
+    reviewPr: L,
+    mergePr: L,
+    ciLog: L,
+    repoSlug: L,
+    refStates: L,
+    ghAccounts: L,
+    sync: L,
+    addWorktree: L,
+    branches: L,
+    branchNameError: L,
+    switchBranch: L,
+    renameAutoBranch: L,
+    worktrees: L,
+    head: L,
+    removeWorktree: L,
+    diskUsage: L,
+    checkpoint: L,
+    restoreCheckpoint: L,
+    restoreFiles: L,
+    rewindPreview: L,
+    checkpointDiff: L,
+    turnDiff: L,
+    forkWorktree: L,
+    runCheck: L,
+  },
+  // Any root and path on the disk; a device reads files only inside a thread's folder (`read-file`, `files`).
+  fs: {
+    list: L,
+    read: L,
+    write: L,
+    search: L,
+    cancelSearch: L,
+    editors: L,
+    openIn: L,
+    reveal: L,
+    pickFolder: L,
+    folders: L,
+    entries: L,
+  },
+  // Lists or kills any process on the machine; `port-kill` is the thread-bound command.
+  ports: {
+    list: L,
+    kill: L,
+    allocate: L,
+    targets: L,
+  },
+  // The simulator is pixels on the machine; devices get a screenshot, not control.
+  sim: {
+    list: L,
+    boot: L,
+    shutdown: L,
+    stream: L,
+    stopStream: L,
+    touch: L,
+    button: L,
+    type: L,
+    key: L,
+    openUrl: L,
+    appearance: L,
+    setAppearance: L,
+    contentSize: L,
+    setContentSize: L,
+    screenshot: L,
+    startRecording: L,
+    stopRecording: L,
+    buildAndRun: L,
+  },
+  // The Mochi tools' browser sessions never reach a device.
+  browser: {
+    create: L,
+    destroy: L,
+    navigate: L,
+    command: L,
+    setBounds: L,
+    setZoom: L,
+    mirror: L,
+    emulate: L,
+    devtools: L,
+    capture: L,
+    pick: L,
+    cancelPick: L,
+    clearData: L,
+    snapshot: L,
+    act: L,
+    logs: L,
+    eval: L,
+    waitFor: L,
+    answerDialog: L,
+    autoReload: L,
+    scroll: L,
+    compareStart: L,
+    compareStop: L,
+    find: L,
+    stopFind: L,
+    menuCommand: L,
+    peek: L,
+    openExternal: L,
+    showDownload: L,
+    defaultBrowser: L,
+    suggest: L,
+  },
+  // OS notifications on this screen.
+  notify: {
+    show: L,
+    close: L,
+    addressed: L,
+    watch: L,
+    pendingOpen: L,
+    permission: L,
+    requestPermission: L,
+    haptic: L,
+  },
+  // This computer's windows.
+  windows: {
+    open: L,
+    broadcast: L,
+    isFullScreen: L,
+    zoomFactor: L,
+    showAppMenu: L,
+    resetZoom: L,
+    placeLights: L,
+    setAppearance: L,
+    listApps: L,
+    captureApp: L,
+    openScreenRecordingSettings: L,
+  },
+  // Only a thread id and what to do to it. `local`: `start` and `move` name a cwd and profile; `send` can raise the turn's
+  // permission mode (`policy`) and skips the store's record of the message (devices send through `send`); `ask`, `review`,
+  // `classify`, `utility` and `warm` spend this machine's models on the caller's prompt; `limits` is the account's;
+  // `readWidget`, `pendingToolCalls` and `toolResult` are the window's MCP tools. `attached` replays agent events, patches
+  // included, so `code`; `rewindPoint` reads a checkpoint, so `code`.
+  agent: {
+    start: L,
+    send: L,
+    unsteer: 'operate',
+    compact: 'operate',
+    compactInstructions: 'operate',
+    interrupt: 'operate',
+    setupChoice: 'operate',
+    keepTitle: 'manage',
+    resolve: 'operate',
+    stop: 'operate',
+    move: L,
+    settle: 'manage',
+    attached: 'code',
+    ask: L,
+    review: L,
+    classify: L,
+    utility: L,
+    rewindFiles: 'operate',
+    rewindPoint: 'code',
+    readWidget: L,
+    stopTask: 'operate',
+    contextUsage: 'read',
+    warm: L,
+    models: 'read',
+    limits: L,
+    pendingToolCalls: L,
+    toolResult: L,
+  },
+  // Accounts, API keys, profile folders and MCP configs; a device changes the rows `setting` allows.
+  settings: {
+    get: L,
+    set: L,
+    systemFonts: L,
+    detect: L,
+    latestVersion: L,
+    updateHarness: L,
+    accounts: L,
+    addAccount: L,
+    renameAccount: L,
+    removeAccount: L,
+    linkAccount: L,
+    apiKey: L,
+    setApiKey: L,
+    profileFolder: L,
+    readInstructions: L,
+    writeInstructions: L,
+    setAccountInstructions: L,
+    copyProfileFolder: L,
+    agentConfig: L,
+    previewConfig: L,
+    applyConfig: L,
+    testMcp: L,
+  },
+  // Replays and images on this disk by path.
+  data: {
+    loadReplay: L,
+    appendReplay: L,
+    replayUsage: L,
+    clearReplays: L,
+    exportReplay: L,
+    saveImage: L,
+  },
+  // This screen's look; themes change only on the machine itself.
+  themes: {
+    list: L,
+    search: L,
+    inspect: L,
+    install: L,
+    uninstall: L,
+    importFile: L,
+    saveCustom: L,
+    readCustom: L,
+    openCustom: L,
+    removeCustom: L,
+  },
+  // Pairing, members and device scopes: who may do what here is decided only here.
+  remote: {
+    status: L,
+    set: L,
+    commandResult: L,
+    removeMember: L,
+    setDeviceScopes: L,
+    answerApproval: L,
+    otherMachines: L,
+    join: L,
+    machines: L,
+    follow: L,
+    cacheMachine: L,
+    cachedMachines: L,
+    command: L,
+  },
+  // The Mochi account session.
+  account: {
+    get: L,
+    signIn: L,
+    cancelSignIn: L,
+    signOut: L,
+    openAccountPortal: L,
+  },
+  // Paths on this disk; devices see projects by id (`projects`, `catalog`).
+  projects: {
+    list: L,
+    migrate: L,
+    addFolder: L,
+    clone: L,
+    create: L,
+    rename: L,
+    remove: L,
+    relocate: L,
+    setFavorites: L,
+    setIcon: L,
+    githubRepos: L,
+  },
+  // Skills, connectors, OAuth apps and sign-ins: credentials and files on this machine.
+  library: {
+    list: L,
+    setEnabled: L,
+    remove: L,
+    importFromAccount: L,
+    addSkill: L,
+    discoverSkills: L,
+    skillFiles: L,
+    installSkill: L,
+    searchSkillsSh: L,
+    popularSkillsSh: L,
+    marketplaces: L,
+    addMarketplace: L,
+    removeMarketplace: L,
+    marketplaceCatalog: L,
+    installPlugin: L,
+    reviewUpload: L,
+    installUpload: L,
+    addConnector: L,
+    runSetup: L,
+    updateSetupStep: L,
+    oauthApps: L,
+    ownAppRedirect: L,
+    signIn: L,
+    update: L,
+    renameConnector: L,
+    connectorSettings: L,
+    listConnectorTools: L,
+    setConnectorSettings: L,
+  },
+  // Takes folders and repos by path.
+  usage: {
+    report: L,
+  },
+  // This app's updates.
+  updates: {
+    get: L,
+    setChannel: L,
+    check: L,
+    install: L,
+  },
+  // `list` and `set` carry each trigger's folder and start options (devices use `schedules` and `schedule-set`).
+  schedule: {
+    list: L,
+    set: L,
+    remove: 'manage',
+    setPaused: 'manage',
+    runNow: 'manage',
+    drain: L,
+  },
+} as const satisfies HostScopes;

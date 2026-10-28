@@ -60,9 +60,9 @@
     { "type": "port-kill", "threadId": "t", "pid": 4242 },
     { "type": "rewind-preview", "threadId": "t", "n": 3 }
   ],
-  "hello": [{ "type": "hello", "version": 7 }, { "type": "hello", "version": 7, "members": [{ "id": "k1" }] }],
+  "hello": [{ "type": "hello", "version": 8 }, { "type": "hello", "version": 8, "members": [{ "id": "k1" }] }],
   "machineFrames": [
-    { "type": "welcome", "version": 7, "deviceId": "d-laptop", "backend": { "id": "studio", "name": "Studio", "kind": "mac", "appVersion": "0.0.0", "protocolVersion": 2, "capabilities": ["notify", "browserView"], "scopes": ["read", "operate", "manage", "code"] }, "addresses": [] },
+    { "type": "welcome", "version": 8, "deviceId": "d-laptop", "backend": { "id": "studio", "name": "Studio", "kind": "mac", "appVersion": "0.0.0", "protocolVersion": 2, "capabilities": ["notify", "browserView"], "scopes": ["read", "operate", "manage", "code"] }, "addresses": [] },
     { "type": "refused", "reason": "This machine speaks protocol 6; update Mochi on both sides" },
     { "type": "members", "members": [{ "id": "k1" }] }
   ],

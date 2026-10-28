@@ -26,4 +26,5 @@ export * as Usage from './ipc/usage.ts';
 export * as Windows from './ipc/windows.ts';
 export { upgrade, versioned, versionedUnion } from './version.ts';
 export { definitionOf, hostMethods, hostTags, HostRpcs } from './rpc.ts';
+export { HOST_SCOPES, type HostScopes } from './scopes.ts';
 export * as Capabilities from './capabilities.ts';
