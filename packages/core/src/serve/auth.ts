@@ -19,17 +19,30 @@ export interface ServeFlags {
   readonly scopes: ReadonlyArray<Capabilities.AuthScope>;
   /** Page origins allowed besides the served UI's own. */
   readonly origins: ReadonlyArray<string>;
+  /** PEM files for https/wss; both or neither. */
+  readonly tlsCert: Option.Option<string>;
+  readonly tlsKey: Option.Option<string>;
 }
 
 /**
- * The token and the origins `mochi serve` accepts. Beyond loopback a token is required and must be long; on loopback one is
- * generated when none is given. The served UI's own origin is always allowed.
+ * The token and the origins `mochi serve` accepts. A token path never leaves the machine in plaintext: beyond loopback it needs
+ * TLS (`--tls-cert` and `--tls-key`), a token, and the token must be long; on loopback one is generated when none is given.
+ * The served UI's own origin is always allowed.
  */
 export const resolveAuth = (flags: ServeFlags) =>
   Effect.gen(function* () {
     if (!Number.isInteger(flags.port) || flags.port < 1 || flags.port > 65535)
       return yield* new ServeRefused({
         message: `Port ${flags.port} is not 1–65535`,
+      });
+    if (Option.isSome(flags.tlsCert) !== Option.isSome(flags.tlsKey))
+      return yield* new ServeRefused({
+        message: '--tls-cert and --tls-key go together',
+      });
+    const tls = Option.isSome(flags.tlsCert);
+    if (!isLoopback(flags.host) && !tls)
+      return yield* new ServeRefused({
+        message: `${flags.host} is reachable beyond this computer, and a token over plain http would be readable on the network. Bind loopback, serve https with --tls-cert and --tls-key, or connect end-to-end encrypted: pair this computer (Settings › Remote access), or use the browser shell once it lands`,
       });
     if (!isLoopback(flags.host) && Option.isNone(flags.token))
       return yield* new ServeRefused({
@@ -52,10 +65,11 @@ export const resolveAuth = (flags: ServeFlags) =>
     return {
       token,
       isGenerated: Option.isNone(flags.token),
+      tls,
       tokens: new Map([[token, scopes]]),
       origins: [
         ...new Set([
-          ...servedOrigins(flags.host, flags.port),
+          ...servedOrigins(flags.host, flags.port, tls),
           ...flags.origins,
         ]),
       ],
@@ -70,13 +84,13 @@ export const isLoopback = (host: string) =>
   (isIP(host) === 4 && host.startsWith('127.'));
 
 /** The origins a browser reports for the UI served at `host:port`; a wildcard bind is also reached through loopback. */
-const servedOrigins = (host: string, port: number) => {
+const servedOrigins = (host: string, port: number, tls: boolean) => {
   const local = ['localhost', '127.0.0.1', '[::1]'];
   const hosts =
     isLoopback(host) || WILDCARDS.has(host)
       ? [...local, urlHost(host)]
       : [urlHost(host)];
-  return hosts.map((name) => `http://${name}:${port}`);
+  return hosts.map((name) => `${tls ? 'https' : 'http'}://${name}:${port}`);
 };
 
 const urlHost = (host: string) => (isIP(host) === 6 ? `[${host}]` : host);

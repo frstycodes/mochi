@@ -223,15 +223,17 @@ The interface draws every machine's icon, name and presence from this, its own c
 | Transport                           | Used by                                                      | Encryption                               |
 | ----------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
 | Loopback WebSocket + token          | desktop's own Core; `mochi serve` opened on the same machine | none (loopback)                          |
+| https/wss + token                   | `mochi serve --tls-cert/--tls-key` beyond loopback           | TLS                                      |
 | Direct WebSocket (LAN or Tailscale) | any shell to a paired machine                                | libsodium session (`crypto/session.ts`)  |
 | Relay                               | any shell to a paired machine, from anywhere                 | libsodium session; relay sees ciphertext |
 
+- **Every connection that leaves the machine is end-to-end encrypted or TLS.** A token never crosses a network in plaintext: `mochi serve` binds loopback unless it is given `--tls-cert` and `--tls-key`, and refuses any other `--host` (there is no `MOCHI_SERVE_HOST` fallback) with a pointer to pairing (Settings › Remote access).
 - **On Electron,** the device key stays in main (`safeStorage`). Main runs the handshake and gives the renderer an already-secured channel per backend, as a `MessagePort`. The renderer never sees the key.
 - **In a browser,** the handshake runs in the page. The key is a non-extractable WebCrypto Ed25519 key in IndexedDB, and the relay is reached with a short-lived ticket in the first frame, since a browser can't set `Authorization` on a WebSocket (the GAP under Transport).
 
 ### Headless `mochi serve`
 
-- A backend with no shell capabilities. A browser opens its page and connects over a direct WebSocket with a token, or a scoped device key once it signs in.
+- A backend with no shell capabilities. A browser opens its page and connects over a direct WebSocket with a token (loopback, or https/wss with `--tls-cert` and `--tls-key`), or a scoped device key once it signs in. Every connection that leaves the machine is end-to-end encrypted or TLS: `mochi serve --host <non-loopback>` without TLS is refused, pointing to pairing a computer or, once PR 15 lands, the browser shell, which runs the handshake in the page.
 - **What it needs beyond today:**
   - settings, library, account and the machine side of remote access moving from main into Core (the PR `core-owns-machine`, below)
   - a key store for headless Core: the OS keychain where there is one, else a `0600` file in its data folder

@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { createServer } from 'node:http';
+import { createServer, type Server } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import path from 'node:path';
 import { Context, Effect, Layer, Schedule, Schema, Stream } from 'effect';
 import {
@@ -59,6 +60,8 @@ export interface ServerOptions {
   readonly tokens: ReadonlyMap<string, ReadonlyArray<Contract.AuthScope>>;
   /** Page origins allowed to connect. A client that sends no Origin (main, a Node client) needs only the token. */
   readonly origins: ReadonlyArray<string>;
+  /** Serve https/wss with this certificate and key. Unset: plain http, which only loopback should use. */
+  readonly tls?: { readonly cert: Buffer; readonly key: Buffer };
   /** Mochi's data folder: the store's `mochi.db`, and the JSON files it imports once. Unset: an in-memory store (tests). */
   readonly userData?: string;
   /** The built renderer (`dist/`), served at `/` for a browser (`mochi serve`). Unset: only the socket. */
@@ -75,16 +78,21 @@ export const layerCore = (options: ServerOptions) =>
     // a connection is refused, and the client redials in 250ms.
     // Sockets are long-lived and never drain on their own, so closing waits only briefly for them.
     Layer.provideMerge(
-      NodeHttpServer.layerServer(createServer, {
-        port: options.port,
-        host: options.host ?? '127.0.0.1',
-        gracefulShutdownTimeout: '100 millis',
-        // Answers with `mochi` alone: the token subprotocol is never echoed back.
-        websocket: {
-          handleProtocols: (offered) =>
-            offered.has(Contract.SUBPROTOCOL) ? Contract.SUBPROTOCOL : false,
+      NodeHttpServer.layerServer(
+        options.tls
+          ? () => createHttpsServer(options.tls!) as unknown as Server
+          : createServer,
+        {
+          port: options.port,
+          host: options.host ?? '127.0.0.1',
+          gracefulShutdownTimeout: '100 millis',
+          // Answers with `mochi` alone: the token subprotocol is never echoed back.
+          websocket: {
+            handleProtocols: (offered) =>
+              offered.has(Contract.SUBPROTOCOL) ? Contract.SUBPROTOCOL : false,
+          },
         },
-      }),
+      ),
     ),
     Layer.provideMerge(Layer.mergeAll(Cache.layer, layerReactor)),
     Layer.provideMerge(
