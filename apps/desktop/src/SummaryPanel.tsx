@@ -1229,7 +1229,7 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
   };
 }
 
-/** Like Claude's: state icon and title on top; number, diff and checks under the title. A click opens its preview; hovering or focusing doesn't. */
+/** Like Claude's: state icon and title on top; number, diff and checks under the title. A click opens its preview, which stays until an outside click or Esc; hovering or focusing doesn't. */
 function PullRequestRow({
   thread,
   item,
@@ -1248,8 +1248,8 @@ function PullRequestRow({
       side="left"
       align="start"
       open={isOpen}
-      // The card's own hover and focus ask to open; only the click below does.
-      onOpenChange={(next) => !next && setOpen(false)}
+      // A popover: the row's click toggles it; an outside click or Esc closes it.
+      onOpenChange={setOpen}
     >
       <div className="relative isolate flex flex-col gap-0.5 rounded-lg px-2 py-1.5 hover:bg-accent/60">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -1259,7 +1259,6 @@ function PullRequestRow({
             <button
               type="button"
               aria-expanded={isOpen}
-              onClick={() => setOpen(true)}
               aria-label={`${label}: ${state.title}, ${refDescription('pr', state)}`}
               className="min-w-0 flex-1 cursor-default truncate text-left type-meta after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2"
             >
