@@ -69,12 +69,15 @@ const SavedThreadV1 = Schema.Struct({
   thread: Thread,
   checkpoints: opt(Schema.Array(Checkpoint)),
   fork: opt(Fork),
+  /** The thread's open approvals and questions, so a `thread` stream carries them to devices; the index holds the same items. */
+  queue: opt(Schema.Array(QueueItem)),
 });
 const LegacySavedThread = Schema.Struct({
   ...NO_V,
   thread: LegacyThread,
   checkpoints: opt(Schema.Array(LegacyCheckpoint)),
   fork: opt(Fork),
+  queue: opt(Schema.Array(LegacyQueueItem)),
 });
 
 export const SavedThread = Schema.Union([
@@ -82,11 +85,12 @@ export const SavedThread = Schema.Union([
   upgrade(
     LegacySavedThread,
     SavedThreadV1,
-    ({ thread, checkpoints, fork }) => ({
+    ({ thread, checkpoints, fork, queue }) => ({
       v: 1 as const,
       thread: liftThread(thread),
       ...(checkpoints && { checkpoints: liftCheckpoints(checkpoints) }),
       ...(fork && { fork }),
+      ...(queue && { queue: liftQueue(queue) }),
     }),
     ({ v: _, ...rest }) => rest as never,
   ),

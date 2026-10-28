@@ -4,7 +4,12 @@ import type { MirrorFrame } from '../host/types/remote.ts';
 import type { Action } from '../store/index.tsx';
 import { mirrorState, reducer } from '../store/root.ts';
 import { splitSaved, toSaved } from '../store/saved.ts';
-import { applyFrame, cachedMirror, type Mirror } from './mirror.ts';
+import {
+  applyFrame,
+  cachedMirror,
+  remoteDecisions,
+  type Mirror,
+} from './mirror.ts';
 import type { FollowedView } from './useMachines.tsx';
 import { findAnyThread } from '../store/anyThread.ts';
 import { parseRemoteThreadId, remoteThreadId, toWire, wireId } from './ids.ts';
@@ -194,4 +199,39 @@ test('any thread resolves to this computer’s or a followed machine’s', () =>
     machine: pc,
   });
   assert.equal(findAnyThread(undefined, machines, `mac~${id}`), undefined);
+});
+
+test('a thread’s open asks reach the mirror with machine-aware ids, and answering sends the machine’s own', () => {
+  const m = machine();
+  const threadId = m.threadId();
+  const item = {
+    id: 'q-7',
+    kind: 'question' as const,
+    threadId,
+    title: 'Which database?',
+    detail: '',
+    blocks: { steps: 0, threads: 1 },
+    createdAt: 1,
+  };
+  let mirror = apply(undefined, m.files());
+  assert.deepEqual(mirror?.state.queue, []);
+  mirror = apply(mirror, m.act({ type: 'queue-add', item }));
+  const [ask] = remoteDecisions(mirror!.state);
+  assert.equal(ask.id, remoteThreadId('mac', 'q-7'));
+  assert.equal(ask.threadId, remoteThreadId('mac', threadId));
+  assert.deepEqual(toWire({ type: 'resolve', queueId: ask.id }), {
+    type: 'resolve',
+    queueId: 'q-7',
+  });
+  // Another machine's identical ids stay apart.
+  const other = apply(undefined, m.files(), 'pc');
+  assert.equal(other?.state.queue[0].id, 'pc~q-7');
+  // Answered there: the next save drops it here, and the cache round trip keeps it.
+  const cached = cachedMirror(
+    'mac',
+    JSON.parse(JSON.stringify(mirror!.threads)),
+  );
+  assert.equal(cached.state.queue[0].id, 'mac~q-7');
+  mirror = apply(mirror, m.act({ type: 'answer', queueId: 'q-7' }));
+  assert.deepEqual(mirror?.state.queue, []);
 });
