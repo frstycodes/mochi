@@ -224,7 +224,7 @@ test('malformed commands are refused, never half-read', () => {
 test('a hello on another protocol is refused, and a device frame must be an RPC message or its members', () => {
   assert.throws(
     () => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 5 }),
-    /protocol 6/,
+    /protocol 7/,
   );
   const isDeviceFrame = Schema.is(DeviceLinkFrame);
   assert.ok(

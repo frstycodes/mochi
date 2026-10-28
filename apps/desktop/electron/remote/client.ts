@@ -13,6 +13,7 @@ import type {
   DeviceKind,
   FollowedMachine,
   RemoteCommand,
+  Scope as MemberScope,
 } from '../../src/host/types/remote.ts';
 import { asKind, PairingRefused } from './pairing.ts';
 
@@ -104,16 +105,18 @@ export function followMachine(options: FollowOptions): MachineFollower {
         members: options.members,
         onMembers: options.onMembers,
         onWelcome: (welcome, route) => {
-          const kind = asKind(welcome.machineKind) ?? state.kind;
+          const kind = asKind(welcome.backend.kind) ?? state.kind;
           options.onWelcome({ addresses: [...welcome.addresses], kind });
           if (welcome.members !== undefined)
             options.onMembers?.(welcome.members);
           set({
             status: 'online',
             route,
-            name: welcome.machineName,
+            name: welcome.backend.name,
             kind,
-            scopes: [...welcome.scopes],
+            scopes: welcome.backend.scopes.filter(
+              (scope): scope is MemberScope => scope !== 'local',
+            ),
             error: undefined,
             lastSeenAt: Date.now(),
           });

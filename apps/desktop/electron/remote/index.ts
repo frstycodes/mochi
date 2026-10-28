@@ -10,9 +10,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join as joinPath } from 'node:path';
 import sodium from 'libsodium-wrappers';
-import { Option, Schema } from 'effect';
+import { Effect, Option, Schema, Stream } from 'effect';
 import { Persist, Relay } from '@mochi/schema';
-import { deviceTunnel, logToCore } from '@mochi/core/host';
+import { deviceTunnel, logToCore, mainCoreClient } from '@mochi/core/host';
 import { openLan } from '@mochi/core/remote/device';
 import type { RawLink } from '@mochi/core/remote/link';
 import {
@@ -116,9 +116,33 @@ const followers = new Map<string, MachineFollower & { publicKey: string }>();
 let membership: Membership | undefined;
 let absorbing: Promise<unknown> = Promise.resolve();
 
+const thisIdentity = () => ({
+  id: theRegistry().machineId,
+  name: settings.machineName || hostname(),
+});
+
+/**
+ * Core answers `backend.info` with the id this machine registered and the name its owner chose, which only main knows. Sent
+ * whenever the descriptor disagrees, so a renamed machine and a restarted Core (which starts from its defaults) both follow.
+ */
+const keepCoreIdentity = Effect.gen(function* () {
+  const client = yield* Effect.promise(() => mainCoreClient());
+  yield* Stream.runForEach(client['backend.watch'](), (info) => {
+    const { id, name } = thisIdentity();
+    return info.id === id && info.name === name
+      ? Effect.void
+      : client['backend.identify']({ id, name });
+  });
+}).pipe(
+  Effect.catch(() => Effect.void),
+  Effect.andThen(Effect.sleep('500 millis')),
+  Effect.forever,
+);
+
 /** Reads Settings › Remote access and, when it is on, starts listening and keeps the renderer alive. */
 export function startRemote() {
   settings = loadSettings();
+  Effect.runFork(keepCoreIdentity);
   app.on('before-quit', () => (isQuitting = true));
   app.on('will-quit', () => void server?.close());
   // While remote is on, closing the main window hides it: the store lives in its renderer, and devices need it running.
@@ -188,7 +212,12 @@ export async function setRemote(patch: Partial<RemoteSettings>) {
   settings = { ...settings, ...patch };
   writeFileSync(file(), JSON.stringify(settings), { mode: 0o600 });
   // Its own record carries its name: renaming signs a new one.
-  if (settings.machineName !== previous.machineName) void absorb([]);
+  if (settings.machineName !== previous.machineName) {
+    void absorb([]);
+    void mainCoreClient().then((client) =>
+      Effect.runPromise(client['backend.identify'](thisIdentity())),
+    );
+  }
   if (
     settings.isEnabled !== previous.isEnabled ||
     settings.allowsNetwork !== previous.allowsNetwork ||
@@ -371,7 +400,7 @@ export async function join(machineId: string) {
         publicKey: machine.publicKey,
         machineId: machine.id,
         name: machine.name,
-        kind: asKind(welcome.machineKind),
+        kind: asKind(welcome.backend.kind),
       },
       Date.now(),
     );
@@ -664,7 +693,12 @@ function restart() {
         coreFor: deviceTunnel,
         onRejected: (device, reason) =>
           logToCore('Warn', `remote: ${device}: ${reason}`),
-        machineName: () => settings.machineName || hostname(),
+        backend: async (scopes) => ({
+          ...(await Effect.runPromise(
+            (await mainCoreClient())['backend.info'](),
+          )),
+          scopes,
+        }),
         onDevicesChange: broadcast,
         members: ownRecords,
         onMembers: (members) => void absorb(parseRecords(members)),

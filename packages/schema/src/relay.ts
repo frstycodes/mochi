@@ -1,5 +1,6 @@
 import { Schema, SchemaTransformation } from 'effect';
 import { AgentModel } from './agent.ts';
+import { BackendInfo } from './backend.ts';
 import { Int, Str } from './checks.ts';
 import {
   DiffFile,
@@ -28,7 +29,7 @@ const S = Schema.String;
 const B = Schema.Boolean;
 
 /** Bumped on any link frame change; a device on another version is refused rather than misread. */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 const MAX_ID = 128;
 const MAX_TEXT = 256 * 1024;
@@ -695,9 +696,8 @@ export const WelcomeFrame = Schema.Struct({
   type: Schema.Literal('welcome'),
   version: Schema.Number,
   deviceId: S,
-  machineName: S,
-  machineKind: DeviceKind,
-  scopes: Schema.Array(Scope),
+  /** The machine's own descriptor (`backend.info`), with `scopes` what this device may do there. */
+  backend: BackendInfo,
   addresses: Schema.Array(S),
   members: opt(Schema.Unknown),
 });

@@ -1,6 +1,7 @@
 import { Effect, Redacted } from 'effect';
 import { NodeRuntime } from '@effect/platform-node';
 import { Capabilities } from '@mochi/schema';
+import { osKind } from './backend/backend.ts';
 import { coreConfig } from './config.ts';
 import { launchCore } from './launch.ts';
 
@@ -12,6 +13,7 @@ const program = Effect.gen(function* () {
     tokens: new Map([[Redacted.value(config.token), Capabilities.allScopes]]),
     origins: config.origins,
     userData: config.userData,
+    backend: { kind: osKind(process.platform) },
     logFile: config.logFile,
     otlpUrl: config.otlpUrl,
   });

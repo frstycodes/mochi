@@ -1,4 +1,5 @@
 export * as Agent from './agent.ts';
+export * as Backend from './backend.ts';
 export * as Model from './model.ts';
 export * as Persist from './persist.ts';
 export * as Relay from './relay.ts';

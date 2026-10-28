@@ -7,7 +7,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { DeviceIcon, THIS_DEVICE } from './DeviceIcon';
+import { DeviceIcon } from './DeviceIcon';
+import { useThisBackend } from './useThisBackend';
 import { MachinePresence } from './MachinePresence';
 import { useMachines } from './useMachines';
 
@@ -25,9 +26,10 @@ export function RunsOnMenu({
   onChange: (machineId: string | null) => void;
 }) {
   const { machines } = useMachines();
+  const here = useThisBackend();
   if (machines.length === 0) return null;
   const picked = machines.find((m) => m.machine.id === value)?.machine;
-  const label = picked?.name ?? 'This computer';
+  const label = picked?.name ?? here.name;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -37,7 +39,7 @@ export function RunsOnMenu({
           className="min-w-0 text-subtle-foreground hover:text-foreground"
           aria-label={`Runs on ${label}`}
         >
-          <DeviceIcon kind={picked ? picked.kind : THIS_DEVICE} />
+          <DeviceIcon kind={picked ? picked.kind : here.kind} />
           <span className="truncate max-sm:hidden">{label}</span>
         </Button>
       </DropdownMenuTrigger>
@@ -48,8 +50,13 @@ export function RunsOnMenu({
           onValueChange={(id) => onChange(id === HERE ? null : id)}
         >
           <DropdownMenuRadioItem value={HERE}>
-            <DeviceIcon kind={THIS_DEVICE} />
-            This computer
+            <DeviceIcon kind={here.kind} />
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className="truncate">{here.name}</span>
+              <span className="type-caption text-muted-foreground">
+                This computer
+              </span>
+            </span>
           </DropdownMenuRadioItem>
           {machines.map(({ machine }) => {
             const reason =

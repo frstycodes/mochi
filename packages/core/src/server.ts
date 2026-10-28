@@ -11,6 +11,7 @@ import {
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { NodeHttpServer } from '@effect/platform-node';
 import { Capabilities as Contract, definitionOf, Relay } from '@mochi/schema';
+import { Backend, type BackendOptions } from './backend/backend.ts';
 import { Cache } from './cache.ts';
 import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
@@ -62,6 +63,8 @@ export interface ServerOptions {
   readonly userData?: string;
   /** The built renderer (`dist/`), served at `/` for a browser (`mochi serve`). Unset: only the socket. */
   readonly ui?: string;
+  /** What `backend.info` says this Core is. Unset: a `server`. */
+  readonly backend?: Partial<BackendOptions>;
 }
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
@@ -84,6 +87,12 @@ export const layerCore = (options: ServerOptions) =>
       }),
     ),
     Layer.provideMerge(Layer.mergeAll(Cache.layer, layerReactor)),
+    Layer.provideMerge(
+      Backend.layer({
+        kind: options.backend?.kind ?? 'server',
+        userData: options.userData,
+      }),
+    ),
     Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
     Layer.provideMerge(layerAgents(options.userData)),
@@ -125,6 +134,7 @@ const layerStore = (userData: string | undefined) =>
   );
 
 type Services =
+  | Backend
   | Run
   | Capabilities
   | UtilityQueue
@@ -299,8 +309,13 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const terminals = yield* Terminals;
       const scheduler = yield* Scheduler;
       const hosted = yield* (yield* Hosted).handlers(windowId);
+      const backend = yield* Backend;
       return {
         ping: () => Effect.succeed('pong'),
+        'backend.info': () => backend.describe(identity.scopes),
+        'backend.watch': () => backend.watch(identity.scopes),
+        'backend.identify': (patch: { id?: string; name?: string }) =>
+          backend.identify(patch),
         ticks: ({ intervalMs }: { intervalMs: number }) =>
           Stream.fromSchedule(Schedule.spaced(intervalMs)),
         log: ({
