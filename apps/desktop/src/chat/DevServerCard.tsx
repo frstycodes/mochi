@@ -120,6 +120,7 @@ function useDevServer(thread: Thread, server: DevServer) {
       if (!cwd) return;
       const pane = getState().panes.find((p) => p.threadId === thread.id);
       void runTarget(server, { threadId: thread.id, cwd, pane, dispatch });
+      paneOpeners(dispatch, thread.id).openPort(server.port);
       refreshPorts();
     },
     stop: async (pid: number) => {

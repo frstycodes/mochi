@@ -4,7 +4,7 @@ import type { Action } from '../store';
 import { nextTabId } from '../store/panes';
 import { paneOpeners } from './usePaneOpeners';
 
-/** Runs `target` as a new shell in the thread's terminal tab, opening one if there is none. Returns where its output lands. */
+/** Runs `target` as a new shell in the thread's terminal tab, opening one in the background if there is none; the terminal is never revealed. Returns where its output lands. */
 export async function runTarget(
   target: RunTarget,
   { threadId, cwd, pane, dispatch }: RunContext,
@@ -19,8 +19,14 @@ export async function runTarget(
     { cwd, threadId, links: paneOpeners(dispatch, threadId) },
     { title: target.name, command: target.command },
   );
-  if (terminal) dispatch({ type: 'pane-select-tab', threadId, tabId });
-  else dispatch({ type: 'pane-open-tab', threadId, kind: 'terminal' });
+  if (!terminal)
+    dispatch({
+      type: 'pane-open-tab',
+      threadId,
+      kind: 'terminal',
+      tabId,
+      isBackground: true,
+    });
   return { key, sessionId };
 }
 

@@ -299,8 +299,16 @@ function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
     listening,
     targets,
     threadPort,
-    run: (target: RunTarget) =>
-      runTarget(target, { threadId: thread.id, cwd, pane, dispatch }),
+    run: async (target: RunTarget) => {
+      const started = await runTarget(target, {
+        threadId: thread.id,
+        cwd,
+        pane,
+        dispatch,
+      });
+      if (target.port) openers.openPort(target.port);
+      return started;
+    },
     openInPip(port: number) {
       const tabId = nextTabId(pane.tabs);
       openers.openPort(port);
