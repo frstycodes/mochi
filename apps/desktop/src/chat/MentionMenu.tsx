@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/command';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
-import { useFileList } from '../files/useFiles';
+import { localIo, useFileList } from '../files/useFiles';
 import { useRecentFiles } from '../pane/recentFiles';
 import type { AgentImage } from '../host/types/agent';
 import type { ScreenAccess } from '../host/types/windows';
@@ -527,7 +527,7 @@ function useFileOptions(
   const [isUsed, setIsUsed] = useState(false);
   if (query !== null && !isUsed) setIsUsed(true);
   const machine = useRemoteMachine();
-  const { files: localFiles } = useFileList(isUsed ? root : null);
+  const { files: localFiles } = useFileList(isUsed ? localIo(root) : null);
   const remoteFiles = useMachineFiles(
     threadId ? machine : null,
     threadId ?? '',

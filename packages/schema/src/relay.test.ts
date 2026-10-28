@@ -10,6 +10,7 @@ import {
   HelloFrame,
   MachineLinkFrame,
   RemoteCommand,
+  COMMAND_SCOPES,
 } from './relay.ts';
 
 const fixtures = JSON.parse(
@@ -222,8 +223,8 @@ test('malformed commands are refused, never half-read', () => {
 
 test('a hello on another protocol is refused, and a device frame must be an RPC message or its members', () => {
   assert.throws(
-    () => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 4 }),
-    /protocol 5/,
+    () => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 5 }),
+    /protocol 6/,
   );
   const isDeviceFrame = Schema.is(DeviceLinkFrame);
   assert.ok(
@@ -398,4 +399,84 @@ test('a send carries the composer’s images and references, and needs something
     { ...send, text: 'x', mentions: [{ kind: 'shell', id: 'x', title: 'x' }] },
   ])
     assert.ok(isRefused(bad), JSON.stringify(bad));
+});
+
+test('pane commands decode, and refuse what would escape the thread or read nothing', () => {
+  const ok = {
+    type: 'write-file',
+    threadId: 't',
+    path: 'src/a.ts',
+    text: 'x',
+    baseMtimeMs: 1,
+  };
+  assert.deepEqual(decode(ok), ok);
+  for (const path of ['/etc/passwd', '../x', 'a/../../x', 'C:/x'])
+    assert.ok(isRefused({ ...ok, path }), path);
+  assert.deepEqual(decode({ ...ok, force: true }), { ...ok, force: true });
+
+  const diff = { type: 'turn-diff', threadId: 't', from: 'abcd1234' };
+  assert.deepEqual(decode(diff), diff);
+  assert.deepEqual(decode({ ...diff, to: 'beef' }), { ...diff, to: 'beef' });
+  assert.ok(isRefused({ ...diff, from: 'not-hex' }));
+  assert.ok(isRefused({ ...diff, to: 'xyz!' }));
+
+  const search = {
+    type: 'search',
+    threadId: 't',
+    pattern: 'foo',
+    isCaseSensitive: false,
+    isRegex: false,
+    isWholeWord: false,
+  };
+  assert.deepEqual(decode(search), search);
+  assert.ok(isRefused({ ...search, pattern: '   ' }));
+  assert.ok(isRefused({ ...search, pattern: '' }));
+
+  for (const type of ['read-image', 'read-task-output']) {
+    const c = { type, threadId: 't', path: '/tmp/a.png' };
+    assert.deepEqual(decode(c), c);
+  }
+});
+
+test('pane commands need the scope their kind of access needs', () => {
+  for (const type of ['write-file', 'search', 'turn-diff'] as const)
+    assert.equal(COMMAND_SCOPES[type], 'code');
+  for (const type of ['read-image', 'read-task-output'] as const)
+    assert.equal(COMMAND_SCOPES[type], 'read');
+  assert.equal(
+    scopeOf('device.command', { command: { type: 'write-file' } }),
+    'code',
+  );
+  assert.equal(
+    scopeOf('device.command', { command: { type: 'read-image' } }),
+    'read',
+  );
+  // A device holding only `read` is not granted write-file.
+  const held = new Set(['read']);
+  assert.equal(
+    held.has(scopeOf('device.command', { command: { type: 'write-file' } })),
+    false,
+  );
+});
+
+test('pane command results keep the shape they answer with', () => {
+  const decodeResult = Schema.decodeUnknownSync(CommandResult);
+  const line = {
+    line: 1,
+    text: 'x',
+    isCut: false,
+    ranges: [[0, 1]],
+    column: [0, 1],
+  };
+  for (const data of [
+    { text: 'hi', mtimeMs: 42 },
+    { status: 'saved', mtimeMs: 3 },
+    { status: 'conflict', text: 'theirs', mtimeMs: 4 },
+    { hits: [{ path: 'a.ts', lines: [line] }], isTruncated: true },
+    { turnFiles: [] },
+    { mediaType: 'image/png', base64: 'AAA=' },
+  ]) {
+    const result = { isOk: true, data };
+    assert.deepEqual(decodeResult(result), result);
+  }
 });

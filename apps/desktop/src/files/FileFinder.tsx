@@ -23,6 +23,7 @@ import {
   visibleRows,
 } from '@mochi/domain/files/tree';
 import { useContentSearch } from './useContentSearch';
+import type { ThreadIo } from '../remote/threadIo';
 
 export interface FileTarget {
   path: string;
@@ -35,7 +36,7 @@ const SEARCH_PREFIX = '?';
 
 /** The tree with one input on top: typing filters it by name, `?` searches file contents instead. */
 export function FileFinder({
-  root,
+  io,
   files,
   selected,
   query,
@@ -43,7 +44,7 @@ export function FileFinder({
   focusKey,
   onOpen,
 }: {
-  root: string;
+  io: ThreadIo;
   files: string[];
   selected: string | null;
   query: string;
@@ -61,7 +62,7 @@ export function FileFinder({
   });
   const tree = useTreeFilter(files, isContentSearch ? '' : query, selected);
   const search = useContentSearch(
-    root,
+    io,
     isContentSearch ? query.slice(SEARCH_PREFIX.length) : '',
     options,
   );
@@ -164,7 +165,7 @@ export function FileFinder({
           </p>
         ) : (
           <FileTree
-            root={root}
+            root={io.kind === 'local' ? io.root : undefined}
             rows={tree.rows}
             isExpanded={tree.isExpanded}
             selected={selected}

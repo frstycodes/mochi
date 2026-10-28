@@ -26,6 +26,7 @@ import { previewKind } from './kinds';
 import { FilePreview } from './previews';
 import { useOpenFile, type OpenFile } from './useFiles';
 import { isCommand } from '../keymap';
+import type { ThreadIo } from '../remote/threadIo';
 import { ModeToggle, TooltipIconButton, type Mode } from '../ui';
 
 // Lazy so CodeMirror parses only when a file is first opened as source.
@@ -49,19 +50,19 @@ const FILE_MODES = [
 ] as const satisfies readonly [Mode<FileMode>, Mode<FileMode>];
 
 export function FileView({
-  root,
+  io,
   path,
   line,
   column,
   toolbar,
 }: {
-  root: string;
+  io: ThreadIo;
   path: string;
   line?: number;
   column?: [number, number];
   toolbar: ReactNode;
 }) {
-  const file = useOpenFile(root, path);
+  const file = useOpenFile(io, path);
   const kind = previewKind(path);
   const hasSource = file.content?.kind === 'text';
   const [mode, setMode] = useState<FileMode>(
@@ -105,7 +106,9 @@ export function FileView({
             Save
           </Button>
         )}
-        <OpenInMenu root={root} path={path} line={line} />
+        {io.kind === 'local' && (
+          <OpenInMenu root={io.root} path={path} line={line} />
+        )}
       </header>
       {!!file.conflict && (
         <ConflictBar

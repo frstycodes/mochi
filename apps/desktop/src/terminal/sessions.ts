@@ -32,7 +32,7 @@ export interface TerminalSession {
   serialize: SerializeAddon;
   /** xterm's host node. It moves between React mounts so the buffer and the shell survive tab switches. */
   element: HTMLDivElement;
-  ptyId?: string;
+  pty?: Pty;
   selection: string;
   failure?: { exitCode: number; output: string };
   agentRuns: number;
@@ -55,6 +55,51 @@ interface GroupContext {
   cwd: string;
   threadId: string;
   links: TerminalLinks;
+  /** Where the group's shells run; this computer's pty host when left out. */
+  transport?: PtyTransport;
+}
+
+/**
+ * Where a terminal group's shells run: this computer's pty host (`localPty`) or another computer's shells in its thread's
+ * folder (`remotePty`). Pty ids are the transport's own; `id` keeps two transports' ids apart.
+ */
+export interface PtyTransport {
+  id: string;
+  spawn(options: {
+    cwd: string;
+    threadId: string;
+    cols: number;
+    rows: number;
+    command?: string;
+  }): Promise<{ id: string }>;
+  write(ptyId: string, data: string): void;
+  resize(ptyId: string, cols: number, rows: number): void;
+  kill(ptyId: string): void;
+  /** Called once per transport, before its first spawn. */
+  listen(events: {
+    data(ptyId: string, data: string): void;
+    exit(ptyId: string, exitCode: number): void;
+  }): void;
+}
+
+export const localPty: PtyTransport = {
+  id: 'local',
+  spawn: ({ cwd, threadId, cols, rows, command }) =>
+    portFor(threadId).then((port) =>
+      host.pty.spawn({ cwd, cols, rows, command, port, threadId }),
+    ),
+  write: (ptyId, data) => void host.pty.write(ptyId, data),
+  resize: (ptyId, cols, rows) => void host.pty.resize(ptyId, cols, rows),
+  kill: (ptyId) => void host.pty.kill(ptyId),
+  listen({ data, exit }) {
+    host.pty.onData(({ id, data: chunk }) => data(id, chunk));
+    host.pty.onExit(({ id, exitCode }) => exit(id, exitCode));
+  },
+};
+
+interface Pty {
+  transport: PtyTransport;
+  id: string;
 }
 
 interface ShellOptions {
@@ -84,6 +129,9 @@ const groupsStore = createStore<{ groups: ReadonlyMap<string, TerminalGroup> }>(
 const groups = () => groupsStore.getState().groups;
 const contexts = new Map<string, GroupContext>();
 const byPty = new Map<string, TerminalSession>();
+const listening = new Set<string>();
+const ptyKey = (transportId: string, ptyId: string) =>
+  `${transportId}:${ptyId}`;
 // Output can beat the spawn reply that tells us which session a pty id belongs to.
 const earlyOutput = new Map<string, string>();
 let nextSessionId = 0;
@@ -185,9 +233,9 @@ export function closeSession(key: string, id: string) {
     .get(key)
     ?.sessions.find((s) => s.id === id);
   if (!session) return;
-  if (session.ptyId) {
-    byPty.delete(session.ptyId);
-    void host.pty.kill(session.ptyId);
+  if (session.pty) {
+    byPty.delete(ptyKey(session.pty.transport.id, session.pty.id));
+    session.pty.transport.kill(session.pty.id);
   }
   session.term.dispose();
   updateGroup(key, (g) => {
@@ -324,38 +372,49 @@ function startShell(key: string, session: TerminalSession, command?: string) {
     }
     return true;
   });
-  term.onData(
-    (data) => session.ptyId && void host.pty.write(session.ptyId, data),
+  term.onData((data) => session.pty?.transport.write(session.pty.id, data));
+  term.onResize(({ cols, rows }) =>
+    session.pty?.transport.resize(session.pty.id, cols, rows),
   );
-  term.onResize(
-    ({ cols, rows }) =>
-      session.ptyId && void host.pty.resize(session.ptyId, cols, rows),
-  );
-  const { cwd, threadId } = contexts.get(key)!;
-  void portFor(threadId)
-    .then((port) =>
-      host.pty.spawn({
-        cwd,
-        cols: term.cols,
-        rows: term.rows,
-        command,
-        port,
-        threadId,
-      }),
-    )
+  const { cwd, threadId, transport = localPty } = contexts.get(key)!;
+  listen(transport);
+  void transport
+    .spawn({ cwd, threadId, cols: term.cols, rows: term.rows, command })
     .then(({ id }) => {
-      session.ptyId = id;
-      byPty.set(id, session);
-      term.write(earlyOutput.get(id) ?? '');
-      earlyOutput.delete(id);
+      const at = ptyKey(transport.id, id);
+      session.pty = { transport, id };
+      byPty.set(at, session);
+      term.write(earlyOutput.get(at) ?? '');
+      earlyOutput.delete(at);
       // The fit may have run before the shell existed.
-      void host.pty.resize(id, term.cols, term.rows);
+      transport.resize(id, term.cols, term.rows);
     })
     .catch((error: Error) =>
       term.write(
         `\x1b[31mCould not start a shell: ${error.message}\x1b[0m\r\n`,
       ),
     );
+}
+
+function listen(transport: PtyTransport) {
+  if (listening.has(transport.id)) return;
+  listening.add(transport.id);
+  transport.listen({
+    data(ptyId, data) {
+      const at = ptyKey(transport.id, ptyId);
+      const session = byPty.get(at);
+      if (session) session.term.write(data);
+      else earlyOutput.set(at, (earlyOutput.get(at) ?? '') + data);
+    },
+    exit(ptyId, exitCode) {
+      const at = ptyKey(transport.id, ptyId);
+      byPty
+        .get(at)
+        ?.term.write(`\r\n\x1b[2m[process exited with ${exitCode}]\x1b[0m\r\n`);
+      byPty.delete(at);
+      earlyOutput.delete(at);
+    },
+  });
 }
 
 function linesSince(term: Terminal, fromLine: number) {
@@ -394,18 +453,6 @@ function replaceFocused(group: TerminalGroup, id: string) {
 function wireHost() {
   if (isWired) return;
   isWired = true;
-  host.pty.onData(({ id, data }) => {
-    const session = byPty.get(id);
-    if (session) session.term.write(data);
-    else earlyOutput.set(id, (earlyOutput.get(id) ?? '') + data);
-  });
-  host.pty.onExit(({ id, exitCode }) => {
-    byPty
-      .get(id)
-      ?.term.write(`\r\n\x1b[2m[process exited with ${exitCode}]\x1b[0m\r\n`);
-    byPty.delete(id);
-    earlyOutput.delete(id);
-  });
   onThemeChange(() => {
     const theme = terminalTheme();
     groups().forEach((g) =>

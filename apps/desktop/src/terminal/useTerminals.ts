@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import type { Thread } from '../model';
+import { useThreadOrigin } from '../remote/origin';
+import { ptyTransportFor } from '../remote/remotePty';
 import { useDispatch } from '../store';
 import { usePorts } from './ports';
 import {
@@ -15,9 +17,16 @@ export function useTerminals(thread: Thread, tabId: string, cwd: string) {
   const dispatch = useDispatch();
   const key = `${thread.id}/${tabId}`;
   const openers = usePaneOpeners(thread.id);
-  const context = { cwd, threadId: thread.id, links: openers };
+  const origin = useThreadOrigin();
+  const context = {
+    cwd,
+    threadId: thread.id,
+    links: openers,
+    transport: ptyTransportFor(origin),
+  };
   const group = useTerminalGroup(key);
-  usePorts(thread.id, cwd);
+  // Another computer's processes aren't this one's to list.
+  usePorts(thread.id, origin.kind === 'local' ? cwd : null);
   useEffect(() => ensureGroup(key, context), [key, context]);
 
   const runs = agentRuns(thread);

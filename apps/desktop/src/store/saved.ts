@@ -8,6 +8,7 @@ import type { SavedFiles } from '../host/types/data.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
+import type { RemoteSideChat } from './remoteSideChat.ts';
 import { failDrafts } from '../rewind/handoff.ts';
 import { undeliver } from '../runtime/due.ts';
 import { reportStoppedAtQuit } from '../runtime/subThreadReports.ts';
@@ -23,10 +24,15 @@ export interface Saved {
   checkpoints: Record<string, Checkpoint[]>;
   checkpointSeq: number;
   forks: Record<string, Fork>;
+  /** Saved before remote side chats, a save has none. */
+  remoteSideChats?: Record<string, RemoteSideChat>;
 }
 
 /** The save is split so each write touches only the threads that changed: one row per thread in Core's store (`packages/core/src/store/store.ts`). */
-interface SavedIndex extends Omit<Saved, 'threads' | 'checkpoints' | 'forks'> {
+interface SavedIndex extends Omit<
+  Saved,
+  'threads' | 'checkpoints' | 'forks' | 'remoteSideChats'
+> {
   threadIds: string[];
 }
 
@@ -36,6 +42,8 @@ export interface SavedThread {
   fork?: Fork;
   /** Its open approvals and questions, for devices that follow it (also in the index). */
   queue?: QueueItem[];
+  /** Its remote side chat, so the computers following the thread see it (`remoteSideChat.ts`). */
+  sideChat?: RemoteSideChat;
 }
 
 export function toSaved(
@@ -48,7 +56,8 @@ export function toSaved(
     | 'checkpoints'
     | 'checkpointSeq'
     | 'forks'
-  >,
+  > &
+    Partial<Pick<State, 'remoteSideChats'>>,
 ): Saved {
   const threads = state.threads.filter(
     (t) => t.live && !LIMIT_DEMO_IDS.includes(t.id),
@@ -56,6 +65,7 @@ export function toSaved(
   const ids = new Set(threads.map((t) => t.id));
   const pick = <T>(record: Record<string, T>) =>
     Object.fromEntries(Object.entries(record).filter(([id]) => ids.has(id)));
+  const remoteSideChats = pick(state.remoteSideChats ?? {});
   return {
     version: 1,
     now: state.now,
@@ -65,6 +75,7 @@ export function toSaved(
     checkpoints: pick(state.checkpoints),
     checkpointSeq: state.checkpointSeq,
     forks: pick(state.forks),
+    ...(Object.keys(remoteSideChats).length && { remoteSideChats }),
   };
 }
 
@@ -113,8 +124,16 @@ export function savedThreadFrom(value: unknown): SavedThread | null {
 /** Only live threads are saved; demo threads start fresh every launch. */
 function fromDecoded(decoded: Persist.Saved): Saved {
   // Decoded values are the model's types (src/schemaConformance/persist.ts checks it), readonly; the store's slices aren't.
-  const { now, seq, threads, queue, checkpoints, checkpointSeq, forks } =
-    decoded as unknown as Saved;
+  const {
+    now,
+    seq,
+    threads,
+    queue,
+    checkpoints,
+    checkpointSeq,
+    forks,
+    remoteSideChats,
+  } = decoded as unknown as Saved;
   return {
     version: 1,
     now,
@@ -124,6 +143,7 @@ function fromDecoded(decoded: Persist.Saved): Saved {
     checkpoints,
     checkpointSeq,
     forks,
+    ...(remoteSideChats && { remoteSideChats }),
   };
 }
 
@@ -306,7 +326,13 @@ function stoppedSetup(setup: WorktreeSetup): WorktreeSetup {
   };
 }
 
-export function splitSaved({ threads, checkpoints, forks, ...rest }: Saved) {
+export function splitSaved({
+  threads,
+  checkpoints,
+  forks,
+  remoteSideChats,
+  ...rest
+}: Saved) {
   const queues: Record<string, QueueItem[]> = {};
   for (const q of rest.queue) (queues[q.threadId] ??= []).push(q);
   const index = JSON.stringify({
@@ -318,7 +344,13 @@ export function splitSaved({ threads, checkpoints, forks, ...rest }: Saved) {
     threads: Object.fromEntries(
       threads.map((t) => [
         t.id,
-        encodeThread(t, checkpoints[t.id], forks[t.id], queues[t.id]),
+        encodeThread(
+          t,
+          checkpoints[t.id],
+          forks[t.id],
+          queues[t.id],
+          remoteSideChats?.[t.id],
+        ),
       ]),
     ),
   };
@@ -358,6 +390,11 @@ export function joinSaved({ index, threads }: SavedFiles): Saved | null {
     forks: Object.fromEntries(
       parts.flatMap((p) => (p.fork ? [[p.thread.id, p.fork]] : [])),
     ),
+    ...(parts.some((p) => p.sideChat) && {
+      remoteSideChats: Object.fromEntries(
+        parts.flatMap((p) => (p.sideChat ? [[p.thread.id, p.sideChat]] : [])),
+      ),
+    }),
   });
 }
 
@@ -373,13 +410,15 @@ function encodeThread(
   checkpoints: Checkpoint[] | undefined,
   fork: Fork | undefined,
   queue: QueueItem[] | undefined,
+  sideChat: RemoteSideChat | undefined,
 ): string {
   const hit = encoded.get(thread);
   if (
     hit &&
     hit.checkpoints === checkpoints &&
     hit.fork === fork &&
-    sameItems(hit.queue, queue)
+    sameItems(hit.queue, queue) &&
+    hit.sideChat === sideChat
   )
     return hit.json;
   const json = JSON.stringify({
@@ -387,7 +426,8 @@ function encodeThread(
     checkpoints,
     fork,
     queue,
+    sideChat,
   } satisfies SavedThread);
-  encoded.set(thread, { thread, checkpoints, fork, queue, json });
+  encoded.set(thread, { thread, checkpoints, fork, queue, sideChat, json });
   return json;
 }

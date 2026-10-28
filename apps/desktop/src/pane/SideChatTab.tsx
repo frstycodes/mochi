@@ -61,20 +61,24 @@ import type { PaneTabProps } from './tabs';
 export function SideChatTab({ thread, tab }: PaneTabProps) {
   const side = useSideChat(thread, tab.id);
   const isEmpty = side.chat.messages.length === 0;
+  const blocker = side.remote?.blocker;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <p className="shrink-0 truncate px-3 pb-1 type-meta text-muted-foreground">
         Aside from <span className="text-foreground">{thread.title}</span>
       </p>
-      <PaneActions>
-        <HeaderAction
-          label="Clear side chat"
-          icon={Broom}
-          disabled={isEmpty || side.isStreaming}
-          onClick={side.clear}
-        />
-      </PaneActions>
+      {/* Another computer's side chat is kept there, for every computer following the thread. */}
+      {!side.remote && (
+        <PaneActions>
+          <HeaderAction
+            label="Clear side chat"
+            icon={Broom}
+            disabled={isEmpty || side.isStreaming}
+            onClick={side.clear}
+          />
+        </PaneActions>
+      )}
       {isEmpty ? (
         <EmptySideChat />
       ) : (
@@ -89,6 +93,7 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
                     key={m.id}
                     message={m}
                     onPromote={(to) => side.promote(m.id, to)}
+                    canStartThread={!side.remote}
                   />
                 ),
               )}
@@ -119,27 +124,34 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
                   attributes={{ 'data-sidechat-input': thread.id }}
                   autoFocus={!!side.chat.draft}
                   placeholder={
-                    side.chat.draft
+                    blocker ??
+                    (side.chat.draft
                       ? 'Ask about this selection'
-                      : 'Ask about this thread'
+                      : 'Ask about this thread')
                   }
                   className="type-prose max-md:text-base"
                 />
               </PromptInputBody>
               <PromptInputFooter className="px-2 pb-2">
                 <PromptInputTools>
-                  <ModelPicker
-                    value={side.model.model}
-                    provider={side.model.provider}
-                    onChange={(m) =>
-                      side.setModel({ provider: m.harness, model: m.id })
-                    }
-                  />
+                  {side.remote ? (
+                    <span className="px-1.5 type-caption text-subtle-foreground">
+                      Answered on {side.remote.machine.name}
+                    </span>
+                  ) : (
+                    <ModelPicker
+                      value={side.model.model}
+                      provider={side.model.provider}
+                      onChange={(m) =>
+                        side.setModel({ provider: m.harness, model: m.id })
+                      }
+                    />
+                  )}
                 </PromptInputTools>
                 <PromptInputTools>
                   <PromptInputSubmit
                     aria-label="Ask"
-                    disabled={side.isStreaming}
+                    disabled={side.isStreaming || !!blocker}
                     className="rounded-full"
                   >
                     <ArrowUp className="size-4" />
@@ -208,13 +220,15 @@ export function Question({ message }: { message: SideMessage }) {
   );
 }
 
-/** `onPromote` unset: another computer's answer, which can't be sent on from here. */
+/** `onPromote` unset: an answer that can't be sent on from here. `canStartThread` false: only to its own thread (another computer's). */
 export function Answer({
   message,
   onPromote,
+  canStartThread = true,
 }: {
   message: SideMessage;
   onPromote?: (to: 'message' | 'thread') => void;
+  canStartThread?: boolean;
 }) {
   const isThinking = !!message.isStreaming && !message.text;
   const canPromote = !!onPromote && !message.isStreaming && !message.promotedTo;
@@ -244,15 +258,17 @@ export function Answer({
             <SendAlt aria-hidden />
             Send to thread
           </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="text-muted-foreground"
-            onClick={() => onPromote?.('thread')}
-          >
-            <MessagePlus aria-hidden />
-            New thread
-          </Button>
+          {canStartThread && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground"
+              onClick={() => onPromote?.('thread')}
+            >
+              <MessagePlus aria-hidden />
+              New thread
+            </Button>
+          )}
         </MessageActions>
       )}
       {!!message.promotedTo && (

@@ -12,39 +12,48 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { BranchList, DiffScope } from '../host/types/git';
-import { useBranches } from './useGit';
+import type { BranchList } from '../host/types/git';
+import { useBranches, type DiffTarget } from './useGit';
 
-/** What the Changes pane diffs: everything since `base` (the thread's base when unset), or only what isn't committed. */
-export interface Compare {
-  scope: DiffScope;
-  base?: string;
-}
+/** What the Changes pane diffs: everything since `base` (the thread's base when unset), only what isn't committed, or a checkpoint's. */
+export type Compare = DiffTarget;
 
-/** The pane title's `main → working tree` switch: All changes, Uncommitted changes, or Compare against another branch. */
+/**
+ * The pane title's `main → working tree` switch: All changes, Uncommitted changes, Compare against another branch (needs `cwd`,
+ * a folder on this computer), or the changes at a saved checkpoint.
+ */
 export function ComparePicker({
   cwd,
   compare,
   threadBase,
+  checkpoints = [],
   onChange,
 }: {
-  cwd: string;
+  cwd: string | null;
   compare: Compare;
   threadBase?: string;
+  checkpoints?: { n: number; label: string }[];
   onChange: (compare: Compare) => void;
 }) {
-  const branches = useBranches(cwd);
+  const branches = useBranches(cwd ?? '');
   const [isOpen, setOpen] = useState(false);
   const defaultBase = threadBase ?? branches.list?.defaultBranch ?? 'base';
   const isAll = compare.scope === 'branch' && !compare.base;
+  const at = checkpoints.find((c) => c.n === compare.checkpoint);
   const from =
-    compare.scope === 'uncommitted' ? 'HEAD' : (compare.base ?? defaultBase);
+    compare.checkpoint !== undefined
+      ? (at?.label ?? 'Checkpoint')
+      : compare.scope === 'uncommitted'
+        ? 'HEAD'
+        : (compare.base ?? defaultBase);
+  const to = compare.checkpoint !== undefined ? 'at the time' : 'working tree';
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setOpen}>
@@ -52,12 +61,16 @@ export function ComparePicker({
         <Button
           variant="ghost"
           size="sm"
-          aria-label={`Comparing ${from} to the working tree`}
+          aria-label={
+            compare.checkpoint !== undefined
+              ? `Changes at ${from}`
+              : `Comparing ${from} to the working tree`
+          }
           className="-ml-1 min-w-0 gap-1 px-1.5 font-normal text-muted-foreground"
         >
           <span className="truncate text-foreground">{from}</span>
           <ArrowRight aria-hidden className="size-3 text-subtle-foreground" />
-          <span className="shrink-0">working tree</span>
+          <span className="shrink-0">{to}</span>
           <ChevronDown
             data-icon="inline-end"
             className="text-subtle-foreground"
@@ -73,26 +86,43 @@ export function ComparePicker({
           Uncommitted changes
           <MenuMeta isChecked={compare.scope === 'uncommitted'} />
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            Compare against
-            <span className="ml-auto truncate pl-3 text-subtle-foreground">
-              {compare.base ?? defaultBase}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent collisionPadding={8} className="w-72 p-0">
-            <BranchSearch
-              list={branches.list}
-              error={branches.error}
-              chosen={compare.base}
-              onChoose={(base) => {
-                onChange({ scope: 'branch', base });
-                setOpen(false);
-              }}
-            />
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        {!!cwd && <DropdownMenuSeparator />}
+        {!!cwd && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              Compare against
+              <span className="ml-auto truncate pl-3 text-subtle-foreground">
+                {compare.base ?? defaultBase}
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent collisionPadding={8} className="w-72 p-0">
+              <BranchSearch
+                list={branches.list}
+                error={branches.error}
+                chosen={compare.base}
+                onChoose={(base) => {
+                  onChange({ scope: 'branch', base });
+                  setOpen(false);
+                }}
+              />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+        {checkpoints.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>At a checkpoint</DropdownMenuLabel>
+            {checkpoints.map((c) => (
+              <DropdownMenuItem
+                key={c.n}
+                onSelect={() => onChange({ checkpoint: c.n })}
+              >
+                <span className="truncate">{c.label}</span>
+                <MenuMeta isChecked={compare.checkpoint === c.n} />
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

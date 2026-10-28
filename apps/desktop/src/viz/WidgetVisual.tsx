@@ -84,6 +84,9 @@ const VizThreadContext = createContext<string | null>(null);
 
 export const VizThreadProvider = VizThreadContext.Provider;
 
+/** The thread around the caller, if any: unlike `useVizThreadId`, fine outside one. */
+export const useOptionalVizThreadId = () => useContext(VizThreadContext);
+
 export function useVizThreadId() {
   const id = useContext(VizThreadContext);
   if (!id)

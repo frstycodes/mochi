@@ -1,7 +1,10 @@
 import type { Dispatch } from 'react';
 import { configuredCommands } from '../chat/slash.ts';
 import { sendSteerNow } from '../chat/outbox.ts';
+import { splitPath } from '../chat/imageSrc.ts';
+import { imageMime } from '../files/kinds.ts';
 import { openedPr } from '../git/prs.ts';
+import type { SearchHits } from '@mochi/domain/host/types/fs';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type {
@@ -30,7 +33,7 @@ import {
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { askSideChat } from '../sidechat/ask.ts';
-import { chatFor } from '../store/sidechat.ts';
+import { REMOTE_SIDE_CHAT_TAB } from '../store/remoteSideChat.ts';
 import { closeShell, openShell, shellOf } from './terminals.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
 import { switchHere } from '../rewind/switch.ts';
@@ -124,13 +127,15 @@ export async function runRemoteCommand(
         : ok;
     }
     case 'side-chat':
-      return sideChat(thread, command.text, env);
+      return sideChat(thread, command, env);
     case 'unsteer':
       return unsteer(thread, command, dispatch);
     case 'setup-choice':
       await host.agent.setupChoice(thread.id, command.choice);
       return ok;
   }
+  if (command.type === 'read-image' || command.type === 'read-task-output')
+    return threadFile(thread, command);
   const cwd = threadCwd(thread);
   if (!cwd) return fail('This thread has no folder on this machine');
   return command.type.startsWith('terminal-')
@@ -140,12 +145,25 @@ export async function runRemoteCommand(
 
 type CodeCommand = Extract<
   RemoteCommand,
-  { type: 'diff' | 'checkpoint-diff' | 'change' | 'files' | 'read-file' }
+  {
+    type:
+      | 'diff'
+      | 'checkpoint-diff'
+      | 'change'
+      | 'files'
+      | 'read-file'
+      | 'write-file'
+      | 'search'
+      | 'turn-diff';
+  }
 >;
 type TerminalCommand = Extract<RemoteCommand, { type: `terminal-${string}` }>;
 
 const MAX_FILES = 10_000;
 const MAX_FILE_CHARS = 512 * 1024;
+const MAX_SEARCH_FILES = 500;
+const MAX_IMAGE_BYTES = 5_000_000;
+let searchSeq = 0;
 
 /** The Changes and Files tabs' host calls, in the thread's folder as this machine resolves it. */
 async function code(
@@ -185,9 +203,102 @@ async function code(
         return fail(
           'This file is too large to show here; open it on that computer',
         );
-      return { isOk: true, data: { text: file.text } };
+      return { isOk: true, data: { text: file.text, mtimeMs: file.mtimeMs } };
     }
+    case 'write-file':
+      return {
+        isOk: true,
+        data: await host.fs.write(cwd, command.path, command.text, {
+          baseMtimeMs: command.baseMtimeMs,
+          force: command.force,
+        }),
+      };
+    case 'search':
+      return search(cwd, command);
+    case 'turn-diff':
+      return {
+        isOk: true,
+        data: {
+          turnFiles: await host.git.turnDiff(cwd, command.from, command.to),
+        },
+      };
   }
+}
+
+/** The Files tab's content search, gathered here and answered whole: a device gets the first `MAX_SEARCH_FILES` files' hits. */
+async function search(
+  cwd: string,
+  {
+    pattern,
+    isCaseSensitive,
+    isRegex,
+    isWholeWord,
+  }: CodeCommand & {
+    type: 'search';
+  },
+): Promise<CommandResult> {
+  const id = `remote-search-${++searchSeq}`;
+  const hits: { path: string; lines: SearchHits['lines'] }[] = [];
+  const off = host.fs.onSearchHits((found) => {
+    if (found.id !== id || hits.length >= MAX_SEARCH_FILES) return;
+    hits.push({ path: found.path, lines: found.lines });
+    if (hits.length === MAX_SEARCH_FILES) void host.fs.cancelSearch(id);
+  });
+  try {
+    const { isTruncated } = await host.fs.search(cwd, id, pattern, {
+      isCaseSensitive,
+      isRegex,
+      isWholeWord,
+    });
+    return {
+      isOk: true,
+      data: {
+        hits,
+        isTruncated: isTruncated || hits.length >= MAX_SEARCH_FILES,
+      },
+    };
+  } finally {
+    off();
+  }
+}
+
+/**
+ * A file the thread itself names by its path here (an image in its transcript, a background task's output file), never any
+ * other: a device can't read a path the thread doesn't hold.
+ */
+async function threadFile(
+  thread: Thread,
+  command: Extract<RemoteCommand, { type: 'read-image' | 'read-task-output' }>,
+): Promise<CommandResult> {
+  if (!JSON.stringify(thread).includes(JSON.stringify(command.path)))
+    return fail('This thread doesn’t name that file');
+  const { dir, name } = splitPath(command.path);
+  const file = await host.fs.read(dir, name);
+  if (command.type === 'read-task-output')
+    return file.kind === 'text'
+      ? {
+          isOk: true,
+          data: {
+            text: file.text.slice(-MAX_FILE_CHARS),
+            mtimeMs: file.mtimeMs,
+          },
+        }
+      : fail('This output isn’t text');
+  if (!/\.(png|jpe?g|gif|webp|svg)$/i.test(name))
+    return fail('That file isn’t an image');
+  const bytes =
+    file.kind === 'text' ? new TextEncoder().encode(file.text) : file.bytes;
+  if (bytes.byteLength > MAX_IMAGE_BYTES)
+    return fail('This image is too large to show here');
+  const mediaType = /\.svg$/i.test(name) ? 'image/svg+xml' : imageMime(name);
+  return { isOk: true, data: { mediaType, base64: toBase64(bytes) } };
+}
+
+function toBase64(bytes: Uint8Array) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
 }
 
 function terminal(
@@ -356,19 +467,46 @@ async function machineSources(state: State): Promise<SettingSources> {
   };
 }
 
-/** Side chats a device asks live in their own tab here, beside the thread's own. */
-export const REMOTE_SIDE_CHAT_TAB = 'remote';
-
-/** Asked now; the answer streams to the device with the store. */
+/**
+ * Asked now, on this computer's agent and account with Settings › Models' side chat model; answered into the thread's remote
+ * side chat (`store/remoteSideChat.ts`), which its thread file streams back to every computer following it.
+ */
 async function sideChat(
   thread: Thread,
-  text: string,
+  { text, quote }: Extract<RemoteCommand, { type: 'side-chat' }>,
   { state, dispatch }: CommandEnv,
 ): Promise<CommandResult> {
-  const chat = chatFor(state, thread.id, REMOTE_SIDE_CHAT_TAB);
-  const model =
-    chat.model ?? sideChatChoice((await host.settings.get()).sideChatModel);
-  void askSideChat(thread, REMOTE_SIDE_CHAT_TAB, chat, model, text, dispatch);
+  const messages = state.remoteSideChats[thread.id]?.messages ?? [];
+  if (messages.some((m) => m.isStreaming))
+    return fail('The side chat is still answering');
+  const model = sideChatChoice((await host.settings.get()).sideChatModel);
+  // `askSideChat` answers a window's side chat tab; its two actions become the remote side chat's.
+  const remote = (action: Action) => {
+    if (action.type === 'sidechat-ask')
+      dispatch({
+        type: 'remote-sidechat-ask',
+        threadId: thread.id,
+        id: action.id,
+        text: action.text,
+        ...(quote && { quote }),
+      });
+    else if (action.type === 'sidechat-stream')
+      dispatch({
+        type: 'remote-sidechat-stream',
+        threadId: thread.id,
+        id: action.id,
+        text: action.text,
+        isDone: action.isDone,
+      });
+  };
+  void askSideChat(
+    thread,
+    REMOTE_SIDE_CHAT_TAB,
+    { messages, draft: quote },
+    model,
+    text,
+    remote,
+  );
   return ok;
 }
 

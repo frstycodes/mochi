@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
-import { imageMime } from '../files/previews';
+import { imageMime } from '../files/kinds';
 import { queryKeys } from '../queryKeys';
 import { useThreadOrigin } from '../remote/origin';
+import {
+  askMachine,
+  base64Blob,
+  remoteIo,
+  type RemoteIo,
+} from '../remote/threadIo';
+import { useOptionalVizThreadId } from '../viz/WidgetVisual';
 
 // A URL has a scheme (`data:`, `https:`, `blob:`); a Windows drive (`C:\`) looks like one, so it's checked first.
 const isUrl = (src: string) =>
@@ -14,16 +21,28 @@ export const isFilePath = (src: string) => !isUrl(src);
 
 /**
  * Image sources as URLs the page can show: URLs as they are, absolute file paths read through the file host into object
- * URLs (revoked when the sources change or the caller goes). Per source: the URL, `undefined` while it loads, `null` when it can't be read.
+ * URLs (revoked when the sources change or the caller goes). On another computer's thread a path names that computer's file,
+ * so it's asked for there (`read-image`), never read from the same path here. Per source: the URL, `undefined` while it
+ * loads, `null` when it can't be read.
  */
 export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
-  // Another computer's path names its file, not this computer's one at the same path: it isn't read here.
-  const isRemote = useThreadOrigin().kind === 'remote';
+  const origin = useThreadOrigin();
+  const threadId = useOptionalVizThreadId();
+  const owner = threadId ? remoteIo(origin, threadId, 'read') : null;
+  const remote = owner?.kind === 'remote' ? owner : null;
+  const isRemote = origin.kind === 'remote';
+  const canAsk = remote?.machine.status === 'online';
   const images = useQueries({
     queries: srcs.map((src) => ({
-      queryKey: queryKeys.chat.imageBlob(src),
-      queryFn: () => readImage(src),
-      enabled: !!src && isFilePath(src) && !isRemote,
+      queryKey: remote
+        ? queryKeys.remote.read(remote.machine.id, [
+            remote.threadId,
+            'image',
+            src,
+          ])
+        : queryKeys.chat.imageBlob(src),
+      queryFn: () => (remote ? askImage(remote, src) : readImage(src)),
+      enabled: !!src && isFilePath(src) && (isRemote ? canAsk : true),
       structuralSharing: false,
     })),
     combine: (results) =>
@@ -32,9 +51,9 @@ export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
   const urls = useObjectUrls(images.map(({ blob }) => blob));
   return srcs.map((src, i) => {
     if (!isFilePath(src)) return src;
-    if (isRemote) return null;
     const blob = images[i].blob;
-    return (blob && urls.get(blob)) ?? (images[i].isError ? null : undefined);
+    if (blob) return urls.get(blob);
+    return images[i].isError || (isRemote && !canAsk) ? null : undefined;
   });
 }
 
@@ -74,6 +93,15 @@ async function readImage(path: string) {
     [(content.kind === 'text' ? content.text : content.bytes) as BlobPart],
     { type },
   );
+}
+
+async function askImage({ machine, threadId }: RemoteIo, path: string) {
+  const { base64, mediaType } = await askMachine(machine.id, {
+    type: 'read-image',
+    threadId,
+    path,
+  });
+  return base64Blob(base64, mediaType);
 }
 
 // The file host reads paths relative to a root, so a file is read from its own folder.

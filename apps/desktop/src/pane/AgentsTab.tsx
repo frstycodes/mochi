@@ -47,10 +47,8 @@ import {
   VIZ_PLUGINS,
   VIZ_REHYPE_PLUGINS,
 } from '../viz/FenceVisual';
-import { useGitDiff } from '../git/useGit';
-import { useWorktreePath } from '../git/worktrees';
+import { useThreadDiff } from '../git/useGit';
 import { host } from '../host';
-import { threadCwd } from '../host/cwd';
 import type { DiffFile } from '../host/types/git';
 import type { Subagent, Thread } from '../model';
 import { useDispatch } from '../store';
@@ -67,6 +65,14 @@ import {
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 import { queryKeys } from '../queryKeys';
+import { useThreadOrigin } from '../remote/origin';
+import {
+  askMachine,
+  remoteIo,
+  remoteQuery,
+  useThreadIo,
+  type ThreadIo,
+} from '../remote/threadIo';
 
 /** Everything this thread's agent started beside its turn as cards, running first; a card opens that task's page (an agent's transcript, a command's output) in place of the list. */
 export function AgentsTab({ thread, tab }: PaneTabProps) {
@@ -442,7 +448,7 @@ function AgentTranscript({
 
 /** A command's page: its output as the chat's run block, live while it runs, then with its exit code. */
 function CommandOutput({ thread, task }: { thread: Thread; task: TaskRow }) {
-  const run = useTaskRun(task);
+  const run = useTaskRun(thread, task);
   const elapsed = useElapsed(task.startedAt, task.endedAt);
   const isRunning = isActive(task);
   return (
@@ -552,20 +558,37 @@ function AgentChanges({
   thread: Thread;
   subagent: Subagent;
 }) {
-  const shared = useWorktreePath(thread.id) ?? threadCwd(thread);
-  const cwd = subagent.hasOwnWorktree ? subagent.cwd : shared;
+  const shared = useThreadIo(thread);
+  const isRemote = useThreadOrigin().kind === 'remote';
+  // Its own worktree is a folder on the thread's computer that no command reads yet: another computer's shows nothing.
+  const io: ThreadIo | null = subagent.hasOwnWorktree
+    ? subagent.cwd && !isRemote
+      ? { kind: 'local', root: subagent.cwd }
+      : null
+    : shared?.kind === 'denied'
+      ? null
+      : shared;
   const edited = [...new Set(subagent.steps.flatMap((s) => s.files ?? []))];
-  if (!cwd || (!subagent.hasOwnWorktree && !edited.length)) return null;
+  if (!io || (!subagent.hasOwnWorktree && !edited.length)) return null;
   return (
     <ChangedFiles
-      cwd={cwd}
+      io={io}
+      threadId={thread.id}
       only={subagent.hasOwnWorktree ? undefined : edited}
     />
   );
 }
 
-function ChangedFiles({ cwd, only }: { cwd: string; only?: string[] }) {
-  const diffQuery = useGitDiff(cwd, 'branch');
+function ChangedFiles({
+  io,
+  threadId,
+  only,
+}: {
+  io: ThreadIo;
+  threadId: string;
+  only?: string[];
+}) {
+  const diffQuery = useThreadDiff(io, threadId, { scope: 'branch' });
   const files = (diffQuery.data?.files ?? []).filter(
     (f) => !only || only.includes(f.path),
   );
@@ -641,23 +664,51 @@ function NoTasks() {
   );
 }
 
-/** The command's output, read from the file its harness writes it to: re-read every second while it runs, once more when it ends. */
+/**
+ * The command's output, read from the file its harness writes it to (on the thread's own computer): re-read every second while
+ * it runs, once more when it ends.
+ */
 function useTaskRun(
+  thread: Thread,
   task: TaskRow,
 ): RunResult | Pick<RunResult, 'lines'> | undefined {
   const { outputFile, status } = task;
   const isRunning = status === 'running';
+  const origin = useThreadOrigin();
+  const owner = remoteIo(origin, thread.id, 'read');
+  const remote = owner?.kind === 'remote' ? owner : null;
   const outputQuery = useQuery({
     queryKey: queryKeys.agent.taskOutput(outputFile, isRunning),
     queryFn: () => {
       const { dir, name } = splitPath(outputFile!);
       return host.fs.read(dir, name);
     },
-    enabled: !!outputFile,
+    enabled: !!outputFile && origin.kind === 'local',
     refetchInterval: isRunning ? OUTPUT_POLL_MS : false,
     staleTime: 0,
   });
-  const text = outputQuery.data?.kind === 'text' ? outputQuery.data.text : '';
+  const remoteOutput = remoteQuery(
+    remote,
+    ['task-output', outputFile, isRunning],
+    ({ machine, threadId }) =>
+      askMachine(machine.id, {
+        type: 'read-task-output',
+        threadId,
+        path: outputFile!,
+      }),
+    isRunning ? OUTPUT_POLL_MS : undefined,
+  );
+  const remoteOutputQuery = useQuery({
+    ...remoteOutput,
+    enabled: remoteOutput.enabled && !!outputFile,
+    staleTime: 0,
+  });
+  const text =
+    origin.kind === 'remote'
+      ? (remoteOutputQuery.data?.text ?? '')
+      : outputQuery.data?.kind === 'text'
+        ? outputQuery.data.text
+        : '';
   const lines = outputLines(text);
   if (task.exitCode !== undefined) return { exitCode: task.exitCode, lines };
   return status === 'done' ? { exitCode: 0, lines } : { lines };

@@ -11,7 +11,9 @@ import type { Fork } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
 import type { McpServerDef } from '../settings/agentConfig.ts';
+import type { RemoteSideChat } from '../store/remoteSideChat.ts';
 import type { Saved } from '../store/saved.ts';
+import type { SideMessage } from '../store/sidechat.ts';
 import type { VizLanguage } from '@mochi/domain/viz/fence';
 import type { Check, Decoded, Same } from './check.ts';
 
@@ -33,6 +35,8 @@ export type Conformance = [
   Check<Same<Decoded<typeof Model.PaneLayout>, PaneLayout>>,
   Check<Same<Decoded<typeof Persist.Checkpoint>, Checkpoint>>,
   Check<Same<Decoded<typeof Persist.Fork>, Fork>>,
+  Check<Same<Decoded<typeof Persist.SideMessage>, SideMessage>>,
+  Check<Same<Decoded<typeof Persist.RemoteSideChat>, RemoteSideChat>>,
   // `Saved.version` becomes `v`.
   Check<Same<Persist.Saved, Omit<Saved, 'version'>>>,
 ];

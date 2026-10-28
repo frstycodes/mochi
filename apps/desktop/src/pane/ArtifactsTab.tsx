@@ -115,7 +115,14 @@ function ArtifactFile({ path, onBack }: { path: string; onBack: () => void }) {
       <ArrowLeft />
     </TooltipIconButton>
   );
-  return <FileView key={path} root={dir} path={name} toolbar={back} />;
+  return (
+    <FileView
+      key={path}
+      io={{ kind: 'local', root: dir }}
+      path={name}
+      toolbar={back}
+    />
+  );
 }
 
 function FileItem({

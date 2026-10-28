@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { setPrefs, usePrefs } from '../settings/prefs';
-import { XCircle, File, Folder, Columns, List, Rows } from '@/icons';
+import { ArrowDown, XCircle, File, Folder, Columns, List, Rows } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -23,17 +23,32 @@ import { ChangeTree } from '../git/ChangeTree';
 import { ComparePicker, type Compare } from '../git/ComparePicker';
 import { ShipBar } from '../git/ShipBar';
 import { useConfirm } from '../git/useConfirm';
-import { useGitAction, useGitDiff } from '../git/useGit';
+import { useGitAction, useThreadDiff } from '../git/useGit';
 import { WorktreeMenu } from '../git/WorktreeMenu';
 import { AskAboutHunk } from '../sidechat/AskInSideChat';
-import { useWorktreePath } from '../git/worktrees';
 import { host } from '../host';
-import { threadCwd } from '../host/cwd';
-import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
+import type {
+  ChangeTarget,
+  DiffFile,
+  DiffScope,
+  GitDiff,
+} from '../host/types/git';
 import { cn } from '@/lib/utils';
-import { ModeToggle, TooltipIconButton, type Mode } from '../ui';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ModeToggle, OverflowIcon, TooltipIconButton, type Mode } from '../ui';
 import type { Thread } from '../model';
-import { useDispatch } from '../store';
+import { IoDenied, OfflineNote } from '../remote/IoStates';
+import { elsewhereReason } from '../remote/origin';
+import { RemoteShipBar } from '../remote/RemoteShip';
+import { askMachine, useThreadIo, type ThreadIo } from '../remote/threadIo';
+import { useDispatch, useHarness } from '../store';
 import { DiffStat } from '../WorkLog';
 import {
   PaneActions,
@@ -59,18 +74,27 @@ export const DIFF_STYLES = [
 ] as const satisfies readonly [Mode<DiffStyle>, Mode<DiffStyle>];
 
 export function ChangesTab({ thread, tab }: PaneTabProps) {
-  const cwd = useWorktreePath(thread.id) ?? threadCwd(thread);
-  if (!cwd) return <NoFolder />;
-  return <Changes key={cwd} thread={thread} cwd={cwd} tabId={tab.id} />;
+  const io = useThreadIo(thread);
+  if (!io) return <NoFolder />;
+  if (io.kind === 'denied')
+    return <IoDenied title="Changes aren’t shared" reason={io.reason} />;
+  return (
+    <Changes
+      key={io.kind === 'local' ? io.root : io.machine.id}
+      thread={thread}
+      io={io}
+      tabId={tab.id}
+    />
+  );
 }
 
 function Changes({
   thread,
-  cwd,
+  io,
   tabId,
 }: {
   thread: Thread;
-  cwd: string;
+  io: ThreadIo;
   tabId: string;
 }) {
   usePaneMenu();
@@ -79,17 +103,23 @@ function Changes({
   const [selected, setSelected] = useState<string | null>(null);
   const diffColumn = useRef<HTMLDivElement>(null);
   const { diffStyle } = usePrefs();
-  const diffQuery = useGitDiff(
-    cwd,
-    compare.scope,
-    compare.base ?? thread.repo?.base,
+  const { state } = useHarness();
+  const checkpoints = (state.checkpoints[thread.id] ?? []).filter(
+    (c) => !!c.ref,
+  );
+  const diffQuery = useThreadDiff(
+    io,
+    thread.id,
+    compare.checkpoint === undefined
+      ? { scope: compare.scope, base: compare.base ?? thread.repo?.base }
+      : compare,
   );
   const { run } = useGitAction(diffQuery.refresh);
   const { confirm, dialog } = useConfirm();
   const canStage = compare.scope === 'uncommitted';
   const actions = useChangeActions({
     thread,
-    cwd,
+    io,
     canStage,
     diffStyle,
     run,
@@ -123,9 +153,10 @@ function Changes({
           <List />
         </TooltipIconButton>
         <ComparePicker
-          cwd={cwd}
+          cwd={io.kind === 'local' ? io.root : null}
           compare={compare}
           threadBase={thread.repo?.base}
+          checkpoints={checkpoints}
           onChange={setCompare}
         />
       </PaneTitle>
@@ -145,16 +176,23 @@ function Changes({
           onSelect={(v) => setPrefs({ diffStyle: v })}
           className="text-muted-foreground"
         />
-        <WorktreeMenu
-          cwd={cwd}
-          base={thread.repo?.base}
-          diff={diff}
-          run={run}
-          confirm={confirm}
-        >
-          <PaneMenuItems kind="changes" threadId={thread.id} tabId={tabId} />
-        </WorktreeMenu>
+        {io.kind === 'local' ? (
+          <WorktreeMenu
+            cwd={io.root}
+            base={thread.repo?.base}
+            diff={diff}
+            run={run}
+            confirm={confirm}
+          >
+            <PaneMenuItems kind="changes" threadId={thread.id} tabId={tabId} />
+          </WorktreeMenu>
+        ) : (
+          <RemoteChangesMenu diff={diff} machineName={io.machine.name}>
+            <PaneMenuItems kind="changes" threadId={thread.id} tabId={tabId} />
+          </RemoteChangesMenu>
+        )}
       </PaneActions>
+      <OfflineNote io={io} />
       {!!diffQuery.error && !diff && (
         <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />
       )}
@@ -166,7 +204,7 @@ function Changes({
           className="px-2"
         />
       )}
-      {isEmpty && <NoChanges scope={compare.scope} />}
+      {isEmpty && <NoChanges scope={compare.scope ?? 'branch'} />}
       {files.length > 0 && (
         <div className="flex min-h-0 flex-1 border-t">
           {isTreeOpen && (
@@ -188,23 +226,27 @@ function Changes({
             className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!"
           >
             <ChangeList
-              key={`${compare.scope}:${compare.base}`}
+              key={`${compare.scope}:${compare.base}:${compare.checkpoint}`}
               sections={sections}
               actions={actions}
             />
           </ScrollArea>
         </div>
       )}
-      {!!diff && (
-        <ShipBar
-          thread={thread}
-          cwd={cwd}
-          diff={diff}
-          canCommit={canStage}
-          run={run}
-          confirm={confirm}
-        />
-      )}
+      {io.kind === 'remote'
+        ? !!thread.repo && (
+            <RemoteShipBar machine={io.machine} thread={thread} />
+          )
+        : !!diff && (
+            <ShipBar
+              thread={thread}
+              cwd={io.root}
+              diff={diff}
+              canCommit={canStage}
+              run={run}
+              confirm={confirm}
+            />
+          )}
       {dialog}
     </div>
   );
@@ -212,7 +254,7 @@ function Changes({
 
 export interface ChangeActionsInput {
   thread: Thread;
-  cwd: string;
+  io: ThreadIo;
   canStage: boolean;
   diffStyle: DiffStyle;
   run: ReturnType<typeof useGitAction>['run'];
@@ -221,7 +263,7 @@ export interface ChangeActionsInput {
 
 export function useChangeActions({
   thread,
-  cwd,
+  io,
   canStage,
   diffStyle,
   run,
@@ -231,9 +273,20 @@ export function useChangeActions({
   const [notes, setNotes] = useState<LineNote[]>([]);
   const agentName = thread.providers[0] === 'codex' ? 'Codex' : 'Claude';
 
+  const change =
+    (action: 'stage' | 'unstage' | 'revert') => (target: ChangeTarget) =>
+      io.kind === 'local'
+        ? host.git[action](io.root, target)
+        : askMachine(io.machine.id, {
+            type: 'change',
+            threadId: thread.id,
+            action,
+            target,
+          });
+
   const revert = async (target: ChangeTarget) => {
     const ok = await confirm(revertRequest(target));
-    if (ok) await run('Revert', () => host.git.revert(cwd, target));
+    if (ok) await run('Revert', () => change('revert')(target));
   };
 
   const comment = (file: DiffFile, side: LineNote['side'], line: number) => {
@@ -257,16 +310,31 @@ export function useChangeActions({
     );
   };
 
-  const sendNote = (note: LineNote, text: string) => {
-    dispatch({
-      type: 'say',
-      threadId: thread.id,
-      entry: {
-        who: 'you',
-        kind: 'message',
-        text: reviewNote(note.path, note.side, note.line, text),
-      },
-    });
+  const sendNote = async (note: LineNote, text: string) => {
+    if (io.kind === 'local')
+      dispatch({
+        type: 'say',
+        threadId: thread.id,
+        entry: {
+          who: 'you',
+          kind: 'message',
+          text: reviewNote(note.path, note.side, note.line, text),
+        },
+      });
+    else {
+      const isSent = await run('Send the note', async () => {
+        await askMachine(io.machine.id, {
+          type: 'comment',
+          threadId: thread.id,
+          path: note.path,
+          side: note.side,
+          line: note.line,
+          text,
+        });
+        return true;
+      });
+      if (!isSent) return;
+    }
     setNotes((all) =>
       all.map((n) =>
         n.id === note.id
@@ -281,12 +349,11 @@ export function useChangeActions({
     diffStyle,
     agentName,
     notes,
-    stage: (target) => void run('Stage', () => host.git.stage(cwd, target)),
-    unstage: (target) =>
-      void run('Unstage', () => host.git.unstage(cwd, target)),
+    stage: (target) => void run('Stage', () => change('stage')(target)),
+    unstage: (target) => void run('Unstage', () => change('unstage')(target)),
     revert: (target) => void revert(target),
     comment,
-    sendNote,
+    sendNote: (note, text) => void sendNote(note, text),
     dropNote: (note) => setNotes((all) => all.filter((n) => n.id !== note.id)),
   };
 }
@@ -312,6 +379,52 @@ export function revertRequest(target: ChangeTarget) {
 
 function sum(files: DiffFile[], key: 'added' | 'removed') {
   return files.reduce((n, f) => n + f[key], 0);
+}
+
+/** The pane's ⋯ on another computer's thread: the worktree's own actions (sync, cleanup) run on that computer itself. */
+function RemoteChangesMenu({
+  diff,
+  machineName,
+  children,
+}: {
+  diff: GitDiff | undefined;
+  machineName: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="More Changes actions"
+          className="text-muted-foreground"
+        >
+          <OverflowIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel className="flex flex-col gap-0.5">
+          <span className="truncate font-mono text-xs text-foreground">
+            {diff ? `${diff.branch} → ${diff.base}` : 'Worktree'}
+          </span>
+          <span className="truncate type-caption font-normal text-subtle-foreground">
+            On {machineName}
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled>
+          <ArrowDown />
+          Sync with {diff?.base ?? 'base'}
+        </DropdownMenuItem>
+        <p className="px-2 pb-1.5 type-caption text-subtle-foreground">
+          {elsewhereReason({ name: machineName })}
+        </p>
+        <DropdownMenuSeparator />
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function NoFolder() {

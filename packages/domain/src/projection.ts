@@ -1,6 +1,7 @@
 import type { SeqAgentEvent } from '../../../apps/desktop/src/host/types/agent.ts';
 import { scheduleReducer } from '../../../apps/desktop/src/schedule/slice.ts';
 import { reviewsReducer } from '../../../apps/desktop/src/secondOpinion/slice.ts';
+import { remoteSideChatReducer } from '../../../apps/desktop/src/store/remoteSideChat.ts';
 import { withContext } from '../../../apps/desktop/src/store/context.ts';
 import {
   initialQueue,
@@ -24,6 +25,7 @@ export const DOMAIN_KEYS = [
   'checkpointSeq',
   'rewindUndo',
   'forks',
+  'remoteSideChats',
   'queue',
   'context',
 ] as const;
@@ -35,6 +37,7 @@ const DOMAIN_SLICES = [
   queueReducer,
   reviewsReducer,
   scheduleReducer,
+  remoteSideChatReducer,
 ];
 
 /**

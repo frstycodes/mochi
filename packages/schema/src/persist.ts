@@ -24,6 +24,27 @@ export const Fork = Schema.Struct({
 });
 export type Fork = typeof Fork.Type;
 
+/** A selection a side chat question quotes (`src/store/sidechat.ts` `Quote`). */
+export const Quote = Schema.Struct({
+  source: Schema.Literals(['diff', 'terminal', 'file']),
+  label: Schema.String,
+  text: Schema.String,
+});
+
+export const SideMessage = Schema.Struct({
+  id: Schema.String,
+  role: Schema.Literals(['user', 'assistant']),
+  text: Schema.String,
+  quote: opt(Quote),
+  isStreaming: opt(Schema.Boolean),
+  promotedTo: opt(Schema.Literals(['message', 'thread'])),
+});
+
+/** The side chat other computers ask on a thread, run here (`src/store/remoteSideChat.ts`); saved with its thread so they follow it. */
+export const RemoteSideChat = Schema.Struct({
+  messages: Schema.Array(SideMessage),
+});
+
 // Files written before `v`. Their threads may hold steps an overlap held (`waiting`, a status that went with overlaps) and
 // their queue overlap cards; both read as today's shapes: the step is up next again, the card has nothing left to answer it.
 const LegacyStep = Schema.Struct({
@@ -71,6 +92,7 @@ const SavedThreadV1 = Schema.Struct({
   fork: opt(Fork),
   /** The thread's open approvals and questions, so a `thread` stream carries them to devices; the index holds the same items. */
   queue: opt(Schema.Array(QueueItem)),
+  sideChat: opt(RemoteSideChat),
 });
 const LegacySavedThread = Schema.Struct({
   ...NO_V,
@@ -78,6 +100,7 @@ const LegacySavedThread = Schema.Struct({
   checkpoints: opt(Schema.Array(LegacyCheckpoint)),
   fork: opt(Fork),
   queue: opt(Schema.Array(LegacyQueueItem)),
+  sideChat: opt(RemoteSideChat),
 });
 
 export const SavedThread = Schema.Union([
@@ -85,12 +108,13 @@ export const SavedThread = Schema.Union([
   upgrade(
     LegacySavedThread,
     SavedThreadV1,
-    ({ thread, checkpoints, fork, queue }) => ({
+    ({ thread, checkpoints, fork, queue, sideChat }) => ({
       v: 1 as const,
       thread: liftThread(thread),
       ...(checkpoints && { checkpoints: liftCheckpoints(checkpoints) }),
       ...(fork && { fork }),
       ...(queue && { queue: liftQueue(queue) }),
+      ...(sideChat && { sideChat }),
     }),
     ({ v: _, ...rest }) => rest as never,
   ),
@@ -142,6 +166,7 @@ const SavedV1 = Schema.Struct({
   checkpoints: Schema.Record(Schema.String, Schema.Array(Checkpoint)),
   checkpointSeq: Schema.Number,
   forks: Schema.Record(Schema.String, Fork),
+  remoteSideChats: opt(Schema.Record(Schema.String, RemoteSideChat)),
 });
 
 // A `threads.json` from before the split holds the whole save; older ones may predate checkpoints and forks (`joinSaved`).

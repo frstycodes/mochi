@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { Thread } from '../model';
+import { missingScopeReason, useRemoteMachine } from '../remote/origin';
 import { AskInSideChat } from '../sidechat/AskInSideChat';
 import {
   addShell,
@@ -31,7 +32,20 @@ import { isCommand } from '../keymap';
 import { TooltipIconButton } from '../ui';
 
 export default function TerminalTab({ thread, tab }: PaneTabProps) {
-  const cwd = threadCwd(thread);
+  const machine = useRemoteMachine();
+  // Another computer's folder is only a label here: its shells open there (`remotePty`).
+  const cwd = machine
+    ? (thread.repo?.path ?? thread.live?.cwd)
+    : threadCwd(thread);
+  const reason = machine && missingScopeReason(machine, 'terminal');
+  if (reason)
+    return (
+      <PlannedTab
+        icon={Terminal}
+        title="Terminal isn’t here"
+        description={reason}
+      />
+    );
   if (!cwd)
     return (
       <PlannedTab

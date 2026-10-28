@@ -152,6 +152,10 @@ export function chatFor(
   return state.sidechats[threadId]?.[tabId] ?? EMPTY;
 }
 
+/** An answer as it goes to the thread: a message of yours, saying where it came from. */
+export const promotedText = (answer: SideMessage) =>
+  `From the side chat:\n\n${answer.text}`;
+
 /** The question as the agent reads it: the quote as a labelled block above the text. */
 export function questionText(message: SideMessage) {
   if (!message.quote) return message.text;
@@ -228,7 +232,7 @@ function promote(
   const answer = messages[i];
   if (!thread || !answer || answer.isStreaming) return state;
   const question = messages[i - 1];
-  const text = `From the side chat:\n\n${answer.text}`;
+  const text = promotedText(answer);
   const marked = patchMessage(state, action, (m) => ({
     ...m,
     promotedTo: action.to,

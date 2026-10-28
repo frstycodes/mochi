@@ -4,6 +4,7 @@ import { mirrorState } from '../store/root.ts';
 import { rankQueue } from '../store/queue.ts';
 import { savedThreadFrom, type SavedThread } from '../store/saved.ts';
 import { remoteThreadId } from './ids.ts';
+import { REMOTE_SIDE_CHAT_TAB } from '../store/remoteSideChat.ts';
 
 /** One thread's file as the machine saves it. */
 export type MirroredThread = SavedThread;
@@ -77,7 +78,21 @@ export function mirrorOf(
     checkpointSeq: 0,
     forks,
   });
-  return { threads, state };
+  return { threads, state: withSideChats(state, files) };
+}
+
+/**
+ * Each thread's remote side chat (the one its computer answers for every follower, `store/remoteSideChat.ts`), from its file
+ * into the mirror's `sidechats` under its machine-aware id and `REMOTE_SIDE_CHAT_TAB`; `hybridState` shows it in every side
+ * chat tab of that thread here.
+ */
+function withSideChats(state: State, files: MirroredThread[]): State {
+  const sidechats = Object.fromEntries(
+    files.flatMap((f) =>
+      f.sideChat ? [[f.thread.id, { [REMOTE_SIDE_CHAT_TAB]: f.sideChat }]] : [],
+    ),
+  );
+  return { ...state, sidechats };
 }
 
 /** Keys whose string value names a thread, at any depth of a thread file (sub-thread links, replies, reports, proposals). */
