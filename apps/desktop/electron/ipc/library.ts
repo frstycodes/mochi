@@ -1,5 +1,4 @@
 import type { WebContents } from 'electron';
-import { statSync } from 'node:fs';
 import {
   connectorKey,
   type DeviceCode,
@@ -11,23 +10,8 @@ import {
   type LibraryConnector,
 } from '../../src/library/library.ts';
 import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
-import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
-import {
-  addMarketplace,
-  addOwnSkill,
-  importFromAccount,
-  installPlugin,
-  installSkill,
-  installUploadedPlugin,
-  marketplaces,
-  readLibrary,
-  removeMarketplace,
-  removePlacements,
-  reviewUploadedPlugin,
-  updateLibrary,
-} from '../library/store.ts';
-import { popularSkillsSh, searchSkillsSh } from '../library/skillsSh.ts';
-import type { SkillDestination } from '../../src/library/library.ts';
+import type { InMain } from '@mochi/core/library/host';
+import { readLibrary, updateLibrary } from '@mochi/core/library/store';
 import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
 import {
   overrideStep,
@@ -42,10 +26,8 @@ import {
   nameFromServer,
   readSecrets,
   recordIdentity,
-  renameConnector,
   saveSecrets,
   signIn,
-  withSettings,
 } from '../library/connectors.ts';
 import { sameAccount } from '../library/identity.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
@@ -58,99 +40,10 @@ import {
 } from '../library/ownApp.ts';
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
 import { RELAY_URL } from '@mochi/core/remote/relayClient';
-import { setAutoUpdate, updateItem } from '../library/updates.ts';
 import type { Handlers } from './handlers.ts';
 
+// Core serves the rest of `host.library` (packages/core/src/library/host.ts); main keeps connector accounts' live side.
 export const library = {
-  async list(_sender, spaceId) {
-    return libraryEntries(await readLibrary(), spaceId);
-  },
-  async setEnabled(_sender, spaceId, id, isEnabled) {
-    return libraryEntries(
-      await updateLibrary((index) =>
-        setItemEnabled(index, spaceId, id, isEnabled),
-      ),
-      spaceId,
-    );
-  },
-  async remove(_sender, spaceId, id) {
-    const item = (await readLibrary()).items.find((i) => i.id === id);
-    if (item?.kind === 'connector') await forgetAccount(id);
-    await removePlacements(item);
-    return libraryEntries(
-      await updateLibrary((index) => removeItem(index, id)),
-      spaceId,
-    );
-  },
-  async importFromAccount(_sender, spaceId, provider, parts, names) {
-    const notes = await importFromAccount(spaceId, provider, parts, names);
-    return { entries: libraryEntries(await readLibrary(), spaceId), notes };
-  },
-  async addSkill(_sender, spaceId, files) {
-    await addOwnSkill(spaceId, files);
-    return libraryEntries(await readLibrary(), spaceId);
-  },
-  async discoverSkills(_sender, source) {
-    const skills = await discoverSkills(source);
-    return skills.map(
-      ({ name, description, source: from, files, icon, commit }) => ({
-        name,
-        description,
-        source: from,
-        fileCount: Object.keys(files).length,
-        icon,
-        commit,
-      }),
-    );
-  },
-  async skillFiles(_sender, source, name) {
-    const skill = (await discoverSkills(source)).find((s) => s.name === name);
-    if (!skill) throw new Error(`${name} isn't in ${source}`);
-    return skill.files;
-  },
-  async installSkill(_sender, spaceId, source, name, destination) {
-    await installSkill(spaceId, source, name, skillDestination(destination));
-    return libraryEntries(await readLibrary(), spaceId);
-  },
-  async searchSkillsSh(_sender, query) {
-    return searchSkillsSh(query);
-  },
-  async popularSkillsSh() {
-    return popularSkillsSh();
-  },
-  async marketplaces() {
-    return marketplaces();
-  },
-  async addMarketplace(_sender, source) {
-    await addMarketplace(source);
-    return marketplaces();
-  },
-  async removeMarketplace(_sender, name) {
-    await removeMarketplace(name);
-    return marketplaces();
-  },
-  async marketplaceCatalog(_sender, name) {
-    const marketplace = (await marketplaces()).find((m) => m.name === name);
-    if (!marketplace) throw new Error(`No marketplace named ${name}`);
-    return fetchMarketplace(marketplace.source);
-  },
-  async installPlugin(_sender, spaceId, marketplace, name) {
-    await installPlugin(spaceId, marketplace, name);
-    return libraryEntries(await readLibrary(), spaceId);
-  },
-  async reviewUpload(_sender, file) {
-    return reviewUploadedPlugin(file.name, file.bytes);
-  },
-  async installUpload(_sender, spaceId, file, choice) {
-    await installUploadedPlugin(
-      file.name,
-      file.bytes,
-      choice.sha256,
-      choice.targets,
-      choice.profileIds,
-    );
-    return libraryEntries(await readLibrary(), spaceId);
-  },
   async addConnector(sender, spaceId, input, options) {
     const space = spaceId;
     const { inPane, secretFrom, slackTokenFrom, fromSetup } = options ?? {};
@@ -209,9 +102,6 @@ export const library = {
   async updateSetupStep(_sender, connector, stepId, target) {
     return overrideStep(connector, stepId, target);
   },
-  async ownAppRedirect() {
-    return `${RELAY_URL}/oauth/callback`;
-  },
   async signIn(sender, spaceId, id) {
     const account = (await readLibrary()).items.find((i) => i.id === id);
     if (account?.kind !== 'connector')
@@ -219,35 +109,10 @@ export const library = {
     await signIn(account, deviceCodeTo(sender));
     return libraryEntries(await readLibrary(), spaceId);
   },
-  async update(_sender, spaceId, id, autoUpdate) {
-    if (autoUpdate === undefined) await updateItem(id);
-    else await setAutoUpdate(id, autoUpdate);
-    return libraryEntries(await readLibrary(), spaceId);
-  },
-  async renameConnector(_sender, spaceId, key, name) {
-    await renameConnector(key, name.trim());
-    return libraryEntries(await readLibrary(), spaceId);
-  },
-  async connectorSettings() {
-    return (await readLibrary()).connectors ?? {};
-  },
   async listConnectorTools(_sender, key) {
     return listConnectorTools(key);
   },
-  async setConnectorSettings(_sender, key, settings) {
-    const chosen = {
-      ...(settings.isOff === true && { isOff: true }),
-      tools: settings.tools ?? {},
-    };
-    const index = await updateLibrary((current) =>
-      withSettings(current, key, ({ toolList }) => ({
-        ...chosen,
-        ...(toolList && { toolList }),
-      })),
-    );
-    return index.connectors ?? {};
-  },
-} satisfies Handlers<LibraryHost>;
+} satisfies Handlers<Pick<LibraryHost, InMain>>;
 
 /** A device sign-in's code goes to the window that started it, for the dialog to show. */
 const deviceCodeTo = (sender: WebContents) => (code: DeviceCode) =>
@@ -360,16 +225,4 @@ function connectorFields(input: ConnectorAccountInput) {
     clientId: optional(input.clientId),
     clientSecret: optional(input.clientSecret),
   };
-}
-
-// GAP: a project path is checked to be an existing folder, not that it is one of the profile's projects.
-function skillDestination(
-  input: SkillDestination | undefined,
-): SkillDestination | undefined {
-  if (!input || input.scope === 'library') return input;
-  const providers = [...new Set(input.providers)];
-  if (input.scope === 'user') return { scope: 'user', providers };
-  if (!statSync(input.project, { throwIfNoEntry: false })?.isDirectory())
-    throw new TypeError('destination.project must be a project folder');
-  return { scope: 'project', providers, project: input.project };
 }

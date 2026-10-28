@@ -1,4 +1,5 @@
-import { app } from 'electron';
+import { userData } from '../agents/paths.ts';
+import type { ConnectorSettings } from '@mochi/domain/library/connectorTools';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   chmod,
@@ -26,19 +27,19 @@ import {
   type Marketplace,
   type SkillDestination,
   type SkillPlacement,
-} from '../../src/library/library.ts';
-import type { Provider } from '../../src/model.ts';
+} from '../../../../apps/desktop/src/library/library.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import {
   skillMeta,
   stripSecrets,
   type McpServerDef,
-} from '../../src/settings/agentConfig.ts';
-import { accountFor } from '@mochi/core/agents/config';
+} from '../../../../apps/desktop/src/settings/agentConfig.ts';
+import { accountFor } from '../agents/config.ts';
 import {
   expand,
   expandAll,
   readProfileConfig,
-} from '@mochi/core/agents/profileConfig';
+} from '../agents/profileConfig.ts';
 import {
   CatalogError,
   discoverSkills,
@@ -48,22 +49,25 @@ import {
 } from './catalog.ts';
 import { removeSkillFolder, writeSkillFolder } from './skillFiles.ts';
 import { reviewUpload, unpackUpload, UploadError } from './upload.ts';
-import { readDoc, writeDoc } from '@mochi/core/store/client';
+import { readDoc, writeDoc } from '../store/client.ts';
 
 /**
  * The library index in Core's `library` table, and each profile's plugin folders under userData/library/<profile>/, one
  * folder per content hash so a running session never sees one change under it.
  */
-const foldersRoot = () => join(app.getPath('userData'), 'library');
+const foldersRoot = () => join(userData(), 'library');
 
-let index: Promise<LibraryIndex> | undefined;
 let writes = Promise.resolve();
 
+/**
+ * Read fresh each time: Core serves the library and main still writes its connector accounts (electron/library/connectors.ts).
+ * GAP: the two processes queue their writes apart, so a change landing between the other's read and write is lost. It goes
+ * when connector accounts move into Core.
+ */
 export function readLibrary(): Promise<LibraryIndex> {
-  index ??= readDoc('library', 'index').then((saved) =>
+  return readDoc('library', 'index').then((saved) =>
     parseLibrary(saved === undefined ? null : JSON.stringify(saved)),
   );
-  return index;
 }
 
 /** Changes apply one at a time, so two quick edits can't drop each other. */
@@ -73,7 +77,6 @@ export function updateLibrary(
   const next = writes.then(async () => {
     const updated = change(await readLibrary());
     await writeDoc('library', 'index', updated);
-    index = Promise.resolve(updated);
     return updated;
   });
   writes = next.then(
@@ -524,4 +527,31 @@ async function exists(path: string) {
     () => true,
     () => false,
   );
+}
+
+/** Shows the connector under `name` in every profile. */
+export function renameConnector(key: string, name: string) {
+  return updateLibrary((index) => ({
+    ...index,
+    items: index.items.map((item) =>
+      item.kind === 'connector' && item.key === key
+        ? { ...item, title: name }
+        : item,
+    ),
+  }));
+}
+
+/** The index with the connector's settings changed. */
+export function withSettings(
+  index: LibraryIndex,
+  key: string,
+  change: (settings: ConnectorSettings) => ConnectorSettings,
+): LibraryIndex {
+  return {
+    ...index,
+    connectors: {
+      ...index.connectors,
+      [key]: change(index.connectors?.[key] ?? {}),
+    },
+  };
 }

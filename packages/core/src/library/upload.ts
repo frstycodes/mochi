@@ -6,14 +6,14 @@ import {
   usesPluginRoot,
   type LibraryItem,
   type PluginReview,
-} from '../../src/library/library.ts';
+} from '../../../../apps/desktop/src/library/library.ts';
 import {
   MANIFEST_PATHS,
   parsePluginBundle,
   type PluginBundle,
 } from '@mochi/domain/library/pluginBundle';
-import { readTar } from '../../src/library/tar.ts';
-import type { Provider } from '../../src/model.ts';
+import { readTar } from '../../../../apps/desktop/src/library/tar.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
 
 /**
  * A plugin file the user uploads (LIBRARY.md): a zip (Claude's `.plugin` from Cowork is one) or a tar, read in memory and

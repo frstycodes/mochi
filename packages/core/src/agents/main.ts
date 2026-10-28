@@ -5,12 +5,11 @@ import type {
 } from '../../../../apps/desktop/src/host/types/agent.ts';
 import type { McpServerDef } from '../../../../apps/desktop/src/settings/agentConfig.ts';
 import type { ToolRules } from '@mochi/domain/library/connectorTools';
-import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 
 /**
- * What the agents ask of main, over the `main` capability: the window that runs Mochi's tools, the library (its OAuth
- * connectors and keychain-backed servers stay in main), and the terminals and compare servers a settled thread leaves.
+ * What the agents ask of main, over the `main` capability: the window that runs Mochi's tools, the library's connector
+ * accounts (their OAuth sign-in and proxy stay in main), and the terminals and compare servers a settled thread leaves.
  * Main serves these in electron/agents/events.ts.
  */
 export interface MainForAgents {
@@ -25,16 +24,22 @@ export interface MainForAgents {
   codexUrl(thread: string, scope: MochiScope): Promise<string>;
   /** Where Codex's pattern-kill hook POSTs (packages/core/src/agents/codex/killGuard.ts). */
   killGuardUrl(): Promise<string>;
-  library(spaceId: string, provider: Provider): Promise<SessionLibrary>;
+  /** The profile's signed-in connectors, served through main's MCP proxy. */
+  connectors(spaceId: string): Promise<SessionConnectors>;
+  /** Drops a connector account's client and secrets (packages/core/src/library/host.ts removes its index entry). */
+  forgetConnector(id: string): Promise<void>;
   settle(threadId: string): Promise<void>;
 }
 
-export interface SessionLibrary {
-  servers: McpServerDef[];
-  pluginDirs: string[];
+export interface SessionConnectors {
   /** Connector name and its local proxy URL. */
   connectors: [string, string][];
   rules: Record<string, ToolRules>;
+}
+
+export interface SessionLibrary extends SessionConnectors {
+  servers: McpServerDef[];
+  pluginDirs: string[];
 }
 
 type Call = (method: string, args: ReadonlyArray<unknown>) => Promise<unknown>;

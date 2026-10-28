@@ -5,10 +5,15 @@ import { dataHost } from './data/host.ts';
 import { fs } from './fs/host.ts';
 import { git } from './git/host.ts';
 import { GitHub } from './github/service.ts';
+import { setDataDir } from './agents/paths.ts';
 import { hostMethods } from './hostMethods.ts';
+import { Capabilities } from './hostServer.ts';
+import { libraryHost } from './library/host.ts';
+import { startLibraryUpdates } from './library/updates.ts';
 import { ports } from './ports/host.ts';
 import { projectsHost } from './projects/host.ts';
 import { ptyHost } from './pty/host.ts';
+import { settingsHost } from './settings/host.ts';
 import { useDocs } from './store/client.ts';
 import { Store } from './store/store.ts';
 import { themesHost } from './themes/host.ts';
@@ -31,8 +36,21 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
         set: (table, key, value) => run(store.setDoc(table, key, value)),
         append: (input) => run(store.append(input)),
       });
+      const capabilities = yield* Capabilities;
       // Tests run without a data folder; theirs is a scratch one.
       const data = userData ?? path.join(tmpdir(), 'mochi-core');
+      setDataDir(data);
+      if (userData) startLibraryUpdates();
+      const forgetConnector = (id: string) =>
+        capabilities.offers('main')
+          ? run(
+              capabilities.call({
+                capability: 'main',
+                method: 'forgetConnector',
+                args: [id],
+              }),
+            ).then(() => {})
+          : Promise.resolve();
       const namespaces = {
         git,
         fs,
@@ -41,6 +59,8 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
         pty: ptyHost(data),
         data: dataHost(data),
         themes: themesHost(data),
+        settings: settingsHost,
+        library: libraryHost(forgetConnector),
         usage: usageHost(data, (cwd, since, githubUser) =>
           run(github.authoredPrs(cwd, since, githubUser)),
         ),

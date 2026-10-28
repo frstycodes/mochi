@@ -86,6 +86,14 @@ export function cachedDoc<T>(table: DocTable, key: string): T | undefined {
   return cached.get(key) as T | undefined;
 }
 
+/** Another process wrote the document: keeps the preloaded copy current, for a table `preloadDocs` read. */
+export function cacheDoc(table: DocTable, key: string, value: unknown) {
+  const cached = preloaded.get(table);
+  if (!cached) return;
+  if (value === undefined) cached.delete(key);
+  else cached.set(key, value);
+}
+
 /** Writes one at a time per table, each the whole document; `undefined` deletes it. A failure is logged, and rejects. */
 export function writeDoc(
   table: DocTable,

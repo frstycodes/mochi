@@ -68,3 +68,26 @@ it.live('Core serves the UI and nothing outside its folder', () =>
     assert.notEqual(status, 200);
   }),
 );
+
+it.live(
+  'settings and the library answer with no main: a setting saved is read back, and the library lists',
+  () =>
+    Effect.gen(function* () {
+      const port = yield* startHeadless;
+      const call = makeHostCaller(yield* makeCoreClient(coreUrl(port, TOKEN)));
+      const host = (tag: string, args: ReadonlyArray<unknown>) =>
+        Effect.promise(() => call(tag, args));
+      const before = (yield* host('settings.get', [])) as {
+        concurrency: number;
+      };
+      const concurrency = before.concurrency + 1;
+      yield* host('settings.set', [{ concurrency }]);
+      assert.equal(
+        ((yield* host('settings.get', [])) as { concurrency: number })
+          .concurrency,
+        concurrency,
+      );
+      assert.deepEqual(yield* host('library.list', ['default']), []);
+      assert.deepEqual(yield* host('library.connectorSettings', []), {});
+    }),
+);

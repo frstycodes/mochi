@@ -92,9 +92,7 @@ it.live.skipIf(process.platform === 'win32')(
         },
       });
       useMain(async (method) =>
-        method === 'library'
-          ? { servers: [], pluginDirs: [], connectors: [], rules: {} }
-          : undefined,
+        method === 'connectors' ? { connectors: [], rules: {} } : undefined,
       );
       const turns = yield* Turns.make;
       useAgentServices({

@@ -1,7 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentReviewRequest } from '../../../../apps/desktop/src/host/types/agent.ts';
 import { VERDICT_SCHEMA } from '../../../../apps/desktop/src/secondOpinion/verdict.ts';
-import { detect } from '../../../../apps/desktop/electron/settings/detect.ts';
+import { detect } from '../settings/detect.ts';
 import { createMapper } from './claude/map.ts';
 import { DEFAULT_MODEL } from './claude/sessions.ts';
 import { accountEnv, accountFor, userPath } from './config.ts';

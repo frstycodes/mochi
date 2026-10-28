@@ -33,19 +33,22 @@ import { ensureLocalServer, saveGoogleClient } from './googleWorkspace.ts';
 import {
   connectorName,
   toolRules,
-  type ConnectorSettings,
   type ConnectorToolList,
   type ToolRules,
 } from '@mochi/domain/library/connectorTools';
 import {
   profileConnectors,
   type LibraryConnector,
-  type LibraryIndex,
 } from '../../src/library/library.ts';
 import { addLoopbackRoute, loopbackUrl } from '../mcp/server.ts';
 import { identityOf } from './identity.ts';
 import { allTools, connectorServer } from './proxy.ts';
-import { readLibrary, updateLibrary } from './store.ts';
+import {
+  readLibrary,
+  renameConnector,
+  updateLibrary,
+  withSettings,
+} from '@mochi/core/library/store';
 
 /**
  * Connector accounts (LIBRARY.md Phase 1b): sign-in, tokens, and the proxy route sessions reach them through. Tokens and
@@ -262,17 +265,6 @@ export async function nameFromServer(
 }
 
 /** Every account on the connector takes the name; the key (and so every permission rule) stays. */
-export function renameConnector(key: string, name: string) {
-  return updateLibrary((index) => ({
-    ...index,
-    items: index.items.map((item) =>
-      item.kind === 'connector' && item.key === key
-        ? { ...item, title: name }
-        : item,
-    ),
-  }));
-}
-
 /**
  * RFC 8628: the provider shows a one-time code page, you enter the code `onCode` hands the dialog, and Mochi polls the
  * token endpoint until you approve. No redirect and no client secret. Endpoints and scopes come from the server's
@@ -525,20 +517,6 @@ async function listTools(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-export function withSettings(
-  index: LibraryIndex,
-  key: string,
-  change: (settings: ConnectorSettings) => ConnectorSettings,
-): LibraryIndex {
-  return {
-    ...index,
-    connectors: {
-      ...index.connectors,
-      [key]: change(index.connectors?.[key] ?? {}),
-    },
-  };
 }
 
 /** The proxy URL per connector the profile has a signed-in account on, as `[server name, url]`. */

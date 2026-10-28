@@ -14,7 +14,7 @@ import {
 } from '../../../../../apps/desktop/src/drift.ts';
 import type { Thread } from '../../../../../apps/desktop/src/model.ts';
 import { cached, uncache } from '../../../../../apps/desktop/electron/cache.ts';
-import { detect } from '../../../../../apps/desktop/electron/settings/detect.ts';
+import { detect } from '../../settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
 
 const CLASSIFY_MODEL = 'claude-haiku-5-5';

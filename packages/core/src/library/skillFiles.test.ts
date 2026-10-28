@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
 import { test } from 'vite-plus/test';
-import { skillPlacementDir } from '../../src/library/library.ts';
+import { skillPlacementDir } from '../../../../apps/desktop/src/library/library.ts';
 import { removeSkillFolder, writeSkillFolder } from './skillFiles.ts';
 
 test('skills land where the skills CLI puts them, in a temp home', async () => {

@@ -17,6 +17,7 @@ import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
 import { Capabilities, hostHandlers } from './hostServer.ts';
 import { Hosted } from './hosted.ts';
+import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
@@ -103,6 +104,7 @@ export const layerCore = (options: ServerOptions) =>
       ),
     ),
     Layer.provideMerge(Hosted.layer(options.userData)),
+    Layer.provideMerge(KeyStore.layer(options.userData)),
     Layer.provide(
       Layer.mergeAll(
         GitHub.layer.pipe(Layer.provide(GithubTransport.layer)),
@@ -146,7 +148,8 @@ type Services =
   | Metrics
   | Terminals
   | Scheduler
-  | Hosted;
+  | Hosted
+  | KeyStore;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(

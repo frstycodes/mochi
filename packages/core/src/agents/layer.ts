@@ -9,7 +9,11 @@ import { Projection } from '../store/projection.ts';
 import { Store } from '../store/store.ts';
 import { ThreadContext } from '../switch/context.ts';
 import { UtilityQueue } from '../utility/queue.ts';
-import { reloadAgentConfig, useAgentConfig } from './config.ts';
+import {
+  AGENT_SETTINGS_SAVED,
+  reloadAgentConfig,
+  useAgentConfig,
+} from './config.ts';
 import {
   BUSY_CHANNEL,
   busyThreads,
@@ -27,6 +31,7 @@ import {
   useAgentServices,
 } from './handlers.ts';
 import { useLimitDocs } from './limits.ts';
+import { push } from './events.ts';
 import { useMain } from './main.ts';
 import { setThreadHistory } from './mochiTools.ts';
 import { noteLogin } from './models.ts';
@@ -82,8 +87,11 @@ export const layerAgents = (userData: string | undefined) =>
         );
       useAgentConfig({
         read: () => settingsDoc,
-        write: async () => {
-          throw new Error('Agent settings are written by main');
+        // Core writes them (packages/core/src/settings/host.ts); main reads its own copy, so it hears of each save.
+        write: async (value) => {
+          await Effect.runPromise(store.setDoc('settings', 'agent', value));
+          settingsDoc = value;
+          push({ channel: AGENT_SETTINGS_SAVED, payload: value });
         },
         keychain: {
           // Nothing serves it under `mochi serve`: keys are refused there rather than stored without the OS keychain.
