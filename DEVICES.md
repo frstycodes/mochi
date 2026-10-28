@@ -175,6 +175,77 @@ Mochi on macOS, Windows and Linux are equal peers: any of them can own threads a
 - **Self-host:** the same Worker deploys to your own Cloudflare account, with the relay URL set in Settings. Pairing always needs a relay (hosted or self-hosted), since the account's device list lives there; traffic itself can stay on the LAN or Tailscale.
 - No client hosting: the only client for now is Mochi on another computer.
 
+## Everything is a backend (proposed 2026-10-28)
+
+The app is an interface. It connects to any number of backends; each backend is a Core, and the computer you sit at is one of them, reached over loopback instead of LAN or relay. Each backend says who it is (name, kind, icon) and what it can do, and the interface shows that. The same split gives the web build and `mochi serve` for free: a browser is one more interface, a headless Core one more backend. This replaces "`src/host/remote` as a whole host is the phone PWA's job" (PR 6, below).
+
+### Where it stands (verified 2026-10-28)
+
+- **Core is already the backend for this computer.** It runs as main's utilityProcess, or alone as `mochi serve` (`packages/core/src/serve/serve.ts`, which also serves the page). It serves agents, schedules, git, projects, ports, usage and pty itself (`electron/ipc/index.ts`, `InCore`), the store as an event log with a `replica` stream (`packages/core/src/store/rpc.ts`), and fs, data and themes in part (`hosted.ts`). Every `host.*` call from a window goes to Core over its socket (`src/host/desktop/*.ts`).
+- **Main still serves part of the machine.** Core forwards `host`, `notify`, `browserView`, `sim`, `secureStorage`, `remote`, `metrics` and `main` to main (`mainCapabilities`, `electron/ipc/index.ts`). Under `host` that's settings, account, library, windows and updates. So a headless Core has no settings, account, library or remote access.
+- **Two APIs, not one.** A window's token holds every scope and calls any RPC. A paired device calls `device.command` (a `RemoteCommand` per type) and reads a mirror stream; every other RPC is `local` and closed to it (`scopeOf`, `packages/schema/src/capabilities.ts`). So the same action has two code paths: the RPC this computer's window calls, and the command another computer sends (`src/remote/commands.ts`, `threadOps.ts`).
+- **The interface treats this computer as special.** It has a `replica` for this computer and a `mirror` per other machine (`src/store/replica.ts`, `src/remote/mirror.ts`), joined by `hybridState` (`src/remote/threadScope.ts`). Panes choose between `LocalIo` and `RemoteIo` (`src/remote/threadIo.ts`), and shared views run inside `RemoteScope`, which turns store actions into commands. 66 `origin.kind` / `kind === 'remote'` checks are spread across 15 files.
+- **Other machines are dialed by main, not by the interface** (`electron/remote/client.ts`): the device key and the account token stay in main.
+- **Name and kind arrive only from other machines,** in the pairing `welcome` frame. This computer's name and icon come from somewhere else.
+- **`mochi serve` is a special case in the page:** `servedNamespace` (`src/host/web/served.ts`) proxies `host.*` to Core and drops pushes meant for a window. Its only sign-in is a `#token=` URL fragment, with a browser prompt as the fallback.
+
+### The split (proposed)
+
+- **Shell:** what the interface runs inside. That's Electron or a browser. It owns windows, OS notifications, the dock badge, app updates, and the shell's own device key and account session. It renders the browser pane and the simulator but doesn't own them.
+- **Backend:** one Core on one machine. It owns threads and the store, agents, provider logins, git, files, terminals, ports, schedules, projects, that machine's settings, library (skills, commands, connectors), pairing and members, and its relay registration. Whatever a backend needs an OS for that Core can't do alone (the browser pane its agents drive, the simulator, the keychain) is a capability the backend reports it has or lacks.
+- **Rule:** if it would still be true with the interface closed, it belongs to the backend.
+
+### Backend descriptor
+
+Every backend answers `backend.info` and pushes it again whenever it changes:
+
+- `id`, `name`, `kind` (`mac`, `windows`, `linux`, `server`), app and protocol version
+- `capabilities`: `browserView`, `sim`, `notify`, `keychain`, … (what it can do now; headless has none of the shell-backed ones)
+- `scopes`: what this connection may do
+
+The interface draws every machine's icon, name and presence from this, its own computer included. `welcome` carries the same descriptor.
+
+### One protocol
+
+- Every Core RPC gets a scope (`read`, `operate`, `manage`, `code`, `terminal`; `local` only for what never leaves the machine, like `windows`). A window's loopback token holds every scope, and a device's holds what it was granted. The same middleware (`ScopeAuthorization`) decides for both.
+- Devices read the same `replica` stream the window reads, filtered per scope as `visibleItem` already does (`packages/core/src/remote/visible.ts`). The mirror frames go away.
+- `device.command` becomes a thin adapter onto those RPCs while the interface moves over, then is removed. Protocol version 6.
+
+### One interface path
+
+- **`Backends`:** a registry in the interface with one entry per connected Core: descriptor, transport, replica and `call`. This computer's Core is just the first entry, not a special case.
+- **Thread routing:** a thread belongs to exactly one backend (`backendId`, kept with its id the way `src/remote/ids.ts` does now). Everything about a thread goes through `backendOf(thread)`: panes, composer, Changes, Files, Terminal, PR tab, schedules, settings. This removes `ThreadIo`, `RemoteScope`, `hybridState`, `ThreadCalls` and `mirror`.
+- **Merged views** (sidebar, Queue, palette, pins) list across `Backends` grouped by descriptor, as they group by machine now.
+- **Shell features** (`windows`, `notify`, `updates`) stay on `host.*`, served by the shell; nothing in them names a backend.
+
+### Transports
+
+| Transport                           | Used by                                                      | Encryption                               |
+| ----------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
+| Loopback WebSocket + token          | desktop's own Core; `mochi serve` opened on the same machine | none (loopback)                          |
+| Direct WebSocket (LAN or Tailscale) | any shell to a paired machine                                | libsodium session (`crypto/session.ts`)  |
+| Relay                               | any shell to a paired machine, from anywhere                 | libsodium session; relay sees ciphertext |
+
+- **On Electron,** the device key stays in main (`safeStorage`). Main runs the handshake and gives the renderer an already-secured channel per backend, as a `MessagePort`. The renderer never sees the key.
+- **In a browser,** the handshake runs in the page. The key is a non-extractable WebCrypto Ed25519 key in IndexedDB, and the relay is reached with a short-lived ticket in the first frame, since a browser can't set `Authorization` on a WebSocket (the GAP under Transport).
+
+### Headless `mochi serve`
+
+- A backend with no shell capabilities. A browser opens its page and connects over a direct WebSocket with a token, or a scoped device key once it signs in.
+- **What it needs beyond today:**
+  - settings, library, account and the machine side of remote access moving from main into Core (the PR `core-owns-machine`, below)
+  - a key store for headless Core: the OS keychain where there is one, else a `0600` file in its data folder
+  - a sign-in screen instead of `#token=`
+  - the interface hiding what the descriptor lacks: no browser pane, no simulator, notifications only in the shell
+- **Agents' browser (decided 2026-10-28):** headless Chromium inside Core. Core starts it the first time a Mochi browser tool runs, and serves `browserView` from it. Any interface shows its live screenshot, the same way it shows another computer's browser pane today. Chromium downloads on first use, not with `mochi serve`. A backend that can't run Chromium reports no `browserView`, and the browser tools answer "this computer has no browser" instead of failing.
+- **Account (decided 2026-10-28): CLI sign-in, then pairing.**
+  - `mochi login` runs Clerk's device-code flow: it prints a code and a URL, you approve it in any browser, and the session is kept in the backend's key store. `mochi serve` offers to run it on first start.
+  - Once signed in, the backend registers with the relay, so it shows on every signed-in computer under "Join your computers".
+  - Being on the same account doesn't make it trusted. Account access alone must not be enough to read your threads, and the relay can't vouch for anyone (Pairing, below). So approval is one click on any computer that's already trusted, with the six-digit code shown both there and in the CLI. After that, the backend is a member like any computer.
+  - `mochi logout` signs out and removes it from the relay.
+
+- **Windows (decided 2026-10-28): merged, with a machine filter.** Every window shows all backends, grouped by machine. A filter in the sidebar narrows a window to one or more machines, and "New window" can open one already filtered. Each window keeps its own filter, so you can keep a window just for a server next to one for everything. There is no separate per-backend window type.
+
 ## Clients
 
 - **Another computer, first and only for now.** Mochi gets a third host implementation, `src/host/remote`, next to `desktop` and `web` (verified layout, `src/host/`), speaking the device protocol instead of IPC. A machine shows paired machines' threads and Queue merged with its own, each tagged with its machine, using the existing UI.
@@ -212,6 +283,15 @@ Each PR is its own worktree session, per SESSIONS.md, verified in both themes wh
 9. **`attention`** (built): keep-awake (Offline, above); alerts and read state across computers; the sidebar stays grouped by computer.
    - Alerts: a followed computer's thread that starts needing you (an approval or question, a failed turn, a finished turn, ready for review) shows the OS notification in the background and a toast in front, under the same Settings › Notifications switches and quiet hours as this computer's own, and counts in the dock badge. Clicking opens that thread (`openRemoteThread`). They come from the difference with a baseline kept per machine across launches (`src/notify/remote.ts`), never from the stream's actions, so a reconnect's snapshot or replayed actions never alert twice, and a turn that ended while this computer was away still alerts once. The first look at a machine only sets the baseline. Turn outcomes come from `live.turnEnd`, which the machine records at each turn's end. GAP: per-thread mute applies to this computer's threads only.
    - Read state: the computer that owns a thread owns its read state, `seenActivity` (activity entries seen) on the thread and `isSeen` on Queue cards. Opening a thread marks it and its asks read when it opens and when it closes; leaving the Queue marks the cards it showed. Another computer sends `seen` (operate scope; a device without it just leaves things unread there) and the change comes back on the stream like any action. Unread shows as a dot on sidebar rows and Queue cards.
+
+Everything is a backend (above), in order. Each PR leaves the app working; old and new paths live side by side until 14 removes the old ones.
+
+10. **`backend-info`**: `backend.info` RPC and push in Core (id, name, kind, versions, capabilities, scopes); `welcome` carries it. This computer's name and icon come from its own Core like every other machine's. Small, and it proves the descriptor before anything depends on it.
+11. **`one-protocol`**: a scope on every Core RPC (`scopeOf` classifies tags, not just `device.command`); devices may call what their scopes allow and read the `replica` stream through `visibleItem`. `device.command` stays as an adapter onto the same handlers. Protocol version 6. Tests: each scope refused below it, a device's replica has no diffs without `code`, a `local` RPC refused to every device.
+12. **`core-owns-machine`**: settings, library, account (relay registration) and the machine side of remote access (pairing, members, relay client, devices) move from main into Core; main keeps the shell (windows, notify, updates, browser view, sim, `safeStorage` as a capability). Headless Core gets a key store, `mochi login` / `mochi logout` (device code), and a headless Chromium behind `browserView`. Tests: `mochi serve` signs in, is approved from a member, changes a setting and drives a page, all with no main.
+13. **`backends`**: the interface's `Backends` registry and transport interface. This computer's Core becomes entry one over loopback; other machines come through main as secured `MessagePort`s; one replica per backend. The sidebar, Queue, palette and pins read from it, with a machine filter per window; `mirror` stays behind it for now.
+14. **`one-path`**: threads route through `backendOf(thread)`; `ThreadIo`, `RemoteScope`, `hybridState`, `ThreadCalls`, `mirror` and the `device.command` adapter are deleted. Large, so it ships in slices: composer and chat; Changes, Files and Terminal; PR tab and schedules; Settings for another computer. Each slice is verified on this computer's threads and another's.
+15. **`browser-shell`**: the web build as a shell. The descriptor gates what the UI shows; handshake in the page with WebCrypto keys; relay tickets; a sign-in screen for `mochi serve` instead of `#token=`. `servedNamespace` goes away. The phone PWA is this plus screens and Web Push.
 
 Later, its own design pass: the phone PWA and push.
 
