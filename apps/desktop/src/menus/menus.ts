@@ -23,6 +23,19 @@ export const THREAD_MENU = [
   ['thread-settle', 'thread-reactivate', 'thread-delete'],
 ] as const;
 
+/** Another computer's thread in the sidebar: only what runs there, through its commands, or pins it on this screen. */
+export const REMOTE_THREAD_MENU = [
+  ['thread-open', 'thread-open-split'],
+  [
+    'thread-rename',
+    'thread-pin',
+    'thread-unpin',
+    'thread-watch',
+    'thread-unwatch',
+  ],
+  ['thread-settle', 'thread-reactivate', 'thread-delete'],
+] as const;
+
 export const TAB_MENU = [
   ['tab-reload', 'tab-duplicate'],
   ['tab-copy-url', 'tab-open-external'],

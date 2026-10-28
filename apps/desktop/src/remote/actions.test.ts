@@ -24,12 +24,8 @@ test('the shared UI’s actions become the commands that do the same on the mach
     type: 'delete',
     threadId: 't',
   });
-  assert.deepEqual(commandFor({ type: 'pin-at', threadId: 't', order: 42 }), {
-    type: 'pin',
-    threadId: 't',
-    isPinned: true,
-    order: 42,
-  });
+  // Pins stay on each screen: pinning another computer's thread never reaches it.
+  assert.equal(commandFor({ type: 'pin-at', threadId: 't', order: 42 }), null);
   assert.deepEqual(
     commandFor({
       type: 'rewind-message',

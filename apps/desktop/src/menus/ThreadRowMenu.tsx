@@ -19,7 +19,8 @@ import {
 import { useHarness } from '../store';
 import { nestWithUndo, unnestWithUndo } from '../subThreadActions';
 import { ActionItems, BulkActionItems } from './ActionItems';
-import { THREAD_MENU } from './menus';
+import { parseRemoteThreadId } from '../remote/ids';
+import { REMOTE_THREAD_MENU, THREAD_MENU } from './menus';
 
 /**
  * A sidebar thread row: the bulk menu when it is part of a multi-selection, else the thread's own menu. Extra props (a
@@ -34,6 +35,8 @@ export function ThreadRowMenu({
   typeof ContextMenuTrigger
 >) {
   const isBulk = selectedIds.length > 1 && selectedIds.includes(threadId);
+  const isRemote = (id: string) => !!parseRemoteThreadId(id);
+  const groups = isRemote(threadId) ? REMOTE_THREAD_MENU : THREAD_MENU;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild {...props}>
@@ -41,14 +44,16 @@ export function ThreadRowMenu({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-60">
         {isBulk ? (
-          <BulkActionItems threadIds={selectedIds} groups={THREAD_MENU} />
+          <BulkActionItems
+            threadIds={selectedIds}
+            groups={
+              selectedIds.some(isRemote) ? REMOTE_THREAD_MENU : THREAD_MENU
+            }
+          />
         ) : (
           <>
-            <ActionItems
-              target={{ threadId, isRow: true }}
-              groups={THREAD_MENU}
-            />
-            <SubThreadItems threadId={threadId} />
+            <ActionItems target={{ threadId, isRow: true }} groups={groups} />
+            {!isRemote(threadId) && <SubThreadItems threadId={threadId} />}
           </>
         )}
       </ContextMenuContent>

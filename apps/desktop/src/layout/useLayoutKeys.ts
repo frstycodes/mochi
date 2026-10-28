@@ -15,6 +15,10 @@ import {
   listenKeydown,
 } from '../keymap';
 import { startRename } from '../rename';
+import { useProfiles } from '../profiles';
+import { mergeThreads } from '../remote/merged';
+import { useRemotePins } from '../remote/pins';
+import { useMachines } from '../remote/useMachines';
 
 const FOCUS = {
   'split-focus-left': 'ArrowLeft',
@@ -42,6 +46,18 @@ const COMMANDS = [
 /** Split and pin commands (`src/keymap.ts`): move focus between splits, zoom, split, pin or rename the focused thread, jump to pinned N here or in a new split. */
 export function useLayoutKeys() {
   const { state, dispatch } = useHarness();
+  const { machines } = useMachines();
+  const remotePins = useRemotePins();
+  const spaceIds = useProfiles().map((p) => p.id);
+  // Pinned N as the sidebar numbers it, this screen's pins on other computers' threads among them.
+  const merged = () =>
+    mergeThreads(
+      state.threads,
+      machines.flatMap((m) => (m.state ? [{ state: m.state }] : [])),
+      remotePins,
+      spaceIds,
+      state.spaceId,
+    );
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.defaultPrevented) return;
     const command = commandOf(e, COMMANDS);
@@ -91,9 +107,7 @@ export function useLayoutKeys() {
       return startRename(id, rowId ? 'row' : 'dialog');
     }
     const index = PINNED.indexOf(command);
-    const thread = pinnedThreads(state.threads, state.spaceId)[
-      Math.floor(index / 2)
-    ];
+    const thread = pinnedHere(state, merged())[Math.floor(index / 2)];
     if (!thread) return;
     handled();
     const view = { kind: 'thread', id: thread.id } as const;
@@ -101,6 +115,9 @@ export function useLayoutKeys() {
   });
   useEffect(() => listenKeydown((e) => onKey(e)), []);
 }
+
+const pinnedHere = (state: State, threads: State['threads']) =>
+  pinnedThreads(threads, state.spaceId);
 
 function leafRects() {
   const rects: Record<string, Rect> = {};

@@ -43,7 +43,10 @@ export function MachinePresence({
           ) : (
             <span
               aria-hidden
-              className={cn('size-2 rounded-full', DOT[machine.status])}
+              className={cn(
+                'size-2 rounded-full',
+                PRESENCE_DOT[machine.status],
+              )}
             />
           )}
         </span>
@@ -53,7 +56,8 @@ export function MachinePresence({
   );
 }
 
-const DOT = {
+/** The presence dot by status, also on a row's device icon (`Sidebar.tsx`). */
+export const PRESENCE_DOT = {
   online: 'bg-success',
   connecting: 'bg-subtle-foreground/60 motion-safe:animate-pulse',
   offline: 'border border-subtle-foreground',
