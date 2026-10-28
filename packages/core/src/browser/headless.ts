@@ -20,6 +20,7 @@ import type {
 import { dialogNote } from '../../../../apps/desktop/src/browser/dialog.ts';
 import { push } from '../agents/events.ts';
 import type { Call, LocalCapability } from '../hostServer.ts';
+import { NO_BROWSER } from './answers.ts';
 import {
   evalResult,
   EVAL_TIMEOUT_MS,
@@ -29,9 +30,6 @@ import {
 
 // Loaded with the first view, so `mochi serve` doesn't load Playwright until a browser tool runs.
 const drive = () => import('./drive.ts');
-
-/** What every browser tool answers on a computer where Chromium can't be found, downloaded or started. */
-export const NO_BROWSER = 'this computer has no browser';
 
 /** Starts the Chromium Core drives; rejects when there is none to start. */
 export type Launcher = () => Promise<Browser>;

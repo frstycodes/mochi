@@ -32,7 +32,8 @@ import {
 } from './handlers.ts';
 import { useLimitDocs } from './limits.ts';
 import { push } from './events.ts';
-import { useMain } from './main.ts';
+import { mochiToolWithoutMain, useMain } from './main.ts';
+import { agentBrowserTools } from '../browser/agentTools.ts';
 import { setThreadHistory } from './mochiTools.ts';
 import { noteLogin } from './models.ts';
 import { setDataDir } from './paths.ts';
@@ -102,13 +103,40 @@ export const layerAgents = (userData: string | undefined) =>
             call('secureStorage', 'decrypt', [base64]) as Promise<string>,
         },
       });
+      const projection = yield* Projection;
+      const browserTool = agentBrowserTools({
+        call: (method, args) =>
+          Effect.runPromise(
+            capabilities
+              .call({
+                capability: 'browserView',
+                method,
+                args: JSON.parse(JSON.stringify(args)) as unknown[],
+              })
+              .pipe(
+                Effect.catch((error) =>
+                  Effect.die(
+                    typeof error === 'string' ? new Error(error) : error,
+                  ),
+                ),
+              ),
+          ),
+        isAvailable: () => capabilities.available('browserView'),
+        spaceOf: (threadId) =>
+          Effect.runSync(projection.current).domain.threads.find(
+            (t) => t.id === threadId,
+          )?.spaceId,
+      });
       // The call crosses as JSON: an `undefined` field is dropped and an `undefined` argument arrives as null.
+      // With no main (`mochi serve`), Mochi's tools are answered here; every other call fails as unavailable, as before.
       useMain((method, args) =>
-        call(
-          'main',
-          method,
-          JSON.parse(JSON.stringify(args)) as ReadonlyArray<unknown>,
-        ),
+        method === 'mochiTool' && !capabilities.offers('main')
+          ? mochiToolWithoutMain(browserTool, args)
+          : call(
+              'main',
+              method,
+              JSON.parse(JSON.stringify(args)) as ReadonlyArray<unknown>,
+            ),
       );
       useCoreClient(Promise.resolve(clientFromRun(run)));
       // In emit order: one fiber appends them, so the log's sequence follows the agents' own.
@@ -137,7 +165,6 @@ export const layerAgents = (userData: string | undefined) =>
           Effect.runPromise(store.setDoc('limits', accountId, limits)),
       });
       useAgentServices({ turns, queue, context });
-      const projection = yield* Projection;
       useAgentDriven(
         (threadId) =>
           !!Effect.runSync(projection.current).domain.threads.find(

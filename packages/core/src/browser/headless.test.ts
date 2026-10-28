@@ -23,9 +23,9 @@ import { layerCore } from '../server.ts';
 import {
   chromiumLauncher,
   headlessBrowser,
-  NO_BROWSER,
   type Launcher,
 } from './headless.ts';
+import { NO_BROWSER } from './answers.ts';
 
 const TOKEN = 'browser-token';
 
