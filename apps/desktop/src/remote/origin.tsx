@@ -4,7 +4,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { FollowedMachine } from '../host/types/remote';
+import type { FollowedMachine, Scope } from '../host/types/remote';
 import { DeviceIcon } from './DeviceIcon';
 
 /** Where the thread on screen runs: this computer, or another one it follows (`RemoteThreadScope`). */
@@ -29,6 +29,15 @@ export function useRemoteMachine() {
 /** Why something can't run on another computer's thread yet: it would otherwise act on this one. */
 export const elsewhereReason = (machine: Pick<FollowedMachine, 'name'>) =>
   `Do this on ${machine.name} itself for now`;
+
+/** Why another computer's thread can't do something that needs `scope` here; undefined once that computer gave it. */
+export const missingScopeReason = (
+  machine: Pick<FollowedMachine, 'name' | 'scopes'>,
+  scope: Scope,
+) =>
+  machine.scopes.includes(scope)
+    ? undefined
+    : `${machine.name} hasn’t given this computer the ${scope} scope`;
 
 /** The owning computer's icon beside a remote thread's title, with what that means. */
 export function DeviceIndicator({

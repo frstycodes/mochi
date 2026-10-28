@@ -9,6 +9,10 @@ import type { ReviewAction } from '../secondOpinion/slice.ts';
 import type { LayoutAction, LayoutState } from './layout.ts';
 import type { PanesAction, PanesState } from './panes.ts';
 import type { QueueAction, QueueState } from './queue.ts';
+import type {
+  RemoteSideChatAction,
+  RemoteSideChatState,
+} from './remoteSideChat.ts';
 import type { SideChatAction, SideChatState } from './sidechat.ts';
 import type { ThreadsAction, ThreadsState } from './threads.ts';
 import type { UiAction, UiState } from './ui.ts';
@@ -24,6 +28,7 @@ export type State = ThreadsState &
   LayoutState &
   UiState &
   SideChatState &
+  RemoteSideChatState &
   NotificationsState;
 export type Action =
   | ThreadsAction
@@ -32,6 +37,7 @@ export type Action =
   | LayoutAction
   | UiAction
   | SideChatAction
+  | RemoteSideChatAction
   | ReviewAction
   | NotificationsAction
   | ScheduleAction

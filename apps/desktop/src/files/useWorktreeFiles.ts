@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import { useFileList } from './useFiles';
+import { localIo, useFileList } from './useFiles';
 
 /**
  * Another computer's thread: its folder's files as that computer listed them. Links resolve against these, never against a
@@ -11,6 +11,6 @@ export const RemoteFilesContext = createContext<ReadonlySet<string> | null>(
 
 /** The folder's files (`.gitignore` honoured) as a set for existence checks; null until listed or when listing failed. */
 export function useWorktreeFiles(root: string | null) {
-  const { files } = useFileList(root);
+  const { files } = useFileList(localIo(root));
   return files ? new Set(files) : null;
 }

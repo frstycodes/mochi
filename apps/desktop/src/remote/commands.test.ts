@@ -522,7 +522,7 @@ test('code commands make the Changes and Files tabsâ€™ host calls in the threadâ
   );
   assert.deepEqual(
     await runRemoteCommand({ type: 'read-file', threadId, path: 'a.ts' }, env),
-    { isOk: true, data: { text: 'hi' } },
+    { isOk: true, data: { text: 'hi', mtimeMs: 0 } },
   );
   assert.deepEqual(read.mock.calls[0], ['/work/reply', 'a.ts']);
   assert.deepEqual(

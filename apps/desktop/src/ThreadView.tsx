@@ -59,7 +59,7 @@ import { ThreadPrHoverCard } from './chat/RefHoverCard';
 import { useSeen } from './notify/useSeen';
 import { toast } from '@/toast/store';
 import { DeviceIndicator, useRemoteMachine } from './remote/origin';
-import { remotePaneReason } from './remote/RemotePanes';
+import { remotePaneReason } from './remote/panes';
 
 export function ThreadView({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();

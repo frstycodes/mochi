@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
-import { parseCsv, type PreviewKind } from './kinds';
+import { imageMime, parseCsv, type PreviewKind } from './kinds';
 
 /** Previews a file's content; text kinds (svg, markdown, json, csv) get the current draft so edits show up live. */
 export function FilePreview({
@@ -260,13 +260,4 @@ function useObjectUrl(data: string | Uint8Array, type: string) {
     return () => URL.revokeObjectURL(next);
   }, [data, type]);
   return url;
-}
-
-export function imageMime(path: string) {
-  const ext = path.split('.').pop()!.toLowerCase();
-  return ext === 'jpg'
-    ? 'image/jpeg'
-    : ext === 'ico'
-      ? 'image/x-icon'
-      : `image/${ext}`;
 }

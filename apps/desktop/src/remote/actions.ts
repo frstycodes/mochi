@@ -24,6 +24,14 @@ export function commandFor(
       return sendCommand(action);
     case 'interrupt':
       return { type: 'interrupt', threadId: action.threadId };
+    // The side chat's question, asked and answered on that computer (`useSideChat` dispatches it for a remote thread).
+    case 'remote-sidechat-ask':
+      return {
+        type: 'side-chat',
+        threadId: action.threadId,
+        text: action.text,
+        ...(action.quote && { quote: action.quote }),
+      };
     case 'seen':
       return {
         type: 'seen',

@@ -1,9 +1,10 @@
 import { Schema, SchemaTransformation } from 'effect';
 import { AgentModel } from './agent.ts';
 import { Int, Str } from './checks.ts';
-import { DiffScope, GitDiff } from './ipc/git.ts';
+import { DiffFile, DiffScope, GitDiff } from './ipc/git.ts';
 import { Project } from './ipc/projects.ts';
 import { Access, AgentCommand, AgentImage, Provider } from './model.ts';
+import { Quote } from './persist.ts';
 
 // Frames carry no `v`: they are a live wire protocol, never persisted or replayed as is, versioned as a whole by
 // `hello.version` (a device on another protocol is refused at the handshake). What they carry that is persisted is versioned
@@ -14,7 +15,7 @@ const S = Schema.String;
 const B = Schema.Boolean;
 
 /** Bumped on any link frame change; a device on another version is refused rather than misread. */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 const MAX_ID = 128;
 const MAX_TEXT = 256 * 1024;
@@ -258,6 +259,61 @@ const command = <const T extends string, F extends Schema.Struct.Fields>(
   fields: F,
 ) => Schema.Struct({ type: Schema.Literal(type), ...fields });
 
+const MAX_PATTERN = 1024;
+const CommitRef = Str(64).check(Schema.isPattern(/^[0-9a-f]{4,64}$/));
+/** A path on this computer that the thread itself names (an image it attached, a task's output file): checked against the thread. */
+const ThreadFilePath = Text(MAX_PATH).check(
+  Schema.makeFilter((p: string) => !p.includes('\0') || 'must not hold NUL'),
+);
+
+/** The side pane's reads and writes on another computer's thread (phase 6): saving and searching files, turn diffs, images, task output. */
+const PANE_COMMANDS = [
+  command('write-file', {
+    threadId: Id,
+    path: RelativePath,
+    text: Str(MAX_TEXT),
+    baseMtimeMs: Schema.Finite,
+    force: opt(B),
+  }),
+  command('search', {
+    threadId: Id,
+    pattern: Text(MAX_PATTERN),
+    isCaseSensitive: B,
+    isRegex: B,
+    isWholeWord: B,
+  }),
+  command('turn-diff', { threadId: Id, from: CommitRef, to: opt(CommitRef) }),
+  command('read-image', { threadId: Id, path: ThreadFilePath }),
+  command('read-task-output', { threadId: Id, path: ThreadFilePath }),
+] as const;
+
+const SearchLine = Schema.Struct({
+  line: Schema.Number,
+  text: S,
+  isCut: B,
+  ranges: Schema.Array(Schema.Tuple([Schema.Number, Schema.Number])),
+  column: Schema.Tuple([Schema.Number, Schema.Number]),
+});
+
+/** What the pane commands answer. Structs keep only their own keys, so a shape that extends another comes first. */
+const PaneCommandData = [
+  Schema.Struct({
+    status: Schema.Literal('conflict'),
+    text: S,
+    mtimeMs: Schema.Number,
+  }),
+  Schema.Struct({ status: Schema.Literal('saved'), mtimeMs: Schema.Number }),
+  Schema.Struct({ text: S, mtimeMs: Schema.Number }),
+  Schema.Struct({
+    hits: Schema.Array(
+      Schema.Struct({ path: S, lines: Schema.Array(SearchLine) }),
+    ),
+    isTruncated: B,
+  }),
+  Schema.Struct({ turnFiles: Schema.Array(DiffFile) }),
+  Schema.Struct({ mediaType: S, base64: S }),
+] as const;
+
 /**
  * What a device can ask this computer to do, as the `device.command` RPC's payload. Fields a command doesn't take are
  * dropped; titles, goals and names come back trimmed.
@@ -306,7 +362,17 @@ export const RemoteCommand = Schema.Union([
     point: ThreadPoint,
     mode: Schema.Literals(['chat', 'files']),
   }),
-  command('side-chat', { threadId: Id, text: Text(MAX_TEXT) }),
+  command('side-chat', {
+    threadId: Id,
+    text: Text(MAX_TEXT),
+    quote: opt(
+      Schema.Struct({
+        source: Quote.fields.source,
+        label: Str(MAX_PATH),
+        text: Str(MAX_TEXT),
+      }),
+    ),
+  }),
   command('seen', {
     threadId: opt(Id),
     queueIds: opt(Schema.Array(NonEmptyId).check(Schema.isMaxLength(MAX_SEEN))),
@@ -378,6 +444,7 @@ export const RemoteCommand = Schema.Union([
     rows: Size,
   }),
   command('terminal-close', { threadId: Id, terminalId: Id }),
+  ...PANE_COMMANDS,
 ]);
 export type RemoteCommand = typeof RemoteCommand.Type;
 
@@ -412,16 +479,16 @@ export const TerminalOutput = Schema.Struct({
 
 /**
  * `CommandData[keyof CommandData]`. Nothing on the wire says which command a result answers, so the all-string shapes
- * (`settings`, a catalog project, `read-file`, `terminal-open`) decode through the string record, which keeps every key.
+ * (`settings`, a catalog project, `terminal-open`) decode through the string record, which keeps every key.
  */
 const CommandData = Schema.Union([
+  ...PaneCommandData,
   MachineCatalog,
   GitDiff,
   Schema.Struct({ paths: Schema.Array(S), isTruncated: B }),
   Schema.Array(Project),
   Schema.Record(S, S),
   CatalogProject,
-  Schema.Struct({ text: S }),
   Schema.Struct({ terminalId: S }),
   Schema.Struct({ threadId: S }),
 ]);
@@ -486,6 +553,11 @@ export const COMMAND_SCOPES = {
   'terminal-write': 'terminal',
   'terminal-resize': 'terminal',
   'terminal-close': 'terminal',
+  'write-file': 'code',
+  search: 'code',
+  'turn-diff': 'code',
+  'read-image': 'read',
+  'read-task-output': 'read',
 } as const satisfies Record<RemoteCommand['type'], Scope>;
 
 /** The scope a command needs: a `thread-action` by its action, any other by its type; `local` (refused) for one unknown. */

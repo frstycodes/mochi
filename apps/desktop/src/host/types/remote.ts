@@ -1,8 +1,14 @@
 import type { AgentCommand, Provider, SentImage } from '../../model.ts';
 import type { Mention } from '../../chat/mentions.ts';
 import type { ThreadControls } from '../../runtime/controls.ts';
+import type { Quote } from '../../store/sidechat.ts';
 import type { AgentModel } from './agent.ts';
-import type { ChangeTarget, DiffScope, GitDiff } from './git.ts';
+import type { ChangeTarget, DiffFile, DiffScope, GitDiff } from './git.ts';
+import type {
+  SearchHits,
+  SearchOptions,
+  WriteResult,
+} from '@mochi/domain/host/types/fs';
 import type { Manifest } from '@mochi/domain/host/types/manifest';
 import type { CloneSource, Project } from '@mochi/domain/host/types/projects';
 
@@ -166,8 +172,8 @@ export type RemoteCommand =
       point: ThreadPoint;
       mode: 'chat' | 'files';
     }
-  /** Asked in the thread's side chat on this computer; the answer streams in like any store change. */
-  | { type: 'side-chat'; threadId: string; text: string }
+  /** Asked in the thread's remote side chat on this computer (`store/remoteSideChat.ts`); the answer streams back in its thread file. */
+  | { type: 'side-chat'; threadId: string; text: string; quote?: Quote }
   /** Opened on the device: the thread (with its asks) and Queue cards read here too, and on every other device. */
   | { type: 'seen'; threadId?: string; queueIds?: string[] }
   // manage
@@ -239,7 +245,20 @@ export type RemoteCommand =
       rows: number;
     }
   /** Output from offset `after` on; the device polls with the `next` it got. */
-  | { type: 'terminal-close'; threadId: string; terminalId: string };
+  | { type: 'terminal-close'; threadId: string; terminalId: string }
+  // the side pane on another computer's thread: saving and searching its files, turn diffs, transcript images, task output
+  | {
+      type: 'write-file';
+      threadId: string;
+      path: string;
+      text: string;
+      baseMtimeMs: number;
+      force?: boolean;
+    }
+  | ({ type: 'search'; threadId: string; pattern: string } & SearchOptions)
+  | { type: 'turn-diff'; threadId: string; from: string; to?: string }
+  | { type: 'read-image'; threadId: string; path: string }
+  | { type: 'read-task-output'; threadId: string; path: string };
 
 /** `QueuedMessage` as typed, less its id; images never name a path on the sending computer. */
 export interface RemoteMessage {
@@ -291,9 +310,14 @@ export interface CommandData {
   diff: GitDiff;
   'checkpoint-diff': GitDiff;
   files: { paths: string[]; isTruncated: boolean };
-  'read-file': { text: string };
+  'read-file': { text: string; mtimeMs: number };
   'terminal-open': { terminalId: string };
   create: { threadId: string };
+  'write-file': WriteResult;
+  search: { hits: Omit<SearchHits, 'id'>[]; isTruncated: boolean };
+  'turn-diff': { turnFiles: DiffFile[] };
+  'read-image': { mediaType: string; base64: string };
+  'read-task-output': { text: string; mtimeMs: number };
 }
 
 /** What a new thread on this computer can start in and with. */

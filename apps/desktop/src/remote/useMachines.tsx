@@ -15,7 +15,6 @@ import { toast } from '@/toast/store';
 import { host } from '../host';
 import { useLatest } from '../useLatest';
 import type {
-  CommandData,
   CommandResult,
   FollowedMachine,
   RemoteCommand,
@@ -24,6 +23,7 @@ import { StoreScope, type Action, type State } from '../store';
 import { commandFor } from './actions';
 import { applyFrame, cachedMirror, type Mirror } from './mirror';
 import { toWire } from './ids';
+import { askMachine, type DataOf } from './threadIo';
 import { openRemoteThread } from '../routes/nav';
 
 /** A computer this one follows, with its store as far as the stream has brought it; no state before its first snapshot. */
@@ -42,10 +42,6 @@ interface Machines {
     command: Extract<RemoteCommand, { type: T }>,
   ) => Promise<DataOf<T>>;
 }
-
-type DataOf<T extends RemoteCommand['type']> = T extends keyof CommandData
-  ? CommandData[T]
-  : undefined;
 
 const MachinesContext = createContext<Machines | null>(null);
 const NOT_SENT: CommandResult = { isOk: false, error: 'Not sent' };
@@ -151,17 +147,8 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
-  const ask = async <T extends RemoteCommand['type']>(
-    machineId: string,
-    command: Extract<RemoteCommand, { type: T }>,
-  ) => {
-    const result = await host.remote.command(machineId, toWire(command));
-    if (!result.isOk) throw new Error(result.error);
-    return result.data as DataOf<T>;
-  };
-
   return (
-    <MachinesContext.Provider value={{ machines, run, ask }}>
+    <MachinesContext.Provider value={{ machines, run, ask: askMachine }}>
       {children}
       {dialog}
     </MachinesContext.Provider>
@@ -339,6 +326,11 @@ const COMMAND_VERBS = {
   'terminal-write': 'type in the terminal',
   'terminal-resize': 'resize the terminal',
   'terminal-close': 'close the terminal',
+  'write-file': 'save the file',
+  search: 'search the files',
+  'turn-diff': 'read the turn’s changes',
+  'read-image': 'read the image',
+  'read-task-output': 'read the task’s output',
 } satisfies Record<RemoteCommand['type'], string>;
 
 const SUCCESS: Partial<Record<RemoteCommand['type'], string>> = {

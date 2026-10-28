@@ -110,7 +110,7 @@ function PrView({
   const { diffStyle, mergeMethod: preferred } = usePrefs();
   const changeActions = useChangeActions({
     thread,
-    cwd,
+    io: { kind: 'local', root: cwd },
     canStage: false,
     diffStyle,
     run,

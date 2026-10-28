@@ -16,7 +16,8 @@ import {
 import { FileFinder, type FileTarget } from '@/files/FileFinder';
 import { FileView } from '@/files/FileView';
 import { useFileList } from '@/files/useFiles';
-import { threadCwd } from '@/host/cwd';
+import { IoDenied, OfflineNote } from '@/remote/IoStates';
+import { useThreadIo, type ThreadIo } from '@/remote/threadIo';
 import { cn } from '@/lib/utils';
 import { AskAboutFileRange } from '@/sidechat/AskInSideChat';
 import { noteOpened } from './recentFiles';
@@ -25,13 +26,15 @@ import { BoundShortcut } from '../Shortcut';
 import { commandOf } from '../keymap';
 
 export function FilesTab({ thread, tab }: PaneTabProps) {
-  const root = threadCwd(thread);
-  if (!root) return <NoFolderState />;
+  const io = useThreadIo(thread);
+  if (!io) return <NoFolderState />;
+  if (io.kind === 'denied')
+    return <IoDenied title="Files aren’t shared" reason={io.reason} />;
   return (
     <FilesBrowser
-      key={`${tab.id}:${root}`}
+      key={`${tab.id}:${io.kind === 'local' ? io.root : io.machine.id}`}
       threadId={thread.id}
-      root={root}
+      io={io}
       initial={tab.file}
     />
   );
@@ -39,14 +42,14 @@ export function FilesTab({ thread, tab }: PaneTabProps) {
 
 function FilesBrowser({
   threadId,
-  root,
+  io,
   initial,
 }: {
   threadId: string;
-  root: string;
+  io: ThreadIo;
   initial?: FileTarget;
 }) {
-  const { files, error } = useFileList(root);
+  const { files, error, isTruncated } = useFileList(io);
   const [selected, setSelected] = useState<FileTarget | null>(initial ?? null);
   const [isTreeOpen, setIsTreeOpen] = useState(!initial);
   const [query, setQuery] = useState('');
@@ -123,7 +126,7 @@ function FilesBrowser({
             <p className="px-3 pt-11 type-meta text-destructive">{error}</p>
           ) : (
             <FileFinder
-              root={root}
+              io={io}
               files={files ?? []}
               selected={selected?.path ?? null}
               query={query}
@@ -132,21 +135,34 @@ function FilesBrowser({
               onOpen={open}
             />
           )}
+          {isTruncated && (
+            <p className="px-3 pb-3 type-caption text-subtle-foreground">
+              Showing the first {files?.length.toLocaleString()} files
+            </p>
+          )}
         </aside>
       )}
-      <div className={cn('min-w-0 flex-1', isTreeOpen && 'bg-background')}>
-        {selected ? (
-          <FileView
-            key={`${selected.path}:${selected.line ?? ''}:${selected.column?.join('-') ?? ''}`}
-            root={root}
-            path={selected.path}
-            line={selected.line}
-            column={selected.column}
-            toolbar={toolbar}
-          />
-        ) : (
-          <NoFileState toolbar={toolbar} />
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 flex-col',
+          isTreeOpen && 'bg-background',
         )}
+      >
+        <OfflineNote io={io} />
+        <div className="min-h-0 flex-1">
+          {selected ? (
+            <FileView
+              key={`${selected.path}:${selected.line ?? ''}:${selected.column?.join('-') ?? ''}`}
+              io={io}
+              path={selected.path}
+              line={selected.line}
+              column={selected.column}
+              toolbar={toolbar}
+            />
+          ) : (
+            <NoFileState toolbar={toolbar} />
+          )}
+        </div>
       </div>
     </div>
   );

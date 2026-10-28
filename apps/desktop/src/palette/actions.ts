@@ -61,7 +61,7 @@ import { REVEAL_IN, revealPath } from '../files/editors';
 import { PRESETS, PRESET_LABELS } from '@mochi/domain/layout/tree';
 import type { Provider, Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
-import { PANE_TABS } from '../pane/tabs';
+import { PANE_TAB_LABELS } from '../pane/tabLabels';
 import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
 import { PROVIDER_NAME } from '../rewind/handoff';
@@ -513,8 +513,8 @@ export const ACTIONS = [
       ({
         id: `pane-open-${kind}`,
         group: 'Side pane',
-        title: `Open ${PANE_TABS[kind].title}`,
-        icon: PANE_TABS[kind].icon,
+        title: `Open ${PANE_TAB_LABELS[kind].title}`,
+        icon: PANE_TAB_LABELS[kind].icon,
         keywords: 'tab',
         when: when.thread,
         run: onThread((t, { dispatch }) =>
@@ -526,7 +526,7 @@ export const ACTIONS = [
     id: 'sidechat-ask',
     group: 'Side pane',
     title: 'Ask in side chat',
-    icon: PANE_TABS.sidechat.icon,
+    icon: PANE_TAB_LABELS.sidechat.icon,
     keywords: 'side question aside /side',
     when: when.thread,
     run: onThread((t, { dispatch }) => askInSideChat(dispatch, t.id)),

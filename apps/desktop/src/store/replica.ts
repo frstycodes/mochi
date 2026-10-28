@@ -228,6 +228,10 @@ function merged(state: State, saved: Saved | null): State {
     checkpoints: { ...pick(state.checkpoints), ...saved.checkpoints },
     checkpointSeq: saved.checkpointSeq,
     forks: { ...pick(state.forks), ...saved.forks },
+    remoteSideChats: {
+      ...pick(state.remoteSideChats),
+      ...saved.remoteSideChats,
+    },
   };
 }
 

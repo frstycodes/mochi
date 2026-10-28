@@ -102,6 +102,7 @@ import {
   type WorkspaceDraft,
 } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './types.ts';
+import type { RemoteSideChat } from './remoteSideChat.ts';
 import type { Saved } from './saved.ts';
 import { markSeen, type SeenAction } from './seen.ts';
 import type { TriggerDraft } from '../schedule/calls.ts';
@@ -117,6 +118,8 @@ export interface ThreadsState {
   rewindUndo: RewindUndo | null;
   /** Fork thread id → where it was forked from. */
   forks: Record<string, Fork>;
+  /** Side chats other computers ask on threads here (`remoteSideChat.ts`, its own domain slice). */
+  remoteSideChats: Record<string, RemoteSideChat>;
   /** Your prefs and pins as the folds read them (`src/store/context.ts`). */
   context: ProjectionContext;
 }
@@ -432,6 +435,7 @@ export function initialThreads(
     checkpointSeq,
     rewindUndo: null,
     forks: saved?.forks ?? {},
+    remoteSideChats: saved?.remoteSideChats ?? {},
     context: DEFAULT_CONTEXT,
   };
 }

@@ -2,6 +2,8 @@ import { turnDiffQuery } from './turnDiffQuery';
 import { useQuery } from '@tanstack/react-query';
 import { useWorktreePath } from '../git/worktrees.ts';
 import type { Thread } from '../model.ts';
+import { chooseThreadIo } from '../remote/threadIo.ts';
+import { useThreadOrigin } from '../remote/origin.tsx';
 import { turnCheckpoint } from '../rewind/checkpoints.ts';
 import { useHarness } from '../store/index.tsx';
 import type { TurnChanges } from './turnChanges.ts';
@@ -12,14 +14,20 @@ import type { TurnChanges } from './turnChanges.ts';
  */
 export function useTurnDiff(thread: Thread, turn: TurnChanges): TurnChanges {
   const { state } = useHarness();
-  const cwd = useWorktreePath(thread.id);
+  const origin = useThreadOrigin();
+  const io = chooseThreadIo(thread, origin, useWorktreePath(thread.id) ?? null);
   const list = state.checkpoints[thread.id] ?? [];
   const from = turnCheckpoint(list, turn.start)?.ref;
   const isLatest = turn.end === thread.activity.length - 1;
   // GAP: the latest turn diffs against the worktree, so your own edits after it ended count as its until you send again.
   const to = isLatest ? undefined : turnCheckpoint(list, turn.end + 1)?.ref;
   const diffQuery = useQuery(
-    turnDiffQuery(cwd, from, to, isLatest ? thread.activity.length : undefined),
+    turnDiffQuery(
+      io?.kind === 'denied' ? null : io,
+      from,
+      to,
+      isLatest ? thread.activity.length : undefined,
+    ),
   );
   if (!diffQuery.data) return turn;
   const files = diffQuery.data.map((f) => ({

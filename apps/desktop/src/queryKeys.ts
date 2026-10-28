@@ -106,6 +106,8 @@ export const queryKeys = {
   git: {
     diff: (cwd: string, scope: DiffScope, base: string | undefined) =>
       ['git-diff', cwd, scope, base] as const,
+    checkpointDiff: (cwd: string | null, threadId: string, n: number) =>
+      ['git-checkpoint-diff', cwd, threadId, n] as const,
     branches: (root: string) => ['git-branches', root] as const,
     pr: (cwd: string, githubUser: string | undefined) =>
       ['git-pr', cwd, githubUser] as const,

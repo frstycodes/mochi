@@ -44,10 +44,10 @@
     { "type": "terminal-resize", "threadId": "t", "terminalId": "p", "cols": 100, "rows": 30 },
     { "type": "terminal-close", "threadId": "t", "terminalId": "p" }
   ],
-  "hello": [{ "type": "hello", "version": 5 }, { "type": "hello", "version": 5, "members": [{ "id": "k1" }] }],
+  "hello": [{ "type": "hello", "version": 6 }, { "type": "hello", "version": 6, "members": [{ "id": "k1" }] }],
   "machineFrames": [
-    { "type": "welcome", "version": 5, "deviceId": "d-laptop", "machineName": "Studio", "machineKind": "mac", "scopes": ["read", "operate", "manage", "code"], "addresses": [] },
-    { "type": "refused", "reason": "This machine speaks protocol 4; update Mochi on both sides" },
+    { "type": "welcome", "version": 6, "deviceId": "d-laptop", "machineName": "Studio", "machineKind": "mac", "scopes": ["read", "operate", "manage", "code"], "addresses": [] },
+    { "type": "refused", "reason": "This machine speaks protocol 6; update Mochi on both sides" },
     { "type": "members", "members": [{ "id": "k1" }] }
   ],
   "results": [
