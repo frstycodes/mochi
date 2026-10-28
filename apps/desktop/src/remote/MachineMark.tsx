@@ -8,7 +8,14 @@ import { useFollowedMachine } from './useMachines';
  * Where a thread runs, on its row (sidebar, switcher): another computer's device icon, with that computer's presence dot in
  * the corner while it isn't online. Nothing for this computer's own.
  */
-export function ThreadMachineMark({ threadId }: { threadId: string }) {
+export function ThreadMachineMark({
+  threadId,
+  surfaceClass = 'bg-sidebar ring-sidebar',
+}: {
+  threadId: string;
+  /** The background the mark sits on, for the presence dot's cut-out. */
+  surfaceClass?: string;
+}) {
   const machine = useFollowedMachine(parseRemoteThreadId(threadId)?.machineId);
   if (!machine) return null;
   const isOnline = machine.status === 'online';
@@ -22,7 +29,8 @@ export function ThreadMachineMark({ threadId }: { threadId: string }) {
         <span
           aria-hidden
           className={cn(
-            'absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-sidebar ring-1 ring-sidebar',
+            'absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-1',
+            surfaceClass,
             PRESENCE_DOT[machine.status],
           )}
         />

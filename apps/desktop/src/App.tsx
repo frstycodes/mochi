@@ -47,6 +47,7 @@ import { readEmbeddedReplay } from './replay/export';
 import { ReplayPage } from './replay/ReplayView';
 import { ColorThemeController } from './themes/ColorThemeController';
 import { DeviceApprovalLayer } from './remote/DeviceApproval';
+import { MergedScope } from './remote/MergedScope';
 import { MachinesProvider } from './remote/useMachines';
 import { useLibraryNamesLoader } from './library/useLibrary';
 
@@ -80,7 +81,7 @@ function AppContent() {
             ) : route === 'design' ? (
               <DesignPage />
             ) : route.startsWith('/window/') ? (
-              // Outside `MachinesProvider`: a torn-off window shows this computer's thread only, for now.
+              // Outside `MachinesProvider`: a torn-off window shows this computer's threads only (the split menu doesn't tear off another computer's).
               <TornWindow threadId={route.slice('/window/'.length)} />
             ) : (
               <HarnessProvider>
@@ -90,7 +91,10 @@ function AppContent() {
                   <ErrorBoundary FallbackComponent={ErrorFallback}>
                     <Shell />
                   </ErrorBoundary>
-                  <Orbit />
+                  {/* The sidebar's list: pins on other computers' threads take Orbit slots like this one's. */}
+                  <MergedScope>
+                    <Orbit />
+                  </MergedScope>
                   <ThreadSwitcher />
                   <PhotoViewer />
                   <FileViewer />
@@ -192,7 +196,10 @@ function Shell() {
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
-      <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
+      {/* The sidebar's list: other computers' threads are jumped to like this one's. */}
+      <MergedScope>
+        <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
+      </MergedScope>
       <ShellEffects />
     </SidebarProvider>
   );

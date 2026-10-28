@@ -10,6 +10,7 @@ import { COMPOSER_EDITABLE } from '../chat/ComposerEditor';
 import { haptic } from '../haptic';
 import { LeafView, Workspace, WorkspaceEffects } from '../layout/Workspace';
 import type { Leaf } from '@mochi/domain/layout/tree';
+import { useMergeThreads } from '../remote/MergedScope';
 import { Overview } from '../stage/Overview';
 import { useDispatch, useHarnessSelector, type State } from '../store';
 import { useSnapPager } from '../useSnapPager';
@@ -24,7 +25,8 @@ import { useOnePagePerSwipe } from './useOnePagePerSwipe';
  */
 export function PinnedPager() {
   const dispatch = useDispatch();
-  const slots = useHarnessSelector(slotsOf, isSameSlots);
+  const merge = useMergeThreads();
+  const slots = useHarnessSelector((s) => slotsOf(s, merge(s)), isSameSlots);
   const live = useHarnessSelector((s) => liveLeaf(s, slots.ids[slots.center]));
   const isOverview = useHarnessSelector((s) => s.isOverview);
   // Every pinned page stays mounted (pins cap at five, and a virtualized thread is cheap), so a quick run of swipes never lands on an empty page.

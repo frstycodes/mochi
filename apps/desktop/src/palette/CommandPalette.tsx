@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/command';
 import { isListed } from '../model';
 import { profileById } from '../profiles';
+import { ThreadMachineMark } from '../remote/MachineMark';
 import { useHarness } from '../store';
 import { STEP_MARKS, StatusMark, lineColor } from '../ui';
 import { ACTION_GROUPS, type PaletteAction } from './actions';
@@ -76,6 +77,10 @@ export function CommandPalette({
               >
                 <StatusMark status={t.status} size="icon" />
                 <span className="truncate">{t.title}</span>
+                <ThreadMachineMark
+                  threadId={t.id}
+                  surfaceClass="bg-popover ring-popover"
+                />
                 <CommandShortcut className="tracking-normal">
                   {profileById(t.spaceId).name}
                 </CommandShortcut>

@@ -35,6 +35,7 @@ import {
 } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { GitPullRequestIcon } from '@/icons/github';
+import { ThreadMachineMark } from './remote/MachineMark';
 import { cn } from '@/lib/utils';
 import { ProviderMark, ProgressRing, lineColor } from './ui';
 import { isWorking } from './agentPhase';
@@ -388,6 +389,12 @@ function OuterNode({
         />
       )}
       <span className="truncate">{item.label}</span>
+      {item.thread && (
+        <ThreadMachineMark
+          threadId={item.thread.id}
+          surfaceClass="bg-background ring-background"
+        />
+      )}
     </div>
   );
 }
