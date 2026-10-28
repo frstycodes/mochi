@@ -127,7 +127,8 @@ import { TONE_COLORS, toneFor } from './usage/limits';
 import { TOKENS } from '@mochi/domain/lib/format';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
 import { useLibraryNames } from './library/names';
-import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
+import { DeviceIcon } from './remote/DeviceIcon';
+import { useThisBackend } from './remote/useThisBackend';
 import { useLaunchNames, usePorts } from './terminal/ports';
 import { portUrl } from '@mochi/domain/terminal/devServer';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
@@ -427,6 +428,7 @@ function EnvironmentCard({ thread }: CardProps) {
   const worktree = useWorktreePath(thread.id);
   const fullAccess = isFullAccess(agent?.permissionMode);
   const machine = useRemoteMachine();
+  const here = useThisBackend();
   return (
     <>
       <CardHeader title="Environment" />
@@ -434,11 +436,11 @@ function EnvironmentCard({ thread }: CardProps) {
         <SummaryRow
           icon={
             <DeviceIcon
-              kind={machine ? machine.kind : THIS_DEVICE}
+              kind={machine ? machine.kind : here.kind}
               className="size-4"
             />
           }
-          label={machine?.name ?? 'This computer'}
+          label={machine?.name ?? here.name}
         />
         <SummaryRow
           icon={Folder}

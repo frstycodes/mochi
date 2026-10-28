@@ -6,6 +6,7 @@ import {
   Queue,
   Schema,
   Stream,
+  SubscriptionRef,
 } from 'effect';
 import {
   Capabilities as Contract,
@@ -25,7 +26,7 @@ export const DISCONNECTED = 'The client serving this call disconnected';
 export class Capabilities extends Context.Service<Capabilities>()(
   'mochi/core/Capabilities',
   {
-    make: Effect.sync(() => {
+    make: Effect.gen(function* () {
       /** Per name, the serving clients' queues, latest last. */
       const providers = new Map<
         Contract.CapabilityName,
@@ -39,6 +40,13 @@ export class Capabilities extends Context.Service<Capabilities>()(
         }
       >();
       let nextId = 0;
+      /** The names a client serves now, in registration order; `backend.info` pushes it again when it changes. */
+      const offered = yield* SubscriptionRef.make<
+        ReadonlyArray<Contract.CapabilityName>
+      >([]);
+      const publish = Effect.suspend(() =>
+        SubscriptionRef.set(offered, [...providers.keys()]),
+      );
 
       const failPending = (queue: Queue.Queue<Contract.CapabilityCall>) => {
         for (const [id, entry] of pending) {
@@ -51,10 +59,12 @@ export class Capabilities extends Context.Service<Capabilities>()(
       /** The calls for `names`, until the stream ends, which unregisters them. */
       const serve = (names: ReadonlyArray<Contract.CapabilityName>) =>
         Stream.unwrap(
-          Effect.map(Queue.unbounded<Contract.CapabilityCall>(), (queue) => {
+          Effect.gen(function* () {
+            const queue = yield* Queue.unbounded<Contract.CapabilityCall>();
             for (const name of names)
               providers.set(name, [...(providers.get(name) ?? []), queue]);
-            const unregister = Effect.sync(() => {
+            yield* publish;
+            const unregister = Effect.gen(function* () {
               for (const name of names) {
                 const rest = (providers.get(name) ?? []).filter(
                   (q) => q !== queue,
@@ -62,6 +72,7 @@ export class Capabilities extends Context.Service<Capabilities>()(
                 if (rest.length) providers.set(name, rest);
                 else providers.delete(name);
               }
+              yield* publish;
               failPending(queue);
             });
             return Stream.fromQueue(queue).pipe(Stream.ensuring(unregister));
@@ -107,7 +118,7 @@ export class Capabilities extends Context.Service<Capabilities>()(
       /** Whether a connected client serves `name` now. */
       const offers = (name: Contract.CapabilityName) => providers.has(name);
 
-      return { serve, reply, call, offers };
+      return { serve, reply, call, offers, offered };
     }),
   },
 ) {

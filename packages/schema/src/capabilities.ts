@@ -1,6 +1,10 @@
 import { Schema } from 'effect';
 import { invoke, Str } from './checks.ts';
 import { commandScope } from './relay.ts';
+import { AuthScope, CapabilityName } from './names.ts';
+
+export { AuthScope, CapabilityName };
+export const allScopes = AuthScope.literals;
 
 /** Core refuses a WebSocket upgrade whose `v` differs, with HTTP 426. Bump on any breaking change to Core's RPCs. */
 export const PROTOCOL_VERSION = 2;
@@ -22,41 +26,6 @@ export const tokenFromSubprotocols = (header: string | undefined) =>
     .map((p) => p.trim())
     .find((p) => p.startsWith(TOKEN_PREFIX))
     ?.slice(TOKEN_PREFIX.length);
-
-/**
- * The remote member scopes, and `local`: everything only this computer's own windows and main may do. A paired device's
- * token never carries `local`. A token carries some of them; every RPC needs one (`scopeOf`).
- */
-export const AuthScope = Schema.Literals([
-  'read',
-  'operate',
-  'manage',
-  'code',
-  'terminal',
-  'local',
-]);
-export type AuthScope = typeof AuthScope.Type;
-export const allScopes = AuthScope.literals;
-
-/**
- * What a client can do for Core that Core can't: show OS notifications, own browser-pane views, reach `safeStorage`,
- * drive simulators. `host` is every `host.*` namespace whose handler still lives in main; it shrinks as they move into Core.
- * `remote` runs a device's command (`device.command`) in the window that owns the store, until Core owns it.
- * `reactor` runs the reactor's commands (`packages/core/src/reactor/commands.ts`) in the window that owns the store, until Core owns it.
- * `main` is what Core's agents ask of main (`MainForAgents` in packages/core/src/agents/main.ts), not a `host.*` namespace.
- */
-export const CapabilityName = Schema.Literals([
-  'notify',
-  'browserView',
-  'secureStorage',
-  'sim',
-  'host',
-  'remote',
-  'metrics',
-  'main',
-  'reactor',
-]);
-export type CapabilityName = typeof CapabilityName.Type;
 
 /**
  * No connected client serves `capability`: main is restarting, or Core runs headless (`mochi serve`), where the desktop's
@@ -126,6 +95,8 @@ export const capabilityOf = (namespace: string): CapabilityName =>
 /** What a paired device may call besides `device.command`. `terminal.output` pushes a shell's output. */
 const deviceScopes: Record<string, AuthScope> = {
   ping: 'read',
+  'backend.info': 'read',
+  'backend.watch': 'read',
   shell: 'read',
   thread: 'read',
   'terminal.output': 'terminal',

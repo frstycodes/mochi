@@ -2,13 +2,12 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Schema } from 'effect';
 import { WebSocketServer } from 'ws';
-import { Relay } from '@mochi/schema';
+import { Backend, Relay } from '@mochi/schema';
 import { socketLink, type Link, type RawLink } from '@mochi/core/remote/link';
 import type { DeviceGrant } from '@mochi/core/remote/token';
 import { tunnel } from '@mochi/core/remote/tunnel';
-import type { ConnectedDevice } from '../../src/host/types/remote.ts';
+import type { ConnectedDevice, Scope } from '../../src/host/types/remote.ts';
 import {
-  THIS_KIND,
   type AuthenticatedDevice,
   type Origin,
   type Secured,
@@ -21,7 +20,8 @@ export interface RemoteServerOptions {
   secure: (raw: RawLink, origin: Origin) => Promise<Secured>;
   /** Core's address and a token holding this device to its scopes (`deviceTunnel` in `@mochi/core/host`). */
   coreFor: (grant: DeviceGrant) => Promise<{ url: string; token: string }>;
-  machineName: () => string;
+  /** This computer's Core's descriptor (`backend.info`), with `scopes` the device's; sent in each welcome. */
+  backend: (scopes: Scope[]) => Promise<Backend.BackendInfo>;
   /** A device's frame that was refused, for the log. */
   onRejected: (device: string, reason: string) => void;
   onDevicesChange?: () => void;
@@ -123,9 +123,7 @@ export async function startRemoteServer(
       type: 'welcome',
       version: Relay.PROTOCOL_VERSION,
       deviceId: device.deviceId,
-      machineName: options.machineName(),
-      machineKind: THIS_KIND,
-      scopes: device.scopes,
+      backend: await options.backend(device.scopes),
       addresses: reachable,
       ...(options.members && { members: options.members() }),
     });

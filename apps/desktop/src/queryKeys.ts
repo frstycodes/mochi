@@ -178,6 +178,9 @@ export const queryKeys = {
     previewFrame: (hostId: string | null | undefined) =>
       ['preview-frame', hostId] as const,
   },
+  backend: {
+    info: () => ['backend-info'] as const,
+  },
   developer: {
     metrics: () => ['developer-metrics'] as const,
   },

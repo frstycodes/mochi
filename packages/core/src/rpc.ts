@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup, RpcMiddleware } from 'effect/rpc';
-import { Agent, Capabilities, HostRpcs, Model } from '@mochi/schema';
+import { Agent, Backend, Capabilities, HostRpcs, Model } from '@mochi/schema';
 import { StoreRpcs } from './store/rpc.ts';
 import { Gate, StaleKind, WatchKey, WatchValue } from './watch/keys.ts';
 import { GithubRpcs } from './github/schema.ts';
@@ -99,6 +99,17 @@ export class CoreRpcs extends RpcGroup.make(
   Rpc.make('utility.classify', {
     payload: { prompt: Schema.String, thread: Model.Thread },
     success: Schema.NullOr(Agent.DriftVerdict),
+  }),
+  /** This Core's descriptor as this connection sees it. */
+  Rpc.make('backend.info', { success: Backend.BackendInfo }),
+  /** The descriptor now, then again whenever it changes. */
+  Rpc.make('backend.watch', { success: Backend.BackendInfo, stream: true }),
+  /** Main tells Core the id and name it registered for this machine; local only. */
+  Rpc.make('backend.identify', {
+    payload: {
+      id: Schema.optional(Schema.String),
+      name: Schema.optional(Schema.String),
+    },
   }),
   Rpc.make('capabilities.serve', {
     payload: { names: Schema.Array(Capabilities.CapabilityName) },

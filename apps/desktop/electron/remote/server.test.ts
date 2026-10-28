@@ -110,7 +110,15 @@ const setup = (scopes: Scope[]) =>
             url: coreUrl(port, '').split('#')[0]!,
             token: mintDeviceToken(TOKEN, grant),
           }),
-          machineName: () => 'Studio',
+          backend: async (scopes) => ({
+            id: 'studio',
+            name: 'Studio',
+            kind: 'mac',
+            appVersion: '0.0.0',
+            protocolVersion: Capabilities.PROTOCOL_VERSION,
+            capabilities: [],
+            scopes,
+          }),
           onRejected: (_device, reason) => void rejected.push(reason),
         }),
       ),
@@ -241,7 +249,7 @@ it.live(
         ),
         ['Fix login', 'Fix SSO login'],
       );
-      assert.equal(welcomes[0]?.machineName, 'Studio');
+      assert.equal(welcomes[0]?.backend.name, 'Studio');
     }),
 );
 
@@ -415,7 +423,7 @@ it.live('malformed frames from a device are refused and logged', () =>
       open('{"type":"hello","version":3}'),
     );
     yield* Effect.promise(() => badHello.closed);
-    assert.match(badHello.replies[0] ?? '', /"refused".*protocol 6/);
+    assert.match(badHello.replies[0] ?? '', /"refused".*protocol 7/);
 
     // The old protocol's command frame, after a good hello: no longer anything Core speaks.
     const old: {
@@ -424,7 +432,7 @@ it.live('malformed frames from a device are refused and logged', () =>
       replies: string[];
       welcomed: Promise<void>;
     } = yield* Effect.promise(() =>
-      open(JSON.stringify({ type: 'hello', version: 6 })),
+      open(JSON.stringify({ type: 'hello', version: 7 })),
     );
     yield* Effect.promise(() => old.welcomed);
     old.link.send(
@@ -436,7 +444,7 @@ it.live('malformed frames from a device are refused and logged', () =>
     );
     yield* Effect.promise(() => old.closed);
     assert.equal(rejected.length, 2);
-    assert.match(rejected[0]!, /protocol 6/);
+    assert.match(rejected[0]!, /protocol 7/);
     assert.match(rejected[1]!, /Malformed frame: \{"type":"command"/);
   }),
 );
