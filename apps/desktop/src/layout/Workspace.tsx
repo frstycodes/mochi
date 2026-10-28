@@ -37,6 +37,11 @@ import { ProjectsView } from '../ProjectsView';
 import { SettledView } from '../settled/SettledView';
 import { QueueView } from '../QueueView';
 import { useDispatch, useHarnessSelector, useThread } from '../store';
+import { useAnyThread } from '../store/anyThread';
+import { parseRemoteThreadId } from '../remote/ids';
+import { DeviceIndicator, useRemoteMachine } from '../remote/origin';
+import { RemoteThreadLeaf } from '../remote/RemoteThreadLeaf';
+import { PaneTabContent } from '../pane/PaneTabContent';
 import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
@@ -220,19 +225,34 @@ export function LeafView({
 }
 
 function LeafContent({ leafId, view }: { leafId: string; view: View }) {
-  const thread = useThread(view.kind === 'thread' ? view.id : '');
+  const id = view.kind === 'thread' ? view.id : '';
+  const isRemote = !!parseRemoteThreadId(id);
+  const thread = useAnyThread(id)?.thread;
   if (view.kind === 'tab')
-    return <TabLeaf threadId={view.threadId} tabId={view.tabId} />;
+    return parseRemoteThreadId(view.threadId) ? (
+      <RemoteThreadLeaf threadId={view.threadId}>
+        <TabLeaf threadId={view.threadId} tabId={view.tabId} />
+      </RemoteThreadLeaf>
+    ) : (
+      <TabLeaf threadId={view.threadId} tabId={view.tabId} />
+    );
   // A thread or tab that no longer exists (deleted, or saved by a launch that showed demo data) opens a new thread.
   const kind = view.kind in PAGES ? (view.kind as PageKind) : 'new';
   const { icon: Icon, title, component: Page } = PAGES[kind];
   return (
     <>
       {/* Keyed: another thread is a fresh view, so its pane, summary and chat open in their own state instead of animating from the last thread's. */}
-      {!!thread && <ThreadView key={thread.id} thread={thread} />}
+      {/* Another computer's thread: the same view under its store, every change a command to it. */}
+      {isRemote ? (
+        <RemoteThreadLeaf key={id} threadId={id}>
+          {!!thread && <ThreadView key={thread.id} thread={thread} />}
+        </RemoteThreadLeaf>
+      ) : (
+        !!thread && <ThreadView key={thread.id} thread={thread} />
+      )}
       {/* Sending from a new thread fades its page out over the thread it started; every other switch is instant. */}
       <AnimatePresence initial={false} custom={isHandingOff(leafId)}>
-        {!thread && (
+        {!thread && !isRemote && (
           <PageLeaf key={kind}>
             <LeafBar>
               <Icon className="size-4 text-muted-foreground" />
@@ -289,8 +309,9 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
     s.panes.find((p) => p.threadId === threadId),
   );
   const tab = pane?.tabs.find((t) => t.id === tabId);
+  const machine = useRemoteMachine();
   if (!thread || !pane || !tab) return <ClosedTab />;
-  const { icon: Icon, component: Content } = PANE_TABS[tab.kind];
+  const { icon: Icon } = PANE_TABS[tab.kind];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
@@ -304,6 +325,7 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{tabTitle(tab)}</span>
         </SplitTabHandle>
+        {!!machine && <DeviceIndicator machine={machine} />}
         <button
           type="button"
           onClick={() =>
@@ -317,7 +339,7 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
       <PaneSlots>
         <PaneSlotBar />
         <div className="min-h-0 flex-1">
-          <Content thread={thread} pane={pane} tab={tab} />
+          <PaneTabContent thread={thread} pane={pane} tab={tab} />
         </div>
       </PaneSlots>
     </div>

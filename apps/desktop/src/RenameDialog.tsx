@@ -11,10 +11,19 @@ import { Input } from '@/components/ui/input';
 import type { Thread } from './model';
 import { endRename, titleToSave, useDialogRename } from './rename';
 import { useHarness, useDispatch } from './store';
+import { OwnerScope } from './remote/RemoteThreadScope';
 
 /** Mounted once at the app root: renames started away from the thread's sidebar row (⌘K, the thread header's menu). */
 export function RenameLayer() {
   const threadId = useDialogRename();
+  return (
+    <OwnerScope threadId={threadId}>
+      <RenameFor threadId={threadId} />
+    </OwnerScope>
+  );
+}
+
+function RenameFor({ threadId }: { threadId: string | undefined }) {
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
   if (!thread) return null;

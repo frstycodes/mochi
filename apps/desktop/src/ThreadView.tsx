@@ -57,6 +57,9 @@ import { hasGoal } from './drift';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
 import { useSeen } from './notify/useSeen';
+import { toast } from '@/toast/store';
+import { DeviceIndicator, useRemoteMachine } from './remote/origin';
+import { remotePaneReason } from './remote/RemotePanes';
 
 export function ThreadView({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();
@@ -80,7 +83,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
   // Memoized by hand: the compiler leaves it inline, and a new array each render would give every pinned tab a new onToggle.
   const openKinds = isPaneShown && pane ? layoutOf(pane).columns.flat() : [];
 
-  const toggleKind = (kind: PaneTabKind) => {
+  const toggleKind = useRemoteGate(thread, openKinds, (kind) => {
     const split = pane?.tabs.find((t) => t.kind === kind && inSplits.has(t.id));
     if (split)
       return dispatch({
@@ -91,7 +94,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
       return dispatch({ type: 'pane-close-kind', threadId: thread.id, kind });
     dispatch({ type: 'pane-show-tab', threadId: thread.id, kind });
     if (!isWide) setPaneTabOpen(true);
-  };
+  });
   usePaneShortcuts(isFocused, toggleKind);
 
   const header = (
@@ -188,6 +191,27 @@ export function ThreadView({ thread }: { thread: Thread }) {
       )}
     </div>
   );
+}
+
+/** Why a pane can't open on this thread: never on this computer's own; on another's, when it would read this computer's disk. */
+function useRemotePaneReason(thread: Thread) {
+  const machine = useRemoteMachine();
+  return (kind: PaneTabKind) =>
+    machine ? remotePaneReason(kind, machine, thread) : undefined;
+}
+
+/** A pane toggle that, on another computer's thread, says why a pane can't open instead of opening it. */
+function useRemoteGate(
+  thread: Thread,
+  openKinds: PaneTabKind[],
+  toggle: (kind: PaneTabKind) => void,
+) {
+  const reasonOf = useRemotePaneReason(thread);
+  return (kind: PaneTabKind) => {
+    const reason = reasonOf(kind);
+    if (reason && !openKinds.includes(kind)) return void toast(reason);
+    toggle(kind);
+  };
 }
 
 function noPane(threadId: string): Pane {
@@ -338,6 +362,7 @@ function ThreadHeader({
   onToggleKind: (kind: PaneTabKind) => void;
 }) {
   const { isFirst, isMulti, leafId } = useSplit();
+  const machine = useRemoteMachine();
   const progress = goalProgress(thread);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
@@ -354,9 +379,11 @@ function ThreadHeader({
           pinDrop.isOver && 'bg-accent/40',
         )}
       >
+        {!!machine && <DeviceIndicator machine={machine} />}
         <ThreadMenu thread={thread} />
-        <LimitChip thread={thread} />
-        {!thread.repo && !thread.isSettingsChat && (
+        {/* This computer's account limits and projects say nothing about another computer's thread. */}
+        {!machine && <LimitChip thread={thread} />}
+        {!machine && !thread.repo && !thread.isSettingsChat && (
           <AddToProject thread={thread} />
         )}
         {thread.prs.map((pr) => (
@@ -422,7 +449,11 @@ function ThreadHeader({
         >
           <SidebarRight />
         </TooltipIconButton>
-        <PanesMenu openKinds={openKinds} onToggle={onToggleKind} />
+        <PanesMenu
+          thread={thread}
+          openKinds={openKinds}
+          onToggle={onToggleKind}
+        />
         <RewindLayer thread={thread} />
       </TitleBar>
     </TargetContextMenu>
@@ -559,13 +590,20 @@ function PinnedTab({
 
 /** Every pane, open or closed with its shortcut, then which of them sit in the header. */
 function PanesMenu({
+  thread,
   openKinds,
   onToggle,
 }: {
+  thread: Thread;
   openKinds: PaneTabKind[];
   onToggle: (kind: PaneTabKind) => void;
 }) {
   const pins = useHeaderPins();
+  const reasonOf = useRemotePaneReason(thread);
+  // Each distinct reason once, under the list: a disabled item can't hold a tooltip.
+  const reasons = [
+    ...new Set(PINNABLE_KINDS.flatMap((kind) => reasonOf(kind) ?? [])),
+  ];
   return (
     <DropdownMenu>
       <Tooltip>
@@ -593,6 +631,7 @@ function PanesMenu({
               <DropdownMenuCheckboxItem
                 key={kind}
                 checked={openKinds.includes(kind)}
+                disabled={!!reasonOf(kind) && !openKinds.includes(kind)}
                 onCheckedChange={() => onToggle(kind)}
                 className="pr-1.5 text-muted-foreground data-[state=checked]:text-foreground *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden"
               >
@@ -604,6 +643,14 @@ function PanesMenu({
               </DropdownMenuCheckboxItem>
             );
           })}
+          {reasons.map((reason) => (
+            <p
+              key={reason}
+              className="px-2 py-1 type-caption text-subtle-foreground"
+            >
+              {reason}
+            </p>
+          ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuSub>

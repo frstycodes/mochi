@@ -21,6 +21,7 @@ import {
   type PaneTabKind,
   type Thread,
 } from './model';
+import { PaneTabContent } from './pane/PaneTabContent';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { PaneHeader, PaneSlots, PaneTitle } from './pane/PaneHeader';
 import {
@@ -366,7 +367,6 @@ function PaneCard({
   const dispatch = useDispatch();
   const { ref, handleRef } = useDraggable({ id: kind });
   const tab = shownTab(pane, kind);
-  const Content = PANE_TABS[kind].component;
   const focus = () =>
     !isFocused &&
     dispatch({ type: 'pane-focus-kind', threadId: thread.id, kind });
@@ -423,7 +423,7 @@ function PaneCard({
           <PaneTabs thread={thread} pane={pane} kind={kind} shown={tab} />
         )}
         <div className={cn('min-h-0 flex-1', rect.isCollapsed && 'hidden')}>
-          {!!tab && <Content thread={thread} pane={pane} tab={tab} />}
+          {!!tab && <PaneTabContent thread={thread} pane={pane} tab={tab} />}
         </div>
       </PaneSlots>
     </section>

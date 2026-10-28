@@ -1,3 +1,4 @@
+import { PaneTabContent } from './pane/PaneTabContent';
 import {
   useContext,
   useEffect,
@@ -41,7 +42,7 @@ import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
 import { isTabOnScreen } from './store/panes';
 import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
-import { PANE_TABS, tabTitle } from './pane/tabs';
+import { tabTitle } from './pane/tabs';
 import { useHarness, useDispatch, useHarnessSelector } from './store';
 import { isWorking } from './agentPhase';
 import { isCommand } from './keymap';
@@ -600,13 +601,12 @@ function PoppedTab({
   pane: Pane;
   tab: PaneTab;
 }) {
-  const Content = PANE_TABS[tab.kind].component;
   return (
     <div className="flex h-full flex-col bg-card">
       <PaneSlots>
         <PaneSlotBar />
         <div className="min-h-0 flex-1">
-          <Content thread={thread} pane={pane} tab={tab} />
+          <PaneTabContent thread={thread} pane={pane} tab={tab} />
         </div>
       </PaneSlots>
     </div>

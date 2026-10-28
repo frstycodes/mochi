@@ -65,3 +65,22 @@ test('what a device can’t do maps to nothing rather than to something close', 
   );
   assert.equal(commandFor({ type: 'pause' }), null);
 });
+
+test('a message to another computer’s thread goes as text; one with images or skills isn’t sent without them', () => {
+  const send = {
+    type: 'send',
+    threadId: 'm1~t',
+    text: 'hi',
+    reason: '',
+  } as const;
+  assert.deepEqual(commandFor(send), {
+    type: 'send',
+    threadId: 'm1~t',
+    text: 'hi',
+  });
+  assert.equal(
+    commandFor({ ...send, images: [{ mediaType: 'image/png', data: '' }] }),
+    null,
+  );
+  assert.equal(commandFor({ ...send, skills: ['simplify'] }), null);
+});

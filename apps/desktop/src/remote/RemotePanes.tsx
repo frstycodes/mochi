@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useState, type ReactNode } from 'react';
-import { ArrowUp, X } from '@/icons';
+import { ArrowUp } from '@/icons';
 import {
   ConversationContent,
   Conversation,
@@ -48,29 +48,26 @@ import { useConfirm } from '../git/useConfirm';
 import { gitError } from '../git/useGit';
 import type { DiffScope } from '../host/types/git';
 import type { FollowedMachine, RemoteCommand } from '../host/types/remote';
-import type { Thread } from '../model';
+import type { PaneTabKind, Thread } from '../model';
 import {
   DiffError,
   DIFF_STYLES,
   NoChanges,
   revertRequest,
 } from '../pane/ChangesTab';
-import {
-  PaneActions,
-  PaneActionsSlot,
-  PaneSlots,
-  PaneTitle,
-  PaneTitleSlot,
-} from '../pane/PaneHeader';
+import { PaneActions, PaneTitle } from '../pane/PaneHeader';
 import { Answer, EmptySideChat, Question } from '../pane/SideChatTab';
 import { PANE_TABS } from '../pane/tabs';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { chatFor } from '../store/sidechat';
 import { useHarness } from '../store';
 import { DiffStat } from '../WorkLog';
-import { ModeToggle, TooltipIconButton } from '../ui';
+import { ModeToggle } from '../ui';
 import { REMOTE_SIDE_CHAT_TAB } from './commands';
 import { useMachines } from './useMachines';
+import { elsewhereReason, useRemoteMachine } from './origin';
+import { RemoteShipBar } from './RemoteShip';
+import type { PaneTabProps } from '../pane/tabs';
 import { queryKeys } from '../queryKeys';
 
 // Lazy so CodeMirror parses only when a file is first opened.
@@ -78,78 +75,64 @@ const RemoteTerminal = lazy(() => import('./RemoteTerminal'));
 const CodeEditor = lazy(() => import('../files/CodeEditor'));
 
 /** Panes another computer's thread can open here, each reading from and acting on that computer, and the scope each needs. */
-export const REMOTE_PANES = {
+const REMOTE_PANES = {
   changes: { scope: 'code', needsFolder: true },
   files: { scope: 'code', needsFolder: true },
   terminal: { scope: 'terminal', needsFolder: true },
   sidechat: { scope: 'read', needsFolder: false },
 } as const;
 
-export type RemotePaneKind = keyof typeof REMOTE_PANES;
+type RemotePaneKind = keyof typeof REMOTE_PANES;
 
-/** One pane card beside the chat, its header like the machine's own panes. */
-/** `file`: what a link in the transcript last opened, shown in Files. */
-export function RemotePane({
-  kind,
-  machine,
-  thread,
-  file,
-  onClose,
-}: {
-  kind: RemotePaneKind;
-  machine: FollowedMachine;
-  thread: Thread;
-  file?: FileTarget;
-  onClose: () => void;
-}) {
-  const { title, icon: Icon } = PANE_TABS[kind];
+/**
+ * A pane tab of another computer's thread in the app's own side pane (`usePaneTabComponent`): the panes that read from that
+ * computer through commands, and for the rest why they can't open here yet. None reads this computer's disk.
+ */
+export function RemotePaneTab({ thread, tab }: PaneTabProps) {
+  const machine = useRemoteMachine();
+  if (!machine) return null;
+  const reason = remotePaneReason(tab.kind, machine, thread);
+  if (reason)
+    return (
+      <PaneState
+        title={`${PANE_TABS[tab.kind].title} isn’t here yet`}
+        description={reason}
+      />
+    );
+  const kind = tab.kind as RemotePaneKind;
   return (
-    <section
-      aria-label={title}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card"
-    >
-      <PaneSlots>
-        <header
-          data-pane-header
-          className="flex h-9 shrink-0 items-center gap-0.5 pl-3 select-none"
-        >
-          <PaneTitleSlot>
-            <Icon
-              aria-hidden
-              className="size-3.5 shrink-0 text-muted-foreground"
-            />
-            <h2 className="truncate type-meta font-medium">{title}</h2>
-          </PaneTitleSlot>
-          <PaneActionsSlot />
-          <TooltipIconButton
-            label={`Close ${title}`}
-            hint={`Reads from ${machine.name} again when you open it`}
-            onClick={onClose}
-            data-pane-edge
-            className="mr-1.5 text-muted-foreground"
-          >
-            <X />
-          </TooltipIconButton>
-        </header>
-        <div className="flex min-h-0 flex-1 flex-col">
-          {kind === 'changes' && (
-            <RemoteChanges machine={machine} thread={thread} />
-          )}
-          {kind === 'files' && (
-            <RemoteFiles machine={machine} thread={thread} file={file} />
-          )}
-          {kind === 'terminal' && (
-            <Suspense>
-              <RemoteTerminal machine={machine} thread={thread} />
-            </Suspense>
-          )}
-          {kind === 'sidechat' && (
-            <RemoteSideChat machine={machine} thread={thread} />
-          )}
-        </div>
-      </PaneSlots>
-    </section>
+    <div className="flex h-full min-h-0 flex-col">
+      {kind === 'changes' && (
+        <RemoteChanges machine={machine} thread={thread} />
+      )}
+      {kind === 'files' && (
+        <RemoteFiles machine={machine} thread={thread} file={tab.file} />
+      )}
+      {kind === 'terminal' && (
+        <Suspense>
+          <RemoteTerminal machine={machine} thread={thread} />
+        </Suspense>
+      )}
+      {kind === 'sidechat' && (
+        <RemoteSideChat machine={machine} thread={thread} />
+      )}
+    </div>
   );
+}
+
+/** Why a pane can't open on another computer's thread: not built for it yet, a scope it wasn't given, no folder. */
+export function remotePaneReason(
+  kind: PaneTabKind,
+  machine: FollowedMachine,
+  thread: Pick<Thread, 'repo' | 'live'>,
+) {
+  if (!(kind in REMOTE_PANES)) return elsewhereReason(machine);
+  const { scope, needsFolder } = REMOTE_PANES[kind as RemotePaneKind];
+  if (!machine.scopes.includes(scope))
+    return `${machine.name} hasn’t given this computer the ${scope} scope`;
+  if (needsFolder && !thread.repo && !thread.live?.cwd)
+    return 'This thread has no folder yet';
+  return undefined;
 }
 
 const DIFF_POLL_MS = 4000;
@@ -306,6 +289,7 @@ function RemoteChanges({
           />
         </ScrollArea>
       )}
+      {!!thread.repo && <RemoteShipBar machine={machine} thread={thread} />}
       {dialog}
     </>
   );
@@ -523,9 +507,12 @@ function RemoteSideChat({
   machine: FollowedMachine;
   thread: Thread;
 }) {
-  const { state } = useHarness();
-  const { run } = useMachines();
-  const chat = chatFor(state, thread.id, REMOTE_SIDE_CHAT_TAB);
+  const { run, machines } = useMachines();
+  // The side chat runs on that computer: its answers are in its store, not this window's.
+  const mirror = machines.find((m) => m.machine.id === machine.id)?.state;
+  const chat = mirror
+    ? chatFor(mirror, thread.id, REMOTE_SIDE_CHAT_TAB)
+    : { messages: [] };
   const isStreaming = chat.messages.some((m) => m.isStreaming);
   const canAsk =
     machine.status === 'online' && machine.scopes.includes('operate');

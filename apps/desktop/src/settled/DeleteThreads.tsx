@@ -18,6 +18,7 @@ import { plural } from '@mochi/domain/lib/format';
 import { removeThreadWorktree, useWorktreePaths } from '../git/worktrees';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
+import { OwnerScope } from '../remote/RemoteThreadScope';
 import { deleteTitle } from './settled';
 
 const openStore = createStore<{ threadIds: string[] }>(() => ({
@@ -32,6 +33,14 @@ export function requestDelete(threadIds: string[]) {
 /** Mounted once at the app root. */
 export function DeleteThreadsLayer() {
   const threadIds = useStore(openStore, (s) => s.threadIds);
+  return (
+    <OwnerScope threadId={threadIds[0]}>
+      <DeleteThreadsFor threadIds={threadIds} />
+    </OwnerScope>
+  );
+}
+
+function DeleteThreadsFor({ threadIds }: { threadIds: string[] }) {
   const { state } = useHarness();
   const threads = state.threads.filter((t) => threadIds.includes(t.id));
   return (

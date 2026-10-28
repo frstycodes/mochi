@@ -62,6 +62,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
+import { useRemoteMachine } from './remote/origin';
 import { useWorktreePath } from './git/worktrees';
 import { useGitDiff } from './git/useGit';
 import { cn } from '@/lib/utils';
@@ -425,13 +426,19 @@ function EnvironmentCard({ thread }: CardProps) {
   const { repo, agent } = thread;
   const worktree = useWorktreePath(thread.id);
   const fullAccess = isFullAccess(agent?.permissionMode);
+  const machine = useRemoteMachine();
   return (
     <>
       <CardHeader title="Environment" />
       <CardBody>
         <SummaryRow
-          icon={<DeviceIcon kind={THIS_DEVICE} className="size-4" />}
-          label="This computer"
+          icon={
+            <DeviceIcon
+              kind={machine ? machine.kind : THIS_DEVICE}
+              className="size-4"
+            />
+          }
+          label={machine?.name ?? 'This computer'}
         />
         <SummaryRow
           icon={Folder}

@@ -3,6 +3,7 @@ import { useQueries } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
 import { imageMime } from '../files/previews';
 import { queryKeys } from '../queryKeys';
+import { useThreadOrigin } from '../remote/origin';
 
 // A URL has a scheme (`data:`, `https:`, `blob:`); a Windows drive (`C:\`) looks like one, so it's checked first.
 const isUrl = (src: string) =>
@@ -16,11 +17,13 @@ export const isFilePath = (src: string) => !isUrl(src);
  * URLs (revoked when the sources change or the caller goes). Per source: the URL, `undefined` while it loads, `null` when it can't be read.
  */
 export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
+  // Another computer's path names its file, not this computer's one at the same path: it isn't read here.
+  const isRemote = useThreadOrigin().kind === 'remote';
   const images = useQueries({
     queries: srcs.map((src) => ({
       queryKey: queryKeys.chat.imageBlob(src),
       queryFn: () => readImage(src),
-      enabled: !!src && isFilePath(src),
+      enabled: !!src && isFilePath(src) && !isRemote,
       structuralSharing: false,
     })),
     combine: (results) =>
@@ -29,6 +32,7 @@ export function useImageUrls(srcs: string[]): (string | null | undefined)[] {
   const urls = useObjectUrls(images.map(({ blob }) => blob));
   return srcs.map((src, i) => {
     if (!isFilePath(src)) return src;
+    if (isRemote) return null;
     const blob = images[i].blob;
     return (blob && urls.get(blob)) ?? (images[i].isError ? null : undefined);
   });

@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
+import { OwnerScope } from '../remote/RemoteThreadScope';
 import { TooltipIconButton } from '../ui';
 import {
   applyDraft,
@@ -37,6 +38,14 @@ export function openGoalEditor(threadId: string | null) {
 /** Mounted once at the app root. */
 export function GoalEditorLayer() {
   const threadId = useStore(openStore, (s) => s.threadId);
+  return (
+    <OwnerScope threadId={threadId}>
+      <GoalEditorFor threadId={threadId} />
+    </OwnerScope>
+  );
+}
+
+function GoalEditorFor({ threadId }: { threadId: string | null }) {
   const { state } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
   if (!thread) return null;

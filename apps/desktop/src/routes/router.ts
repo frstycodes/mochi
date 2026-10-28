@@ -34,7 +34,7 @@ const replayRoute = createRoute({
 const remoteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/remote/$machineId/$threadId',
-  component: lazyRouteComponent(load, 'RemoteThreadView'),
+  component: lazyRouteComponent(load, 'RemoteThreadRedirect'),
 });
 const developerRoute = createRoute({
   getParentRoute: () => rootRoute,
