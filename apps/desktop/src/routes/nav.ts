@@ -11,6 +11,7 @@ import {
   type RemoteThreadRoute,
 } from './locations';
 import { getRouter } from './router';
+import { wireId } from '../remote/ids';
 
 let nonce = 0;
 
@@ -56,7 +57,7 @@ export function openReplay(threadId: string) {
 export function openRemoteThread({ machineId, threadId }: RemoteThreadRoute) {
   void getRouter().navigate({
     to: '/remote/$machineId/$threadId',
-    params: { machineId, threadId },
+    params: { machineId, threadId: wireId(threadId) },
     replace: !!remoteRouteOf(getRouter().state.location),
   });
 }
@@ -97,7 +98,7 @@ export function useEscapeBack() {
         )
       )
         return;
-      if (isTyping(e.target)) return void (e.target as HTMLElement).blur();
+      if (isTyping(e.target)) return (e.target as HTMLElement).blur();
       goBack();
     };
     return listenKeydown(onKey);

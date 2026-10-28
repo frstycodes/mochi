@@ -23,6 +23,7 @@ import type {
 import { StoreScope, type Action, type State } from '../store';
 import { commandFor } from './actions';
 import { applyFrame, cachedMirror, type Mirror } from './mirror';
+import { toWire } from './ids';
 import { openRemoteThread } from '../routes/nav';
 
 /** A computer this one follows, with its store as far as the stream has brought it; no state before its first snapshot. */
@@ -75,7 +76,7 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     const offFrames = host.remote.onMachineFrame(({ machineId, frame }) =>
       setMirrors((all) => ({
         ...all,
-        [machineId]: applyFrame(all[machineId], frame),
+        [machineId]: applyFrame(machineId, all[machineId], frame),
       })),
     );
     // Before this, frames went nowhere: every machine starts over, each thread from its snapshot.
@@ -96,7 +97,10 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
         (next, { machineId, saved }) =>
           next[machineId]
             ? next
-            : { ...next, [machineId]: cached(cachedMirror(JSON.parse(saved))) },
+            : {
+                ...next,
+                [machineId]: cached(cachedMirror(machineId, JSON.parse(saved))),
+              },
         all,
       ),
     );
@@ -131,7 +135,7 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       if (!isSent) return NOT_SENT;
     }
     const result = await host.remote
-      .command(machineId, command)
+      .command(machineId, toWire(command))
       .catch((error: unknown): CommandResult => ({
         isOk: false,
         error: error instanceof Error ? error.message : String(error),
@@ -151,7 +155,7 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     machineId: string,
     command: Extract<RemoteCommand, { type: T }>,
   ) => {
-    const result = await host.remote.command(machineId, command);
+    const result = await host.remote.command(machineId, toWire(command));
     if (!result.isOk) throw new Error(result.error);
     return result.data as DataOf<T>;
   };

@@ -210,11 +210,11 @@ function watchConfig(
     );
   });
   const { muted, quiet } = state.notifications;
-  // Another computer's threads count toward the badge too, keyed by machine so ids never collide with this one's.
-  const remoteNeedsYou = machines.flatMap(({ machine, state }) =>
+  // Another computer's threads count toward the badge too; their ids are machine-aware, so they never collide with this one's.
+  const remoteNeedsYou = machines.flatMap(({ state }) =>
     (state?.threads ?? [])
       .filter((t) => t.status === 'needs-you')
-      .map((t) => `${machine.id}/${t.id}`),
+      .map((t) => t.id),
   );
   return {
     threads,

@@ -80,26 +80,28 @@ function AppContent() {
             ) : route === 'design' ? (
               <DesignPage />
             ) : route.startsWith('/window/') ? (
+              // Outside `MachinesProvider`: a torn-off window shows this computer's thread only, for now.
               <TornWindow threadId={route.slice('/window/'.length)} />
             ) : (
               <HarnessProvider>
+                {/* Around the overlays too: Orbit, the switcher and the thread dialogs can reach other computers' threads. */}
                 <MachinesProvider>
                   {/* Inside the store's provider: a crash in the shell (the sidebar) keeps the store and its running agents. */}
                   <ErrorBoundary FallbackComponent={ErrorFallback}>
                     <Shell />
                   </ErrorBoundary>
+                  <Orbit />
+                  <ThreadSwitcher />
+                  <PhotoViewer />
+                  <FileViewer />
+                  <ScheduleLayer />
+                  <DeleteThreadsLayer />
+                  <RenameLayer />
+                  <GoalEditorLayer />
+                  <DeviceApprovalLayer />
+                  <Toaster />
+                  <AppZoomChip />
                 </MachinesProvider>
-                <Orbit />
-                <ThreadSwitcher />
-                <PhotoViewer />
-                <FileViewer />
-                <ScheduleLayer />
-                <DeleteThreadsLayer />
-                <RenameLayer />
-                <GoalEditorLayer />
-                <DeviceApprovalLayer />
-                <Toaster />
-                <AppZoomChip />
               </HarnessProvider>
             )}
           </ErrorBoundary>

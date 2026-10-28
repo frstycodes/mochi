@@ -15,8 +15,9 @@ import {
   type RemoteBaseline,
 } from './remote';
 
+// v2: thread and queue ids became machine-aware; a v1 baseline would read every thread as new and alert for each once.
 const baselineSlice = persistedFamily<RemoteBaseline | null>(
-  'harness:remote-alerts:',
+  'harness:remote-alerts:v2:',
   null,
 );
 
