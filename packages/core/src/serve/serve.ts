@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import path from 'node:path';
 import { Config, Console, Effect, Option } from 'effect';
 import { Command, Flag } from 'effect/cli';
@@ -9,6 +8,7 @@ import { version } from '../../../../package.json' with { type: 'json' };
 import { chromiumLauncher, headlessBrowser } from '../browser/headless.ts';
 import { launchCore } from '../launch.ts';
 import { resolveAuth } from './auth.ts';
+import { dataFlag, login, logout, offerLogin } from './login.ts';
 
 const serve = Command.make(
   'serve',
@@ -49,18 +49,13 @@ const serve = Command.make(
       Flag.withDescription('PEM private key for --tls-cert'),
       Flag.optional,
     ),
-    data: Flag.String('data').pipe(
-      Flag.withDescription(
-        'Data folder; the desktop app’s works while the app is closed',
-      ),
-      Flag.withFallbackConfig(Config.NonEmptyString('MOCHI_CORE_DATA')),
-      Flag.withDefault(path.join(homedir(), '.mochi', 'serve')),
-    ),
+    data: dataFlag,
   },
   (flags) =>
     Effect.gen(function* () {
       const auth = yield* resolveAuth(flags);
       mkdirSync(flags.data, { recursive: true });
+      yield* offerLogin(flags.data);
       const url = `${auth.tls ? 'https' : 'http'}://${flags.host}:${flags.port}`;
       yield* Console.log(
         auth.isGenerated
@@ -93,7 +88,9 @@ const serve = Command.make(
   Command.withDescription('Run Core headless and serve the UI to a browser'),
 );
 
-const mochi = Command.make('mochi').pipe(Command.withSubcommands([serve]));
+const mochi = Command.make('mochi').pipe(
+  Command.withSubcommands([serve, login, logout]),
+);
 
 Command.run(mochi, { version }).pipe(
   Effect.provide(NodeServices.layer),

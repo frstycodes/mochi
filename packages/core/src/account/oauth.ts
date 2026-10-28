@@ -8,7 +8,7 @@ export const ENDPOINTS = {
   userinfo: '/oauth/userinfo',
   revoke: '/oauth/token/revoke',
 };
-const SCOPES = 'openid profile email offline_access';
+export const SCOPES = 'openid profile email offline_access';
 
 export interface Pkce {
   verifier: string;

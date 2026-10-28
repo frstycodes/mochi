@@ -91,3 +91,28 @@ it.live(
       assert.deepEqual(yield* host('library.connectorSettings', []), {});
     }),
 );
+
+it.live(
+  'the account answers with no main: signed out, sign-in points at `mochi login`, and its token stays off windows',
+  () =>
+    Effect.gen(function* () {
+      const port = yield* startHeadless;
+      const call = makeHostCaller(yield* makeCoreClient(coreUrl(port, TOKEN)));
+      const host = (tag: string, args: ReadonlyArray<unknown>) =>
+        Effect.promise(() =>
+          call(tag, args).then(
+            (value) => ({ value }),
+            (error: unknown) => ({ error: String(error) }),
+          ),
+        );
+      const got = (yield* host('account.get', [])) as {
+        value: { status: string };
+      };
+      assert.equal(got.value.status, 'signed-out');
+      const signIn = (yield* host('account.signIn', [])) as { error: string };
+      assert.match(signIn.error, /mochi login/);
+      const window = yield* makeCoreClient(coreUrl(port, TOKEN, 1));
+      const refused = yield* Effect.flip(window['account.relayToken']());
+      assert.match(String(refused), /Only main/);
+    }),
+);

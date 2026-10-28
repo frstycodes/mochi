@@ -9,7 +9,6 @@ import { runDeviceCommand } from '../remote/index.ts';
 import { processMetrics } from '../metrics.ts';
 import { mainWindow } from '../window.ts';
 import type { Handlers } from './handlers.ts';
-import { account } from './account.ts';
 import { mainForAgents } from '../agents/events.ts';
 import { browser } from './browser.ts';
 import { data } from './data.ts';
@@ -36,7 +35,8 @@ type InCore =
   | 'projects'
   | 'ports'
   | 'usage'
-  | 'pty';
+  | 'pty'
+  | 'account';
 
 /** Main's part of a namespace Core serves the rest of. */
 type InMain = {
@@ -57,7 +57,6 @@ const handlers = {
   data,
   themes,
   remote,
-  account,
   library,
   updates,
 } satisfies {
