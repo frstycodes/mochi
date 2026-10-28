@@ -161,7 +161,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
     result: CommandResult,
   ) {
     if (command.type === 'terminal-close')
-      return void interrupt(current.terminals, command.terminalId);
+      return interrupt(current.terminals, command.terminalId);
     if (
       command.type !== 'terminal-open' ||
       !result.isOk ||

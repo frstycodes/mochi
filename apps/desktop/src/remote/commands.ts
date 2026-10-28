@@ -32,6 +32,7 @@ import { closeShell, openShell, shellOf } from './terminals.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
 import { switchHere } from '../rewind/switch.ts';
 import type { Action, State } from '../store/index.tsx';
+import { nextThreadId } from '../store/threads.ts';
 import { storeCommand, type StoreCommand } from './storeCommands.ts';
 
 export interface CommandEnv {
@@ -267,6 +268,7 @@ async function create(
           (p) => p.id === command.project && !p.isMissing,
         );
   if (project === undefined) return fail('That project isn’t on this machine');
+  const threadId = nextThreadId(state);
   dispatch({
     type: 'create',
     title: command.title,
@@ -277,7 +279,7 @@ async function create(
     isLive: host.isDesktop,
     isBackground: true,
   });
-  return ok;
+  return { isOk: true, data: { threadId } };
 }
 
 /**

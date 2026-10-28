@@ -68,6 +68,7 @@ import {
   type Workspace,
 } from './git/WorkspacePicker';
 import type { WorkspaceDraft } from './git/workspace';
+import { openStarted } from './remote/expecting';
 import { RunsOnMenu } from './remote/RunsOnMenu';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
 import { HeroRows, heroTitle } from './NewThreadHero';
@@ -244,6 +245,8 @@ function NewThread() {
         ...(images.length > 0 && { images }),
       });
       if (!result.isOk) return false;
+      mention.clear();
+      if (openStarted(remote.id, result, dispatch)) return;
       return void toast.success(`Started on ${remote.name}`, {
         description: 'It’s in the sidebar under that computer.',
       });

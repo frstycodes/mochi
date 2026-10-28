@@ -255,6 +255,7 @@ const CommandData = Schema.Union([
   CatalogProject,
   Schema.Struct({ text: S }),
   Schema.Struct({ terminalId: S }),
+  Schema.Struct({ threadId: S }),
 ]);
 
 const okFields = {

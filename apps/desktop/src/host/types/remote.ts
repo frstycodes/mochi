@@ -240,6 +240,7 @@ export interface CommandData {
   files: { paths: string[]; isTruncated: boolean };
   'read-file': { text: string };
   'terminal-open': { terminalId: string };
+  create: { threadId: string };
 }
 
 /** What a new thread on this computer can start in and with. */
