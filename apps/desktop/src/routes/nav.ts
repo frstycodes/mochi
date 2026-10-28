@@ -11,7 +11,8 @@ import {
   type RemoteThreadRoute,
 } from './locations';
 import { getRouter } from './router';
-import { wireId } from '../remote/ids';
+import { parseRemoteThreadId, wireId } from '../remote/ids';
+import { useView } from '../store';
 
 let nonce = 0;
 
@@ -53,7 +54,7 @@ export function openReplay(threadId: string) {
   void getRouter().navigate({ to: '/replay/$threadId', params: { threadId } });
 }
 
-/** Another computer's thread over the app, like a replay. Between two remote threads it replaces, so Back leaves them. */
+/** Another computer's thread, opened in the focused split like this computer's own (`RemoteThreadRedirect`). */
 export function openRemoteThread({ machineId, threadId }: RemoteThreadRoute) {
   void getRouter().navigate({
     to: '/remote/$machineId/$threadId',
@@ -115,9 +116,17 @@ export function useReplayRoute() {
   return replayThreadOf(useLocation());
 }
 
-export function useRemoteThreadRoute() {
-  const location = useLocation();
-  return remoteRouteOf(location);
+/** Another computer's thread in the focused split, as a route names it: what the sidebar marks and alerts stay quiet for. */
+export function useRemoteThreadRoute(): RemoteThreadRoute | null {
+  const view = useView();
+  const id = view.kind === 'thread' ? view.id : '';
+  const remote = parseRemoteThreadId(id);
+  return remote && { machineId: remote.machineId, threadId: id };
+}
+
+/** A `/remote/$machineId/$threadId` link (an alert, a deep link): it only redirects to the thread in a split. */
+export function useRemoteThreadLink() {
+  return remoteRouteOf(useLocation());
 }
 
 export function usePathname() {

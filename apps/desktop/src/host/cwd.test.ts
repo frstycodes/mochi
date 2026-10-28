@@ -3,6 +3,7 @@ import { test } from 'vite-plus/test';
 import { setWorktreePath } from '../git/worktrees.ts';
 import type { Thread } from '../model.ts';
 import { repoFor } from '../projects.ts';
+import { remoteThreadId } from '../remote/ids.ts';
 import { threadCwd } from './cwd.ts';
 
 const thread = (id: string, repo: Thread['repo']) => ({ id, repo }) as Thread;
@@ -71,3 +72,30 @@ test('repoFor keeps an absolute path and names the project after its folder', ()
   });
   assert.deepEqual(repoFor('~/dev/app', 'b'), { project: 'app', branch: 'b' });
 });
+
+test('threadCwd: another computer’s thread has no folder here, even when this computer has the same path or worktree id', () => {
+  const id = remoteThreadId('m1', 't1');
+  setWorktreePath(id, '/Users/me/.harness/worktrees/app/t1');
+  const remote = {
+    ...thread(id, repoFor('/Users/me/dev/app', 'feat/t1')),
+    live: { cwd: '/Users/me/dev/app' },
+  } as Thread;
+  const errors = mockConsoleError();
+  assert.equal(threadCwd(remote, true), null);
+  assert.equal(threadCwd({ ...remote, repo: null }, true), null, 'a chat');
+  assert.equal(threadCwd(remote, false), null, 'the web build');
+  setWorktreePath(id, null);
+  assert.equal(errors.restore(), 1, 'reported once per thread in dev');
+});
+
+function mockConsoleError() {
+  const original = console.error;
+  let count = 0;
+  console.error = () => void count++;
+  return {
+    restore: () => {
+      console.error = original;
+      return count;
+    },
+  };
+}

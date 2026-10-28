@@ -15,6 +15,11 @@ export function commandFor(
         queueId: action.queueId,
         ...(action.answers && { answers: action.answers }),
       };
+    // Text only for now: images and skills don't cross yet, so a message with them isn't sent without them.
+    case 'send':
+      return action.images?.length || action.skills?.length
+        ? null
+        : { type: 'send', threadId: action.threadId, text: action.text };
     case 'interrupt':
       return { type: 'interrupt', threadId: action.threadId };
     case 'seen':
