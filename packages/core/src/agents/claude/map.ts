@@ -511,7 +511,10 @@ export function createMapper(
     Object.assign(reported, { input, output, cached, costUsd });
     context = {
       ...context,
-      max: Math.max(...models.map((m) => m.contextWindow), context.max),
+      max: fitWindow(
+        Math.max(...models.map((m) => m.contextWindow), context.max),
+        context.used,
+      ),
     };
     return context.used
       ? {
@@ -593,11 +596,11 @@ export function createMapper(
                   inputTokens: 0,
                   outputTokens: 0,
                   contextUsed: used,
-                  contextMax: context.max || undefined,
+                  contextMax: fitWindow(context.max, used) || undefined,
                 },
               ]
             : [];
-        context = { ...context, used };
+        context = { ...context, used, max: fitWindow(context.max, used) };
         // Text already arrived as stream_event deltas (includePartialMessages), so only thinking and tool calls are read here.
         return [
           ...meter,
@@ -1199,6 +1202,13 @@ function exitCode(block: ToolResultBlock) {
 // GAP: the SDK types `resetsAt` as a number without a unit; read as epoch seconds unless it is large enough to be milliseconds.
 const resetTime = (value: number) =>
   new Date(value < 1e12 ? value * 1000 : value).toISOString();
+
+/** The window sizes Claude models come in. */
+const WINDOWS = [200_000, 1_000_000];
+
+/** A window can't be smaller than what it holds: Claude Code can report 200K for a model running its 1M window, so grow to the tier that fits. */
+const fitWindow = (max: number, used: number) =>
+  max && used > max ? (WINDOWS.find((w) => w >= used) ?? used) : max;
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
 
