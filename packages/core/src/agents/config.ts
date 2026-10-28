@@ -27,7 +27,7 @@ export { userPath };
 
 /**
  * Agent settings shared by the settings UI (main) and the harness adapters (Core). Each process points it at the stored
- * document with `useAgentConfig`; only main's `electron/ipc/settings.ts` writes.
+ * document with `useAgentConfig`; only Core's `settings/host.ts` writes.
  */
 
 /** Where the settings document lives in this process, and the OS keychain the API keys are sealed with. */
@@ -51,6 +51,16 @@ export function useAgentConfig(next: AgentConfigSource) {
 export function reloadAgentConfig() {
   stored = undefined;
   unreadable = undefined;
+}
+
+/** Core's push to main with the agent settings document, whenever it saves it. */
+export const AGENT_SETTINGS_SAVED = 'settings:agentSaved';
+
+/** Another process saved the document: reload it, and tell this process's listeners. */
+export function agentConfigChanged() {
+  reloadAgentConfig();
+  const settings = agentSettings();
+  for (const listener of listeners) listener(settings);
 }
 
 const sourceOf = () => {

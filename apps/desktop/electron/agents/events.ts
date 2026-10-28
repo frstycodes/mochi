@@ -10,17 +10,23 @@ import type {
   StartWorkspace,
 } from '../../src/host/types/agent.ts';
 import type { AgentLogin } from '../../src/host/types/settings.ts';
-import type { Provider } from '../../src/model.ts';
 import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 import { mainCoreClient } from '@mochi/core/host';
 import { makeHostCaller } from '@mochi/core/hostClient';
-import { useAgentConfig } from '@mochi/core/agents/config';
+import {
+  AGENT_SETTINGS_SAVED,
+  agentConfigChanged,
+  useAgentConfig,
+} from '@mochi/core/agents/config';
 import type { MainForAgents } from '@mochi/core/agents/main';
 import { setDataDir } from '@mochi/core/agents/paths';
-import { cachedDoc, writeDoc } from '@mochi/core/store/client';
+import { cacheDoc, cachedDoc } from '@mochi/core/store/client';
 import { stopCompare } from '../browser/compare.ts';
-import { sessionConnectors, sessionToolRules } from '../library/connectors.ts';
-import { sessionLibrary } from '../library/store.ts';
+import {
+  forgetAccount,
+  sessionConnectors,
+  sessionToolRules,
+} from '../library/connectors.ts';
 import {
   callMochi,
   codexUrl,
@@ -43,7 +49,9 @@ let whenClosed: Tap = () => {};
 setDataDir(() => app.getPath('userData'));
 useAgentConfig({
   read: () => cachedDoc('settings', 'agent'),
-  write: (value) => writeDoc('settings', 'agent', value),
+  write: async () => {
+    throw new Error('Agent settings are written by Core');
+  },
   keychain: {
     isAvailable: async () => canStore(),
     encrypt: async (text) => seal(text),
@@ -82,6 +90,10 @@ function deliver({
   windowId?: number;
 }) {
   if (channel === 'mochi:busy') return setBusy(payload as string[]);
+  if (channel === AGENT_SETTINGS_SAVED) {
+    cacheDoc('settings', 'agent', payload);
+    return agentConfigChanged();
+  }
   if (windowId !== undefined) {
     const target = webContents.fromId(windowId);
     if (target && !target.isDestroyed()) target.send(channel, payload);
@@ -157,7 +169,7 @@ export function onBusyChange(tap: () => void) {
 export const openWindows = () =>
   BrowserWindow.getAllWindows().filter((w) => !w.webContents.isDestroyed());
 
-/** The `main` capability: what Core's agents can't do without Electron, the window, or main's library. */
+/** The `main` capability: what Core's agents and library can't do without Electron, the window, or main's connector accounts. */
 export const mainForAgents = {
   mochiTool: (thread: string, name: string, args: Record<string, unknown>) =>
     callMochi(thread, name, args),
@@ -173,13 +185,15 @@ export const mainForAgents = {
     resolveToolCall(id, result),
   codexUrl: (thread: string, scope: MochiScope) => codexUrl(thread, scope),
   killGuardUrl: () => killGuardUrl(),
-  library: async (spaceId: string, provider: Provider) => {
-    const [library, connectors, rules] = await Promise.all([
-      sessionLibrary(spaceId, provider),
+  connectors: async (spaceId: string) => {
+    const [connectors, rules] = await Promise.all([
       sessionConnectors(spaceId),
       sessionToolRules(spaceId),
     ]);
-    return { ...library, connectors, rules };
+    return { connectors, rules };
+  },
+  forgetConnector: async (id: string) => {
+    await forgetAccount(id);
   },
   // Core kills the thread's terminals itself (packages/core/src/pty/sessions.ts).
   settle: async (threadId: string) => {

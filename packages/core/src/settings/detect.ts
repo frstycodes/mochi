@@ -1,23 +1,22 @@
 import { createInterface } from 'node:readline';
-import { runCommand, RunError, spawnCommand } from '@mochi/core/runClient';
+import { runCommand, RunError, spawnCommand } from '../runClient.ts';
 import type {
   Account,
   AgentInstall,
   AgentLogin,
-} from '../../src/host/types/settings.ts';
-import type { Provider } from '../../src/model.ts';
+} from '../../../../apps/desktop/src/host/types/settings.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import {
   parseClaudeAuth,
   parseCodexAccount,
   parseVersion,
-} from '../../src/settings/parse.ts';
+} from '../../../../apps/desktop/src/settings/parse.ts';
+import { accountEnv, resolveExecutable, userPath } from '../agents/config.ts';
+import { HARNESSES } from '../../../../apps/desktop/src/settings/harnesses.ts';
 import {
-  accountEnv,
-  resolveExecutable,
-  userPath,
-} from '@mochi/core/agents/config';
-import { HARNESSES } from '../../src/settings/harnesses.ts';
-import { killTree, spawnable } from '../platform.ts';
+  killTree,
+  spawnable,
+} from '../../../../apps/desktop/electron/platform.ts';
 
 const TIMEOUT_MS = 10_000;
 

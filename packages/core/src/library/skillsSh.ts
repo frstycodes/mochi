@@ -2,7 +2,7 @@ import {
   parseLeaderboard,
   SKILLS_SH,
   skillsShSkill,
-} from '../../src/library/skillsSh.ts';
+} from '../../../../apps/desktop/src/library/skillsSh.ts';
 import { cached } from './catalog.ts';
 
 /**

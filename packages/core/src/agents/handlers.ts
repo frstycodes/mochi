@@ -53,6 +53,7 @@ import { ask as askAgent, utility } from './ask.ts';
 import { models } from './models.ts';
 import { resolveRun } from '../../../../apps/desktop/src/runtime/models.ts';
 import { setImageGenerator } from './mochiTools.ts';
+import { librarySession } from '../library/session.ts';
 import { main } from './main.ts';
 import { userData } from './paths.ts';
 import type { Turns } from './turns.ts';
@@ -144,7 +145,7 @@ const codex = new CodexAdapter(
   (thread, scope) => main.codexUrl(thread, scope),
   async ({ spaceId, cwd, nativeOff }) => {
     const [{ servers, connectors, rules }, native] = await Promise.all([
-      main.library(spaceId, 'codex'),
+      librarySession(spaceId, 'codex'),
       codexNativeOff(spaceId, cwd, nativeOff),
     ]);
     const tools = Object.entries(rules).map(([key, keyRules]) =>

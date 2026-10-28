@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { userData } from '../agents/paths.ts';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -7,15 +7,15 @@ import { Option, Schema, SchemaTransformation } from 'effect';
 import type {
   CatalogPlugin,
   MarketplaceCatalog,
-} from '../../src/library/library.ts';
+} from '../../../../apps/desktop/src/library/library.ts';
 import { parsePluginBundle } from '@mochi/domain/library/pluginBundle';
 import { isInternalSkill, parseSkillMd } from '@mochi/domain/library/skillMd';
 import {
   findSkillDirs,
   parseSkillSource,
 } from '@mochi/domain/library/skillSource';
-import { readTar } from '../../src/library/tar.ts';
-import { run } from '@mochi/core/git/run';
+import { readTar } from '../../../../apps/desktop/src/library/tar.ts';
+import { run } from '../git/run.ts';
 
 /** Skills and plugins from public GitHub repos and marketplace.json files (Claude's and Codex's formats). */
 export class CatalogError extends Error {}
@@ -477,7 +477,7 @@ export async function cached<T>(
   isFresh = false,
 ): Promise<T> {
   const file = join(
-    app.getPath('userData'),
+    userData(),
     'library-cache',
     `${createHash('sha256').update(key).digest('hex').slice(0, 32)}.json`,
   );

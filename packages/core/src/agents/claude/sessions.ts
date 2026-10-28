@@ -55,6 +55,7 @@ import {
 } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../mochiTools.ts';
 import { emitAgentEvent } from '../events.ts';
+import { librarySession } from '../../library/session.ts';
 import { main } from '../main.ts';
 import {
   accountEnv,
@@ -63,7 +64,7 @@ import {
   defaultModel,
   userPath,
 } from '../config.ts';
-import { detect } from '../../../../../apps/desktop/electron/settings/detect.ts';
+import { detect } from '../../settings/detect.ts';
 import { exitEvent } from './exit.ts';
 import { spawnThroughRun } from './spawn.ts';
 import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
@@ -443,7 +444,7 @@ async function launch(session: Session) {
       );
     const [library, native, profileText, isAccountFileUsed] = await Promise.all(
       [
-        main.library(options.spaceId, 'claude'),
+        librarySession(options.spaceId, 'claude'),
         nativeOffSettings(options),
         profileInstructions(options.spaceId, 'claude'),
         accountInstructionsUsed(options.spaceId, 'claude'),

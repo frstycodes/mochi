@@ -4,7 +4,6 @@ import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
 import { setImageDir } from '@mochi/core/agents/images';
 import { mainCapabilities } from './ipc/index.ts';
-import { startLibraryUpdates } from './library/updates.ts';
 import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
 import { startScheduler } from './schedule/scheduler.ts';
@@ -54,7 +53,6 @@ app
     startAppIcon();
     startWatch();
     startScheduler();
-    startLibraryUpdates();
     startUpdates();
     // Before the first window: it watches every window's close.
     startRemote();

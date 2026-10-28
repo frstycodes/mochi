@@ -1,4 +1,7 @@
-import { isUpdatable, type LibraryItem } from '../../src/library/library.ts';
+import {
+  isUpdatable,
+  type LibraryItem,
+} from '../../../../apps/desktop/src/library/library.ts';
 import { discoverSkills, fetchPluginBundle } from './catalog.ts';
 import {
   marketplaces,
