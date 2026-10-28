@@ -1,19 +1,6 @@
 import type { ComponentType } from 'react';
-import {
-  BackgroundTask,
-  Chart,
-  Folder,
-  Layers,
-  Globe,
-  MessagePlus,
-  Phone,
-  Plug,
-  type IconComponent,
-  Diff,
-  Terminal,
-} from '@/icons';
 import type { Pane, PaneTab, PaneTabKind, Thread } from '../model';
-import { GitPullRequestIcon } from '../icons/github';
+import { PANE_TAB_LABELS } from './tabLabels';
 import { AgentsTab } from './AgentsTab';
 import { ArtifactsTab } from './ArtifactsTab';
 import { BrowserTab } from './BrowserTab';
@@ -32,27 +19,31 @@ export interface PaneTabProps {
   tab: PaneTab;
 }
 
-export const PANE_TABS = {
-  browser: { title: 'Preview', icon: Globe, component: BrowserTab },
-  changes: { title: 'Changes', icon: Diff, component: ChangesTab },
-  terminal: { title: 'Terminal', icon: Terminal, component: TerminalTab },
-  files: { title: 'Files', icon: Folder, component: FilesTab },
-  simulator: { title: 'Simulator', icon: Phone, component: SimulatorTab },
-  ports: { title: 'Ports', icon: Plug, component: PortsTab },
-  sidechat: { title: 'Side chat', icon: MessagePlus, component: SideChatTab },
-  agents: {
-    title: 'Background tasks',
-    icon: BackgroundTask,
-    component: AgentsTab,
-  },
-  visual: { title: 'Visual', icon: Chart, component: VisualTab },
-  artifacts: { title: 'Artifacts', icon: Layers, component: ArtifactsTab },
-  pr: { title: 'Pull request', icon: GitPullRequestIcon, component: PrTab },
-} satisfies Record<
-  PaneTabKind,
-  { title: string; icon: IconComponent; component: ComponentType<PaneTabProps> }
->;
+const COMPONENTS = {
+  browser: BrowserTab,
+  changes: ChangesTab,
+  terminal: TerminalTab,
+  files: FilesTab,
+  simulator: SimulatorTab,
+  ports: PortsTab,
+  sidechat: SideChatTab,
+  agents: AgentsTab,
+  visual: VisualTab,
+  artifacts: ArtifactsTab,
+  pr: PrTab,
+} satisfies Record<PaneTabKind, ComponentType<PaneTabProps>>;
+
+export const PANE_TABS = Object.fromEntries(
+  Object.entries(PANE_TAB_LABELS).map(([kind, label]) => [
+    kind,
+    { ...label, component: COMPONENTS[kind as PaneTabKind] },
+  ]),
+) as {
+  [K in PaneTabKind]: (typeof PANE_TAB_LABELS)[K] & {
+    component: ComponentType<PaneTabProps>;
+  };
+};
 
 export function tabTitle(tab: PaneTab) {
-  return tab.title ?? PANE_TABS[tab.kind].title;
+  return tab.title ?? PANE_TAB_LABELS[tab.kind].title;
 }
