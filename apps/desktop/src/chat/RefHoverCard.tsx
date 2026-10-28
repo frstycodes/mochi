@@ -28,6 +28,11 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { GitMergeIcon, GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
@@ -75,7 +80,7 @@ type OpenControl = Pick<
   'open' | 'onOpenChange'
 >;
 
-/** Wraps a PR or issue trigger; hovering it (300ms) or focusing it opens the preview. The caller already holds the state, from `useRefState`. */
+/** Wraps a PR or issue trigger; hovering it (300ms) or focusing it opens the preview. The caller already holds the state, from `useRefState`. With `open` set the caller opens it (a click on the trigger toggles), and it's a popover: it closes on an outside click or Esc, not when the pointer leaves. */
 export function RefHoverCard({
   item,
   side,
@@ -93,6 +98,23 @@ export function RefHoverCard({
     footer?: ReactNode;
     children: ReactElement;
   }) {
+  const contentClass = cn('flex w-80 flex-col gap-3 p-3', REDUCED_MOTION);
+  if (open !== undefined) {
+    return (
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>{children}</PopoverTrigger>
+        <PopoverContent
+          side={side}
+          align={align}
+          collisionPadding={8}
+          className={contentClass}
+        >
+          <RefPreview item={item} threadId={threadId} />
+          {footer}
+        </PopoverContent>
+      </Popover>
+    );
+  }
   return (
     <HoverCard
       open={open}
@@ -105,7 +127,7 @@ export function RefHoverCard({
         side={side}
         align={align}
         collisionPadding={8}
-        className={cn('flex w-80 flex-col gap-3 p-3', REDUCED_MOTION)}
+        className={contentClass}
       >
         <RefPreview item={item} threadId={threadId} />
         {footer}
