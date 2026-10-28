@@ -6,8 +6,9 @@ import type { Thread } from '../model';
 import { useProfiles } from '../profiles';
 import { queryKeys } from '../queryKeys';
 import {
-  StoreScope,
-  useHarness,
+  DerivedScope,
+  useDispatch,
+  useGetState,
   useHarnessSelector,
   type Action,
   type State,
@@ -34,8 +35,9 @@ const PROJECTS_STALE_MS = 5 * 60_000;
  * them as its own. An action goes to the computer whose threads it names; pins on another computer's threads stay on this screen.
  */
 export function MergedScope({ children }: { children: ReactNode }) {
-  const { state, dispatch } = useHarness();
-  const merged = useMergedState(state);
+  const dispatch = useDispatch();
+  const getState = useGetState();
+  const derive = useMergedDerive();
   const dispatchOn = useRemoteDispatch();
   const { machines } = useMachines();
   const pins = useRemotePins();
@@ -67,16 +69,16 @@ export function MergedScope({ children }: { children: ReactNode }) {
     if (isScreenAction(action)) return dispatch(action);
     if (isQuietAction(action)) return;
     if (action.type === 'reorder' && (pins.length > 0 || namesRemote(action)))
-      return reorderHere(merged.threads, action, dispatch);
+      return reorderHere(derive(getState()).threads, action, dispatch);
     if (action.type === 'pin-at' && parseRemoteThreadId(action.threadId))
-      return pinHere(merged.threads, action);
+      return pinHere(derive(getState()).threads, action);
     toMachines(action);
   };
 
   return (
-    <StoreScope state={merged} dispatch={route}>
+    <DerivedScope derive={derive} dispatch={route}>
       {children}
-    </StoreScope>
+    </DerivedScope>
   );
 }
 
@@ -106,12 +108,14 @@ function pinHere(
 const namesRemote = (action: Extract<Action, { type: 'reorder' }>) =>
   [...action.pinned, ...action.unpinned].some((id) => parseRemoteThreadId(id));
 
-/** `state` with every followed computer's threads and Queue in it, in this computer's profiles and projects. */
-function useMergedState(state: State): State {
-  const sources = useMergedSources(state.spaceId);
+/** A state with every followed computer's threads and Queue in it, in this computer's profiles and projects. */
+function useMergedDerive(): (state: State) => State {
+  const spaceId = useHarnessSelector((s) => s.spaceId);
+  const sources = useMergedSources(spaceId);
   const pins = useRemotePins();
   const spaceIds = useProfiles().map((p) => p.id);
-  return mergedState(state, sources, pins, spaceIds);
+  const ids = spaceIds.join();
+  return (state: State) => mergedState(state, sources, pins, ids.split(','));
 }
 
 /**

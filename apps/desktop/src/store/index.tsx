@@ -201,6 +201,42 @@ export function StoreScope({
   );
 }
 
+/**
+ * A `StoreScope` over this window's own state, `derive`d from it on every change by subscription: the scope never re-renders
+ * for a streamed token, and readers re-render only for what they select. `dispatch` may change identity freely.
+ */
+export function DerivedScope({
+  derive,
+  dispatch,
+  children,
+}: {
+  derive: (state: State) => State;
+  dispatch: Dispatch<Action>;
+  children: ReactNode;
+}) {
+  const base = useHarnessStore();
+  const [store] = useState(() =>
+    createStore<State>()(() => derive(base.getState())),
+  );
+  useLayoutEffect(() => {
+    const apply = () => store.setState(derive(base.getState()), true);
+    apply();
+    return base.store.subscribe(apply);
+  }, [base, store, derive]);
+  const latest = useRef(dispatch);
+  useLayoutEffect(() => {
+    latest.current = dispatch;
+  });
+  const [value] = useState(() => ({
+    store,
+    getState: store.getState,
+    dispatch: (action: Action) => latest.current(action),
+  }));
+  return (
+    <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>
+  );
+}
+
 function useStoreValue() {
   const replica = requireReplica();
   const { dispatch, apply } = storeDispatch(replica);
