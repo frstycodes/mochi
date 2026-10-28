@@ -47,6 +47,7 @@ import { readEmbeddedReplay } from './replay/export';
 import { ReplayPage } from './replay/ReplayView';
 import { ColorThemeController } from './themes/ColorThemeController';
 import { DeviceApprovalLayer } from './remote/DeviceApproval';
+import { MergedScope } from './remote/MergedScope';
 import { MachinesProvider } from './remote/useMachines';
 import { useLibraryNamesLoader } from './library/useLibrary';
 
@@ -90,7 +91,10 @@ function AppContent() {
                   <ErrorBoundary FallbackComponent={ErrorFallback}>
                     <Shell />
                   </ErrorBoundary>
-                  <Orbit />
+                  {/* The sidebar's list: pins on other computers' threads take Orbit slots like this one's. */}
+                  <MergedScope>
+                    <Orbit />
+                  </MergedScope>
                   <ThreadSwitcher />
                   <PhotoViewer />
                   <FileViewer />

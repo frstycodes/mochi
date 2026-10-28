@@ -7,8 +7,13 @@ import {
   pagerSlots,
   pinnedNeighbour,
   releasePage,
+  slotsOf,
   swipeStarts,
 } from './slots.ts';
+import { PIN_SLOTS, type Thread } from '../model.ts';
+import { remoteThreadId } from '../remote/ids.ts';
+import { mergeThreads } from '../remote/merged.ts';
+import type { State } from '../store/types.ts';
 
 const PINS = ['a', 'b', 'c', 'd', 'e'];
 
@@ -98,4 +103,58 @@ test('a pile-up behind a busy frame stays the same swipe; a gentle start after a
   assert.equal(isStart(216, 50, 0), false);
   assert.equal(isStart(400, 10, 0), true);
   assert.equal(isStart(1000, 120, 0), true);
+});
+
+// Another computer's pins sit among this one's in the pager and take Orbit slots, as the sidebar lists them.
+const thread = (id: string, extra: Partial<Thread> = {}) =>
+  ({
+    id,
+    spaceId: 'personal',
+    status: 'running',
+    startedAt: 0,
+    activity: [],
+    repo: null,
+    ...extra,
+  }) as unknown as Thread;
+
+test('a pin on another computer’s thread takes its place among the pager’s pages and Orbit’s slots', () => {
+  const lap = (id: string) => remoteThreadId('lap', id);
+  const merged = mergeThreads(
+    [
+      thread('a', { orbitSlot: 1, pinOrder: 10 }),
+      thread('z', { pinOrder: 30, orbitSlot: 2 }),
+    ],
+    [
+      {
+        state: {
+          threads: [thread(lap('r')), thread(lap('s'))],
+        } as unknown as State,
+      },
+    ],
+    [{ id: lap('r'), order: 20 }],
+    ['personal'],
+    'personal',
+  );
+  const state = {
+    spaceId: 'personal',
+    layouts: {
+      personal: {
+        focusId: 'x',
+        root: { kind: 'leaf', id: 'x', view: { kind: 'thread', id: lap('r') } },
+      },
+    },
+  } as unknown as State;
+  const slots = slotsOf(state, merged);
+  assert.deepEqual(slots, { ids: ['a', lap('r'), 'z'], center: 1 });
+  assert.equal(pinnedNeighbour(slots, -1), 'a');
+  assert.equal(pinnedNeighbour(slots, 1), 'z');
+  const slotOf = (id: string) => merged.find((t) => t.id === id)?.orbitSlot;
+  assert.deepEqual(['a', lap('r'), 'z'].map(slotOf), PIN_SLOTS.slice(0, 3));
+  assert.equal(slotOf(lap('s')), undefined);
+  // Without the merge the local-only list leaves the remote pin out.
+  assert.deepEqual(slotsOf(state, [merged[0], merged[1]]).ids, [
+    OFF_PIN,
+    'a',
+    'z',
+  ]);
 });

@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent } from 'react';
 import { useHarness } from '../store';
+import { useMergeThreads } from '../remote/MergedScope';
 import { commandOf, listenKeydown, isCommand } from '../keymap';
 import { pinnedNeighbour, slotsOf } from './slots';
 
@@ -9,6 +10,7 @@ import { pinnedNeighbour, slotsOf } from './slots';
  */
 export function usePagerKeys() {
   const { state, dispatch } = useHarness();
+  const merge = useMergeThreads();
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.defaultPrevented) return;
     if (isCommand(e, 'dismiss') && state.isOverview) {
@@ -27,7 +29,7 @@ export function usePagerKeys() {
       return dispatch({ type: 'overview-toggle' });
     }
     const id = pinnedNeighbour(
-      slotsOf(state),
+      slotsOf(state, merge(state)),
       command === 'pinned-previous' ? -1 : 1,
     );
     if (!id) return;

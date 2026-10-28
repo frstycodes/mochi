@@ -5,10 +5,18 @@ import { host } from '../host';
 import type { Thread } from '../model';
 import { useProfiles } from '../profiles';
 import { queryKeys } from '../queryKeys';
-import { StoreScope, useHarness, type Action, type State } from '../store';
+import {
+  StoreScope,
+  useHarness,
+  useHarnessSelector,
+  type Action,
+  type State,
+} from '../store';
 import { parseRemoteThreadId } from './ids';
 import {
   mergeThreads,
+  type MergeSource,
+  type RemotePin,
   pinAcross,
   projectMap,
   reorderAcross,
@@ -100,13 +108,35 @@ const namesRemote = (action: Extract<Action, { type: 'reorder' }>) =>
 
 /** `state` with every followed computer's threads and Queue in it, in this computer's profiles and projects. */
 function useMergedState(state: State): State {
-  const { machines, ask } = useMachines();
+  const sources = useMergedSources(state.spaceId);
   const pins = useRemotePins();
   const spaceIds = useProfiles().map((p) => p.id);
+  return mergedState(state, sources, pins, spaceIds);
+}
+
+/**
+ * The sidebar's thread list as a function of this computer's state, for what numbers and orders pins (Orbit's keys, the pager)
+ * without re-rendering on every streamed token: call it where the state is read, in a selector or an event handler.
+ */
+export function useMergeThreads(): (
+  state: Pick<State, 'threads' | 'spaceId'>,
+) => Thread[] {
+  const spaceId = useHarnessSelector((s) => s.spaceId);
+  const sources = useMergedSources(spaceId);
+  const pins = useRemotePins();
+  const spaceIds = useProfiles().map((p) => p.id);
+  return (state) =>
+    sources.length === 0
+      ? state.threads
+      : mergeThreads(state.threads, sources, pins, spaceIds, state.spaceId);
+}
+
+function useMergedSources(spaceId: string): MergeSource[] {
+  const { machines, ask } = useMachines();
   // What the Projects page already read; the merged list starts no read of this computer's own.
   const localProjects = useQuery({
-    queryKey: queryKeys.projects.list(state.spaceId),
-    queryFn: () => host.projects.list(state.spaceId),
+    queryKey: queryKeys.projects.list(spaceId),
+    queryFn: () => host.projects.list(spaceId),
     enabled: false,
   }).data;
   const remoteProjects = useQueries({
@@ -118,7 +148,7 @@ function useMergedState(state: State): State {
     })),
     combine: dataOf,
   });
-  const sources = machines.flatMap(({ state: mirrored }, i) => {
+  return machines.flatMap(({ state: mirrored }, i) => {
     const theirs = remoteProjects[i];
     return mirrored
       ? [
@@ -132,15 +162,14 @@ function useMergedState(state: State): State {
         ]
       : [];
   });
-  return mergedState(state, sources, pins, spaceIds);
 }
 
 const dataOf = <T,>(results: { data?: T }[]) => results.map((r) => r.data);
 
 function mergedState(
   state: State,
-  sources: Parameters<typeof mergeThreads>[1],
-  pins: Parameters<typeof mergeThreads>[2],
+  sources: MergeSource[],
+  pins: RemotePin[],
   spaceIds: string[],
 ): State {
   if (sources.length === 0) return state;

@@ -15,10 +15,9 @@ import {
   listenKeydown,
 } from '../keymap';
 import { startRename } from '../rename';
-import { useProfiles } from '../profiles';
-import { mergeThreads } from '../remote/merged';
-import { useRemotePins } from '../remote/pins';
-import { useMachines } from '../remote/useMachines';
+import { useMergeThreads } from '../remote/MergedScope';
+import { toggleRemotePin } from '../remote/pins';
+import { parseRemoteThreadId } from '../remote/ids';
 
 const FOCUS = {
   'split-focus-left': 'ArrowLeft',
@@ -46,18 +45,8 @@ const COMMANDS = [
 /** Split and pin commands (`src/keymap.ts`): move focus between splits, zoom, split, pin or rename the focused thread, jump to pinned N here or in a new split. */
 export function useLayoutKeys() {
   const { state, dispatch } = useHarness();
-  const { machines } = useMachines();
-  const remotePins = useRemotePins();
-  const spaceIds = useProfiles().map((p) => p.id);
   // Pinned N as the sidebar numbers it, this screen's pins on other computers' threads among them.
-  const merged = () =>
-    mergeThreads(
-      state.threads,
-      machines.flatMap((m) => (m.state ? [{ state: m.state }] : [])),
-      remotePins,
-      spaceIds,
-      state.spaceId,
-    );
+  const merge = useMergeThreads();
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.defaultPrevented) return;
     const command = commandOf(e, COMMANDS);
@@ -92,7 +81,7 @@ export function useLayoutKeys() {
     }
     if (command === 'thread-pin') {
       handled();
-      return pinFocused(state, dispatch);
+      return pinFocused(merge(state), state, dispatch);
     }
     if (command === 'thread-rename') {
       const rowId =
@@ -107,7 +96,7 @@ export function useLayoutKeys() {
       return startRename(id, rowId ? 'row' : 'dialog');
     }
     const index = PINNED.indexOf(command);
-    const thread = pinnedHere(state, merged())[Math.floor(index / 2)];
+    const thread = pinnedHere(state, merge(state))[Math.floor(index / 2)];
     if (!thread) return;
     handled();
     const view = { kind: 'thread', id: thread.id } as const;
@@ -127,17 +116,26 @@ function leafRects() {
 }
 
 function pinFocused(
+  threads: State['threads'],
   s: State,
   dispatch: ReturnType<typeof useHarness>['dispatch'],
 ) {
-  const thread = s.threads.find((t) => t.id === focusedThreadId(s));
+  const thread = threads.find((t) => t.id === focusedThreadId(s));
   if (!thread || thread.status === 'settled') return;
-  const lists = togglePin(s.threads, s.spaceId, thread.id);
+  const lists = togglePin(threads, s.spaceId, thread.id);
   if (!lists)
     return toast('Pinned is full', {
       description: 'Orbit has five pin slots. Unpin a thread first.',
     });
-  dispatch({ type: 'reorder', ...lists, at: Date.now() });
+  // Another computer's thread is pinned on this screen only.
+  if (parseRemoteThreadId(thread.id)) return toggleRemotePin(thread.id);
+  const isLocal = (id: string) => !parseRemoteThreadId(id);
+  dispatch({
+    type: 'reorder',
+    pinned: lists.pinned.filter(isLocal),
+    unpinned: lists.unpinned.filter(isLocal),
+    at: Date.now(),
+  });
 }
 
 function focusedThreadId(s: State) {

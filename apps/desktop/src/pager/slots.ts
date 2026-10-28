@@ -27,13 +27,17 @@ export function pagerSlots(
   return { ids: [OFF_PIN, ...ids], center: 0 };
 }
 
-export function slotsOf(state: State): PagerSlots {
+/** `threads`: the sidebar's list when other computers' pins count (`useMergedThreads`), else this computer's own. */
+export function slotsOf(
+  state: State,
+  threads: State['threads'] = state.threads,
+): PagerSlots {
   const layout = state.layouts[state.spaceId];
   const onScreen = leaves(layout.root).flatMap((l) =>
     l.view.kind === 'thread' ? [l.view.id] : [],
   );
   const view = findLeaf(layout.root, layout.focusId)?.view;
-  const pinned = pinnedThreads(state.threads, state.spaceId).map((t) => t.id);
+  const pinned = pinnedThreads(threads, state.spaceId).map((t) => t.id);
   return pagerSlots(
     pinned,
     onScreen,
