@@ -381,9 +381,9 @@ function ThreadHeader({
       >
         {!!machine && <DeviceIndicator machine={machine} />}
         <ThreadMenu thread={thread} />
-        {/* This computer's account limits and projects say nothing about another computer's thread. */}
+        {/* This computer's account limits say nothing about another computer's thread; its projects are that computer's own. */}
         {!machine && <LimitChip thread={thread} />}
-        {!machine && !thread.repo && !thread.isSettingsChat && (
+        {!thread.repo && !thread.isSettingsChat && (
           <AddToProject thread={thread} />
         )}
         {thread.prs.map((pr) => (

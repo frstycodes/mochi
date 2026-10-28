@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { setPrefs, usePrefs } from '../settings/prefs';
-import { ArrowDown, XCircle, File, Folder, Columns, List, Rows } from '@/icons';
+import { XCircle, File, Folder, Columns, List, Rows } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -27,25 +27,11 @@ import { useGitAction, useThreadDiff } from '../git/useGit';
 import { WorktreeMenu } from '../git/WorktreeMenu';
 import { AskAboutHunk } from '../sidechat/AskInSideChat';
 import { host } from '../host';
-import type {
-  ChangeTarget,
-  DiffFile,
-  DiffScope,
-  GitDiff,
-} from '../host/types/git';
+import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { ModeToggle, OverflowIcon, TooltipIconButton, type Mode } from '../ui';
+import { ModeToggle, TooltipIconButton, type Mode } from '../ui';
 import type { Thread } from '../model';
 import { IoDenied, OfflineNote } from '../remote/IoStates';
-import { elsewhereReason } from '../remote/origin';
 import { RemoteShipBar } from '../remote/RemoteShip';
 import { askMachine, useThreadIo, type ThreadIo } from '../remote/threadIo';
 import { useDispatch, useHarness } from '../store';
@@ -176,21 +162,19 @@ function Changes({
           onSelect={(v) => setPrefs({ diffStyle: v })}
           className="text-muted-foreground"
         />
-        {io.kind === 'local' ? (
-          <WorktreeMenu
-            cwd={io.root}
-            base={thread.repo?.base}
-            diff={diff}
-            run={run}
-            confirm={confirm}
-          >
-            <PaneMenuItems kind="changes" threadId={thread.id} tabId={tabId} />
-          </WorktreeMenu>
-        ) : (
-          <RemoteChangesMenu diff={diff} machineName={io.machine.name}>
-            <PaneMenuItems kind="changes" threadId={thread.id} tabId={tabId} />
-          </RemoteChangesMenu>
-        )}
+        <WorktreeMenu
+          thread={thread}
+          cwd={
+            io.kind === 'local'
+              ? io.root
+              : (thread.live?.cwd ?? thread.repo?.path ?? '')
+          }
+          diff={diff}
+          run={run}
+          confirm={confirm}
+        >
+          <PaneMenuItems kind="changes" threadId={thread.id} tabId={tabId} />
+        </WorktreeMenu>
       </PaneActions>
       <OfflineNote io={io} />
       {!!diffQuery.error && !diff && (
@@ -379,52 +363,6 @@ export function revertRequest(target: ChangeTarget) {
 
 function sum(files: DiffFile[], key: 'added' | 'removed') {
   return files.reduce((n, f) => n + f[key], 0);
-}
-
-/** The pane's ⋯ on another computer's thread: the worktree's own actions (sync, cleanup) run on that computer itself. */
-function RemoteChangesMenu({
-  diff,
-  machineName,
-  children,
-}: {
-  diff: GitDiff | undefined;
-  machineName: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="More Changes actions"
-          className="text-muted-foreground"
-        >
-          <OverflowIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="truncate font-mono text-xs text-foreground">
-            {diff ? `${diff.branch} → ${diff.base}` : 'Worktree'}
-          </span>
-          <span className="truncate type-caption font-normal text-subtle-foreground">
-            On {machineName}
-          </span>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-          <ArrowDown />
-          Sync with {diff?.base ?? 'base'}
-        </DropdownMenuItem>
-        <p className="px-2 pb-1.5 type-caption text-subtle-foreground">
-          {elsewhereReason({ name: machineName })}
-        </p>
-        <DropdownMenuSeparator />
-        {children}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 function NoFolder() {

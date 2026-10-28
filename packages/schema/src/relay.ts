@@ -1,7 +1,20 @@
 import { Schema, SchemaTransformation } from 'effect';
 import { AgentModel } from './agent.ts';
 import { Int, Str } from './checks.ts';
-import { DiffFile, DiffScope, GitDiff } from './ipc/git.ts';
+import {
+  DiffFile,
+  DiffScope,
+  GitDiff,
+  MergeMethod,
+  MergeMode,
+  PrInfo,
+  PrReview,
+  ReviewVerdict,
+  RewindPreview,
+  SyncResult,
+} from './ipc/git.ts';
+import { PortsListing } from './ipc/ports.ts';
+import { MissedRuns, Trigger, TriggerWhen } from './ipc/schedule.ts';
 import { Project } from './ipc/projects.ts';
 import { Access, AgentCommand, AgentImage, Provider } from './model.ts';
 import { Quote } from './persist.ts';
@@ -314,6 +327,87 @@ const PaneCommandData = [
   Schema.Struct({ mediaType: S, base64: S }),
 ] as const;
 
+// The thread's remaining actions, run on the computer that owns it (PR tab, worktree, schedule, project, ports, rewind).
+
+const PrNumber = Int.check(Schema.isBetween({ minimum: 1, maximum: 1e9 }));
+const MAX_PR_BODY = 64 * 1024;
+
+/** The PR tab's writes, as the thread's profile's GitHub login there. A review thread is one of that PR's own. */
+const PrAction = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('comment'), body: Text(MAX_PR_BODY) }),
+  Schema.Struct({
+    kind: Schema.Literal('review'),
+    verdict: ReviewVerdict,
+    body: Str(MAX_PR_BODY),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('reply'),
+    reviewThreadId: NonEmptyId,
+    body: Text(MAX_PR_BODY),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('resolve'),
+    reviewThreadId: NonEmptyId,
+    isResolved: B,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('merge'),
+    method: MergeMethod,
+    mode: MergeMode,
+  }),
+]);
+
+const THREAD_OP_COMMANDS = [
+  command('pr-status', { threadId: Id }),
+  command('pr-review', { threadId: Id, number: PrNumber }),
+  command('pr', { threadId: Id, number: PrNumber, action: PrAction }),
+  command('sync', { threadId: Id }),
+  command('disk-usage', { threadId: Id }),
+  command('schedules', {}),
+  command('schedule-set', {
+    threadId: Id,
+    name: Str(200),
+    prompt: Str(100_000),
+    when: TriggerWhen,
+    missed: MissedRuns,
+  }),
+  command('attach-project', { threadId: Id, project: NonEmptyId }),
+  command('ports', { threadId: Id }),
+  command('port-kill', {
+    threadId: Id,
+    pid: Int.check(Schema.isGreaterThan(0)),
+  }),
+  command('rewind-preview', { threadId: Id, n: Index }),
+] as const;
+
+const THREAD_OP_SCOPES = {
+  'pr-status': 'read',
+  'pr-review': 'code',
+  pr: 'manage',
+  sync: 'manage',
+  'disk-usage': 'read',
+  schedules: 'read',
+  'schedule-set': 'manage',
+  'attach-project': 'manage',
+  ports: 'read',
+  'port-kill': 'manage',
+  'rewind-preview': 'code',
+} as const satisfies Record<
+  (typeof THREAD_OP_COMMANDS)[number]['Type']['type'],
+  Scope
+>;
+
+/** What the thread-op commands answer with; `PrReview` before `PrInfo`, which would keep only its first fields. */
+const THREAD_OP_DATA = [
+  PrReview,
+  PrInfo,
+  SyncResult,
+  Schema.Struct({ bytes: Schema.Number }),
+  Schema.Array(Trigger),
+  PortsListing,
+  RewindPreview,
+] as const;
+
 /**
  * What a device can ask this computer to do, as the `device.command` RPC's payload. Fields a command doesn't take are
  * dropped; titles, goals and names come back trimmed.
@@ -445,6 +539,7 @@ export const RemoteCommand = Schema.Union([
   }),
   command('terminal-close', { threadId: Id, terminalId: Id }),
   ...PANE_COMMANDS,
+  ...THREAD_OP_COMMANDS,
 ]);
 export type RemoteCommand = typeof RemoteCommand.Type;
 
@@ -491,6 +586,7 @@ const CommandData = Schema.Union([
   CatalogProject,
   Schema.Struct({ terminalId: S }),
   Schema.Struct({ threadId: S }),
+  ...THREAD_OP_DATA,
 ]);
 
 const okFields = {
@@ -558,6 +654,7 @@ export const COMMAND_SCOPES = {
   'turn-diff': 'code',
   'read-image': 'read',
   'read-task-output': 'read',
+  ...THREAD_OP_SCOPES,
 } as const satisfies Record<RemoteCommand['type'], Scope>;
 
 /** The scope a command needs: a `thread-action` by its action, any other by its type; `local` (refused) for one unknown. */

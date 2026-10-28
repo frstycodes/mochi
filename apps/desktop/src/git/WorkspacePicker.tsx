@@ -25,6 +25,7 @@ import type { Branch, BranchList } from '../host/types/git';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
+import { parseRemoteThreadId } from '../remote/ids';
 import { shallowEqual, useDispatch, useHarnessSelector } from '../store';
 import { nextTempBranch } from '../store/threads';
 import { MetaChip } from '../MetaChip';
@@ -104,7 +105,10 @@ export function useWorkspace(
 export function useThreadWorkspace(thread: Thread): Workspace | null {
   const dispatch = useDispatch();
   const repo = thread.repo;
-  const isOpen = !!repo && isUnstarted(thread);
+  // Another computer's thread starts the moment it's created there: its branch shows (`BranchLabel`), never this computer's
+  // branches of a same-named folder.
+  const isOpen =
+    !!repo && isUnstarted(thread) && !parseRemoteThreadId(thread.id);
   const draft: WorkspaceDraft = {
     mode: repo?.mode ?? 'worktree',
     base: repo?.base,

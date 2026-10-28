@@ -42,6 +42,8 @@ import { host } from '../host';
 import { usePrefs } from '../settings/prefs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useWorktreePath } from '../git/worktrees';
+import { useRemoteMachine } from '../remote/origin';
+import { askMachine } from '../remote/threadIo';
 import type { Thread } from '../model';
 import { clock } from '../progress';
 import { useHarness } from '../store';
@@ -116,7 +118,7 @@ function RewindConfirm({
   const { state, dispatch } = useHarness();
   const { rewindMode } = usePrefs();
   const { rewind } = useRewindActions();
-  const cwd = useWorktreePath(thread.id);
+  const cwd = useRewindFolder(thread);
   const checkpoint =
     target.kind === 'message'
       ? checkpointForMessage(state, thread.id, target.index)
@@ -411,6 +413,17 @@ export function DisabledTooltip({
   );
 }
 
+/**
+ * Where a files rewind restores: the thread's own worktree here, or, for another computer's thread in a worktree there, its
+ * machine-aware id (that computer resolves the folder).
+ */
+function useRewindFolder(thread: Thread) {
+  const machine = useRemoteMachine();
+  const worktree = useWorktreePath(thread.id);
+  if (!machine) return worktree;
+  return thread.repo && thread.repo.mode !== 'folder' ? thread.id : undefined;
+}
+
 /** The files a files rewind would change, re-read while the agent works (its edits move the answer). */
 function useRewindPreview(
   cwd: string | undefined,
@@ -418,9 +431,13 @@ function useRewindPreview(
   n: number | undefined,
   isWorking: boolean,
 ) {
+  const machine = useRemoteMachine();
   const previewQuery = useQuery({
     queryKey: queryKeys.git.rewindPreview(cwd, threadId, n, isWorking),
-    queryFn: () => host.git.rewindPreview(cwd!, threadId, n!),
+    queryFn: () =>
+      machine
+        ? askMachine(machine.id, { type: 'rewind-preview', threadId, n: n! })
+        : host.git.rewindPreview(cwd!, threadId, n!),
     enabled: !!cwd && n !== undefined,
   });
   return { data: previewQuery.data, error: previewQuery.error?.message };

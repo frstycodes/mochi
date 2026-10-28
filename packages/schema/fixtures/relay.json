@@ -42,7 +42,23 @@
     { "type": "terminal-open", "threadId": "t", "cols": 80, "rows": 24 },
     { "type": "terminal-write", "threadId": "t", "terminalId": "p", "data": "ls\r" },
     { "type": "terminal-resize", "threadId": "t", "terminalId": "p", "cols": 100, "rows": 30 },
-    { "type": "terminal-close", "threadId": "t", "terminalId": "p" }
+    { "type": "terminal-close", "threadId": "t", "terminalId": "p" },
+    { "type": "pr-status", "threadId": "t" },
+    { "type": "pr-review", "threadId": "t", "number": 12 },
+    { "type": "pr", "threadId": "t", "number": 12, "action": { "kind": "comment", "body": "LGTM" } },
+    { "type": "pr", "threadId": "t", "number": 12, "action": { "kind": "review", "verdict": "request-changes", "body": "" } },
+    { "type": "pr", "threadId": "t", "number": 12, "action": { "kind": "reply", "reviewThreadId": "PRRT_1", "body": "Done" } },
+    { "type": "pr", "threadId": "t", "number": 12, "action": { "kind": "resolve", "reviewThreadId": "PRRT_1", "isResolved": true } },
+    { "type": "pr", "threadId": "t", "number": 12, "action": { "kind": "merge", "method": "squash", "mode": "auto" } },
+    { "type": "sync", "threadId": "t" },
+    { "type": "disk-usage", "threadId": "t" },
+    { "type": "schedules" },
+    { "type": "schedule-set", "threadId": "t", "name": "Nightly", "prompt": "run the tests", "when": { "kind": "cron", "cron": "0 3 * * *" }, "missed": "skip" },
+    { "type": "schedule-set", "threadId": "t", "name": "", "prompt": "", "when": { "kind": "pr", "event": "ci-failed", "branch": "main" }, "missed": "run-once" },
+    { "type": "attach-project", "threadId": "t", "project": "p1" },
+    { "type": "ports", "threadId": "t" },
+    { "type": "port-kill", "threadId": "t", "pid": 4242 },
+    { "type": "rewind-preview", "threadId": "t", "n": 3 }
   ],
   "hello": [{ "type": "hello", "version": 6 }, { "type": "hello", "version": 6, "members": [{ "id": "k1" }] }],
   "machineFrames": [
@@ -55,6 +71,14 @@
     { "isOk": true },
     { "isOk": true, "data": { "text": "hi" } },
     { "isOk": true, "data": { "projects": [{ "ref": "p1", "name": "mochi" }], "models": { "claude": [{ "id": "claude-opus-5-5", "name": "Opus 5.5", "description": "", "efforts": ["high"], "speeds": [], "isDefault": true }] }, "defaults": { "claude": "", "codex": "" } } },
-    { "isOk": true, "data": { "shell": "zsh", "theme": "mochi" } }
+    { "isOk": true, "data": { "shell": "zsh", "theme": "mochi" } },
+    { "isOk": true, "data": { "number": 12, "url": "https://github.com/o/r/pull/12", "title": "Fix", "state": "OPEN", "checks": [{ "name": "ci", "state": "pass" }] } },
+    { "isOk": true, "data": { "number": 12, "url": "https://github.com/o/r/pull/12", "title": "Fix", "body": "", "author": "me", "state": "OPEN", "isDraft": false, "base": "main", "head": "fix", "isConflicting": false, "mergeMethods": ["squash"], "viewer": "me", "checks": [], "comments": [], "threads": [{ "id": "PRRT_1", "path": "a.ts", "side": "additions", "line": 3, "isResolved": false, "comments": [] }], "files": [] } },
+    { "isOk": true, "data": { "base": "main", "conflicts": ["a.ts"] } },
+    { "isOk": true, "data": { "bytes": 1048576 } },
+    { "isOk": true, "data": [{ "threadId": "t", "name": "Nightly", "prompt": "run the tests", "when": { "kind": "cron", "cron": "0 3 * * *" }, "missed": "skip", "start": { "provider": "claude", "spaceId": "personal", "cwd": "/work/t" }, "isPaused": false, "createdAt": 1, "checkedAt": 2, "runs": [] }] },
+    { "isOk": true, "data": { "ports": [{ "port": 5173, "pid": 4242, "command": "vite", "startedAt": 1 }] } },
+    { "isOk": true, "data": { "error": "lsof failed" } },
+    { "isOk": true, "data": { "files": ["a.ts"], "outside": [] } }
   ]
 }

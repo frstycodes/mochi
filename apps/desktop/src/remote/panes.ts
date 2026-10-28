@@ -4,7 +4,7 @@ import { elsewhereReason, missingScopeReason } from './origin.tsx';
 
 /**
  * Panes another computer's thread opens in the app's own side pane, each reading from and acting on that computer through
- * commands, and the scope each needs. The others (preview, simulator, ports, PR, artifacts' files) would act on this computer.
+ * commands, and the scope each needs. The others (preview, simulator, ports, artifacts' files) would act on this computer.
  */
 const REMOTE_PANES = {
   changes: { scope: 'code', needsFolder: true },
@@ -13,6 +13,7 @@ const REMOTE_PANES = {
   sidechat: { scope: 'read', needsFolder: false },
   agents: { scope: 'read', needsFolder: false },
   visual: { scope: 'read', needsFolder: false },
+  pr: { scope: 'code', needsFolder: true },
 } as const satisfies Partial<
   Record<
     PaneTabKind,

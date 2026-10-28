@@ -18,6 +18,7 @@ import type {
   CommandResult,
   FollowedMachine,
   RemoteCommand,
+  ThreadOpCommand,
 } from '../host/types/remote';
 import { StoreScope, type Action, type State } from '../store';
 import { commandFor } from './actions';
@@ -288,6 +289,20 @@ export function useRemoteDispatch() {
   };
 }
 
+const THREAD_OP_VERBS = {
+  'pr-status': 'read the pull request',
+  'pr-review': 'read the pull request',
+  pr: 'update the pull request',
+  sync: 'sync the branch',
+  'disk-usage': 'measure the worktree',
+  schedules: 'read its schedules',
+  'schedule-set': 'save the schedule',
+  'attach-project': 'move the chat into the project',
+  ports: 'list its dev servers',
+  'port-kill': 'stop the server',
+  'rewind-preview': 'preview the rewind',
+} satisfies Record<ThreadOpCommand['type'], string>;
+
 const COMMAND_VERBS = {
   catalog: 'read its projects',
   settings: 'read its settings',
@@ -331,6 +346,7 @@ const COMMAND_VERBS = {
   'turn-diff': 'read the turn’s changes',
   'read-image': 'read the image',
   'read-task-output': 'read the task’s output',
+  ...THREAD_OP_VERBS,
 } satisfies Record<RemoteCommand['type'], string>;
 
 const SUCCESS: Partial<Record<RemoteCommand['type'], string>> = {

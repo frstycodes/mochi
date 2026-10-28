@@ -13,6 +13,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { host } from '../host';
 import type { GitDiff } from '../host/types/git';
+import type { Thread } from '../model';
+import { parseRemoteThreadId } from '../remote/ids';
+import { useThreadCalls, type ThreadCalls } from '../remote/threadCalls';
 import { useHarness } from '../store';
 import type { ConfirmRequest } from './useConfirm';
 import { gitError } from './useGit';
@@ -21,9 +24,9 @@ import { OverflowIcon } from '../ui';
 import { plural } from '@mochi/domain/lib/format';
 
 interface WorktreeMenuProps {
+  thread: Thread;
+  /** The worktree's path, shown and copied; another computer's thread shows its path there. */
   cwd: string;
-  /** The thread's chosen base; the default branch when unset. */
-  base?: string;
   diff: GitDiff | undefined;
   run: <T>(label: string, action: () => Promise<T>) => Promise<T | undefined>;
   confirm: (request: ConfirmRequest) => Promise<boolean>;
@@ -33,21 +36,23 @@ interface WorktreeMenuProps {
 
 /** The thread's worktree: where it is, its size, sync with base, and cleanup of settled threads' worktrees. */
 export function WorktreeMenu({
+  thread,
   cwd,
-  base: chosenBase,
   diff,
   run,
   confirm,
   children,
 }: WorktreeMenuProps) {
-  const bytes = useDiskUsage(cwd);
+  const calls = useThreadCalls(thread);
+  const bytes = useDiskUsage(calls);
+  // This computer's worktrees: nothing to clean up from another computer's thread.
+  const isHere = !parseRemoteThreadId(thread.id);
   const settled = useSettledWorktrees();
-  const base = diff?.base ?? chosenBase ?? 'base';
+  const base = diff?.base ?? thread.repo?.base ?? 'base';
 
   const sync = async () => {
-    const result = await run(`Sync with ${base}`, () =>
-      host.git.sync(cwd, chosenBase),
-    );
+    if (!calls) return;
+    const result = await run(`Sync with ${base}`, () => calls.sync());
     if (!result) return;
     if (result.conflicts.length)
       toast.warning(`Merged ${result.base} with conflicts`, {
@@ -127,7 +132,7 @@ export function WorktreeMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onSelect={sync}>
+          <DropdownMenuItem disabled={!calls} onSelect={sync}>
             <ArrowDown />
             Sync with {base}
           </DropdownMenuItem>
@@ -140,13 +145,20 @@ export function WorktreeMenu({
             Copy worktree path
           </DropdownMenuItem>
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={settled.length === 0} onSelect={cleanUp}>
-          <Broom />
-          {settled.length
-            ? `Clean up settled worktrees (${settled.length})`
-            : 'No settled worktrees to clean up'}
-        </DropdownMenuItem>
+        {isHere && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={settled.length === 0}
+              onSelect={cleanUp}
+            >
+              <Broom />
+              {settled.length
+                ? `Clean up settled worktrees (${settled.length})`
+                : 'No settled worktrees to clean up'}
+            </DropdownMenuItem>
+          </>
+        )}
         {!!children && (
           <>
             <DropdownMenuSeparator />
@@ -158,11 +170,12 @@ export function WorktreeMenu({
   );
 }
 
-function useDiskUsage(cwd: string) {
+function useDiskUsage(calls: ThreadCalls | null) {
   const [value, setValue] = useState<number>();
   const refresh = () => {
     setValue(undefined);
-    host.git.diskUsage(cwd).then(setValue, () => setValue(Number.NaN));
+    if (!calls) return setValue(Number.NaN);
+    calls.diskUsage().then(setValue, () => setValue(Number.NaN));
   };
   return { value, refresh };
 }

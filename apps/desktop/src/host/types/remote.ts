@@ -3,12 +3,26 @@ import type { Mention } from '../../chat/mentions.ts';
 import type { ThreadControls } from '../../runtime/controls.ts';
 import type { Quote } from '../../store/sidechat.ts';
 import type { AgentModel } from './agent.ts';
-import type { ChangeTarget, DiffFile, DiffScope, GitDiff } from './git.ts';
+import type {
+  ChangeTarget,
+  DiffFile,
+  DiffScope,
+  GitDiff,
+  MergeMethod,
+  MergeMode,
+  PrInfo,
+  PrReview,
+  ReviewVerdict,
+  RewindPreview,
+  SyncResult,
+} from './git.ts';
 import type {
   SearchHits,
   SearchOptions,
   WriteResult,
 } from '@mochi/domain/host/types/fs';
+import type { MissedRuns, Trigger, TriggerWhen } from './schedule.ts';
+import type { PortsListing } from '@mochi/domain/host/types/ports';
 import type { Manifest } from '@mochi/domain/host/types/manifest';
 import type { CloneSource, Project } from '@mochi/domain/host/types/projects';
 
@@ -258,7 +272,46 @@ export type RemoteCommand =
   | ({ type: 'search'; threadId: string; pattern: string } & SearchOptions)
   | { type: 'turn-diff'; threadId: string; from: string; to?: string }
   | { type: 'read-image'; threadId: string; path: string }
-  | { type: 'read-task-output'; threadId: string; path: string };
+  | { type: 'read-task-output'; threadId: string; path: string }
+  | ThreadOpCommand;
+
+/**
+ * The thread's remaining actions, run on the computer that owns it: its PR tab, worktree, schedule, project, dev servers and
+ * rewind preview. Each acts only on what that thread itself has (its PRs, its folder, its ports).
+ */
+export type ThreadOpCommand =
+  // read
+  /** The open PR on the thread's branch, as `usePr` reads it; no data when there is none. */
+  | { type: 'pr-status'; threadId: string }
+  | { type: 'disk-usage'; threadId: string }
+  /** Every trigger on that computer, without their runs: what `NextRunBadge` and the schedule editor read. */
+  | { type: 'schedules' }
+  | { type: 'ports'; threadId: string }
+  // code
+  | { type: 'pr-review'; threadId: string; number: number }
+  | { type: 'rewind-preview'; threadId: string; n: number }
+  // manage
+  | { type: 'pr'; threadId: string; number: number; action: PrAction }
+  | { type: 'sync'; threadId: string }
+  | {
+      type: 'schedule-set';
+      threadId: string;
+      name: string;
+      prompt: string;
+      when: TriggerWhen;
+      missed: MissedRuns;
+    }
+  /** A project's id from `projects`: a folderless chat moves into it there. */
+  | { type: 'attach-project'; threadId: string; project: string }
+  /** A process listening in the thread's folder, as `ports` listed it. */
+  | { type: 'port-kill'; threadId: string; pid: number };
+
+export type PrAction =
+  | { kind: 'comment'; body: string }
+  | { kind: 'review'; verdict: ReviewVerdict; body: string }
+  | { kind: 'reply'; reviewThreadId: string; body: string }
+  | { kind: 'resolve'; reviewThreadId: string; isResolved: boolean }
+  | { kind: 'merge'; method: MergeMethod; mode: MergeMode };
 
 /** `QueuedMessage` as typed, less its id; images never name a path on the sending computer. */
 export interface RemoteMessage {
@@ -318,6 +371,13 @@ export interface CommandData {
   'turn-diff': { turnFiles: DiffFile[] };
   'read-image': { mediaType: string; base64: string };
   'read-task-output': { text: string; mtimeMs: number };
+  'pr-status': PrInfo;
+  'pr-review': PrReview;
+  sync: SyncResult;
+  'disk-usage': { bytes: number };
+  schedules: Trigger[];
+  ports: PortsListing;
+  'rewind-preview': RewindPreview;
 }
 
 /** What a new thread on this computer can start in and with. */

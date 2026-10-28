@@ -5,12 +5,12 @@ import { Schema } from 'effect';
 import { scopeOf } from './capabilities.ts';
 import {
   commandScope,
+  COMMAND_SCOPES,
   CommandResult,
   DeviceLinkFrame,
   HelloFrame,
   MachineLinkFrame,
   RemoteCommand,
-  COMMAND_SCOPES,
 } from './relay.ts';
 
 const fixtures = JSON.parse(
@@ -479,4 +479,62 @@ test('pane command results keep the shape they answer with', () => {
     const result = { isOk: true, data };
     assert.deepEqual(decodeResult(result), result);
   }
+});
+
+test('thread ops: the PR tab writes need manage, its review code, a badge read; scopeOf routes each', () => {
+  const expected = {
+    'pr-status': 'read',
+    'disk-usage': 'read',
+    schedules: 'read',
+    ports: 'read',
+    'pr-review': 'code',
+    'rewind-preview': 'code',
+    pr: 'manage',
+    sync: 'manage',
+    'schedule-set': 'manage',
+    'attach-project': 'manage',
+    'port-kill': 'manage',
+  } as const;
+  for (const [type, scope] of Object.entries(expected)) {
+    assert.equal(COMMAND_SCOPES[type as keyof typeof expected], scope, type);
+    assert.equal(scopeOf('device.command', { command: { type } }), scope);
+  }
+});
+
+test('thread ops refuse what their handlers never should see', () => {
+  const pr = (action: unknown, number: unknown = 12) => ({
+    type: 'pr',
+    threadId: 't',
+    number,
+    action,
+  });
+  assert.ok(isRefused(pr({ kind: 'comment', body: 'x' }, 0)));
+  assert.ok(isRefused(pr({ kind: 'comment', body: 'x' }, 1.5)));
+  assert.ok(isRefused(pr({ kind: 'comment', body: '  ' })));
+  assert.ok(isRefused(pr({ kind: 'close' })));
+  assert.ok(isRefused(pr({ kind: 'merge', method: 'octopus', mode: 'now' })));
+  assert.ok(isRefused(pr({ kind: 'reply', reviewThreadId: '', body: 'x' })));
+  assert.ok(isRefused({ type: 'port-kill', threadId: 't', pid: 0 }));
+  assert.ok(isRefused({ type: 'port-kill', threadId: 't', pid: -1 }));
+  assert.ok(isRefused({ type: 'attach-project', threadId: 't', project: '' }));
+  assert.ok(
+    isRefused({
+      type: 'schedule-set',
+      threadId: 't',
+      name: 'x',
+      prompt: 'x',
+      when: { kind: 'hourly' },
+      missed: 'skip',
+    }),
+  );
+  // A path is the owner's to pick: a device can't slip one in.
+  assert.deepEqual(
+    decode({
+      type: 'attach-project',
+      threadId: 't',
+      project: 'p1',
+      path: '/etc',
+    }),
+    { type: 'attach-project', threadId: 't', project: 'p1' },
+  );
 });

@@ -213,3 +213,22 @@ test('referenced threads cross as that computer’s own ids', () => {
     },
   );
 });
+
+test('a message the PR tab or a line note writes for you is sent there as typed; anything else it says stays here', () => {
+  assert.deepEqual(
+    commandFor({
+      type: 'say',
+      threadId: 't',
+      entry: { who: 'you', kind: 'message', text: 'Address this thread' },
+    }),
+    { type: 'send', threadId: 't', text: 'Address this thread' },
+  );
+  assert.equal(
+    commandFor({
+      type: 'say',
+      threadId: 't',
+      entry: { who: 'harness', kind: 'message', text: 'hi' },
+    }),
+    null,
+  );
+});
