@@ -48,7 +48,7 @@ import { useDragSession } from './drag';
 import { SplitTabHandle } from './SplitTabHandle';
 import { PaneSlotBar, PaneSlots } from '../pane/PaneHeader';
 import { LeafBar } from './SplitControls';
-import { PreviewContext, SplitContext } from './SplitContext';
+import { SplitContext } from './SplitContext';
 import {
   displayRoot,
   equalSizes,
@@ -161,65 +161,54 @@ function SplitView({ split, firstId }: { split: Split; firstId: string }) {
   );
 }
 
-/**
- * `isPreview`: a pinned page beside the one in view, drawn the way a lone split draws it but read-only (`inert`, no native overlays, not a
- * drop or focus target). Same element tree either way, so landing on it only flips these props and never remounts the thread.
- */
 export function LeafView({
   leaf,
   isMulti,
   isZoomed,
   isFirst,
-  isPreview = false,
 }: {
   leaf: Leaf;
   isMulti: boolean;
   isZoomed: boolean;
   isFirst: boolean;
-  isPreview?: boolean;
 }) {
   const dispatch = useDispatch();
   const ref = useRef<HTMLElement>(null);
   const isWide = useIsWider(ref, WIDE_SPLIT_PX);
   const isFocused = useHarnessSelector(
-    (s) => !isPreview && s.layouts[s.spaceId].focusId === leaf.id,
+    (s) => s.layouts[s.spaceId].focusId === leaf.id,
   );
   useFocusFollows(ref, isFocused && isMulti);
-  const focus = () =>
-    !isPreview && dispatch({ type: 'layout-focus', leafId: leaf.id });
+  const focus = () => dispatch({ type: 'layout-focus', leafId: leaf.id });
 
   return (
     <SplitContext.Provider
       value={{ leafId: leaf.id, isFocused, isMulti, isZoomed, isFirst, isWide }}
     >
-      <PreviewContext.Provider value={isPreview}>
-        <section
-          ref={ref}
-          data-leaf-id={isPreview ? undefined : leaf.id}
-          inert={isPreview}
-          aria-hidden={isPreview || undefined}
-          aria-label={
-            isMulti ? `Split${isFocused ? ', focused' : ''}` : undefined
-          }
-          tabIndex={-1}
-          // Primary button only: right-clicking a split's tab or header opens its menu without focusing the split.
-          onPointerDownCapture={(e) => e.button === 0 && focus()}
-          onFocusCapture={() => isTabbing() && focus()}
-          className={cn(
-            'relative h-full min-h-0 min-w-0 bg-background outline-none',
-            isMulti && 'overflow-hidden rounded-xl border border-transparent',
-            isMulti && isFocused && 'border-foreground/20',
-          )}
+      <section
+        ref={ref}
+        data-leaf-id={leaf.id}
+        aria-label={
+          isMulti ? `Split${isFocused ? ', focused' : ''}` : undefined
+        }
+        tabIndex={-1}
+        // Primary button only: right-clicking a split's tab or header opens its menu without focusing the split.
+        onPointerDownCapture={(e) => e.button === 0 && focus()}
+        onFocusCapture={() => isTabbing() && focus()}
+        className={cn(
+          'relative h-full min-h-0 min-w-0 bg-background outline-none',
+          isMulti && 'overflow-hidden rounded-xl border border-transparent',
+          isMulti && isFocused && 'border-foreground/20',
+        )}
+      >
+        <ErrorBoundary
+          FallbackComponent={ErrorFallback}
+          resetKeys={[JSON.stringify(leaf.view)]}
         >
-          <ErrorBoundary
-            FallbackComponent={ErrorFallback}
-            resetKeys={[JSON.stringify(leaf.view)]}
-          >
-            <LeafContent leafId={leaf.id} view={leaf.view} />
-          </ErrorBoundary>
-          <DropZone leafId={leaf.id} />
-        </section>
-      </PreviewContext.Provider>
+          <LeafContent leafId={leaf.id} view={leaf.view} />
+        </ErrorBoundary>
+        <DropZone leafId={leaf.id} />
+      </section>
     </SplitContext.Provider>
   );
 }
