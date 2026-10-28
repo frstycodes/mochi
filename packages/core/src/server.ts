@@ -28,7 +28,8 @@ import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
-import { REMOTE_PORT, Remote } from './remote/service.ts';
+import { layerRemote, REMOTE_PORT } from './remote/service.ts';
+import { Remote } from './remote/tag.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
@@ -127,7 +128,7 @@ export const layerCore = (options: ServerOptions) => {
     ),
     Layer.provideMerge(Hosted.layer(options.userData)),
     Layer.provideMerge(
-      Remote.layer(options.userData, options.remotePort ?? REMOTE_PORT, {
+      layerRemote(options.userData, options.remotePort ?? REMOTE_PORT, {
         hasKeychain: options.hasKeychain ?? false,
       }),
     ),

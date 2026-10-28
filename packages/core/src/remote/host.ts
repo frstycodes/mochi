@@ -1,6 +1,6 @@
 import type { RemoteHost } from '../../../../apps/desktop/src/host/types/remote.ts';
 import type { HostMethods } from '../hostMethods.ts';
-import type { Remote } from './service.ts';
+import type { Remote } from './tag.ts';
 
 /** Main keeps the follower side: the computers this one follows, their cached threads, and a device's command run in its window. */
 export type InMain =

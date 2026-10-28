@@ -15,7 +15,7 @@ import { ports } from './ports/host.ts';
 import { projectsHost } from './projects/host.ts';
 import { ptyHost } from './pty/host.ts';
 import { remoteHost } from './remote/host.ts';
-import { Remote } from './remote/service.ts';
+import { Remote } from './remote/tag.ts';
 import { settingsHost } from './settings/host.ts';
 import { useDocs } from './store/client.ts';
 import { Store } from './store/store.ts';

@@ -4,7 +4,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
 import sodium from 'libsodium-wrappers';
-import { Context, Effect, Layer, Option, Schema } from 'effect';
+import { Effect, Layer, Option, Schema } from 'effect';
 import { Relay } from '@mochi/schema';
 import type {
   ApprovalRequest,
@@ -24,6 +24,7 @@ import { Backend } from '../backend/backend.ts';
 import { Capabilities } from '../hostServer.ts';
 import { KeyStore, type Keys } from '../keys/keyStore.ts';
 import { networkHosts } from './interfaces.ts';
+import { Remote } from './tag.ts';
 import {
   approveMember,
   mergeRecords,
@@ -675,12 +676,16 @@ function makeRemote({
   };
 }
 
-export class Remote extends Context.Service<Remote>()('mochi/core/Remote', {
-  make: (
-    userData: string | undefined,
-    port: number,
-    { hasKeychain }: { hasKeychain: boolean },
-  ) =>
+/** What `Remote` serves; its key lives in `tag.ts`, so code that only names the service never loads this module. */
+export type RemoteApi = ReturnType<typeof makeRemote>;
+
+export const layerRemote = (
+  userData: string | undefined,
+  port: number,
+  { hasKeychain }: { hasKeychain: boolean },
+) =>
+  Layer.effect(
+    Remote,
     Effect.gen(function* () {
       const services = yield* Effect.context<never>();
       const remote = makeRemote({
@@ -704,13 +709,7 @@ export class Remote extends Context.Service<Remote>()('mochi/core/Remote', {
       if (userData) remote.start();
       return remote;
     }),
-}) {
-  static readonly layer = (
-    userData: string | undefined,
-    port: number,
-    options: { hasKeychain: boolean },
-  ) => Layer.effect(this, this.make(userData, port, options));
-}
+  );
 
 function loadSettings(file: string): RemoteSettings {
   try {
