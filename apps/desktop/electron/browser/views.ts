@@ -1,4 +1,3 @@
-import { stat } from 'node:fs/promises';
 import {
   BrowserWindow,
   screen,
@@ -7,7 +6,7 @@ import {
   type BrowserWindowConstructorOptions,
   type WebContents,
 } from 'electron';
-import { errors, type Locator, type Page } from 'playwright-core';
+import type { Locator, Page } from 'playwright-core';
 import type {
   BrowserAct,
   BrowserWait,
@@ -25,14 +24,21 @@ import type {
 } from '@mochi/domain/host/types/browser';
 import { dialogNote } from '../../src/browser/dialog.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
-import { agentSnapshot, ariaSelector } from './ariaRefs.ts';
 import {
   evalResult,
   EVAL_TIMEOUT_MS,
   withTimeout,
   type CdpEvaluate,
-} from './evaluate.ts';
-import { canNavigate, isAllowedUrl } from './navigation.ts';
+} from '@mochi/core/browser/evaluate';
+import { canNavigate, isAllowedUrl } from '@mochi/core/browser/navigation';
+import {
+  ACTION_TIMEOUT_MS,
+  locate,
+  rethrowForAgent,
+  runAct,
+  snapshotPage,
+  waitOnPage,
+} from '@mochi/core/browser/drive';
 import { downloadsSince, trackDownloads } from './downloads.ts';
 import {
   debuggerFor,
@@ -661,23 +667,7 @@ export async function snapshotView(
   id: string,
 ): Promise<BrowserSnapshot> {
   const entry = get(owner, id);
-  const page = await pageFor(entry);
-  const yaml = await page
-    .ariaSnapshot({ mode: 'ai', timeout: SNAPSHOT_TIMEOUT_MS })
-    .catch(rethrowForAgent);
-  const generation = ++entry.snapshotGeneration;
-  const { text, refs } = agentSnapshot(yaml, generation);
-  const flags = await Promise.all(
-    refs.map(({ ref }) =>
-      formFlags(page.locator(ariaSelector(ref, generation)!)),
-    ),
-  );
-  return {
-    text,
-    refs: Object.fromEntries(
-      refs.map(({ ref, role, name }, i) => [ref, { role, name, ...flags[i]! }]),
-    ),
-  };
+  return snapshotPage(await pageFor(entry), () => ++entry.snapshotGeneration);
 }
 
 /** `ref`'s value (an input's) or text, for main alone: Mochi stores a secret from the page without handing it to the agent. */
@@ -687,7 +677,11 @@ export async function readRefValue(
   ref: string,
 ) {
   const entry = get(owner, id);
-  const target = await locate(entry, await pageFor(entry), ref);
+  const target = await locate(
+    await pageFor(entry),
+    entry.snapshotGeneration,
+    ref,
+  );
   const value = await target.evaluate(
     (el) =>
       el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
@@ -707,7 +701,7 @@ export async function readRefValue(
 export async function copiedByRef(owner: WebContents, id: string, ref: string) {
   const entry = get(owner, id);
   const page = await pageFor(entry);
-  return copiedBy(page, await locate(entry, page, ref));
+  return copiedBy(page, await locate(page, entry.snapshotGeneration, ref));
 }
 
 /** The Playwright page behind a view, for main's own scripted steps (setup recipes) on the agent's tab. */
@@ -793,33 +787,6 @@ function releaseCopy() {
   (window as CopyCatcher).__mochiRelease?.();
 }
 
-/** Whether clicking the element sends its form, and whether it takes a password: the agent asks or masks before acting. */
-function formFlags(target: Locator) {
-  return target
-    .evaluate(
-      (el) => {
-        const type = (el.getAttribute('type') ?? '').toLowerCase();
-        const form = (el as HTMLButtonElement).form ?? el.closest('form');
-        return {
-          isSubmit:
-            !!form &&
-            (type === 'submit' ||
-              type === 'image' ||
-              (el.localName === 'button' && !type)),
-          isPassword: type === 'password',
-        };
-      },
-      undefined,
-      { timeout: FLAGS_TIMEOUT_MS },
-    )
-    .catch(() => FAIL_CLOSED_FLAGS);
-}
-
-// An element that can't be checked is treated as both, so the agent asks before clicking it and never echoes what it types.
-const FAIL_CLOSED_FLAGS = { isSubmit: true, isPassword: true };
-const SNAPSHOT_TIMEOUT_MS = 10_000;
-const FLAGS_TIMEOUT_MS = 2000;
-
 export function viewLogs(owner: WebContents, id: string) {
   return get(owner, id).logs;
 }
@@ -836,7 +803,7 @@ export async function actOnView(
   const startedAt = Date.now();
   const done = new AbortController();
   const result = await Promise.race([
-    runAct(entry, page, act),
+    runAct(page, entry.snapshotGeneration, act),
     dialogOpened(entry, done.signal),
   ])
     .catch(rethrowForAgent)
@@ -874,176 +841,6 @@ export async function answerDialogInView(
   await dbg.sendCommand('Page.handleJavaScriptDialog', { accept });
 }
 
-async function runAct(
-  entry: Entry,
-  page: Page,
-  act: BrowserAct,
-): Promise<{ note?: string }> {
-  const timeout = ACTION_TIMEOUT_MS;
-  switch (act.kind) {
-    case 'click':
-      await (await locate(entry, page, act.ref)).click({ timeout });
-      return {};
-    case 'hover':
-      await (await locate(entry, page, act.ref)).hover({ timeout });
-      return {};
-    case 'drag': {
-      const from = await locate(entry, page, act.from);
-      await from.dragTo(await locate(entry, page, act.to), { timeout });
-      return {};
-    }
-    case 'type': {
-      const target = await locate(entry, page, act.ref);
-      const select = await selectState(target, act.text);
-      if (!select.isSelect) await target.fill(act.text, { timeout });
-      else await pickOption(target, act.text, select.value);
-      return {};
-    }
-    case 'select': {
-      const target = await locate(entry, page, act.ref);
-      const select = await selectState(target, act.value);
-      if (!select.isSelect)
-        throw new Error(
-          'That element is not a <select>; use browser_type for a text field or browser_click for a custom dropdown',
-        );
-      await pickOption(target, act.value, select.value);
-      return {};
-    }
-    case 'upload': {
-      if (
-        !(await stat(act.path).then(
-          (s) => s.isFile(),
-          () => false,
-        ))
-      )
-        throw new Error(`No file at ${act.path}`);
-      const target = await locate(entry, page, act.ref);
-      if (!(await isFileInput(target)))
-        throw new Error(
-          'That element is not a file input; browser_snapshot shows one as a button named after its label',
-        );
-      await target.setInputFiles(act.path, { timeout });
-      return {};
-    }
-    case 'press': {
-      const key = act.key === 'Space' ? ' ' : act.key;
-      await page.keyboard.press(key).catch((error: unknown) => {
-        throw String(error).includes('Unknown key')
-          ? new Error(
-              `Unknown key "${act.key}"; use a single character or a key name like Enter, Tab, Escape, Backspace, ArrowDown, PageDown or Space`,
-            )
-          : error;
-      });
-      return {};
-    }
-    case 'scroll': {
-      const target = act.ref
-        ? await locate(entry, page, act.ref)
-        : page.locator(':root');
-      if (act.ref) await target.scrollIntoViewIfNeeded({ timeout });
-      const box = act.ref ? await target.boundingBox({ timeout }) : null;
-      const at = box
-        ? { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-        : await page.evaluate(() => ({
-            x: innerWidth / 2,
-            y: innerHeight / 2,
-          }));
-      await page.mouse.move(at.x, at.y);
-      await page.mouse.wheel(act.dx, act.dy);
-      const { x, y, maxY } = await target.evaluate(settledScroll, undefined, {
-        timeout,
-      });
-      return { note: `Scrolled to ${x}, ${y} of ${maxY}` };
-    }
-  }
-}
-
-const ACTION_TIMEOUT_MS = 5000;
-const GONE = (ref: string) =>
-  `No element ${ref} on the page now; take a new browser_snapshot`;
-
-/** `ref`'s element from the latest snapshot; one from an older snapshot, or gone from the page, fails at once. */
-async function locate(entry: Entry, page: Page, ref: string) {
-  const selector = ariaSelector(ref, entry.snapshotGeneration);
-  if (!selector) throw new Error(GONE(ref));
-  const target = page.locator(selector);
-  if (!(await target.count().catch(() => 0))) throw new Error(GONE(ref));
-  return target;
-}
-
-/** For a `<select>`, the value of the option whose label or value is `want` (null when none is). */
-function selectState(target: Locator, want: string) {
-  return target.evaluate(
-    (el, want) =>
-      el instanceof HTMLSelectElement
-        ? {
-            isSelect: true,
-            value:
-              [...el.options].find((o) => o.label === want || o.value === want)
-                ?.value ?? null,
-          }
-        : { isSelect: false, value: null },
-    want,
-    { timeout: ACTION_TIMEOUT_MS },
-  );
-}
-
-/** Playwright waits out its timeout on any other element instead of failing. A label stands for its control, as in Playwright. */
-function isFileInput(target: Locator) {
-  return target.evaluate(
-    (el) => {
-      const input = el instanceof HTMLLabelElement ? el.control : el;
-      return input instanceof HTMLInputElement && input.type === 'file';
-    },
-    undefined,
-    { timeout: ACTION_TIMEOUT_MS },
-  );
-}
-
-async function pickOption(target: Locator, want: string, value: string | null) {
-  if (value === null)
-    throw new Error(`No option ${JSON.stringify(want)} in that list`);
-  await target.selectOption({ value }, { timeout: ACTION_TIMEOUT_MS });
-}
-
-/** The scroll position of `el` (the page's, for the root) once it has stopped moving, so a smooth scroll reports where it ends. */
-function settledScroll(el: Element) {
-  const box =
-    el === document.documentElement ? (document.scrollingElement ?? el) : el;
-  const read = () => ({
-    x: Math.round(box.scrollLeft),
-    y: Math.round(box.scrollTop),
-    maxY: Math.round(box.scrollHeight - box.clientHeight),
-  });
-  return new Promise<ReturnType<typeof read>>((resolve) => {
-    let last = read();
-    let still = 0;
-    const deadline = Date.now() + 1000;
-    const tick = () => {
-      const now = read();
-      still = now.x === last.x && now.y === last.y ? still + 1 : 0;
-      last = now;
-      if (still >= 3 || Date.now() > deadline) resolve(now);
-      else requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-}
-
-/** Playwright's errors carry a call log; the agent gets one line it can act on. */
-function rethrowForAgent(error: unknown): never {
-  const message = (error instanceof Error ? error.message : String(error))
-    .split('\n')[0]!
-    .replace(/^[\w.]+: /, '');
-  if (error instanceof errors.TimeoutError)
-    throw new Error(
-      `${message} The page may be busy, or the element hidden, disabled or covered; take a new browser_snapshot`,
-    );
-  if (message.includes('Element is not an <input>, <textarea>'))
-    throw new Error('That element takes no text');
-  throw new Error(message);
-}
-
 /** The page's own world, so the script can read app state; `replMode` gives top-level await and the last expression's value. */
 export async function evalInView(
   owner: WebContents,
@@ -1071,39 +868,10 @@ export async function waitForView(
   until: BrowserWait,
 ) {
   const entry = get(owner, id);
-  const { text, selector, url } = until;
   const start = Date.now();
-  const page = text || selector || url ? await pageFor(entry) : null;
-  // Playwright reads a timeout of 0 as "never"; connecting already spent part of the wait.
-  const timeout = Math.max(1, until.timeoutMs - (Date.now() - start));
-  const waits = !page
-    ? []
-    : [
-        text && page.getByText(text).first().waitFor({ timeout }),
-        selector &&
-          page
-            .locator(selector)
-            .first()
-            .waitFor({ state: 'attached', timeout }),
-        url &&
-          page.waitForURL((u) => u.href.includes(url), {
-            timeout,
-            waitUntil: 'commit',
-          }),
-      ].filter((wait) => !!wait);
-  if (!waits.length) await new Promise((r) => setTimeout(r, timeout));
-  const isMet =
-    !!waits.length &&
-    (await Promise.any(waits).then(() => true, falseIfAllTimedOut));
-  return { isMet, waitedMs: Date.now() - start };
-}
-
-/** A wait that failed for any reason but time, like a bad selector, is the agent's to see. */
-function falseIfAllTimedOut({ errors: reasons }: AggregateError) {
-  const failure = reasons.find(
-    (reason) => !(reason instanceof errors.TimeoutError),
-  );
-  return failure ? rethrowForAgent(failure) : false;
+  const page =
+    until.text || until.selector || until.url ? await pageFor(entry) : null;
+  return waitOnPage(page, until, start);
 }
 
 function get(owner: WebContents, id: string) {

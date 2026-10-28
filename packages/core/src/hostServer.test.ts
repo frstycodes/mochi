@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { Capabilities } from './hostServer.ts';
 
 /** A client serving `reactor` that answers each call with its own name, or never answers when `isStuck`. */
@@ -68,6 +68,48 @@ it.effect(
           yield* Fiber.join(answer).pipe(Effect.timeout('1 second')),
           'first',
         );
+      }),
+    ),
+);
+
+it.effect(
+  'Core serves a capability itself only while no client does, and keeps what it made',
+  () =>
+    run(
+      Effect.gen(function* () {
+        const capabilities = yield* Capabilities;
+        let isAvailable = true;
+        yield* capabilities.serveLocally('browserView', {
+          owns: ({ args }) => args[0] === 'view-mine',
+          call: async () => 'core',
+          isAvailable: () => isAvailable,
+        });
+        // Core's own counts in what the backend reports, while it can serve.
+        assert.deepEqual(yield* SubscriptionRef.get(capabilities.offered), [
+          'browserView',
+        ]);
+        const browser = (id: string) =>
+          capabilities.call({
+            capability: 'browserView',
+            method: 'browser.snapshot',
+            args: [id],
+          });
+        assert.equal(yield* browser('view-1'), 'core');
+        const main = yield* capabilities.serve(['browserView']).pipe(
+          Stream.runForEach((call) =>
+            capabilities.reply({ id: call.id, value: 'main' }),
+          ),
+          Effect.forkChild,
+        );
+        yield* Effect.yieldNow;
+        assert.equal(yield* browser('view-1'), 'main');
+        assert.equal(yield* browser('view-mine'), 'core');
+        yield* Fiber.interrupt(main);
+        isAvailable = false;
+        assert.equal(capabilities.available('browserView'), false);
+        // The next call it fails is when the backend stops reporting it.
+        yield* browser('view-1');
+        assert.deepEqual(yield* SubscriptionRef.get(capabilities.offered), []);
       }),
     ),
 );

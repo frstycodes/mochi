@@ -15,7 +15,11 @@ import { Backend, type BackendOptions } from './backend/backend.ts';
 import { Cache } from './cache.ts';
 import { GitHub, GithubTransport } from './github/service.ts';
 import { githubHandlers } from './github/handlers.ts';
-import { Capabilities, hostHandlers } from './hostServer.ts';
+import {
+  Capabilities,
+  hostHandlers,
+  type LocalCapability,
+} from './hostServer.ts';
 import { Hosted } from './hosted.ts';
 import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
@@ -64,6 +68,8 @@ export interface ServerOptions {
   readonly userData?: string;
   /** The built renderer (`dist/`), served at `/` for a browser (`mochi serve`). Unset: only the socket. */
   readonly ui?: string;
+  /** `browserView` served by Core itself while no client offers it (headless Chromium under `mochi serve`). */
+  readonly browserView?: LocalCapability;
   /** What `backend.info` says this Core is. Unset: a `server`. */
   readonly backend?: Partial<BackendOptions>;
 }
@@ -112,11 +118,21 @@ export const layerCore = (options: ServerOptions) =>
         Turns.layer,
         Terminals.layer,
         layerStore(options.userData).pipe(
-          Layer.provideMerge(Capabilities.layer),
+          Layer.provideMerge(layerCapabilities(options.browserView)),
         ),
       ).pipe(Layer.provideMerge(Run.layer)),
     ),
     Layer.provideMerge(NodeHttpServer.layerHttpServices),
+  );
+
+const layerCapabilities = (browserView: LocalCapability | undefined) =>
+  Layer.effect(
+    Capabilities,
+    Effect.tap(Capabilities.make, (capabilities) =>
+      browserView
+        ? capabilities.serveLocally('browserView', browserView)
+        : Effect.void,
+    ),
   );
 
 /** The store, its projection and Core's own dispatch, after the one-time import of main's JSON files, so neither reads it before they are in. */

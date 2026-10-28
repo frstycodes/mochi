@@ -14,7 +14,20 @@ import {
   hostTags,
 } from '@mochi/schema';
 
-type Call = Omit<Contract.CapabilityCall, 'id'>;
+export type Call = Omit<Contract.CapabilityCall, 'id'>;
+
+/**
+ * A capability Core serves itself when no connected client does, like headless Chromium for `browserView` under `mochi serve`.
+ * A client's wins while one is connected, except for what the local one already holds (a view it created), which stays its own.
+ */
+export interface LocalCapability {
+  /** Whether `request` is about something this provider made, so it answers even while a client serves the name. */
+  owns(request: Call): boolean;
+  /** JSON args in, a JSON value out; rejects with the message the caller gets. */
+  call(request: Call): Promise<unknown>;
+  /** Whether it can serve now: false once it found it can't (no Chromium here), so the backend reports the capability absent. */
+  isAvailable(): boolean;
+}
 
 /** A served call's failure when its client went away before answering: the next client serving the name takes it. */
 export const DISCONNECTED = 'The client serving this call disconnected';
@@ -39,14 +52,24 @@ export class Capabilities extends Context.Service<Capabilities>()(
           queue: Queue.Queue<Contract.CapabilityCall>;
         }
       >();
+      const locals = new Map<Contract.CapabilityName, LocalCapability>();
       let nextId = 0;
-      /** The names a client serves now, in registration order; `backend.info` pushes it again when it changes. */
+      /**
+       * The names served now, by a client (in registration order) or by Core itself while it can; `backend.info` pushes it
+       * again when it changes.
+       */
       const offered = yield* SubscriptionRef.make<
         ReadonlyArray<Contract.CapabilityName>
       >([]);
-      const publish = Effect.suspend(() =>
-        SubscriptionRef.set(offered, [...providers.keys()]),
-      );
+      const publish = Effect.gen(function* () {
+        const names = new Set(providers.keys());
+        for (const [name, local] of locals)
+          if (local.isAvailable()) names.add(name);
+        const next = [...names];
+        const now = yield* SubscriptionRef.get(offered);
+        if (next.length !== now.length || next.some((n, i) => n !== now[i]))
+          yield* SubscriptionRef.set(offered, next);
+      });
 
       const failPending = (queue: Queue.Queue<Contract.CapabilityCall>) => {
         for (const [id, entry] of pending) {
@@ -96,6 +119,13 @@ export class Capabilities extends Context.Service<Capabilities>()(
       ): Effect.Effect<unknown, string | Contract.CapabilityUnavailable> =>
         Effect.gen(function* () {
           const queue = providers.get(request.capability)?.at(-1);
+          const local = locals.get(request.capability);
+          if (local && (!queue || local.owns(request)))
+            // A call can find it can't serve after all (no Chromium here), which the backend then stops reporting.
+            return yield* Effect.tryPromise({
+              try: () => local.call(request),
+              catch: messageOf,
+            }).pipe(Effect.ensuring(publish));
           if (!queue)
             return yield* new Contract.CapabilityUnavailable({
               capability: request.capability,
@@ -118,7 +148,21 @@ export class Capabilities extends Context.Service<Capabilities>()(
       /** Whether a connected client serves `name` now. */
       const offers = (name: Contract.CapabilityName) => providers.has(name);
 
-      return { serve, reply, call, offers, offered };
+      /** Core serves `name` itself whenever no client does. */
+      const serveLocally = (
+        name: Contract.CapabilityName,
+        local: LocalCapability,
+      ) =>
+        Effect.suspend(() => {
+          locals.set(name, local);
+          return publish;
+        });
+
+      /** Whether `name` can be served now, by a client or by Core itself: what the backend reports it has. */
+      const available = (name: Contract.CapabilityName) =>
+        providers.has(name) || !!locals.get(name)?.isAvailable();
+
+      return { serve, reply, call, offers, offered, serveLocally, available };
     }),
   },
 ) {
