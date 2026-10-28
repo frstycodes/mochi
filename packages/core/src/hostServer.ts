@@ -53,6 +53,7 @@ export class Capabilities extends Context.Service<Capabilities>()(
         }
       >();
       const locals = new Map<Contract.CapabilityName, LocalCapability>();
+      const waiters = new Map<Contract.CapabilityName, (() => void)[]>();
       let nextId = 0;
       /**
        * The names served now, by a client (in registration order) or by Core itself while it can; `backend.info` pushes it
@@ -84,8 +85,11 @@ export class Capabilities extends Context.Service<Capabilities>()(
         Stream.unwrap(
           Effect.gen(function* () {
             const queue = yield* Queue.unbounded<Contract.CapabilityCall>();
-            for (const name of names)
+            for (const name of names) {
               providers.set(name, [...(providers.get(name) ?? []), queue]);
+              for (const resolve of waiters.get(name) ?? []) resolve();
+              waiters.delete(name);
+            }
             yield* publish;
             const unregister = Effect.gen(function* () {
               for (const name of names) {
@@ -148,6 +152,14 @@ export class Capabilities extends Context.Service<Capabilities>()(
       /** Whether a connected client serves `name` now. */
       const offers = (name: Contract.CapabilityName) => providers.has(name);
 
+      /** Resolves once a connected client serves `name`: at once when one does now. */
+      const whenOffered = (name: Contract.CapabilityName) =>
+        providers.has(name)
+          ? Promise.resolve()
+          : new Promise<void>((resolve) =>
+              waiters.set(name, [...(waiters.get(name) ?? []), resolve]),
+            );
+
       /** Core serves `name` itself whenever no client does. */
       const serveLocally = (
         name: Contract.CapabilityName,
@@ -162,7 +174,16 @@ export class Capabilities extends Context.Service<Capabilities>()(
       const available = (name: Contract.CapabilityName) =>
         providers.has(name) || !!locals.get(name)?.isAvailable();
 
-      return { serve, reply, call, offers, offered, serveLocally, available };
+      return {
+        serve,
+        reply,
+        call,
+        offers,
+        offered,
+        whenOffered,
+        serveLocally,
+        available,
+      };
     }),
   },
 ) {

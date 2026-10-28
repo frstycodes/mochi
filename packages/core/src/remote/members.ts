@@ -1,6 +1,9 @@
 import sodium from 'libsodium-wrappers';
-import { DEVICE_KINDS, type DeviceKind } from '../../src/host/types/remote.ts';
-import type { DeviceKeys } from './crypto/keys.ts';
+import {
+  DEVICE_KINDS,
+  type DeviceKind,
+} from '../../../../apps/desktop/src/host/types/remote.ts';
+import type { DeviceKeys } from './session.ts';
 import { deviceId } from './pairing.ts';
 
 /**

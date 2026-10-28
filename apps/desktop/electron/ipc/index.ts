@@ -16,6 +16,7 @@ import { fs } from './fs.ts';
 import type { InMain as DataInMain } from '@mochi/core/data/host';
 import type { InMain as FsInMain } from '@mochi/core/fs/host';
 import type { InMain as LibraryInMain } from '@mochi/core/library/host';
+import type { InMain as RemoteInMain } from '@mochi/core/remote/host';
 import type { InMain as SettingsInMain } from '@mochi/core/settings/host';
 import type { InMain as ThemesInMain } from '@mochi/core/themes/host';
 import { library } from './library.ts';
@@ -45,6 +46,7 @@ type InMain = {
   themes: ThemesInMain;
   settings: SettingsInMain;
   library: LibraryInMain;
+  remote: RemoteInMain;
 };
 
 const handlers = {

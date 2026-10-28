@@ -1,16 +1,16 @@
 import sodium from 'libsodium-wrappers';
-import type { Link, RawLink } from '@mochi/core/remote/link';
+import type { Link, RawLink } from './link.ts';
 import {
   createHandshake,
   E2EError,
   type DeviceKeys,
   type Session,
-} from '@mochi/core/remote/session';
+} from './session.ts';
 import {
   DEVICE_KINDS,
   type DeviceKind,
   type Scope,
-} from '../../src/host/types/remote.ts';
+} from '../../../../apps/desktop/src/host/types/remote.ts';
 
 /** This computer's kind, from its OS. */
 export const THIS_KIND: DeviceKind =

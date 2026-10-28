@@ -1,7 +1,10 @@
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { Context, Effect, Layer } from 'effect';
-import type { AccountHost } from '@mochi/domain/host/types/account';
+import type {
+  AccountHost,
+  MochiAccount,
+} from '@mochi/domain/host/types/account';
 import { push } from '../agents/events.ts';
 import type { HostMethods } from '../hostMethods.ts';
 import { Capabilities } from '../hostServer.ts';
@@ -35,7 +38,8 @@ export class AccountService extends Context.Service<AccountService>()(
                 ),
               ),
           );
-        return makeAccount({
+        const listeners = new Set<(account: MochiAccount) => void>();
+        const account = makeAccount({
           keys,
           ...CLERK,
           openUrl: async (url) => {
@@ -51,9 +55,19 @@ export class AccountService extends Context.Service<AccountService>()(
                   call('secureStorage', 'decrypt', [sealed]).then(String),
                 )
               : undefined,
-          onChange: (account) =>
-            push({ channel: ACCOUNT_CHANGED, payload: account }),
+          onChange: (account) => {
+            push({ channel: ACCOUNT_CHANGED, payload: account });
+            for (const listener of listeners) listener(account);
+          },
         });
+        return {
+          ...account,
+          /** Each change, for Core's own services: remote access's relay connection follows it. */
+          onChange(listener: (account: MochiAccount) => void) {
+            listeners.add(listener);
+            return () => void listeners.delete(listener);
+          },
+        };
       }),
   },
 ) {

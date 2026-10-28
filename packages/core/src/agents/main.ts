@@ -32,6 +32,8 @@ export interface MainForAgents {
   settle(threadId: string): Promise<void>;
   /** Opens a page in the system browser: Core's account sign-in and Account Portal. */
   openExternal(url: string): Promise<void>;
+  /** Keeps this computer from idle sleep while remote access needs it (packages/core/src/remote/service.ts). */
+  holdAwake(isHeld: boolean): Promise<void>;
 }
 
 export interface SessionConnectors {

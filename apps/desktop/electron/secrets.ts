@@ -1,5 +1,23 @@
-import { safeStorage } from 'electron';
-import { isWeakStorage, type KeyStorage } from './remote/crypto/keys';
+import { safeStorage, type SafeStorage } from 'electron';
+
+export type KeyStorage = Pick<
+  SafeStorage,
+  | 'isEncryptionAvailable'
+  | 'getSelectedStorageBackend'
+  | 'encryptString'
+  | 'decryptString'
+>;
+
+/** `basic_text` encrypts with a hardcoded password; `unknown` means the app isn't ready. Neither may hold a secret. */
+export function isWeakStorage(
+  storage: KeyStorage,
+  platform: NodeJS.Platform,
+): boolean {
+  if (!storage.isEncryptionAvailable()) return true;
+  if (platform !== 'linux') return false;
+  const backend = storage.getSelectedStorageBackend();
+  return backend === 'basic_text' || backend === 'unknown';
+}
 
 /** False when the OS keychain is missing or, on Linux, only `basic_text` (a hardcoded password): callers keep secrets in memory then. */
 export const canStore = (

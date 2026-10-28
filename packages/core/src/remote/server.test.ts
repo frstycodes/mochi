@@ -13,16 +13,16 @@ import {
 import { HttpServer } from 'effect/http';
 import sodium from 'libsodium-wrappers';
 import { Capabilities, type Relay } from '@mochi/schema';
-import { coreUrl, makeCoreClient } from '@mochi/core/client';
-import { serveCapabilities } from '@mochi/core/hostClient';
-import { makeDeviceClient } from '@mochi/core/remote/device';
-import { queuedReader, type Link, type RawLink } from '@mochi/core/remote/link';
-import { mintDeviceToken } from '@mochi/core/remote/token';
-import { Unauthorized } from '@mochi/core/rpc';
+import { coreUrl, makeCoreClient } from '../client.ts';
+import { serveCapabilities } from '../hostClient.ts';
+import { makeDeviceClient } from './device.ts';
+import { queuedReader, type Link, type RawLink } from './link.ts';
+import { mintDeviceToken } from './token.ts';
+import { Unauthorized } from '../rpc.ts';
 import type { ThreadItem } from '@mochi/domain';
-import { layerCore } from '@mochi/core/server';
-import type { Scope } from '../../src/host/types/remote.ts';
-import type { DeviceKeys } from './crypto/keys.ts';
+import { layerCore } from '../server.ts';
+import type { Scope } from '../../../../apps/desktop/src/host/types/remote.ts';
+import type { DeviceKeys } from './session.ts';
 import {
   deviceId,
   PairingRefused,

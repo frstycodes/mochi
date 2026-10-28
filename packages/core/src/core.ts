@@ -16,6 +16,8 @@ const program = Effect.gen(function* () {
     backend: { kind: osKind(process.platform) },
     logFile: config.logFile,
     otlpUrl: config.otlpUrl,
+    // Main serves the OS keychain once it connects.
+    hasKeychain: true,
   });
 });
 

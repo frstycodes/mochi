@@ -3,10 +3,13 @@ import type { AddressInfo } from 'node:net';
 import { Schema } from 'effect';
 import { WebSocketServer } from 'ws';
 import { Backend, Relay } from '@mochi/schema';
-import { socketLink, type Link, type RawLink } from '@mochi/core/remote/link';
-import type { DeviceGrant } from '@mochi/core/remote/token';
-import { tunnel } from '@mochi/core/remote/tunnel';
-import type { ConnectedDevice, Scope } from '../../src/host/types/remote.ts';
+import { socketLink, type Link, type RawLink } from './link.ts';
+import type { DeviceGrant } from './token.ts';
+import { tunnel } from './tunnel.ts';
+import type {
+  ConnectedDevice,
+  Scope,
+} from '../../../../apps/desktop/src/host/types/remote.ts';
 import {
   type AuthenticatedDevice,
   type Origin,
@@ -18,7 +21,7 @@ export interface RemoteServerOptions {
   port: number;
   /** The pairing exchange every connection opens with (`pairing.ts`): who the device is, and its decrypted link. */
   secure: (raw: RawLink, origin: Origin) => Promise<Secured>;
-  /** Core's address and a token holding this device to its scopes (`deviceTunnel` in `@mochi/core/host`). */
+  /** Core's address and a token holding this device to its scopes (signed with Core's internal token, `service.ts`). */
   coreFor: (grant: DeviceGrant) => Promise<{ url: string; token: string }>;
   /** This computer's Core's descriptor (`backend.info`), with `scopes` the device's; sent in each welcome. */
   backend: (scopes: Scope[]) => Promise<Backend.BackendInfo>;

@@ -1,10 +1,11 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import path from 'node:path';
 import { Context, Effect, Layer, Schedule, Schema, Stream } from 'effect';
 import {
   HttpRouter,
+  HttpServer,
   HttpServerRequest,
   HttpServerResponse,
   HttpStaticServer,
@@ -27,6 +28,7 @@ import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
+import { REMOTE_PORT, Remote } from './remote/service.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
@@ -76,11 +78,22 @@ export interface ServerOptions {
   readonly browserView?: LocalCapability;
   /** What `backend.info` says this Core is. Unset: a `server`. */
   readonly backend?: Partial<BackendOptions>;
+  /** Where remote access listens for devices when it is on; 0 picks a free port (tests). */
+  readonly remotePort?: number;
+  /** Main serves `secureStorage` once it connects: a new device key waits for it instead of landing unsealed. */
+  readonly hasKeychain?: boolean;
 }
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
-export const layerCore = (options: ServerOptions) =>
-  layerRoute(options).pipe(
+export const layerCore = (options: ServerOptions) => {
+  // Core's own: remote access signs each device's tunnel token with it (`remote/token.ts`). Never leaves this process.
+  const internal = randomBytes(32).toString('base64url');
+  const tokens = new Map([
+    ...options.tokens,
+    [internal, Contract.allScopes],
+  ] as const);
+  return layerRoute({ ...options, tokens }).pipe(
+    Layer.provideMerge(layerBindCore(internal)),
     // Built after everything below, right before the route serves: the server listens when built but answers only once served,
     // and an upgrade that arrives in between is never answered, so a client would wait out its 10s open timeout. Until then
     // a connection is refused, and the client redials in 250ms.
@@ -103,12 +116,6 @@ export const layerCore = (options: ServerOptions) =>
       ),
     ),
     Layer.provideMerge(Layer.mergeAll(Cache.layer, layerReactor)),
-    Layer.provideMerge(
-      Backend.layer({
-        kind: options.backend?.kind ?? 'server',
-        userData: options.userData,
-      }),
-    ),
     Layer.provide(Metrics.layer),
     Layer.provide(Watch.layer),
     Layer.provideMerge(layerAgents(options.userData)),
@@ -119,6 +126,17 @@ export const layerCore = (options: ServerOptions) =>
       ),
     ),
     Layer.provideMerge(Hosted.layer(options.userData)),
+    Layer.provideMerge(
+      Remote.layer(options.userData, options.remotePort ?? REMOTE_PORT, {
+        hasKeychain: options.hasKeychain ?? false,
+      }),
+    ),
+    Layer.provideMerge(
+      Backend.layer({
+        kind: options.backend?.kind ?? 'server',
+        userData: options.userData,
+      }),
+    ),
     Layer.provideMerge(AccountService.layer(options.userData)),
     Layer.provideMerge(KeyStore.layer(options.userData)),
     Layer.provide(
@@ -133,6 +151,17 @@ export const layerCore = (options: ServerOptions) =>
       ).pipe(Layer.provideMerge(Run.layer)),
     ),
     Layer.provideMerge(NodeHttpServer.layerHttpServices),
+  );
+};
+
+/** Remote access learns Core's bound port, for the tunnels its devices open into Core. */
+const layerBindCore = (token: string) =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const { address } = yield* HttpServer.HttpServer;
+      const remote = yield* Remote;
+      if ('port' in address) remote.bindCore({ port: address.port, token });
+    }),
   );
 
 const layerCapabilities = (browserView: LocalCapability | undefined) =>
@@ -176,7 +205,8 @@ type Services =
   | Scheduler
   | Hosted
   | AccountService
-  | KeyStore;
+  | KeyStore
+  | Remote;
 
 const layerRoute = (options: ServerOptions) =>
   HttpRouter.serve(
@@ -341,6 +371,12 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const hosted = yield* (yield* Hosted).handlers(windowId);
       const backend = yield* Backend;
       const account = yield* AccountService;
+      const remote = yield* Remote;
+      // Main's connection names no window; what these hand out stays off pages and devices.
+      const mainOnly = <A>(run: () => Promise<A>) =>
+        windowId === undefined && !identity.device
+          ? Effect.tryPromise({ try: run, catch: messageOf })
+          : Effect.fail('Only main may ask for this');
       return {
         ping: () => Effect.succeed('pong'),
         'backend.info': () => backend.describe(identity.scopes),
@@ -397,15 +433,27 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           capabilities.reply(reply),
         watch: ({ key }: { key: WatchKey }) => watch.watch(key),
         'watch.gate': (gate: Gate) => watch.setGate(gate),
-        // Main's connection names no window; the token stays out of pages and off devices.
-        'account.relayToken': () =>
-          windowId === undefined && !identity.device
-            ? Effect.tryPromise({
-                try: () => account.accessToken(),
-                catch: (error) =>
-                  error instanceof Error ? error.message : String(error),
-              })
-            : Effect.fail('Only main may ask for the account’s token'),
+        'account.relayToken': () => mainOnly(() => account.accessToken()),
+        'remote.deviceKey': () => mainOnly(() => remote.deviceKey()),
+        'remote.paired': () => mainOnly(() => remote.paired()),
+        'remote.absorb': ({ members }: { members?: unknown }) =>
+          mainOnly(() => remote.absorb(members)),
+        'remote.noteWelcome': ({
+          machineId,
+          ...welcome
+        }: {
+          machineId: string;
+          addresses?: ReadonlyArray<string>;
+          kind?: Relay.DeviceKind;
+        }) =>
+          mainOnly(async () =>
+            remote.noteWelcome(machineId, {
+              ...welcome,
+              addresses: welcome.addresses && [...welcome.addresses],
+            }),
+          ),
+        'remote.shell': (shell: Parameters<typeof remote.setShell>[0]) =>
+          mainOnly(async () => remote.setShell(shell)),
         'watch.stale': ({ kinds }: { kinds: ReadonlyArray<StaleKind> }) =>
           watch.markStale(kinds),
         'utility.run': ({
@@ -597,4 +645,12 @@ const inWindow = (
     return yield* Schema.decodeUnknownEffect(
       Schema.toCodecJson(Relay.CommandResult),
     )(value);
-  });
+  }).pipe(
+    // No desktop app or browser tab holds the store to run it in.
+    Effect.catchTag('CapabilityUnavailable', () =>
+      Effect.succeed<Relay.CommandResult>({
+        isOk: false,
+        error: 'No interface is open on this computer',
+      }),
+    ),
+  );

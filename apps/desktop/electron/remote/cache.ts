@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { isWeakStorage, type KeyStorage } from './crypto/keys.ts';
+import { isWeakStorage, type KeyStorage } from '../secrets.ts';
 
 /**
  * Each followed machine's last snapshot, so its threads read offline and show at launch before it answers. Encrypted with
