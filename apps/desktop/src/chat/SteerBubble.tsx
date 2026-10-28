@@ -9,6 +9,8 @@ import { toast } from '@/toast/store';
 import { TooltipIconButton } from '../ui';
 import { host } from '../host';
 import { authorName, type QueuedMessage, type Thread } from '../model';
+import { useRemoteMachine } from '../remote/origin';
+import { useOptionalMachines } from '../remote/useMachines';
 import { useDispatch } from '../store';
 import { sendSteerNow } from './outbox';
 import { MessageImages } from './MessageImages';
@@ -23,13 +25,19 @@ export function PendingSteers({
 }) {
   const dispatch = useDispatch();
   const agent = authorName(thread.providers[0]);
+  const remote = useRemoteUnsteer(thread.id);
   const takeBack = async (message: QueuedMessage) => {
+    if (remote) {
+      if (await remote(message.id, false)) onTakeBack(message);
+      return;
+    }
     if (!(await host.agent.unsteer(thread.id, message.id)))
       return toast(`${agent} is already reading it`);
     dispatch({ type: 'steer-take-back', threadId: thread.id, id: message.id });
     onTakeBack(message);
   };
   const sendNow = async (message: QueuedMessage) => {
+    if (remote) return void (await remote(message.id, true));
     if (
       !(await sendSteerNow(dispatch, thread, message.id, (threadId, steerId) =>
         host.agent.unsteer(threadId, steerId),
@@ -48,6 +56,22 @@ export function PendingSteers({
       onSendNow={() => void sendNow(message)}
     />
   ));
+}
+
+/** On another computer's thread, its agent is there: that computer takes the message back (`unsteer`), and says when it can't. */
+function useRemoteUnsteer(threadId: string) {
+  const machine = useRemoteMachine();
+  const machines = useOptionalMachines();
+  if (!machine || !machines) return null;
+  return async (steerId: string, sendNow: boolean) =>
+    (
+      await machines.run(machine.id, {
+        type: 'unsteer',
+        threadId,
+        steerId,
+        ...(sendNow && { sendNow }),
+      })
+    ).isOk;
 }
 
 /**

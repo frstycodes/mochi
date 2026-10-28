@@ -117,6 +117,7 @@ import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
+import { useRemoteMachine } from './remote/origin';
 import { LimitEntry, LimitHint } from './chat/LimitCard';
 import { CompactionRow } from './chat/CompactionRow';
 import { HandoffRow } from './chat/HandoffRow';
@@ -815,6 +816,7 @@ const Composer = memo(function Composer({
   restoreRef: RefObject<((message: QueuedMessage) => void) | null>;
 }) {
   const dispatch = useDispatch();
+  const isRemote = !!useRemoteMachine();
   const { whileWorking, promptSuggestions } = usePrefs();
   const [isHeld, setIsHeld] = useState(false);
   const isQueueing = shouldQueue(thread, whileWorking, isHeld);
@@ -992,8 +994,11 @@ const Composer = memo(function Composer({
                 const focus = compactFocus(trimmed);
                 if (focus !== null) return runCompact(focus, files.length > 0);
                 if (!isQueueing) recordUnanswered();
+                // Another computer's thread keeps no original here: the image goes inline and lives there.
                 const images = await sentImages(files, (type, base64) =>
-                  host.data.saveImage(type, base64),
+                  isRemote
+                    ? Promise.reject(new Error('kept on that computer'))
+                    : host.data.saveImage(type, base64),
                 );
                 const message = queuedMessage(trimmed, {
                   ...(images.length > 0 && { images }),

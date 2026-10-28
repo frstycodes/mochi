@@ -2,7 +2,12 @@ import { sendAction, queuedMessage, shouldQueue } from '../chat/queued.ts';
 import type { DriftVerdict } from '../drift.ts';
 import { reviewNote } from '../git/files.ts';
 import { draftFrom } from '../goals/edit.ts';
-import type { CommandResult, RemoteCommand } from '../host/types/remote.ts';
+import type {
+  CommandResult,
+  RemoteCommand,
+  RemoteMessage,
+  RemoteThreadAction,
+} from '../host/types/remote.ts';
 import type { Thread } from '../model.ts';
 import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
 import type { Action, State } from '../store/types.ts';
@@ -52,7 +57,9 @@ export function storeCommand(
   if (!thread) return fail('No such thread on this machine');
   switch (command.type) {
     case 'send':
-      return send(state, thread, command.text);
+      return send(state, thread, command);
+    case 'thread-action':
+      return threadAction(thread, command.action);
     case 'interrupt':
       return thread.live?.isWorking
         ? done({ type: 'interrupt', threadId: thread.id })
@@ -103,6 +110,7 @@ export function storeCommand(
 
 const STORE_TYPES = new Set<RemoteCommand['type']>([
   'send',
+  'thread-action',
   'interrupt',
   'fork',
   'rename',
@@ -136,22 +144,69 @@ function resolve(
   });
 }
 
-/** The composer's path: queued behind a working agent per Settings › General › While the agent is working, otherwise sent now. */
-function send(state: State, thread: Thread, text: string): StoreCommand {
-  const message = queuedMessage(text, {
-    mentions: [],
-    isCommand: false,
-    typedSkills: [],
-  });
-  if (shouldQueue(thread, state.context.prefs.whileWorking, false))
+/**
+ * The composer's path: steered into the turn or queued as the device's composer chose, else per Settings › General › While
+ * the agent is working here. Send now on a queued message sends this machine's copy of it.
+ */
+function send(
+  state: State,
+  thread: Thread,
+  command: Extract<RemoteCommand, { type: 'send' }>,
+): StoreCommand {
+  const { queuedId } = command;
+  const queued =
+    queuedId === undefined
+      ? undefined
+      : thread.queued?.find((m) => m.id === queuedId);
+  if (queuedId !== undefined && !queued)
+    return fail('That message already left the queue');
+  const message = queued ?? typedMessage({ ...command, draft: command.text });
+  const steers =
+    queued !== undefined ||
+    (command.steers ??
+      !shouldQueue(thread, state.context.prefs.whileWorking, false));
+  if (!steers)
     return done({ type: 'queued-add', threadId: thread.id, message });
-  const sent = sendAction(state, thread, message);
+  const sent = sendAction(state, thread, message, queued && { queuedId });
   return {
     ...done(sent.action),
     ...(sent.verdict instanceof Promise && {
       verdict: { threadId: thread.id, text: sent.text, verdict: sent.verdict },
     }),
   };
+}
+
+const typedMessage = (message: RemoteMessage) =>
+  queuedMessage(message.draft, {
+    ...(message.images?.length && { images: message.images }),
+    mentions: message.mentions ?? [],
+    isCommand: message.isCommand ?? false,
+    typedSkills: message.typedSkills ?? [],
+  });
+
+/** The thread's own action as its UI dispatches it; what the UI stamps (a queued message's id, Auto-fix's start) is stamped here. */
+function threadAction(
+  thread: Thread,
+  action: RemoteThreadAction,
+): StoreCommand {
+  const threadId = thread.id;
+  switch (action.type) {
+    case 'queued-add':
+      return done({
+        type: 'queued-add',
+        threadId,
+        message: typedMessage(action.message),
+      });
+    case 'autofix-set':
+      return done({
+        type: 'autofix-set',
+        threadId,
+        pr: action.pr,
+        ...(action.isOn && { since: Date.now() }),
+      });
+    default:
+      return done({ ...action, threadId });
+  }
 }
 
 /** The sidebar's pin toggle (mod Shift P), only when it changes something. */

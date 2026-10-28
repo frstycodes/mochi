@@ -4,6 +4,13 @@
     { "type": "settings" },
     { "type": "projects" },
     { "type": "send", "threadId": "t", "text": "why?" },
+    { "type": "send", "threadId": "t", "text": "see /simplify", "images": [{ "mediaType": "image/png", "data": "x", "thumb": "x" }], "mentions": [{ "kind": "thread", "id": "t2", "title": "Login" }], "typedSkills": ["simplify"], "steers": false },
+    { "type": "send", "threadId": "t", "text": "", "queuedId": "m-1" },
+    { "type": "thread-action", "threadId": "t", "action": { "type": "controls", "controls": { "model": "opus", "effort": "high", "speed": "", "access": "Manual" } } },
+    { "type": "thread-action", "threadId": "t", "action": { "type": "queued-order", "ids": ["m-2", "m-1"] } },
+    { "type": "thread-action", "threadId": "t", "action": { "type": "autofix-set", "pr": 12, "isOn": true } },
+    { "type": "unsteer", "threadId": "t", "steerId": "m-1", "sendNow": true },
+    { "type": "setup-choice", "threadId": "t", "choice": "retry" },
     { "type": "resolve", "queueId": "q", "answers": [["Yes"], []] },
     { "type": "interrupt", "threadId": "t" },
     { "type": "fork", "threadId": "t", "point": { "kind": "checkpoint", "n": 2 } },
@@ -37,9 +44,9 @@
     { "type": "terminal-resize", "threadId": "t", "terminalId": "p", "cols": 100, "rows": 30 },
     { "type": "terminal-close", "threadId": "t", "terminalId": "p" }
   ],
-  "hello": [{ "type": "hello", "version": 4 }, { "type": "hello", "version": 4, "members": [{ "id": "k1" }] }],
+  "hello": [{ "type": "hello", "version": 5 }, { "type": "hello", "version": 5, "members": [{ "id": "k1" }] }],
   "machineFrames": [
-    { "type": "welcome", "version": 4, "deviceId": "d-laptop", "machineName": "Studio", "machineKind": "mac", "scopes": ["read", "operate", "manage", "code"], "addresses": [] },
+    { "type": "welcome", "version": 5, "deviceId": "d-laptop", "machineName": "Studio", "machineKind": "mac", "scopes": ["read", "operate", "manage", "code"], "addresses": [] },
     { "type": "refused", "reason": "This machine speaks protocol 4; update Mochi on both sides" },
     { "type": "members", "members": [{ "id": "k1" }] }
   ],

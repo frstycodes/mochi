@@ -17,6 +17,7 @@ import type { ActivityEntry, Provider, Thread } from '../model';
 import { PROVIDER_NAME } from '../rewind/handoff';
 import { isSwitchPending, otherProvider, switchHere } from '../rewind/switch';
 import { HARNESSES } from '../settings/harnesses';
+import { useRemoteMachine } from '../remote/origin';
 import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { resetLabel, untilLabel } from '../usage/limits';
@@ -178,13 +179,15 @@ export function useUntil(at?: string) {
   return isPending && target > now ? target - now : 0;
 }
 
+/** Never on another computer's thread: its key is that computer's, and stays there (DEVICES.md). */
 function useHasApiKey(provider: Provider) {
+  const isRemote = !!useRemoteMachine();
   const keyQuery = useQuery({
     queryKey: queryKeys.agent.apiKey(provider),
     queryFn: () => host.settings.apiKey(provider),
-    enabled: !!HARNESSES[provider].apiKey,
+    enabled: !!HARNESSES[provider].apiKey && !isRemote,
   });
-  return keyQuery.data?.isSet ?? false;
+  return !isRemote && (keyQuery.data?.isSet ?? false);
 }
 
 /** The header's status chip while a limit stops the thread: "Waiting · resets 3:40 PM". */

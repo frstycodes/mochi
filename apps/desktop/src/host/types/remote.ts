@@ -1,4 +1,5 @@
-import type { Provider, SentImage } from '../../model.ts';
+import type { AgentCommand, Provider, SentImage } from '../../model.ts';
+import type { Mention } from '../../chat/mentions.ts';
 import type { ThreadControls } from '../../runtime/controls.ts';
 import type { AgentModel } from './agent.ts';
 import type { ChangeTarget, DiffScope, GitDiff } from './git.ts';
@@ -137,7 +138,23 @@ export type RemoteCommand =
   /** This profile's projects as that computer keeps them (its Projects page). */
   | { type: 'projects' }
   // operate
-  | { type: 'send'; threadId: string; text: string }
+  /**
+   * The composer's send, `text` as typed, its references resolved there. `queuedId`: Send now on a message in that computer's
+   * queue. `steers`: true sends into the turn in flight, false queues it; unset, that computer's While the agent is working.
+   */
+  | ({
+      type: 'send';
+      threadId: string;
+      text: string;
+      queuedId?: string;
+      steers?: boolean;
+    } & Partial<Omit<RemoteMessage, 'draft'>>)
+  /** One of the thread's own store actions a device may ask for, each behind its scope (`THREAD_ACTION_SCOPES`). */
+  | { type: 'thread-action'; threadId: string; action: RemoteThreadAction }
+  /** Takes back a message sent into the turn before the agent read it; `sendNow` stops the turn and sends it first instead. */
+  | { type: 'unsteer'; threadId: string; steerId: string; sendNow?: boolean }
+  /** Retry or Skip on a failed setup step. */
+  | { type: 'setup-choice'; threadId: string; choice: 'retry' | 'skip' }
   | { type: 'resolve'; queueId: string; answers?: string[][] }
   | { type: 'interrupt'; threadId: string }
   | { type: 'fork'; threadId: string; point: ThreadPoint }
@@ -224,6 +241,42 @@ export type RemoteCommand =
   /** Output from offset `after` on; the device polls with the `next` it got. */
   | { type: 'terminal-close'; threadId: string; terminalId: string };
 
+/** `QueuedMessage` as typed, less its id; images never name a path on the sending computer. */
+export interface RemoteMessage {
+  draft: string;
+  images?: Omit<SentImage, 'original'>[];
+  mentions?: Mention[];
+  isCommand?: boolean;
+  typedSkills?: string[];
+}
+
+/** The thread's store actions a device may ask for, less the thread id and what that computer stamps itself. */
+export type RemoteThreadAction =
+  // operate
+  | { type: 'controls'; controls: ThreadControls }
+  | { type: 'provider-switch'; to: Provider; model?: string }
+  | { type: 'compact'; focus: string; queuedId?: string }
+  | { type: 'queued-add'; message: RemoteMessage }
+  | { type: 'queued-remove'; id: string }
+  | { type: 'queued-order'; ids: string[] }
+  | { type: 'queued-resume' }
+  /** After a usage limit, on the same account: a device never switches that computer to its API key. */
+  | { type: 'resume' }
+  | { type: 'limit-auto-resume'; isOn: boolean }
+  | {
+      type: 'grant-answer';
+      grantId: string;
+      answer: 'allow' | 'deny' | 'revoke';
+      models?: string[];
+    }
+  | { type: 'proposal-answer'; proposalId: string; state: 'dismissed' | 'here' }
+  // manage
+  | { type: 'proposal-start'; proposalId: string }
+  | { type: 'goal-remove' }
+  /** On from when that computer gets it. */
+  | { type: 'autofix-set'; pr: number; isOn: boolean }
+  | { type: 'auto-archive-set'; pr: number; isOn: boolean };
+
 export type ThreadPoint =
   | { kind: 'message'; index: number }
   | { kind: 'checkpoint'; n: number };
@@ -249,6 +302,13 @@ export interface MachineCatalog {
   models: Partial<Record<Provider, AgentModel[]>>;
   /** Settings › Defaults per harness; '' is the harness's own. */
   defaults: Record<Provider, string>;
+  /** Each harness's slash commands and skills as the profile configures them, before a thread's agent reports its own. */
+  commands?: Partial<Record<Provider, MachineCommands>>;
+}
+
+export interface MachineCommands {
+  commands: AgentCommand[];
+  skills: string[];
 }
 
 /** A project as a device names it: `ref` is the project's id there, sent back as is (`create`), never a path. */

@@ -26,6 +26,8 @@ import type { AgentImage } from '../host/types/agent';
 import type { ScreenAccess } from '../host/types/windows';
 import type { AgentCommand, McpServer, Thread } from '../model';
 import { openPhotos } from '../photo/photos';
+import { useRemoteMachine } from '../remote/origin';
+import { useMachineFiles } from '../remote/useMachines';
 import { useHarnessSelector } from '../store';
 import { isSameListing } from '../reorder';
 import { useLibraryNames } from '../library/names';
@@ -493,15 +495,24 @@ export function useThreadMentionDrop(menu: ReturnType<typeof useMentionMenu>) {
   };
 }
 
-/** Where `@` finds files: the folder the thread works in, and the files it opened or edited lately (relative, newest first). */
-export type MentionFiles = { root: string | null; recent: string[] };
+/**
+ * Where `@` finds files: the folder the thread works in, and the files it opened or edited lately (relative, newest first).
+ * `threadId` on another computer's thread: its files come from there (`files`), and folders aren't browsed.
+ */
+export type MentionFiles = {
+  root: string | null;
+  recent: string[];
+  threadId?: string;
+};
 const NO_FILES: MentionFiles = { root: null, recent: [] };
 const MAX_FILES = 8;
 const MAX_BROWSE = 50;
 
 export function useThreadMentionFiles(thread: Thread): MentionFiles {
+  const isRemote = !!useRemoteMachine();
   const root = threadCwd(thread);
   const recent = useRecentFiles(thread, root ?? '');
+  if (isRemote) return { root: null, recent: [], threadId: thread.id };
   return { root, recent: recent.map((f) => f.path) };
 }
 
@@ -511,13 +522,20 @@ export function useThreadMentionFiles(thread: Thread): MentionFiles {
  */
 function useFileOptions(
   query: string | null,
-  { root, recent }: MentionFiles,
+  { root, recent, threadId }: MentionFiles,
 ): FileOption[] {
   const [isUsed, setIsUsed] = useState(false);
   if (query !== null && !isUsed) setIsUsed(true);
-  const { files } = useFileList(isUsed ? root : null);
+  const machine = useRemoteMachine();
+  const { files: localFiles } = useFileList(isUsed ? root : null);
+  const remoteFiles = useMachineFiles(
+    threadId ? machine : null,
+    threadId ?? '',
+    isUsed,
+  );
+  const files = threadId ? remoteFiles : localFiles;
   const deferred = useDeferredValue(query);
-  const browse = deferred === null ? null : browseQuery(deferred);
+  const browse = deferred === null || threadId ? null : browseQuery(deferred);
   const folder = useFolder(
     browse && browseTarget(root, browse.dir),
     browse?.dir ?? null,

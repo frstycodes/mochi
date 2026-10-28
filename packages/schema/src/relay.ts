@@ -3,7 +3,7 @@ import { AgentModel } from './agent.ts';
 import { Int, Str } from './checks.ts';
 import { DiffScope, GitDiff } from './ipc/git.ts';
 import { Project } from './ipc/projects.ts';
-import { Access, AgentImage, Provider } from './model.ts';
+import { Access, AgentCommand, AgentImage, Provider } from './model.ts';
 
 // Frames carry no `v`: they are a live wire protocol, never persisted or replayed as is, versioned as a whole by
 // `hello.version` (a device on another protocol is refused at the handshake). What they carry that is persisted is versioned
@@ -14,7 +14,7 @@ const S = Schema.String;
 const B = Schema.Boolean;
 
 /** Bumped on any link frame change; a device on another version is refused rather than misread. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 const MAX_ID = 128;
 const MAX_TEXT = 256 * 1024;
@@ -26,6 +26,8 @@ const MAX_THUMB = 512 * 1024;
 // `MAX_IMAGE_BYTES` (src/chat/images.ts) as base64.
 const MAX_IMAGE_CHARS = Math.ceil((5_000_000 * 4) / 3);
 const MAX_IMAGES = 8;
+const MAX_MENTIONS = 64;
+const MAX_QUEUED = 100;
 
 export const Scope = Schema.Literals([
   'read',
@@ -86,6 +88,130 @@ const RemoteImage = Schema.Struct({
   thumb: Str(MAX_THUMB),
 });
 
+const Images = Schema.Array(RemoteImage).check(Schema.isMaxLength(MAX_IMAGES));
+
+/** `Mention`: what the composer references. A file is one the thread's `files` listed; a window comes as its screenshot. */
+const RemoteMention = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('thread'),
+    id: Id,
+    title: Str(MAX_TITLE),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('window'),
+    id: Id,
+    title: Str(MAX_TITLE),
+    icon: opt(Str(MAX_THUMB)),
+    image: Schema.Struct({
+      mediaType: AgentImage.fields.mediaType,
+      data: Str(MAX_IMAGE_CHARS),
+    }),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('skill'),
+    id: Id,
+    title: Str(MAX_TITLE),
+    description: Str(MAX_TEXT),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('mcp'),
+    id: Id,
+    title: Str(MAX_TITLE),
+    toolCount: opt(Index),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('plugin'),
+    id: Id,
+    title: Str(MAX_TITLE),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('file'),
+    id: Str(MAX_PATH),
+    title: Str(MAX_PATH),
+    path: RelativePath,
+    isDir: B,
+  }),
+]);
+
+/** `QueuedMessage` as typed, without its id: the machine resolves its references as its composer would (`sendAction`). */
+const messageFields = {
+  draft: Str(MAX_TEXT),
+  images: opt(Images),
+  mentions: opt(
+    Schema.Array(RemoteMention).check(Schema.isMaxLength(MAX_MENTIONS)),
+  ),
+  isCommand: opt(B),
+  typedSkills: opt(Schema.Array(Id).check(Schema.isMaxLength(MAX_MENTIONS))),
+};
+const hasContent = Schema.makeFilter(
+  (m: {
+    draft: string;
+    images?: readonly unknown[];
+    mentions?: readonly unknown[];
+  }) =>
+    !!m.draft.trim() ||
+    !!m.images?.length ||
+    !!m.mentions?.length ||
+    'a message needs text, an image or a reference',
+);
+const RemoteMessage = Schema.Struct(messageFields).check(hasContent);
+
+const action = <const T extends string, F extends Schema.Struct.Fields>(
+  type: T,
+  fields: F,
+) => Schema.Struct({ type: Schema.Literal(type), ...fields });
+
+/**
+ * The store actions on one thread a device may ask for (`thread-action`), each as the thread's own UI dispatches it, less the
+ * thread id and whatever the machine stamps itself (times, ids). Each needs its `THREAD_ACTION_SCOPES` scope.
+ */
+export const ThreadAction = Schema.Union([
+  action('controls', { controls: RemoteControls }),
+  action('provider-switch', { to: Provider, model: opt(Id) }),
+  action('compact', { focus: Str(MAX_TEXT), queuedId: opt(Id) }),
+  action('queued-add', { message: RemoteMessage }),
+  action('queued-remove', { id: Id }),
+  action('queued-order', {
+    ids: Schema.Array(Id).check(Schema.isMaxLength(MAX_QUEUED)),
+  }),
+  action('queued-resume', {}),
+  action('resume', {}),
+  action('limit-auto-resume', { isOn: B }),
+  action('grant-answer', {
+    grantId: Id,
+    answer: Schema.Literals(['allow', 'deny', 'revoke']),
+    models: opt(Schema.Array(Id).check(Schema.isMaxLength(MAX_MENTIONS))),
+  }),
+  action('proposal-answer', {
+    proposalId: Id,
+    state: Schema.Literals(['dismissed', 'here']),
+  }),
+  action('proposal-start', { proposalId: Id }),
+  action('goal-remove', {}),
+  action('autofix-set', { pr: Index, isOn: B }),
+  action('auto-archive-set', { pr: Index, isOn: B }),
+]);
+export type ThreadAction = typeof ThreadAction.Type;
+
+/** `operate` steers the agent and answers its cards; `manage` changes the thread itself (its goal, its PR's watchers, new threads). */
+export const THREAD_ACTION_SCOPES = {
+  controls: 'operate',
+  'provider-switch': 'operate',
+  compact: 'operate',
+  'queued-add': 'operate',
+  'queued-remove': 'operate',
+  'queued-order': 'operate',
+  'queued-resume': 'operate',
+  resume: 'operate',
+  'limit-auto-resume': 'operate',
+  'grant-answer': 'operate',
+  'proposal-answer': 'operate',
+  'proposal-start': 'manage',
+  'goal-remove': 'manage',
+  'autofix-set': 'manage',
+  'auto-archive-set': 'manage',
+} as const satisfies Record<ThreadAction['type'], Scope>;
+
 const PROJECT_NAME = /^(?!\.\.?$)[\w.-]+$/;
 const OWNER_REPO = /^[\w.-]+\/(?!\.\.?$)[\w.-]+$/;
 
@@ -140,7 +266,37 @@ export const RemoteCommand = Schema.Union([
   command('catalog', {}),
   command('settings', {}),
   command('projects', {}),
-  command('send', { threadId: Id, text: Text(MAX_TEXT) }),
+  /**
+   * The composer's send, `text` as typed. `queuedId`: Send now on a message in the machine's queue, which then goes as queued
+   * there. `steers`: true sends into the turn in flight, false queues it; unset, the machine's While the agent is working.
+   */
+  command('send', {
+    threadId: Id,
+    text: Str(MAX_TEXT),
+    images: messageFields.images,
+    mentions: messageFields.mentions,
+    isCommand: messageFields.isCommand,
+    typedSkills: messageFields.typedSkills,
+    queuedId: opt(Id),
+    steers: opt(B),
+  }).check(
+    Schema.makeFilter(
+      (c) =>
+        c.queuedId !== undefined ||
+        !!c.text.trim() ||
+        !!c.images?.length ||
+        !!c.mentions?.length ||
+        'a message needs text, an image or a reference',
+    ),
+  ),
+  command('thread-action', { threadId: Id, action: ThreadAction }),
+  /** Takes back a message sent into the turn before the agent read it; `sendNow` instead stops the turn and sends it first. */
+  command('unsteer', { threadId: Id, steerId: Id, sendNow: opt(B) }),
+  /** Retry or Skip on a failed setup step, as the step's own buttons answer it. */
+  command('setup-choice', {
+    threadId: Id,
+    choice: Schema.Literals(['retry', 'skip']),
+  }),
   command('resolve', { queueId: Id, answers: opt(Answers) }),
   command('interrupt', { threadId: Id }),
   command('fork', { threadId: Id, point: ThreadPoint }),
@@ -227,6 +383,11 @@ export type RemoteCommand = typeof RemoteCommand.Type;
 
 export const CatalogProject = Schema.Struct({ ref: S, name: S });
 
+const MachineCommands = Schema.Struct({
+  commands: Schema.Array(AgentCommand),
+  skills: Schema.Array(S),
+});
+
 export const MachineCatalog = Schema.Struct({
   projects: Schema.Array(CatalogProject),
   models: Schema.Struct({
@@ -234,6 +395,13 @@ export const MachineCatalog = Schema.Struct({
     codex: opt(Schema.Array(AgentModel)),
   }),
   defaults: Schema.Struct({ claude: S, codex: S }),
+  /** Each harness's slash commands and skills as the profile configures them, before a thread's agent reports its own. */
+  commands: opt(
+    Schema.Struct({
+      claude: opt(MachineCommands),
+      codex: opt(MachineCommands),
+    }),
+  ),
 });
 
 export const TerminalOutput = Schema.Struct({
@@ -284,6 +452,10 @@ export const COMMAND_SCOPES = {
   settings: 'read',
   projects: 'read',
   send: 'operate',
+  // At least `operate`; each action's own scope is `THREAD_ACTION_SCOPES` (`commandScope`).
+  'thread-action': 'operate',
+  unsteer: 'operate',
+  'setup-choice': 'operate',
   resolve: 'operate',
   interrupt: 'operate',
   fork: 'operate',
@@ -315,6 +487,21 @@ export const COMMAND_SCOPES = {
   'terminal-resize': 'terminal',
   'terminal-close': 'terminal',
 } as const satisfies Record<RemoteCommand['type'], Scope>;
+
+/** The scope a command needs: a `thread-action` by its action, any other by its type; `local` (refused) for one unknown. */
+export function commandScope(command: unknown): Scope | 'local' {
+  const { type, action } = (command ?? {}) as {
+    type?: RemoteCommand['type'];
+    action?: { type?: ThreadAction['type'] };
+  };
+  const [scopes, key] =
+    type === 'thread-action'
+      ? [THREAD_ACTION_SCOPES, action?.type]
+      : [COMMAND_SCOPES, type];
+  return typeof key === 'string' && Object.hasOwn(scopes, key)
+    ? scopes[key as keyof typeof scopes]
+    : 'local';
+}
 
 /**
  * After pairing, a link carries Core's WebSocket RPC (frames with a `_tag`, tunnelled to the machine's Core) and these

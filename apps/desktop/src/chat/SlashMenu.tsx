@@ -17,6 +17,8 @@ import { useProfiles } from '../profiles';
 import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { isAbsolutePath } from '../projects';
+import { useRemoteMachine } from '../remote/origin';
+import { useMachineCatalog } from '../remote/useMachines';
 import { useHarnessSelector } from '../store';
 import type { Caret } from './ComposerEditor';
 import { CaretMenu, forwardKey } from './CaretMenu';
@@ -238,7 +240,9 @@ export function useThreadServers(
   projectRoot: string | null,
   agent?: AgentInfo,
 ): McpServer[] {
-  const config = useProfileConfig(spaceId, projectRoot);
+  // Another computer's thread offers what its live agent reported: this computer's profile config isn't that one's.
+  const isRemote = !!useRemoteMachine();
+  const config = useProfileConfig(isRemote ? undefined : spaceId, projectRoot);
   const nativeOff =
     useProfiles().find((p) => p.id === spaceId)?.nativeOff ?? [];
   const live = new Map((agent?.mcpServers ?? []).map((s) => [s.name, s]));
@@ -276,13 +280,14 @@ export function useThreadPlugins(
   projectRoot: string | null,
   agent?: AgentInfo,
 ): string[] {
+  const isRemote = !!useRemoteMachine();
   const config = useProfileConfig(
-    agent?.plugins ? undefined : spaceId,
+    agent?.plugins || isRemote ? undefined : spaceId,
     projectRoot,
   );
   const nativeOff = useProfiles().find((p) => p.id === spaceId)?.nativeOff;
   const library = useLibraryPlugins(
-    agent?.plugins || provider !== 'claude' ? undefined : spaceId,
+    agent?.plugins || isRemote || provider !== 'claude' ? undefined : spaceId,
   );
   if (agent?.plugins) return agent.plugins.map((p) => p.name);
   if (!config) return [];
@@ -311,12 +316,20 @@ function useAgentCommands(
   projectRoot: string | null,
   agent?: AgentInfo,
 ): { commands: AgentCommand[]; skills?: string[] } {
-  const configured = useConfiguredCommands(
+  // Another computer's thread: its own profile's commands, as its catalog lists them; never this computer's disk.
+  const machine = useRemoteMachine();
+  const { catalog } = useMachineCatalog(
+    machine && !agent?.commands ? machine : undefined,
+  );
+  const local = useConfiguredCommands(
     provider,
     spaceId,
     projectRoot,
-    !agent?.commands,
+    !agent?.commands && !machine,
   );
+  const configured = machine
+    ? (catalog?.commands?.[provider] ?? NO_COMMANDS)
+    : local;
   const known = useHarnessSelector((s) =>
     agent?.commands ? undefined : liveCommands(s.threads, provider),
   );
@@ -324,6 +337,8 @@ function useAgentCommands(
     ? { commands: agent.commands, skills: agent.skills }
     : { ...configured, commands: withBuiltins(configured.commands, known) };
 }
+
+const NO_COMMANDS = { commands: [], skills: [] };
 
 // GAP: until a thread on `provider` has reported its live list, the built-ins stay out.
 const liveCommands = (threads: Thread[], provider: Provider) =>

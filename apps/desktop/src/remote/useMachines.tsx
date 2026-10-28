@@ -216,6 +216,9 @@ function unsaved(
   );
 }
 
+/** `useMachines` where the view may render without a provider (the shared chat): null there. */
+export const useOptionalMachines = () => useContext(MachinesContext);
+
 export function useMachines() {
   const machines = useContext(MachinesContext);
   if (!machines)
@@ -234,13 +237,14 @@ export function useFollowedMachine(machineId: string | undefined) {
 /** What a new thread on that computer can start in and with; null while it's read, offline or when it can't be read. */
 /** That machine's catalog, read when it comes online; `reload` reads it again (after adding a project there). */
 export function useMachineCatalog(machine: FollowedMachine | undefined) {
-  const { ask } = useMachines();
+  // Optional: the shared composer asks with no machine for this computer's own threads, wherever it renders.
+  const machines = useOptionalMachines();
   const machineId = machine?.id;
   const isOnline = machine?.status === 'online';
   const catalogQuery = useQuery({
     queryKey: queryKeys.remote.catalog(machineId, isOnline),
-    queryFn: () => ask(machineId!, { type: 'catalog' }),
-    enabled: !!machineId && isOnline,
+    queryFn: () => machines!.ask(machineId!, { type: 'catalog' }),
+    enabled: !!machineId && isOnline && !!machines,
   });
   return {
     catalog: isOnline ? (catalogQuery.data ?? null) : null,
@@ -304,6 +308,9 @@ const COMMAND_VERBS = {
   'add-project': 'create the project',
   'clone-project': 'clone the project',
   send: 'send the message',
+  'thread-action': 'change the thread',
+  unsteer: 'take the message back',
+  'setup-choice': 'continue the setup',
   resolve: 'answer',
   interrupt: 'stop the agent',
   fork: 'fork the thread',
@@ -338,3 +345,19 @@ const SUCCESS: Partial<Record<RemoteCommand['type'], string>> = {
   commit: 'Committed',
   'open-pr': 'Opened the pull request',
 };
+
+/** The files of another computer's thread as its `files` lists them, while `isNeeded`; null before then or for this computer's own. */
+export function useMachineFiles(
+  machine: FollowedMachine | null,
+  threadId: string,
+  isNeeded: boolean,
+) {
+  const machines = useOptionalMachines();
+  const isOnline = machine?.status === 'online';
+  const filesQuery = useQuery({
+    queryKey: queryKeys.remote.read(machine?.id ?? '', ['files', threadId]),
+    queryFn: () => machines!.ask(machine!.id, { type: 'files', threadId }),
+    enabled: !!machine && isOnline && isNeeded && !!machines,
+  });
+  return machine ? (filesQuery.data?.paths ?? null) : null;
+}
