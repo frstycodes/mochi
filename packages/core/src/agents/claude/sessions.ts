@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
+import { planNudge } from './planNudge.ts';
 import { killGuard } from './killGuard.ts';
 import { killDecision } from '../processKill.ts';
 import { saveImage } from '../images.ts';
@@ -547,6 +548,7 @@ async function launch(session: Session) {
             killGuard(threadId),
             ...(options.isGoalsOff ? [] : [goalNudge(threadId)]),
           ],
+          PostToolUse: [planNudge(threadId)],
         },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
         // Deny rules alone only refuse a call; disallowedTools also takes an Off tool out of the model's context (sdk.d.ts).
