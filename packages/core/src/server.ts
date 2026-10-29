@@ -2,7 +2,15 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import path from 'node:path';
-import { Context, Effect, Layer, Schedule, Schema, Stream } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  Queue,
+  Schedule,
+  Schema,
+  Stream,
+} from 'effect';
 import {
   HttpRouter,
   HttpServer,
@@ -29,7 +37,12 @@ import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
-import { layerRemote, REMOTE_PORT } from './remote/service.ts';
+import {
+  isJoinDone,
+  layerRemote,
+  REMOTE_PORT,
+  type JoinProgress,
+} from './remote/service.ts';
 import { Remote } from './remote/tag.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem } from './remote/visible.ts';
@@ -84,6 +97,8 @@ export interface ServerOptions {
   readonly remotePort?: number;
   /** Main serves `secureStorage` once it connects: a new device key waits for it instead of landing unsealed. */
   readonly hasKeychain?: boolean;
+  /** `mochi serve`'s output: once signed in, remote access turns on and joins your computers, printing each code here. */
+  readonly serving?: (line: string) => void;
 }
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
@@ -131,6 +146,7 @@ export const layerCore = (options: ServerOptions) => {
     Layer.provideMerge(
       layerRemote(options.userData, options.remotePort ?? REMOTE_PORT, {
         hasKeychain: options.hasKeychain ?? false,
+        serving: options.serving,
       }),
     ),
     Layer.provideMerge(
@@ -463,6 +479,20 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
               addresses: welcome.addresses && [...welcome.addresses],
             }),
           ),
+        'remote.joinAlone': () =>
+          windowId === undefined && !identity.device
+            ? Stream.callback<JoinProgress>((queue) =>
+                Effect.acquireRelease(
+                  Effect.promise(() =>
+                    remote.joinAlone((progress) => {
+                      Queue.offerUnsafe(queue, progress);
+                      if (isJoinDone(progress)) Queue.endUnsafe(queue);
+                    }),
+                  ),
+                  (off) => Effect.sync(off),
+                ),
+              )
+            : Stream.fail('Only main may ask for this'),
         'remote.shell': (shell: Parameters<typeof remote.setShell>[0]) =>
           mainOnly(async () => remote.setShell(shell)),
         'watch.stale': ({ kinds }: { kinds: ReadonlyArray<StaleKind> }) =>

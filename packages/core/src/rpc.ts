@@ -177,6 +177,33 @@ export class CoreRpcs extends RpcGroup.make(
     },
     error: Schema.String,
   }),
+  /**
+   * `mochi login` following a headless Core's join (`Remote.joinAlone`): each computer asked with its code, then how it
+   * ended. Refused to a window's or a device's connection, like main's.
+   */
+  Rpc.make('remote.joinAlone', {
+    success: Schema.Union([
+      Schema.Struct({
+        type: Schema.Literal('asking'),
+        machineName: Schema.String,
+        name: Schema.String,
+        code: Schema.String,
+      }),
+      Schema.Struct({
+        type: Schema.Literal('declined'),
+        machineName: Schema.String,
+        reason: Schema.String,
+      }),
+      Schema.Struct({
+        type: Schema.Literal('joined'),
+        machineName: Schema.String,
+      }),
+      Schema.Struct({ type: Schema.Literal('member') }),
+      Schema.Struct({ type: Schema.Literal('failed'), reason: Schema.String }),
+    ]),
+    error: Schema.String,
+    stream: true,
+  }),
   /** What only main knows, for `host.remote.status`: the power source, and each followed machine's connection. */
   Rpc.make('remote.shell', {
     payload: {

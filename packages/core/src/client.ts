@@ -12,7 +12,10 @@ export const coreUrl = (port: number, token: string, windowId?: number) =>
   `ws://127.0.0.1:${port}/ws?v=${Capabilities.PROTOCOL_VERSION}${windowId ? `&window=${windowId}` : ''}#${token}`;
 
 /** Redials every 250ms while Core is down; calls made meanwhile wait for it. */
-const layerProtocol = (url: string) =>
+const layerProtocol = (
+  url: string,
+  webSocket: Layer.Layer<Socket.WebSocketConstructor>,
+) =>
   RpcClient.layerProtocolSocket({
     retryTransientErrors: true,
     retryPolicy: Schedule.spaced(250),
@@ -22,13 +25,19 @@ const layerProtocol = (url: string) =>
         protocols: Capabilities.subprotocolsFor(url.split('#')[1] ?? ''),
       }),
     ),
-    Layer.provide(Socket.layerWebSocketConstructorGlobal),
+    Layer.provide(webSocket),
     Layer.provide(RpcSerialization.layerJson),
   );
 
-/** The connection lives as long as the caller's scope. Idempotent calls retry across a Core restart (`retryIdempotent`). */
-export const makeCoreClient = (url: string) =>
-  Effect.flatMap(Layer.build(layerProtocol(url)), (context) =>
+/**
+ * The connection lives as long as the caller's scope. Idempotent calls retry across a Core restart (`retryIdempotent`).
+ * `webSocket` is the platform's by default; `mochi login` passes one that trusts only a TLS Core's own certificate.
+ */
+export const makeCoreClient = (
+  url: string,
+  webSocket: Layer.Layer<Socket.WebSocketConstructor> = Socket.layerWebSocketConstructorGlobal,
+) =>
+  Effect.flatMap(Layer.build(layerProtocol(url, webSocket)), (context) =>
     RpcClient.make(CoreWsRpcs).pipe(
       Effect.provide(context),
       Effect.map(retryIdempotent),

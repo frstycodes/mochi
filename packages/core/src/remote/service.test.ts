@@ -18,6 +18,7 @@ import { Capabilities } from '../hostServer.ts';
 import { fileKeys } from '../keys/keyStore.ts';
 import { CoreWsRpcs } from '../rpc.ts';
 import { layerCore } from '../server.ts';
+import { joinThroughServe, serveFile } from '../serve/login.ts';
 import { makeDeviceClient, openLan } from './device.ts';
 import { networkHosts } from './interfaces.ts';
 import type { Link } from './link.ts';
@@ -386,5 +387,39 @@ it.live(
       assert.equal(status.error, undefined);
       assert.match(status.addresses[0] ?? '', /^127\.0\.0\.1:[1-9]\d*$/);
       yield* Effect.promise(() => call('remote.set', [{ isEnabled: false }]));
+    }),
+);
+
+it.live(
+  '`mochi login` follows a TLS `mochi serve`, trusting only the certificate `serve.json` names',
+  () =>
+    Effect.gen(function* () {
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-login-tls-'));
+      const tls = selfSigned(userData);
+      const context = yield* Layer.build(
+        layerCore({
+          port: 0,
+          tls,
+          userData,
+          tokens: new Map([[TOKEN, Contract.allScopes]]),
+          origins: [],
+          remotePort: 0,
+        }),
+      );
+      const { port } = Context.get(context, HttpServer.HttpServer).address as {
+        port: number;
+      };
+      writeFileSync(
+        serveFile(userData),
+        JSON.stringify({
+          pid: process.pid,
+          url: `wss://127.0.0.1:${port}/ws?v=${Contract.PROTOCOL_VERSION}`,
+          token: TOKEN,
+          certFile: path.join(userData, 'cert.pem'),
+        }),
+      );
+      // Reaching Core is what this checks: signed out, its join answers why.
+      const refused = yield* Effect.flip(joinThroughServe(userData));
+      assert.match(refused.message, /Not signed in/);
     }),
 );
