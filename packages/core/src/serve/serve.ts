@@ -1,7 +1,7 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { Config, Console, Effect } from 'effect';
+import { Config, Console, Effect, Option } from 'effect';
 import { Command, Flag } from 'effect/cli';
 import { NodeRuntime, NodeServices } from '@effect/platform-node';
 import { Capabilities } from '@mochi/schema';
@@ -14,8 +14,9 @@ const serve = Command.make(
   'serve',
   {
     host: Flag.String('host').pipe(
-      Flag.withDescription('Address to bind; beyond loopback needs --token'),
-      Flag.withFallbackConfig(Config.String('MOCHI_SERVE_HOST')),
+      Flag.withDescription(
+        'Address to bind; beyond loopback needs --token, --tls-cert and --tls-key',
+      ),
       Flag.withDefault('127.0.0.1'),
     ),
     port: Flag.Int('port').pipe(
@@ -40,6 +41,14 @@ const serve = Command.make(
       ),
       Flag.atLeast(0),
     ),
+    tlsCert: Flag.String('tls-cert').pipe(
+      Flag.withDescription('PEM certificate; serves https/wss'),
+      Flag.optional,
+    ),
+    tlsKey: Flag.String('tls-key').pipe(
+      Flag.withDescription('PEM private key for --tls-cert'),
+      Flag.optional,
+    ),
     data: Flag.String('data').pipe(
       Flag.withDescription(
         'Data folder; the desktop app’s works while the app is closed',
@@ -52,7 +61,7 @@ const serve = Command.make(
     Effect.gen(function* () {
       const auth = yield* resolveAuth(flags);
       mkdirSync(flags.data, { recursive: true });
-      const url = `http://${flags.host}:${flags.port}`;
+      const url = `${auth.tls ? 'https' : 'http'}://${flags.host}:${flags.port}`;
       yield* Console.log(
         auth.isGenerated
           ? `Mochi Core on ${url}/#token=${auth.token}`
@@ -63,6 +72,12 @@ const serve = Command.make(
         port: flags.port,
         tokens: auth.tokens,
         origins: auth.origins,
+        tls: Option.isSome(flags.tlsCert)
+          ? {
+              cert: readFileSync(flags.tlsCert.value),
+              key: readFileSync(Option.getOrThrow(flags.tlsKey)),
+            }
+          : undefined,
         userData: flags.data,
         // Built beside this file: dist-electron/serve.js and the renderer's dist/.
         ui: path.join(import.meta.dirname, '..', 'dist'),
