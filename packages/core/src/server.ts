@@ -11,6 +11,7 @@ import {
   HttpStaticServer,
 } from 'effect/http';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
+import { NetAddress } from 'effect/net';
 import { NodeHttpServer } from '@effect/platform-node';
 import { Capabilities as Contract, definitionOf, Relay } from '@mochi/schema';
 import { Backend, type BackendOptions } from './backend/backend.ts';
@@ -94,7 +95,7 @@ export const layerCore = (options: ServerOptions) => {
     [internal, Contract.allScopes],
   ] as const);
   return layerRoute({ ...options, tokens }).pipe(
-    Layer.provideMerge(layerBindCore(internal)),
+    Layer.provideMerge(layerBindCore(internal, options.tls?.cert)),
     // Built after everything below, right before the route serves: the server listens when built but answers only once served,
     // and an upgrade that arrives in between is never answered, so a client would wait out its 10s open timeout. Until then
     // a connection is refused, and the client redials in 250ms.
@@ -155,13 +156,22 @@ export const layerCore = (options: ServerOptions) => {
   );
 };
 
-/** Remote access learns Core's bound port, for the tunnels its devices open into Core. */
-const layerBindCore = (token: string) =>
+/** Remote access learns Core's bound address (and its certificate under TLS), for the tunnels its devices open into Core. */
+const layerBindCore = (token: string, ca: Buffer | undefined) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const { address } = yield* HttpServer.HttpServer;
       const remote = yield* Remote;
-      if ('port' in address) remote.bindCore({ port: address.port, token });
+      if (!NetAddress.isInetAddress(address)) return;
+      // Bound to every interface: loopback is one of them.
+      const host = NetAddress.isUnspecified(address.address)
+        ? '127.0.0.1'
+        : NetAddress.formatUrlHost(address.address);
+      remote.bindCore({
+        url: `${ca ? 'wss' : 'ws'}://${host}:${address.port}/ws?v=${Contract.PROTOCOL_VERSION}`,
+        token,
+        ...(ca && { ca }),
+      });
     }),
   );
 

@@ -19,7 +19,6 @@ import type {
 import type { MochiAccount } from '@mochi/domain/host/types/account';
 import { AccountService } from '../account/service.ts';
 import { isAnyBusy, onBusy, push } from '../agents/events.ts';
-import { coreUrl } from '../client.ts';
 import { Backend } from '../backend/backend.ts';
 import { Capabilities } from '../hostServer.ts';
 import { KeyStore, type Keys } from '../keys/keyStore.ts';
@@ -154,6 +153,17 @@ const fromSeed = (seed: string): DeviceKeys => {
   return { publicKey, privateKey };
 };
 
+/**
+ * Where a device's tunnel reaches Core: its own socket, as bound. Under TLS (`mochi serve --tls-cert`) it is `wss`, and `ca` is
+ * Core's own certificate, the only one the tunnel trusts.
+ */
+export interface CoreEndpoint {
+  url: string;
+  /** Signs each device's token (`mintDeviceToken`); never leaves this process. */
+  token: string;
+  ca?: Buffer;
+}
+
 interface RemoteOptions {
   /** Where `remote.json` and `devices.json` live. */
   dir: string;
@@ -209,10 +219,8 @@ function makeRemote({
     await sodium.ready;
     return fromSeed(value);
   };
-  let core: (value: { port: number; token: string }) => void;
-  const coreEndpoint = new Promise<{ port: number; token: string }>(
-    (resolve) => (core = resolve),
-  );
+  let core: (value: CoreEndpoint) => void;
+  const coreEndpoint = new Promise<CoreEndpoint>((resolve) => (core = resolve));
   const isSignedIn = async () =>
     (await account.current()).status === 'signed-in';
   const machineName = () => settings.machineName || hostname();
@@ -547,8 +555,9 @@ function makeRemote({
           coreFor: async (grant) => {
             const endpoint = await coreEndpoint;
             return {
-              url: coreUrl(endpoint.port, '').split('#')[0]!,
+              url: endpoint.url,
               token: mintDeviceToken(endpoint.token, grant),
+              ...(endpoint.ca && { ca: endpoint.ca }),
             };
           },
           onRejected: (device, reason) => log(`${device}: ${reason}`),
@@ -637,7 +646,7 @@ function makeRemote({
         .catch((e: unknown) => log(`Couldn’t read the members: ${String(e)}`));
     },
     /** Core's own socket, once bound: where a device's tunnel reaches it, and the token its device tokens are signed with. */
-    bindCore: (endpoint: { port: number; token: string }) => core(endpoint),
+    bindCore: (endpoint: CoreEndpoint) => core(endpoint),
     status,
     set,
     removeMember,

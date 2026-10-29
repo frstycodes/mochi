@@ -22,7 +22,9 @@ export interface RemoteServerOptions {
   /** The pairing exchange every connection opens with (`pairing.ts`): who the device is, and its decrypted link. */
   secure: (raw: RawLink, origin: Origin) => Promise<Secured>;
   /** Core's address and a token holding this device to its scopes (signed with Core's internal token, `service.ts`). */
-  coreFor: (grant: DeviceGrant) => Promise<{ url: string; token: string }>;
+  coreFor: (
+    grant: DeviceGrant,
+  ) => Promise<{ url: string; token: string; ca?: Buffer }>;
   /** This computer's Core's descriptor (`backend.info`), with `scopes` the device's; sent in each welcome. */
   backend: (scopes: Scope[]) => Promise<Backend.BackendInfo>;
   /** A device's frame that was refused, for the log. */
