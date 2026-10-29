@@ -889,7 +889,7 @@ function progressLog() {
   const followers = new Set<(progress: JoinProgress) => void>();
   return {
     isDone: () => seen.some(isJoinDone),
-    emit(progress: JoinProgress) {
+    emit: (progress: JoinProgress) => {
       seen.push(progress);
       for (const follower of followers) follower(progress);
       if (isJoinDone(progress)) followers.clear();
