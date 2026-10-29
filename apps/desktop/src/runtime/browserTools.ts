@@ -2,6 +2,7 @@ import type { Page } from '../browser/pages.ts';
 import { DEVICES, RESPONSIVE } from '../browser/devices.ts';
 import { dialogNote } from '../browser/dialog.ts';
 import { displayUrl, normalizeUrl } from '../browser/url.ts';
+import { IRREVERSIBLE, isLocalUrl } from '../browser/sites.ts';
 import type {
   BrowserAct,
   BrowserSnapshot,
@@ -388,20 +389,6 @@ export const BROWSER_TOOLS = {
   },
 } satisfies { [K in BrowserToolName]: ToolSpec<K> };
 
-/** Local means this machine or a dev domain: the agent browses those freely; anything else is logged, and forms there ask. */
-export function isLocalUrl(url: string) {
-  try {
-    const { protocol, hostname } = new URL(url);
-    if (protocol === 'about:' || protocol === 'file:') return true;
-    return (
-      /^(localhost|0\.0\.0\.0|\[::1\]|127(\.\d{1,3}){3})$/.test(hostname) ||
-      /\.(localhost|test)$/.test(hostname)
-    );
-  } catch {
-    return false;
-  }
-}
-
 export const pageKey = (threadId: string, tabId: string) =>
   `${threadId}/${tabId}`;
 
@@ -412,13 +399,6 @@ const lastRefs = new Map<
 >();
 
 type Ctx = ToolContext<{ tabId?: string; [arg: string]: unknown }>;
-
-/**
- * Clicks that may not be undoable on someone else's site ask first: paying, sending, publishing, deleting. Ordinary steps
- * (Next, Create, Save, Continue, Allow, Sign in) go through; the user watches them in the pane.
- */
-const IRREVERSIBLE =
-  /\b(pay|buy|purchase|order|checkout|check out|subscribe|send|publish|post|delete|remove|transfer|merge|deploy|withdraw|cancel (my )?(subscription|account)|close (my )?account)\b/i;
 
 // Sites the user said not to ask about again, per thread, for this run of Mochi.
 const trusted = new Map<string, Set<string>>();

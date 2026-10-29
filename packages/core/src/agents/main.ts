@@ -3,6 +3,7 @@ import type {
   AgentToolCall,
   AgentToolResult,
 } from '../../../../apps/desktop/src/host/types/agent.ts';
+import { toCallToolResult } from '../browser/agentTools.ts';
 import type { McpServerDef } from '../../../../apps/desktop/src/settings/agentConfig.ts';
 import type { ToolRules } from '@mochi/domain/library/connectorTools';
 import type { MochiScope } from '@mochi/domain/runtime/toolTable';
@@ -47,6 +48,17 @@ type Call = (method: string, args: ReadonlyArray<unknown>) => Promise<unknown>;
 let call: Call = async (method) => {
   throw new Error(`Main is not connected, so ${method} can't run`);
 };
+
+/** `mochiTool` while no main is connected (`mochi serve`): `runTool` answers it in Core, as MCP content. */
+export const mochiToolWithoutMain = (
+  runTool: (
+    thread: string,
+    name: string,
+    args: unknown,
+  ) => Promise<AgentToolResult>,
+  [thread, name, args]: ReadonlyArray<unknown>,
+): Promise<CallToolResult> =>
+  runTool(thread as string, name as string, args).then(toCallToolResult);
 
 /** Set once by the agents layer: a capability call to main. */
 export const useMain = (next: Call) => void (call = next);
