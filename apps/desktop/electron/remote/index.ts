@@ -14,6 +14,8 @@ import type { MochiAccount } from '@mochi/domain/host/types/account';
 import { coreClient, logToCore, mainCoreClient } from '@mochi/core/host';
 import { makeHostCaller } from '@mochi/core/hostClient';
 import { openLan } from '@mochi/core/remote/device';
+import { watchNetwork } from '@mochi/core/remote/interfaces';
+import { networkChanged } from '@mochi/core/remote/reconnect';
 import { deviceId, secureAsDevice } from '@mochi/core/remote/pairing';
 import type { PairedMachine } from '@mochi/core/remote/registry';
 import { openDeviceChannel } from '@mochi/core/remote/relayClient';
@@ -81,6 +83,10 @@ export function startRemote() {
     win.on('closed', () => !isQuitting && keepRendererAlive());
   });
   app.on('will-quit', () => followers.forEach((f) => f.close()));
+  // Waking or unlocking may mean another network: redial followed computers now, not after their backoff.
+  powerMonitor.on('resume', networkChanged);
+  powerMonitor.on('unlock-screen', networkChanged);
+  watchNetwork(networkChanged);
   powerMonitor.on('on-battery', reportShell);
   powerMonitor.on('on-ac', reportShell);
   void mainCoreClient()
