@@ -353,7 +353,7 @@ it.live(
 );
 
 it.live(
-  'where main can’t seal (Linux `basic_text`) it offers no `secureStorage`: the key is kept plain and remote access starts',
+  'where main can’t seal (Linux `basic_text`) it offers no `secureStorage`: with no passphrase the key stays in memory, never on disk in plain text, and remote access starts',
   () =>
     Effect.gen(function* () {
       const userData = mkdtempSync(path.join(tmpdir(), 'mochi-weak-keyring-'));
@@ -376,10 +376,19 @@ it.live(
         Effect.forkChild,
       );
       const seed = yield* main['remote.deviceKey']();
-      const file = JSON.parse(
-        readFileSync(path.join(userData, 'keys', 'keys.json'), 'utf8'),
-      ) as { keys: Record<string, unknown> };
-      assert.deepEqual(file.keys[DEVICE_KEY], { plain: seed });
+      const file = readFileSync(
+        path.join(userData, 'keys', 'keys.json'),
+        'utf8',
+      );
+      assert.ok(seed);
+      assert.ok(!file.includes(seed), 'the device key is not on disk');
+      assert.equal(
+        (JSON.parse(file) as { keys: Record<string, unknown> }).keys[
+          DEVICE_KEY
+        ],
+        undefined,
+      );
+      assert.equal(yield* main['remote.deviceKey'](), seed, 'held in memory');
       const call = makeHostCaller(main);
       const status = (yield* Effect.promise(() =>
         call('remote.set', [{ isEnabled: true }]),

@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { it } from '@effect/vitest';
@@ -15,13 +21,17 @@ const noKeychain = {
 
 const scratch = () => mkdtempSync(path.join(tmpdir(), 'mochi-keys-'));
 const keysFile = (dir: string) => path.join(dir, 'keys', 'keys.json');
+const rawFile = (dir: string) => readFileSync(keysFile(dir), 'utf8');
+const withPassphrase = (secret: string | undefined) => ({
+  passphrase: () => secret,
+});
 
 it.effect(
-  'with no keychain, a key round-trips through a 0600 file in a 0700 folder',
+  'with no keychain but a passphrase, a key round-trips through a 0600 file in a 0700 folder, never in plain text',
   () =>
     Effect.promise(async () => {
       const dir = scratch();
-      const keys = fileKeys(dir, noKeychain);
+      const keys = fileKeys(dir, noKeychain, withPassphrase('hunter2'));
       assert.equal(await keys.get('session'), undefined);
       await keys.set('session', 'secret-1');
       await keys.set('device', 'secret-2');
@@ -31,9 +41,73 @@ it.effect(
         assert.equal(statSync(keysFile(dir)).mode & 0o777, 0o600);
         assert.equal(statSync(path.join(dir, 'keys')).mode & 0o777, 0o700);
       }
+      assert.doesNotMatch(rawFile(dir), /secret-|hunter2|"plain"/);
       await keys.delete('session');
       assert.equal(await keys.get('session'), undefined);
-      assert.equal(await fileKeys(dir, noKeychain).get('device'), 'secret-2');
+      assert.equal(
+        await fileKeys(dir, noKeychain, withPassphrase('hunter2')).get(
+          'device',
+        ),
+        'secret-2',
+      );
+    }),
+);
+
+it.effect(
+  'a wrong passphrase is an error, for reading and for writing, and a missing one names the variable',
+  () =>
+    Effect.promise(async () => {
+      const dir = scratch();
+      await fileKeys(dir, noKeychain, withPassphrase('right')).set(
+        'device',
+        'secret',
+      );
+      const wrong = fileKeys(dir, noKeychain, withPassphrase('wrong'));
+      await assert.rejects(wrong.get('device'), /doesn’t open the keys/);
+      await assert.rejects(wrong.set('other', 'x'), /doesn’t open the keys/);
+      await assert.rejects(
+        fileKeys(dir, noKeychain, withPassphrase(undefined)).get('device'),
+        /set MOCHI_KEY_PASSPHRASE/,
+      );
+    }),
+);
+
+it.effect(
+  'with neither a keychain nor a passphrase, a key is kept in memory only and nothing is written',
+  () =>
+    Effect.promise(async () => {
+      const dir = scratch();
+      const unsaved: string[] = [];
+      const keys = fileKeys(dir, noKeychain, {
+        ...withPassphrase(undefined),
+        onUnsaved: (name) => unsaved.push(name),
+      });
+      await keys.set('device', 'secret');
+      assert.equal(await keys.get('device'), 'secret');
+      assert.deepEqual(unsaved, ['device']);
+      assert.doesNotMatch(rawFile(dir), /secret/);
+      // A passphrase arriving later puts it on disk, locked.
+      await fileKeys(dir, noKeychain, withPassphrase('later')).set('x', 'y');
+      assert.match(rawFile(dir), /"device":\{"locked"/);
+      assert.doesNotMatch(rawFile(dir), /secret/);
+    }),
+);
+
+it.effect(
+  'a plain entry from an older file is still read, and locked on the next write',
+  () =>
+    Effect.promise(async () => {
+      const dir = scratch();
+      mkdirSync(path.join(dir, 'keys'), { recursive: true });
+      writeFileSync(
+        keysFile(dir),
+        JSON.stringify({ keys: { device: { plain: 'old-secret' } } }),
+      );
+      const keys = fileKeys(dir, noKeychain, withPassphrase('pw'));
+      assert.equal(await keys.get('device'), 'old-secret');
+      await keys.set('session', 'new');
+      assert.doesNotMatch(rawFile(dir), /old-secret|"plain"/);
+      assert.equal(await keys.get('device'), 'old-secret');
     }),
 );
 
@@ -88,7 +162,8 @@ it.effect(
           keys: Record<string, unknown>;
         };
         assert.deepEqual(saved.keys.session, { sealed: 'os:secret' });
-        assert.deepEqual(saved.keys.before, { plain: 'plain-value' });
+        // Held in memory until a keychain served, then sealed with it.
+        assert.deepEqual(saved.keys.before, { sealed: 'os:plain-value' });
         yield* Fiber.interrupt(provider);
       }).pipe(
         Effect.provide(
