@@ -1,11 +1,11 @@
-import { Effect, Layer, Schema } from 'effect';
+import { Effect, Layer, Schedule, Schema } from 'effect';
 import { RpcClient, RpcSerialization } from 'effect/rpc';
 import { Socket } from 'effect/socket';
 import WebSocket from 'ws';
 import { Relay } from '@mochi/schema';
 import { CoreWsRpcs } from '../rpc.ts';
 import { keepAlive, socketLink, type Link, type RawLink } from './link.ts';
-import { reconnect } from './reconnect.ts';
+import { backoff } from './reconnect.ts';
 
 /** One way to reach a machine. LAN and Tailscale addresses come first; the relay last. */
 export interface Route {
@@ -24,7 +24,7 @@ export interface DeviceOptions {
   members?: () => unknown;
   onWelcome: (welcome: Relay.WelcomeFrame, route: Route['kind']) => void;
   onMembers?: (members: unknown) => void;
-  /** Why it isn't connected now; the client redials on `reconnect`. */
+  /** Why it isn't connected now; the client redials after `backoff`. */
   onOffline: (error: string) => void;
   /** The machine refused this computer; nothing retries until the caller starts over. */
   onRefused: (reason: string) => void;
@@ -41,19 +41,26 @@ export const makeDeviceClient = (options: DeviceOptions) =>
 
 export type DeviceClient = Effect.Success<ReturnType<typeof makeDeviceClient>>;
 
+/**
+ * The protocol redials at once (`Schedule.forever`); the wait is `open`'s own, so a network change cuts it short and a
+ * welcome starts it over. Effect's schedule would keep growing across connections and can't be woken.
+ */
 const layerProtocol = (options: DeviceOptions) =>
   RpcClient.layerProtocolSocket({
     retryTransientErrors: true,
-    retryPolicy: reconnect,
+    retryPolicy: Schedule.forever,
   }).pipe(
     Layer.provide(
       Layer.effect(
         Socket.Socket,
-        Socket.fromWebSocket(
-          Effect.acquireRelease(open(options), (ws) =>
-            Effect.sync(() => ws.close(1000, 'Done')),
-          ),
-        ),
+        Effect.sync(() => {
+          const attempts = { count: 0 };
+          return Socket.fromWebSocket(
+            Effect.acquireRelease(open(options, attempts), (ws) =>
+              Effect.sync(() => ws.close(1000, 'Done')),
+            ),
+          );
+        }).pipe(Effect.flatten),
       ),
     ),
     Layer.provide(RpcSerialization.layerJson),
@@ -63,22 +70,34 @@ const decodeMachineFrame = Schema.decodeUnknownOption(
   Schema.fromJsonString(Relay.MachineLinkFrame),
 );
 
-/** Pairs over the first route that answers, says hello, and waits for the welcome; then the link is the RPC socket. */
-const open = (options: DeviceOptions) =>
-  Effect.tryPromise({
-    try: async () => {
-      const { link, route } = await openFirst(options);
-      const welcome = await hello(link, options);
-      options.onWelcome(welcome, route);
-      return linkSocket(link, options);
-    },
-    catch: (cause) => {
-      options.onOffline(cause instanceof Error ? cause.message : String(cause));
-      return new Socket.SocketError({
-        reason: new Socket.SocketOpenError({ kind: 'Unknown', cause }),
-      });
-    },
-  });
+/**
+ * Waits out the backoff after a failed or dropped connection, pairs over the first route that answers, says hello, and waits
+ * for the welcome; then the link is the RPC socket. A welcome makes the next wait the shortest again.
+ */
+const open = (options: DeviceOptions, attempts: { count: number }) =>
+  Effect.suspend(() =>
+    attempts.count++ > 0 ? backoff(attempts.count - 1) : Effect.void,
+  ).pipe(
+    Effect.andThen(
+      Effect.tryPromise({
+        try: async () => {
+          const { link, route } = await openFirst(options);
+          const welcome = await hello(link, options);
+          attempts.count = 1;
+          options.onWelcome(welcome, route);
+          return linkSocket(link, options);
+        },
+        catch: (cause) => {
+          options.onOffline(
+            cause instanceof Error ? cause.message : String(cause),
+          );
+          return new Socket.SocketError({
+            reason: new Socket.SocketOpenError({ kind: 'Unknown', cause }),
+          });
+        },
+      }),
+    ),
+  );
 
 async function openFirst(
   options: DeviceOptions,

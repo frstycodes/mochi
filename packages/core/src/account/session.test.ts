@@ -19,15 +19,26 @@ type Poll =
   | 'ok';
 
 /** Clerk as far as the device grant goes: metadata, the code, the token endpoint answering `polls` in turn, userinfo, revoke. */
-const mockClerk = (polls: Poll[], { hasDeviceGrant = true } = {}) =>
+const mockClerk = (
+  polls: Poll[],
+  options: { hasDeviceGrant?: boolean; network?: { isDown: boolean } } = {},
+) =>
   Effect.acquireRelease(
-    Effect.promise(() => startClerk(polls, { hasDeviceGrant })),
+    Effect.promise(() => startClerk(polls, options)),
     ({ close }) => Effect.sync(close),
   );
 
-async function startClerk(polls: Poll[], { hasDeviceGrant = true } = {}) {
+async function startClerk(
+  polls: Poll[],
+  {
+    hasDeviceGrant = true,
+    network,
+  }: { hasDeviceGrant?: boolean; network?: { isDown: boolean } } = {},
+) {
   const seen: { path: string; body: URLSearchParams }[] = [];
   const server = createServer(async (req, res) => {
+    // No network: the connection dies with no answer, and fetch rejects as it does offline.
+    if (network?.isDown) return void req.socket.destroy();
     const body = new URLSearchParams(await text(req));
     const url = new URL(req.url ?? '/', 'http://x');
     seen.push({ path: url.pathname, body });
@@ -235,5 +246,31 @@ it.live(
       assert.deepEqual(moved, { user, refreshToken: 'opened:c2VhbGVk' });
       const again = yield* promise(() => legacySession(data, async () => ''));
       assert.equal(again, undefined);
+    }),
+);
+
+it.live(
+  'a refresh that fails because the network is down keeps the session, and the next one online succeeds',
+  () =>
+    Effect.gen(function* () {
+      const network = { isDown: false };
+      const clerk = yield* mockClerk(['ok'], { network });
+      const data = scratch();
+      const account = terminalAccount(data, clerk.issuer);
+      yield* signInWithCode(terminalAccount(data, clerk.issuer), waits().wait);
+      network.isDown = true;
+      const offline = yield* promise(() =>
+        account.accessToken().then(
+          () => 'resolved',
+          (e: unknown) => String(e),
+        ),
+      );
+      assert.match(offline, /fetch failed/);
+      assert.equal(
+        (yield* promise(() => account.current())).status,
+        'signed-in',
+      );
+      network.isDown = false;
+      assert.equal(yield* promise(() => account.accessToken()), 'access-2');
     }),
 );

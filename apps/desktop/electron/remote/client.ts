@@ -1,4 +1,14 @@
-import { Cause, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  Latch,
+  Schedule,
+  Schema,
+  Scope,
+  Stream,
+} from 'effect';
 import { RpcClientError } from 'effect/rpc';
 import { Persist, type Relay } from '@mochi/schema';
 import {
@@ -7,7 +17,6 @@ import {
   type Route,
 } from '@mochi/core/remote/device';
 import type { Link, RawLink } from '@mochi/core/remote/link';
-import { reconnect } from '@mochi/core/remote/reconnect';
 import type {
   CommandResult,
   DeviceKind,
@@ -78,6 +87,8 @@ export function followMachine(options: FollowOptions): MachineFollower {
         scope: Scope.Closeable;
         fiber: Fiber.Fiber<unknown, unknown>;
         client?: DeviceClient;
+        /** Open while the machine is connected: a dropped stream resubscribes as soon as it opens again. */
+        online: Latch.Latch;
         terminals: Map<string, Fiber.Fiber<unknown, unknown>>;
       }
     | undefined;
@@ -92,6 +103,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
     const current: NonNullable<typeof session> = {
       scope,
       fiber: undefined as never,
+      online: Latch.makeUnsafe(false),
       terminals: new Map(),
     };
     session = current;
@@ -109,6 +121,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
           options.onWelcome({ addresses: [...welcome.addresses], kind });
           if (welcome.members !== undefined)
             options.onMembers?.(welcome.members);
+          current.online.openUnsafe();
           set({
             status: 'online',
             route,
@@ -122,6 +135,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
           });
         },
         onOffline: (error) => {
+          current.online.closeUnsafe();
           if (session !== current || state.status === 'refused') return;
           set({
             status: 'offline',
@@ -142,7 +156,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
           stop(current);
         },
       });
-      yield* mirror(current.client, options);
+      yield* mirror(current.client, current.online, options);
     }).pipe(Scope.provide(scope));
     current.fiber = Effect.runFork(program);
   }
@@ -187,7 +201,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
           options.onTerminal({ terminalId, ...chunk });
         }),
       ),
-      Effect.retry({ schedule: reconnect, while: isDropped }),
+      whileConnected(current.online),
       Effect.ignore,
       Effect.ensuring(
         Effect.sync(() => void current.terminals.delete(terminalId)),
@@ -237,7 +251,11 @@ export function followMachine(options: FollowOptions): MachineFollower {
 }
 
 /** The machine's threads, kept in step with its `shell` and `thread` streams; each resumes after the last sequence it saw. */
-const mirror = (client: DeviceClient, options: FollowOptions) =>
+const mirror = (
+  client: DeviceClient,
+  online: Latch.Latch,
+  options: FollowOptions,
+) =>
   Effect.gen(function* () {
     const following = new Map<string, Fiber.Fiber<unknown, unknown>>();
     const after = new Map<string, number>();
@@ -271,7 +289,7 @@ const mirror = (client: DeviceClient, options: FollowOptions) =>
             if (item.event.type === 'thread.deleted') send(threadId, null);
           }),
         ),
-        Effect.retry({ schedule: reconnect, while: isDropped }),
+        whileConnected(online),
         Effect.ignore,
       );
 
@@ -307,7 +325,7 @@ const mirror = (client: DeviceClient, options: FollowOptions) =>
         }),
       ),
       // Without `read` (or past any other refusal) there is nothing to mirror; commands still go.
-      Effect.retry({ schedule: reconnect, while: isDropped }),
+      whileConnected(online),
       Effect.ignore,
     );
   });
@@ -323,3 +341,15 @@ function interrupt(
 
 const isDropped = (error: unknown) =>
   error instanceof RpcClientError.RpcClientError;
+
+/** Runs again after the link drops, once it's back: no backoff of its own, so a reconnect brings every stream back with it. */
+const whileConnected =
+  (online: Latch.Latch) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    online.await.pipe(
+      Effect.andThen(effect),
+      Effect.retry({
+        schedule: Schedule.spaced('500 millis'),
+        while: isDropped,
+      }),
+    );
