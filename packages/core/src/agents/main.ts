@@ -10,7 +10,7 @@ import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 
 /**
  * What the agents ask of main, over the `main` capability: the window that runs Mochi's tools, the library's connector
- * accounts (their OAuth sign-in and proxy stay in main), and the terminals and compare servers a settled thread leaves.
+ * accounts (their OAuth sign-in and proxy stay in main), the system browser, and the terminals and compare servers a settled thread leaves.
  * Main serves these in electron/agents/events.ts.
  */
 export interface MainForAgents {
@@ -30,6 +30,8 @@ export interface MainForAgents {
   /** Drops a connector account's client and secrets (packages/core/src/library/host.ts removes its index entry). */
   forgetConnector(id: string): Promise<void>;
   settle(threadId: string): Promise<void>;
+  /** Opens a page in the system browser: Core's account sign-in and Account Portal. */
+  openExternal(url: string): Promise<void>;
 }
 
 export interface SessionConnectors {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, webContents } from 'electron';
+import { app, BrowserWindow, shell, webContents } from 'electron';
 import { canStore, open, seal } from '../secrets';
 import { Cause, Effect, Schedule, Stream } from 'effect';
 import type {
@@ -10,6 +10,7 @@ import type {
   StartWorkspace,
 } from '../../src/host/types/agent.ts';
 import type { AgentLogin } from '../../src/host/types/settings.ts';
+import type { MochiAccount } from '@mochi/domain/host/types/account';
 import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 import { mainCoreClient } from '@mochi/core/host';
 import { makeHostCaller } from '@mochi/core/hostClient';
@@ -21,6 +22,7 @@ import {
 import type { MainForAgents } from '@mochi/core/agents/main';
 import { setDataDir } from '@mochi/core/agents/paths';
 import { cacheDoc, cachedDoc } from '@mochi/core/store/client';
+import { noteAccount } from '../account/session.ts';
 import { stopCompare } from '../browser/compare.ts';
 import {
   forgetAccount,
@@ -90,6 +92,8 @@ function deliver({
   windowId?: number;
 }) {
   if (channel === 'mochi:busy') return setBusy(payload as string[]);
+  // Core's account changed: remote access follows it here, and every window hears it below.
+  if (channel === 'account:onChange') noteAccount(payload as MochiAccount);
   if (channel === AGENT_SETTINGS_SAVED) {
     cacheDoc('settings', 'agent', payload);
     return agentConfigChanged();
@@ -199,4 +203,5 @@ export const mainForAgents = {
   settle: async (threadId: string) => {
     await stopCompare(threadId);
   },
+  openExternal: (url: string) => shell.openExternal(url),
 } satisfies MainForAgents;

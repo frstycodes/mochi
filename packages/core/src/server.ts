@@ -22,6 +22,7 @@ import {
   type LocalCapability,
 } from './hostServer.ts';
 import { Hosted } from './hosted.ts';
+import { AccountService } from './account/service.ts';
 import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
 import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
@@ -118,6 +119,7 @@ export const layerCore = (options: ServerOptions) =>
       ),
     ),
     Layer.provideMerge(Hosted.layer(options.userData)),
+    Layer.provideMerge(AccountService.layer(options.userData)),
     Layer.provideMerge(KeyStore.layer(options.userData)),
     Layer.provide(
       Layer.mergeAll(
@@ -173,6 +175,7 @@ type Services =
   | Terminals
   | Scheduler
   | Hosted
+  | AccountService
   | KeyStore;
 
 const layerRoute = (options: ServerOptions) =>
@@ -337,6 +340,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const scheduler = yield* Scheduler;
       const hosted = yield* (yield* Hosted).handlers(windowId);
       const backend = yield* Backend;
+      const account = yield* AccountService;
       return {
         ping: () => Effect.succeed('pong'),
         'backend.info': () => backend.describe(identity.scopes),
@@ -393,6 +397,15 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           capabilities.reply(reply),
         watch: ({ key }: { key: WatchKey }) => watch.watch(key),
         'watch.gate': (gate: Gate) => watch.setGate(gate),
+        // Main's connection names no window; the token stays out of pages and off devices.
+        'account.relayToken': () =>
+          windowId === undefined && !identity.device
+            ? Effect.tryPromise({
+                try: () => account.accessToken(),
+                catch: (error) =>
+                  error instanceof Error ? error.message : String(error),
+              })
+            : Effect.fail('Only main may ask for the account’s token'),
         'watch.stale': ({ kinds }: { kinds: ReadonlyArray<StaleKind> }) =>
           watch.markStale(kinds),
         'utility.run': ({

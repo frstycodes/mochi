@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Context, Effect, Layer } from 'effect';
+import { accountHost, AccountService } from './account/service.ts';
 import { dataHost } from './data/host.ts';
 import { fs } from './fs/host.ts';
 import { git } from './git/host.ts';
@@ -37,6 +38,7 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
         append: (input) => run(store.append(input)),
       });
       const capabilities = yield* Capabilities;
+      const account = yield* AccountService;
       // Tests run without a data folder; theirs is a scratch one.
       const data = userData ?? path.join(tmpdir(), 'mochi-core');
       setDataDir(data);
@@ -60,6 +62,7 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
         data: dataHost(data),
         themes: themesHost(data),
         settings: settingsHost,
+        account: accountHost(account),
         library: libraryHost(forgetConnector),
         usage: usageHost(data, (cwd, since, githubUser) =>
           run(github.authoredPrs(cwd, since, githubUser)),

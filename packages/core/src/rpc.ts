@@ -126,6 +126,11 @@ export class CoreRpcs extends RpcGroup.make(
   Rpc.make('watch.gate', { payload: Gate }),
   /** Every subscribed key of these kinds reads again, gate permitting. */
   Rpc.make('watch.stale', { payload: { kinds: Schema.Array(StaleKind) } }),
+  /** An access token for the relay, for main's remote access; refused to a window's or a device's connection. */
+  Rpc.make('account.relayToken', {
+    success: Schema.String,
+    error: Schema.String,
+  }),
 ) {}
 
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
