@@ -12,6 +12,7 @@ import {
   type RawLink,
 } from './link.ts';
 import { backoff, onNetworkChange } from './reconnect.ts';
+import type { Sealed } from './sealed.ts';
 
 /** How long a socket has to answer a ping sent because the network changed. */
 const PROBE_MS = 5000;
@@ -33,6 +34,8 @@ export const RELAY_URL = Effect.runSync(
 
 export interface MachineConnection {
   close(): void;
+  /** Sends `register` again on the open socket: the members or this machine's addresses changed. */
+  reregister(): void;
 }
 
 /**
@@ -41,7 +44,8 @@ export interface MachineConnection {
  */
 export function connectMachine(options: {
   machineId: string;
-  name: () => string;
+  /** This machine's name, kind and addresses, sealed to its members (`sealMachineInfo`); the relay never sees them. */
+  sealed: () => Sealed;
   publicKey: string;
   token: () => Promise<string>;
   onChannel: (raw: RawLink) => void;
@@ -52,6 +56,16 @@ export function connectMachine(options: {
   onMalformed?: (raw: string) => void;
 }): MachineConnection {
   const channels = new Map<number, ReturnType<typeof channelLink>>();
+  let live: WebSocket | undefined;
+  const register = (ws: WebSocket) =>
+    ws.readyState === ws.OPEN &&
+    ws.send(
+      JSON.stringify({
+        type: 'register',
+        publicKey: options.publicKey,
+        sealed: options.sealed(),
+      }),
+    );
 
   /** One connection: fails when it couldn't open, succeeds when an open one dropped, so the next drop starts the backoff over. */
   const connectOnce = (token: string) =>
@@ -76,13 +90,8 @@ export function connectMachine(options: {
       });
       ws.on('open', () => {
         isOpen = true;
-        ws.send(
-          JSON.stringify({
-            type: 'register',
-            name: options.name(),
-            publicKey: options.publicKey,
-          }),
-        );
+        live = ws;
+        register(ws);
         options.onState({ status: 'connected' });
         options.onMembers();
       });
@@ -108,6 +117,7 @@ export function connectMachine(options: {
       ws.on('close', () => {
         clearInterval(heartbeat);
         offChange();
+        if (live === ws) live = undefined;
         for (const channel of channels.values())
           channel.end(1001, 'The relay connection dropped');
         channels.clear();
@@ -169,6 +179,7 @@ export function connectMachine(options: {
       Effect.runFork(Fiber.interrupt(fiber));
       options.onState({ status: 'off' });
     },
+    reregister: () => void (live && register(live)),
   };
 }
 

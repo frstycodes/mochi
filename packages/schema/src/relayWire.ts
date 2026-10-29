@@ -8,7 +8,11 @@ import { Int, Str } from './checks.ts';
  * encrypted binary the relay forwards untouched; only these small JSON control frames are the relay's.
  *
  * Machine socket: binary frames carry a 4-byte big-endian channel number, then the device's bytes. Text frames are
- * control: the machine sends `register` and `close`, the relay sends `open` and `close`.
+ * control: the machine sends `register` (again whenever its members or addresses change) and `close`, the relay sends
+ * `open`, `close` and `members`.
+ *
+ * What the relay keeps beyond routing (the id and public key) is `sealed`: one libsodium sealed box per member, keyed by
+ * its device id (`packages/core/src/remote/sealed.ts`). The relay stores and returns it, and can read none of it.
  * Device socket: binary frames are the bytes, unprefixed: a device talks to exactly one machine.
  */
 
@@ -40,6 +44,15 @@ const Channel = Int.check(
 const Name = Str(64)
   .check(Schema.makeFilter((s: string) => !!s.trim() || 'must not be blank'))
   .pipe(Schema.decodeTo(Schema.String, SchemaTransformation.trim()));
+/** A sealed box per member, keyed by device id; the relay holds no key that opens one. */
+export const MAX_SEALED_MEMBERS = 64;
+export const Sealed = Schema.Record(RelayId, Str(4096)).check(
+  Schema.makeFilter(
+    (sealed: Record<string, string>) =>
+      Object.keys(sealed).length <= MAX_SEALED_MEMBERS ||
+      `at most ${MAX_SEALED_MEMBERS} members`,
+  ),
+);
 const PublicKey = Schema.String.check(
   Schema.makeFilter(
     (s: string) =>
@@ -51,8 +64,10 @@ const PublicKey = Schema.String.check(
 export const MachineFrame = Schema.Union([
   Schema.Struct({
     type: Schema.Literal('register'),
-    name: Name,
     publicKey: PublicKey,
+    sealed: Schema.optional(Sealed),
+    /** Before 2026-10: the name in clear. Still accepted from older machines; never sent now. */
+    name: Schema.optional(Name),
   }),
   Schema.Struct({ type: Schema.Literal('close'), channel: Channel }),
 ]);
@@ -70,12 +85,18 @@ export const RelayToMachine = Schema.Union([
 ]);
 export type RelayToMachine = typeof RelayToMachine.Type;
 
-/** One computer on the account, as `GET /v1/machines` lists it. */
+/**
+ * One computer on the account, as `GET /v1/machines` lists it. `sameSite`: the asking device and the machine's socket
+ * reach the relay from the same IP, which the relay compares without returning either.
+ */
 export const RelayMachine = Schema.Struct({
   id: RelayId,
-  name: Schema.String,
   publicKey: PublicKey,
   isOnline: Schema.Boolean,
+  sealed: Schema.optional(Sealed),
+  sameSite: Schema.optional(Schema.Boolean),
+  /** From an older machine that registered its name in clear. */
+  name: Schema.optional(Schema.String),
 });
 export type RelayMachine = typeof RelayMachine.Type;
 

@@ -27,13 +27,17 @@ export const asKind = (value: unknown): DeviceKind | undefined =>
 /**
  * Every connection opens with one pairing exchange, then carries only ciphertext (DEVICES.md › End-to-end encryption):
  *
- *   device → machine   { type: 'pair', version, name, kind, publicKey, hello, isReturning? }   its key, and a handshake signed with it
+ *   device → machine   { type: 'pair', version, publicKey, hello, about, isReturning? }   its key, and a handshake signed with it
  *   machine → device   { type: 'paired', hello } | { type: 'refused', reason }
+ *
+ * `about` is the device's name and kind, sealed to the machine's key (`crypto_box_seal`), so the relay reads neither. The
+ * rest is public: a key, a signed ephemeral key, and fixed refusal sentences.
  *
  * The machine trusts only its members' keys (`members.ts`): ones some computer of yours approved on its own screen. The
  * relay vouches for nothing but the account.
  */
-export const PAIRING_VERSION = 1;
+/** 2: the name and kind travel sealed (`about`); 1 sent them in clear. */
+export const PAIRING_VERSION = 2;
 const MAX_NAME = 64;
 const PAIR_TIMEOUT_MS = 15_000;
 /** Long enough for someone to walk over to the machine and read its screen. */
@@ -93,13 +97,8 @@ export async function secureAsMachine(
 ): Promise<Secured> {
   await sodium.ready;
   const frame = await firstFrame(raw, PAIR_TIMEOUT_MS);
-  const pair = frame && parsePair(frame);
-  if (!pair) return refuse(raw, 'The first frame must be a pairing request');
-  if (pair.version !== PAIRING_VERSION)
-    return refuse(
-      raw,
-      `This computer pairs with version ${PAIRING_VERSION}; update Mochi on both`,
-    );
+  const pair = frame ? parsePair(frame, side.keys) : { refusal: NOT_A_PAIRING };
+  if ('refusal' in pair) return refuse(raw, pair.refusal);
   const id = deviceId(pair.publicKey);
   const handshake = await createHandshake(side.keys, pair.publicKey, 'machine');
   let session: Session;
@@ -179,10 +178,14 @@ export async function secureAsDevice(
   sendJson(raw, {
     type: 'pair',
     version: PAIRING_VERSION,
-    name,
-    kind: THIS_KIND,
     publicKey: b64(keys.publicKey),
     hello: b64(handshake.hello),
+    about: b64(
+      sodium.crypto_box_seal(
+        sodium.from_string(JSON.stringify({ name, kind: THIS_KIND })),
+        sodium.crypto_sign_ed25519_pk_to_curve25519(machinePublicKey),
+      ),
+    ),
     ...(isReturning && { isReturning }),
   });
   const frame = await firstFrame(
@@ -205,13 +208,14 @@ export async function secureAsDevice(
     return encrypted(raw, handshake.finish(hello));
   } catch (error) {
     // The key the relay listed isn't the one answering: a stale listing, or someone in between.
-    if (error instanceof E2EError)
-      throw new PairingRefused(
-        'That computer’s key doesn’t match; pair again from its current listing',
-      );
+    if (error instanceof E2EError) throw new PairingRefused(WRONG_KEY);
     throw error;
   }
 }
+
+const NOT_A_PAIRING = 'The first frame must be a pairing request';
+const WRONG_KEY =
+  'That computer’s key doesn’t match; pair again from its current listing';
 
 /** The machine (or its key) said no: retrying the same way gets the same answer. */
 export class PairingRefused extends Error {}
@@ -300,16 +304,35 @@ const MORE = new Uint8Array([0]);
 const concatBytes = (parts: Uint8Array[]) =>
   new Uint8Array(Buffer.concat(parts));
 
-function parsePair(bytes: Uint8Array) {
+/** The pairing request, or why it is refused before anyone is asked. */
+type PairRequest = {
+  name: string;
+  kind?: DeviceKind;
+  publicKey: Uint8Array;
+  hello: Uint8Array;
+  isReturning: boolean;
+};
+
+function parsePair(
+  bytes: Uint8Array,
+  keys: DeviceKeys,
+): PairRequest | { refusal: string } {
   const frame = parseJson(bytes);
   if (
     frame?.type !== 'pair' ||
-    typeof frame.name !== 'string' ||
     typeof frame.publicKey !== 'string' ||
     typeof frame.hello !== 'string'
   )
-    return null;
-  const name = frame.name.trim().slice(0, MAX_NAME);
+    return { refusal: NOT_A_PAIRING };
+  if (frame.version !== PAIRING_VERSION)
+    return {
+      refusal: `This computer pairs with version ${PAIRING_VERSION}; update Mochi on both`,
+    };
+  const about = parseAbout(frame.about, keys);
+  // Sealed to another key: the device was handed a different key for this machine.
+  if (!about) return { refusal: WRONG_KEY };
+  const name =
+    typeof about.name === 'string' ? about.name.trim().slice(0, MAX_NAME) : '';
   const publicKey = fromB64(frame.publicKey);
   const hello = fromB64(frame.hello);
   if (
@@ -317,15 +340,31 @@ function parsePair(bytes: Uint8Array) {
     publicKey?.length !== sodium.crypto_sign_PUBLICKEYBYTES ||
     !hello
   )
-    return null;
+    return { refusal: NOT_A_PAIRING };
   return {
-    version: frame.version,
     name,
-    kind: asKind(frame.kind),
+    kind: asKind(about.kind),
     publicKey,
     hello,
     isReturning: frame.isReturning === true,
   };
+}
+
+/** The sealed `{ name, kind }` of a pairing request, opened with this machine's key. */
+function parseAbout(value: unknown, keys: DeviceKeys) {
+  const sealed = typeof value === 'string' ? fromB64(value) : null;
+  if (!sealed) return null;
+  try {
+    return parseJson(
+      sodium.crypto_box_seal_open(
+        sealed,
+        sodium.crypto_sign_ed25519_pk_to_curve25519(keys.publicKey),
+        sodium.crypto_sign_ed25519_sk_to_curve25519(keys.privateKey),
+      ),
+    );
+  } catch {
+    return null;
+  }
 }
 
 /** The first frame, or null when the link closed or `timeoutMs` passed. Later frames are the encrypted link's to read. */

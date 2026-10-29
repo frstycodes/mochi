@@ -9,6 +9,7 @@ export {
   type MachineFrame,
   type RelayToMachine,
 } from '../../../packages/schema/src/relayWire.ts';
+export type Sealed = Record<string, string>;
 import {
   decodeMachineFrame,
   isId,
@@ -18,8 +19,10 @@ export const parseMachineFrame = (raw: string) =>
   decodeMachineFrame(raw) ?? null;
 
 /**
- * A signed membership record as the relay keeps it (`electron/remote/members.ts`). The relay holds no key and checks no
- * signature: it keeps the newest record per kind, subject and signer, and each computer decides what a record is worth.
+ * A signed membership record as the relay keeps it (`packages/core/src/remote/members.ts`). The relay holds no key and
+ * checks no signature: it keeps the newest record per kind, subject and signer, and each computer decides what a record
+ * is worth. A member record's name and kind are `sealed` to the members (`sealed.ts`); one carrying them in clear is
+ * refused, so nothing the relay stores names a computer.
  */
 export type StoredRecord = {
   type: 'member' | 'removal';
@@ -29,7 +32,8 @@ export type StoredRecord = {
   record: Record<string, unknown>;
 };
 
-const MAX_RECORD_CHARS = 2048;
+/** A sealed box per member (up to `MAX_SEALED_MEMBERS`) and the public fields. */
+const MAX_RECORD_CHARS = 16384;
 export const MAX_RECORDS = 1000;
 
 /** A `POST /v1/members` body: an array of records. Off-shape entries are dropped, never stored. */
@@ -55,6 +59,11 @@ export function parseRecords(value: unknown): StoredRecord[] {
       !isId(signer) ||
       !Number.isSafeInteger(at) ||
       typeof r.signature !== 'string'
+    )
+      return [];
+    if (
+      r.type === 'member' &&
+      ('name' in r || 'kind' in r || !r.sealed || typeof r.sealed !== 'object')
     )
       return [];
     return [

@@ -232,7 +232,7 @@ test('an unknown device on the LAN is refused without asking; a paired one conne
   );
 });
 
-test('a relay that swaps the machine’s key fails the handshake, and the codes on the two screens differ', async () => {
+test('a relay that swaps the machine’s key is refused before anyone is asked, and the codes would differ', async () => {
   const machineKeys = keypair();
   const impostor = keypair();
   const device = keypair();
@@ -249,9 +249,10 @@ test('a relay that swaps the machine’s key fails the handshake, and the codes 
       (deviceResult.reason as Error).message,
     'That computer’s key doesn’t match; pair again from its current listing',
   );
+  assert.deepEqual(machine.asked, []);
   assert.notEqual(
     pairingCode(impostor.publicKey, device.publicKey),
-    machine.asked[0].code,
+    pairingCode(machineKeys.publicKey, device.publicKey),
   );
 });
 
@@ -284,6 +285,54 @@ test('a pairing request naming one key but signed with another is refused before
   assert.deepEqual(
     machineResult.status === 'fulfilled' && machineResult.value,
     { refusal: 'The pairing request wasn’t signed by the key it names' },
+  );
+  assert.deepEqual(machine.asked, []);
+});
+
+test('nothing the relay forwards while pairing carries the device’s name or kind', async () => {
+  const machineKeys = keypair();
+  const device = keypair();
+  const machine = machineSide(machineKeys, true);
+  const wire: string[] = [];
+  const ends = pipe(
+    (bytes) => (wire.push(Buffer.from(bytes).toString('latin1')), bytes),
+  );
+  const [machineResult] = await Promise.allSettled([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop'),
+  ]);
+  assert.equal(machineResult.status, 'fulfilled');
+  assert.equal(machine.asked[0].name, 'Laptop');
+  assert.ok(wire.length > 0);
+  for (const frame of wire) {
+    assert.doesNotMatch(frame, /Laptop/);
+    assert.doesNotMatch(frame, new RegExp(`"${THIS_KIND}"`));
+  }
+});
+
+test('a device on pairing version 1, which sent its name in clear, is told to update', async () => {
+  const machineKeys = keypair();
+  const device = keypair();
+  const machine = machineSide(machineKeys, true);
+  const ends = pipe((bytes, toMachine) => {
+    if (!toMachine) return bytes;
+    const frame = JSON.parse(sodium.to_string(bytes)) as Record<
+      string,
+      unknown
+    >;
+    return sodium.from_string(
+      JSON.stringify({ ...frame, version: 1, name: 'Laptop' }),
+    );
+  });
+  const [machineResult] = await Promise.allSettled([
+    secureAsMachine(ends.machine, 'relay', machine.side),
+    secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop'),
+  ]);
+  assert.deepEqual(
+    machineResult.status === 'fulfilled' && machineResult.value,
+    {
+      refusal: 'This computer pairs with version 2; update Mochi on both',
+    },
   );
   assert.deepEqual(machine.asked, []);
 });

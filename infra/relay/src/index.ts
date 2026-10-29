@@ -22,7 +22,7 @@ interface Env {
  * Mochi's relay (DEVICES.md › Transport): reach a machine from anywhere. Every route but /oauth/callback needs the account's Clerk token in
  * `Authorization` (never in the URL), and each account gets its own Durable Object, so accounts never share state.
  *
- * GET    /v1/machines          the account's machines: id, name, public key, online
+ * GET    /v1/machines          the account's machines: id, public key, online, same site, and their sealed info
  * DELETE /v1/machines/:id      forget a machine
  * GET    /v1/members           the account's signed membership records
  * POST   /v1/members           add records (JSON array); online machines hear `{ type: 'members' }`
@@ -68,7 +68,11 @@ export class AccountRelay extends DurableObject<Env> {
     const url = new URL(request.url);
     const machinePath = /^\/v1\/machines\/([^/]+)$/.exec(url.pathname);
     if (url.pathname === '/v1/machines' && request.method === 'GET')
-      return Response.json(await this.relay.list());
+      return Response.json(
+        await this.relay.list(
+          request.headers.get('cf-connecting-ip') ?? undefined,
+        ),
+      );
     if (machinePath && request.method === 'DELETE') {
       if (!isId(machinePath[1]))
         return new Response('Bad machine id', { status: 400 });
@@ -103,7 +107,11 @@ export class AccountRelay extends DurableObject<Env> {
       return new Response('Bad connect parameters', { status: 400 });
     const admission =
       role === 'machine'
-        ? this.relay.admit('machine', machine)
+        ? this.relay.admit(
+            'machine',
+            machine,
+            request.headers.get('cf-connecting-ip') ?? undefined,
+          )
         : this.relay.admit('device', machine, device!);
     if ('refusal' in admission)
       return new Response(admission.refusal, {

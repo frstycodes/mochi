@@ -56,7 +56,12 @@ function room() {
     relay.opened(socket);
     return socket;
   };
-  return { relay, accept, stored: () => machines };
+  return {
+    relay,
+    accept,
+    stored: () => machines,
+    storedRecords: () => records,
+  };
 }
 
 const bytes = (...values: number[]) => new Uint8Array(values);
@@ -139,29 +144,25 @@ test('a machine reconnecting replaces its old socket without dropping the new on
   assert.ok(fresh.sent.length, 'the device opened on the new socket');
 });
 
-test('machines register with a name and key, list with online state, and removal closes them', async () => {
+const SEALED = { mac: 'c2VhbGVkLWZvci1tYWM=', pc: 'c2VhbGVkLWZvci1wYw==' };
+
+test('machines register a key and their sealed info, list with online state, and removal closes them', async () => {
   const { relay, accept, stored } = room();
   const mac = accept('mac', relay.admit('machine', 'mac'));
   await relay.message(
     mac,
-    JSON.stringify({ type: 'register', name: '  Studio  ', publicKey: KEY }),
+    JSON.stringify({ type: 'register', publicKey: KEY, sealed: SEALED }),
   );
   assert.deepEqual(stored(), {
-    mac: { id: 'mac', name: 'Studio', publicKey: KEY, lastSeen: 1000 },
+    mac: { id: 'mac', publicKey: KEY, sealed: SEALED, lastSeen: 1000 },
   });
   assert.deepEqual(await relay.list(), [
-    {
-      id: 'mac',
-      name: 'Studio',
-      publicKey: KEY,
-      lastSeen: 1000,
-      isOnline: true,
-    },
+    { id: 'mac', publicKey: KEY, sealed: SEALED, isOnline: true },
   ]);
 
   await relay.message(
     mac,
-    JSON.stringify({ type: 'register', name: 'x', publicKey: 'short' }),
+    JSON.stringify({ type: 'register', publicKey: 'short', sealed: SEALED }),
   );
   assert.equal(
     mac.closed?.code,
@@ -172,11 +173,44 @@ test('machines register with a name and key, list with online state, and removal
   const pc = accept('pc', relay.admit('machine', 'pc'));
   await relay.message(
     pc,
-    JSON.stringify({ type: 'register', name: 'PC', publicKey: KEY }),
+    JSON.stringify({ type: 'register', publicKey: KEY, sealed: SEALED }),
   );
   await relay.remove('pc');
   assert.equal(pc.closed?.code, CLOSE.machineOffline);
   assert.deepEqual(Object.keys(stored()), ['mac']);
+});
+
+test('an older machine’s clear name is replaced when it registers sealed', async () => {
+  const { relay, accept, stored } = room();
+  const mac = accept('mac', relay.admit('machine', 'mac'));
+  await relay.message(
+    mac,
+    JSON.stringify({ type: 'register', name: 'Studio', publicKey: KEY }),
+  );
+  assert.equal(stored().mac.name, 'Studio');
+  await relay.message(
+    mac,
+    JSON.stringify({ type: 'register', publicKey: KEY, sealed: SEALED }),
+  );
+  assert.equal(stored().mac.name, undefined);
+  assert.deepEqual(stored().mac.sealed, SEALED);
+});
+
+test('sameSite compares the asker’s IP with the machine socket’s, and returns neither', async () => {
+  const { relay, accept, stored } = room();
+  accept('mac', relay.admit('machine', 'mac', '203.0.113.7'));
+  await relay.message(
+    accept('mac2', relay.admit('machine', 'mac', '203.0.113.7')),
+    JSON.stringify({ type: 'register', publicKey: KEY, sealed: SEALED }),
+  );
+  const [same] = await relay.list('203.0.113.7');
+  const [other] = await relay.list('198.51.100.1');
+  assert.equal(same.sameSite, true);
+  assert.equal(other.sameSite, false);
+  assert.doesNotMatch(
+    JSON.stringify([same, other, stored()]),
+    /203\.0|198\.51/,
+  );
 });
 
 test('devices may only send binary, and oversized frames are refused', async () => {
@@ -197,7 +231,7 @@ test('membership records are kept newest per signer and subject, and online mach
     type: 'member',
     deviceId: 'pc',
     publicKey: KEY,
-    name: 'PC',
+    sealed: SEALED,
     addedBy: 'mac',
     addedAt,
     signature: 'sig',
@@ -229,4 +263,28 @@ test('membership records are kept newest per signer and subject, and online mach
     },
   ]);
   assert.equal((await relay.members()).length, 2);
+});
+
+test('a member record naming its computer in clear is refused, so nothing stored names one', async () => {
+  const { relay, storedRecords } = room();
+  const base = {
+    type: 'member',
+    deviceId: 'pc',
+    publicKey: KEY,
+    addedBy: 'mac',
+    addedAt: 1,
+    signature: 'sig',
+  };
+  await relay.addMembers([
+    { ...base, name: 'PC' },
+    { ...base, deviceId: 'pc2', kind: 'linux', sealed: SEALED },
+    { ...base, deviceId: 'pc3' },
+  ]);
+  assert.deepEqual(storedRecords(), {});
+  await relay.addMembers([{ ...base, sealed: SEALED }]);
+  assert.equal(Object.keys(storedRecords()).length, 1);
+  assert.doesNotMatch(
+    JSON.stringify(storedRecords()),
+    /"name"|"kind"|"addresses"/,
+  );
 });

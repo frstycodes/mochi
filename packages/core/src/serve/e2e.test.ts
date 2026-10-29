@@ -91,11 +91,12 @@ function memoryRoom() {
   let machines: Record<string, MachineRecord> = {};
   let records: Record<string, StoredRecord> = {};
   const waiters = new Set<() => void>();
-  /** Once a machine called `name` registered: the relay lists it, online. */
-  const registered = (name: string) =>
+  /** Once `count` machines registered, their names sealed: the relay lists them, and can't read what they're called. */
+  const registered = (count: number) =>
     new Promise<void>((resolve) => {
       const check = () => {
-        if (!Object.values(machines).some((m) => m.name === name)) return;
+        if (Object.values(machines).filter((m) => m.sealed).length < count)
+          return;
         waiters.delete(check);
         resolve();
       };
@@ -122,7 +123,12 @@ function memoryRoom() {
     records: async () => records,
     saveRecords: async (next) => void (records = next),
   };
-  return { room, sockets, registered };
+  return {
+    room,
+    sockets,
+    registered,
+    stored: () => ({ machines, records }),
+  };
 }
 
 /** The relay's routes over `Relay`, as the Worker serves them, with Clerk's JWT check swapped for the fake's tokens. */
@@ -211,8 +217,10 @@ async function startRelay(
   const port = await listen(server);
   return {
     url: `http://127.0.0.1:${port}`,
-    registered: (user: string, name: string) =>
-      accountOf(user).registered(name),
+    registered: (user: string, count: number) =>
+      accountOf(user).registered(count),
+    /** Everything the relay stores for `user`, as it would persist it. */
+    stored: (user: string) => accountOf(user).stored(),
     close() {
       for (const client of wss.clients) client.terminate();
       server.closeAllConnections();
@@ -360,7 +368,7 @@ it.live(
         reachesAnywhere: true,
         machineName: 'Studio',
       });
-      yield* Effect.promise(() => relay.registered(USER.sub, 'Studio'));
+      yield* Effect.promise(() => relay.registered(USER.sub, 1));
 
       // `mochi serve`: named Pi, not signed in yet, so it waits.
       const piData = scratch('pi');
@@ -409,7 +417,8 @@ it.live(
         );
 
       const asked = printed.find((line) => line.startsWith('Approve'));
-      const code = /^Approve “Pi” on Studio: (\d{3} \d{3})$/.exec(
+      // Studio's name is sealed to its members, which Pi isn't yet: Pi names it by the code.
+      const code = /^Approve “Pi” on Computer (\d{3} \d{3}): \1$/.exec(
         asked ?? '',
       )?.[1];
       assert.ok(code, printed.join('\n'));
@@ -438,7 +447,12 @@ it.live(
         ['Pi'],
       );
       // Pi is on the relay too, for your devices to reach.
-      yield* Effect.promise(() => relay.registered(USER.sub, 'Pi'));
+      yield* Effect.promise(() => relay.registered(USER.sub, 2));
+      // Nothing the relay keeps names either computer.
+      assert.doesNotMatch(
+        JSON.stringify(relay.stored(USER.sub)),
+        /Studio|"Pi"|"name"/,
+      );
       const piStatus = yield* pi.host<RemoteStatus>('remote.status');
       assert.deepEqual(names(piStatus), ['Studio']);
       assert.equal(piStatus.settings.reachesAnywhere, true);
