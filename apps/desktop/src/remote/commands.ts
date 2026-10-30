@@ -106,8 +106,6 @@ export async function runRemoteCommand(
       switchHere(thread, dispatch, command.to);
       return ok;
     }
-    case 'schedule':
-      return schedule(thread, command.action);
     case 'commit':
     case 'push':
     case 'open-pr':
@@ -133,9 +131,6 @@ export async function runRemoteCommand(
       return sideChat(thread, command, env);
     case 'unsteer':
       return unsteer(thread, command, dispatch);
-    case 'setup-choice':
-      await host.agent.setupChoice(thread.id, command.choice);
-      return ok;
   }
   if (command.type === 'read-image' || command.type === 'read-task-output')
     return threadFile(thread, command);
@@ -539,19 +534,6 @@ async function setting(
       await host.settings.set(write.patch);
       return ok;
   }
-}
-
-async function schedule(
-  thread: Thread,
-  action: Extract<RemoteCommand, { type: 'schedule' }>['action'],
-): Promise<CommandResult> {
-  const triggers = await host.schedule.list();
-  if (!triggers.some((t) => t.threadId === thread.id))
-    return fail('This thread has no schedule');
-  if (action === 'run') await host.schedule.runNow(thread.id);
-  else if (action === 'remove') await host.schedule.remove(thread.id);
-  else await host.schedule.setPaused(thread.id, action === 'pause');
-  return ok;
 }
 
 /** The ship bar's calls, as the thread's profile's GitHub login, in the thread's own folder. */

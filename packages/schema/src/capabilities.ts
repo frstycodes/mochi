@@ -1,6 +1,5 @@
 import { Schema } from 'effect';
 import { invoke, Str } from './checks.ts';
-import { commandScope } from './relay.ts';
 import { AuthScope, CapabilityName } from './names.ts';
 
 export { AuthScope, CapabilityName };
@@ -91,22 +90,3 @@ export const capabilityOf = (namespace: string): CapabilityName =>
       : namespace === 'sim'
         ? 'sim'
         : 'host';
-
-/** What a paired device may call besides `device.command`. `terminal.output` pushes a shell's output. */
-const deviceScopes: Record<string, AuthScope> = {
-  ping: 'read',
-  'backend.info': 'read',
-  'backend.watch': 'read',
-  shell: 'read',
-  thread: 'read',
-  'terminal.output': 'terminal',
-};
-
-/**
- * The scope an RPC needs: a device command's by its type, the few reads a device makes, and `local` for everything else,
- * so a new procedure stays closed to devices until it is classified here.
- */
-export const scopeOf = (tag: string, payload?: unknown): AuthScope =>
-  tag === 'device.command'
-    ? commandScope((payload as { command?: unknown } | undefined)?.command)
-    : (deviceScopes[tag] ?? 'local');

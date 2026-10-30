@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'vite-plus/test';
 import { Schema } from 'effect';
-import { scopeOf } from './capabilities.ts';
 import {
   commandScope,
   COMMAND_SCOPES,
@@ -224,7 +223,7 @@ test('malformed commands are refused, never half-read', () => {
 test('a hello on another protocol is refused, and a device frame must be an RPC message or its members', () => {
   assert.throws(
     () => Schema.decodeUnknownSync(HelloFrame)({ type: 'hello', version: 5 }),
-    /protocol 7/,
+    /protocol 8/,
   );
   const isDeviceFrame = Schema.is(DeviceLinkFrame);
   assert.ok(
@@ -332,10 +331,7 @@ test('each thread action needs its own scope, and one Core doesn’t know needs 
   assert.equal(commandScope({ type: 'hasOwnProperty' }), 'local');
   assert.equal(commandScope({ type: 'send' }), 'operate');
   assert.equal(commandScope(undefined), 'local');
-  assert.equal(
-    scopeOf('device.command', { command: action('goal-remove') }),
-    'manage',
-  );
+  assert.equal(commandScope(action('goal-remove')), 'manage');
 });
 
 test('a send carries the composer’s images and references, and needs something to send', () => {
@@ -443,20 +439,11 @@ test('pane commands need the scope their kind of access needs', () => {
     assert.equal(COMMAND_SCOPES[type], 'code');
   for (const type of ['read-image', 'read-task-output'] as const)
     assert.equal(COMMAND_SCOPES[type], 'read');
-  assert.equal(
-    scopeOf('device.command', { command: { type: 'write-file' } }),
-    'code',
-  );
-  assert.equal(
-    scopeOf('device.command', { command: { type: 'read-image' } }),
-    'read',
-  );
+  assert.equal(commandScope({ type: 'write-file' }), 'code');
+  assert.equal(commandScope({ type: 'read-image' }), 'read');
   // A device holding only `read` is not granted write-file.
   const held = new Set(['read']);
-  assert.equal(
-    held.has(scopeOf('device.command', { command: { type: 'write-file' } })),
-    false,
-  );
+  assert.equal(held.has(commandScope({ type: 'write-file' })), false);
 });
 
 test('pane command results keep the shape they answer with', () => {
@@ -497,7 +484,7 @@ test('thread ops: the PR tab writes need manage, its review code, a badge read; 
   } as const;
   for (const [type, scope] of Object.entries(expected)) {
     assert.equal(COMMAND_SCOPES[type as keyof typeof expected], scope, type);
-    assert.equal(scopeOf('device.command', { command: { type } }), scope);
+    assert.equal(commandScope({ type }), scope);
   }
 });
 
