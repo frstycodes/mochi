@@ -363,3 +363,34 @@ test('a peer that keeps sending pieces past 64 MB is cut off', async () => {
   await closed;
   assert.equal(secured.link.isOpen(), false);
 });
+
+test('a device that leaves while the machine asks (it joined through another computer) withdraws the prompt', async () => {
+  const machineKeys = keypair();
+  const ends = pipe();
+  let isWithdrawn = false;
+  let onAsked: () => void;
+  const asked = new Promise<void>((resolve) => (onAsked = resolve));
+  const machine = secureAsMachine(ends.machine, 'relay', {
+    ...machineSide(machineKeys, true).side,
+    approve: (_request, left) =>
+      new Promise((answer) => {
+        left.addEventListener('abort', () => {
+          isWithdrawn = true;
+          answer(true);
+        });
+        onAsked();
+      }),
+  });
+  const joining = secureAsDevice(
+    ends.device,
+    keypair(),
+    machineKeys.publicKey,
+    'Server',
+  ).catch((e: unknown) => e);
+  await asked;
+  ends.device.close(1000, 'Joined through another computer');
+  assert.ok(isWithdrawn);
+  // Allowed only after it left: nothing is added.
+  assert.deepEqual(await machine, { refusal: 'The device left' });
+  assert.ok((await joining) instanceof Error);
+});

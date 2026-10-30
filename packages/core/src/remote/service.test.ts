@@ -18,6 +18,7 @@ import { Capabilities } from '../hostServer.ts';
 import { fileKeys } from '../keys/keyStore.ts';
 import { CoreWsRpcs } from '../rpc.ts';
 import { layerCore } from '../server.ts';
+import { joinThroughServe, serveFile } from '../serve/login.ts';
 import { makeDeviceClient, openLan } from './device.ts';
 import { networkHosts } from './interfaces.ts';
 import type { Link } from './link.ts';
@@ -85,9 +86,9 @@ const legacyKey = (seed: string) => {
   return { dir, keys };
 };
 
-/** Main's `secureStorage`: decrypts what `legacyKey` wrote. */
+/** Main, with its `secureStorage`: decrypts what `legacyKey` wrote. */
 const serveKeychain = (capabilities: Capabilities['Service']) =>
-  capabilities.serve(['secureStorage']).pipe(
+  capabilities.serve(['main', 'secureStorage']).pipe(
     Stream.runForEach((call) =>
       capabilities.reply({
         id: call.id,
@@ -348,5 +349,77 @@ it.live(
         /^closed: /,
       );
       yield* hostCall('remote.set', [{ isEnabled: false }]);
+    }),
+);
+
+it.live(
+  'where main can’t seal (Linux `basic_text`) it offers no `secureStorage`: the key is kept plain and remote access starts',
+  () =>
+    Effect.gen(function* () {
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-weak-keyring-'));
+      const context = yield* Layer.build(
+        layerCore({
+          port: 0,
+          tokens: new Map([[TOKEN, Contract.allScopes]]),
+          origins: [],
+          remotePort: 0,
+          userData,
+          hasKeychain: true,
+        }),
+      );
+      const port = (
+        Context.get(context, HttpServer.HttpServer).address as { port: number }
+      ).port;
+      const main = yield* makeCoreClient(coreUrl(port, TOKEN));
+      yield* main['capabilities.serve']({ names: ['main'] }).pipe(
+        Stream.runDrain,
+        Effect.forkChild,
+      );
+      const seed = yield* main['remote.deviceKey']();
+      const file = JSON.parse(
+        readFileSync(path.join(userData, 'keys', 'keys.json'), 'utf8'),
+      ) as { keys: Record<string, unknown> };
+      assert.deepEqual(file.keys[DEVICE_KEY], { plain: seed });
+      const call = makeHostCaller(main);
+      const status = (yield* Effect.promise(() =>
+        call('remote.set', [{ isEnabled: true }]),
+      )) as RemoteStatus;
+      assert.equal(status.error, undefined);
+      assert.match(status.addresses[0] ?? '', /^127\.0\.0\.1:[1-9]\d*$/);
+      yield* Effect.promise(() => call('remote.set', [{ isEnabled: false }]));
+    }),
+);
+
+it.live(
+  '`mochi login` follows a TLS `mochi serve`, trusting only the certificate `serve.json` names',
+  () =>
+    Effect.gen(function* () {
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-login-tls-'));
+      const tls = selfSigned(userData);
+      const context = yield* Layer.build(
+        layerCore({
+          port: 0,
+          tls,
+          userData,
+          tokens: new Map([[TOKEN, Contract.allScopes]]),
+          origins: [],
+          remotePort: 0,
+        }),
+      );
+      const { port } = Context.get(context, HttpServer.HttpServer).address as {
+        port: number;
+      };
+      writeFileSync(
+        serveFile(userData),
+        JSON.stringify({
+          pid: process.pid,
+          url: `wss://127.0.0.1:${port}/ws?v=${Contract.PROTOCOL_VERSION}`,
+          token: TOKEN,
+          certFile: path.join(userData, 'cert.pem'),
+        }),
+      );
+      // Reaching Core is what this checks: signed out, its join answers why.
+      const refused = yield* Effect.flip(joinThroughServe(userData));
+      assert.match(refused.message, /Not signed in/);
     }),
 );

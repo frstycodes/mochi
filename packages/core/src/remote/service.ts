@@ -98,8 +98,9 @@ export interface Shell {
 
 /**
  * The device key's seed. It moves into `Keys` from main's `<userData>/device-key` (sealed with `safeStorage`) on first use,
- * waiting for main's keychain when that file is there: a new key would end every pairing. With neither, a new one, which
- * waits for the keychain too when `hasKeychain` (desktop), so it is sealed from the start.
+ * waiting for main when that file is there: a new key would end every pairing. With neither, a new one. When `hasKeychain`
+ * (desktop), both wait for main to connect, so the key is sealed from the start whenever main offers `secureStorage`; main
+ * leaves it out where `safeStorage` can't seal (Linux with `basic_text`), and the key is kept plain in `Keys`' 0600 file.
  */
 export async function deviceSeed(
   keys: Keys,
@@ -112,9 +113,11 @@ export async function deviceSeed(
   const file = joinPath(dir, 'device-key');
   const legacy = await readFile(file).catch(() => undefined);
   await sodium.ready;
-  const seed = legacy
-    ? await capabilities.whenOffered('secureStorage').then(() =>
-        Effect.runPromise(
+  // Main registers every capability it serves at once, so once it connects `secureStorage` is offered or never will be.
+  if (legacy || hasKeychain) await capabilities.whenOffered('main');
+  const seed =
+    legacy && capabilities.offers('secureStorage')
+      ? await Effect.runPromise(
           capabilities
             .call({
               capability: 'secureStorage',
@@ -126,10 +129,9 @@ export async function deviceSeed(
                 Effect.die(typeof e === 'string' ? new Error(e) : e),
               ),
             ),
-        ).then(String),
-      )
-    : sodium.to_base64(sodium.randombytes_buf(sodium.crypto_sign_SEEDBYTES));
-  if (hasKeychain) await capabilities.whenOffered('secureStorage');
+        ).then(String)
+      : // Weak storage never wrote that file, but one it can't open now is no key: a new one.
+        sodium.to_base64(sodium.randombytes_buf(sodium.crypto_sign_SEEDBYTES));
   await keys.set(DEVICE_KEY, seed);
   await rm(file, { force: true });
   return seed;
@@ -175,6 +177,8 @@ interface RemoteOptions {
   backend: Backend['Service'];
   hasKeychain: boolean;
   log: (message: string) => void;
+  /** `mochi serve`'s output: set, it turns remote access on once signed in and joins your computers (`serveAlone`). */
+  serving?: (line: string) => void;
 }
 
 /**
@@ -190,6 +194,7 @@ function makeRemote({
   backend,
   hasKeychain,
   log,
+  serving,
 }: RemoteOptions) {
   const file = joinPath(dir, 'remote.json');
   let settings = loadSettings(file);
@@ -301,9 +306,16 @@ function makeRemote({
     return status();
   }
 
-  /** "Allow <name>?" in an interface on this computer; none open answers No at once. */
-  function approve(request: { name: string; code: string }): Promise<boolean> {
-    if (!capabilities.offers('remote')) return Promise.resolve(false);
+  /**
+   * "Allow <name>?" in an interface on this computer; none open answers No at once. When the asking computer leaves, the
+   * prompt is sent again with its deadline now, which closes it.
+   */
+  function approve(
+    request: { name: string; code: string },
+    left?: AbortSignal,
+  ): Promise<boolean> {
+    if (!capabilities.offers('remote') || left?.aborted)
+      return Promise.resolve(false);
     const id = randomUUID();
     const asked: ApprovalRequest = {
       id,
@@ -313,12 +325,21 @@ function makeRemote({
     };
     return new Promise((resolve) => {
       const timer = setTimeout(() => answer(false), APPROVAL_TIMEOUT_MS);
+      const onLeft = () => {
+        answer(false);
+        push({
+          channel: APPROVAL_CHANNEL,
+          payload: { ...asked, expiresAt: Date.now() },
+        });
+      };
       function answer(isAllowed: boolean) {
         clearTimeout(timer);
+        left?.removeEventListener('abort', onLeft);
         approvals.delete(id);
         resolve(isAllowed);
       }
       approvals.set(id, answer);
+      left?.addEventListener('abort', onLeft, { once: true });
       push({ channel: APPROVAL_CHANNEL, payload: asked });
     });
   }
@@ -377,7 +398,7 @@ function makeRemote({
    * the code on both screens. Once it allowed this one, each vouches for the other, and every member's records reach this
    * computer, so it reaches all of them and they it with no more prompts.
    */
-  async function join(machineId: string) {
+  async function join(machineId: string, signal?: AbortSignal) {
     const token = await account.accessToken();
     const [listed, own] = await Promise.all([listMachines(token), theKeys()]);
     const machine = listed.find((m) => m.id === machineId);
@@ -393,6 +414,10 @@ function makeRemote({
       deviceId(own.publicKey),
       token,
     );
+    // Closing the channel ends the attempt, and dismisses the prompt on that computer (`secureAsMachine`).
+    const stop = () => raw.close(1000, 'Joined through another computer');
+    if (signal?.aborted) stop();
+    signal?.addEventListener('abort', stop, { once: true });
     try {
       const link = await secureAsDevice(raw, own, machineKey, machineName());
       const welcome = await new Promise<Relay.MachineLinkFrame | undefined>(
@@ -433,9 +458,106 @@ function makeRemote({
       );
       await absorb([...theirs, vouch]);
     } finally {
+      signal?.removeEventListener('abort', stop);
       raw.close(1000, 'Joined');
     }
     await pullMembers();
+    return machine.name;
+  }
+
+  let alone: ReturnType<typeof progressLog> | undefined;
+
+  /**
+   * A computer with no screen (`mochi serve`) joins your computers by asking every online one of them at once, each showing
+   * "Let <name> join?" with the code this one prints. The first that allows it wins and the other prompts close; account
+   * access alone never makes it a member. One run at a time: a second caller follows the one in flight.
+   */
+  function joinAlone(onProgress: (progress: JoinProgress) => void) {
+    if (!alone || alone.isDone()) {
+      const run = (alone = progressLog());
+      void askEveryone(run.emit).then(run.emit, (e: unknown) =>
+        run.emit({ type: 'failed', reason: messageOf(e) }),
+      );
+    }
+    return alone.follow(onProgress);
+  }
+
+  async function askEveryone(
+    emit: (progress: JoinProgress) => void,
+  ): Promise<JoinProgress> {
+    if (!(await isSignedIn()))
+      return {
+        type: 'failed',
+        reason: 'Not signed in: run `mochi login` first',
+      };
+    await absorbing;
+    await pullMembers();
+    if (theRegistry().devices().length > 0) return { type: 'member' };
+    const [listed, own] = await Promise.all([
+      account.accessToken().then(listMachines),
+      theKeys(),
+    ]);
+    const self = sodium.to_base64(
+      own.publicKey,
+      sodium.base64_variants.ORIGINAL,
+    );
+    const online = listed.filter(
+      (m) =>
+        m.isOnline && m.id !== theRegistry().machineId && m.publicKey !== self,
+    );
+    if (online.length === 0)
+      return {
+        type: 'failed',
+        reason:
+          'No other computer of yours is online: open Mochi on one, then run `mochi login` again',
+      };
+    const others = new AbortController();
+    const attempts = online.map(async (machine) => {
+      emit({
+        type: 'asking',
+        machineName: machine.name,
+        name: machineName(),
+        code: pairingCode(
+          sodium.from_base64(
+            machine.publicKey,
+            sodium.base64_variants.ORIGINAL,
+          ),
+          own.publicKey,
+        ),
+      });
+      try {
+        const name = await join(machine.id, others.signal);
+        others.abort();
+        return name;
+      } catch (e) {
+        if (!others.signal.aborted)
+          emit({
+            type: 'declined',
+            machineName: machine.name,
+            reason: messageOf(e),
+          });
+        throw e;
+      }
+    });
+    return Promise.any(attempts).then(
+      (machineName): JoinProgress => ({ type: 'joined', machineName }),
+      (): JoinProgress => ({
+        type: 'failed',
+        reason: 'No computer of yours allowed this one',
+      }),
+    );
+  }
+
+  /** Under `mochi serve`, once signed in: remote access on, reachable through the relay, and joined when it trusts nobody. */
+  async function serveAlone() {
+    if (!serving || !(await isSignedIn())) return;
+    if (!settings.isEnabled || !settings.reachesAnywhere) {
+      await set({ isEnabled: true, reachesAnywhere: true });
+      serving(
+        `Remote access is on, through the relay as “${machineName()}”: your other computers see it under “Join your computers”.`,
+      );
+    }
+    joinAlone((progress) => serving?.(describeJoin(progress)));
   }
 
   /**
@@ -633,7 +755,7 @@ function makeRemote({
   // Signing in or out starts or stops the relay connection.
   const offAccount = account.onChange((next: MochiAccount) => {
     if (settings.isEnabled && settings.reachesAnywhere) void restart();
-    if (next.status === 'signed-in') void pullMembers();
+    if (next.status === 'signed-in') void pullMembers().then(serveAlone);
   });
 
   return {
@@ -643,6 +765,7 @@ function makeRemote({
       if (settings.isEnabled) void restart();
       void absorb([])
         .then(pullMembers)
+        .then(serveAlone)
         .catch((e: unknown) => log(`Couldn’t read the members: ${String(e)}`));
     },
     /** Core's own socket, once bound: where a device's tunnel reaches it, and the token its device tokens are signed with. */
@@ -654,7 +777,15 @@ function makeRemote({
     answerApproval: (id: string, isAllowed: boolean) =>
       approvals.get(id)?.(isAllowed),
     otherMachines,
-    join,
+    join: (machineId: string) => join(machineId).then(() => {}),
+    /**
+     * `mochi login` following the join from another process: it signed in there, so this Core reads the account again and,
+     * under `mochi serve`, turns remote access on first. Ends with `joined`, `member` or `failed`.
+     */
+    async joinAlone(onProgress: (progress: JoinProgress) => void) {
+      if (serving) await serveAlone();
+      return joinAlone(onProgress);
+    },
     // Main's, for the computers it follows.
     deviceKey: theSeed,
     paired: async () => {
@@ -691,7 +822,10 @@ export type RemoteApi = ReturnType<typeof makeRemote>;
 export const layerRemote = (
   userData: string | undefined,
   port: number,
-  { hasKeychain }: { hasKeychain: boolean },
+  {
+    hasKeychain,
+    serving,
+  }: { hasKeychain: boolean; serving?: (line: string) => void },
 ) =>
   Layer.effect(
     Remote,
@@ -706,6 +840,7 @@ export const layerRemote = (
         capabilities: yield* Capabilities,
         backend: yield* Backend,
         hasKeychain,
+        serving,
         log: (message) =>
           void Effect.runPromiseWith(services)(
             Effect.logWarning(message).pipe(
@@ -719,6 +854,55 @@ export const layerRemote = (
       return remote;
     }),
   );
+
+/** How a headless computer's join goes (`joinAlone`), for `mochi serve` and `mochi login` to print. */
+export type JoinProgress =
+  | { type: 'asking'; machineName: string; name: string; code: string }
+  | { type: 'declined'; machineName: string; reason: string }
+  | { type: 'joined'; machineName: string }
+  | { type: 'member' }
+  | { type: 'failed'; reason: string };
+
+export const isJoinDone = (progress: JoinProgress) =>
+  progress.type === 'joined' ||
+  progress.type === 'member' ||
+  progress.type === 'failed';
+
+export function describeJoin(progress: JoinProgress): string {
+  switch (progress.type) {
+    case 'asking':
+      return `Approve “${progress.name}” on ${progress.machineName}: ${progress.code}`;
+    case 'declined':
+      return `${progress.machineName}: ${progress.reason}`;
+    case 'joined':
+      return `Joined your computers: ${progress.machineName} allowed this one.`;
+    case 'member':
+      return 'Already one of your computers.';
+    case 'failed':
+      return progress.reason;
+  }
+}
+
+/** One join's progress so far, replayed to each follower, who is told of the rest until it ends. */
+function progressLog() {
+  const seen: JoinProgress[] = [];
+  const followers = new Set<(progress: JoinProgress) => void>();
+  return {
+    isDone: () => seen.some(isJoinDone),
+    emit: (progress: JoinProgress) => {
+      seen.push(progress);
+      for (const follower of followers) follower(progress);
+      if (isJoinDone(progress)) followers.clear();
+    },
+    follow(follower: (progress: JoinProgress) => void) {
+      for (const progress of seen) follower(progress);
+      if (!seen.some(isJoinDone)) followers.add(follower);
+      return () => void followers.delete(follower);
+    },
+  };
+}
+
+const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 function loadSettings(file: string): RemoteSettings {
   try {

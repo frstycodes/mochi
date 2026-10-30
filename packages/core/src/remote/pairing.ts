@@ -64,8 +64,14 @@ export interface MachineSide {
   find(deviceId: string): PairedDevice | undefined;
   /** Fetches the account's membership records, for a key another computer may have approved since. */
   refresh(): Promise<void>;
-  /** "Let <name> join?" on this machine's screen, showing `code`; false on No or after `APPROVAL_TIMEOUT_MS`. */
-  approve(request: { name: string; code: string }): Promise<boolean>;
+  /**
+   * "Let <name> join?" on this machine's screen, showing `code`; false on No, after `APPROVAL_TIMEOUT_MS`, or once `left`
+   * aborts (the device closed the link: it joined through another computer, or gave up), which dismisses the prompt.
+   */
+  approve(
+    request: { name: string; code: string },
+    left: AbortSignal,
+  ): Promise<boolean>;
   /** Vouches for the device as a member, and has the record reach the relay before the device hears it was allowed. */
   add(device: {
     id: string;
@@ -120,10 +126,16 @@ export async function secureAsMachine(
     // Reconnecting on its own after being removed here: nobody at that device asked, so nobody here is asked either.
     if (pair.isReturning)
       return refuse(raw, 'That computer doesn’t trust this one; join again');
-    const isAllowed = await side.approve({
-      name: pair.name,
-      code: pairingCode(side.keys.publicKey, pair.publicKey),
-    });
+    const left = new AbortController();
+    raw.onClose(() => left.abort());
+    if (!raw.isOpen()) left.abort();
+    const isAllowed = await side.approve(
+      {
+        name: pair.name,
+        code: pairingCode(side.keys.publicKey, pair.publicKey),
+      },
+      left.signal,
+    );
     if (!isAllowed) return refuse(raw, 'That computer didn’t allow this one');
     if (!raw.isOpen()) return { refusal: 'The device left' };
     device = await side.add({

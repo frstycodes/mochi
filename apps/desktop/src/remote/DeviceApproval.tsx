@@ -13,13 +13,18 @@ import { host } from '../host';
 import type { ApprovalRequest } from '../host/types/remote';
 import { PairingCode } from './PairingCode';
 
-/** "Let <computer> join?" when a computer of yours joins through this one. Unanswered by its deadline, it closes as No in main too. */
+/** "Let <computer> join?" when a computer of yours joins through this one. Unanswered by its deadline, it closes as No in Core too. */
 export function DeviceApprovalLayer() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   useEffect(
     () =>
       host.remote.onApproval((request) =>
-        setRequests((all) => [...all, request]),
+        // Sent again with its deadline passed, a request is withdrawn: the computer asking left (it joined through another).
+        setRequests((all) =>
+          request.expiresAt <= Date.now()
+            ? all.filter((r) => r.id !== request.id)
+            : [...all, request],
+        ),
       ),
     [],
   );

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { Config, Console, Effect, Option } from 'effect';
 import { Command, Flag } from 'effect/cli';
@@ -8,7 +8,7 @@ import { version } from '../../../../package.json' with { type: 'json' };
 import { chromiumLauncher, headlessBrowser } from '../browser/headless.ts';
 import { launchCore } from '../launch.ts';
 import { resolveAuth } from './auth.ts';
-import { dataFlag, login, logout, offerLogin } from './login.ts';
+import { dataFlag, login, logout, offerLogin, serveFile } from './login.ts';
 
 const serve = Command.make(
   'serve',
@@ -62,6 +62,24 @@ const serve = Command.make(
           ? `Mochi Core on ${url}/#token=${auth.token}`
           : `Mochi Core on ${url}`,
       );
+      // `mochi login` in another shell finds this Core here, to follow its join.
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          writeFileSync(
+            serveFile(flags.data),
+            JSON.stringify({
+              pid: process.pid,
+              url: `${auth.tls ? 'wss' : 'ws'}://${dialHost(flags.host)}:${flags.port}/ws?v=${Capabilities.PROTOCOL_VERSION}`,
+              token: auth.token,
+              ...(Option.isSome(flags.tlsCert) && {
+                certFile: path.resolve(flags.tlsCert.value),
+              }),
+            }),
+            { mode: 0o600 },
+          ),
+        ),
+        () => Effect.sync(() => rmSync(serveFile(flags.data), { force: true })),
+      );
       return yield* launchCore({
         host: flags.host,
         port: flags.port,
@@ -80,13 +98,23 @@ const serve = Command.make(
         browserView: headlessBrowser(
           chromiumLauncher(path.join(flags.data, 'browsers')),
         ),
+        // Once signed in: remote access on, through the relay, and each code a computer of yours shows to approve this one.
+        serving: (line) => console.log(line),
         logFile: path.join(flags.data, 'logs', 'mochi.log'),
         otlpUrl: yield* Config.option(Config.URL('MOCHI_OTLP_URL')),
       });
-    }),
+    }).pipe(Effect.scoped),
 ).pipe(
   Command.withDescription('Run Core headless and serve the UI to a browser'),
 );
+
+/** Where a client on this computer dials: loopback when bound to every interface. */
+const dialHost = (host: string) =>
+  host === '0.0.0.0' || host === '::' || host === '[::]'
+    ? '127.0.0.1'
+    : host.includes(':') && !host.startsWith('[')
+      ? `[${host}]`
+      : host;
 
 const mochi = Command.make('mochi').pipe(
   Command.withSubcommands([serve, login, logout]),

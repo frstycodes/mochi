@@ -1,5 +1,5 @@
 import { webContents } from 'electron';
-import { open, seal } from '../secrets';
+import { canStore, open, seal } from '../secrets';
 import { Schema } from 'effect';
 import { Capabilities, definitionOf, Relay } from '@mochi/schema';
 import type { CapabilityHandler } from '@mochi/core/hostClient';
@@ -84,16 +84,22 @@ const secureStorage = {
  * decodes it, then hands it here JSON-encoded, with the window's id so the handler gets its sender.
  */
 export const mainCapabilities = {
-  names: [
-    'host',
-    'notify',
-    'browserView',
-    'sim',
-    'secureStorage',
-    'remote',
-    'metrics',
-    'main',
-  ],
+  /**
+   * Read when main connects to Core, after `app` is ready (`canStore` isn't reliable before). No `secureStorage` when
+   * `safeStorage` can't seal (Linux with `basic_text`): Core keeps its keys in its 0600 file then.
+   */
+  get names(): ReadonlyArray<Capabilities.CapabilityName> {
+    return [
+      'host',
+      'notify',
+      'browserView',
+      'sim',
+      ...(canStore() ? (['secureStorage'] as const) : []),
+      'remote',
+      'metrics',
+      'main',
+    ];
+  },
   handle: async ({ capability, method, args, windowId }) => {
     if (capability === 'main')
       return (
