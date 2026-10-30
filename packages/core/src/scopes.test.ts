@@ -166,6 +166,7 @@ it('a replica snapshot without `code` has no diffs, and no device gets the conte
   assert.deepEqual(visibleSnapshot(snapshot, ['read']), {
     ...snapshot,
     context: null,
+    parts: 0,
     saved: {
       threads: [{ id: 't1', activity: [{ text: 'edit' }] }],
       checkpoints: {},
@@ -231,6 +232,8 @@ it.live(
           const subscribed = yield* Deferred.make<void>();
           const items = yield* device.replica({ afterSequence: 0 }).pipe(
             Stream.tap(() => Deferred.succeed(subscribed, undefined)),
+            // With `code` the snapshot's checkpoints follow it as parts.
+            Stream.filter((item) => item._tag !== 'checkpoints'),
             Stream.take(2),
             Stream.runCollect,
             Effect.forkChild({ startImmediately: true }),

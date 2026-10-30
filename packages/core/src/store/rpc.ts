@@ -51,6 +51,11 @@ export const ReplicaItem = Schema.Union([
     sequence: Schema.Number,
     saved: Schema.Unknown,
     context: Schema.Unknown,
+    parts: Schema.optional(Schema.Number),
+  }),
+  Schema.TaggedStruct('checkpoints', {
+    threadId: Schema.String,
+    checkpoints: Schema.Unknown,
   }),
   Schema.TaggedStruct('event', { event: LoggedEvent }),
 ]);

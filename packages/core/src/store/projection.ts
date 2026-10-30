@@ -184,22 +184,29 @@ export class Projection extends Context.Service<Projection>()(
             Effect.gen(function* () {
               const live = yield* PubSub.subscribe(folded);
               const at = sequence;
-              // As JSON: the store leaves optional fields undefined, which the socket's encoder refuses.
-              const snapshot: ReplicaItem = JSON.parse(
-                JSON.stringify({
+              const { checkpoints, ...saved } = toSaved(domain);
+              const parts = Object.entries(checkpoints);
+              // As JSON: the store leaves optional fields undefined, which the socket's encoder refuses. Each part is its own
+              // string: checkpoints copy whole threads, and the store as one string outgrew V8's ~512 MB limit.
+              const snapshot: ReplicaItem[] = [
+                asJson({
                   _tag: 'snapshot',
                   sequence: at,
-                  saved: toSaved(domain),
+                  saved: { ...saved, checkpoints: {} },
                   context: isContextSet ? domain.context : null,
+                  parts: parts.length,
                 }),
-              );
+                ...parts.map(([threadId, list]) =>
+                  asJson({ _tag: 'checkpoints', threadId, checkpoints: list }),
+                ),
+              ];
               const gap =
                 afterSequence > 0 &&
                 afterSequence >= startSequence &&
                 afterSequence <= at
                   ? yield* replay(afterSequence, at)
                   : undefined;
-              const items = gap ?? [snapshot];
+              const items = gap ?? snapshot;
               const tail = Stream.fromSubscription(live).pipe(
                 Stream.filter(({ event }) => event.sequence > at),
                 Stream.map(({ event }): ReplicaItem => ({
@@ -207,7 +214,11 @@ export class Projection extends Context.Service<Projection>()(
                   event,
                 })),
               );
-              return Stream.concat(Stream.fromIterable(items), tail);
+              // One item per chunk: the RPC server writes a chunk as one message.
+              return Stream.concat(
+                Stream.fromIterable(items).pipe(Stream.rechunk(1)),
+                tail,
+              );
             }),
           );
 
@@ -252,3 +263,6 @@ function restoredDomain(domain: Domain) {
     ),
   };
 }
+
+const asJson = (item: ReplicaItem): ReplicaItem =>
+  JSON.parse(JSON.stringify(item));

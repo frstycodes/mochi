@@ -654,8 +654,13 @@ const visibleReplica = (
     item._tag === 'snapshot' ? visibleSnapshot(item, scopes) : item,
   );
   if (scopes.includes('code')) return replica(input).pipe(visible);
-  const snapshot = replica({ afterSequence: 0 }).pipe(Stream.take(1));
-  return replica({ afterSequence: 0 }).pipe(
+  // Checkpoints are diffs: without `code` a snapshot is whole without its parts (`visibleSnapshot`).
+  const withoutParts = () =>
+    replica({ afterSequence: 0 }).pipe(
+      Stream.filter((item) => item._tag !== 'checkpoints'),
+    );
+  const snapshot = withoutParts().pipe(Stream.take(1));
+  return withoutParts().pipe(
     Stream.groupedWithin(Number.MAX_SAFE_INTEGER, REPLICA_SETTLE),
     Stream.flatMap((burst) =>
       burst.at(-1)?._tag === 'snapshot' ? Stream.make(burst.at(-1)!) : snapshot,

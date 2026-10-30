@@ -64,6 +64,7 @@ export function visibleSnapshot(
   return {
     ...item,
     context,
+    parts: 0,
     saved: {
       ...rest,
       ...(saved.threads && { threads: saved.threads.map(withoutPatches) }),

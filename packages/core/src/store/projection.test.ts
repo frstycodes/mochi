@@ -199,6 +199,48 @@ it.effect(
 );
 
 it.effect(
+  'a snapshot sends each thread’s checkpoints as its own item, and the window puts them back together',
+  () =>
+    withCore(mkdtempSync(join(tmpdir(), 'mochi-replica-')), (core) =>
+      Effect.gen(function* () {
+        const { log, items, caughtUp } = yield* linkTo(core);
+        const first = yield* open(log);
+        first.dispatch(create);
+        first.dispatch({ ...create, title: 'Another' });
+        yield* Effect.promise(() => first.sent());
+        yield* caughtUp(first);
+        first.stop();
+        const { domain } = yield* core.projection.current;
+        const threadIds = Object.keys(domain.checkpoints);
+        assert.ok(threadIds.length >= 2, 'each new thread has a checkpoint');
+
+        const reloaded = yield* open(log);
+        const [snapshot, ...rest] = items[1]!;
+        assert.equal(snapshot!._tag, 'snapshot');
+        assert.ok(snapshot!._tag === 'snapshot');
+        assert.equal(snapshot!.parts, threadIds.length);
+        assert.deepEqual(
+          (snapshot!.saved as { checkpoints: unknown }).checkpoints,
+          {},
+        );
+        assert.deepEqual(
+          rest
+            .slice(0, threadIds.length)
+            .map((item) =>
+              item._tag === 'checkpoints' ? item.threadId : item._tag,
+            ),
+          threadIds,
+        );
+        assert.deepEqual(
+          asJson(reloaded.getState().checkpoints),
+          asJson(domain.checkpoints),
+        );
+        reloaded.stop();
+      }),
+    ),
+);
+
+it.effect(
   'a dropped stream resumes from the last sequence it folded: a replay, not a snapshot, with no gap and no repeat',
   () =>
     withCore(mkdtempSync(join(tmpdir(), 'mochi-replica-')), (core) =>
