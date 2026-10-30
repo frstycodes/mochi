@@ -84,6 +84,8 @@ export interface OtherMachine {
   isOnline: boolean;
   /** The six digits both screens show while joining. */
   pairingCode: string;
+  /** Heard on this computer's network, not only listed by the relay. */
+  isNearby?: boolean;
 }
 
 /**
