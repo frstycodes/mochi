@@ -40,7 +40,9 @@ import {
 import { savePanes } from './panes.ts';
 import { rankQueue } from './queue.ts';
 import { createReplica, type Replica } from './replica.ts';
-import { coreLog, pageLog } from './replicaLog.ts';
+import { pageLog, transportLog } from './replicaLog.ts';
+import { backends, LOCAL_BACKEND } from '../backends/registry.ts';
+import { loopbackTransport, pageTransport } from '../backends/transport.ts';
 import { saveSideChats } from './sidechat.ts';
 import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 import { initialState, reducer } from './root.ts';
@@ -78,10 +80,14 @@ let replica: Replica | undefined;
 
 /** This window's store, once Core's first item is in; `src/main.tsx` waits for it before the first render. */
 export async function startStore() {
-  replica ??= await createReplica(
-    host.hasCore ? coreLog() : pageLog(),
+  if (replica) return;
+  const transport = host.hasCore ? loopbackTransport() : pageTransport();
+  replica = await createReplica(
+    host.hasCore ? transportLog(transport) : pageLog(),
     (saved) => initialState(saved),
   );
+  // The window's store is this computer's entry in the registry, the way another computer's replica is its own.
+  backends.add({ id: LOCAL_BACKEND, isLocal: true, transport, replica });
   followProfiles(replica);
   replica.listen((action) => {
     if (action.type === 'agent' && action.event.type === 'worktree')

@@ -16,7 +16,7 @@ import { reducer } from './root.ts';
 import { savedFrom, toSaved, type Saved } from './saved.ts';
 import type { Action, State } from './types.ts';
 
-/** Where a window's store reads the projection from and sends its commands: Core (`coreLog`), or the page itself (web). */
+/** Where a window's store reads the projection from and sends its commands: a Core over its transport (`transportLog`), or the page itself (web). */
 export interface ReplicaLog {
   /** Items after `afterSequence` (a snapshot when the log can't replay them), then live ones, until `onEnd`. Returns a stop. */
   follow(
