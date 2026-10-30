@@ -30,10 +30,6 @@
     "provider": "claude",
     "model": "claude-haiku-5-5"
    },
-   "outcome": {
-    "provider": "claude",
-    "model": "claude-haiku-5-5"
-   },
    "simplify": {
     "provider": "claude",
     "model": "claude-haiku-5-5"
@@ -49,10 +45,6 @@
    "handoff": {
     "provider": "claude",
     "model": "claude-haiku-5-5"
-   },
-   "audit": {
-    "provider": "claude",
-    "model": "claude-sonnet-5-5"
    },
    "command": {
     "provider": "claude",
@@ -92,10 +84,6 @@
     "provider": "claude",
     "model": "claude-haiku-5-5"
    },
-   "outcome": {
-    "provider": "claude",
-    "model": "claude-haiku-5-5"
-   },
    "simplify": {
     "provider": "claude",
     "model": "claude-haiku-5-5"
@@ -111,10 +99,6 @@
    "handoff": {
     "provider": "claude",
     "model": "claude-haiku-5-5"
-   },
-   "audit": {
-    "provider": "claude",
-    "model": "claude-sonnet-5-5"
    },
    "command": {
     "provider": "claude",
@@ -195,7 +179,7 @@
   },
   {
    "utilityModels": {
-    "audit": {
+    "commit": {
      "provider": "codex",
      "model": "gpt-5.5-mini"
     }

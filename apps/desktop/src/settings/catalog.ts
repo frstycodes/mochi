@@ -881,7 +881,7 @@ const APP_SETTINGS: Setting[] = [
     {
       locked: AGENT_REACH,
       group: 'Agents',
-      description: 'Threads, goals, panes, settings and the in-app browser',
+      description: 'Threads, panes, settings and the in-app browser',
     },
   ),
   pref('demoData', 'Show demo data', 'data', SWITCH, {

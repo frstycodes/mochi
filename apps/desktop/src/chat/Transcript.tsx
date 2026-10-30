@@ -119,7 +119,7 @@ export function Transcript({
 
 type Virtualizer = ReturnType<typeof useVirtualizer<HTMLElement, Element>>;
 
-/** The list's distance from the top of the scroller's content (the chat's top padding, the goal card and setup row above it): the virtualizer's `scrollMargin`. */
+/** The list's distance from the top of the scroller's content (the chat's top padding and setup row above it): the virtualizer's `scrollMargin`. */
 function useOffsetIn(
   list: RefObject<HTMLElement | null>,
   scrollRef: RefObject<HTMLElement | null>,

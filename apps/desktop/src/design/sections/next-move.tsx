@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { authorName, type NextOption, type Thread } from '../../model';
 import { ComposerCard } from '../../Composer';
-import { Evidence, GapList } from '../../goals/ReportCard';
 import {
   NextMoveActions,
   NextMoveAsk,
@@ -15,7 +14,7 @@ import {
   NextMoveRecord,
   NextMoveSummary,
   PlanList,
-  useNextMove,
+  nextMoveOf,
 } from '../../goals/NextMove';
 import { isPlanComplete, type PlanItem } from '../../goals/plan';
 import { VizThreadProvider } from '../../viz/WidgetVisual';
@@ -27,7 +26,7 @@ export function NextMoveBlock({ rl }: { rl: Thread }) {
   return (
     <Block
       title="Next move"
-      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat until every item is done: no header, no dividers, each step with how long it took on Mochi's clock. When it stops: Mochi's verdict, the agent's summary, Mochi's evidence, then the agent's question with its own answers as buttons; each sends the agent's written reply, or fills the message box. Mochi picks a move only when the agent wrote none. Answer it and the card stays as a record of what you chose."
+      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat until every item is done: no header, no dividers, each step with how long it took on Mochi's clock. When it stops: Mochi's verdict when something needs you, the agent's summary, then the agent's question with its own answers as buttons; each sends the agent's written reply, or fills the message box. Answer it and the card stays as a record of what you chose."
       wide
     >
       <VizThreadProvider value={rl.id}>
@@ -145,9 +144,9 @@ function TurnEndCard({
   fixture: NextMoveFixture;
   onAnswer: (a: Answer) => void;
 }) {
-  const next = useNextMove(fixture.thread);
+  const next = nextMoveOf(fixture.thread);
   if (!next) return null;
-  const { verdict, prs, tiles } = next;
+  const { verdict } = next;
   const pick = (o: NextOption) =>
     onAnswer(
       o.isDraft
@@ -156,13 +155,9 @@ function TurnEndCard({
     );
   return (
     <NextMoveCard>
-      <NextMoveHeader thread={fixture.thread} verdict={verdict} />
+      {verdict.kind !== 'idle' && <NextMoveHeader verdict={verdict} />}
       <NextMoveContent>
         <NextMoveSummary>{fixture.summary}</NextMoveSummary>
-        <Evidence thread={fixture.thread} tiles={tiles} prs={prs} />
-        {verdict.gaps.length > 0 && (
-          <GapList thread={fixture.thread} gaps={verdict.gaps} />
-        )}
         <NextMoveAsk question={fixture.question}>
           <NextMoveActions
             labels={fixture.options.map((o) => o.label)}
@@ -309,15 +304,15 @@ interface NextMoveFixture {
   reply?: string;
 }
 
-/** One per move, on the verdict fixtures' threads. */
+/** One per kind of answer, on the verdict fixtures' threads. */
 function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
   const byLabel = new Map(verdictFixtures(rl).map((f) => [f.label, f.thread]));
   const thread = (label: string) => byLabel.get(label)!;
-  const done = thread('Done · no PR yet');
+  const done = thread('Idle · no PR yet');
   return [
     {
-      label: 'Done · uncommitted · Commit',
-      thread: { ...done, idle: { ...done.idle!, uncommitted: 2 } },
+      label: 'Commit',
+      thread: done,
       summary:
         'The session cookie keeps its name through the Better Auth migration, so signed-in people stay signed in. The old cookie is read once and rewritten on the next response.',
       question: 'Commit the cookie fix and its test?',
@@ -332,7 +327,7 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       after: 'Committed 2 files as fix(auth): keep the session cookie name',
     },
     {
-      label: 'Done · committed · Open pull request',
+      label: 'Open pull request',
       thread: done,
       summary:
         'Committed as fix(auth): keep the session cookie name. Every criterion passes on the branch.',
@@ -351,30 +346,8 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       after: 'Opened #136 fix(auth): keep the session cookie name',
     },
     {
-      label: "Gaps · Close gaps, or the agent's other answer",
-      thread: thread('Gaps · 1 critical, 2 unverified'),
-      summary:
-        "PR chips now fall back to your home folder when the thread's worktree is gone, and #135 is open with the fix.",
-      question:
-        'Fix the 5 failing git tests, then check the #133 chip in the app?',
-      options: [
-        {
-          label: 'Fix both',
-          reply:
-            'Fix the 5 failing git tests, then check the #133 chip in the app.',
-        },
-        {
-          label: 'Only the tests',
-          reply: "Fix the failing git tests only, I'll check the chip myself.",
-          isDraft: true,
-        },
-      ],
-      before: 'Edited 3 files, ran 2 commands',
-      after: 'Working on the 3 gaps',
-    },
-    {
       label: 'Needs you · answered in the message box',
-      thread: thread('Needs you · asked in prose'),
+      thread: thread('Needs you · asked in its report'),
       summary:
         'The checkout test fails about 1 in 20 runs, only on CI. It times out waiting for the payment iframe, which loads slower on the CI runners.',
       question: 'Retry it, or quarantine it and open an issue?',
@@ -390,8 +363,8 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       reply: 'Quarantine it and open an issue.',
     },
     {
-      label: 'Stopped mid-plan · Continue',
-      thread: thread('Stalled · stopped mid-plan'),
+      label: 'Continue',
+      thread: done,
       summary:
         "The Devices list reads the registry and shows each computer's icon. Offline ages and the theme check aren't done yet.",
       question: 'Pick up where it stopped: offline ages, then both themes?',
@@ -410,9 +383,9 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       after: 'Continuing with offline ages',
     },
     {
-      label: 'Merged · Settle thread',
-      thread: thread('Done · merged'),
-      summary: '#133 merged into main. Nothing is left open on this goal.',
+      label: 'Settle thread',
+      thread: thread('Idle · merged'),
+      summary: '#133 merged into main. Nothing is left open.',
       question: 'Settle this thread?',
       options: [
         { label: 'Settle', reply: 'Settle this thread.' },
@@ -423,7 +396,7 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
     },
     {
       label: 'Worst case · long everything',
-      thread: thread('Worst case · 12 gaps, long everything'),
+      thread: thread('Worst case · long everything'),
       summary:
         'I rewrote the checkout flow so the payment step no longer blocks on the address lookup, moved the retry logic into one helper used by every provider, and split the 1,400 line CheckoutPage into five components with their own tests. Two of the provider sandboxes were down, so their paths are only covered by mocks.',
       question:

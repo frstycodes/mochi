@@ -1,5 +1,5 @@
-import { isConcrete } from '../drift.ts';
 import { firstPrompt, type Thread } from '../model.ts';
+import { tokens } from '../progress.ts';
 import { titlePrompt } from './prompts.ts';
 
 /**
@@ -20,11 +20,9 @@ export function startTitleRequest(t: Thread) {
 export function titleRequest(t: Thread) {
   if (!t.live || t.live.isWorking || t.isTitleRenamed || t.isTitleGenerated)
     return null;
-  const asked =
-    t.goal ||
-    t.activity.find(
-      (e) => e.who === 'you' && e.kind === 'message' && isConcrete(e.text),
-    )?.text;
+  const asked = t.activity.find(
+    (e) => e.who === 'you' && e.kind === 'message' && isConcrete(e.text),
+  )?.text;
   if (!asked) return null;
   const reply = t.activity.find(
     (e) => e.who !== 'you' && e.who !== 'harness' && e.kind === 'message',
@@ -43,3 +41,43 @@ export function hasTempBranch(t: Thread) {
     !repo.isDetached
   );
 }
+
+/** A message concrete enough to name a thread by: a content word left once greetings and pleasantries are dropped, in a message of two words or more. "hi", "how are you", "auth" are not; "add a readme" is. */
+export function isConcrete(text: string) {
+  const content = [...tokens(text)].filter((w) => !SMALL_TALK.has(w));
+  return (
+    content.length >= 2 ||
+    (content.length === 1 && text.trim().split(/\s+/).length >= 2)
+  );
+}
+
+/** Words that say nothing about what a message is about: greetings and pleasantries. */
+const SMALL_TALK = new Set([
+  'hey',
+  'hello',
+  'hiya',
+  'howdy',
+  'thank',
+  'thx',
+  'okay',
+  'cool',
+  'nice',
+  'great',
+  'good',
+  'morning',
+  'afternoon',
+  'evening',
+  'how',
+  'you',
+  'are',
+  'doing',
+  'going',
+  'there',
+  'sup',
+  'what',
+  'test',
+  'testing',
+  'please',
+  'lol',
+  'haha',
+]);

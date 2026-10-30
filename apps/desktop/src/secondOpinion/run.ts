@@ -77,7 +77,6 @@ function start(
         type: 'send',
         threadId: thread.id,
         text: `[Second opinion you asked for] ${providerName(provider)} couldn't review: ${message}. Carry on without it.`,
-        reason: 'Second opinion failed',
         steers: true,
         secondOpinion: { reviewId: id, provider },
       });
@@ -184,8 +183,6 @@ export function sendFindings(
     type: 'send',
     threadId: thread.id,
     text: findingsMessage(review.provider, review.result, review.isAgentAsked),
-    drift: 'on-goal',
-    reason: 'Second opinion findings',
     ...agentAsked,
   });
   dispatch({

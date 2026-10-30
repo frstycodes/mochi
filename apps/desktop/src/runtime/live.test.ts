@@ -63,7 +63,6 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
     model: 'claude-sonnet-5-5',
     effort: 'low',
     permissionMode: 'default',
-    isGoalsOff: true,
   });
   assert.deepEqual(
     thread.steps,
@@ -82,8 +81,6 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
       type: 'send',
       threadId: id,
       text: 'and add a test',
-      drift: 'on-goal',
-      reason: '',
     }),
     [
       {
@@ -112,8 +109,6 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
       type: 'send',
       threadId: 'adm',
       text: 'hi',
-      drift: 'on-goal',
-      reason: '',
     }),
     [],
   );
@@ -594,8 +589,6 @@ test('settling stops the agent once; after reactivating, the next message restar
     type: 'send',
     threadId: id,
     text: 'and add a test',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.equal(restart.method, 'start');
   assert.equal(restart.method === 'start' && restart.options.resume, 'sess-1');
@@ -728,8 +721,6 @@ test('a thread whose worktree was cleaned up makes it again on its next message'
     type: 'send',
     threadId: id,
     text: 'go on',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.equal(kept.method === 'start' && kept.options.cwd, `/w/harness/${id}`);
   assert.equal(kept.method === 'start' && kept.options.workspace, undefined);
@@ -738,8 +729,6 @@ test('a thread whose worktree was cleaned up makes it again on its next message'
     type: 'send',
     threadId: id,
     text: 'go on',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.equal(
     remade.method === 'start' && remade.options.cwd,
@@ -835,8 +824,6 @@ test('a permissions change goes with the next message to the running agent, whic
     type: 'send',
     threadId: id,
     text: 'go on',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.equal(
     send.method === 'send' && send.policy?.permissionMode,

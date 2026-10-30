@@ -8,7 +8,6 @@ export const THREAD_MENU = [
     'thread-watch',
     'thread-unwatch',
   ],
-  ['thread-goal-make', 'thread-goal-remove'],
   ['thread-autofix', 'thread-autofix-off'],
   [
     'thread-schedule',

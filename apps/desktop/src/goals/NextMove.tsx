@@ -5,41 +5,21 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import {
-  authorName,
-  type ActivityEntry,
-  type LineSlot,
-  type Thread,
-} from '../model';
-import { useThreadPrs } from '../git/useThreadPrs';
+import type { ActivityEntry, LineSlot, Thread } from '../model';
 import { IS_MAC } from '../keys';
 import { Shortcut } from '../Shortcut';
 import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
-import { shallowEqual, useHarnessSelector } from '../store';
-import { hasGoal } from '../drift';
+import { useHarnessSelector } from '../store';
 import { planDuration } from '../progress';
 import { isPlanComplete, isTicking, planItems, type PlanItem } from './plan';
-import {
-  agentAsk,
-  moveContext,
-  moveFor,
-  questionFor,
-  type MoveContext,
-} from './moves';
-import { useIdleVerdict, VerdictIcon } from './VerdictChip';
-import { turnReport } from './report';
-import {
-  TONE_CLASS,
-  verdictHeading,
-  verdictTiles,
-  type Verdict,
-} from './verdict';
+import { VerdictIcon } from './VerdictChip';
+import { agentAsk, turnReport } from './report';
+import { idleVerdict, TONE_CLASS, verdictTitle, type Verdict } from './verdict';
 
 /**
- * The end of a turn, in the chat after the agent's last call: Mochi's verdict, the agent's own summary, Mochi's evidence, then
- * the agent's question with its own answers as buttons (Mochi's move only when it wrote none). Answered, it shrinks to a record of
- * what you chose: the summary, the question, your answer.
+ * The end of a turn, in the chat after the agent's last call: Mochi's verdict, the agent's own summary, then the agent's question
+ * with its own answers as buttons. Answered, it shrinks to a record of what you chose: the summary, the question, your answer.
  */
 export function NextMoveCard({
   className,
@@ -56,56 +36,19 @@ export function NextMoveCard({
   );
 }
 
-/** The verdict, its evidence, the agent's question and options (else Mochi's move) for a thread that just went idle; null while the agent works. */
-export function useNextMove(thread: Thread) {
-  const prs = useThreadPrs(thread);
-  const verdict = useIdleVerdict(thread);
-  const context = useHarnessSelector(
-    (s) => moveContext(s.threads, thread),
-    isSameMoveContext,
-  );
+/** The verdict and the agent's question and options for a thread that just went idle; null while the agent works. */
+export function nextMoveOf(thread: Thread) {
+  const verdict = idleVerdict(thread);
   if (!verdict) return null;
-  const states = prs.map((p) => p.state);
   const report = turnReport(thread);
-  const move = moveFor(
-    thread,
-    verdict,
-    states.map((s) => s.status),
-    context,
-  );
   const ask = agentAsk(report);
   const question =
-    ask?.question ??
-    questionFor(
-      verdict,
-      move,
-      report,
-      authorName(thread.session?.provider ?? thread.providers[0]),
-      context,
-    );
-  return {
-    verdict,
-    prs,
-    report,
-    tiles: hasGoal(thread) ? verdictTiles(thread, states, verdict) : [],
-    move,
-    ask,
-    question,
-    context,
-  };
+    ask?.question ?? (verdict.kind === 'needs-you' ? verdict.reason : null);
+  return { verdict, report, ask, question };
 }
 
-const isSameMoveContext = (a: MoveContext, b: MoveContext) =>
-  a.parent === b.parent && shallowEqual(a.subPrs, b.subPrs);
-
 /** Mochi's verdict as the card's title, in the sidebar chip's icon and tone. */
-export function NextMoveHeader({
-  thread,
-  verdict,
-}: {
-  thread: Thread;
-  verdict: Verdict;
-}) {
+export function NextMoveHeader({ verdict }: { verdict: Verdict }) {
   return (
     <CardHeader>
       <CardTitle className="flex items-center gap-2">
@@ -118,9 +61,7 @@ export function NextMoveHeader({
         >
           <VerdictIcon kind={verdict.kind} className="size-4" />
         </span>
-        <span className="min-w-0 truncate">
-          {verdictHeading(verdict, thread).title}
-        </span>
+        <span className="min-w-0 truncate">{verdictTitle(verdict)}</span>
       </CardTitle>
     </CardHeader>
   );
@@ -331,7 +272,7 @@ function PlanIcon({
       />
     );
   if (status === 'running')
-    return <ProgressRing met={0} total={1} slot={slot} size={14} isWorking />;
+    return <ProgressRing slot={slot} size={14} isWorking />;
   if (status === 'paused')
     return (
       <PauseCircle

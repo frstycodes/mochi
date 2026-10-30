@@ -249,16 +249,12 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   setupCommands: {},
   sideChatModel: { provider: 'claude', model: 'claude-sonnet-5-5' },
   appIcon: 'graphite',
-  utilityModels: {
-    ...(Object.fromEntries(
-      UTILITY_TASKS.map((task) => [
-        task,
-        { provider: 'claude', model: CHEAP_MODELS.claude },
-      ]),
-    ) as AgentSettings['utilityModels']),
-    // Measured on 20 finished turns: Haiku flagged things the agent never said it skipped (54 gaps, 10+ false); Sonnet 38, none false.
-    audit: { provider: 'claude', model: 'claude-sonnet-5-5' },
-  },
+  utilityModels: Object.fromEntries(
+    UTILITY_TASKS.map((task) => [
+      task,
+      { provider: 'claude', model: CHEAP_MODELS.claude },
+    ]),
+  ) as AgentSettings['utilityModels'],
   imageGen: 'codex',
 };
 

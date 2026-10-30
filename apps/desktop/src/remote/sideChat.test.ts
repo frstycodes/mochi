@@ -272,7 +272,6 @@ test('under a remote thread, asking and sending an answer on are commands to its
     type: 'send',
     threadId: 'mac~t1',
     text: 'From the side chat:\n\nBecause.',
-    reason: '',
   };
   assert.deepEqual(toWire(commandFor(promote) as never), {
     type: 'send',

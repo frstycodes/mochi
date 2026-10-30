@@ -95,17 +95,13 @@ export const autoTitles: Rule = (_event, _before, after) =>
   });
 
 /**
- * Each live Claude thread's compaction instructions, again when its goal or pins change and after every Core start (Claude's
+ * Each live Claude thread's compaction instructions, again when its pins change and after every Core start (Claude's
  * PreCompact hook reads them from Core's memory).
  */
 export const compactInstructions: Rule = (_event, _before, after) =>
   after.threads.flatMap((t): ReactorCommand[] => {
     if (!t.live || t.session?.provider !== 'claude') return [];
-    const kept = [
-      t.goal,
-      ...(t.criteria ?? []).map((c) => c.text),
-      JSON.stringify(after.context.pins[t.id] ?? []),
-    ].join('\n');
+    const kept = JSON.stringify(after.context.pins[t.id] ?? []);
     return [
       {
         type: 'compact.instructions',
@@ -115,12 +111,17 @@ export const compactInstructions: Rule = (_event, _before, after) =>
     ];
   });
 
-/** A turn's end gets its idle record: gathered (checks, uncommitted files, the audit) with goals on, only marked without. */
-export const idleChecks: Rule = (event, _before, after) => {
-  if (!event.threadId) return [];
-  const type = after.context.prefs.goals ? 'idle.gather' : 'idle.mark';
-  return [{ type, key: `idle:${event.sequence}`, threadId: event.threadId }];
-};
+/** A turn's end gets its idle record. */
+export const idleMark: Rule = (event) =>
+  event.threadId
+    ? [
+        {
+          type: 'idle.mark',
+          key: `idle:${event.sequence}`,
+          threadId: event.threadId,
+        },
+      ]
+    : [];
 
 /** A turn's end simplifies its last reply when Settings › Simplify › auto is on and the reply is long enough for it. */
 export const autoSimplify: Rule = (event, _before, after) => {
@@ -191,7 +192,7 @@ const RESTORED: LoggedEvent = {
 
 /** Rules by the event type they react to. */
 export const RULES: Readonly<Record<string, ReadonlyArray<Rule>>> = {
-  'agent.turn-end': [idleChecks, autoSimplify],
+  'agent.turn-end': [idleMark, autoSimplify],
   'agent.tool': [prSync],
 };
 

@@ -51,26 +51,14 @@ it.effect('waiting jobs run by priority then arrival, one at a time', () =>
         PRIORITY.simplify,
         record('simplify'),
       ),
-      yield* submit(queue, 't2', 'audit', PRIORITY.audit, record('audit')),
-      yield* submit(
-        queue,
-        't3',
-        'classify',
-        PRIORITY.classify,
-        record('classify'),
-      ),
-      yield* submit(
-        queue,
-        't4',
-        'audit',
-        PRIORITY.audit,
-        record('audit-later'),
-      ),
+      yield* submit(queue, 't2', 'commit', PRIORITY.commit, record('commit')),
+      yield* submit(queue, 't3', 'title', PRIORITY.title, record('title')),
+      yield* submit(queue, 't4', 'pr', PRIORITY.pr, record('pr')),
     ];
     yield* Deferred.succeed(release, 'held');
     assert.equal(yield* Fiber.join(held), 'held');
     yield* Fiber.joinAll(rest);
-    assert.deepEqual(order, ['classify', 'audit', 'audit-later', 'simplify']);
+    assert.deepEqual(order, ['title', 'simplify', 'commit', 'pr']);
     assert.equal(peak, 1);
   }),
 );

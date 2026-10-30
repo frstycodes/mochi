@@ -34,8 +34,6 @@ const REMOTE_THREAD_ACTIONS = new Set([
   'thread-rename',
   'thread-watch',
   'thread-unwatch',
-  'thread-goal-make',
-  'thread-goal-remove',
   'thread-autofix',
   'thread-autofix-off',
   'thread-fork',

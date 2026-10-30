@@ -40,7 +40,6 @@ export const CORE_SCOPES = {
   signal: L,
   // This machine's utility model on the caller's prompt.
   'utility.run': L,
-  'utility.classify': L,
   'backend.info': 'read',
   'backend.watch': 'read',
   'backend.identify': L,

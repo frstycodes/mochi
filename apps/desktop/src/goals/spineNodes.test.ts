@@ -34,7 +34,6 @@ const REPORT: TurnReport = {
 function thread(extra: Partial<Thread> = {}): Thread {
   return {
     id: 't',
-    goal: '',
     status: 'review',
     prs: [],
     activity: [{ at: 9, who: 'you', kind: 'message', text: 'Import the CSV' }],
@@ -54,7 +53,7 @@ function thread(extra: Partial<Thread> = {}): Thread {
       { why: 'Last turn', dropped: ['Old'], at: 0, turn: 1 },
     ],
     assumptions: withAssumptions([], reportItems(REPORT.assumptions), 2),
-    idle: { at: 12, turn: 2, accepted: [] },
+    idle: { at: 12, turn: 2 },
     report: REPORT,
     ...extra,
   } as unknown as Thread;

@@ -42,10 +42,6 @@ export interface Prefs {
   headerPins: PaneTabKind[];
   /** Sidebar destinations shown, by `SIDEBAR_ITEMS` id (Edit sidebar); the rest sit under More. */
   sidebarItems: string[];
-  /** Off turns goals off everywhere: agents get no goal instructions, tools or nudge; no goal cards, checks, verdicts or drift guard. Always off: goals are retired, their code kept for now. */
-  goals: boolean;
-  /** Off sends every message straight through: no local score, no classifier call. */
-  driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
   whileWorking: 'queue' | 'steer';
   /** After a turn, the report's first next-move answer in the empty composer (`suggestedReply`). */
@@ -57,11 +53,6 @@ export interface Prefs {
   simplifyRules: string;
   simplifyAuto: boolean;
   simplifyAutoWords: number;
-  branchFrom: 'current' | 'base';
-  /** When the agent goes idle, whether Mochi runs the goal's criterion checks (`gatherIdle`). */
-  idleChecks: 'edited' | 'always' | 'off';
-  /** A goal the agent proposes (`propose_goal`) waits for your Accept, or applies at once with an undo. */
-  proposedGoals: 'ask' | 'apply';
   /** VerdictKind values that notify when a thread you aren't looking at goes idle. */
   idleAlerts: string[];
   branchPrefix: string;
@@ -117,10 +108,7 @@ export const DEFAULT_PREFS: Prefs = {
   darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
-  goals: false,
-  idleChecks: 'edited',
-  proposedGoals: 'ask',
-  idleAlerts: ['gaps', 'needs-you', 'stalled'],
+  idleAlerts: ['needs-you', 'stalled'],
   alertKinds: [
     'needs-you',
     'done',
@@ -140,7 +128,6 @@ export const DEFAULT_PREFS: Prefs = {
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
   sidebarItems: ['queue', 'projects'],
-  driftGuard: true,
   whileWorking: 'steer',
   promptSuggestions: true,
   turnSpine: true,
@@ -149,7 +136,6 @@ export const DEFAULT_PREFS: Prefs = {
   simplifyRules: '',
   simplifyAuto: false,
   simplifyAutoWords: 150,
-  branchFrom: 'current',
   branchPrefix: 'mochi/',
   autofixPrs: true,
   autoArchivePrs: false,

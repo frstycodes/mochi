@@ -3,7 +3,6 @@ import { onTestFinished, test, vi } from 'vite-plus/test';
 import type { Page } from '../browser/pages.ts';
 import type { ListeningPort, RunTarget } from '@mochi/domain/host/types/ports';
 import type { BrowserAct } from '@mochi/domain/host/types/browser';
-import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '@mochi/domain/layout/tree';
 import type { LibraryEntry } from '../library/library.ts';
 import type { SetupResult } from '@mochi/domain/library/recipes';
@@ -53,9 +52,6 @@ import {
 import { applyUndo } from './undo.ts';
 import { startTitleRequest, titleRequest } from '../utility/titles.ts';
 import { runDevTool } from './devTools.ts';
-
-// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
-setPrefs({ goals: true });
 
 const SLICES = [
   threadsReducer,
@@ -142,7 +138,7 @@ function setup({
       } as Page,
     ],
   ]);
-  let prefs: Prefs = { ...DEFAULT_PREFS, goals: true, agentControl: control };
+  let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
   let profiles: Space[] = [
     ...DEFAULT_SPACES,
     {
@@ -896,15 +892,6 @@ test('create_thread nests under the calling thread; a top-level one waits on you
     'you can nest what the agent suggested as top-level',
   );
   assert.equal(await placed('top-level'), undefined);
-  assert.match(
-    await t.err('create_thread', {
-      initiation: 'user_asked',
-      prompt: 'x',
-      isTopLevel: true,
-      criterionId: 'c',
-    }),
-    /leave out isTopLevel/,
-  );
 });
 
 test('isFromDefaultBranch nests the thread but bases it on the default branch', async () => {
@@ -1165,7 +1152,6 @@ test('another profile is out of reach and bad args are errors, not throws', asyn
   );
   assert.match(await t.err('rename_thread', { title: 42 }), /title/);
   assert.match(await t.err('rm_rf'), /No Mochi tool/);
-  assert.match(await t.err('get_goal', {}, 'ghost'), /No thread ghost/);
 });
 
 // {THREADS}
@@ -1215,7 +1201,7 @@ test('list_threads filters by status, pinned and project inside the profile', as
   assert.equal((await t.ok('list_threads', { project: 'nope' })).length, 0);
 });
 
-test("get_thread returns goal, its agent's plan, last activity, PRs and what waits on you", async () => {
+test("get_thread returns its agent's plan, last activity, PRs and what waits on you", async () => {
   const r = await setup().ok('get_thread', { threadId: 'e2e' });
   assert.equal(r.id, 'e2e');
   assert.ok(
@@ -1432,26 +1418,6 @@ test('delete_thread with approval removes the thread everywhere, and the worktre
 });
 
 // {GOALS}
-
-test("get_goal returns the goal and what done means, not the agent's plan", async () => {
-  const r = await setup().ok('get_goal');
-  assert.equal(r.threadId, 'rl');
-  assert.ok(r.goal && Array.isArray(r.criteria));
-  assert.equal(r.steps, undefined);
-});
-
-test('settle_goal settles the thread with the reason', async () => {
-  const t = setup();
-  await t.ok('settle_goal', { threadId: 'adm', reason: 'Shipped elsewhere' });
-  assert.equal(t.thread('adm').status, 'settled');
-  assert.ok(
-    t
-      .thread('adm')
-      .activity.some(
-        (a) => a.text === 'Goal settled by Claude: Shipped elsewhere',
-      ),
-  );
-});
 
 // {LAYOUT}
 
@@ -2931,191 +2897,6 @@ test('update_plan answers with the step now in progress, so the agent never coun
   );
 });
 
-test('claim_criterion records evidence; report and get_report give the turn as data', async () => {
-  const t = setup();
-  t.env.dispatch({
-    type: 'edit-goal',
-    threadId: 'rl',
-    draft: {
-      ...draftFrom(t.thread('rl')),
-      criteria: [{ text: '429s carry Retry-After' }],
-    },
-  });
-  const [criterion] = t.thread('rl').criteria!;
-  assert.match(
-    await t.err('claim_criterion', { criterionId: 'nope', evidence: 'x' }),
-    /get_goal lists them/,
-  );
-  await t.ok('claim_criterion', {
-    criterionId: criterion.id,
-    evidence: 'curl -i shows Retry-After: 30',
-  });
-  assert.deepEqual(t.thread('rl').criteria![0].claim, {
-    evidence: 'curl -i shows Retry-After: 30',
-    at: t.state().now,
-    by: 'claude',
-  });
-  await t.ok('report_turn', {
-    decisions: ['Kept the old 429 body'],
-    left: [],
-    question: 'Switch the 429 body to JSON?',
-  });
-  const r = await t.ok('get_report', {}, 'adm');
-  assert.equal(r.threadId, 'adm');
-  const mine = await t.ok('get_report');
-  assert.deepEqual(
-    [mine.criteria[0].claimed, mine.report.question, mine.report.decisions],
-    [
-      'curl -i shows Retry-After: 30',
-      'Switch the 429 body to JSON?',
-      [{ text: 'Kept the old 429 body' }],
-    ],
-  );
-  await t.ok('report_turn', {
-    decisions: [],
-    left: [],
-    next: 'Commit the Retry-After fix?',
-    options: [
-      { label: ' Commit ', reply: 'Commit it.' },
-      { label: 'Change the plan', reply: 'First:', isDraft: true },
-    ],
-  });
-  assert.deepEqual(
-    t.thread('rl').report?.options,
-    [
-      { label: 'Commit', reply: 'Commit it.' },
-      { label: 'Change the plan', reply: 'First:', isDraft: true },
-    ],
-    "the agent's own buttons, trimmed",
-  );
-});
-
-test('propose_goal waits for Accept by default; Keep leaves the draft; Apply with undo sets it and Undo puts the draft back', async () => {
-  const proposal = {
-    goal: 'PR chips in a deleted worktree show live GitHub state',
-    criteria: [
-      { text: 'Home folder reads PR state', command: 'pnpm test' },
-      { text: 'Chip #133 shows its state in the app' },
-    ],
-    basis: 'refStates runs gh in the removed folder',
-  };
-  const t = setup();
-  const draft = t.thread('rl').goal;
-  const waiting = await t.ok('propose_goal', proposal);
-  assert.match(waiting.status, /Waiting for the user/);
-  assert.equal(t.thread('rl').goal, draft, 'nothing changes until you accept');
-  t.env.dispatch({ type: 'goal-proposal', threadId: 'rl', decision: 'accept' });
-  assert.equal(t.thread('rl').goal, proposal.goal);
-  assert.deepEqual(
-    t.thread('rl').criteria!.map((c) => [c.text, c.command]),
-    [
-      ['Home folder reads PR state', 'pnpm test'],
-      ['Chip #133 shows its state in the app', undefined],
-    ],
-  );
-  // What done means can change later: a new proposal waits for you again, the accepted goal stands meanwhile.
-  assert.match(
-    (
-      await t.ok('propose_goal', {
-        ...proposal,
-        goal: 'Only the home folder reads PR state',
-      })
-    ).status,
-    /Waiting for the user/,
-  );
-  assert.deepEqual(
-    [t.thread('rl').goal, t.thread('rl').proposal?.goal],
-    [proposal.goal, 'Only the home folder reads PR state'],
-  );
-
-  const kept = setup();
-  await kept.ok('propose_goal', proposal);
-  kept.env.dispatch({
-    type: 'goal-proposal',
-    threadId: 'rl',
-    decision: 'keep',
-  });
-  assert.deepEqual(
-    [kept.thread('rl').goal, kept.thread('rl').proposal?.state],
-    [draft, 'kept'],
-  );
-
-  const applied = setup();
-  applied.env.prefs.set({ proposedGoals: 'apply' });
-  const before = applied.thread('rl').criteria;
-  assert.match(
-    (await applied.ok('propose_goal', proposal)).status,
-    /Applied; the user can undo/,
-  );
-  assert.equal(applied.thread('rl').goal, proposal.goal);
-  applied.env.dispatch({
-    type: 'goal-proposal',
-    threadId: 'rl',
-    decision: 'undo',
-  });
-  assert.equal(applied.thread('rl').goal, draft);
-  assert.deepEqual(
-    applied.thread('rl').criteria?.map((c) => c.text) ?? [],
-    before?.map((c) => c.text) ?? [],
-  );
-});
-
-test('a goal only Mochi drafted is flagged in get_goal, and claim_criterion and report_turn wait for propose_goal', async () => {
-  const t = setup();
-  const { id } = await t.ok('create_thread', {
-    initiation: 'user_asked',
-    prompt: 'Something is off with sum',
-  });
-  t.env.dispatch({
-    type: 'goal-drafted',
-    threadId: id,
-    outcome: 'sum returns correct results',
-    criteria: [{ text: 'Tests pass', command: 'npm test' }],
-  });
-  const drafted = await t.ok('get_goal', {}, id);
-  assert.equal(drafted.isDraft, true);
-  assert.match(drafted.next, /call propose_goal/);
-  const [criterion] = t.thread(id).criteria!;
-  assert.match(
-    await t.err(
-      'claim_criterion',
-      { criterionId: criterion.id, evidence: 'x' },
-      id,
-    ),
-    /^Call propose_goal first/,
-  );
-  assert.match(
-    await t.err('report_turn', { decisions: [], left: [] }, id),
-    /^Call propose_goal first/,
-  );
-  await t.ok(
-    'propose_goal',
-    {
-      goal: 'sum adds its arguments',
-      criteria: [
-        { text: 'node sum.test.mjs prints ok', command: 'node sum.test.mjs' },
-      ],
-    },
-    id,
-  );
-  assert.equal(
-    (await t.ok('get_goal', {}, id)).isDraft,
-    undefined,
-    'a proposal waiting on the user is enough',
-  );
-  await t.ok('report_turn', { decisions: ['Fixed a - b'], left: [] }, id);
-  t.env.dispatch({
-    type: 'edit-goal',
-    threadId: 'rl',
-    draft: draftFrom(t.thread('rl')),
-  });
-  assert.equal(
-    (await t.ok('get_goal')).isDraft,
-    undefined,
-    'a goal you wrote is never a draft',
-  );
-});
-
 function connectorEntry(
   name: string,
   url: string,
@@ -3184,67 +2965,10 @@ test('dev MCP starts tasks from an empty build and exposes paginated evidence an
   );
   assert.equal((await call('inspect', { threadId: 'missing' })).isError, true);
   assert.equal((await call('delete_thread', {})).isError, true);
-  assert.equal((await call('accept_goal', { threadId: id })).isError, true);
-  t.env.dispatch({
-    type: 'goal-propose',
-    threadId: id,
-    goal: 'Explain addition',
-    criteria: [{ text: 'Addition explained' }],
-    by: 'codex',
-    isApplied: false,
-  });
-  assert.ok(!(await call('accept_goal', { threadId: id })).isError);
-  assert.equal(t.thread(id).proposal?.state, 'accepted');
-  assert.equal(t.thread(id).criteria?.[0].check, undefined);
 });
 
-test('new tasks await a researched working-agent goal and can report while acceptance is pending', async () => {
+test('report_turn records the report on the caller', async () => {
   const t = setup();
-  const { id } = await t.ok('create_thread', {
-    initiation: 'user_asked',
-    prompt: 'Fix the retry bug after investigating the transport',
-  });
-  const empty = await t.ok('get_goal', {}, id);
-  assert.equal(empty.goal, '');
-  assert.deepEqual(empty.criteria, []);
-  assert.match(empty.next, /research.*propose_goal/);
-  await t.ok(
-    'propose_goal',
-    {
-      goal: 'Reconnect the transport without duplicate retries',
-      criteria: [{ text: 'Reconnect retries once' }],
-    },
-    id,
-  );
-  assert.equal(
-    t.thread(id).goal,
-    '',
-    'only the user accepts a waiting proposal',
-  );
-  assert.match((await t.ok('get_goal', {}, id)).next, /waiting for acceptance/);
-  await t.ok(
-    'report_turn',
-    { summary: 'Fixed duplicate retries', decisions: [], left: [] },
-    id,
-  );
-  t.env.dispatch({ type: 'goal-proposal', threadId: id, decision: 'accept' });
-  const criterion = t.thread(id).criteria![0];
-  await t.ok(
-    'claim_criterion',
-    { criterionId: criterion.id, evidence: 'Transport retry check passed' },
-    id,
-  );
-  assert.equal(
-    t.thread(id).goal,
-    'Reconnect the transport without duplicate retries',
-  );
-});
-
-test('report_turn works with goals off, on a thread with no goal', async () => {
-  const t = setup();
-  t.env.prefs.set({ goals: false });
-  // Every demo thread has a goal; a thread started since goals retired has none.
-  Object.assign(t.thread('rl'), { goal: undefined, proposal: undefined });
   await t.ok('report_turn', {
     summary: 'Built the wheel',
     decisions: [],
@@ -3255,8 +2979,6 @@ test('report_turn works with goals off, on a thread with no goal', async () => {
 
 test('report_turn reminds the agent of a step left in progress, and says nothing once the plan is done', async () => {
   const t = setup();
-  t.env.prefs.set({ goals: false });
-  Object.assign(t.thread('rl'), { goal: undefined, proposal: undefined });
   await t.ok('update_plan', {
     scope: 'first_task',
     items: [{ title: 'Open the PR', status: 'in_progress' }],
@@ -3274,14 +2996,11 @@ test('report_turn reminds the agent of a step left in progress, and says nothing
 
 // {TURN SPINE}
 
-/** A goal-less thread whose open turn has `edits`: your message, then the agent's Edit rows the turn's changes read. */
+/** A thread whose open turn has `edits`: your message, then the agent's Edit rows the turn's changes read. */
 function spineSetup(edits: string[] = []) {
   const t = setup();
-  t.env.prefs.set({ goals: false });
   const rl = t.thread('rl');
   Object.assign(rl, {
-    goal: undefined,
-    proposal: undefined,
     steps: [],
     activity: [
       ...rl.activity,
@@ -3480,7 +3199,6 @@ test('the agent starts a card by its proposalId when you tell it to', async () =
     type: 'send',
     threadId: 'rl',
     text: 'start it',
-    reason: '',
   });
   const created = await t.ok('create_thread', { proposalId: taskId });
   assert.equal(cardsOf(t.thread('rl'))[0].threadId, created.id);
@@ -3521,7 +3239,6 @@ test('a started card is a sub-thread like user_asked, from either Start or the a
     type: 'send',
     threadId: 'rl',
     text: 'start it',
-    reason: '',
   });
   await t.ok('create_thread', { proposalId: told.taskId });
   const alone = await t.ok('create_thread', {
@@ -3556,7 +3273,6 @@ test("a sub-thread's asked-for threads go on one card with no approval; Start an
     type: 'send',
     threadId: sub.id,
     text: 'Split this further',
-    reason: '',
   });
   const [queued, threads] = [t.state().queue.length, t.state().threads.length];
   const asked = [];
@@ -3708,7 +3424,6 @@ test('a turn proposes at most 3 threads, paged on one card; your next message st
     type: 'send',
     threadId: 'rl',
     text: 'thanks, what else?',
-    reason: '',
   });
   await t.ok('create_thread', {
     initiation: 'own_initiative',
@@ -3781,7 +3496,6 @@ test('a turn another thread or an automated event began can only propose', async
     type: 'send',
     threadId: 'rl',
     text: 'Ship the fix',
-    reason: '',
     from: { threadId: 'e2e', title: 'Fix e2e' },
   });
   assert.match(
@@ -3804,7 +3518,6 @@ test('a turn another thread or an automated event began can only propose', async
     type: 'send',
     threadId: 'rl',
     text: 'PR #9 checks failed',
-    reason: '',
     autofix: { kind: 'ci', pr: 9, title: 'Checks failed' },
   });
   assert.match(
@@ -3844,7 +3557,6 @@ test("an agent-started thread's first turn can only propose, until you write to 
     type: 'send',
     threadId: sub,
     text: 'go ahead and split it',
-    reason: '',
   });
   assert.equal(t.thread(sub).turn?.isAgentDriven, undefined);
 });
@@ -3947,7 +3659,6 @@ const fromNotes = (t: ReturnType<typeof setup>) =>
     type: 'send',
     threadId: 'rl',
     text: 'Sub-thread notes',
-    reason: '',
     from: { threadId: 'e2e', title: 'Fix e2e' },
   });
 const nested = (title: string, model = 'claude-sonnet-5-5') => ({

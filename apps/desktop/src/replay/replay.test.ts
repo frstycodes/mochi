@@ -125,8 +125,6 @@ function events(id: string): (Action | ((s: State) => Action))[] {
       type: 'send',
       threadId: id,
       text: 'also add a legend',
-      drift: 'on-goal',
-      reason: '',
     },
     agent({ type: 'message', text: 'Adding', isDelta: true }, 9),
     agent({ type: 'message', text: ' a legend.', isDelta: true }, 10),
@@ -253,7 +251,7 @@ test('only live threads are recorded', () => {
   assert.equal(
     linesFor(
       { ...s, threads: s.threads.map((t) => ({ ...t, live: undefined })) },
-      { type: 'send', threadId: s.threads[0].id, text: 'x', reason: '' },
+      { type: 'send', threadId: s.threads[0].id, text: 'x' },
       1,
       () => false,
     ),
@@ -401,7 +399,7 @@ test('a new session writes a fresh base, and the replay jumps to it before going
   const file = [...first.file];
   let isStarted = false;
   for (const action of [
-    { type: 'send', threadId: id, text: 'keep going', reason: '' },
+    { type: 'send', threadId: id, text: 'keep going' },
     {
       type: 'agent',
       event: { threadId: id, type: 'message', text: 'On it.', isDelta: false },

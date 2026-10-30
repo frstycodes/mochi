@@ -6,15 +6,9 @@ import {
   similarity,
   statusAt,
   timeAgo,
-  goalProgress,
-  progressLabel,
   duration,
   formatElapsed,
 } from './progress.ts';
-import { setPrefs } from './settings/prefs.ts';
-
-// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
-setPrefs({ goals: true });
 
 test('the shared duration formatter preserves minute, ticking and precise command styles', () => {
   assert.deepEqual([0, 5, 60, 63].map(duration), ['0m', '5m', '1h', '1h 3m']);
@@ -51,84 +45,6 @@ test('statusAt replays a step through time', () => {
   assert.equal(statusAt(a, 10), 'done');
   assert.equal(statusAt(thread.steps[2], 4), 'ready');
   assert.equal(statusAt(thread.steps[2], 5), 'dropped');
-});
-
-test('the ring counts criteria only, never steps or a percent, and the phase follows what happened', () => {
-  const goal = {
-    ...thread,
-    goal: 'Keys rate limited',
-    status: 'running' as const,
-    activity: [],
-    criteria: [
-      { id: 'c1', text: 'Header' },
-      { id: 'c2', text: 'Tests' },
-    ],
-  };
-  assert.deepEqual(goalProgress({ ...goal, steps: [] }), {
-    met: 0,
-    total: 2,
-    phase: 'planning',
-  });
-  assert.equal(goalProgress(goal).phase, 'building', 'a step done');
-  const claimed = {
-    ...goal,
-    criteria: [
-      {
-        ...goal.criteria[0],
-        claim: { evidence: 'curl', at: 1, by: 'claude' as const },
-      },
-      goal.criteria[1],
-    ],
-  };
-  assert.deepEqual(goalProgress(claimed), {
-    met: 1,
-    total: 2,
-    phase: 'verifying',
-  });
-  assert.equal(progressLabel(goalProgress(claimed)), 'Verifying · 1/2');
-  const passed = {
-    ...claimed,
-    criteria: claimed.criteria.map((c) => ({
-      ...c,
-      check: { status: 'passed' as const, at: 2 },
-    })),
-  };
-  assert.equal(progressLabel(goalProgress(passed)), 'Ready for review · 2/2');
-  const noCriteria = goalProgress({ ...thread, goal: 'x', criteria: [] });
-  assert.deepEqual(
-    [noCriteria.met, noCriteria.total],
-    [0, 0],
-    'done steps never fill the ring',
-  );
-  assert.equal(progressLabel(noCriteria), 'Building');
-});
-
-test('judged criteria you confirmed count as met, so the ring agrees with the goal panel', () => {
-  const goal = {
-    ...thread,
-    goal: 'Calm pane',
-    status: 'running' as const,
-    activity: [],
-    criteria: [
-      {
-        id: 'c1',
-        text: 'Typecheck',
-        command: 'pnpm typecheck',
-        check: { status: 'passed' as const, at: 1 },
-      },
-      { id: 'c2', text: 'Looks calm' },
-      { id: 'c3', text: 'Both themes' },
-    ],
-  };
-  assert.equal(progressLabel(goalProgress(goal)), 'Verifying · 1/3');
-  const confirmed = {
-    ...goal,
-    idle: { at: 2, accepted: [], isConfirmed: true },
-  };
-  assert.equal(
-    progressLabel(goalProgress(confirmed)),
-    'Ready for review · 3/3',
-  );
 });
 
 test("a step sits in its own plan's column on the board", () => {

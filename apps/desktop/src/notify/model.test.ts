@@ -8,10 +8,6 @@ import {
   isQuiet,
   type Notice,
 } from './model.ts';
-import { setPrefs } from '../settings/prefs.ts';
-
-// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
-setPrefs({ goals: true });
 
 const step = (rest: Partial<Step> = {}): Step => ({
   id: 's1',
@@ -27,13 +23,11 @@ const thread = (rest: Partial<Thread> = {}): Thread =>
     spaceId: 'x',
     repo: null,
     title: 'Rate limits',
-    goal: '',
     providers: ['claude'],
     status: 'running',
     line: 1,
     startedAt: 0,
     steps: [step()],
-    revisions: [],
     activity: [],
     prs: [],
     skills: [],
@@ -236,55 +230,39 @@ test('a usage limit notifies what the harness does; going on by itself notifies 
   );
 });
 
-test('one idle notice per turn, once Mochi has gathered its evidence; a failed turn says stalled, not waiting on you', () => {
-  const audit = {
-    unverified: [{ text: 'Not checked in the app', quote: 'q' }],
-  };
-  const goal = {
-    goal: 'Ship it',
-    criteria: [
-      { id: 'c', text: 'c', check: { status: 'passed' as const, at: 1 } },
-    ],
-    live: { isWorking: false },
-  };
-  const gathering = thread({
-    ...goal,
-    idle: { at: 1, accepted: [], isGathering: true },
-  });
-  const gathered = thread({ ...goal, idle: { at: 1, accepted: [], audit } });
-  const [notice] = diffNotices(
-    { threads: [gathering], queue: [] },
-    { threads: [gathered], queue: [] },
-    10,
-  );
-  assert.deepEqual(
-    [notice.kind, notice.verdict, notice.title, notice.body],
-    ['idle', 'gaps', '1 gap in “Rate limits”', 'Not checked in the app'],
-  );
-  assert.deepEqual(
-    diff(
-      gathered,
-      thread({ ...goal, idle: { at: 1, accepted: ['x'], audit } }),
-    ),
-    [],
-    'accepting a gap later is no new notice',
-  );
+test('one idle notice per turn, once the turn has ended; a failed turn says stalled, not waiting on you', () => {
   const failed = {
-    ...goal,
+    live: { isWorking: false },
     status: 'needs-you' as const,
     queuePause: 'failed' as const,
   };
-  assert.deepEqual(
-    diff(
-      thread({ ...failed, idle: { at: 1, accepted: [], isGathering: true } }),
-      thread({ ...failed, idle: { at: 1, accepted: [] } }),
-    ),
-    ['idle'],
+  const [notice] = diffNotices(
+    {
+      threads: [thread({ ...failed, idle: { at: 1, isGathering: true } })],
+      queue: [],
+    },
+    { threads: [thread({ ...failed, idle: { at: 1 } })], queue: [] },
+    10,
   );
   assert.deepEqual(
-    diff(thread(goal), thread({ ...failed })),
+    [notice.kind, notice.verdict, notice.title],
+    ['idle', 'stalled', '“Rate limits” stalled'],
+  );
+  assert.deepEqual(
+    diff(thread({ live: { isWorking: false } }), thread(failed)),
     [],
-    'the turn-end itself waits for the verdict',
+    'the turn-end itself waits for the idle record',
+  );
+  assert.deepEqual(
+    diff(
+      thread({
+        live: { isWorking: false },
+        idle: { at: 1, isGathering: true },
+      }),
+      thread({ live: { isWorking: false }, idle: { at: 1 } }),
+    ),
+    [],
+    'an idle thread with nothing to say is no notice',
   );
 });
 
@@ -322,7 +300,6 @@ test('a notice is addressed by what its kind waits for: looking, acting, or the 
     isAddressed({ kind: 'idle', verdict: 'stalled' }, viewed),
     false,
   );
-  assert.equal(isAddressed({ kind: 'idle', verdict: 'done' }, viewed), true);
   assert.equal(
     isAddressed({ kind: 'ci', queueId: 'q1' }, { queue: [] }),
     true,

@@ -8,9 +8,7 @@ import {
 } from '../model.ts';
 import { resetLabel } from '../usage/limits.ts';
 import {
-  bareStates,
   idleVerdict,
-  subThreadVerdicts,
   type Verdict,
   type VerdictKind,
 } from '../goals/verdict.ts';
@@ -103,9 +101,7 @@ const ADDRESSED = {
   failed: (_, a) => !!a.isActedOn,
   limit: (_, a) => !!a.isViewed || !!a.isActedOn,
   'step-done': (_, a) => !!a.isViewed || !!a.isActedOn,
-  idle: (n, a) =>
-    !!a.isActedOn ||
-    (!!a.isViewed && (n.verdict === 'done' || n.verdict === 'gaps')),
+  idle: (_, a) => !!a.isActedOn,
   ci: (n, a) => !!a.isActedOn || isSettled(n, a),
   run: (n, a) => !!a.isViewed || !!a.isActedOn || isSettled(n, a),
   'pr-review': (n, a) =>
@@ -206,10 +202,9 @@ export function diffNotices(
             : 'Waiting on your answer'),
       });
     }
-    // A parent waiting on its sub-threads says nothing; each sub-thread's own notice names the parent it belongs to.
     const verdict =
       p.idle?.isGathering && t.idle && !t.idle.isGathering
-        ? idleVerdict(t, bareStates(t), subThreadVerdicts(next.threads, t.id))
+        ? idleVerdict(t)
         : null;
     const parent = parentOf(next.threads, t);
     if (verdict && isIdleNotice(t, verdict))
@@ -302,15 +297,11 @@ export function isQuiet(quiet: QuietHours, date: Date) {
 /** What the other notices don't already say: a tray question and a usage limit have their own. */
 function isIdleNotice(t: Thread, v: Verdict) {
   if (v.kind === 'needs-you') return t.status !== 'needs-you';
-  if (v.kind === 'stalled') return v.chip !== 'Limit';
-  return v.kind === 'gaps' || v.kind === 'done';
+  return v.kind === 'stalled' && v.chip !== 'Limit';
 }
 
 function idleTitle(title: string, v: Verdict) {
-  if (v.kind === 'gaps') return `${v.chip} in “${title}”`;
-  if (v.kind === 'needs-you') return `“${title}” needs you`;
-  if (v.kind === 'stalled') return `“${title}” stalled`;
-  return `“${title}” is done`;
+  return v.kind === 'needs-you' ? `“${title}” needs you` : `“${title}” stalled`;
 }
 
 function limitBody(provider: Provider, limit: NonNullable<LiveRun['limit']>) {

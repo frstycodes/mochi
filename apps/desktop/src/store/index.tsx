@@ -12,7 +12,6 @@ import {
   type ReactNode,
 } from 'react';
 import { replaceAllPins, useAllPins } from '../chat/pins.ts';
-import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
 import { NO_AGENT_PROCESS, type AgentToolCall } from '../host/types/agent.ts';
@@ -52,7 +51,6 @@ import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
 import { markOwnAnswer } from '@mochi/domain/remote/answers';
-import { classifyInCore } from '../utility/runUtility.ts';
 import { WindowReactor } from '../reactor/WindowReactor.tsx';
 
 export type { View } from './layout.ts';
@@ -61,8 +59,6 @@ export { mirrorState, reducer } from './root.ts';
 export { shallow as shallowEqual } from 'zustand/vanilla/shallow';
 
 export type { Action, Snapshot, State } from './types.ts';
-
-setDriftClassifier(classifyInCore);
 
 /** One demo minute a second. */
 const DEMO_TICK_MS = 1000;

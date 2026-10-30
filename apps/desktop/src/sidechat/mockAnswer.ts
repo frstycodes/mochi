@@ -14,8 +14,6 @@ export function mockAnswer(
       ? `Looking at the ${quoted.toLowerCase()} you quoted, in the context of **${context.title}**.`
       : `Answering from the context of **${context.title}**.`,
     '',
-    `The goal is: ${context.goal}`,
-    '',
     `${done} of ${context.steps.length} steps are done${running ? `, and it is working on "${running.title}" now` : ''}.`,
   ];
   if (context.diff?.length) {

@@ -12,12 +12,10 @@ export function claudeLimitThread(): Thread {
     spaceId: 'latitude',
     repo: { project: 'latitude', branch: 'feat/usage-export' },
     title: 'Usage export to CSV',
-    goal: 'Admins can export a month of API usage per key as CSV.',
     providers: ['claude'],
     status: 'running',
     line: 2,
     startedAt: s,
-    revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [],
     activity: [
       {
@@ -107,12 +105,10 @@ export function codexLimitThread(): Thread {
     spaceId: 'personal',
     repo: { project: 'focus-mode', branch: 'feat/streaks' },
     title: 'Focus streaks',
-    goal: 'Count consecutive focus days and show the streak on the home screen.',
     providers: ['codex'],
     status: 'needs-you',
     line: 4,
     startedAt: s,
-    revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [],
     activity: [
       {

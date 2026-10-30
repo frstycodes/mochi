@@ -1,7 +1,5 @@
-import { localClassifier, type DriftVerdict } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { callCore } from '../host/desktop/rpc.ts';
-import type { Thread } from '../model.ts';
 import type { UtilityTask } from './prompts.ts';
 
 /** Where the calls go: Core on desktop, nothing on web. Tests swap `call`. */
@@ -27,18 +25,4 @@ export function runUtility(
     prompt,
     thread,
   });
-}
-
-/** The drift guard's model pass, ahead of everything else in the queue; the local pass when Core has no verdict. */
-export async function classifyInCore(
-  prompt: string,
-  thread: Thread,
-): Promise<DriftVerdict> {
-  if (!host.hasCore) return host.agent.classify(prompt, thread);
-  return (
-    (await utilityCore.call<DriftVerdict | null>('utility.classify', {
-      prompt,
-      thread,
-    })) ?? localClassifier(prompt, thread)
-  );
 }

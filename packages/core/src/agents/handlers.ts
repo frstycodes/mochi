@@ -19,15 +19,12 @@ import {
   type AgentToolResult,
   type StartWorkspace,
 } from '../../../../apps/desktop/src/host/types/agent.ts';
-import { classifyWithModel } from '../../../../apps/desktop/src/drift.ts';
 import type {
   McpWidgetResource,
   Provider,
-  Thread,
 } from '../../../../apps/desktop/src/model.ts';
 import {
   askClaude,
-  classifyClaude,
   claudeLimits,
   discardSpares,
   warmClaude,
@@ -502,9 +499,6 @@ export const agent = {
   async utility(_window, task, spaceId, prompt) {
     return executeUtility(task, spaceId, prompt);
   },
-  async classify(_window, prompt, thread) {
-    return classify(prompt, thread);
-  },
 } satisfies WindowHandlers<AgentHost>;
 
 /** Queued in Core's utility queue, which runs `executeUtility` when it is this job's turn. */
@@ -563,7 +557,6 @@ export async function handoffTurn(
       prompt: ask.prompt,
       ...(ask.resume && { resume: ask.resume }),
       permissionMode: permissionModeOf(ask.provider, 'Plan'),
-      isGoalsOff: true,
       ...(await offered(ask.provider, spaceId, ask.model, undefined)),
     });
     return await ended;
@@ -596,11 +589,6 @@ export const utilityCall = (
         null,
       ),
     ),
-  );
-
-export const classify = (prompt: string, thread: Thread) =>
-  classifyWithModel(prompt, thread, (signal) =>
-    classifyClaude(prompt, thread, signal),
   );
 
 /** One model call, no queue. */

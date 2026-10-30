@@ -1,4 +1,4 @@
-import { browserStorage, persistedSlice } from '../lib/uiStorage.ts';
+import { persistedSlice } from '../lib/uiStorage.ts';
 import { useStore } from 'zustand';
 import { accessOf } from '../runtime/access.ts';
 import { effortId, modelId } from '../runtime/models.ts';
@@ -14,12 +14,8 @@ export {
 } from './prefsDefaults.ts';
 
 export const PREFS_KEY = 'mochi.prefs.v1';
-// Before this store, the drift card kept its choice under its own key.
-const LEGACY_BRANCH_FROM_KEY = 'harness.drift.branchFrom';
 
-const prefsSlice = persistedSlice(PREFS_KEY, DEFAULT_PREFS, (raw) =>
-  parsePrefs(raw, browserStorage.getItem(LEGACY_BRANCH_FROM_KEY)),
-);
+const prefsSlice = persistedSlice(PREFS_KEY, DEFAULT_PREFS, parsePrefs);
 export function getPrefs(): Prefs {
   return prefsSlice.getState().value;
 }
@@ -52,18 +48,13 @@ export function subscribePrefs(listener: () => void) {
 }
 
 /** Saved values win only when they have the default's type, so a stale or hand-edited entry can't break a reader. */
-export function parsePrefs(
-  raw: string | null,
-  legacyBranchFrom?: string | null,
-): Prefs {
+export function parsePrefs(raw: string | null): Prefs {
   let saved: Record<string, unknown> = {};
   try {
     const parsed: unknown = JSON.parse(raw ?? '{}');
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
       saved = parsed as Record<string, unknown>;
   } catch {}
-  if (saved.branchFrom === undefined && legacyBranchFrom === 'base')
-    saved.branchFrom = 'base';
   // '' was the old default, saved with every pref since; a temp name needs the prefix to stand apart from your branches.
   if (saved.branchPrefix === '') delete saved.branchPrefix;
   // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
@@ -72,8 +63,6 @@ export function parsePrefs(
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
   if (!isStringRecord(saved.keybindings)) delete saved.keybindings;
   if (!isStringRecord(saved.toolPolicies)) delete saved.toolPolicies;
-  // GAP: goals are retired (2026-10-20) and have no setting; a saved `true` from before must not bring them back.
-  delete saved.goals;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];

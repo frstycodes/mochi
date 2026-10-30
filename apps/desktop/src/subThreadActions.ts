@@ -27,7 +27,6 @@ export function nestWithUndo(
                 type: 'nest',
                 threadId: thread.id,
                 parentId: before.threadId,
-                criterionId: before.criterionId,
               }
             : { type: 'unnest', threadId: thread.id },
         );
@@ -58,7 +57,6 @@ export function unnestWithUndo(
           type: 'nest',
           threadId: thread.id,
           parentId: link.threadId,
-          criterionId: link.criterionId,
         }),
     },
   });

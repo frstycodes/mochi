@@ -1,7 +1,5 @@
 import { sendAction, queuedMessage, shouldQueue } from '../chat/queued.ts';
-import type { DriftVerdict } from '../drift.ts';
 import { reviewNote } from '../git/files.ts';
-import { draftFrom } from '../goals/edit.ts';
 import type {
   CommandResult,
   RemoteCommand,
@@ -14,14 +12,12 @@ import type { Action, State } from '../store/types.ts';
 import { answeredBy, markAnswered } from '@mochi/domain/remote/answers';
 
 /**
- * A device command that is only store actions: what to apply, and the device's answer. `verdict` is a send's drift verdict
- * still out, whose answer comes as `drift-verdict`. Core runs these on its own store (packages/core/src/server.ts); the rest
- * need a window's host (`runRemoteCommand`).
+ * A device command that is only store actions: what to apply, and the device's answer. Core runs these on its own store
+ * (packages/core/src/server.ts); the rest need a window's host (`runRemoteCommand`).
  */
 export interface StoreCommand {
   result: CommandResult;
   actions: Action[];
-  verdict?: { threadId: string; text: string; verdict: Promise<DriftVerdict> };
 }
 
 const ok: CommandResult = { isOk: true };
@@ -72,12 +68,6 @@ export function storeCommand(
         threadId: thread.id,
         title: command.title,
       });
-    case 'edit-goal':
-      return done({
-        type: 'edit-goal',
-        threadId: thread.id,
-        draft: { ...draftFrom(thread), goal: command.goal },
-      });
     case 'pin':
       return pin(state, thread, command);
     case 'settle':
@@ -114,7 +104,6 @@ const STORE_TYPES = new Set<RemoteCommand['type']>([
   'interrupt',
   'fork',
   'rename',
-  'edit-goal',
   'pin',
   'settle',
   'delete',
@@ -167,13 +156,7 @@ function send(
       !shouldQueue(thread, state.context.prefs.whileWorking, false));
   if (!steers)
     return done({ type: 'queued-add', threadId: thread.id, message });
-  const sent = sendAction(state, thread, message, queued && { queuedId });
-  return {
-    ...done(sent.action),
-    ...(sent.verdict instanceof Promise && {
-      verdict: { threadId: thread.id, text: sent.text, verdict: sent.verdict },
-    }),
-  };
+  return done(sendAction(state, thread, message, queued && { queuedId }));
 }
 
 const typedMessage = (message: RemoteMessage) =>

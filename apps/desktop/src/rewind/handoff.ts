@@ -57,7 +57,7 @@ export function handoffDraft(
 
 // For a live thread, `agentCalls` (src/runtime/live.ts) also stops the old agent and starts the new one in the same worktree
 // with `prompt` as its first message. A demo thread only changes which agent it names.
-/** Moves the thread to `to` and records the prompt on its handoff row: the drafting one, or a new one (a remote handoff never drafts). Not a goal revision: what done means is unchanged. */
+/** Moves the thread to `to` and records the prompt on its handoff row: the drafting one, or a new one (a remote handoff never drafts). */
 export function handoff(
   state: State,
   threadId: string,

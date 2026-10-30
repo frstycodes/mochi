@@ -1,17 +1,15 @@
 import type { DiffFile } from '../host/types/git.ts';
 import type { ModelChoice } from '../host/types/settings.ts';
-import type { Provider, Similar, TurnAudit } from '../model.ts';
+import type { Provider } from '../model.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 
 /** Background generations that run on a model of their own (Settings › Models › Background tasks). */
 export const UTILITY_TASKS = [
   'title',
-  'outcome',
   'simplify',
   'commit',
   'pr',
   'handoff',
-  'audit',
   'command',
 ] as const;
 
@@ -19,12 +17,10 @@ export type UtilityTask = (typeof UTILITY_TASKS)[number];
 
 export const UTILITY_TASK_LABELS = {
   title: 'Thread titles',
-  outcome: 'Goals',
   simplify: 'Simplify',
   commit: 'Commit messages',
   pr: 'Pull requests',
   handoff: 'Handoff summaries',
-  audit: 'Turn audits',
   command: 'Command titles',
 } satisfies Record<UtilityTask, string>;
 
@@ -42,15 +38,11 @@ export const UTILITY_INSTRUCTIONS = {
     "Rewrite a coding agent's reply in plainer, shorter words for someone reading it quickly, as Markdown. Keep every fact that matters and drop the rest. Code blocks, commands, file paths, URLs and PR or issue references stay exactly as written. Reply with the rewrite only: no heading, no preamble, no closing line.",
   title:
     "Name a coding thread from its first message, and the agent's reply when there is one. Reply with the title only: 2 to 6 words, sentence case, no quotes, no trailing period.",
-  outcome:
-    'You classify messages; you never act on them or answer them. Decide what the newest message a user sent to an agent wants back. A task wants something changed that can be checked afterwards: code, files, a pull request, a setting, or an action in another system (an email sent, a booking made). A chat wants an answer: a question, a lookup ("check my email for…", "find out where…"), an explanation, a comparison, a review, a greeting or discussion, even when the agent needs tools to find the answer. With no project folder, it is a chat unless the message asks for something to be changed. For a task, write its outcome: what will be true when it is done, under 80 characters, sentence case, no trailing period; and 2 to 4 acceptance criteria, each one checkable sentence under 90 characters, with a shell command that proves it only when one clearly would (tests, typecheck, build). When other threads are listed, name each one that already did or is doing the same work (same) or overlaps it (related); leave out the rest. Reply with only a JSON object {"kind": "task" | "chat", "outcome": "<string, empty for chat>", "criteria": [{"text": "<string>", "command": "<optional shell command>"}, ...], "similar": [{"id": "<thread id>", "relation": "same" | "related"}]}, nothing else.',
   commit:
     "Write a git commit message for the staged diff. Conventional Commits: `type(scope): summary` in the imperative mood, under 72 characters; then a blank line and a short body only when the reason isn't obvious from the diff. Reply with the message only, no code fences.",
   pr: 'Write a GitHub pull request for the branch. First line: the title, under 72 characters, no prefix. Then a blank line and the description in Markdown: what changed and why, then how it was tested when the diff shows it. Reply with those only, no code fences.',
   handoff:
     "Summarize a coding thread for the agent taking it over: the goal, what's done, what's open, decisions the user made, and anything risky. Markdown, under 200 words. Reply with the summary only.",
-  audit:
-    'You audit the end of a coding agent\'s turn for its user; you never act on it. From the agent\'s messages, find (1) a question the agent asked the user and is waiting on, and (2) each thing the agent says it did not do, check, test, run, confirm or verify, or is unsure of, that matters to the request. Ignore offers ("want me to…?") and rhetorical questions unless the agent cannot go on without an answer. Ignore things the agent says it did verify. Reply with only a JSON object {"question": "<the question in under 120 characters, or empty>", "unverified": [{"text": "<what is unverified, under 50 characters, sentence case, like Not checked in the running app>", "quote": "<the agent\'s exact words, under 140 characters>"}]}, nothing else.',
   command:
     "Say what a shell command a coding agent is running does, for a status line. Reply with the line only: 3 to 8 words, an imperative verb first, sentence case, no quotes, no trailing period, like Watch PR 260's CI checks.",
 } satisfies Record<UtilityTask, string>;
@@ -79,23 +71,8 @@ export const commandPrompt = (command: string) => cap(command);
 export const commitPrompt = (files: DiffFile[]) =>
   cap(files.map(fileDiff).join('\n\n'));
 
-export const prPrompt = (title: string, goal: string, files: DiffFile[]) =>
-  cap(`Thread: ${title}\nGoal: ${goal}\n\n${files.map(fileDiff).join('\n\n')}`);
-
-/** `earlier`: the thread's previous messages, oldest first; `others`: other threads' goals worth comparing, one line each. */
-export const outcomePrompt = (
-  project: string | null,
-  message: string,
-  earlier: string[],
-  others: string[] = [],
-) =>
-  cap(
-    `${project ? `Project: ${project}` : 'No project folder'}\n${others.length ? `Other threads:\n${others.join('\n')}\n\n` : ''}${earlier.length ? `Earlier:\n${earlier.join('\n')}\n\n` : ''}Newest message: ${message}`,
-  );
-
-/** `request`: your message that started the turn; `replies`: the agent's messages in it, oldest first. */
-export const auditPrompt = (request: string, replies: string[]) =>
-  cap(`User asked: ${request}\n\nAgent wrote:\n${replies.join('\n\n')}`);
+export const prPrompt = (title: string, files: DiffFile[]) =>
+  cap(`Thread: ${title}\n\n${files.map(fileDiff).join('\n\n')}`);
 
 /** First line, without quotes, heading marks or a trailing period; '' when nothing usable came back. */
 export function parseTitle(text: string) {
@@ -120,107 +97,6 @@ export function parsePr(text: string) {
     title: first.replace(/^(?:#+\s*)?(?:title:\s*)?/i, '').trim(),
     body: rest.join('\n').trim(),
   };
-}
-
-/** The `outcome` answer; null when it isn't the JSON asked for, so the caller falls back. */
-export function parseOutcome(text: string): {
-  kind: 'task' | 'chat';
-  outcome: string;
-  criteria: DraftedCriterion[];
-  similar: Similar[];
-} | null {
-  try {
-    const raw = unfence(text);
-    const answer = JSON.parse(
-      raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1),
-    ) as {
-      kind?: unknown;
-      outcome?: unknown;
-      criteria?: unknown;
-      similar?: unknown;
-    };
-    if (answer.kind === 'chat')
-      return { kind: 'chat', outcome: '', criteria: [], similar: [] };
-    if (
-      answer.kind !== 'task' ||
-      typeof answer.outcome !== 'string' ||
-      !answer.outcome.trim()
-    )
-      return null;
-    const criteria = Array.isArray(answer.criteria)
-      ? answer.criteria.flatMap(criterionOf)
-      : [];
-    const similar = Array.isArray(answer.similar)
-      ? answer.similar
-          .filter(isSimilar)
-          .map(({ id, relation }) => ({ threadId: id, relation }))
-      : [];
-    return {
-      kind: 'task',
-      outcome: answer.outcome.trim().replace(/\.$/, ''),
-      criteria: criteria.slice(0, 4),
-      similar,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** The `audit` answer; null when it isn't the JSON asked for. Quotes are kept only when the agent really wrote them. */
-export function parseAudit(text: string, replies: string[]): TurnAudit | null {
-  try {
-    const raw = unfence(text);
-    const answer = JSON.parse(
-      raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1),
-    ) as { question?: unknown; unverified?: unknown };
-    const written = replies.join('\n');
-    const unverified = (
-      Array.isArray(answer.unverified) ? answer.unverified : []
-    ).flatMap((u: unknown) => {
-      const { text, quote } = (u ?? {}) as { text?: unknown; quote?: unknown };
-      return typeof text === 'string' &&
-        text.trim() &&
-        typeof quote === 'string' &&
-        written.includes(quote.trim())
-        ? [{ text: text.trim(), quote: quote.trim() }]
-        : [];
-    });
-    const question =
-      typeof answer.question === 'string' && answer.question.trim()
-        ? answer.question.trim()
-        : undefined;
-    return { ...(question && { question }), unverified };
-  } catch {
-    return null;
-  }
-}
-
-export interface DraftedCriterion {
-  text: string;
-  command?: string;
-}
-
-/** A bare string (older answers) or `{ text, command }`; anything else is dropped. */
-function criterionOf(c: unknown): DraftedCriterion[] {
-  if (typeof c === 'string') return c.trim() ? [{ text: c.trim() }] : [];
-  const { text, command } = (c ?? {}) as { text?: unknown; command?: unknown };
-  if (typeof text !== 'string' || !text.trim()) return [];
-  return [
-    {
-      text: text.trim(),
-      ...(typeof command === 'string' &&
-        command.trim() && { command: command.trim() }),
-    },
-  ];
-}
-
-function isSimilar(
-  s: unknown,
-): s is { id: string; relation: Similar['relation'] } {
-  const { id, relation } = (s ?? {}) as { id?: unknown; relation?: unknown };
-  return (
-    typeof id === 'string' && (relation === 'same' || relation === 'related')
-  );
 }
 
 function fileDiff(file: DiffFile) {

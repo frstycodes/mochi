@@ -187,12 +187,6 @@ export const GhAccount = Schema.Struct({
   isValid: B,
 });
 
-export const CheckRun = Schema.Struct({
-  exitCode: Schema.NullOr(N),
-  output: S,
-  ms: N,
-});
-
 export const RewindPreview = Schema.Struct({
   files: Schema.Array(S),
   outside: Schema.Array(S),
@@ -354,5 +348,4 @@ export const gitRpc = {
     ]),
     S,
   ),
-  runCheck: invoke(T([Cwd, Str(2000)]), CheckRun),
 };

@@ -22,7 +22,7 @@ export interface Fork {
   checkpoint?: number;
 }
 
-/** A new thread carrying the parent's goal, steps and transcript up to `point`, on its own branch; opened right away. */
+/** A new thread carrying the parent's steps and transcript up to `point`, on its own branch; opened right away. */
 export function forkThread(
   state: State,
   threadId: string,
@@ -35,7 +35,6 @@ export function forkThread(
   const now = state.now;
   const id = `fork-${state.seq}`;
   const base = from.thread;
-  const revision = base.revisions.length + 1;
   const child: Thread = {
     ...base,
     id,
@@ -52,15 +51,6 @@ export function forkThread(
     status: base.status === 'settled' ? 'running' : base.status,
     prs: [],
     steps: base.steps.map((s) => ({ ...s, id: `${s.id}-f${state.seq}` })),
-    revisions: [
-      ...base.revisions,
-      {
-        n: revision,
-        at: now,
-        label: `Forked from "${parent.title}"`,
-        by: 'you',
-      },
-    ],
     activity: [
       ...base.activity,
       {

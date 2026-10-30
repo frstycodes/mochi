@@ -29,7 +29,7 @@ export const TOOL_GUIDE = {
     group: 'Threads',
     label: 'Read a thread',
     description:
-      "See one thread's goal, its agent's plan, recent activity, pull requests and what it's waiting on you for.",
+      "See one thread's agent plan, recent activity, pull requests and what it's waiting on you for.",
   },
   rename_thread: {
     group: 'Threads',
@@ -112,24 +112,6 @@ export const TOOL_GUIDE = {
       'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.',
   },
 
-  get_goal: {
-    group: 'Progress',
-    label: 'Read goals',
-    description:
-      "See a thread's goal and what done means, with each criterion's claim and check.",
-  },
-  propose_goal: {
-    group: 'Progress',
-    label: 'Propose goals',
-    description:
-      'Propose a thread’s goal and its criteria after a first look at the code, and again when what done means changes. How it lands is under Goals and checks.',
-  },
-  claim_criterion: {
-    group: 'Progress',
-    label: 'Claim criteria',
-    description:
-      'Say a criterion is met, with evidence you can check. Mochi still checks it itself.',
-  },
   report_turn: {
     group: 'Progress',
     label: 'Report turns',
@@ -141,18 +123,6 @@ export const TOOL_GUIDE = {
     label: 'Report to the parent thread',
     description:
       'A sub-thread ends each turn with a short report to the thread that started it: done, blocked, needs input or failed, with its branch, PR, files and checks.',
-  },
-  get_report: {
-    group: 'Progress',
-    label: 'Read reports',
-    description:
-      "Read another thread's latest report, to coordinate without reading its transcript.",
-  },
-  settle_goal: {
-    group: 'Progress',
-    label: 'Close goals',
-    description:
-      'Close out a goal with a reason and settle its thread. Never its own thread.',
   },
 
   update_plan: {

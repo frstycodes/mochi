@@ -1,23 +1,13 @@
-import { isMet, type Thread, type TurnReport } from '../model.ts';
-import { openTurn } from '../chat/turnChanges.ts';
+import type { Thread, TurnReport } from '../model.ts';
 import { prefsNow } from '../store/context.ts';
 import { openAssumptions } from './ledger.ts';
-import type { RefStatus } from '@mochi/domain/chat/refs';
 
 /** The latest report while it still describes the thread: it isn't working, and you haven't written since. */
 export function currentReport(t: Thread) {
   const report = turnReport(t);
   if (!report || t.live?.isWorking || isAnsweredUnturned(t, report))
     return null;
-  const criteria = t.criteria ?? [];
-  const met = criteria.filter((c) => isMet(c, t.idle?.isConfirmed)).length;
-  return {
-    report,
-    criteria,
-    met,
-    isReady: criteria.length > 0 && met === criteria.length,
-    changes: openTurn(t.activity),
-  };
+  return report;
 }
 
 /** The agent's report_turn from the turn that just ended; an older one describes a turn your later message already answered. */
@@ -42,9 +32,15 @@ function isAnsweredUnturned(t: Thread, report: TurnReport) {
   return !!lastYou && lastYou.at > report.at;
 }
 
+/** The agent's own question and buttons for this turn; null when it wrote none (a limit, an error, no report). */
+export function agentAsk(report: TurnReport | undefined) {
+  if (!report?.next || !report.options?.length) return null;
+  return { question: report.next, options: report.options };
+}
+
 /** Your likely next message for the empty composer: the agent's pick on its next-move card, in your voice; nothing without one. */
 export function suggestedReply(t: Thread) {
-  const report = currentReport(t)?.report;
+  const report = currentReport(t);
   return report?.isSuperseded ? undefined : report?.options?.[0]?.reply;
 }
 
@@ -67,36 +63,17 @@ export function showsVerdictCard(t: Thread) {
 const PLURAL = new Intl.PluralRules('en');
 const ASSUMPTION_WORDS = { one: 'assumption', other: 'assumptions' };
 
-/** The sidebar card's one line from the report: the question first, then open assumptions (turn spine on), readiness, what's left. */
+/** The sidebar card's one line from the report: the question first, then open assumptions (turn spine on), what's left. */
 export function reportHeadline(
   t: Thread,
   isSpineOn = prefsNow().turnSpine !== false,
 ) {
-  const view = currentReport(t);
-  if (!view) return null;
-  if (view.report.question && !view.report.isSuperseded)
-    return `Needs you: ${view.report.question}`;
+  const report = currentReport(t);
+  if (!report) return null;
+  if (report.question && !report.isSuperseded)
+    return `Needs you: ${report.question}`;
   const toCheck = isSpineOn ? openAssumptions(t.assumptions).length : 0;
   if (toCheck)
     return `${toCheck} ${ASSUMPTION_WORDS[PLURAL.select(toCheck) === 'one' ? 'one' : 'other']} to check`;
-  if (view.isReady)
-    return NEXT_STEP_TITLES[nextStep(t.prs.map((p) => p.state))];
-  if (view.criteria.length)
-    return `${view.met} of ${view.criteria.length} criteria done`;
-  return view.report.left[0] ?? null;
+  return report.left[0] ?? null;
 }
-
-export type NextStep = 'open-pr' | 'review' | 'settle';
-
-/** What a goal whose criteria are all met waits on, from its PRs' states: a PR to open, one to review, or a merged one to settle. */
-export function nextStep(prStates: RefStatus[]): NextStep {
-  if (prStates.some((s) => s === 'open' || s === 'draft')) return 'review';
-  if (prStates.includes('merged')) return 'settle';
-  return 'open-pr';
-}
-
-export const NEXT_STEP_TITLES = {
-  'open-pr': 'Ready for a pull request',
-  review: 'Ready for review',
-  settle: 'Merged',
-} satisfies Record<NextStep, string>;

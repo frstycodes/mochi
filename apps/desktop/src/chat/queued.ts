@@ -1,5 +1,4 @@
 import { v7 as uuidv7 } from 'uuid';
-import { judgeDrift, type DriftVerdict } from '../drift.ts';
 import {
   isWorking,
   type QueuedMessage,
@@ -30,10 +29,7 @@ export function interruptsToSend(thread: Thread, ids: string[]) {
   return !!thread.live?.isWorking && clicked?.sendNow === 'pending';
 }
 
-/**
- * The `send` a message makes, its references resolved, and the drift guard's verdict: settled now, or a promise whose answer
- * comes as `drift-verdict`. The composer, a queued message and a device's send all go through it.
- */
+/** The `send` a message makes, its references resolved. The composer, a queued message and a device's send all go through it. */
 export function sendAction(
   state: Pick<State, 'threads'>,
   thread: Thread,
@@ -51,17 +47,10 @@ export function sendAction(
       typedSkills: message.typedSkills,
     },
   );
-  const verdict: DriftVerdict | Promise<DriftVerdict> = judgeDrift(
-    text,
-    thread,
-  );
-  const settled = verdict instanceof Promise ? undefined : verdict;
   const action: Extract<Action, { type: 'send' }> = {
     type: 'send',
     threadId: thread.id,
     text,
-    drift: settled && settled.kind !== 'off-goal' ? settled.kind : undefined,
-    reason: settled ? settled.reason : 'Checking against the goal',
     ...references,
     images: [...references.images, ...images.map(agentImage)],
     shownImages: images.map(shownImage),
@@ -69,7 +58,7 @@ export function sendAction(
     typed: message,
     ...extra,
   };
-  return { action, text, verdict };
+  return action;
 }
 
 /** Whether a message sent now waits for the turn to end: the setting, flipped for this one send while mod is held. */

@@ -21,10 +21,8 @@ export type ReactorCommand =
       spaceId: string;
       prompt: string;
     }
-  /** Goals off: the turn's idle record, which the end-of-turn card reads; Core applies it. */
+  /** The turn's idle record, which the end-of-turn card reads; Core applies it. */
   | { type: 'idle.mark'; key: string; threadId: string }
-  /** Goals on: checks, uncommitted files and the audit; checks and git status go through main's host. */
-  | { type: 'idle.gather'; key: string; threadId: string }
   | { type: 'simplify.auto'; key: string; threadId: string }
   | { type: 'compact.instructions'; key: string; threadId: string }
   | { type: 'pr.refresh'; key: string; threadId: string };
