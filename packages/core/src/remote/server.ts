@@ -37,8 +37,13 @@ export interface RemoteServerOptions {
 }
 
 export interface RemoteServer {
-  /** `host:port` per bound interface. */
-  addresses: string[];
+  /** `host:port` per bound interface, as they are now. */
+  readonly addresses: string[];
+  /**
+   * Listens on `hosts` from now on: stops on the ones that went away, starts on new ones. Connected devices stay connected
+   * where their address still exists. Rejects when a new host couldn't be bound; the others are bound anyway.
+   */
+  rebind(hosts: string[]): Promise<void>;
   devices(): ConnectedDevice[];
   /** A relay channel: the same pairing and tunnel as a LAN socket, but the device came through your account. */
   attach(raw: RawLink): void;
@@ -73,16 +78,37 @@ export async function startRemoteServer(
     maxPayload: MAX_FRAME_BYTES,
   });
   const connections = new Set<Connection>();
-  const servers = await Promise.all(
-    options.hosts.map((host) => listen(host, options.port, wss)),
-  );
-  const addresses = servers.map((s) =>
-    formatAddress(s.address() as AddressInfo),
-  );
+  const servers = new Map<string, Server>();
+  const addresses = () =>
+    [...servers.values()].map((s) => formatAddress(s.address() as AddressInfo));
   // Loopback would reach the device's own computer.
-  const reachable = addresses.filter(
-    (a) => !a.startsWith('127.') && !a.startsWith('[::1]'),
-  );
+  const reachable = () =>
+    addresses().filter((a) => !a.startsWith('127.') && !a.startsWith('[::1]'));
+  async function rebind(hosts: string[]) {
+    await Promise.all(
+      [...servers]
+        .filter(([host]) => !hosts.includes(host))
+        .map(([host, server]) => {
+          servers.delete(host);
+          return closeServer(server);
+        }),
+    );
+    const added = await Promise.allSettled(
+      hosts
+        .filter((host) => !servers.has(host))
+        .map(async (host) =>
+          servers.set(host, await listen(host, options.port, wss)),
+        ),
+    );
+    const failed = added.find((r) => r.status === 'rejected');
+    if (failed) throw failed.reason;
+  }
+  try {
+    await rebind(options.hosts);
+  } catch (e) {
+    await Promise.all([...servers.values()].map(closeServer));
+    throw e;
+  }
   wss.on('connection', (socket) => void accept(socketLink(socket), 'lan'));
 
   async function accept(raw: RawLink, origin: Origin) {
@@ -129,13 +155,16 @@ export async function startRemoteServer(
       version: Relay.PROTOCOL_VERSION,
       deviceId: device.deviceId,
       backend: await options.backend(device.scopes),
-      addresses: reachable,
+      addresses: reachable(),
       ...(options.members && { members: options.members() }),
     });
   }
 
   return {
-    addresses,
+    get addresses() {
+      return addresses();
+    },
+    rebind,
     devices: () =>
       [...connections].map(({ device, connectedAt }) => ({
         id: device.deviceId,
@@ -157,9 +186,8 @@ export async function startRemoteServer(
     async close() {
       for (const { socket } of connections)
         socket.close(1001, 'Remote access turned off');
-      await Promise.all(
-        servers.map((s) => new Promise((resolve) => s.close(resolve))),
-      );
+      await Promise.all([...servers.values()].map(closeServer));
+      servers.clear();
       wss.close();
     },
   };
@@ -199,6 +227,9 @@ function listen(host: string, port: number, wss: WebSocketServer) {
     server.listen(port, host, () => resolve(server));
   });
 }
+
+/** Stops listening now; a device still connected through it stays until its own socket closes. */
+const closeServer = async (server: Server) => void server.close();
 
 function refuse(socket: Link, reason: string) {
   send(socket, { type: 'refused', reason });

@@ -22,7 +22,8 @@ import { isAnyBusy, onBusy, push } from '../agents/events.ts';
 import { Backend } from '../backend/backend.ts';
 import { Capabilities } from '../hostServer.ts';
 import { KeyStore, type Keys } from '../keys/keyStore.ts';
-import { networkHosts } from './interfaces.ts';
+import { networkHosts, watchNetwork } from './interfaces.ts';
+import { networkChanged } from './reconnect.ts';
 import { Remote } from './tag.ts';
 import {
   approveMember,
@@ -205,6 +206,7 @@ function makeRemote({
   let restarting: Promise<void> = Promise.resolve();
   let shell: Shell = { isOnBattery: false, machines: [] };
   let isHeld = false;
+  let stopWatching: (() => void) | undefined;
   const approvals = new Map<string, (isAllowed: boolean) => void>();
   /** Who this computer trusts, from the records in `devices.json`; set by the first `absorb`. */
   let membership: Membership | undefined;
@@ -648,6 +650,26 @@ function makeRemote({
     records: ownRecords(),
   });
 
+  /** Loopback always; this computer's private addresses as they are now, when devices on the network are allowed. */
+  const hostsNow = () => [
+    '127.0.0.1',
+    ...(settings.allowsNetwork ? networkHosts() : []),
+  ];
+
+  /** An address came or went: listen where this computer is now. Queued behind `restart`, so it never races one. */
+  function rebind() {
+    restarting = restarting.then(async () => {
+      if (!server) return;
+      const before = server.addresses.join(' ');
+      await server.rebind(hostsNow()).then(
+        () => (error = undefined),
+        (e: unknown) => (error = String(e)),
+      );
+      if (server.addresses.join(' ') !== before || error) broadcast();
+    });
+    return restarting;
+  }
+
   /** Serialized: toggling quickly never leaves two servers on the port. */
   /** `backend.info` names this machine as the relay and its other computers know it. */
   function identify() {
@@ -664,14 +686,9 @@ function makeRemote({
       server = undefined;
       error = undefined;
       if (!settings.isEnabled) return broadcast();
-      // GAP: addresses are read once here; after joining another network, turn the setting off and on to bind the new one.
-      const hosts = [
-        '127.0.0.1',
-        ...(settings.allowsNetwork ? networkHosts() : []),
-      ];
       try {
         server = await startRemoteServer({
-          hosts,
+          hosts: hostsNow(),
           port,
           secure,
           coreFor: async (grant) => {
@@ -763,6 +780,10 @@ function makeRemote({
     start() {
       identify();
       if (settings.isEnabled) void restart();
+      stopWatching ??= watchNetwork(() => {
+        networkChanged();
+        void rebind();
+      });
       void absorb([])
         .then(pullMembers)
         .then(serveAlone)
@@ -809,6 +830,7 @@ function makeRemote({
     async close() {
       offBusy();
       offAccount();
+      stopWatching?.();
       relay?.close();
       await restarting;
       await server?.close();

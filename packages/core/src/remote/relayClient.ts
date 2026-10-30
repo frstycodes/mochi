@@ -11,7 +11,10 @@ import {
   toBytes,
   type RawLink,
 } from './link.ts';
-import { reconnect } from './reconnect.ts';
+import { backoff, onNetworkChange } from './reconnect.ts';
+
+/** How long a socket has to answer a ping sent because the network changed. */
+const PROBE_MS = 5000;
 
 const {
   decodeRelayToMachine,
@@ -64,6 +67,13 @@ export function connectMachine(options: {
         isAwaitingPong = true;
         if (ws.readyState === ws.OPEN) ws.send(HEARTBEAT.ping);
       }, HEARTBEAT_MS);
+      // After a network change the socket may be dead with no close on either end: ask now, not at the next heartbeat.
+      const offChange = onNetworkChange(() => {
+        if (ws.readyState !== ws.OPEN) return;
+        isAwaitingPong = true;
+        ws.send(HEARTBEAT.ping);
+        setTimeout(() => isAwaitingPong && ws.terminate(), PROBE_MS);
+      });
       ws.on('open', () => {
         isOpen = true;
         ws.send(
@@ -97,6 +107,7 @@ export function connectMachine(options: {
       ws.on('error', () => {});
       ws.on('close', () => {
         clearInterval(heartbeat);
+        offChange();
         for (const channel of channels.values())
           channel.end(1001, 'The relay connection dropped');
         channels.clear();
@@ -104,31 +115,32 @@ export function connectMachine(options: {
       });
       return Effect.sync(() => {
         clearInterval(heartbeat);
+        offChange();
         ws.close(1000, 'Turned off');
       });
     });
 
+  /**
+   * Never ends by itself: a token that can't be had now (offline, Clerk unreachable) is one more failed attempt, like a relay
+   * that didn't answer. Signing out stops it from outside (`service.ts`).
+   */
   const run = Effect.gen(function* () {
-    options.onState({ status: 'connecting' });
-    const token = yield* Effect.tryPromise(options.token);
-    yield* connectOnce(token).pipe(
-      Effect.tapError(() =>
-        Effect.sync(() => options.onState({ status: 'connecting' })),
-      ),
-    );
-  }).pipe(
-    Effect.retry({
-      schedule: reconnect,
-      while: (error) => error instanceof Unreachable,
-    }),
-    Effect.forever,
-    // Signed out or the session ended: nothing to reconnect with until you sign in again.
-    Effect.catch((error) =>
-      Effect.sync(() =>
-        options.onState({ status: 'error', error: messageOf(error) }),
-      ),
-    ),
-  );
+    let attempt = 0;
+    while (true) {
+      if (attempt > 0) yield* backoff(attempt);
+      options.onState({ status: 'connecting' });
+      const token = yield* Effect.tryPromise(options.token).pipe(Effect.option);
+      if (token._tag === 'None') {
+        attempt++;
+        continue;
+      }
+      const wasOpen = yield* connectOnce(token.value).pipe(
+        Effect.as(true),
+        Effect.orElseSucceed(() => false),
+      );
+      attempt = wasOpen ? 1 : attempt + 1;
+    }
+  });
 
   function onControl(socket: WebSocket, text: string) {
     if (text === HEARTBEAT.pong) return;
@@ -160,12 +172,8 @@ export function connectMachine(options: {
   };
 }
 
-/** The relay didn't take the connection. Anything else (`token()` rejected) means there is no session to connect with. */
+/** The relay didn't take the connection. */
 class Unreachable extends Data.TaggedError('Unreachable') {}
-const messageOf = (error: unknown) => {
-  const cause = (error as { cause?: unknown })?.cause ?? error;
-  return cause instanceof Error ? cause.message : String(cause);
-};
 
 /**
  * A device's own connection to one machine through the relay: its bytes, unprefixed, kept alive by text pings the relay's

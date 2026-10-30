@@ -8,6 +8,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Queue,
   Stream,
 } from 'effect';
 import { HttpServer } from 'effect/http';
@@ -15,7 +16,7 @@ import sodium from 'libsodium-wrappers';
 import { Capabilities, type Relay } from '@mochi/schema';
 import { coreUrl, makeCoreClient } from '../client.ts';
 import { serveCapabilities } from '../hostClient.ts';
-import { makeDeviceClient } from './device.ts';
+import { makeDeviceClient, openLan } from './device.ts';
 import { queuedReader, type Link, type RawLink } from './link.ts';
 import { mintDeviceToken } from './token.ts';
 import { Unauthorized } from '../rpc.ts';
@@ -67,7 +68,8 @@ function pipe() {
  * Core in-process with a window client, and this computer's remote server with one paired device. The device reaches it
  * through a fake relay: each dial is a fresh channel, paired and encrypted for real, then tunnelled into Core.
  */
-const setup = (scopes: Scope[]) =>
+/** `hosts`: the device dials the server's own addresses directly (read on each attempt) instead of the relay. */
+const setup = (scopes: Scope[], { hosts }: { hosts?: string[] } = {}) =>
   Effect.gen(function* () {
     const context = yield* Layer.build(
       layerCore({
@@ -103,7 +105,7 @@ const setup = (scopes: Scope[]) =>
     const server = yield* Effect.acquireRelease(
       Effect.promise(() =>
         startRemoteServer({
-          hosts: [],
+          hosts: hosts ?? [],
           port: 0,
           secure: (raw, origin) => secureAsMachine(raw, origin, side),
           coreFor: async (grant) => ({
@@ -124,23 +126,70 @@ const setup = (scopes: Scope[]) =>
       ),
       (server) => Effect.promise(() => server.close()),
     );
+    /** The relay as the device sees it: `down` drops every open channel and refuses new ones until `up`. */
+    const network = { isDown: false, links: new Set<RawLink>() };
     const dial = () => {
       const ends = pipe();
       server.attach(ends.machine);
+      network.links.add(ends.device);
       return ends.device;
     };
+    const down = () => {
+      network.isDown = true;
+      for (const link of network.links) link.close(1006, 'Network lost');
+      network.links.clear();
+    };
+    const up = () => void (network.isDown = false);
     const secure = (raw: RawLink) =>
       secureAsDevice(raw, deviceKeys, machineKeys.publicKey, 'Laptop', true);
     const welcomes: Relay.WelcomeFrame[] = [];
+    /** Each welcome, to wait for one; and each dial that found no way in (the relay down, or no address listening). */
+    const welcomed = yield* Queue.unbounded<Relay.WelcomeFrame>();
+    const turnedAway = yield* Queue.unbounded<void>();
     const client = yield* makeDeviceClient({
-      routes: () => [{ kind: 'relay', open: async () => dial() }],
+      routes: () =>
+        hosts
+          ? server.addresses.length
+            ? server.addresses.map((address) => ({
+                kind: 'lan' as const,
+                open: () => openLan(address),
+              }))
+            : (Queue.offerUnsafe(turnedAway, undefined), [])
+          : [
+              {
+                kind: 'relay',
+                open: async () => {
+                  if (network.isDown) {
+                    Queue.offerUnsafe(turnedAway, undefined);
+                    throw new Error('getaddrinfo ENOTFOUND');
+                  }
+                  return dial();
+                },
+              },
+            ],
       secure,
       isRefusal: (error) => error instanceof PairingRefused,
-      onWelcome: (welcome) => void welcomes.push(welcome),
+      onWelcome: (welcome) => {
+        welcomes.push(welcome);
+        Queue.offerUnsafe(welcomed, welcome);
+      },
       onOffline: () => {},
       onRefused: (reason) => assert.fail(reason),
     });
-    return { window, client, welcomes, rejected, dial, secure };
+    return {
+      window,
+      client,
+      welcomes,
+      rejected,
+      dial,
+      secure,
+      down,
+      up,
+      server,
+      deviceId: device.id,
+      welcomed,
+      turnedAway,
+    };
   });
 
 type Window = Effect.Success<ReturnType<typeof makeCoreClient>>;
@@ -447,4 +496,70 @@ it.live('malformed frames from a device are refused and logged', () =>
     assert.match(rejected[0]!, /protocol 7/);
     assert.match(rejected[1]!, /Malformed frame: \{"type":"command"/);
   }),
+);
+
+it.live(
+  'a device comes back by itself after the relay drops and refuses it for a while',
+  () =>
+    Effect.gen(function* () {
+      const { client, down, up, welcomed, turnedAway } = yield* setup(['read']);
+      yield* Queue.take(welcomed);
+      yield* client.ping();
+      down();
+      yield* Queue.take(turnedAway);
+      yield* Queue.take(turnedAway);
+      up();
+      yield* Queue.take(welcomed);
+      yield* client.ping();
+    }),
+  30_000,
+);
+
+it.live(
+  'a device on the LAN comes back by itself after the server stops listening and starts again',
+  () =>
+    Effect.gen(function* () {
+      const { client, server, deviceId, welcomed, turnedAway } = yield* setup(
+        ['read'],
+        { hosts: ['127.0.0.1'] },
+      );
+      yield* Queue.take(welcomed);
+      yield* client.ping();
+      yield* Effect.promise(() => server.rebind([]));
+      server.disconnect(deviceId);
+      yield* Queue.take(turnedAway);
+      yield* Effect.promise(() => server.rebind(['127.0.0.1']));
+      yield* Queue.take(welcomed);
+      yield* client.ping();
+    }),
+  30_000,
+);
+
+it.live(
+  "the machine's address changes: it listens on the new one, the old one is gone, and the device reaches it there",
+  () =>
+    Effect.gen(function* () {
+      const { client, server, deviceId, welcomed } = yield* setup(['read'], {
+        hosts: ['127.0.0.1'],
+      });
+      yield* Queue.take(welcomed);
+      yield* client.ping();
+      const [old] = server.addresses;
+      yield* Effect.promise(() => server.rebind(['::1']));
+      assert.deepEqual(
+        server.addresses.map((a) => a.startsWith('[::1]:')),
+        [true],
+      );
+      const refused = yield* Effect.promise(() =>
+        openLan(old!).then(
+          () => 'answered',
+          () => 'refused',
+        ),
+      );
+      assert.equal(refused, 'refused');
+      server.disconnect(deviceId);
+      yield* Queue.take(welcomed);
+      yield* client.ping();
+    }),
+  30_000,
 );
