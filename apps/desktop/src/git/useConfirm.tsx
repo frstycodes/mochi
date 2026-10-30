@@ -40,7 +40,7 @@ export function useConfirm() {
           <AlertDialogHeader>
             <AlertDialogTitle>{request.title}</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div>{request.description}</div>
+              <div className="w-full min-w-0">{request.description}</div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
