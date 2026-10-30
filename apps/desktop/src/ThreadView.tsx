@@ -383,6 +383,7 @@ function ThreadHeader({
         isFirst={isFirst}
         isMulti={isMulti}
         data-pin-drop
+        data-thread-header
         className={cn(
           '@container transition-colors duration-150',
           pinDrop.isOver && 'bg-accent/40',
@@ -480,7 +481,9 @@ function ThreadMenu({ thread }: { thread: Thread }) {
             size="sm"
             className="min-w-0 shrink gap-1 px-1.5"
           >
-            <span className="truncate type-title">{thread.title}</span>
+            <span className="truncate type-title font-normal">
+              {thread.title}
+            </span>
             <ChevronDown aria-hidden className="text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>

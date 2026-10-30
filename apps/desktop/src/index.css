@@ -659,17 +659,20 @@
   }
 }
 
-/* Pane headers stay compact so the pane's content gets the room: every icon button there, the shell's and what panes put in
-   PaneActions, hugs a full-size icon (2px of padding) in a plain rounded rectangle, and its hit area fills the 36px header
-   through an invisible ::after. Unlayered so it wins over the button sizes and the squircle rule above. */
-[data-pane-header] button[data-size^='icon'] {
+/* The 44px thread and pane headers share one icon button: a 28px rounded rectangle around a 16px icon, its hit area filling
+   the header's height through an invisible ::after. Covers the shell's buttons and what panes put in PaneActions; tab strips
+   keep their own compact buttons, since their scroller would clip the ::after and scroll. Unlayered so it wins over the
+   button sizes and the squircle rule above. */
+:is([data-thread-header], [data-pane-header])
+  button[data-size^='icon']:not([role='tablist'] *) {
   position: relative;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   corner-shape: round;
 }
-[data-pane-header] button[data-size^='icon']::after {
+:is([data-thread-header], [data-pane-header])
+  button[data-size^='icon']:not([role='tablist'] *)::after {
   content: '';
   position: absolute;
   /* From inside the button's 1px border: 9px reaches the header's top and bottom edges; 2px sideways stays inside the 2px gap. */
@@ -681,23 +684,25 @@
 }
 /* A toggle group there is one joined segment at the same height; only its outer corners round. */
 [data-pane-header] [data-slot='toggle-group-item'] {
-  height: 20px;
-  min-width: 24px;
-  padding-inline: 4px;
+  height: 28px;
+  min-width: 32px;
+  padding-inline: 6px;
 }
-/* Squircle like the rest of the app (the corner scale keeps it as round as the fallback), sized for a 20px control. */
+/* Squircle like the rest of the app (the corner scale keeps it as round as the fallback), sized for a 28px control. */
 [data-pane-header] [data-slot='toggle-group-item']:first-child {
-  border-radius: calc(5px * var(--corner-scale)) 0 0
-    calc(5px * var(--corner-scale));
+  border-radius: calc(8px * var(--corner-scale)) 0 0
+    calc(8px * var(--corner-scale));
 }
 [data-pane-header] [data-slot='toggle-group-item']:last-child {
-  border-radius: 0 calc(5px * var(--corner-scale))
-    calc(5px * var(--corner-scale)) 0;
+  border-radius: 0 calc(8px * var(--corner-scale))
+    calc(8px * var(--corner-scale)) 0;
 }
-[data-pane-header] [data-slot='toggle-group-item'] svg,
-[data-pane-header] button[data-size^='icon'] svg {
-  width: 13px;
-  height: 13px;
+:is([data-thread-header], [data-pane-header])
+  button[data-size^='icon']:not([role='tablist'] *)
+  svg,
+[data-pane-header] [data-slot='toggle-group-item'] svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* A caption lying on a frame: eased stops, so the fade has no visible edge. Over an image the scrim is fixed black, so white text holds in both themes. */
