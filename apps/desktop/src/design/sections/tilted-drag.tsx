@@ -12,14 +12,14 @@ import {
 } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../../model';
-import { dropAt, type DropAt } from '../../reorder';
+import { dropAt, type DropSlot } from '../../reorder';
 import { DragGhost } from '../../DragGhost';
 import { DropLine } from '../../DropLine';
 import { ThreadItem } from '../../Sidebar';
 import { Block } from '../layout';
 import { verdictFixtures } from '../verdictFixtures';
 
-/** Sidebar rows on the real drop rules (`dropAt`): the tilted ghost, the drop line, nesting by dragging right. Mock data; nothing is saved. */
+/** Sidebar rows on the real drop rules (`dropAt`): the tilted ghost and the drop line. Mock data; nothing is saved. */
 export function TiltedDragBlock({ rl }: { rl: Thread }) {
   const threads = verdictFixtures(rl)
     .slice(0, TITLES.length)
@@ -27,7 +27,7 @@ export function TiltedDragBlock({ rl }: { rl: Thread }) {
   return (
     <Block
       title="Dragging rows"
-      use="Pick a row up: it hangs from where you grabbed it (held left, its right end dips; held right, its left end; up to 4°) and levels out as it lands. A line marks where it drops. Drag right past the indent and the line steps in under the row above: drop to make it a sub-thread there. Drag a sub-thread out of its group to make it a thread again."
+      use="Pick a row up: it hangs from where you grabbed it (held left, its right end dips; held right, its left end; up to 4°) and levels out as it lands. A line marks where it drops. A sub-thread stays under its parent: a drag never nests or un-nests, the row menu moves it out."
       wide
     >
       <DragList threads={threads} />
@@ -57,7 +57,7 @@ interface Drag {
   grabY: number;
   width: number;
   height: number;
-  at: DropAt | null;
+  slot: DropSlot | null;
 }
 
 function DragList({ threads }: { threads: Thread[] }) {
@@ -71,11 +71,9 @@ function DragList({ threads }: { threads: Thread[] }) {
   const byId = new Map(threads.map((t) => [t.id, t]));
 
   const onPointerDown = (e: ReactPointerEvent<HTMLLIElement>, row: Row) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || row.parentId) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const start = { x: e.clientX, y: e.clientY };
-    const hasSubs = rows.some((r) => r.parentId === row.id);
-    const canNest = (parentId: string) => !hasSubs && parentId !== row.id;
     let current: Drag | null = null;
     const onMove = (ev: PointerEvent) => {
       if (
@@ -83,13 +81,7 @@ function DragList({ threads }: { threads: Thread[] }) {
         Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD
       )
         return;
-      const at = slotFor(
-        listRef.current,
-        row,
-        ev.clientY,
-        ev.clientX - start.x >= NEST_INDENT_PX,
-        canNest,
-      );
+      const slot = slotFor(listRef.current, row, ev.clientY);
       current = {
         id: row.id,
         x: ev.clientX - (start.x - rect.left),
@@ -98,15 +90,14 @@ function DragList({ threads }: { threads: Thread[] }) {
         grabY: start.y - rect.top,
         width: rect.width,
         height: rect.height,
-        at,
+        slot,
       };
       setDrag(current);
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      if (current?.at?.slot)
-        setRows((all) => dropRow(all, row.id, current!.at!));
+      if (current?.slot) setRows((all) => dropRow(all, row.id, current!.slot!));
       setDrag(null);
     };
     window.addEventListener('pointermove', onMove);
@@ -145,7 +136,7 @@ function DragList({ threads }: { threads: Thread[] }) {
       {rows.filter((r) => r.parentId === top.id && r.id !== drag?.id).map(item)}
     </Fragment>
   ));
-  const slot = drag?.at?.slot;
+  const slot = drag?.slot;
   if (slot)
     items.splice(
       slot.index,
@@ -153,7 +144,6 @@ function DragList({ threads }: { threads: Thread[] }) {
       <DropLine
         key="line"
         height={drag.height}
-        isNested={!!drag.at!.nestUnder}
         glide={{ layout: 'position', transition: SLIDE }}
       />,
     );
@@ -192,13 +182,7 @@ function DragList({ threads }: { threads: Thread[] }) {
 }
 
 /** The real sidebar rule on the mock's rows, one section (no Pinned). */
-function slotFor(
-  list: HTMLUListElement | null,
-  row: Row,
-  y: number,
-  isIndented: boolean,
-  canNest: (parentId: string) => boolean,
-) {
+function slotFor(list: HTMLUListElement | null, row: Row, y: number) {
   if (!list) return null;
   const boxes = [...list.querySelectorAll<HTMLElement>('[data-row-id]')].map(
     (el) => ({
@@ -209,26 +193,16 @@ function slotFor(
       ...(el.dataset.subOf && { parentId: el.dataset.subOf }),
     }),
   );
-  return dropAt(
-    boxes,
-    -1,
-    { id: row.id, ...(row.parentId && { parentId: row.parentId }) },
-    y - list.getBoundingClientRect().top,
-    isIndented,
-    false,
-    canNest,
-  );
+  return dropAt(boxes, -1, row.id, y - list.getBoundingClientRect().top, false);
 }
 
-function dropRow(rows: Row[], id: string, at: DropAt) {
+function dropRow(rows: Row[], id: string, slot: DropSlot) {
   const rest = rows.filter((r) => r.id !== id);
-  if (at.nestUnder) return [...rest, { id, parentId: at.nestUnder }];
   const tops = rest.filter((r) => !r.parentId);
-  const before = tops[at.slot!.index];
+  const before = tops[slot.index];
   const i = before ? rest.indexOf(before) : rest.length;
   return [...rest.slice(0, i), { id }, ...rest.slice(i)];
 }
 
 const DRAG_THRESHOLD = 5;
-const NEST_INDENT_PX = 24;
 const SLIDE = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;

@@ -318,51 +318,31 @@ export interface RowBox {
   parentId?: string;
 }
 
-export interface DropAt {
-  /** Where the drop line sits; null leaves the row where it is. */
-  slot: { toPinned: boolean; index: number } | null;
-  /** The row above the line, when the drag is indented and that row may take it as a sub-thread. */
-  nestUnder: string | null;
+/** Where a dragged top-level row's drop line sits. */
+export interface DropSlot {
+  toPinned: boolean;
+  index: number;
 }
 
 /**
- * Where a dragged row would go. The pointer's height picks the line between top-level rows (Pinned above the Threads label
- * unless Pinned is full, a group's sub-threads counted with their row); dragged right by the indent (`isIndented`) it nests
- * under the top-level row just above that line, when it may. A sub-thread dragged within its group (`parentId`: the group's
- * top-level row), or indented right under it, stays put: moving it out takes leaving the group.
+ * Where a dragged top-level row would go: the pointer's height picks the line between top-level rows (Pinned above the Threads
+ * label unless Pinned is full, a group's sub-threads counted with their row). A drag never nests or un-nests: a sub-thread
+ * belongs to the thread that started it, and moves out only from its row menu.
  */
 export function dropAt(
   rows: RowBox[],
   labelMid: number,
-  dragged: { id: string; parentId?: string },
+  draggedId: string,
   y: number,
-  isIndented: boolean,
   isPinnedFull: boolean,
-  canNest: (parentId: string) => boolean,
-): DropAt {
-  const group = dragged.parentId
-    ? rows.filter(
-        (r) => r.id === dragged.parentId || r.parentId === dragged.parentId,
-      )
-    : [];
-  const isInGroup =
-    group.length > 0 &&
-    y >= Math.min(...group.map((r) => r.top)) &&
-    y <= Math.max(...group.map((r) => r.top + r.height));
-  if (isInGroup) return { slot: null, nestUnder: null };
+): DropSlot {
   const toPinned = y < labelMid && !isPinnedFull;
   const above = rows.filter(
     (r) =>
       !r.parentId &&
-      r.id !== dragged.id &&
+      r.id !== draggedId &&
       r.isPinned === toPinned &&
       r.top + r.height / 2 < y,
   );
-  const parent = isIndented ? above.at(-1) : undefined;
-  if (parent && parent.id === dragged.parentId)
-    return { slot: null, nestUnder: null };
-  return {
-    slot: { toPinned, index: above.length },
-    nestUnder: parent && canNest(parent.id) ? parent.id : null,
-  };
+  return { toPinned, index: above.length };
 }
