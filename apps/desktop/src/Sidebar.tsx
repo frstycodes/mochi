@@ -9,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { useDraggable } from '@dnd-kit/react';
 import { Archive, Eye, Menu, Plus, Search, Settings, Unarchive } from '@/icons';
 import {
@@ -536,6 +536,28 @@ const SIDEBAR_SETTLED = 10;
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
+/**
+ * A row leaving the list (settled, snoozed, filtered out) fades and softens, then folds its height so the rows below close up.
+ * `custom` is whether a drag is on: the dragged row leaves at once, its ghost carries it.
+ */
+export const ROW_EXIT = {
+  exit: (isDragging: boolean) =>
+    isDragging
+      ? // A frame, not 0: an instant exit completes inside React's commit, and AnimatePresence's re-render there trips flushSync.
+        { opacity: 0, transition: { duration: 0.016 } }
+      : {
+          opacity: 0,
+          scale: 0.97,
+          filter: 'blur(2px)',
+          height: 0,
+          overflow: 'hidden',
+          transition: {
+            duration: 0.16,
+            ease: EASE_OUT,
+            height: { duration: 0.2, ease: EASE_OUT, delay: 0.06 },
+          },
+        },
+} satisfies Variants;
 
 /**
  * Finder-style selection over the space's thread rows: a plain click opens the thread and clears it, Shift-click selects a range
@@ -709,7 +731,12 @@ function ThreadList({
           aria-keyshortcuts={sub ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
           className={cn(sub && 'pl-[27px]')}
         >
-          <motion.li {...glide} layoutId={rowLayoutId(t.id)}>
+          <motion.li
+            {...glide}
+            layoutId={rowLayoutId(t.id)}
+            variants={ROW_EXIT}
+            exit="exit"
+          >
             {!!sub && (
               <SubThreadGuide isLast={sub.isLast} className="left-[15px]" />
             )}
@@ -799,25 +826,33 @@ function ThreadList({
         {...drag.handlers}
       >
         <SidebarMenu ref={listRef} className="relative select-none">
-          {showPinned && (
-            <motion.li {...glide}>
-              <SidebarGroupLabel>Pinned</SidebarGroupLabel>
-            </motion.li>
-          )}
-          {section(pins, true)}
-          {!!drag.state && isPinnedEmpty && (
+          <AnimatePresence initial={false} custom={!!drag.state}>
+            {showPinned && (
+              <motion.li key="pinned-label" {...glide}>
+                <SidebarGroupLabel>Pinned</SidebarGroupLabel>
+              </motion.li>
+            )}
+            {section(pins, true)}
+            {!!drag.state && isPinnedEmpty && (
+              <motion.li
+                key="pin-drop"
+                {...glide}
+                aria-hidden
+                className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground"
+              >
+                Drop here to pin
+              </motion.li>
+            )}
             <motion.li
+              key="threads-label"
               {...glide}
-              aria-hidden
-              className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground"
+              data-threads-label
+              className="mt-6"
             >
-              Drop here to pin
+              <SidebarGroupLabel>Threads</SidebarGroupLabel>
             </motion.li>
-          )}
-          <motion.li {...glide} data-threads-label className="mt-6">
-            <SidebarGroupLabel>Threads</SidebarGroupLabel>
-          </motion.li>
-          {section(active.map(localRow), false)}
+            {section(active.map(localRow), false)}
+          </AnimatePresence>
         </SidebarMenu>
         {/* After the list: its layout effect reads the list's ref, which React attaches in tree order. */}
         <ListDraggable listRef={listRef} isDisabled={isMobile} />
