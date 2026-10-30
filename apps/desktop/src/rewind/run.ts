@@ -45,9 +45,7 @@ export async function rewindThread(
   if (!checkpoint || (target.kind === 'message' && !entry)) return null;
   const dropped = firstDroppedMessage(
     current,
-    target.kind === 'message'
-      ? target.index
-      : checkpoint.thread.activity.length,
+    target.kind === 'message' ? target.index : checkpoint.activityCount,
   );
   // Read before the rewind stops the agent: main only knows the point while the session is live.
   const forkAt =
