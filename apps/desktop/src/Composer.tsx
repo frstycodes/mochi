@@ -543,7 +543,7 @@ export function PermissionsMenu({
           className={cn(
             className,
             access === 'Full access' &&
-              'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:bg-warning/12 dark:hover:bg-warning/20',
+              'text-warning hover:text-warning aria-expanded:text-warning',
           )}
           aria-label={`Permissions: ${access}`}
         >
