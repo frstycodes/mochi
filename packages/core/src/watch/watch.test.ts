@@ -66,17 +66,28 @@ const WAIT_MS = 10_000;
 const ATTEMPT_MS = 2_000;
 const ATTEMPTS = 5;
 
-/** `effect`, failing with a message naming `what` if it hasn't finished in `ms`, so a hang says which wait it was. */
+/**
+ * `effect`, failing with a message naming `what` if it hasn't finished in `ms` of real time, so a hang says which wait it was.
+ * The timer is real even under `it.effect`, where TestClock never advances on its own.
+ */
 const within = <A, E, R>(
   what: string,
   effect: Effect.Effect<A, E, R>,
   ms = WAIT_MS,
 ) =>
-  effect.pipe(
-    Effect.timeoutOrElse({
-      duration: ms,
-      orElse: () =>
-        Effect.die(new Error(`Timed out after ${ms}ms waiting for ${what}`)),
+  Effect.raceFirst(
+    effect,
+    Effect.callback<never>((resume) => {
+      const timer = setTimeout(
+        () =>
+          resume(
+            Effect.die(
+              new Error(`Timed out after ${ms}ms waiting for ${what}`),
+            ),
+          ),
+        ms,
+      );
+      return Effect.sync(() => clearTimeout(timer));
     }),
   );
 
