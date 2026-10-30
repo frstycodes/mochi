@@ -2,10 +2,10 @@ import type { ITheme } from '@xterm/xterm';
 
 // xterm parses only hex/rgb, and DESIGN.md tokens are oklch: a 1px canvas resolves each token to rgba for the active theme.
 const TOKENS = {
-  background: '--card',
+  background: '--background',
   foreground: '--foreground',
   cursor: '--foreground',
-  cursorAccent: '--card',
+  cursorAccent: '--background',
   black: '--subtle-foreground',
   brightBlack: '--muted-foreground',
   white: '--muted-foreground',

@@ -53,6 +53,7 @@ import { useSize } from './browser/PageSurface';
 import { useDispatch, useHarnessSelector } from './store';
 import { layoutOf, shownTab } from './store/panes';
 import { isMod } from './keys';
+import { HAS_CAPTIONS } from './windowCaptions';
 import { commandOf, isCommand, listenKeydown } from './keymap';
 import { TAB_MENU } from './menus/menus';
 import { TargetContextMenu } from './menus/TargetContextMenu';
@@ -113,7 +114,6 @@ export function SidePane({
     : placeholder
       ? placeholder.x
       : resolved.chatWidth;
-  const showFocus = kinds.length > 1;
 
   return (
     <DragSurface
@@ -124,6 +124,7 @@ export function SidePane({
       <div
         ref={areaRef}
         onKeyDown={onKeyDown}
+        data-under-header={HAS_CAPTIONS || !chat ? '' : undefined}
         data-motion={isSliding ? 'slide' : undefined}
         className={cn(
           'relative h-full min-h-0 overflow-hidden',
@@ -148,7 +149,6 @@ export function SidePane({
               rect={resolved.rects[kind]!}
               area={size}
               isFocused={layout.focused === kind}
-              showFocus={showFocus}
               isExpanded={layout.expanded === kind}
               isMoving={move.kind === kind}
               entering={
@@ -273,12 +273,14 @@ function useEnteringPanes(kinds: PaneTabKind[]) {
 }
 
 /** A card touching the area's top, right or bottom edge sits flush with it: no border or rounding on that side. */
+// Panes stack flush: the one above's bottom border is the only line between them. Under a header (Windows, or a pane in place
+// of the chat) the top pane takes a top border, since the header has no line of its own.
 function edgeClass(rect: PaneRect, area: { w: number; h: number }) {
   return cn(
-    'rounded-lg',
-    rect.y <= 1 && 'rounded-t-none border-t-0',
-    rect.x + rect.w >= area.w - 1 && 'rounded-r-none border-r-0',
-    rect.y + rect.h >= area.h - 1 && 'rounded-b-none border-b-0',
+    'rounded-none border-t-0',
+    rect.y <= 1 && 'in-data-under-header:border-t',
+    rect.x + rect.w >= area.w - 1 && 'border-r-0',
+    rect.y + rect.h >= area.h - 1 && 'border-b-0',
   );
 }
 
@@ -300,14 +302,14 @@ function LeavingPane({
       aria-hidden
       data-motion={isSlide ? 'slide' : 'fade'}
       className={cn(
-        'pane-card pane-card-leaving pointer-events-none absolute flex flex-col overflow-hidden border border-border bg-card',
+        'pane-card pane-card-leaving pointer-events-none absolute flex flex-col overflow-hidden border border-border bg-background',
         edgeClass(rect, area),
       )}
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
     >
       <div
         data-pane-header
-        className="flex h-9 shrink-0 items-center gap-1.5 border-b pl-3"
+        className="flex h-11 shrink-0 items-center gap-1.5 pl-3"
       >
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate type-meta font-medium">{title}</span>
@@ -354,7 +356,6 @@ function PaneCard({
   rect,
   area,
   isFocused,
-  showFocus,
   isExpanded,
   isMoving,
   entering,
@@ -365,7 +366,6 @@ function PaneCard({
   rect: PaneRect;
   area: { w: number; h: number };
   isFocused: boolean;
-  showFocus: boolean;
   isExpanded: boolean;
   isMoving: boolean;
   entering: 'slide' | 'fade' | undefined;
@@ -396,15 +396,9 @@ function PaneCard({
           : { left: rect.x, top: rect.y, width: rect.w, height: rect.h }
       }
       className={cn(
-        'pane-card absolute flex flex-col overflow-hidden bg-card outline-none',
+        'pane-card absolute flex flex-col overflow-hidden bg-background outline-none',
         !!entering && 'pane-card-entering',
-        isExpanded
-          ? 'z-20'
-          : cn(
-              'border',
-              edgeClass(rect, area),
-              showFocus && isFocused ? 'border-foreground/20' : 'border-border',
-            ),
+        isExpanded ? 'z-20' : cn('border border-border', edgeClass(rect, area)),
         isMoving && 'opacity-60',
       )}
     >
@@ -601,7 +595,7 @@ function EmptyPanes({
       data-side-pane
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       className={cn(
-        'pane-card absolute overflow-hidden border bg-card',
+        'pane-card absolute overflow-hidden border bg-background',
         edgeClass(rect, area),
       )}
     >
