@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer';
 import {
   Tooltip,
   TooltipContent,
@@ -180,20 +180,24 @@ export function ThreadView({ thread }: { thread: Thread }) {
         )}
       </div>
       {!isWide && (
-        <Sheet open={isSummarySheetOpen} onOpenChange={setSummarySheetOpen}>
-          <SheetContent side="right" className="w-[300px] p-0 sm:max-w-[300px]">
-            <SheetTitle className="sr-only">Thread summary</SheetTitle>
+        <Drawer
+          direction="right"
+          open={isSummarySheetOpen}
+          onOpenChange={setSummarySheetOpen}
+        >
+          <DrawerContent className="w-[300px] data-[vaul-drawer-direction=right]:sm:max-w-[300px]">
+            <DrawerTitle className="sr-only">Thread summary</DrawerTitle>
             <SummaryPanel
               thread={thread}
-              // Room for the sheet's close button, which otherwise covers the summary's menu.
-              className="h-full px-3 pt-10 pb-3"
+              variant="flat"
+              className="h-full p-2"
               onPaneOpened={() => {
                 setSummarySheetOpen(false);
                 setPaneTabOpen(true);
               }}
             />
-          </SheetContent>
-        </Sheet>
+          </DrawerContent>
+        </Drawer>
       )}
     </div>
   );
@@ -335,7 +339,7 @@ function FloatingSummary({
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
       <SummaryPanel
         thread={shown}
-        isFloating
+        variant="floating"
         className={cn('max-h-full', isOpen && 'pointer-events-auto')}
       />
     </div>

@@ -127,23 +127,24 @@ const LIST_LIMIT = 3;
 const OPEN_BY_DEFAULT: string[] = ['threads'] satisfies SummaryCardId[];
 
 /**
- * `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. `isFloating`: cards float over the chat.
+ * `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow drawer) can step aside.
+ * `variant`: `floating` cards float over the chat; `flat` sections share the one surface they sit in (the narrow drawer).
  */
 export function SummaryPanel({
   thread,
   className,
-  isFloating,
+  variant,
   onPaneOpened,
 }: {
   thread: Thread;
   className?: string;
-  isFloating?: boolean;
+  variant?: 'floating' | 'flat';
   onPaneOpened?: () => void;
 }) {
   return (
     <aside
       aria-label="Thread summary"
-      data-floating={isFloating || undefined}
+      data-variant={variant}
       className={cn('group/summary flex min-h-0 flex-col', className)}
     >
       <ScrollArea type="scroll" className="min-h-0 flex-1">
@@ -153,10 +154,10 @@ export function SummaryPanel({
   );
 }
 
-// Docked, cards sit on the chat's own surface, a hairline the only edge; floating over the chat they need the popover's fill.
+// Docked, cards sit on the chat's own surface, a hairline the only edge; floating over the chat they need the popover's fill; flat, they drop their chrome.
 // 22px squircle corners need a 44px-tall box: any shorter and the browser shrinks both corners to fit, so a folded card would round tighter than an open one.
 const CARD =
-  'min-h-11 gap-0 rounded-lg py-0 bg-background group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
+  'min-h-11 gap-0 rounded-lg py-0 bg-background group-data-[variant=floating]/summary:bg-popover group-data-[variant=floating]/summary:shadow-float group-data-[variant=flat]/summary:rounded-none group-data-[variant=flat]/summary:border-0 group-data-[variant=flat]/summary:bg-transparent';
 
 /** What needs you first, then what runs, what it made, what it's tied to and what it used, each only once it has something; where it runs closes the column. */
 function SummaryBody({
@@ -435,7 +436,7 @@ function EnvironmentLine({ thread }: { thread: Thread }) {
   const here = useThisBackend();
   return (
     // Floating over the chat it needs the cards' fill, or it reads as chat text.
-    <div className="flex min-h-7 min-w-0 items-center gap-1.5 pr-1 pl-3 type-caption text-subtle-foreground group-data-floating/summary:min-h-11 group-data-floating/summary:rounded-lg group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float">
+    <div className="flex min-h-7 min-w-0 items-center gap-1.5 pr-1 pl-3 type-caption text-subtle-foreground group-data-[variant=floating]/summary:min-h-11 group-data-[variant=floating]/summary:rounded-lg group-data-[variant=floating]/summary:bg-popover group-data-[variant=floating]/summary:shadow-float">
       {fullAccess && (
         <span className="flex shrink-0 items-center gap-1.5 text-warning">
           <ShieldAlert className="size-3.5" aria-hidden />
