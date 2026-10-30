@@ -1,13 +1,11 @@
 import type { McpServer, Thread } from './model.ts';
 import type { ThreadSummary } from './summary.ts';
-import { hasGoal } from './drift.ts';
 import { activeTasks } from './runtime/tasks.ts';
 import { plural } from '@mochi/domain/lib/format';
 
 export type SummaryCardId =
-  | 'goal'
   | 'environment'
-  | 'context'
+  | 'threads'
   | 'sources'
   | 'connectors'
   | 'servers'
@@ -15,22 +13,23 @@ export type SummaryCardId =
   | 'changes'
   | 'tasks';
 
-/** The cards with something to show, in Claude's order: where it runs, what it holds, what it reaches, what it made, then what still runs. */
+/** The cards with something to show, in Claude's order: where it runs and what it's tied to, what it holds, what it reaches, what it made, then what still runs. */
 export function summaryCards({
   thread,
   summary,
+  linkedThreadCount,
   portCount,
   outputCount,
 }: {
   thread: Thread;
   summary: ThreadSummary;
+  linkedThreadCount: number;
   portCount: number;
   outputCount: number;
 }): SummaryCardId[] {
   const cards: (SummaryCardId | false)[] = [
-    hasGoal(thread) && 'goal',
     'environment',
-    thread.context.max > 0 && 'context',
+    linkedThreadCount > 0 && 'threads',
     'sources',
     !!thread.agent?.mcpServers?.length && 'connectors',
     portCount > 0 && 'servers',
@@ -54,6 +53,19 @@ export function connectorStatus(servers: Pick<McpServer, 'status'>[]) {
   const pending = servers.filter((s) => s.status === 'pending').length;
   if (pending) return { text: `${pending} connecting`, needsYou: false };
   return { text: `${connected} of ${servers.length} on`, needsYou: false };
+}
+
+/** The thread's connectors, the ones this thread called first, most called first; `calls` is 0 for the rest. */
+export function connectorUsage(
+  servers: McpServer[],
+  used: ThreadSummary['servers'],
+) {
+  return servers
+    .map((server) => ({
+      server,
+      calls: used.find((u) => u.server === server.name)?.calls ?? 0,
+    }))
+    .toSorted((a, b) => b.calls - a.calls);
 }
 
 export const fileCount = (n: number) => `${n} ${plural(n, 'file', 'files')}`;

@@ -3,7 +3,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, Criterion, Thread } from '../model';
 import { ThreadName } from '../chat/ThreadMessage';
-import { parentOf } from '../reorder';
+import { SubThreadRow } from './SubThreadRow';
 import { useHarness } from '../store';
 import { StatusRing, useThreadStatus } from './VerdictChip';
 import type { Verdict } from './verdict';
@@ -39,22 +39,33 @@ export function SubThreadState({
   );
 }
 
-/** On a sub-thread's own card: which thread it belongs to, and the criterion of that thread's goal it covers. */
-export function SubThreadLineage({ thread }: { thread: Thread }) {
+/**
+ * Where a sub-thread link was made, in the chat: the sub-thread's live row in its parent's, "Sub-thread of" its parent in its own.
+ * A link since undone or moved shows nothing: the row reads the threads as they are now.
+ */
+export function ThreadLinkRow({
+  thread,
+  link,
+}: {
+  thread: Thread;
+  link: NonNullable<ActivityEntry['threadLink']>;
+}) {
   const { state } = useHarness();
-  const parent = parentOf(state.threads, thread);
-  if (!parent) return null;
-  const covers = parent.criteria?.find(
-    (c) => c.id === thread.parent?.criterionId,
-  );
+  const other = state.threads.find((t) => t.id === link.threadId);
+  if (link.role === 'sub')
+    return (
+      other?.parent?.threadId === thread.id && (
+        <SubThreadRow sub={other} className="-mx-2" />
+      )
+    );
+  if (thread.parent?.threadId !== link.threadId) return null;
   return (
-    <p className="flex min-w-0 items-center gap-1.5 type-meta text-muted-foreground">
-      <DiagramTree aria-hidden className="size-3.5 shrink-0" />
+    <p className="flex min-h-7 min-w-0 items-center gap-1.5 type-meta text-muted-foreground">
+      <DiagramTree aria-hidden className="size-4 shrink-0" />
       <span className="shrink-0">Sub-thread of</span>
-      <ThreadName peer={{ threadId: parent.id, title: parent.title }} />
-      {!!covers && (
-        <span className="min-w-0 truncate">{`, for “${covers.text}”`}</span>
-      )}
+      <ThreadName
+        peer={{ threadId: link.threadId, title: other?.title ?? link.title }}
+      />
     </p>
   );
 }

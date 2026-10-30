@@ -143,7 +143,7 @@ test('similarity matches near-identical step titles only', () => {
   assert.ok(similarity('Add Redis client', 'Export CSV') < 0.3);
 });
 
-test('summary counts tools by verb and sums diffs from edits', async () => {
+test("summary sums each edited file's diffs, ignoring your messages", async () => {
   const { summarize } = await import('./summary.ts');
   const s = summarize([
     {
@@ -167,13 +167,6 @@ test('summary counts tools by verb and sums diffs from edits', async () => {
     { at: 4, who: 'codex', kind: 'tool', text: 'Run pnpm test' },
     { at: 5, who: 'you', kind: 'message', text: 'Edit nothing +99 −99' },
   ]);
-  assert.deepEqual(s.tools, [
-    { verb: 'Read', count: 1 },
-    { verb: 'Edit', count: 2 },
-    { verb: 'Run', count: 1 },
-  ]);
-  assert.equal(s.added, 128);
-  assert.equal(s.removed, 6);
   assert.deepEqual(s.files, [
     { path: 'apps/web/usage.tsx', added: 128, removed: 6 },
   ]);

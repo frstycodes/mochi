@@ -1,17 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import type { Thread } from './model.ts';
+import type { McpServer, Thread } from './model.ts';
 import { summarize } from './summary.ts';
 import {
   connectorStatus,
+  connectorUsage,
   orderCards,
   savedOrder,
   summaryCards,
 } from './summarySections.ts';
-import { setPrefs } from './settings/prefs.ts';
-
-// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
-setPrefs({ goals: true });
 
 const thread = (patch: Partial<Thread>) =>
   ({
@@ -29,10 +26,16 @@ const thread = (patch: Partial<Thread>) =>
     context: { used: 0, max: 0 },
     ...patch,
   }) as Thread;
-const cards = (t: Thread, portCount = 0, outputCount = 0) =>
+const cards = (
+  t: Thread,
+  portCount = 0,
+  outputCount = 0,
+  linkedThreadCount = 0,
+) =>
   summaryCards({
     thread: t,
     summary: summarize(t.activity),
+    linkedThreadCount,
     portCount,
     outputCount,
   });
@@ -41,10 +44,10 @@ test('a folderless chat shows only where it runs and its sources', () => {
   assert.deepEqual(cards(thread({})), ['environment', 'sources']);
 });
 
-test('the context card appears once the thread knows its window', () => {
-  assert.deepEqual(cards(thread({ context: { used: 0, max: 200_000 } })), [
+test('the threads card sits under environment once a parent, sub-thread or reply is linked', () => {
+  assert.deepEqual(cards(thread({}), 0, 0, 1), [
     'environment',
-    'context',
+    'threads',
     'sources',
   ]);
 });
@@ -103,11 +106,24 @@ test('connector status leads with what needs you', () => {
   );
 });
 
-test('a goal leads the cards', () => {
-  assert.deepEqual(cards(thread({ goal: 'Ship it' })).slice(0, 2), [
-    'goal',
-    'environment',
+test('connectors this thread called come first, most called first', () => {
+  const servers = [
+    { name: 'figma', status: 'connected' },
+    { name: 'linear', status: 'connected' },
+    { name: 'slack', status: 'connected' },
+  ] satisfies McpServer[];
+  const rows = connectorUsage(servers, [
+    { server: 'linear', calls: 3, tools: ['get_issue'] },
+    { server: 'slack', calls: 1, tools: ['post'] },
   ]);
+  assert.deepEqual(
+    rows.map((r) => [r.server.name, r.calls]),
+    [
+      ['linear', 3],
+      ['slack', 1],
+      ['figma', 0],
+    ],
+  );
 });
 
 test('dragged order wins; cards never placed keep their default slot', () => {

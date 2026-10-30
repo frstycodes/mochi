@@ -757,6 +757,13 @@ export const ActivityEntry = Schema.Struct({
       title: Schema.String,
     }),
   ),
+  threadLink: opt(
+    Schema.Struct({
+      role: Schema.Literals(['sub', 'parent']),
+      threadId: Schema.String,
+      title: Schema.String,
+    }),
+  ),
   subThread: opt(
     Schema.Struct({
       threadId: Schema.String,

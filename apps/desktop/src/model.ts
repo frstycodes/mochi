@@ -273,6 +273,8 @@ export interface ActivityEntry {
   from?: ThreadRef;
   /** Messages: an Auto-fix event Mochi sent the agent about one of the thread's PRs; `text` is the event, the row shows `title`. */
   autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
+  /** Events only: a sub-thread started from or nested under this thread (`sub`), or this one became a sub-thread of `parent`. */
+  threadLink?: { role: 'sub' | 'parent'; threadId: string; title: string };
   /** Events only: a sub-thread handed its result back here. */
   subThread?: { threadId: string; title: string; text: string };
   /** Events only: a sub-thread reported here (`reportParent`), or a thread messaged with `expectReply` answered; `text` is the body. */

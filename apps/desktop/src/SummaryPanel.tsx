@@ -2,7 +2,6 @@ import { Card } from '@/components/ui/card';
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
 import {
   isValidElement,
-  useRef,
   useState,
   type KeyboardEvent,
   type FormEvent,
@@ -21,12 +20,11 @@ import {
   Grip,
   Image,
   Link,
-  Pushpin,
-  PinOff,
   Route,
   Stop,
   ShieldAlert,
-  ShieldCheck,
+  DiagramTree,
+  Undo,
   XCircle,
   type IconComponent,
   Diff,
@@ -84,26 +82,14 @@ import type { McpServer, Source, Thread } from './model';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { openProfileConfig } from './routes/nav';
-import { GoalDetails } from './goals/GoalDetails';
-import { openGoalEditor } from './goals/GoalEditor';
-import { useNextMove } from './goals/NextMove';
-import { useIdleVerdict } from './goals/VerdictChip';
-import { showsVerdictCard } from './goals/report';
-import {
-  SummaryCriteria,
-  SummaryGoal,
-  SummaryGoalHeader,
-  SummaryGoalStatus,
-  SummaryGoalText,
-  SummaryNextMove,
-} from './goals/SummaryGoal';
+import { SubThreadRow } from './goals/SubThreadRow';
+import { useOpenThread } from './goals/SubThreads';
 import { clock, shortElapsed } from './progress';
-import { subThreadsOf } from './reorder';
+import { parentOf, subThreadsOf } from './reorder';
 import { useDispatch, shallowEqual, useHarnessSelector } from './store';
 import { summarize, type ThreadSummary } from './summary';
-import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { OverflowIcon, ProviderMark, TooltipIconButton } from './ui';
+import { OverflowIcon, TooltipIconButton } from './ui';
 import {
   isActive,
   stopTask,
@@ -114,6 +100,7 @@ import {
 import { TaskIcon, useElapsed } from './agents/parts';
 import {
   connectorStatus,
+  connectorUsage,
   fileCount,
   orderCards,
   savedOrder,
@@ -121,10 +108,6 @@ import {
   type SummaryCardId,
 } from './summarySections';
 import { SkillIcon } from './icons/ObjectIcons';
-import { contextBreakdown, type ContextRow } from './usage/contextBreakdown';
-import { useContextUsage } from './usage/useContextUsage';
-import { TONE_COLORS, toneFor } from './usage/limits';
-import { TOKENS } from '@mochi/domain/lib/format';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
 import { useLibraryNames } from './library/names';
 import { DeviceIcon } from './remote/DeviceIcon';
@@ -146,7 +129,7 @@ import type { ListeningPort } from '@mochi/domain/host/types/ports';
 const LIST_LIMIT = 3;
 const OPEN_BY_DEFAULT: string[] = [
   'environment',
-  'context',
+  'threads',
   'sources',
   'servers',
   'outputs',
@@ -177,8 +160,9 @@ export function SummaryPanel({
   );
 }
 
+// Docked, cards sit on the chat's own surface, a hairline the only edge; floating over the chat they need the popover's fill.
 const CARD =
-  'gap-0 py-0 group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
+  'gap-0 py-0 bg-background group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
 
 /** What needs you first, then a card per thing the right side holds, each only once it has something: like Claude's. */
 function SummaryBody({
@@ -188,10 +172,8 @@ function SummaryBody({
   thread: Thread;
   onPaneOpened?: () => void;
 }) {
-  const { summary, cards, ports, launchNames, outputs, open } = useSummary(
-    thread,
-    onPaneOpened,
-  );
+  const { summary, cards, links, ports, launchNames, outputs, open } =
+    useSummary(thread, onPaneOpened);
   const [order, reorder] = useCardOrder(cards);
   const [openCards, setOpenCards] = useState(OPEN_BY_DEFAULT);
   const [isChangesOpen, setChangesOpen] = useOpenInThread(
@@ -209,9 +191,8 @@ function SummaryBody({
   };
   const props = { thread, summary, open };
   const BODIES = {
-    goal: <GoalSection thread={thread} />,
     environment: <EnvironmentCard {...props} />,
-    context: <ContextCard {...props} />,
+    threads: <ThreadsCard {...links} />,
     sources: <SourcesCard {...props} />,
     connectors: <ConnectorsCard {...props} />,
     servers: (
@@ -224,7 +205,6 @@ function SummaryBody({
 
   return (
     <div className="flex flex-col gap-2">
-      {hasGoal(thread) && <WaitingMove thread={thread} />}
       <NeedsYou thread={thread} />
       <Accordion
         type="multiple"
@@ -248,13 +228,9 @@ function SummaryBody({
               id={id}
               onMove={(step) => reorder(moveCard(order, id, step))}
             >
-              {id === 'goal' ? (
-                BODIES.goal
-              ) : (
-                <AccordionItem value={id} asChild>
-                  <Card className={CARD}>{BODIES[id]}</Card>
-                </AccordionItem>
-              )}
+              <AccordionItem value={id} asChild>
+                <Card className={CARD}>{BODIES[id]}</Card>
+              </AccordionItem>
             </DraggableCard>
           ))}
         </Reorder.Group>
@@ -361,13 +337,27 @@ function useSummary(thread: Thread, onPaneOpened?: () => void) {
   const launchNames = useLaunchNames(cwd);
   const outputs = artifactsOf(thread, thread.repo ? null : cwd);
   const outputCount = outputs.files.length + outputs.visuals.length;
+  const links = useThreadLinks(thread);
   const cards = summaryCards({
     thread,
     summary,
+    linkedThreadCount:
+      +!!links.parent + links.subs.length + links.replyTo.length,
     portCount: ports.length,
     outputCount,
   });
-  return { summary, cards, ports, launchNames, outputs, open };
+  return { summary, cards, links, ports, launchNames, outputs, open };
+}
+
+/** The threads this one is tied to: its parent, its open sub-threads, and the ones its next turn end answers. */
+function useThreadLinks(thread: Thread) {
+  const parent = useHarnessSelector((s) => parentOf(s.threads, thread));
+  const subs = useHarnessSelector(
+    (s) =>
+      subThreadsOf(s.threads, thread.id).filter((t) => t.status !== 'settled'),
+    shallowEqual,
+  );
+  return { parent, subs, replyTo: thread.replyTo ?? [] };
 }
 
 interface CardProps {
@@ -451,7 +441,7 @@ function EnvironmentCard({ thread }: CardProps) {
                 {!!repo.path && (
                   <span className="text-subtle-foreground">
                     {' '}
-                    · {homeShort(parentOf(repo.path))}
+                    · {homeShort(parentDir(repo.path))}
                   </span>
                 )}
               </>
@@ -484,28 +474,12 @@ function EnvironmentCard({ thread }: CardProps) {
             )}
           </SummaryRow>
         )}
-        {!!agent?.model && (
+        {fullAccess && (
           <SummaryRow
-            icon={
-              <ProviderMark
-                provider={thread.session?.provider ?? thread.providers[0]}
-              />
-            }
-            label={agent.model}
-          />
-        )}
-        {!!agent?.permissionMode && (
-          <SummaryRow
-            icon={
-              fullAccess ? (
-                <ShieldAlert className="size-4 text-warning" />
-              ) : (
-                ShieldCheck
-              )
-            }
+            icon={<ShieldAlert className="size-4 text-warning" />}
             label={
-              <span className={cn(fullAccess && 'text-warning')}>
-                {permissionLabel(agent.permissionMode)}
+              <span className="text-warning">
+                {permissionLabel(agent!.permissionMode!)}
               </span>
             }
           />
@@ -516,110 +490,10 @@ function EnvironmentCard({ thread }: CardProps) {
 }
 
 const basenameOf = (path: string) => path.replace(/\/+$/, '').split('/').pop()!;
-const parentOf = (path: string) => path.replace(/\/[^/]+\/?$/, '') || '/';
+const parentDir = (path: string) => path.replace(/\/[^/]+\/?$/, '') || '/';
 const homeShort = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
 
-/** What the agent was handed or reached for: links, files and MCP items you added, then the skills it used. Context use lives in the composer's ring. */
-const PERCENT = new Intl.NumberFormat('en', {
-  style: 'percent',
-  maximumFractionDigits: 1,
-});
-
-/** Claude Code's `/context` as a card: the window as one stacked bar, then each category with its tokens and share. */
-function ContextCard({ thread }: CardProps) {
-  const { data: usage = null } = useContextUsage(thread);
-  const { rows, deferred, used, window, share } = contextBreakdown(
-    usage,
-    thread.context,
-  );
-  const tone = toneFor(share);
-  return (
-    <>
-      <CardHeader
-        title="Context"
-        meta={
-          <span
-            style={{
-              color: tone === 'normal' ? undefined : TONE_COLORS[tone],
-            }}
-          >
-            {Math.round(share * 100)}% used
-          </span>
-        }
-      />
-      <AccordionContent className="flex flex-col gap-3 px-3 pb-3">
-        <div className="flex flex-col gap-1.5">
-          <p className="tabular type-caption text-muted-foreground">
-            {TOKENS.format(used)} of {TOKENS.format(window)} tokens
-          </p>
-          <ContextBar rows={rows} />
-        </div>
-        <ul className="flex flex-col gap-1">
-          {rows.map((row) => (
-            <ContextLegendRow key={row.name} row={row} />
-          ))}
-        </ul>
-        {deferred.length > 0 && (
-          <ul className="flex flex-col gap-1">
-            {deferred.map((row) => (
-              <li
-                key={row.name}
-                className="flex items-center gap-2 type-caption text-subtle-foreground"
-              >
-                <span className="min-w-0 flex-1 truncate">{row.name}</span>
-                <span className="tabular">{TOKENS.format(row.tokens)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </AccordionContent>
-    </>
-  );
-}
-
-function ContextBar({ rows }: { rows: ContextRow[] }) {
-  return (
-    <div
-      role="img"
-      aria-label={rows
-        .map((r) => `${r.name} ${PERCENT.format(r.share)}`)
-        .join(', ')}
-      className="flex h-1.5 w-full gap-px overflow-hidden rounded-full bg-muted"
-    >
-      {rows
-        .filter((row) => row.kind !== 'free')
-        .map((row) => (
-          <span
-            key={row.name}
-            className="h-full min-w-0.5"
-            style={{ width: `${row.share * 100}%`, background: row.color }}
-          />
-        ))}
-    </div>
-  );
-}
-
-function ContextLegendRow({ row }: { row: ContextRow }) {
-  return (
-    <li className="flex items-center gap-2 type-caption">
-      <span
-        aria-hidden
-        className="size-2 shrink-0 rounded-[3px] ring-1 ring-foreground/10 ring-inset"
-        style={{ background: row.color }}
-      />
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">
-        {row.name}
-      </span>
-      <span className="tabular text-muted-foreground">
-        {TOKENS.format(row.tokens)}
-      </span>
-      <span className="w-11 shrink-0 text-right tabular text-subtle-foreground">
-        {PERCENT.format(row.share)}
-      </span>
-    </li>
-  );
-}
-
+/** What the agent was handed or reached for: links, files and MCP items you added, then the skills it used. */
 function SourcesCard({ thread, summary, open }: CardProps) {
   const count = thread.sources.length + summary.skills.length;
   return (
@@ -686,10 +560,12 @@ const MCP_STATUS_CLASSES = {
   disabled: 'text-subtle-foreground',
 } satisfies Record<McpServer['status'], string>;
 
-function ConnectorsCard({ thread }: CardProps) {
+/** Each connector with how often this thread called it; status only when one isn't up. */
+function ConnectorsCard({ thread, summary }: CardProps) {
   const names = useLibraryNames();
   const servers = thread.agent?.mcpServers ?? [];
   const status = connectorStatus(servers);
+  const rows = connectorUsage(servers, summary.servers);
   const manage = () => openProfileConfig(thread.spaceId, 'mcp');
   return (
     <>
@@ -702,8 +578,8 @@ function ConnectorsCard({ thread }: CardProps) {
         }
       />
       <CardBody>
-        <LimitedList items={servers}>
-          {(server) => (
+        <LimitedList items={rows}>
+          {({ server, calls }) => (
             <SummaryRow
               key={server.name}
               icon={<McpServerMark server={server.name} url={server.url} />}
@@ -720,16 +596,66 @@ function ConnectorsCard({ thread }: CardProps) {
                   MCP_STATUS_CLASSES[server.status] || 'text-subtle-foreground',
                 )}
               >
-                {MCP_STATUS_LABELS[server.status] ||
-                  (server.toolCount === undefined
-                    ? 'Connected'
-                    : `${server.toolCount} tools`)}
+                {MCP_STATUS_LABELS[server.status] || (calls > 0 && `×${calls}`)}
               </span>
             </SummaryRow>
           )}
         </LimitedList>
       </CardBody>
     </>
+  );
+}
+
+function ThreadsCard({
+  parent,
+  subs,
+  replyTo,
+}: ReturnType<typeof useThreadLinks>) {
+  const openThread = useOpenThread();
+  return (
+    <>
+      <CardHeader title="Threads" />
+      <CardBody>
+        {!!parent && (
+          <SummaryRow
+            icon={DiagramTree}
+            label={
+              <>
+                <span className="text-muted-foreground">Sub-thread of </span>
+                {parent.title}
+              </>
+            }
+            onClick={() => openThread(parent)}
+          />
+        )}
+        {subs.map((sub) => (
+          <SubThreadRow key={sub.id} sub={sub} peekSide="left" />
+        ))}
+        {replyTo.map((ref) => (
+          <ReplyRow key={ref.threadId} to={ref} />
+        ))}
+      </CardBody>
+    </>
+  );
+}
+
+/** A thread that messaged this one and waits: this thread's next turn end goes back to it. */
+function ReplyRow({ to }: { to: NonNullable<Thread['replyTo']>[number] }) {
+  const openThread = useOpenThread();
+  const target = useHarnessSelector((s) =>
+    s.threads.find((t) => t.id === to.threadId),
+  );
+  return (
+    <SummaryRow
+      icon={Undo}
+      label={
+        <>
+          <span className="text-muted-foreground">Replies to </span>
+          {target?.title ?? to.title}
+        </>
+      }
+      onClick={target ? () => openThread(target) : undefined}
+    />
   );
 }
 
@@ -1480,88 +1406,3 @@ const permissionLabel = (mode: string) =>
     .split(' · ')
     .map((part) => PERMISSION_LABELS[part] ?? part)
     .join(', ');
-
-/** The goal card; Open shows its history in a popover beside the panel. */
-function GoalSection({ thread }: { thread: Thread }) {
-  const [isOpen, setOpen] = useState(false);
-  const [isPinned, setPinned] = useState(false);
-  const block = useRef<HTMLElement>(null);
-  const verdict = useIdleVerdict(thread);
-  const step = thread.steps.find((s) => s.status === 'running')?.title;
-  return (
-    <Popover open={isOpen} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <Card asChild className={cn(CARD, 'gap-2.5 px-3 py-2.5')}>
-          <SummaryGoal ref={block}>
-            <SummaryGoalHeader
-              thread={thread}
-              onEdit={() => openGoalEditor(thread.id)}
-              onOpen={() => setOpen((o) => !o)}
-              countClassName={UNDER_HANDLE}
-            />
-            <SummaryGoalStatus thread={thread} verdict={verdict} step={step} />
-            <SummaryGoalText>{thread.goal}</SummaryGoalText>
-            <SummaryCriteria thread={thread} />
-          </SummaryGoal>
-        </Card>
-      </PopoverAnchor>
-      <PopoverContent
-        side="left"
-        align="start"
-        sideOffset={12}
-        collisionPadding={16}
-        onEscapeKeyDown={() => setPinned(false)}
-        // The block's own Open button toggles; a click elsewhere in the block (Run check) leaves it open.
-        onInteractOutside={(e) =>
-          (isPinned || block.current?.contains(e.target as Node)) &&
-          e.preventDefault()
-        }
-        className="surface-float w-[min(440px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
-      >
-        <div className="mb-3 flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPinned((p) => !p)}
-            aria-pressed={isPinned}
-          >
-            {isPinned ? (
-              <PinOff data-icon="inline-start" />
-            ) : (
-              <Pushpin data-icon="inline-start" />
-            )}
-            {isPinned ? 'Unpin' : 'Keep open'}
-          </Button>
-        </div>
-        <GoalDetails thread={thread} />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/** The end-of-turn question while it waits in the chat; it scrolls there rather than answering here. */
-function WaitingMove({ thread }: { thread: Thread }) {
-  const next = useNextMove(thread);
-  if (!next?.question || !showsVerdictCard(thread)) return null;
-  return (
-    <SummaryNextMove
-      question={next.question}
-      onShow={() => showNextMove(thread.id)}
-    />
-  );
-}
-
-function showNextMove(threadId: string) {
-  const card = document.querySelector<HTMLElement>(
-    `[data-next-move="${CSS.escape(threadId)}"]`,
-  );
-  card?.scrollIntoView({
-    block: 'center',
-    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 'auto'
-      : 'smooth',
-  });
-  card
-    ?.querySelector<HTMLElement>('button:last-of-type')
-    ?.focus({ preventScroll: true });
-}

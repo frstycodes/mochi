@@ -42,8 +42,6 @@ import { changeDraft } from './ledger';
 import { TurnSpine } from './Spine';
 import { turnSection } from './spineNodes';
 import { usePrefs } from '../settings/prefs';
-import { SubThreadLineage } from './SubThreads';
-import { SubThreadList } from './SubThreadList';
 import {
   NextMoveActions,
   NextMoveAnswer,
@@ -114,13 +112,11 @@ export function ReportCard({
       )}
       <NextMoveContent>
         {isSuperseded && <SupersededNote />}
-        <SubThreadLineage thread={thread} />
         {!!report?.summary && (
           <NextMoveSummary>{report.summary}</NextMoveSummary>
         )}
         {!isReadOnly && <TurnSection thread={thread} report={report} />}
         <Evidence thread={thread} tiles={tiles} prs={prs} />
-        <SubThreadList thread={thread} />
         {verdict.gaps.length > 0 && (
           <GapList thread={thread} gaps={verdict.gaps} onJump={onJump} />
         )}
@@ -185,15 +181,12 @@ function TurnSection({
 }
 
 /**
- * The widgets of the last turn that produced them, kept under it while a newer turn runs: its summary, the sub-threads (live)
- * and the question you answered; its file changes are a card of their own just above. No verdict and no answers: those describe the thread now, and the newer turn ends with its own.
+ * The widgets of the last turn that produced them, kept under it while a newer turn runs: its summary and the question you answered; its file changes are a card of their own just above. No verdict and no answers: those describe the thread now, and the newer turn ends with its own.
  */
 export function EarlierTurnCard({
-  thread,
   anchor,
   record,
 }: {
-  thread: Thread;
   anchor: TurnAnchor;
   record?: ActivityEntry['nextMove'];
 }) {
@@ -205,7 +198,6 @@ export function EarlierTurnCard({
     >
       <NextMoveContent>
         {!!summary && <NextMoveSummary>{summary}</NextMoveSummary>}
-        <SubThreadList thread={thread} />
         {!!record && <NextMoveQuestion>{record.question}</NextMoveQuestion>}
         {!!record?.answer && <NextMoveAnswer>{record.answer}</NextMoveAnswer>}
       </NextMoveContent>

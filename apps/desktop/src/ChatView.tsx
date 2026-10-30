@@ -12,7 +12,7 @@ import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { isKeyUp, isWheelUp } from './chat/scrollIntent';
-import { ContextRing } from './ContextRing';
+import { ThreadContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
@@ -95,7 +95,7 @@ import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
 import { EarlierTurnCard, ReportCard } from './goals/ReportCard';
 import { NextMoveRecord, ThreadPlan, useNextMove } from './goals/NextMove';
-import { SubThreadResultRow } from './goals/SubThreads';
+import { SubThreadResultRow, ThreadLinkRow } from './goals/SubThreads';
 import { ProposalEntry } from './chat/ThreadProposals';
 import { GrantEntry } from './chat/GrantCard';
 import { showsVerdictCard, suggestedReply } from './goals/report';
@@ -460,13 +460,7 @@ const ChatRowView = memo(function ChatRowView({
       />
     );
   if (row.kind === 'earlier-turn')
-    return (
-      <EarlierTurnCard
-        thread={thread}
-        anchor={row.anchor}
-        record={row.record}
-      />
-    );
+    return <EarlierTurnCard anchor={row.anchor} record={row.record} />;
   if (row.kind === 'subagent')
     return <SubagentGroup thread={thread} entries={row.entries} />;
   if (row.kind === 'image')
@@ -494,6 +488,8 @@ const ChatRowView = memo(function ChatRowView({
     return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.nextMove)
     return <NextMoveRecord record={row.entry.nextMove} />;
+  if (row.kind === 'event' && row.entry.threadLink)
+    return <ThreadLinkRow thread={thread} link={row.entry.threadLink} />;
   if (row.kind === 'event' && row.entry.subThread)
     return (
       <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />
@@ -991,10 +987,9 @@ const Composer = memo(function Composer({
               submitLabel={isQueueing ? 'Queue message' : 'Send'}
               hasMentions={mention.mentions.length > 0}
               meter={
-                <ContextRing
+                <ThreadContextRing
+                  thread={thread}
                   provider={provider}
-                  spaceId={thread.spaceId}
-                  context={thread.context}
                   usage={threadUsage(thread)}
                 />
               }
