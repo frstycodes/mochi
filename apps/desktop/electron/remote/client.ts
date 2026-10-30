@@ -51,6 +51,8 @@ export interface FollowOptions {
 
 export interface MachineFollower {
   state(): FollowedMachine;
+  /** Its Core as an RPC client while it's online, for the windows' channels (`channels.ts`). */
+  client(): DeviceClient | undefined;
   command(command: RemoteCommand): Promise<CommandResult>;
   /** Starts over: the window drops what it has and every thread comes again from its snapshot. */
   resync(): void;
@@ -154,6 +156,8 @@ export function followMachine(options: FollowOptions): MachineFollower {
           stop(current);
         },
       });
+      // A welcome that came while the client was still being built: the windows' channels need the client too.
+      if (state.status === 'online') options.onChange(state);
       yield* mirror(current.client, current.online, options);
     }).pipe(Scope.provide(scope));
     current.fiber = Effect.runFork(program);
@@ -211,6 +215,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
   start();
   return {
     state: () => state,
+    client: () => (state.status === 'online' ? session?.client : undefined),
     async command(command) {
       const client = session?.client;
       if (!client || state.status !== 'online')

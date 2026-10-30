@@ -28,8 +28,9 @@ import type {
   RemoteCommandRequest,
   RemoteStatus,
 } from '../../src/host/types/remote.ts';
-import { createWindow, mainWindow } from '../window.ts';
+import { createWindow, isTrustedUrl, mainWindow } from '../window.ts';
 import { MachineCache } from './cache.ts';
+import { createChannels } from './channels.ts';
 import { followMachine, type MachineFollower } from './client.ts';
 
 // Core serves remote access itself (packages/core/src/remote/service.ts): Settings › Remote access, who this computer
@@ -61,6 +62,18 @@ const theKeys = () =>
 const results = new Map<string, (result: CommandResult) => void>();
 /** The computers this one follows as a device, by machine id. */
 const followers = new Map<string, MachineFollower & { publicKey: string }>();
+/** Each window's secured channel to each followed machine that's online: its entry in the window's `Backends`. */
+const channels = createChannels(isTrustedUrl);
+const syncChannels = () =>
+  channels.sync(
+    BrowserWindow.getAllWindows().map((win) => win.webContents),
+    new Map(
+      [...followers].flatMap(([id, follower]) => {
+        const client = follower.client();
+        return client ? [[id, client] as const] : [];
+      }),
+    ),
+  );
 
 type Client = Awaited<ReturnType<typeof coreClient>>;
 const core = async <A, E>(call: (client: Client) => Effect.Effect<A, E>) =>
@@ -81,6 +94,12 @@ export function startRemote() {
     });
     // A page's own `window.close()` skips the `close` event and destroys the window: bring a hidden one back.
     win.on('closed', () => !isQuitting && keepRendererAlive());
+    const contents = win.webContents;
+    contents.on('did-finish-load', () => {
+      channels.reloaded(contents);
+      syncChannels();
+    });
+    contents.on('destroyed', () => channels.reloaded(contents));
   });
   app.on('will-quit', () => followers.forEach((f) => f.close()));
   // Waking or unlocking may mean another network: redial followed computers now, not after their backoff.
@@ -226,6 +245,7 @@ function syncFollowers() {
     if (follower?.state().status === 'refused') follower.resync();
     if (!follower) followers.set(machine.id, startFollowing(machine));
   }
+  syncChannels();
   broadcastMachines();
   reportShell();
 
@@ -247,6 +267,7 @@ function syncFollowers() {
         );
       },
       onChange: (state) => {
+        syncChannels();
         broadcastMachines();
         reportShell();
         // A refusal may mean it removed this computer: the records say so, and whether to join again.
