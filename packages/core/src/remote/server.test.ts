@@ -110,6 +110,7 @@ const setup = (
       keys: machineKeys,
       find: (id) => (id === device.id ? device : undefined),
       refresh: async () => {},
+      isOnAccount: async () => false,
       approve: async () => false,
       add: async () => undefined,
     };

@@ -11,6 +11,8 @@ import {
   secureAsDevice,
   secureAsMachine,
   THIS_KIND,
+  NO_ACCOUNT_CHECK,
+  NOT_ON_ACCOUNT,
   type MachineSide,
   type Origin,
   type PairedDevice,
@@ -54,6 +56,7 @@ function machineSide(
   keys: DeviceKeys,
   answer: boolean,
   known: PairedDevice[] = [],
+  isOnAccount: (publicKey: string) => Promise<boolean> = async () => false,
 ) {
   const asked: { name: string; code: string }[] = [];
   const added: PairedDevice[] = [];
@@ -61,6 +64,7 @@ function machineSide(
     keys,
     find: (id) => [...known, ...added].find((d) => d.id === id),
     refresh: async () => {},
+    isOnAccount,
     approve: async (request) => (asked.push(request), answer),
     add: async (d) => {
       const paired = { ...d, scopes: DEFAULT_SCOPES, pairedAt: 1 };
@@ -199,7 +203,7 @@ test('No on the machine refuses the device and trusts nothing', async () => {
   assert.deepEqual(machine.added, []);
 });
 
-test('an unknown device on the LAN is refused without asking; a paired one connects with no prompt', async () => {
+test('an unknown device on the LAN that the relay doesn’t list on the account is refused without asking; a paired one connects with no prompt', async () => {
   const machineKeys = keypair();
   const device = keypair();
   const stranger = machineSide(machineKeys, true);
@@ -207,7 +211,7 @@ test('an unknown device on the LAN is refused without asking; a paired one conne
   assert.equal(
     refused.deviceResult.status === 'rejected' &&
       (refused.deviceResult.reason as Error).message,
-    'Join your computers through your Mochi account first',
+    NOT_ON_ACCOUNT,
   );
   assert.deepEqual(stranger.asked, []);
 
@@ -230,6 +234,47 @@ test('an unknown device on the LAN is refused without asking; a paired one conne
     ['read'],
     'the scopes this machine gave it',
   );
+});
+
+test('an unknown device on the LAN that the relay lists on the account is asked about with the code, and joins', async () => {
+  const machineKeys = keypair();
+  const device = keypair();
+  const checked: string[] = [];
+  const machine = machineSide(machineKeys, true, [], async (publicKey) => {
+    checked.push(publicKey);
+    return true;
+  });
+  const { deviceResult } = await pairOver('lan', machine, machineKeys, device);
+  assert.equal(deviceResult.status, 'fulfilled');
+  assert.deepEqual(checked, [
+    sodium.to_base64(device.publicKey, sodium.base64_variants.ORIGINAL),
+  ]);
+  assert.deepEqual(machine.asked, [
+    {
+      name: 'Laptop',
+      code: pairingCode(machineKeys.publicKey, device.publicKey),
+    },
+  ]);
+  assert.equal(machine.added[0].id, deviceId(device.publicKey));
+});
+
+test('an unknown device on the LAN is refused without asking when the relay can’t be reached to check it', async () => {
+  const machineKeys = keypair();
+  const machine = machineSide(machineKeys, true, [], async () => {
+    throw new Error('offline');
+  });
+  const { deviceResult } = await pairOver(
+    'lan',
+    machine,
+    machineKeys,
+    keypair(),
+  );
+  assert.equal(
+    deviceResult.status === 'rejected' &&
+      (deviceResult.reason as Error).message,
+    NO_ACCOUNT_CHECK,
+  );
+  assert.deepEqual(machine.asked, []);
 });
 
 test('a relay that swaps the machine’s key is refused before anyone is asked, and the codes would differ', async () => {

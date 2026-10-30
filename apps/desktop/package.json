@@ -171,6 +171,9 @@
       ],
       "icon": "build/icon.icns",
       "identity": null,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Mochi finds and connects to your other computers on this network."
+      },
       "extraResources": [
         {
           "from": "build/native/haptic",

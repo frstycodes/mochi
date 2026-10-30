@@ -68,6 +68,8 @@ export interface MachineSide {
   find(deviceId: string): PairedDevice | undefined;
   /** Fetches the account's membership records, for a key another computer may have approved since. */
   refresh(): Promise<void>;
+  /** Whether the relay lists a computer with this key (base64) on this account; rejects when the relay can't be asked. */
+  isOnAccount(publicKey: string): Promise<boolean>;
   /**
    * "Let <name> join?" on this machine's screen, showing `code`; false on No, after `APPROVAL_TIMEOUT_MS`, or once `left`
    * aborts (the device closed the link: it joined through another computer, or gave up), which dismisses the prompt.
@@ -108,23 +110,26 @@ export async function secureAsMachine(
   } catch {
     return refuse(raw, 'The pairing request wasn’t signed by the key it names');
   }
+  const publicKey = sodium.to_base64(
+    pair.publicKey,
+    sodium.base64_variants.ORIGINAL,
+  );
   let device = side.find(id);
   // Another computer of yours may have let it join since this one last heard.
-  if (!device && origin === 'relay')
+  if (!device)
     device = await side.refresh().then(
       () => side.find(id),
       () => undefined,
     );
   if (!device) {
-    // On the LAN nothing vouches that the device is yours; through the relay it is signed in to your account.
-    if (origin === 'lan')
-      return refuse(
-        raw,
-        'Join your computers through your Mochi account first',
-      );
     // Reconnecting on its own after being removed here: nobody at that device asked, so nobody here is asked either.
     if (pair.isReturning)
       return refuse(raw, 'That computer doesn’t trust this one; join again');
+    // Through the relay it is signed in to your account. On the LAN only the relay's listing says so: anyone on the same
+    // network can connect, and must never get as far as a prompt.
+    const lanRefusal =
+      origin === 'lan' && (await accountRefusal(side, publicKey));
+    if (lanRefusal) return refuse(raw, lanRefusal);
     const left = new AbortController();
     raw.onClose(() => left.abort());
     if (!raw.isOpen()) left.abort();
@@ -141,10 +146,7 @@ export async function secureAsMachine(
       id,
       name: pair.name,
       kind: pair.kind,
-      publicKey: sodium.to_base64(
-        pair.publicKey,
-        sodium.base64_variants.ORIGINAL,
-      ),
+      publicKey,
     });
     if (!device)
       return refuse(raw, 'This computer couldn’t vouch for that one');
@@ -159,6 +161,14 @@ export async function secureAsMachine(
       scopes: device.scopes,
     },
   };
+}
+
+/** Why a key on the LAN may not join: not on your account, or the relay couldn't say. Undefined when it may. */
+async function accountRefusal(side: MachineSide, publicKey: string) {
+  const isOnAccount = await side.isOnAccount(publicKey).catch(() => null);
+  if (isOnAccount === null) return NO_ACCOUNT_CHECK;
+  if (!isOnAccount) return NOT_ON_ACCOUNT;
+  return undefined;
 }
 
 /**
@@ -214,6 +224,10 @@ export async function secureAsDevice(
 }
 
 const NOT_A_PAIRING = 'The first frame must be a pairing request';
+export const NOT_ON_ACCOUNT =
+  'Your Mochi account doesn’t list this computer: sign in to the same account here, turn on “Reach this computer from anywhere”, then join';
+export const NO_ACCOUNT_CHECK =
+  'That computer couldn’t reach your Mochi account to check this one; try again once it’s online';
 const WRONG_KEY =
   'That computer’s key doesn’t match; pair again from its current listing';
 

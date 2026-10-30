@@ -160,6 +160,7 @@ export class CoreRpcs extends RpcGroup.make(
     success: Schema.Struct({
       machines: Schema.Array(PairedMachine),
       records: Schema.Unknown,
+      nearby: Schema.Record(Schema.String, Schema.String),
     }),
     error: Schema.String,
   }),
