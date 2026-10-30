@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { host } from '../host';
 import type { GitDiff } from '../host/types/git';
 import type { Thread } from '../model';
@@ -70,13 +71,19 @@ export function WorktreeMenu({
             Worktrees of settled threads are deleted from disk. Their branches
             stay, and a worktree with uncommitted changes is kept.
           </p>
-          <ul className="flex flex-col gap-0.5 font-mono text-xs">
-            {settled.map((w) => (
-              <li key={w.threadId} className="truncate" title={w.path}>
-                {w.path}
-              </li>
-            ))}
-          </ul>
+          <ScrollArea className="min-w-0 rounded-md border [&>[data-slot=scroll-area-viewport]]:max-h-48">
+            <ul className="flex flex-col py-1">
+              {settled.map((w) => (
+                <li
+                  key={w.threadId}
+                  className="truncate px-2 py-0.5 text-foreground"
+                  title={w.path}
+                >
+                  {w.title}
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
         </div>
       ),
       confirm: 'Remove worktrees',
