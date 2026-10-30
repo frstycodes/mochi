@@ -605,6 +605,8 @@ export interface Thread {
   orbitSlot?: number;
   /** Where its pin sorts among all your computers' pins (`pinOrderOf`); unset while unpinned. */
   pinOrder?: number;
+  /** Hidden from Threads until then (wall-clock ms), or until it asks for you; set by Snooze. */
+  snoozedUntil?: number | 'needs-you';
   settledAt?: number;
   /** Wall-clock ms it settled (`markSettled`); `settledAt` is on the app clock. */
   settledMs?: number;

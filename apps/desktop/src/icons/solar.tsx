@@ -5,6 +5,7 @@ import * as Linear from '@solar-icons/react/linear';
 import { customIcon, type IconComponent, type IconProps } from './glyph';
 
 export const Archive = solar(Linear.ArchiveIcon, Bold.ArchiveIcon);
+export const Snooze = solar(Linear.AlarmSleepIcon, Bold.AlarmSleepIcon);
 export const ArrowDown = solar(Linear.ArrowDownIcon, Bold.ArrowDownIcon);
 export const ArrowLeft = solar(Linear.ArrowLeftIcon, Bold.ArrowLeftIcon);
 export const ArrowLeftRight = solar(

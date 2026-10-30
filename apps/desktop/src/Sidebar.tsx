@@ -120,6 +120,7 @@ import { MergedScope } from './remote/MergedScope';
 import { MochiMark, SpaceIcon, StatusMark, TooltipIconButton } from './ui';
 import {
   AgentsBadge,
+  SnoozeAction,
   ThreadDetailText,
   ThreadTitleText,
   ThreadProjectMark,
@@ -1116,9 +1117,12 @@ export function ThreadItem({
   isProjectHidden,
   onSelect,
   onRename,
+  onSnooze,
 }: {
   thread: Thread;
   isSub?: boolean;
+  /** Shows the Snooze action beside Settle. GAP: nothing passes it outside the `#thread-rows` mock until snoozing is stored. */
+  onSnooze?: (until: Thread['snoozedUntil']) => void;
   /** Listed under its own project already (new thread's Recent): the detail line drops the project icon. */
   isProjectHidden?: boolean;
   isActive: boolean;
@@ -1128,7 +1132,6 @@ export function ThreadItem({
 }) {
   const thread = useThread(listed.id) ?? listed;
   const row = useThreadRow(thread);
-  const { isSettled, toggle: settle } = useSettle(thread);
   const isRenaming = useRenameSurface(thread.id) === 'row';
   const mark = rowStatusMark(row, isActive);
   const asks = row.tone === 'warning' || row.tone === 'destructive';
@@ -1148,18 +1151,8 @@ export function ThreadItem({
           </span>
         )}
         {isSub && <PrStack thread={thread} />}
-        {!isRenaming && mark && (
-          <StatusMark
-            {...mark}
-            className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden"
-          />
-        )}
-        {/* Room for the Settle / Reactivate button while it shows, so the title truncates before the button instead of under it. */}
         {!isRenaming && (
-          <span
-            aria-hidden
-            className="shrink-0 group-focus-within/menu-item:min-w-5 group-hover/menu-item:min-w-5"
-          />
+          <ActionSlot mark={mark} isSub={isSub} hasSnooze={!!onSnooze} />
         )}
       </span>
       {isSub ? (
@@ -1182,44 +1175,99 @@ export function ThreadItem({
       )}
     </>
   );
+  const button = (
+    // Renaming, the row is a div: a field inside a button would click and key through to it.
+    <SidebarMenuButton
+      asChild={isRenaming}
+      isActive={isActive}
+      data-selected={isSelected || undefined}
+      aria-description={isSelected ? 'Selected' : undefined}
+      onClick={isRenaming ? undefined : onSelect}
+      onDoubleClick={onRename}
+      tooltip={isRenaming ? undefined : thread.title}
+      className={cn(
+        'h-auto flex-col items-stretch gap-1 py-2 group-has-data-[sidebar=menu-action]/menu-item:pr-2 data-selected:bg-sidebar-accent',
+        isSub && 'gap-0.5 px-1 py-1.5',
+      )}
+    >
+      {isRenaming ? <div>{body}</div> : body}
+    </SidebarMenuButton>
+  );
+  if (isRenaming) return button;
   return (
     <>
-      {/* Renaming, the row is a div: a field inside a button would click and key through to it. */}
-      <SidebarMenuButton
-        asChild={isRenaming}
-        isActive={isActive}
-        data-selected={isSelected || undefined}
-        aria-description={isSelected ? 'Selected' : undefined}
-        onClick={isRenaming ? undefined : onSelect}
-        onDoubleClick={onRename}
-        tooltip={isRenaming ? undefined : thread.title}
-        className={cn(
-          'h-auto flex-col items-stretch gap-1 py-2 group-has-data-[sidebar=menu-action]/menu-item:pr-2 data-selected:bg-sidebar-accent',
-          isSub && 'gap-0.5 px-1 py-1.5',
-        )}
-      >
-        {isRenaming ? <div>{body}</div> : body}
-      </SidebarMenuButton>
-      {!isRenaming && (
-        <SidebarMenuAction
-          showOnHover
-          asChild
-          className="top-1.5! right-2 size-5 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5"
+      {button}
+      <RowActions thread={thread} onSnooze={onSnooze} />
+    </>
+  );
+}
+
+/** Settle (and Snooze, where offered) in the row's corner while it's hovered or focused. */
+function RowActions({
+  thread,
+  onSnooze,
+}: {
+  thread: Thread;
+  onSnooze?: (until: Thread['snoozedUntil']) => void;
+}) {
+  const { isSettled, toggle: settle } = useSettle(thread);
+  return (
+    <>
+      <SidebarMenuAction showOnHover asChild className={INLINE_ACTION}>
+        <TooltipIconButton
+          label={isSettled ? 'Reactivate' : 'Settle'}
+          hint={
+            isSettled
+              ? 'Moves it back to the active list.'
+              : 'Stops its agent, terminals and dev servers, and files it under Settled.'
+          }
+          onClick={settle}
         >
-          <TooltipIconButton
-            label={isSettled ? 'Reactivate' : 'Settle'}
-            hint={
-              isSettled
-                ? 'Moves it back to the active list.'
-                : 'Stops its agent, terminals and dev servers, and files it under Settled.'
-            }
-            onClick={settle}
-          >
-            {isSettled ? <Unarchive /> : <Archive />}
-          </TooltipIconButton>
-        </SidebarMenuAction>
+          {isSettled ? <Unarchive /> : <Archive />}
+        </TooltipIconButton>
+      </SidebarMenuAction>
+      {!!onSnooze && (
+        <SnoozeAction
+          snoozedUntil={thread.snoozedUntil}
+          onSnooze={onSnooze}
+          className={cn(INLINE_ACTION, 'right-[30px]')}
+        />
       )}
     </>
+  );
+}
+
+const INLINE_ACTION =
+  'top-1.5! right-2 size-5 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5';
+
+/**
+ * Room for the hover actions at the title line's end, the row's mark in it while they're hidden.
+ * A sub-row keeps it at full width so its PR icons never move; elsewhere it widens on hover, truncating the title before the buttons.
+ */
+function ActionSlot({
+  mark,
+  isSub,
+  hasSnooze,
+}: {
+  mark: ReturnType<typeof rowStatusMark>;
+  isSub?: boolean;
+  hasSnooze: boolean;
+}) {
+  const width = hasSnooze ? 'w-[42px]' : 'w-5';
+  const hoverWidth = hasSnooze
+    ? 'group-focus-within/menu-item:w-[42px] group-hover/menu-item:w-[42px] group-has-[[aria-expanded=true]]/menu-item:w-[42px]'
+    : 'group-focus-within/menu-item:w-5 group-hover/menu-item:w-5';
+  return (
+    <span
+      className={cn('flex shrink-0 justify-end', isSub ? width : hoverWidth)}
+    >
+      {mark && (
+        <StatusMark
+          {...mark}
+          className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden group-has-[[aria-expanded=true]]/menu-item:hidden"
+        />
+      )}
+    </span>
   );
 }
 
