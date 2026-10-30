@@ -429,6 +429,17 @@
   --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
 }
 
+/* The sidebar reads one step above the compact scale, like Claude desktop's: 14px rows, 13px detail and labels. */
+[data-sidebar='sidebar'] {
+  --text-body: calc(0.875rem * var(--text-scale, 1));
+  --text-meta: calc(0.8125rem * var(--text-scale, 1));
+  --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
+  --text-caption: calc(0.75rem * var(--text-scale, 1));
+  --text-xs: calc(0.8125rem * var(--text-scale, 1));
+  --text-xs--line-height: calc(1.125rem * var(--text-scale, 1));
+  --text-sm: calc(0.875rem * var(--text-scale, 1));
+}
+
 @utility type-display {
   font-size: var(--text-display);
   line-height: var(--text-display--line-height);
