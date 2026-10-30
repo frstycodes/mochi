@@ -417,6 +417,8 @@ function ThreadHeader({
               aria-label="Thread summary"
               aria-pressed={isSummaryOpen}
               onClick={onToggleSummary}
+              // The header's icon-button corner (index.css), not the text-button capsule: it sits among them and is often icon-only.
+              data-header-chip
               className={cn(
                 'gap-1.5 px-2 text-muted-foreground',
                 isSummaryOpen && 'bg-accent text-foreground',

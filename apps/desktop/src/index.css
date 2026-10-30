@@ -408,36 +408,34 @@
   --shadow-lg: var(--elev-popover);
 
   /* --text-scale is Settings › Appearance › Interface size; it scales text, not spacing. */
-  --text-caption: calc(0.6875rem * var(--text-scale, 1));
+  --text-caption: calc(0.75rem * var(--text-scale, 1));
   --text-caption--line-height: calc(1rem * var(--text-scale, 1));
-  --text-meta: calc(0.75rem * var(--text-scale, 1));
-  --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
-  --text-body: calc(0.8125rem * var(--text-scale, 1));
-  --text-body--line-height: calc(1.25rem * var(--text-scale, 1));
-  --text-prose: calc(0.875rem * var(--text-scale, 1));
-  --text-prose--line-height: calc(1.375rem * var(--text-scale, 1));
-  --text-title: calc(0.875rem * var(--text-scale, 1));
-  --text-title--line-height: calc(1.25rem * var(--text-scale, 1));
-  --text-heading: calc(1.125rem * var(--text-scale, 1));
-  --text-heading--line-height: calc(1.5rem * var(--text-scale, 1));
+  --text-meta: calc(0.8125rem * var(--text-scale, 1));
+  --text-meta--line-height: calc(1.1875rem * var(--text-scale, 1));
+  --text-body: calc(0.875rem * var(--text-scale, 1));
+  --text-body--line-height: calc(1.3125rem * var(--text-scale, 1));
+  --text-prose: calc(0.9375rem * var(--text-scale, 1));
+  --text-prose--line-height: calc(1.4375rem * var(--text-scale, 1));
+  --text-title: calc(0.9375rem * var(--text-scale, 1));
+  --text-title--line-height: calc(1.3125rem * var(--text-scale, 1));
+  --text-heading: calc(1.1875rem * var(--text-scale, 1));
+  --text-heading--line-height: calc(1.5625rem * var(--text-scale, 1));
   --text-display: calc(1.5rem * var(--text-scale, 1));
   --text-display--line-height: calc(1.75rem * var(--text-scale, 1));
-  --text-xs: calc(0.75rem * var(--text-scale, 1));
-  --text-xs--line-height: calc(1rem * var(--text-scale, 1));
-  /* shadcn components size their text with text-sm; compact harness density puts it at 13px. */
-  --text-sm: calc(0.8125rem * var(--text-scale, 1));
-  --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
-}
-
-/* The sidebar reads one step above the compact scale, like Claude desktop's: 14px rows, 13px detail and labels. */
-[data-sidebar='sidebar'] {
-  --text-body: calc(0.875rem * var(--text-scale, 1));
-  --text-meta: calc(0.8125rem * var(--text-scale, 1));
-  --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
-  --text-caption: calc(0.75rem * var(--text-scale, 1));
   --text-xs: calc(0.8125rem * var(--text-scale, 1));
   --text-xs--line-height: calc(1.125rem * var(--text-scale, 1));
+  /* shadcn components size their text with text-sm; harness puts it at the 14px body size. */
   --text-sm: calc(0.875rem * var(--text-scale, 1));
+  --text-sm--line-height: calc(1.3125rem * var(--text-scale, 1));
+}
+
+/* The sidebar keeps the tighter line-heights its 32px rows were tuned with. */
+[data-sidebar='sidebar'] {
+  --text-body--line-height: calc(1.25rem * var(--text-scale, 1));
+  --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
+  --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
+  /* The sidebar is glass: hovers and pressed states tint it like its rows (`--sidebar-accent`), never the opaque page accent. */
+  --accent: var(--sidebar-accent);
 }
 
 @utility type-display {
@@ -681,6 +679,12 @@
   [class*='rounded-full'] {
     corner-shape: round;
   }
+}
+
+/* A header button that widens for a label (the summary toggle and its progress) keeps the icon buttons' corner beside them. */
+:is([data-thread-header], [data-pane-header]) button[data-header-chip] {
+  border-radius: 8px;
+  corner-shape: round;
 }
 
 /* The 44px thread and pane headers share one icon button: a 28px rounded rectangle around a 16px icon, its hit area filling
