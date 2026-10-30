@@ -37,6 +37,24 @@ function isTailscale(host: string) {
   return a === 100 && b! >= 64 && b! <= 127;
 }
 
+/** A paired machine's addresses before asking the relay: what its last welcome listed, and where it was heard nearby. */
+export function knownAddresses(
+  paired: {
+    machines: readonly {
+      id: string;
+      publicKey: string;
+      addresses?: readonly string[];
+    }[];
+    nearby: Readonly<Record<string, string>>;
+  },
+  machineId: string,
+): string[] {
+  const machine = paired.machines.find((m) => m.id === machineId);
+  if (!machine) return [];
+  const heard = paired.nearby[machine.publicKey];
+  return [...(machine.addresses ?? []), ...(heard ? [heard] : [])];
+}
+
 export interface RoutesToOptions {
   machineId: string;
   /** What its last welcome listed, kept with the paired machine. */

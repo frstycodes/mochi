@@ -67,6 +67,7 @@ export const OtherMachine = Schema.Struct({
   name: S,
   isOnline: B,
   pairingCode: S,
+  isNearby: opt(B),
 });
 export type OtherMachine = typeof OtherMachine.Type;
 
