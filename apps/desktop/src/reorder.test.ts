@@ -250,104 +250,37 @@ test('the sidebar nests open sub-threads under their parent, pinned or not, and 
   );
 });
 
-test('a drag reorders by height and nests, indented, under the row above the line; a sub-thread moves out only by leaving its group', () => {
+test('a drag reorders top-level rows by height, a group counted with its sub-threads', () => {
   const rows = [
     { id: 'p', top: 0, height: 40, isPinned: true },
     { id: 'a', top: 60, height: 40, isPinned: false },
     { id: 'c', top: 100, height: 30, isPinned: false, parentId: 'a' },
     { id: 'b', top: 140, height: 40, isPinned: false },
   ];
-  const yes = () => true;
   assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 64, false, false, yes),
-    { slot: { toPinned: false, index: 0 }, nestUnder: null },
+    dropAt(rows, 50, 'b', 64, false),
+    { toPinned: false, index: 0 },
     'top half of a: before it',
   );
   assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 85, false, false, yes),
-    { slot: { toPinned: false, index: 1 }, nestUnder: null },
-    'past the middle of a, not indented: after it',
+    dropAt(rows, 50, 'b', 85, false),
+    { toPinned: false, index: 1 },
+    'past the middle of a: after it',
   );
   assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 85, true, false, yes),
-    { slot: { toPinned: false, index: 1 }, nestUnder: 'a' },
-    'indented: under a, the row above the line',
+    dropAt(rows, 50, 'b', 120, false),
+    { toPinned: false, index: 1 },
+    "among a's sub-threads: after a's group, never into it",
   );
   assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 120, true, false, yes),
-    { slot: { toPinned: false, index: 1 }, nestUnder: 'a' },
-    "among a's sub-threads: still under a",
+    dropAt(rows, 50, 'b', 45, false),
+    { toPinned: true, index: 1 },
+    'above the label: pinned',
   );
   assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 64, true, false, yes),
-    { slot: { toPinned: false, index: 0 }, nestUnder: null },
-    'indented with no row above in its section: reorders only',
-  );
-  assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 85, true, false, () => false),
-    { slot: { toPinned: false, index: 1 }, nestUnder: null },
-    'a row that cannot take it only reorders',
-  );
-  assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 30, true, false, yes),
-    { slot: { toPinned: true, index: 1 }, nestUnder: 'p' },
-    'pinned rows take sub-threads too',
-  );
-  assert.deepEqual(
-    dropAt(rows, 50, { id: 'c', parentId: 'a' }, 115, false, false, yes),
-    { slot: null, nestUnder: null },
-    'within its own group: stays',
-  );
-  assert.deepEqual(
-    dropAt(rows, 50, { id: 'c', parentId: 'a' }, 135, true, false, yes),
-    { slot: null, nestUnder: null },
-    'indented right under its own parent: stays',
-  );
-  assert.deepEqual(
-    dropAt(rows, 50, { id: 'c', parentId: 'a' }, 175, false, false, yes),
-    { slot: { toPinned: false, index: 2 }, nestUnder: null },
-    'below b: out, after it',
-  );
-  assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 45, false, false, yes),
-    { slot: { toPinned: true, index: 1 }, nestUnder: null },
-    'above the label: pinned, as before',
-  );
-  assert.deepEqual(
-    dropAt(rows, 50, { id: 'b' }, 45, false, true, yes),
-    { slot: { toPinned: false, index: 0 }, nestUnder: null },
+    dropAt(rows, 50, 'b', 45, true),
+    { toPinned: false, index: 0 },
     'Pinned full: stays in Threads',
-  );
-});
-
-test('a grandchild stays put anywhere in its group, and a refused parent only reorders', () => {
-  // The sidebar shows c (under p) and g (under c) one level deep, both rows of p's group.
-  const rows = [
-    { id: 'p', top: 0, height: 40, isPinned: false },
-    { id: 'c', top: 40, height: 40, isPinned: false, parentId: 'p' },
-    { id: 'g', top: 80, height: 40, isPinned: false, parentId: 'p' },
-    { id: 'x', top: 120, height: 40, isPinned: false },
-  ];
-  const yes = () => true;
-  assert.deepEqual(
-    dropAt(rows, -10, { id: 'x' }, 100, true, false, yes),
-    { slot: { toPinned: false, index: 1 }, nestUnder: 'p' },
-    "indented among p's group: under p",
-  );
-  assert.deepEqual(
-    dropAt(rows, -10, { id: 'x' }, 100, true, false, (id) => id !== 'p'),
-    { slot: { toPinned: false, index: 1 }, nestUnder: null },
-    'refused (a cycle): only reorders',
-  );
-  assert.deepEqual(
-    dropAt(rows, -10, { id: 'g', parentId: 'p' }, 70, true, false, yes),
-    { slot: null, nestUnder: null },
-    'over its own group: stays',
-  );
-  assert.deepEqual(
-    dropAt(rows, -10, { id: 'g', parentId: 'p' }, 155, false, false, yes),
-    { slot: { toPinned: false, index: 2 }, nestUnder: null },
-    'past the group: out',
   );
 });
 

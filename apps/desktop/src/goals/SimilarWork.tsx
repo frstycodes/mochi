@@ -1,9 +1,7 @@
 import { XSquare, Copy } from '@/icons';
 import { Button } from '@/components/ui/button';
 import type { Similar, Thread } from '../model';
-import { nestBlocker } from '../reorder';
 import { useHarness } from '../store';
-import { nestWithUndo } from '../subThreadActions';
 import { TooltipIconButton } from '../ui';
 import { isGoalMet } from './verdict';
 
@@ -38,13 +36,7 @@ function SimilarRow({
   similar: Similar;
   other: Thread;
 }) {
-  const { state, dispatch } = useHarness();
-  // Related live work can take this thread as its sub-thread; the same work is a duplicate, never a part.
-  const canNest =
-    similar.relation === 'related' &&
-    other.status !== 'settled' &&
-    !thread.parent &&
-    !nestBlocker(state.threads, thread.id, other.id);
+  const { dispatch } = useHarness();
   return (
     <li className="flex items-center gap-2 rounded-lg bg-muted/40 py-1 pr-1 pl-2.5">
       <Copy aria-hidden className="size-3.5 shrink-0 text-warning" />
@@ -55,17 +47,6 @@ function SimilarRow({
         <span className="text-foreground">{other.title}</span>
         <span className="text-subtle-foreground"> · {statusLine(other)}</span>
       </span>
-      {canNest && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            nestWithUndo(dispatch, state.threads, thread, other.id)
-          }
-        >
-          Nest under it
-        </Button>
-      )}
       <Button
         variant="ghost"
         size="sm"

@@ -118,7 +118,7 @@ export interface SubReport {
   status: string;
   /** Wakes the parent's agent at once instead of waiting for every sub-thread to go idle. */
   isUrgent?: true;
-  /** A `no_change` report: never wakes the parent's agent, alone or in an all-idle wake; it goes out with its next message or wake. */
+  /** Never wakes the parent's agent, alone or in an all-idle wake; it goes out with its next message or wake. Saves from before no_change stayed with the sub-thread have it on those rows too. */
   isQuiet?: true;
   /** From a thread this one messaged with `expectReply`, not a sub-thread. */
   isReply?: true;
