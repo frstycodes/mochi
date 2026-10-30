@@ -5,19 +5,11 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {
-  flattenGroups,
-  nestBlocker,
-  parentOf,
-  sidebarGroups,
-} from '../reorder';
+import { parentOf } from '../reorder';
 import { useHarness } from '../store';
-import { nestWithUndo, unnestWithUndo } from '../subThreadActions';
+import { unnestWithUndo } from '../subThreadActions';
 import { ActionItems, BulkActionItems } from './ActionItems';
 import { parseRemoteThreadId } from '../remote/ids';
 import { REMOTE_THREAD_MENU, THREAD_MENU } from './menus';
@@ -61,48 +53,25 @@ export function ThreadRowMenu({
   );
 }
 
-/** Nesting from the keyboard: a sub-thread can move out of its parent; any row picks a new parent from the space's tree, never its own subtree. */
+/**
+ * A sub-thread can move out of its parent. Nothing nests from here: a sub-thread is one its parent's agent started, so its
+ * reports, branch and PR fit that parent.
+ */
 function SubThreadItems({ threadId }: { threadId: string }) {
   const { state, dispatch } = useHarness();
   const thread = state.threads.find((t) => t.id === threadId);
   if (!thread || thread.status === 'settled') return null;
   const parent = parentOf(state.threads, thread);
-  const { pinned, active } = sidebarGroups(state.threads, thread.spaceId);
-  const parents = flattenGroups([...pinned, ...active]).filter(
-    (t) => t.id !== parent?.id && !nestBlocker(state.threads, thread.id, t.id),
-  );
-  if (!parent && !parents.length) return null;
+  if (!parent) return null;
   return (
     <>
       <ContextMenuSeparator />
-      {!!parent && (
-        <ContextMenuItem
-          onSelect={() => unnestWithUndo(dispatch, state.threads, thread)}
-        >
-          <DiagramTree />
-          <span className="min-w-0 truncate">{`Move out of “${parent.title}”`}</span>
-        </ContextMenuItem>
-      )}
-      {parents.length > 0 && (
-        <ContextMenuSub>
-          <ContextMenuSubTrigger>
-            <DiagramTree />
-            Make sub-thread of
-          </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="max-h-80 w-60 overflow-y-auto">
-            {parents.map((p) => (
-              <ContextMenuItem
-                key={p.id}
-                onSelect={() =>
-                  nestWithUndo(dispatch, state.threads, thread, p.id)
-                }
-              >
-                <span className="min-w-0 truncate">{p.title}</span>
-              </ContextMenuItem>
-            ))}
-          </ContextMenuSubContent>
-        </ContextMenuSub>
-      )}
+      <ContextMenuItem
+        onSelect={() => unnestWithUndo(dispatch, state.threads, thread)}
+      >
+        <DiagramTree />
+        <span className="min-w-0 truncate">{`Move out of “${parent.title}”`}</span>
+      </ContextMenuItem>
     </>
   );
 }

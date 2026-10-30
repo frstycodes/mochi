@@ -21,8 +21,8 @@ export const undeliveredReports = (thread: Pick<Thread, 'activity'>) =>
   );
 
 /**
- * The undelivered reports that can wake the agent: all but quiet ones (`no_change`, a restart's), which wait for a message or
- * another wake. A restart's report wakes a parent whose orchestration grant is usable at `now`: you let it run phases without you.
+ * The undelivered reports that can wake the agent: all but quiet ones (a restart's), which wait for a message or another wake,
+ * unless the parent's orchestration grant is usable at `now`: you let it run phases without you.
  */
 export const wakingReports = (thread: Pick<Thread, 'activity'>, now: number) =>
   undeliveredReports(thread).filter(
@@ -61,6 +61,12 @@ export function markReportsDelivered(thread: Thread): Thread {
     ),
   };
 }
+
+/**
+ * The longest a batched report waits for the parent's other sub-threads to go idle, in app-clock minutes. A guess: tune it once
+ * real orchestrations show how long a phase runs.
+ */
+export const BATCH_MINUTES = 15;
 
 interface Threads {
   threads: ReadonlyArray<Thread>;
@@ -103,9 +109,10 @@ export function dueReports(threads: ReadonlyArray<Thread>) {
 
 /**
  * Threads holding sub-thread reports or replies that nothing else will deliver: idle, nothing queued or waiting on you, and every
- * sub-thread idle, so done reports batch. An urgent report (blocked, needs_input, failed) doesn't wait for the other sub-threads;
- * a quiet one (no_change, or a restart's `isRestart` without a usable orchestration grant) never wakes it, but goes out with the wake. A stalled sub-thread or one
- * waiting on your answer counts as idle: it reported so.
+ * sub-thread idle, so done reports batch; but none waits past `BATCH_MINUTES`, so one long sub-thread can't hold the rest back.
+ * An urgent report (blocked, needs_input, failed) doesn't wait for the other sub-threads; a quiet one (a restart's without a
+ * usable orchestration grant) never wakes it, but goes out with the wake. A stalled sub-thread or one waiting on your answer
+ * counts as idle: it reported so.
  */
 export function dueWakes(state: Threads): Thread[] {
   return state.threads.filter((t) => {
@@ -121,6 +128,7 @@ export function dueWakes(state: Threads): Thread[] {
     if (!reports.length) return false;
     if (isWaitingOnYou(state, t.id)) return false;
     if (reports.some((e) => e.subReport.isUrgent)) return true;
+    if (state.now - reports[0].at >= BATCH_MINUTES) return true;
     return !subThreadsOf([...state.threads], t.id).some(
       (s) =>
         (s.live?.isWorking || s.live?.starting) &&

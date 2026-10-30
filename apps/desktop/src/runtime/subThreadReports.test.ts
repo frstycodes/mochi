@@ -7,7 +7,12 @@ import { scheduleReducer } from '../schedule/slice.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls } from './live.ts';
-import { dueWakes, undeliveredReports, wakingReports } from './due.ts';
+import {
+  BATCH_MINUTES,
+  dueWakes,
+  undeliveredReports,
+  wakingReports,
+} from './due.ts';
 import {
   reportPrompt,
   STALL_MINUTES,
@@ -210,6 +215,12 @@ test("a sub-thread's PR reaches its parent only when it ends or needs a decision
   autofix(cap);
   autofix(cap);
   assert.equal(news().filter((n) => n.includes('needs a decision')).length, 1);
+  assert.ok(
+    undeliveredReports(s.threads.find((t) => t.id === parent)!)
+      .filter((e) => e.subReport.status.startsWith('PR #12: '))
+      .every((e) => e.subReport.isUrgent),
+    'a PR that needs a decision is urgent',
+  );
 
   autofix({ kind: 'stopped', pr: 13, url: 'u', reason: 'merged' });
   seen(13, 'merged');
@@ -405,7 +416,7 @@ test("report_to_parent shows in the parent's transcript at once; a message of yo
   );
 });
 
-test('a no_change report logs its row but never wakes the parent, alone or for an all-idle wake; it rides with the next real one', () => {
+test('a no_change report stays with the sub-thread: no row in the parent, no wake, nothing in its next message', () => {
   let { s, parent, a, b, thread } = family();
   s = ended(s, parent);
   s = ended(
@@ -415,44 +426,25 @@ test('a no_change report logs its row but never wakes the parent, alone or for a
     }),
     a,
   );
-  const [row] = undeliveredReports(thread(s, parent));
-  assert.equal(row.subReport.status, 'no_change');
-  assert.equal(row.subReport.isQuiet, true);
-  assert.equal(row.subReport.isUrgent, undefined);
-  assert.deepEqual(wakingReports(thread(s, parent), s.now), []);
-  assert.deepEqual(
-    dueWakes(s),
-    [],
-    'Piece B still works, and no_change never wakes',
+  assert.equal(
+    thread(s, a).parentReport?.status,
+    'no_change',
+    'get_thread reads it',
+  );
+  assert.equal(
+    thread(s, parent).activity.filter((e) => e.subReport).length,
+    0,
+    "the turn end doesn't fall back to an excerpt either",
   );
 
-  s = run(s, { type: 'send', threadId: b, text: 'stop' });
-  s = ended(
-    reported(s, b, { status: 'no_change', summary: 'Nothing either.' }),
-    b,
-  );
-  assert.deepEqual(
-    dueWakes(s),
-    [],
-    'every sub-thread idle, but only no_change reports',
-  );
-
-  s = run(s, { type: 'send', threadId: b, text: 'go on' });
   s = ended(reported(s, b, { status: 'done', summary: 'Piece B done.' }), b);
-  assert.deepEqual(
-    dueWakes(s).map((t) => t.id),
-    [parent],
-  );
   const wake: Action = { type: 'subthread-wake', threadId: parent };
   const [call] = agentCalls(s, wake, () => run(s, wake));
   assert.ok(
     call.method === 'send' &&
-      call.text.includes('Bot comment, nothing to do.') &&
-      call.text.includes('Piece B done.'),
-    'the quiet report goes out with the real wake',
+      call.text.includes('Piece B done.') &&
+      !call.text.includes('Bot comment'),
   );
-  s = run(s, wake);
-  assert.deepEqual(reports(s, parent), []);
 });
 
 test("an Auto-fix turn's done report is stored as no_change, so it stays with the sub-thread", () => {
@@ -489,9 +481,7 @@ test("an Auto-fix turn's done report is stored as no_change, so it stays with th
     a,
   );
   assert.equal(thread(s, a).parentReport?.status, 'no_change');
-  const [row] = undeliveredReports(thread(s, parent));
-  assert.equal(row.subReport.isQuiet, true);
-  assert.deepEqual(dueWakes(s), []);
+  assert.deepEqual(reports(s, parent), []);
 
   s = run(s, {
     type: 'autofix',
@@ -519,6 +509,20 @@ const statuses = (s: State, threadId: string) =>
   undeliveredReports(s.threads.find((t) => t.id === threadId)!).map(
     (e) => `${e.subReport.title}: ${e.subReport.status}`,
   );
+
+test("a done report waits for the other sub-threads only BATCH_MINUTES, so a long one can't hold it back", () => {
+  let { s, parent, a, b } = family();
+  s = ended(ended(s, parent), a);
+  // Piece B keeps working: each event resets its stall watchdog.
+  for (let i = 0; i < BATCH_MINUTES - 1; i++)
+    s = agent(tick(s, 1), { threadId: b, type: 'notice', text: 'working' });
+  assert.deepEqual(dueWakes(s), [], 'still within the batch window');
+  s = agent(tick(s, 1), { threadId: b, type: 'notice', text: 'working' });
+  assert.deepEqual(
+    dueWakes(s).map((t) => t.id),
+    [parent],
+  );
+});
 
 test('a sub-thread quiet for 10 minutes reports once, urgently, and its next event clears the stall', () => {
   let { s, parent, a, b, thread } = family();

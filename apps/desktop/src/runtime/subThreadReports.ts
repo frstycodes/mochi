@@ -134,12 +134,16 @@ export function reportStoppedAtQuit<S extends Pick<State, 'threads' | 'now'>>(
   );
 }
 
-/** A `report_to_parent` call, logged in the parent's transcript as it's made: blocked, needs_input and failed are urgent, no_change quiet. */
+/**
+ * A `report_to_parent` call, logged in the parent's transcript as it's made: blocked, needs_input and failed are urgent. A
+ * no_change stays with the sub-thread (`get_thread` reads it): the parent has nothing to act on.
+ */
 export function reportTyped(
   state: State,
   sub: Thread,
   report: ParentReport,
 ): State {
+  if (report.status === 'no_change') return state;
   return addReport(
     state,
     sub,
@@ -147,20 +151,28 @@ export function reportTyped(
       status: report.status,
       report,
       ...(isUrgentStatus(report.status) && { isUrgent: true }),
-      ...(report.status === 'no_change' && { isQuiet: true }),
     },
     reportBody(report),
   );
 }
 
-/** A sub-thread's PR needs its parent: `prEscalation` or `prEnded` said what. The same news not yet delivered never stacks. */
+/**
+ * A sub-thread's PR needs its parent: `prEscalation` (urgent: a decision) or `prEnded` said what. The same news not yet
+ * delivered never stacks.
+ */
 export function reportPr(
   state: State,
   sub: Thread,
   pr: number,
   what: string,
+  urgency: Pick<SubReport, 'isUrgent'> = {},
 ): State {
-  return addReport(state, sub, { status: `PR #${pr}: ${what}` }, '');
+  return addReport(
+    state,
+    sub,
+    { status: `PR #${pr}: ${what}`, ...urgency },
+    '',
+  );
 }
 
 /**
@@ -284,7 +296,8 @@ const isThisTurns = (thread: Thread, report?: ParentReport) =>
 
 /**
  * Logs news from `sub` in its parent's transcript, for its agent: every report goes through here. `isUrgent` wakes the parent at
- * once (stalls, waits on you, failures); otherwise it waits until every sub-thread is idle. `text` is the body under the status.
+ * once (stalls, waits on you, failures, PR decisions); otherwise it waits until every sub-thread is idle, or `BATCH_MINUTES`
+ * (`dueWakes`). `text` is the body under the status.
  */
 export function addReport<S extends Pick<State, 'threads' | 'now'>>(
   state: S,
