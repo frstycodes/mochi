@@ -123,11 +123,18 @@ export class Projection extends Context.Service<Projection>()(
 
         const written = new Map<string, string>();
         let lastIndex = '';
+        // The rows this launch loaded: the first save skips threads that still encode to them instead of rewriting every thread.
+        let loaded: Set<string> | undefined = new Set(files?.threads);
         const save = Effect.suspend(() => {
           if (!isDirty || isSaveBlocked) return Effect.void;
           isDirty = false;
           const at = sequence;
           const { index, threads } = splitSaved(toSaved(domain));
+          if (loaded) {
+            for (const [id, json] of Object.entries(threads))
+              if (loaded.has(json)) written.set(id, json);
+            loaded = undefined;
+          }
           const changed = Object.fromEntries(
             Object.entries(threads).filter(
               ([id, json]) => written.get(id) !== json,
