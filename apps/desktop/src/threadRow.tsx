@@ -87,14 +87,20 @@ export function ThreadProjectMark({ thread }: { thread: Thread }) {
   );
 }
 
-/** The row's detail line: shimmering while the agent works, in the warning or destructive tone when it asks for you. */
+/** The row's title, shimmering while the agent works. */
+export function ThreadTitleText({
+  title,
+  row,
+}: {
+  title: string;
+  row: ThreadRow;
+}) {
+  if (row.isWorking) return <Shimmer as="span">{title}</Shimmer>;
+  return title;
+}
+
+/** The row's detail line, in the warning or destructive tone when it asks for you. */
 export function ThreadDetailText({ row }: { row: ThreadRow }) {
-  if (row.isWorking)
-    return (
-      <Shimmer as="span" className="min-w-0 flex-1 truncate">
-        {row.detail}
-      </Shimmer>
-    );
   return (
     <span
       className={cn(

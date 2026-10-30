@@ -27,7 +27,7 @@ export function FoldGroup({
   const reduce = useReducedMotionConfig();
   const contentId = useId();
   return (
-    <SidebarGroup>
+    <SidebarGroup className="mt-2">
       <SidebarGroupLabel asChild>
         <button
           type="button"
@@ -40,7 +40,7 @@ export function FoldGroup({
           <span className="ml-1 tabular">{count}</span>
           <ChevronRight
             className={cn(
-              'ml-auto size-3 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
+              'ml-1 size-3 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
               isOpen && 'rotate-90',
             )}
           />

@@ -121,6 +121,7 @@ import { MochiMark, SpaceIcon, StatusMark, TooltipIconButton } from './ui';
 import {
   AgentsBadge,
   ThreadDetailText,
+  ThreadTitleText,
   ThreadProjectMark,
   rowStatusMark,
   useThreadRow,
@@ -812,7 +813,7 @@ function ThreadList({
               Drop here to pin
             </motion.li>
           )}
-          <motion.li {...glide} data-threads-label className="mt-3">
+          <motion.li {...glide} data-threads-label className="mt-6">
             <SidebarGroupLabel>Threads</SidebarGroupLabel>
           </motion.li>
           {section(active.map(localRow), false)}
@@ -1139,11 +1140,11 @@ export function ThreadItem({
         ) : (
           <span
             className={cn(
-              'min-w-0 flex-1 truncate',
+              'min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)]',
               (isActive || row.isUnread) && 'text-foreground',
             )}
           >
-            {thread.title}
+            <ThreadTitleText title={thread.title} row={row} />
           </span>
         )}
         {isSub && <PrStack thread={thread} />}
