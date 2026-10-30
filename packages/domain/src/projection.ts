@@ -92,7 +92,8 @@ export const domainFrom = (saved: Saved | null): Domain =>
 
 /**
  * One item of the `replica` stream a window's store follows: the whole projection (`saved` is a `Saved`, decoded by the
- * window with `Persist.Saved`), or one event it folds.
+ * window with `Persist.Saved`), or one event it folds. A snapshot with `parts` holds no checkpoints: that many
+ * `checkpoints` items follow it, one per thread, because the whole store as one message can outgrow a JS string.
  */
 export type ReplicaItem =
   | {
@@ -100,5 +101,11 @@ export type ReplicaItem =
       readonly sequence: number;
       readonly saved: unknown;
       readonly context: unknown;
+      readonly parts?: number;
+    }
+  | {
+      readonly _tag: 'checkpoints';
+      readonly threadId: string;
+      readonly checkpoints: unknown;
     }
   | { readonly _tag: 'event'; readonly event: LoggedEvent };

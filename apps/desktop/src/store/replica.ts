@@ -49,6 +49,9 @@ export interface Replica {
   stop: () => void;
 }
 
+type Snapshot = Extract<ReplicaItem, { _tag: 'snapshot' }>;
+type SnapshotPart = Snapshot | Extract<ReplicaItem, { _tag: 'checkpoints' }>;
+
 /** A dropped stream is followed again from where it stopped, this often. */
 const RESUME_MS = 1000;
 
@@ -76,6 +79,12 @@ export function createReplica(
   let stopFollow = () => {};
   let isStopped = false;
   let isContextSet = false;
+  /** A snapshot waiting for its `checkpoints` parts. */
+  let parts: {
+    snapshot: Snapshot;
+    checkpoints: Record<string, unknown>;
+    left: number;
+  } | null = null;
   const listeners = new Set<(action: Action, before: State) => void>();
 
   const flush = () => {
@@ -110,7 +119,32 @@ export function createReplica(
     state = { ...reducer(state!, action, fold), ...rebase(confirmed) };
   };
 
-  const onItem = (item: ReplicaItem, ready: () => void) => {
+  /** The snapshot once its last `checkpoints` part arrived. */
+  const gather = (item: SnapshotPart) => {
+    if (item._tag === 'snapshot') {
+      parts = { snapshot: item, checkpoints: {}, left: item.parts! };
+      return;
+    }
+    if (!parts) return;
+    parts.checkpoints[item.threadId] = item.checkpoints;
+    if (--parts.left) return;
+    const { snapshot, checkpoints } = parts;
+    parts = null;
+    return {
+      ...snapshot,
+      saved: { ...(snapshot.saved as object), checkpoints },
+      parts: 0,
+    };
+  };
+
+  const onItem = (item: ReplicaItem, ready: () => void): void => {
+    if (
+      item._tag === 'checkpoints' ||
+      (item._tag === 'snapshot' && item.parts)
+    ) {
+      const whole = gather(item);
+      return whole && onItem(whole, ready);
+    }
     if (item._tag === 'snapshot') {
       // Pending commands are in it or still on their way: either way they fold from the log.
       pending = [];
@@ -187,6 +221,7 @@ export function createReplica(
       },
     };
     const follow = () => {
+      parts = null;
       stopFollow = log.follow(
         sequence,
         (item) => onItem(item, () => resolve(replica)),
