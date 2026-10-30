@@ -730,6 +730,10 @@ function makeRemote({
             };
           },
           onRejected: (device, reason) => log(`${device}: ${reason}`),
+          onPortTaken: (wanted, bound) =>
+            log(
+              `Port ${wanted} is in use, so remote access listens on ${bound}`,
+            ),
           backend: (scopes) =>
             Effect.runPromise(backend.describe(scopes)).then((info) => ({
               ...info,
@@ -741,10 +745,8 @@ function makeRemote({
           onMembers: (members) => void absorb(parseRecords(members)),
         });
       } catch (e) {
-        error =
-          (e as NodeJS.ErrnoException).code === 'EADDRINUSE'
-            ? `Port ${port} is already in use`
-            : String(e);
+        error = String(e);
+        log(`Remote access couldn’t start: ${error}`);
       }
       if (server && settings.reachesAnywhere && (await isSignedIn()))
         await startRelay(server);
@@ -777,6 +779,8 @@ function makeRemote({
       token: () => account.accessToken(),
       onChannel: (raw) => listening.attach(raw),
       onState: (state) => {
+        if (state.status === 'error' && relayState.status !== 'error')
+          log(`The relay connection failed: ${state.error}`);
         relayState = state;
         broadcast();
       },

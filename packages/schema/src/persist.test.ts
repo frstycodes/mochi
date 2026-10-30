@@ -3,19 +3,23 @@ import { readFileSync } from 'node:fs';
 import { test } from 'vite-plus/test';
 import { Schema } from 'effect';
 import { Mention } from './model.ts';
-import { Saved, SavedIndex, SavedThread } from './persist.ts';
+import { Checkpoint, Saved, SavedIndex, SavedThread } from './persist.ts';
 
 const recorded = JSON.parse(
   readFileSync(new URL('../fixtures/saved.json', import.meta.url), 'utf8'),
 );
 
-test('thread files as the app writes them today read as v1, every field kept', () => {
+test('thread files as the app writes them today read as v1, every field kept but what checkpoints take from the live thread', () => {
   const decode = Schema.decodeUnknownSync(SavedThread);
   const encode = Schema.encodeSync(SavedThread);
   for (const file of recorded.threads) {
     const decoded = decode(file);
     // Decoding drops keys a schema lacks, so equality means no field of the recorded thread went missing.
-    assert.deepEqual(decoded, { ...file, v: 1 });
+    assert.deepEqual(decoded, {
+      ...file,
+      v: 1,
+      ...(file.checkpoints && { checkpoints: file.checkpoints.map(slim) }),
+    });
     assert.deepEqual(decode(encode(decoded)), decoded);
   }
 });
@@ -83,4 +87,34 @@ test('a plugin @-mention round-trips', () => {
     Schema.encodeSync(Mention)(Schema.decodeUnknownSync(Mention)(mention)),
     mention,
   );
+});
+
+test('a checkpoint saved with its whole thread keeps counts in place of the transcript and subagents', () => {
+  const [whole] = recorded.threads.flatMap(
+    (file: { checkpoints?: WholeCheckpoint[] }) => file.checkpoints ?? [],
+  );
+  assert.ok(whole, 'the recorded threads hold a checkpoint');
+  const decoded = Schema.decodeUnknownSync(Checkpoint)(whole);
+  assert.equal(decoded.activityCount, whole.thread.activity.length);
+  assert.ok(!('activity' in decoded.thread));
+  assert.deepEqual(Schema.decodeUnknownSync(Checkpoint)(decoded), decoded);
+});
+
+interface WholeCheckpoint {
+  thread: {
+    activity: unknown[];
+    subagents?: unknown[];
+    agent?: unknown;
+    setup?: unknown;
+  };
+}
+
+const slim = ({
+  thread: { activity, subagents, agent: _agent, setup: _setup, ...thread },
+  ...rest
+}: WholeCheckpoint) => ({
+  ...rest,
+  activityCount: activity.length,
+  subagentCount: subagents?.length ?? 0,
+  thread,
 });

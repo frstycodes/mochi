@@ -1,20 +1,66 @@
-import { Schema } from 'effect';
+import { Schema, Struct } from 'effect';
 import { QueueItem, QueueKind, Step, Thread } from './model.ts';
 import { upgrade } from './version.ts';
 
 const opt = Schema.optional;
 
-export const Checkpoint = Schema.Struct({
+/**
+ * The thread as a checkpoint keeps it: without what only grows (`activity`, `subagents`) or follows the live session (`agent`,
+ * `setup`), which `checkpointThread` (`src/rewind/checkpoints.ts`) takes from the thread now.
+ */
+export const CheckpointThread = Thread.mapFields(
+  Struct.omit(['activity', 'subagents', 'agent', 'setup']),
+);
+
+const checkpointFields = {
   n: Schema.Number,
   at: Schema.Number,
   label: Schema.String,
   stepId: opt(Schema.String),
-  thread: Thread,
   ref: opt(Schema.String),
   wantsFiles: opt(Schema.Boolean),
   before: opt(Schema.Number),
+};
+
+// The counts lead: a checkpoint saved whole lacks them, so it fails here before its thread is checked.
+const CheckpointV2 = Schema.Struct({
+  activityCount: Schema.Number,
+  subagentCount: Schema.Number,
+  ...checkpointFields,
+  thread: CheckpointThread,
 });
-export type Checkpoint = typeof Checkpoint.Type;
+
+// Saved before checkpoints left out what the live thread holds: each copied its whole thread, most of the store.
+const SavedWholeCheckpoint = Schema.Struct({
+  ...checkpointFields,
+  thread: Thread,
+});
+
+/** Drops what the live thread holds from a checkpoint saved with its whole thread. */
+const slimCheckpoint = ({
+  thread: { activity, subagents, agent: _agent, setup: _setup, ...thread },
+  ...rest
+}: typeof SavedWholeCheckpoint.Type) => ({
+  ...rest,
+  activityCount: activity.length,
+  subagentCount: subagents?.length ?? 0,
+  thread,
+});
+
+export type Checkpoint = typeof CheckpointV2.Type;
+// Annotated: declaration emit inlines both union members, which reaches dependents of `Checkpoint` as `any`.
+export const Checkpoint: Schema.Codec<
+  Checkpoint,
+  typeof CheckpointV2.Encoded | typeof SavedWholeCheckpoint.Encoded
+> = Schema.Union([
+  CheckpointV2,
+  upgrade(
+    SavedWholeCheckpoint,
+    CheckpointV2,
+    (old) => slimCheckpoint(old) as never,
+    (current) => current as never,
+  ),
+]);
 
 export const Fork = Schema.Struct({
   parentId: Schema.String,
@@ -56,9 +102,11 @@ const LegacyThread = Schema.Struct({
   steps: Schema.Array(LegacyStep),
 });
 const LegacyCheckpoint = Schema.Struct({
-  ...Checkpoint.fields,
+  ...checkpointFields,
   thread: LegacyThread,
 });
+// Thread files carry no `v` yet, so today's saves read through the legacy shapes too: their checkpoints are slim or whole.
+const UnversionedCheckpoint = Schema.Union([CheckpointV2, LegacyCheckpoint]);
 const LegacyQueueItem = Schema.Struct({
   ...QueueItem.fields,
   kind: Schema.Union([QueueKind, Schema.Literal('overlap')]),
@@ -78,9 +126,14 @@ const liftThread = (thread: LegacyThread): Thread => ({
       : { ...s, status: s.status },
   ),
 });
-const liftCheckpoints = <C extends { thread: LegacyThread }>(
-  list: readonly C[],
-) => list.map((c) => ({ ...c, thread: liftThread(c.thread) }));
+const liftCheckpoints = (
+  list: readonly (typeof UnversionedCheckpoint.Type)[],
+): Checkpoint[] =>
+  list.map((c) =>
+    'activityCount' in c
+      ? c
+      : slimCheckpoint({ ...c, thread: liftThread(c.thread) }),
+  );
 const liftQueue = (queue: readonly LegacyQueueItem[]): QueueItem[] =>
   queue.flatMap((q) => (q.kind === 'overlap' ? [] : [{ ...q, kind: q.kind }]));
 
@@ -97,7 +150,7 @@ const SavedThreadV1 = Schema.Struct({
 const LegacySavedThread = Schema.Struct({
   ...NO_V,
   thread: LegacyThread,
-  checkpoints: opt(Schema.Array(LegacyCheckpoint)),
+  checkpoints: opt(Schema.Array(UnversionedCheckpoint)),
   fork: opt(Fork),
   queue: opt(Schema.Array(LegacyQueueItem)),
   sideChat: opt(RemoteSideChat),
@@ -177,7 +230,7 @@ const LegacySaved = Schema.Struct({
   threads: Schema.Array(LegacyThread),
   queue: Schema.Array(LegacyQueueItem),
   checkpoints: opt(
-    Schema.Record(Schema.String, Schema.Array(LegacyCheckpoint)),
+    Schema.Record(Schema.String, Schema.Array(UnversionedCheckpoint)),
   ),
   checkpointSeq: opt(Schema.Number),
   forks: opt(Schema.Record(Schema.String, Fork)),

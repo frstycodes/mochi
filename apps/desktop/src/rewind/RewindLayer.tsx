@@ -50,6 +50,7 @@ import { useHarness } from '../store';
 import {
   checkpointForMessage,
   checkpointPhrase,
+  checkpointThread,
   excerpt,
   rewindBlockedReason,
   STOP_TO_REWIND,
@@ -155,11 +156,11 @@ function RewindConfirm({
 
   const entry =
     target.kind === 'message' ? thread.activity[target.index] : undefined;
-  const kept = entry ? threadAt(thread, entry.at - 0.001) : checkpoint.thread;
+  const kept = entry
+    ? threadAt(thread, entry.at - 0.001)
+    : checkpointThread(thread, checkpoint);
   const keptLength =
-    target.kind === 'message'
-      ? target.index
-      : checkpoint.thread.activity.length;
+    target.kind === 'message' ? target.index : checkpoint.activityCount;
   const later = thread.activity
     .slice(keptLength)
     .filter((a) => a.kind === 'message').length;
@@ -191,7 +192,7 @@ function RewindConfirm({
           <AlertDialogDescription>
             Steps, messages and the goal go back to{' '}
             <span className="tabular">
-              {clock(kept === checkpoint.thread ? checkpoint.at : entry!.at)}
+              {clock(entry ? entry.at : checkpoint.at)}
             </span>
             . {countLabel(later, 'message')} leave the transcript and{' '}
             {countLabel(reopened, 'finished step')} reopen. Undo brings it all

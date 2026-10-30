@@ -356,3 +356,36 @@ it.effect(
       );
     }),
 );
+
+it.effect('a launch that changed no thread writes none of them again', () =>
+  Effect.gen(function* () {
+    const dir = mkdtempSync(join(tmpdir(), 'mochi-replica-'));
+    const savedCount = withCore(dir, ({ store }) =>
+      Effect.map(
+        store.eventsAfter(0),
+        (events) => events.filter((e) => e.type === 'thread.saved').length,
+      ),
+    );
+    yield* withCore(dir, (core) =>
+      Effect.gen(function* () {
+        const folded = yield* core.projection.folded.pipe(
+          Stream.take(1),
+          Stream.runDrain,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* core.store.append({
+          type: COMMAND_TYPE,
+          payload: create,
+          commandId: 'c1',
+        });
+        yield* Fiber.join(folded);
+      }),
+    );
+    // The second launch saves the thread stopped (`restoredDomain`); from then on it is unchanged.
+    yield* savedCount;
+    const before = yield* savedCount;
+    const after = yield* savedCount;
+    assert.ok(before > 0);
+    assert.equal(after, before);
+  }),
+);

@@ -1265,7 +1265,7 @@ function RowActions({
         <SnoozeAction
           snoozedUntil={thread.snoozedUntil}
           onSnooze={onSnooze}
-          className={cn(INLINE_ACTION, 'right-[30px]')}
+          className={cn(INLINE_ACTION, 'right-[32px]')}
         />
       )}
     </>
@@ -1273,7 +1273,7 @@ function RowActions({
 }
 
 const INLINE_ACTION =
-  'top-1.5! right-2 size-5 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5';
+  'top-1.5! right-2 size-5 border-0 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5';
 
 /**
  * Room for the hover actions at the title line's end, the row's mark in it while they're hidden.
@@ -1288,9 +1288,9 @@ function ActionSlot({
   isSub?: boolean;
   hasSnooze: boolean;
 }) {
-  const width = hasSnooze ? 'w-[42px]' : 'w-5';
+  const width = hasSnooze ? 'w-[44px]' : 'w-5';
   const hoverWidth = hasSnooze
-    ? 'group-focus-within/menu-item:w-[42px] group-hover/menu-item:w-[42px] group-has-[[aria-expanded=true]]/menu-item:w-[42px]'
+    ? 'group-focus-within/menu-item:w-[44px] group-hover/menu-item:w-[44px] group-has-[[aria-expanded=true]]/menu-item:w-[44px]'
     : 'group-focus-within/menu-item:w-5 group-hover/menu-item:w-5';
   return (
     <span
