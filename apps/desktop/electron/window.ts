@@ -6,14 +6,21 @@ import {
   shell,
   type Rectangle,
 } from 'electron';
+import { release } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 import type { LightsPlacement } from '../src/host/types/windows.ts';
+import { attachSidebarGlass } from './sidebarGlass/sidebarGlass.ts';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
 const background = () =>
   nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9';
+
+// Windows 11 22H2 (build 22621) and up draw Mica; older Windows and Linux keep the solid sidebar.
+const hasMica = () =>
+  process.platform === 'win32' && Number(release().split('.')[2]) >= 22621;
+const materialWindows = new WeakSet<BrowserWindow>();
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
@@ -106,6 +113,7 @@ export function fitWindowButtons(win: BrowserWindow) {
 
 export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
+  const isMica = !route && hasMica();
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -115,6 +123,7 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     show: false,
     ...titleBar(),
     backgroundColor: background(),
+    ...(isMica && { backgroundMaterial: 'mica' }),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -122,6 +131,11 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
       nodeIntegration: false,
     },
   });
+  if (isMica) showMaterial(win);
+  else if (!route)
+    void attachSidebarGlass(win).then(
+      (isAttached) => isAttached && showMaterial(win),
+    );
   win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => {
     fitWindowButtons(win);
@@ -166,9 +180,26 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   return win;
 }
 
+/**
+ * The shell window's sidebar shows the window material (sidebar glass on macOS 26+, Mica on Windows 11) through the page: `data-material` in index.css.
+ * Off in full screen, where there's no wallpaper to light it, so the sidebar keeps the theme's own colour.
+ */
+function showMaterial(win: BrowserWindow) {
+  materialWindows.add(win);
+  win.setBackgroundColor('#00000000');
+  const mark = () =>
+    void win.webContents.executeJavaScript(
+      `document.documentElement.toggleAttribute('data-material', ${!win.isFullScreen()})`,
+    );
+  if (!win.webContents.isLoading()) mark();
+  win.webContents.on('dom-ready', mark);
+  win.on('enter-full-screen', mark);
+  win.on('leave-full-screen', mark);
+}
+
 nativeTheme.on('updated', () =>
   BrowserWindow.getAllWindows().forEach((win) => {
-    win.setBackgroundColor(background());
+    if (!materialWindows.has(win)) win.setBackgroundColor(background());
     fitWindowButtons(win);
   }),
 );

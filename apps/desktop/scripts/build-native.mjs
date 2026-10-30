@@ -49,6 +49,26 @@ if (process.platform === 'darwin') {
     });
     lipo(slices, `build/native/${name}`);
   }
+  // The sidebar glass is a Node-API add-on loaded into Electron, not a helper process: same flags as OBJC_ADDON in electron/native.ts.
+  execFileSync(
+    'xcrun',
+    [
+      'clang++',
+      '-O2',
+      '-fobjc-arc',
+      '-bundle',
+      '-undefined',
+      'dynamic_lookup',
+      '-framework',
+      'AppKit',
+      ...Object.values(MAC_ARCHS).flatMap((arch) => ['-arch', arch]),
+      '-mmacosx-version-min=13.0',
+      'electron/sidebarGlass/sidebarGlass.mm',
+      '-o',
+      'build/native/sidebar-glass',
+    ],
+    { stdio: 'inherit' },
+  );
 }
 
 // uv runs the Google Workspace connector's server (electron/library/googleWorkspace.ts). GAP: Windows (a .zip) isn't fetched yet.

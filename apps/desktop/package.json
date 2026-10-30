@@ -185,6 +185,10 @@
           "to": "fonts"
         },
         {
+          "from": "build/native/sidebar-glass",
+          "to": "sidebar-glass"
+        },
+        {
           "from": "build/icons",
           "to": "icons",
           "filter": [
