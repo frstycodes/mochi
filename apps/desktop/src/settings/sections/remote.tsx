@@ -140,7 +140,8 @@ function RemoteAccess() {
 }
 
 function ListeningState({ status }: { status: RemoteStatus }) {
-  if (status.error) return <span className="text-warning">{status.error}</span>;
+  if (status.error)
+    return <span className="text-warning">Not running: {status.error}</span>;
   if (!status.settings.isEnabled) return 'Off';
   if (status.addresses.length === 0) return 'Starting…';
   return `Listening on ${new Intl.ListFormat('en', { type: 'conjunction' }).format(status.addresses)}`;

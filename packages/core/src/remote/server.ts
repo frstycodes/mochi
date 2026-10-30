@@ -18,7 +18,9 @@ import {
 
 export interface RemoteServerOptions {
   hosts: string[];
+  /** Preferred; when something else holds it, any free port instead (`onPortTaken`). */
   port: number;
+  onPortTaken?: (wanted: number, bound: number) => void;
   /** The pairing exchange every connection opens with (`pairing.ts`): who the device is, and its decrypted link. */
   secure: (raw: RawLink, origin: Origin) => Promise<Secured>;
   /** Core's address and a token holding this device to its scopes (signed with Core's internal token, `service.ts`). */
@@ -39,6 +41,8 @@ export interface RemoteServerOptions {
 export interface RemoteServer {
   /** `host:port` per bound interface, as they are now. */
   readonly addresses: string[];
+  /** The one port every host listens on: `options.port`, or the free one taken when it was busy. */
+  readonly port: number;
   /**
    * Listens on `hosts` from now on: stops on the ones that went away, starts on new ones. Connected devices stay connected
    * where their address still exists. Rejects when a new host couldn't be bound; the others are bound anyway.
@@ -84,6 +88,7 @@ export async function startRemoteServer(
   // Loopback would reach the device's own computer.
   const reachable = () =>
     addresses().filter((a) => !a.startsWith('127.') && !a.startsWith('[::1]'));
+  let port = options.port;
   async function rebind(hosts: string[]) {
     await Promise.all(
       [...servers]
@@ -93,21 +98,41 @@ export async function startRemoteServer(
           return closeServer(server);
         }),
     );
+    let pending = hosts.filter((host) => !servers.has(host));
+    // Port 0 picks a different port per listen: the first one bound decides it for the rest.
+    if (port === 0 && pending[0]) {
+      const first = await listen(pending[0], 0, wss);
+      servers.set(pending[0], first);
+      port = (first.address() as AddressInfo).port;
+      pending = pending.slice(1);
+    }
     const added = await Promise.allSettled(
-      hosts
-        .filter((host) => !servers.has(host))
-        .map(async (host) =>
-          servers.set(host, await listen(host, options.port, wss)),
-        ),
+      pending.map(async (host) =>
+        servers.set(host, await listen(host, port, wss)),
+      ),
     );
     const failed = added.find((r) => r.status === 'rejected');
     if (failed) throw failed.reason;
   }
+  const closeAll = async () => {
+    await Promise.all([...servers.values()].map(closeServer));
+    servers.clear();
+  };
   try {
     await rebind(options.hosts);
   } catch (e) {
-    await Promise.all([...servers.values()].map(closeServer));
-    throw e;
+    await closeAll();
+    if ((e as NodeJS.ErrnoException).code !== 'EADDRINUSE' || port === 0)
+      throw e;
+    // Another Mochi (a dev run, a second profile) holds it: devices learn the new port from the relay and each welcome.
+    port = 0;
+    try {
+      await rebind(options.hosts);
+    } catch (e) {
+      await closeAll();
+      throw e;
+    }
+    options.onPortTaken?.(options.port, port);
   }
   wss.on('connection', (socket) => void accept(socketLink(socket), 'lan'));
 
@@ -163,6 +188,9 @@ export async function startRemoteServer(
   return {
     get addresses() {
       return addresses();
+    },
+    get port() {
+      return port;
     },
     rebind,
     devices: () =>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer, type AddressInfo } from 'node:net';
 import { it } from '@effect/vitest';
 import {
   Cause,
@@ -698,5 +699,37 @@ it.live(
         closed.replies.every((r) => !r.includes('welcome')),
         'no welcome in clear',
       );
+    }),
+);
+
+it.live(
+  'a port another program holds leaves remote access on, listening on a free one',
+  () =>
+    Effect.gen(function* () {
+      const holder = createServer();
+      const taken = yield* Effect.callback<number>((resume) => {
+        holder.listen(0, '127.0.0.1', () =>
+          resume(Effect.succeed((holder.address() as AddressInfo).port)),
+        );
+      });
+      yield* Effect.addFinalizer(() => Effect.sync(() => holder.close()));
+      const moves: [number, number][] = [];
+      const server = yield* Effect.acquireRelease(
+        Effect.promise(() =>
+          startRemoteServer({
+            hosts: ['127.0.0.1'],
+            port: taken,
+            onPortTaken: (wanted, bound) => void moves.push([wanted, bound]),
+            secure: () => Promise.reject(new Error('unused')),
+            coreFor: () => Promise.reject(new Error('unused')),
+            backend: () => Promise.reject(new Error('unused')),
+            onRejected: () => {},
+          }),
+        ),
+        (server) => Effect.promise(() => server.close()),
+      );
+      assert.notEqual(server.port, taken);
+      assert.deepEqual(moves, [[taken, server.port]]);
+      assert.deepEqual(server.addresses, [`127.0.0.1:${server.port}`]);
     }),
 );
