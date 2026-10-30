@@ -408,7 +408,7 @@
   --shadow-lg: var(--elev-popover);
 
   /* --text-scale is Settings › Appearance › Interface size; it scales text, not spacing. */
-  --text-caption: calc(0.6875rem * var(--text-scale, 1));
+  --text-caption: calc(0.75rem * var(--text-scale, 1));
   --text-caption--line-height: calc(1rem * var(--text-scale, 1));
   --text-meta: calc(0.75rem * var(--text-scale, 1));
   --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
@@ -434,7 +434,6 @@
   --text-body: calc(0.875rem * var(--text-scale, 1));
   --text-meta: calc(0.8125rem * var(--text-scale, 1));
   --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
-  --text-caption: calc(0.75rem * var(--text-scale, 1));
   --text-xs: calc(0.8125rem * var(--text-scale, 1));
   --text-xs--line-height: calc(1.125rem * var(--text-scale, 1));
   --text-sm: calc(0.875rem * var(--text-scale, 1));
