@@ -71,7 +71,6 @@ export const HOST_SCOPES = {
     checkpointDiff: L,
     turnDiff: L,
     forkWorktree: L,
-    runCheck: L,
   },
   // Any root and path on the disk; a device reads files only inside a thread's folder (`read-file`, `files`).
   fs: {
@@ -176,7 +175,7 @@ export const HOST_SCOPES = {
   },
   // Only a thread id and what to do to it. `local`: `start` and `move` name a cwd and profile; `send` can raise the turn's
   // permission mode (`policy`) and skips the store's record of the message (devices send through `send`); `ask`, `review`,
-  // `classify`, `utility` and `warm` spend this machine's models on the caller's prompt; `limits` is the account's;
+  // `utility` and `warm` spend this machine's models on the caller's prompt; `limits` is the account's;
   // `readWidget`, `pendingToolCalls` and `toolResult` are the window's MCP tools. `attached` replays agent events, patches
   // included, so `code`; `rewindPoint` reads a checkpoint, so `code`.
   agent: {
@@ -195,7 +194,6 @@ export const HOST_SCOPES = {
     attached: 'code',
     ask: L,
     review: L,
-    classify: L,
     utility: L,
     rewindFiles: 'operate',
     rewindPoint: 'code',

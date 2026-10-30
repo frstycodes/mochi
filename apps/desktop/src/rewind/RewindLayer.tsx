@@ -189,7 +189,7 @@ function RewindConfirm({
         <AlertDialogHeader>
           <AlertDialogTitle>Rewind to {phrase}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Steps, messages and the goal go back to{' '}
+            Steps and messages go back to{' '}
             <span className="tabular">
               {clock(kept === checkpoint.thread ? checkpoint.at : entry!.at)}
             </span>
@@ -497,7 +497,7 @@ function PointDialog({
           <DialogTitle>{isFork ? 'Fork thread' : 'Rewind thread'}</DialogTitle>
           <DialogDescription>
             {isFork
-              ? 'The fork gets its own worktree and branch, carrying the goal, steps and messages up to the point you pick. Compare both later and keep one.'
+              ? 'The fork gets its own worktree and branch, carrying the steps and messages up to the point you pick. Compare both later and keep one.'
               : 'Pick a step boundary. You confirm before anything changes, and one undo is kept.'}
           </DialogDescription>
         </DialogHeader>

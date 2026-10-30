@@ -1,11 +1,11 @@
-import { ChevronRight, DiagramTree } from '@/icons';
+import { DiagramTree } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
-import type { ActivityEntry, Criterion, Thread } from '../model';
+import type { ActivityEntry, Thread } from '../model';
 import { ThreadName } from '../chat/ThreadMessage';
 import { parentOf } from '../reorder';
 import { useHarness } from '../store';
-import { StatusRing, useThreadStatus } from './VerdictChip';
+import { threadStatus } from './VerdictChip';
 import type { Verdict } from './verdict';
 
 /** Working (shimmering), handed back, or the verdict's word in its tone. */
@@ -15,7 +15,7 @@ export function SubThreadState({
   className,
 }: {
   sub: Thread;
-  status: ReturnType<typeof useThreadStatus>;
+  status: ReturnType<typeof threadStatus>;
   className?: string;
 }) {
   if (status.isWorking)
@@ -39,22 +39,16 @@ export function SubThreadState({
   );
 }
 
-/** On a sub-thread's own card: which thread it belongs to, and the criterion of that thread's goal it covers. */
+/** On a sub-thread's own card: which thread it belongs to. */
 export function SubThreadLineage({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const parent = parentOf(state.threads, thread);
   if (!parent) return null;
-  const covers = parent.criteria?.find(
-    (c) => c.id === thread.parent?.criterionId,
-  );
   return (
     <p className="flex min-w-0 items-center gap-1.5 type-meta text-muted-foreground">
       <DiagramTree aria-hidden className="size-3.5 shrink-0" />
       <span className="shrink-0">Sub-thread of</span>
       <ThreadName peer={{ threadId: parent.id, title: parent.title }} />
-      {!!covers && (
-        <span className="min-w-0 truncate">{`, for “${covers.text}”`}</span>
-      )}
     </p>
   );
 }
@@ -81,57 +75,6 @@ export function SubThreadResultRow({
         </span>
       </span>
     </div>
-  );
-}
-
-/** In the summary: a criterion a sub-thread owns. Its ring stands in for the tick, its proof line is the sub-thread's state; the row opens it. */
-export function HandedCriterion({
-  criterion,
-  sub,
-}: {
-  criterion: Criterion;
-  sub: Thread;
-}) {
-  const status = useThreadStatus(sub);
-  const open = useOpenThread();
-  return (
-    <li className="relative isolate -mx-1 flex gap-2 rounded-md px-1 type-meta hover:bg-accent/60">
-      <button
-        type="button"
-        aria-label={`Open ${sub.title}`}
-        onClick={() => open(sub)}
-        className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2"
-      />
-      <span className="mt-px flex shrink-0 [&_svg]:size-3.5!">
-        <StatusRing
-          met={status.progress.met}
-          total={status.progress.total}
-          tone={status.tone}
-          isWorking={status.isWorking}
-          slot={sub.line}
-          label={status.status}
-        />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col text-pretty">
-        <span
-          className={cn(
-            sub.parent?.handedBackAt ? 'text-foreground' : 'text-foreground/75',
-          )}
-        >
-          {criterion.text}
-        </span>
-        <span className="flex min-w-0 items-center gap-1 type-caption text-subtle-foreground">
-          <DiagramTree aria-hidden className="size-3 shrink-0" />
-          <span className="truncate">{sub.title}</span>
-          <span aria-hidden>·</span>
-          <SubThreadState sub={sub} status={status} />
-        </span>
-      </span>
-      <ChevronRight
-        aria-hidden
-        className="mt-1 size-3 shrink-0 text-subtle-foreground"
-      />
-    </li>
   );
 }
 
@@ -186,7 +129,6 @@ export function useOpenThread() {
 }
 
 export const TONE_TEXT = {
-  success: 'text-success',
   warning: 'text-warning',
   destructive: 'text-destructive',
   muted: 'text-muted-foreground',

@@ -40,10 +40,7 @@ test('unread shows only when the row is not the open thread; a seen idle row has
   });
   assert.equal(rowStatusMark({ ...idle, isUnread: true }, true), null);
   assert.equal(rowStatusMark(idle), null);
-  assert.equal(
-    rowStatusMark({ ...idle, tone: 'success', status: 'Done' }),
-    null,
-  );
+  assert.equal(rowStatusMark({ ...idle, tone: 'muted', status: 'Idle' }), null);
 });
 
 test('steps share the thread marks: blocked is needs you, done is settled', () => {

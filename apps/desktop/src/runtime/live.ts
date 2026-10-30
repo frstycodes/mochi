@@ -70,7 +70,6 @@ export function agentCalls(
       // A scheduled thread waits for its first run; main starts it then.
       if (action.schedule) return [];
     // falls through
-    case 'drift-new-thread':
     case 'proposal-start':
     case 'sidechat-promote': {
       const first =
@@ -185,7 +184,6 @@ export function agentCalls(
           type: 'send',
           threadId: action.threadId,
           text: sourcePrompt(action.source),
-          reason: '',
         },
         next,
       );
@@ -322,7 +320,6 @@ export function agentCalls(
           type: 'send',
           threadId: action.threadId,
           text: reportOf(subagent),
-          reason: '',
           steers: true,
         },
         next,
@@ -336,7 +333,6 @@ export function agentCalls(
           type: 'send',
           threadId: action.threadId,
           text: WAKE_PROMPT,
-          reason: '',
         },
         next,
       );

@@ -5,13 +5,10 @@ import { DEFAULT_PREFS, type Prefs } from '../settings/prefsDefaults.ts';
 /** The prefs the thread projection and Core's reactor rules read; the rest of `Prefs` is this window's own. */
 export type ProjectionPrefs = Pick<
   Prefs,
-  | 'goals'
-  | 'driftGuard'
   | 'autofixPrs'
   | 'autoArchivePrs'
   | 'workspaceMode'
   | 'branchPrefix'
-  | 'idleChecks'
   | 'simplifyAuto'
   | 'simplifyAutoWords'
   | 'simplifyLength'
@@ -33,13 +30,10 @@ export interface ProjectionContext {
 }
 
 export const projectionPrefs = ({
-  goals,
-  driftGuard,
   autofixPrs,
   autoArchivePrs,
   workspaceMode,
   branchPrefix,
-  idleChecks,
   simplifyAuto,
   simplifyAutoWords,
   simplifyLength,
@@ -48,13 +42,10 @@ export const projectionPrefs = ({
   whileWorking,
   turnSpine,
 }: ProjectionPrefs): ProjectionPrefs => ({
-  goals,
-  driftGuard,
   autofixPrs,
   autoArchivePrs,
   workspaceMode,
   branchPrefix,
-  idleChecks,
   simplifyAuto,
   simplifyAutoWords,
   simplifyLength,

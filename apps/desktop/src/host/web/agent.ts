@@ -1,4 +1,3 @@
-import { localClassifier } from '../../drift.ts';
 import { demoReviewer } from '../../secondOpinion/demo.ts';
 import { chunks, mockAnswer } from '../../sidechat/mockAnswer.ts';
 import { CLAUDE_DEMO_MODELS, claudeFast } from '../../runtime/models.ts';
@@ -68,9 +67,6 @@ export const agent: AgentHost = {
   // No models in the web build: every background task keeps its local behaviour.
   async utility() {
     return null;
-  },
-  async classify(prompt, thread) {
-    return localClassifier(prompt, thread);
   },
   async rewindFiles() {},
   async rewindPoint() {

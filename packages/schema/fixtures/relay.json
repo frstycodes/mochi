@@ -21,7 +21,6 @@
     { "type": "create", "title": "Fix login", "provider": "claude", "project": "ref", "controls": { "model": "opus", "effort": "high", "speed": "", "access": "Manual" }, "images": [{ "mediaType": "image/png", "data": "iVBORw0KGgo=", "thumb": "data:image/png;base64,iVBORw0KGgo=" }] },
     { "type": "create", "title": "Fix login", "provider": "codex", "project": null },
     { "type": "rename", "threadId": "t", "title": "x" },
-    { "type": "edit-goal", "threadId": "t", "goal": "Ship it" },
     { "type": "pin", "threadId": "t", "isPinned": true, "order": 1.5 },
     { "type": "settle", "threadId": "t", "isSettled": true },
     { "type": "schedule", "threadId": "t", "action": "pause" },

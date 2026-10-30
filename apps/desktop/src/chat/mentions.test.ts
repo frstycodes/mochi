@@ -30,7 +30,6 @@ const calls = (s: State, action: Action) =>
 const other = {
   id: 'auth',
   title: 'Fix "login" redirect',
-  goal: 'Users land back where they signed in',
   status: 'running',
   repo: { project: 'web', branch: 'fix/login' },
   steps: [{ status: 'done' }, { status: 'running' }],
@@ -115,7 +114,7 @@ test('a thread reference becomes a digest and a window reference its screenshot,
   );
   assert.match(
     ref.prompt,
-    /<thread title="Fix &quot;login&quot; redirect">\nGoal: Users land back where they signed in\nStatus: running, 1\/2 steps done, web on fix\/login\nyou: Keep the return URL in state\nclaude: Done\. x+…\n<\/thread>/,
+    /<thread title="Fix &quot;login&quot; redirect">\nStatus: running, 1\/2 steps done, web on fix\/login\nyou: Keep the return URL in state\nclaude: Done\. x+…\n<\/thread>/,
   );
   assert.doesNotMatch(
     ref.prompt,
@@ -131,8 +130,6 @@ test('a thread reference becomes a digest and a window reference its screenshot,
     type: 'send',
     threadId: id,
     text: ref.text,
-    drift: 'on-goal',
-    reason: '',
     prompt: ref.prompt,
     images: ref.images,
   };
@@ -312,8 +309,6 @@ test('picked skills reach the agent call, so Codex can attach them', () => {
     type: 'send',
     threadId: id,
     text: '@ui\n\ngo',
-    drift: 'on-goal',
-    reason: '',
     prompt: 'p',
     images: [],
     skills: ['ui'],
@@ -422,8 +417,6 @@ test('a /skill typed mid-text is sent as written and its name goes to the agent 
     type: 'send',
     threadId: id,
     text: claude.text,
-    drift: 'on-goal',
-    reason: '',
     prompt: claude.prompt,
     images: [],
     skills: claude.skills,

@@ -1,7 +1,4 @@
 import type { Dispatch } from 'react';
-import { useStore } from 'zustand';
-import { createStore } from 'zustand/vanilla';
-import type { DriftVerdict } from '../drift.ts';
 import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
 import type { Action, State } from '../store/types.ts';
 import { sendAction } from './queued.ts';
@@ -58,9 +55,8 @@ export async function sendSteerNow(
 }
 
 /**
- * Sends a message now: references resolve and the drift guard judges it against the thread as it is at this moment, so a
- * queued message is checked when it goes out, not when you wrote it. A confident off-goal verdict waits in `useDriftPending`.
- * It steers: a turn in flight takes it at its next step; an idle agent starts a turn with it.
+ * Sends a message now: references resolve against the thread as it is at this moment, so a queued message reads them when it
+ * goes out, not when you wrote it. It steers: a turn in flight takes it at its next step; an idle agent starts a turn with it.
  */
 export function sendMessage(
   dispatch: Dispatch<Action>,
@@ -69,44 +65,5 @@ export function sendMessage(
   message: QueuedMessage,
   extra?: { queuedId?: string },
 ) {
-  // A new message answers an open suggestion by ignoring it.
-  setDriftPending(thread.id, null);
-  const { action, text, verdict } = sendAction(state, thread, message, extra);
-  dispatch(action);
-  void Promise.resolve(verdict).then((v) => {
-    if (v.kind === 'off-goal')
-      return setDriftPending(thread.id, { text, verdict: v });
-    if (verdict instanceof Promise)
-      dispatch({
-        type: 'drift-verdict',
-        threadId: thread.id,
-        text,
-        drift: v.kind,
-        reason: v.reason,
-      });
-  });
+  dispatch(sendAction(state, thread, message, extra));
 }
-
-export interface DriftPending {
-  text: string;
-  verdict: DriftVerdict;
-}
-
-// Outside React: a queued message the store sends while its thread is closed still leaves its suggestion for when you open it.
-const driftStore = createStore<Record<string, DriftPending>>(() => ({}));
-
-export function setDriftPending(
-  threadId: string,
-  pending: DriftPending | null,
-) {
-  if (pending) return driftStore.setState({ [threadId]: pending });
-  if (!(threadId in driftStore.getState())) return;
-  driftStore.setState(({ [threadId]: _, ...rest }) => rest, true);
-}
-
-export function useDriftPending(threadId: string) {
-  return useStore(driftStore, (all) => all[threadId] ?? null);
-}
-
-export const driftPending = (threadId: string) =>
-  driftStore.getState()[threadId] ?? null;

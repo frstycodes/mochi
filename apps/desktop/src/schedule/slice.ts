@@ -275,7 +275,6 @@ export function autofixSend(
     threadId,
     text: autofixBody(event),
     prompt: autofixPrompt(event),
-    reason: '',
     autofix: { kind: event.kind, pr: event.pr, title: autofixTitle(event) },
   };
 }

@@ -26,12 +26,7 @@ import { Projection } from '../store/projection.ts';
 import type { OutboxEffect } from '../store/store.ts';
 import { PRIORITY, UtilityQueue } from '../utility/queue.ts';
 import type { ReactorCommand } from './commands.ts';
-import {
-  autoSimplify,
-  gatherIdle,
-  refreshPrs,
-  type HostWork,
-} from './hostWork.ts';
+import { autoSimplify, refreshPrs, type HostWork } from './hostWork.ts';
 import { runReactor } from './reactor.ts';
 import type { Outcome } from './worker.ts';
 
@@ -52,7 +47,6 @@ export const layerReactor = Layer.effectDiscard(
     );
     const work: HostWork = {
       apply: (action) => commands.apply(action),
-      host: (tag, args) => host[tag]!(args),
       utility: (thread, task, prompt) =>
         queue.submit({
           thread: thread.id,
@@ -96,29 +90,10 @@ export const layerReactor = Layer.effectDiscard(
                 focus,
                 queuedId: message.id,
               });
-            const { action, text, verdict } = sendAction(
-              state,
-              thread,
-              message,
-              { queuedId: message.id },
+            return yield* apply(
+              command,
+              sendAction(state, thread, message, { queuedId: message.id }),
             );
-            yield* apply(command, action);
-            // GAP: an off-goal verdict's new-thread suggestion is a window's card; a send from Core doesn't raise it.
-            if (verdict instanceof Promise) {
-              const late = yield* Effect.promise(() => verdict);
-              if (late.kind !== 'off-goal')
-                yield* commands.apply(
-                  {
-                    type: 'drift-verdict',
-                    threadId: thread.id,
-                    text,
-                    drift: late.kind,
-                    reason: late.reason,
-                  },
-                  `${command.key}:verdict`,
-                );
-            }
-            return;
           }
           case 'delegate.report':
             if (
@@ -188,8 +163,6 @@ export const layerReactor = Layer.effectDiscard(
               ? yield* applyTitle(command.key, threadId, title)
               : undefined;
           }
-          case 'idle.gather':
-            return yield* gatherIdle(work, state, thread);
           case 'simplify.auto':
             return yield* autoSimplify(work, state, thread);
           case 'pr.refresh':

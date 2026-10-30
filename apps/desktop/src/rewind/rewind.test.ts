@@ -33,7 +33,7 @@ const idle = (s: State, id: string): State => ({
 const calls = (s: State, action: Action) =>
   agentCalls(s, action, () => threadsReducer(s, action));
 
-test('threadAt rebuilds steps, activity and revisions as they stood', () => {
+test('threadAt rebuilds steps and activity as they stood', () => {
   const rl = thread(base(), 'rl');
   const past = threadAt(rl, rl.startedAt + 30);
   assert.deepEqual(past.steps.map((s) => s.status).slice(0, 2), [
@@ -45,7 +45,6 @@ test('threadAt rebuilds steps, activity and revisions as they stood', () => {
     'step added at v2 is not there yet',
   );
   assert.ok(past.activity.every((a) => a.at <= rl.startedAt + 30));
-  assert.equal(past.revisions.length, 1);
   assert.equal(past.status, 'running');
 });
 
@@ -92,10 +91,6 @@ test('rewind restores the snapshot, drops later checkpoints, and one undo brings
   assert.equal(
     rewound.activity.at(-1)!.text,
     'Rewound transcript to after "Agree limit tiers per plan"',
-  );
-  assert.equal(
-    rewound.revisions.at(-1)!.label,
-    'Rewound to after "Agree limit tiers per plan"',
   );
   assert.ok(
     rewound.steps
@@ -181,7 +176,7 @@ test('fork from a checkpoint names it for the worktree only once its files were 
   assert.equal(Object.values(s.forks)[0].checkpoint, cp.n);
 });
 
-test('handoff moves the thread and logs one handoff row with its prompt, not a message or a revision', () => {
+test('handoff moves the thread and logs one handoff row with its prompt, not a message', () => {
   let s = base();
   const rl = thread(s, 'rl');
   const summary = '**Goal:** Every public API key is rate limited';
@@ -194,11 +189,6 @@ test('handoff moves the thread and logs one handoff row with its prompt, not a m
   });
   const t = thread(s, 'rl');
   assert.deepEqual(t.providers, ['codex', 'claude']);
-  assert.equal(
-    t.revisions.length,
-    rl.revisions.length,
-    'what done means is unchanged',
-  );
   assert.equal(
     t.activity.length,
     rl.activity.length + 1,
@@ -411,8 +401,6 @@ function liveThread() {
     type: 'send',
     threadId: id,
     text: 'Now write two',
-    drift: 'on-goal',
-    reason: '',
   });
   turn('Wrote two.');
   for (const c of s.checkpoints[id])
@@ -434,8 +422,6 @@ test('a working agent blocks every rewind and the undo until its turn ends', () 
     type: 'send',
     threadId: id,
     text: 'and three',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.equal(
     rewindBlockedReason(thread(working, id)),
@@ -471,8 +457,6 @@ test('a working agent blocks every rewind and the undo until its turn ends', () 
     type: 'send',
     threadId: id,
     text: 'try again',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.equal(
     threadsReducer(rewound, { type: 'rewind-undo' }),
@@ -531,8 +515,6 @@ test('rewind chat: transcript back, files untouched, the agent stops and its nex
     type: 'send',
     threadId: id,
     text: 'Now write 2',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.equal(start.method, 'start');
   assert.deepEqual(
@@ -558,8 +540,6 @@ test('rewind → fork fails → send again, or the process is lost: the fork poi
     type: 'send',
     threadId: id,
     text: 'Now write 2',
-    drift: 'on-goal',
-    reason: '',
   };
   const [fork] = calls(s, send);
   assert.equal(
@@ -578,8 +558,6 @@ test('rewind → fork fails → send again, or the process is lost: the fork poi
     type: 'send',
     threadId: id,
     text: 'try again',
-    drift: 'on-goal',
-    reason: '',
   };
   assert.deepEqual(
     calls(s, again),
@@ -617,8 +595,6 @@ test('rewind chat and files: files are restored too, and a session main cannot c
     type: 'send',
     threadId: id,
     text: 'Now write 2',
-    drift: 'on-goal',
-    reason: '',
   });
   assert.ok(
     start.method === 'start' &&
@@ -657,8 +633,6 @@ test('undo brings back chat and files for either mode and resumes the original s
       type: 'send',
       threadId: id,
       text: 'Now write 2',
-      drift: 'on-goal',
-      reason: '',
     });
     s = applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'done' });
     assert.deepEqual(calls(s, { type: 'rewind-undo' }), [
@@ -672,8 +646,6 @@ test('undo brings back chat and files for either mode and resumes the original s
       type: 'send',
       threadId: id,
       text: 'go on',
-      drift: 'on-goal',
-      reason: '',
     });
     assert.deepEqual(
       start.method === 'start' && [
@@ -728,7 +700,7 @@ test('a provider switch waits for the next message; picking again replaces it, p
   );
   assert.equal(thread(s, 'rl').live?.restart, undefined);
   assert.deepEqual(
-    calls(s, { type: 'send', threadId: 'rl', text: 'Go on', reason: '' }).map(
+    calls(s, { type: 'send', threadId: 'rl', text: 'Go on' }).map(
       (c) => c.method,
     ),
     ['send'],
@@ -741,7 +713,6 @@ test('a provider switch waits for the next message; picking again replaces it, p
     type: 'send',
     threadId: 'rl',
     text: 'Go on',
-    reason: '',
   });
   assert.equal(thread(sent, 'rl').session, undefined);
   assert.equal(thread(sent, 'rl').providers[0], 'codex');

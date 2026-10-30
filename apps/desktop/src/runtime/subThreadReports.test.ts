@@ -117,7 +117,6 @@ test("a working parent isn't woken; the reports ride with its next message", () 
     type: 'send',
     threadId: parent,
     text: 'go on',
-    reason: '',
   };
   const [call] = agentCalls(s, send, () => run(s, send));
   assert.ok(
@@ -274,7 +273,7 @@ test("a turn's report_to_parent becomes the parent's note, compactly; a turn wit
   );
   assert.ok(!note.includes('A long reply'));
 
-  s = run(s, { type: 'send', threadId: a, text: 'one more thing', reason: '' });
+  s = run(s, { type: 'send', threadId: a, text: 'one more thing' });
   s = agent(s, {
     threadId: a,
     type: 'message',
@@ -319,7 +318,6 @@ test('a thread messaged with expectReply replies to the sender at its next turn 
     type: 'send',
     threadId: parent,
     text: 'take the reports',
-    reason: '',
   });
   s = ended(s, parent);
   const other = run(s, {
@@ -335,7 +333,6 @@ test('a thread messaged with expectReply replies to the sender at its next turn 
     type: 'send',
     threadId: o,
     text: 'Which table?',
-    reason: '',
     from: { threadId: parent, title: 'Split the work' },
     expectReply: true,
   });
@@ -356,10 +353,7 @@ test('a thread messaged with expectReply replies to the sender at its next turn 
     [parent],
   );
   const count = reports(s, parent).length;
-  s = ended(
-    run(s, { type: 'send', threadId: o, text: 'thanks', reason: '' }),
-    o,
-  );
+  s = ended(run(s, { type: 'send', threadId: o, text: 'thanks' }), o);
   assert.equal(reports(s, parent).length, count, 'only the next turn end');
 });
 
@@ -395,7 +389,6 @@ test("report_to_parent shows in the parent's transcript at once; a message of yo
     type: 'send',
     threadId: parent,
     text: 'go on',
-    reason: '',
   };
   const [call] = agentCalls(s, send, () => run(s, send));
   assert.ok(call.method === 'send');
@@ -433,7 +426,7 @@ test('a no_change report logs its row but never wakes the parent, alone or for a
     'Piece B still works, and no_change never wakes',
   );
 
-  s = run(s, { type: 'send', threadId: b, text: 'stop', reason: '' });
+  s = run(s, { type: 'send', threadId: b, text: 'stop' });
   s = ended(
     reported(s, b, { status: 'no_change', summary: 'Nothing either.' }),
     b,
@@ -444,7 +437,7 @@ test('a no_change report logs its row but never wakes the parent, alone or for a
     'every sub-thread idle, but only no_change reports',
   );
 
-  s = run(s, { type: 'send', threadId: b, text: 'go on', reason: '' });
+  s = run(s, { type: 'send', threadId: b, text: 'go on' });
   s = ended(reported(s, b, { status: 'done', summary: 'Piece B done.' }), b);
   assert.deepEqual(
     dueWakes(s).map((t) => t.id),
@@ -465,10 +458,7 @@ test('a no_change report logs its row but never wakes the parent, alone or for a
 test("an Auto-fix turn's done report is stored as no_change, so it stays with the sub-thread", () => {
   let { s, parent, a, thread } = family();
   s = ended(ended(s, parent), a);
-  s = ended(
-    run(s, { type: 'send', threadId: parent, text: 'ok', reason: '' }),
-    parent,
-  );
+  s = ended(run(s, { type: 'send', threadId: parent, text: 'ok' }), parent);
   assert.deepEqual(reports(s, parent), [], 'the first turn end went out');
   s = run(s, {
     type: 'prs-seen',

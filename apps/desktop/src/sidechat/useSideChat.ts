@@ -91,7 +91,6 @@ export function useSideChat(thread: Thread, tabId: string) {
           type: 'send',
           threadId: thread.id,
           text: promotedText(answer),
-          reason: '',
         });
     },
     /** The computer the side chat runs on, and why asking it can't go now; null for this computer's own thread. */

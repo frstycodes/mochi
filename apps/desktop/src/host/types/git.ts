@@ -351,16 +351,6 @@ export interface GitHost {
     branch: string,
     from?: { threadId: string; n: number },
   ): Promise<string>;
-  /** Runs a goal criterion's check command in the worktree with your shell's PATH; never throws for a failing command. */
-  runCheck(cwd: string, command: string): Promise<CheckRun>;
-}
-
-export interface CheckRun {
-  /** null when it was killed (timed out). */
-  exitCode: number | null;
-  /** The output's tail, stdout and stderr interleaved. */
-  output: string;
-  ms: number;
 }
 
 export interface RewindPreview {
@@ -409,5 +399,4 @@ export const gitMethods = {
   checkpointDiff: 'invoke',
   turnDiff: 'invoke',
   forkWorktree: 'invoke',
-  runCheck: 'invoke',
 } satisfies Manifest<GitHost>;

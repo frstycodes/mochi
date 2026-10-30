@@ -244,7 +244,7 @@ const SCOPE_LABELS = {
 } satisfies Record<Scope, string>;
 
 const MEMBERS_FOOTER =
-  'Each reaches the others with no more approvals. What each may do here: Read follows threads and the Queue. Operate answers, sends, stops, forks and hands off. Manage starts, renames, pins and settles threads, edits goals and schedules, and commits, pushes and opens PRs. Code reads files and diffs. Terminal is a shell on this computer. A change reconnects that computer. Removing one removes it everywhere.';
+  'Each reaches the others with no more approvals. What each may do here: Read follows threads and the Queue. Operate answers, sends, stops, forks and hands off. Manage starts, renames, pins and settles threads, edits schedules, and commits, pushes and opens PRs. Code reads files and diffs. Terminal is a shell on this computer. A change reconnects that computer. Removing one removes it everywhere.';
 
 /** What the member may do here; terminal starts off, as a shell on this computer. */
 function ScopeToggles({ member }: { member: MemberInfo }) {

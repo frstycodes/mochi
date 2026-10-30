@@ -20,8 +20,8 @@ import type { Thread } from './model';
 import { snoozeTimes, wakeLabel } from './snooze';
 import { workingLabel } from './agentPhase';
 import { limitStatus } from './chat/LimitCard';
-import { useThreadStatus } from './goals/VerdictChip';
-import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
+import { threadStatus } from './goals/VerdictChip';
+import { reportHeadline } from './goals/report';
 import { runningBackground } from './runtime/subagents';
 import { useHarnessSelector } from './store';
 import { isUnread } from './store/seen';
@@ -31,13 +31,13 @@ import { useProjectAt } from './projects';
 
 export type ThreadRow = ReturnType<typeof useThreadRow>;
 
-/** A row's one status (`useThreadStatus`) and the line under its title: the verdict's reason when idle, else the step in flight or what it waits for. */
+/** A row's one status (`threadStatus`) and the line under its title: the verdict's reason when idle, else the step in flight or what it waits for. */
 export function useThreadRow(thread: Thread) {
   const question = useHarnessSelector(
     (s) => s.queue.find((q) => q.threadId === thread.id)?.title,
   );
   const isWatched = useHarnessSelector((s) => s.watched.includes(thread.id));
-  const status = useThreadStatus(thread);
+  const status = threadStatus(thread);
   // A snoozed thread that asks for you shows the ask: asking wakes it.
   const isAsking = status.tone === 'warning' || status.tone === 'destructive';
   const snooze =
@@ -63,8 +63,8 @@ export function threadDetail(thread: Thread, question?: string) {
   if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];
   if (thread.status === 'review')
-    return pr ? `#${pr.number} ready for review` : NEXT_STEP_TITLES['open-pr'];
-  // A live agent reports what it's doing; idle, its last report says where things stand; demo threads are told by their goal steps.
+    return pr ? `#${pr.number} ready for review` : 'Ready for a pull request';
+  // A live agent reports what it's doing; idle, its last report says where things stand; demo threads are told by their steps.
   if (thread.live)
     return workingLabel(thread) ?? reportHeadline(thread) ?? 'Idle';
   const step =

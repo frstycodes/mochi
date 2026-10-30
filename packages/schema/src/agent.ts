@@ -10,7 +10,6 @@ import {
   McpWidget,
   McpWidgetResource,
   Provider,
-  Thread,
   ThreadRef,
   WebLink,
   WorktreeSetup,
@@ -233,7 +232,6 @@ export const AgentStartOptions = Schema.Struct({
     Schema.Struct({ provider: Provider, model: opt(Short), isLimited: opt(B) }),
   ),
   useApiKey: opt(B),
-  isGoalsOff: opt(B),
   isSpineOff: opt(B),
   isSettingsChat: opt(B),
   isSubThread: opt(B),
@@ -294,7 +292,6 @@ export const AgentAskEvent = Schema.Struct({
 export const AgentAskContext = Schema.Struct({
   spaceId: Short,
   title: S,
-  goal: S,
   steps: Schema.Array(Schema.Struct({ title: S, status: S })),
   activity: Schema.Array(Schema.Struct({ who: S, text: S })),
   diff: Schema.NullOr(
@@ -364,19 +361,12 @@ export type AgentToolResult = typeof AgentToolResult.Type;
 
 export const UtilityTask = Schema.Literals([
   'title',
-  'outcome',
   'simplify',
   'commit',
   'pr',
   'handoff',
-  'audit',
   'command',
 ]);
-
-export const DriftVerdict = Schema.Struct({
-  kind: Schema.Literals(['on-goal', 'scope-add', 'off-goal']),
-  reason: S,
-});
 
 const T = Schema.Tuple;
 const o = Schema.optional;
@@ -409,7 +399,6 @@ export const agentRpc = {
   onAskEvent: event(AgentAskEvent),
   review: invoke(T([AgentReviewRequest]), IdOut),
   onReviewEvent: event(AgentReviewEvent),
-  classify: invoke(T([Str(20_000), Thread]), DriftVerdict),
   utility: invoke(T([UtilityTask, Short, Str(40_000)]), Schema.NullOr(S)),
   rewindFiles: invoke(T([Id, Str(100_000)]), Void),
   rewindPoint: invoke(T([Id, Str(100_000)]), Schema.NullOr(S)),

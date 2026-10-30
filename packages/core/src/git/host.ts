@@ -46,7 +46,6 @@ import {
   type GithubAccountRef,
 } from '../../../../apps/desktop/src/git/github.ts';
 import type { HostMethods } from '../hostMethods.ts';
-import { runCheck } from './check.ts';
 import { conflictedPaths } from './conflicts.ts';
 import {
   autoMergeArgs,
@@ -418,11 +417,6 @@ export const git = {
       await runGit(top, ['diff', from, end, ...DIFF_FLAGS]),
       false,
     );
-  },
-
-  async runCheck(_caller, cwd, command) {
-    const top = await topLevel(cwd);
-    return runCheck(top, command);
   },
 
   async forkWorktree(_caller, cwd, threadId, branch, from) {

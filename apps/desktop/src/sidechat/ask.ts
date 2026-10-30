@@ -69,7 +69,6 @@ function threadContext(
   return {
     spaceId: thread.spaceId,
     title: thread.title,
-    goal: thread.goal,
     steps: thread.steps.map((s) => ({ title: s.title, status: s.status })),
     activity: thread.activity
       .slice(-RECENT_ACTIVITY)

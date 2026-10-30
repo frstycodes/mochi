@@ -8,17 +8,12 @@ import {
   savedOrder,
   summaryCards,
 } from './summarySections.ts';
-import { setPrefs } from './settings/prefs.ts';
-
-// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
-setPrefs({ goals: true });
 
 const thread = (patch: Partial<Thread>) =>
   ({
     id: 't',
     spaceId: 's',
     status: 'running',
-    goal: '',
     repo: null,
     activity: [],
     sources: [],
@@ -101,13 +96,6 @@ test('connector status leads with what needs you', () => {
     connectorStatus([{ status: 'connected' }, { status: 'disabled' }]),
     { text: '1 of 2 on', needsYou: false },
   );
-});
-
-test('a goal leads the cards', () => {
-  assert.deepEqual(cards(thread({ goal: 'Ship it' })).slice(0, 2), [
-    'goal',
-    'environment',
-  ]);
 });
 
 test('dragged order wins; cards never placed keep their default slot', () => {

@@ -33,7 +33,7 @@ export interface SideChat {
   pending?: string;
 }
 
-/** threadId → pane tab id → chat. Lives beside the thread, never inside it, so asking can't touch goal, steps or activity. */
+/** threadId → pane tab id → chat. Lives beside the thread, never inside it, so asking can't touch steps or activity. */
 export interface SideChatState {
   sidechats: Record<string, Record<string, SideChat>>;
 }

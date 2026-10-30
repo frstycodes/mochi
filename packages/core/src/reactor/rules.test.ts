@@ -8,7 +8,7 @@ import {
   autoTitles,
   compactInstructions,
   delegatedReports,
-  idleChecks,
+  idleMark,
   limitResumes,
   prSync,
   queueRunner,
@@ -25,7 +25,6 @@ const thread = (id: string, fields: Record<string, unknown> = {}) =>
     title: id,
     spaceId: 'space',
     status: 'running',
-    goal: '',
     activity: [],
     providers: ['claude'],
     live: idle,
@@ -300,28 +299,17 @@ test('auto titles: after the first exchange, never after a rename', () => {
   );
 });
 
-test('compact instructions: live Claude threads only, a new key when the goal changes or Core restarts', () => {
-  const claude = (goal: string) =>
-    thread('t1', { goal, session: { provider: 'claude' } });
-  const [first] = compactInstructions(
-    saved(),
-    NONE,
-    state([claude('ship it')]),
-  );
+test('compact instructions: live Claude threads only, a new key when Core restarts', () => {
+  const claude = thread('t1', { session: { provider: 'claude' } });
+  const [first] = compactInstructions(saved(), NONE, state([claude]));
   assert.equal(first?.type, 'compact.instructions');
   assert.equal(
-    compactInstructions(saved(), NONE, state([claude('ship it')]))[0]?.key,
+    compactInstructions(saved(), NONE, state([claude]))[0]?.key,
     first?.key,
-    'same goal, same key',
+    'same pins, same key',
   );
   assert.notEqual(
-    compactInstructions(saved(), NONE, state([claude('ship it twice')]))[0]
-      ?.key,
-    first?.key,
-  );
-  assert.notEqual(
-    compactInstructions(saved(), NONE, state([claude('ship it')], [], 'b2'))[0]
-      ?.key,
+    compactInstructions(saved(), NONE, state([claude], [], 'b2'))[0]?.key,
     first?.key,
   );
   assert.deepEqual(
@@ -351,11 +339,8 @@ test('a setting changed in Core is what its rule reads: goals pick gathering ove
       ...DEFAULT_CONTEXT,
       prefs: { ...DEFAULT_CONTEXT.prefs, ...prefs },
     });
-  assert.deepEqual(idleChecks(end, NONE, withPrefs({ goals: false })), [
+  assert.deepEqual(idleMark(end, NONE, withPrefs({})), [
     { type: 'idle.mark', key: 'idle:42', threadId: 't1' },
-  ]);
-  assert.deepEqual(idleChecks(end, NONE, withPrefs({ goals: true })), [
-    { type: 'idle.gather', key: 'idle:42', threadId: 't1' },
   ]);
   assert.deepEqual(
     autoSimplify(
@@ -386,7 +371,6 @@ test('a setting changed in Core is what its rule reads: goals pick gathering ove
 
 test('compact instructions follow your pins in Core: a pin change is a new key', () => {
   const claude = thread('t1', {
-    goal: 'ship it',
     session: { provider: 'claude' },
   });
   const pinned = (pins: ReactorState['context']['pins']) =>

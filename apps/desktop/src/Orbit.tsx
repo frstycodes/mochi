@@ -25,8 +25,6 @@ import {
   type QueueKind,
   type Thread,
 } from './model';
-import { goalProgress, progressLabel } from './progress';
-import { hasGoal } from './drift';
 import {
   useSpaceQueue,
   useSpaceThreads,
@@ -476,7 +474,6 @@ function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
 }
 
 function ThreadPeek({ thread }: { thread: Thread }) {
-  const progress = goalProgress(thread);
   const running = thread.steps.find((s) => s.status === 'running');
   const last = thread.activity[thread.activity.length - 1];
   return (
@@ -484,17 +481,10 @@ function ThreadPeek({ thread }: { thread: Thread }) {
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
         <ProgressRing
-          met={progress.met}
-          total={progress.total}
           slot={thread.line}
           size={18}
           isWorking={isWorking(thread)}
         />
-        {hasGoal(thread) && (
-          <span className="tabular font-medium text-foreground">
-            {progressLabel(progress)}
-          </span>
-        )}
         <span className="truncate text-muted-foreground">
           {running ? running.title : 'Nothing running'}
         </span>

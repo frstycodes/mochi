@@ -21,8 +21,6 @@ import {
 import { killDecision } from '@mochi/core/agents/processKill';
 import { claudeServer as coreClaudeServer } from '@mochi/core/agents/mochiTools';
 import {
-  GOAL_TOOLS,
-  isGoalTool,
   SETTINGS_CHAT_TOOLS,
   TOOL_NAMES,
 } from '@mochi/domain/runtime/toolTable';
@@ -45,13 +43,9 @@ test('browser instructions route to Mochi, and Codex loses the cua_repl browser 
   );
 });
 
-test('goals off leaves goals out of the instructions, browser guidance stays', () => {
-  assert.match(mochiInstructions(), /mcp__mochi__propose_goal/);
-  assert.doesNotMatch(mochiInstructions({ isGoalsOff: true }), /goal/i);
-  assert.match(
-    mochiInstructions({ isGoalsOff: true }),
-    /mcp__mochi__browser_open/,
-  );
+test('the instructions say nothing about goals, browser guidance stays', () => {
+  assert.doesNotMatch(mochiInstructions(), /goal/i);
+  assert.match(mochiInstructions(), /mcp__mochi__browser_open/);
 });
 
 test('only the settings chat is told to read Mochi settings first; threads are told to hand off', () => {
@@ -143,42 +137,11 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
     browsers((await codex.listTools()).tools),
     TOOL_NAMES.filter((name) => name.startsWith('browser_')).sort(),
   );
-  const goalTools = (tools: { name: string }[]) =>
-    tools
-      .map((tool) => tool.name)
-      .filter(isGoalTool)
-      .sort();
-  assert.deepEqual(
-    goalTools((await codex.listTools()).tools),
-    [...GOAL_TOOLS].sort(),
-  );
-  const claudeOff = new Client({ name: 'claude-off', version: '1' });
-  const codexOff = new Client({ name: 'codex-off', version: '1' });
-  onTestFinished(async () => {
-    await claudeOff.close();
-    await codexOff.close();
-  });
-  const [offClient, offServer] = InMemoryTransport.createLinkedPair();
-  await claudeServer('claude-thread', 'space', '/tmp', {
-    isGoalsOff: true,
-  }).instance.connect(offServer);
-  await claudeOff.connect(offClient);
-  await codexOff.connect(
-    new StreamableHTTPClientTransport(
-      new URL(await codexUrl('codex-thread', { isGoalsOff: true })),
-    ),
-  );
-  assert.deepEqual(goalTools((await claudeOff.listTools()).tools), []);
-  assert.deepEqual(goalTools((await codexOff.listTools()).tools), []);
-  assert.doesNotMatch(codexOff.getInstructions() ?? '', /goal/i);
-  assert.equal(
-    browsers((await codexOff.listTools()).tools).length,
-    browsers((await codex.listTools()).tools).length,
-  );
+  assert.doesNotMatch(codex.getInstructions() ?? '', /goal/i);
   const names = async (client: Client) =>
     (await client.listTools()).tools.map((tool) => tool.name).sort();
   const settingsTools: string[] = [...SETTINGS_CHAT_TOOLS].sort();
-  for (const client of [claude, codex, claudeOff, codexOff]) {
+  for (const client of [claude, codex]) {
     assert.deepEqual(
       (await names(client)).filter((name) => settingsTools.includes(name)),
       [],
@@ -193,18 +156,12 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
   });
   const [settingsClient, settingsServer] = InMemoryTransport.createLinkedPair();
   await claudeServer('settings-thread', 'space', '/tmp', {
-    isGoalsOff: true,
     isSettingsChat: true,
   }).instance.connect(settingsServer);
   await claudeSettings.connect(settingsClient);
   await codexSettings.connect(
     new StreamableHTTPClientTransport(
-      new URL(
-        await codexUrl('settings-thread', {
-          isGoalsOff: true,
-          isSettingsChat: true,
-        }),
-      ),
+      new URL(await codexUrl('settings-thread', { isSettingsChat: true })),
     ),
   );
   assert.deepEqual(await names(claudeSettings), settingsTools);

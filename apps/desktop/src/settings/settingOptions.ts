@@ -111,31 +111,10 @@ export const WHILE_WORKING = [
   { value: 'steer', label: 'Send right away (steer)' },
 ] as const;
 
-export const PROPOSED_GOALS = [
-  { value: 'ask', label: 'Ask me to accept' },
-  { value: 'apply', label: 'Apply, with undo' },
-] as const;
-
-export const IDLE_CHECKS = [
-  { value: 'edited', label: 'When the turn edited files' },
-  { value: 'always', label: 'After every turn' },
-  { value: 'off', label: 'Never' },
-] as const;
-
-export const PR_GAPS = [
-  { value: 'block', label: 'Block critical, warn the rest' },
-  { value: 'warn', label: 'Warn only' },
-] as const;
-
-/** Idle verdicts you can be notified about, in Settings' order. Gaps and Done came from goals, which are retired. */
+/** Idle verdicts you can be notified about, in Settings' order. */
 export const IDLE_ALERTS = [
   { value: 'needs-you', label: 'Something for you (a question)' },
   { value: 'stalled', label: 'Stalled' },
-] as const;
-
-export const BRANCH_FROM = [
-  { value: 'current', label: 'Current branch' },
-  { value: 'base', label: 'Base branch' },
 ] as const;
 
 export const ENGINES = (

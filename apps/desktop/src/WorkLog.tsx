@@ -811,7 +811,7 @@ function useDwell(title: Title, dwell: number): Title {
   return title.key === shown.key ? title : shown;
 }
 
-/** A harness event inside the turn: a denied call, a goal change. */
+/** A harness event inside the turn, such as a denied call. */
 function EventRow({ entry }: { entry: ActivityEntry }) {
   const line = eventLine(entry.text);
   return (

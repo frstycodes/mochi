@@ -35,7 +35,6 @@ import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { DeleteThreadsLayer } from './settled/DeleteThreads';
 import { useSettledCleanup } from './settled/useSettledCleanup';
 import { RenameLayer } from './RenameDialog';
-import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useAutoArchive } from './git/autoArchive';
 import { useQueuedMove } from './runtime/useQueuedMove';
@@ -104,7 +103,6 @@ function AppContent() {
                   <ScheduleLayer />
                   <DeleteThreadsLayer />
                   <RenameLayer />
-                  <GoalEditorLayer />
                   <DeviceApprovalLayer />
                   <Toaster />
                   <AppZoomChip />

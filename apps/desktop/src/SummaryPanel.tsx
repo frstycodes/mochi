@@ -2,7 +2,6 @@ import { Card } from '@/components/ui/card';
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
 import {
   isValidElement,
-  useRef,
   useState,
   type KeyboardEvent,
   type FormEvent,
@@ -21,8 +20,6 @@ import {
   Grip,
   Image,
   Link,
-  Pushpin,
-  PinOff,
   Route,
   Stop,
   ShieldAlert,
@@ -84,24 +81,10 @@ import type { McpServer, Source, Thread } from './model';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { openProfileConfig } from './routes/nav';
-import { GoalDetails } from './goals/GoalDetails';
-import { openGoalEditor } from './goals/GoalEditor';
-import { useNextMove } from './goals/NextMove';
-import { useIdleVerdict } from './goals/VerdictChip';
-import { showsVerdictCard } from './goals/report';
-import {
-  SummaryCriteria,
-  SummaryGoal,
-  SummaryGoalHeader,
-  SummaryGoalStatus,
-  SummaryGoalText,
-  SummaryNextMove,
-} from './goals/SummaryGoal';
 import { clock, shortElapsed } from './progress';
 import { subThreadsOf } from './reorder';
 import { useDispatch, shallowEqual, useHarnessSelector } from './store';
 import { summarize, type ThreadSummary } from './summary';
-import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
 import { OverflowIcon, ProviderMark, TooltipIconButton } from './ui';
 import {
@@ -209,7 +192,6 @@ function SummaryBody({
   };
   const props = { thread, summary, open };
   const BODIES = {
-    goal: <GoalSection thread={thread} />,
     environment: <EnvironmentCard {...props} />,
     context: <ContextCard {...props} />,
     sources: <SourcesCard {...props} />,
@@ -224,7 +206,6 @@ function SummaryBody({
 
   return (
     <div className="flex flex-col gap-2">
-      {hasGoal(thread) && <WaitingMove thread={thread} />}
       <NeedsYou thread={thread} />
       <Accordion
         type="multiple"
@@ -248,13 +229,9 @@ function SummaryBody({
               id={id}
               onMove={(step) => reorder(moveCard(order, id, step))}
             >
-              {id === 'goal' ? (
-                BODIES.goal
-              ) : (
-                <AccordionItem value={id} asChild>
-                  <Card className={CARD}>{BODIES[id]}</Card>
-                </AccordionItem>
-              )}
+              <AccordionItem value={id} asChild>
+                <Card className={CARD}>{BODIES[id]}</Card>
+              </AccordionItem>
             </DraggableCard>
           ))}
         </Reorder.Group>
@@ -1480,88 +1457,3 @@ const permissionLabel = (mode: string) =>
     .split(' · ')
     .map((part) => PERMISSION_LABELS[part] ?? part)
     .join(', ');
-
-/** The goal card; Open shows its history in a popover beside the panel. */
-function GoalSection({ thread }: { thread: Thread }) {
-  const [isOpen, setOpen] = useState(false);
-  const [isPinned, setPinned] = useState(false);
-  const block = useRef<HTMLElement>(null);
-  const verdict = useIdleVerdict(thread);
-  const step = thread.steps.find((s) => s.status === 'running')?.title;
-  return (
-    <Popover open={isOpen} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <Card asChild className={cn(CARD, 'gap-2.5 px-3 py-2.5')}>
-          <SummaryGoal ref={block}>
-            <SummaryGoalHeader
-              thread={thread}
-              onEdit={() => openGoalEditor(thread.id)}
-              onOpen={() => setOpen((o) => !o)}
-              countClassName={UNDER_HANDLE}
-            />
-            <SummaryGoalStatus thread={thread} verdict={verdict} step={step} />
-            <SummaryGoalText>{thread.goal}</SummaryGoalText>
-            <SummaryCriteria thread={thread} />
-          </SummaryGoal>
-        </Card>
-      </PopoverAnchor>
-      <PopoverContent
-        side="left"
-        align="start"
-        sideOffset={12}
-        collisionPadding={16}
-        onEscapeKeyDown={() => setPinned(false)}
-        // The block's own Open button toggles; a click elsewhere in the block (Run check) leaves it open.
-        onInteractOutside={(e) =>
-          (isPinned || block.current?.contains(e.target as Node)) &&
-          e.preventDefault()
-        }
-        className="surface-float w-[min(440px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
-      >
-        <div className="mb-3 flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPinned((p) => !p)}
-            aria-pressed={isPinned}
-          >
-            {isPinned ? (
-              <PinOff data-icon="inline-start" />
-            ) : (
-              <Pushpin data-icon="inline-start" />
-            )}
-            {isPinned ? 'Unpin' : 'Keep open'}
-          </Button>
-        </div>
-        <GoalDetails thread={thread} />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/** The end-of-turn question while it waits in the chat; it scrolls there rather than answering here. */
-function WaitingMove({ thread }: { thread: Thread }) {
-  const next = useNextMove(thread);
-  if (!next?.question || !showsVerdictCard(thread)) return null;
-  return (
-    <SummaryNextMove
-      question={next.question}
-      onShow={() => showNextMove(thread.id)}
-    />
-  );
-}
-
-function showNextMove(threadId: string) {
-  const card = document.querySelector<HTMLElement>(
-    `[data-next-move="${CSS.escape(threadId)}"]`,
-  );
-  card?.scrollIntoView({
-    block: 'center',
-    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 'auto'
-      : 'smooth',
-  });
-  card
-    ?.querySelector<HTMLElement>('button:last-of-type')
-    ?.focus({ preventScroll: true });
-}

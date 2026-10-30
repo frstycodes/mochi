@@ -1,4 +1,3 @@
-import type { DriftVerdict } from '../../drift.ts';
 import type {
   AgentInfo,
   GeneratedImage,
@@ -6,7 +5,6 @@ import type {
   McpWidget,
   McpWidgetResource,
   Provider,
-  Thread,
   ThreadRef,
   WebLink,
 } from '../../model.ts';
@@ -39,8 +37,6 @@ export interface AgentStartOptions {
   switchFrom?: SwitchFrom;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
-  /** Goals are off (always, now they're retired): the session gets no goal instructions, tools or nudge. Read at session start. */
-  isGoalsOff?: boolean;
   /** The turn spine is off (Settings): report_turn and update_plan without its fields, no instructions for them. Read at session start. */
   isSpineOff?: boolean;
   /** The profile's settings chat (Settings › Ask Mochi): only the settings tools and their instructions, no files, shell or browser. */
@@ -435,7 +431,6 @@ export interface AgentAskContext {
   /** The thread's profile, whose account for the asked provider answers. */
   spaceId: string;
   title: string;
-  goal: string;
   steps: { title: string; status: string }[];
   activity: { who: string; text: string }[];
   diff: { path: string; added: number; removed: number }[] | null;
@@ -551,8 +546,6 @@ export interface AgentHost {
     spaceId: string,
     prompt: string,
   ): Promise<string | null>;
-  /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
-  classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
   rewindFiles(threadId: string, text: string): Promise<void>;
   /** Where the thread's live session stood just before `text` was sent, for `forkAt`: Claude's last chain entry, Codex's previous turn. Null when this run doesn't know (restarted, or it was the session's first message). */
@@ -603,7 +596,6 @@ export const agentMethods = {
   onAskEvent: 'event',
   review: 'invoke',
   onReviewEvent: 'event',
-  classify: 'invoke',
   utility: 'invoke',
   rewindFiles: 'invoke',
   rewindPoint: 'invoke',

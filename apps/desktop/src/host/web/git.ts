@@ -261,10 +261,6 @@ export const git: GitHost = {
   async turnDiff(cwd) {
     return (await git.diff(cwd, 'branch')).files.slice(0, 2);
   },
-  async runCheck(_cwd, command) {
-    await new Promise((r) => setTimeout(r, 1200));
-    return { exitCode: 0, output: `$ ${command}\n(demo) passed`, ms: 1200 };
-  },
   async forkWorktree(_cwd, threadId) {
     return `~/.mochi/worktrees/demo/${threadId}`;
   },

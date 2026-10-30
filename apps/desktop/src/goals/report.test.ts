@@ -5,29 +5,19 @@ import type { State } from '../store/index.tsx';
 import { threadsReducer } from '../store/threads.ts';
 import {
   currentReport,
-  nextStep,
   showsVerdictCard,
   suggestedReply,
   turnReport,
 } from './report.ts';
 
-test('a met goal waits on opening a PR, then on its review, then on settling once merged', () => {
-  assert.equal(nextStep([]), 'open-pr');
-  assert.equal(nextStep(['closed']), 'open-pr');
-  assert.equal(nextStep(['draft']), 'review');
-  assert.equal(nextStep(['merged', 'open']), 'review');
-  assert.equal(nextStep(['merged', 'closed']), 'settle');
-});
-
 test('answering the next move keeps it in the chat as a record and hides the card until the next turn ends', () => {
   const t = {
     id: 't',
-    goal: 'Ship it',
     status: 'running',
     steps: [],
     activity: [],
     prs: [],
-    idle: { at: 5, accepted: [] },
+    idle: { at: 5 },
   } as unknown as Thread;
   const state = {
     now: 6,
@@ -53,7 +43,6 @@ test('answering the next move keeps it in the chat as a record and hides the car
 test('without a goal, a reported turn still ends in the next-move card, and the next turn brings it back after an answer', () => {
   const t = {
     id: 't',
-    goal: '',
     status: 'running',
     steps: [],
     activity: [],
@@ -92,7 +81,6 @@ test('without a goal, a reported turn still ends in the next-move card, and the 
 test("a quick turn without its own report doesn't bring back the last turn's question", () => {
   const t = {
     id: 't',
-    goal: '',
     status: 'running',
     steps: [],
     activity: [],
@@ -141,7 +129,6 @@ test("the composer suggests the agent's first answer to its next move, never its
   const ended = (report: Record<string, unknown>) => {
     const t = {
       id: 't',
-      goal: '',
       status: 'running',
       steps: [],
       activity: [],

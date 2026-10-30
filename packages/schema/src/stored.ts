@@ -122,8 +122,6 @@ const prefsFields = {
   permissions: SharedAccess,
   headerPins: Schema.Array(PaneTabKind),
   sidebarItems: Strings,
-  goals: B,
-  driftGuard: B,
   whileWorking: Schema.Literals(['queue', 'steer']),
   promptSuggestions: B,
   turnSpine: B,
@@ -132,9 +130,6 @@ const prefsFields = {
   simplifyRules: S,
   simplifyAuto: B,
   simplifyAutoWords: Schema.Number,
-  branchFrom: Schema.Literals(['current', 'base']),
-  idleChecks: Schema.Literals(['edited', 'always', 'off']),
-  proposedGoals: Schema.Literals(['ask', 'apply']),
   idleAlerts: Strings,
   branchPrefix: S,
   autofixPrs: B,
@@ -182,7 +177,7 @@ const RENAMED_ACCESS: Record<string, string> = {
 };
 
 /**
- * Before `v`, as `parsePrefs` read it: a value of the wrong type is dropped, not fatal; `goals` (retired) and the old empty
+ * Before `v`, as `parsePrefs` read it: a value of the wrong type is dropped, not fatal; a retired key and the old empty
  * `branchPrefix` default are dropped; `permissions` take today's names, any other or `Plan` reading as `Auto`.
  */
 const UnversionedPrefs = Schema.Record(S, Schema.Unknown)
@@ -213,7 +208,7 @@ export const StoredPrefs = Schema.Union([
 export type StoredPrefs = typeof StoredPrefs.Type;
 
 function upgradePrefs(saved: Record<string, unknown>) {
-  const { goals: _, ...rest } = saved;
+  const rest = { ...saved };
   if (rest.branchPrefix === '') delete rest.branchPrefix;
   if (typeof rest.permissions === 'string')
     rest.permissions =

@@ -947,13 +947,6 @@
    ]
   },
   {
-   "method": "runCheck",
-   "input": [
-    "/repo",
-    "pnpm test"
-   ]
-  },
-  {
    "method": "repoSlug",
    "input": [
     "/repo"

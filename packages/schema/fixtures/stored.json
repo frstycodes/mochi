@@ -12,11 +12,7 @@
   "darkTheme": "mochi",
   "projectsFolder": "~/dev",
   "restoreLayout": true,
-  "goals": false,
-  "idleChecks": "edited",
-  "proposedGoals": "ask",
   "idleAlerts": [
-   "gaps",
    "needs-you",
    "stalled"
   ],
@@ -50,7 +46,6 @@
    "projects",
    "usage"
   ],
-  "driftGuard": true,
   "whileWorking": "steer",
   "promptSuggestions": true,
   "turnSpine": true,
@@ -59,7 +54,6 @@
   "simplifyRules": "",
   "simplifyAuto": false,
   "simplifyAutoWords": 150,
-  "branchFrom": "current",
   "branchPrefix": "mochi/",
   "autofixPrs": true,
   "autoArchivePrs": false,

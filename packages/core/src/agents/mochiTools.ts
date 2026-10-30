@@ -51,23 +51,15 @@ export const toolsFor = (scope: MochiScope) =>
     shape: shapeFor(name, scope),
   }));
 
-/** Shown to the model as the server's instructions (MCP `initialize`); the same for every thread, so it reads its own goal. */
+/** Shown to the model as the server's instructions (MCP `initialize`); the main instructions say the rest. */
 const INSTRUCTIONS =
-  "Mochi runs this thread and shows the user its goal. Call get_goal at the start. Mochi does not draft a goal from the first prompt: for a task with a checkable outcome, research the code and the user's request, then call propose_goal with the concrete outcome and checkable criteria before finishing the work. A goal is optional: a question, a chat, or a small one-step change needs none. Older threads may have a draft (isDraft): replace it after research. Propose again only if what done means has to change. While a proposal awaits acceptance, keep working and report progress; claim criteria once accepted. With a goal: call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (what changed in the user's terms, decisions, what's left, at most one question for the user, and, only when the user has a real choice, the next move as one yes/no question). To split a goal, give each independent piece (pieces that touch different files) its own sub-thread with create_thread and that piece's criterionId: initiation user_asked when the user asked for it split, else own_initiative cards they start; a sub-thread works only on its piece and opens its own PR with gh pr create --base set explicitly (usually main, or the branch it was cut from), and its result comes back to the parent.";
-
-/** With goals off (always, now goals are retired), nothing about goals: the main instructions say the rest. */
-const NO_GOAL_INSTRUCTIONS =
   'Mochi runs this thread and shows the user what its tools do.';
 
 const SETTINGS_CHAT_INSTRUCTIONS =
   "These tools read and suggest Mochi's own settings. Call get_settings before answering.";
 
-export const instructionsFor = ({ isGoalsOff, isSettingsChat }: MochiScope) =>
-  isSettingsChat
-    ? SETTINGS_CHAT_INSTRUCTIONS
-    : isGoalsOff
-      ? NO_GOAL_INSTRUCTIONS
-      : INSTRUCTIONS;
+export const instructionsFor = ({ isSettingsChat }: MochiScope) =>
+  isSettingsChat ? SETTINGS_CHAT_INSTRUCTIONS : INSTRUCTIONS;
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
 export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL, HISTORY_TOOL].map(

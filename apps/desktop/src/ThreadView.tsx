@@ -39,12 +39,10 @@ import {
   usePinDrop,
   type PinnableKind,
 } from './pane/headerPins';
-import { isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
 import { ChatView } from './ChatView';
-import { goalProgress, progressLabel } from './progress';
 import { SidePane, useSplitTabIds } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
 import { THREAD_ACTIONS_MENU, THREAD_HEADER_MENU } from './menus/menus';
@@ -54,8 +52,7 @@ import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
 import { TitleBar } from './TitleBar';
 import { useDispatch, useHarnessSelector } from './store';
-import { hasGoal } from './drift';
-import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { OverflowIcon, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
 import { useSeen } from './notify/useSeen';
 import { toast } from '@/toast/store';
@@ -372,7 +369,6 @@ function ThreadHeader({
 }) {
   const { isFirst, isMulti, leafId } = useSplit();
   const machine = useRemoteMachine();
-  const progress = goalProgress(thread);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
@@ -424,20 +420,7 @@ function ThreadHeader({
                 isSummaryOpen && 'bg-accent text-foreground',
               )}
             >
-              {hasGoal(thread) ? (
-                <>
-                  <ProgressRing
-                    met={progress.met}
-                    total={progress.total}
-                    slot={thread.line}
-                    size={14}
-                    isWorking={isWorking(thread)}
-                  />
-                  <span className="tabular">{progressLabel(progress)}</span>
-                </>
-              ) : (
-                <TextAlignLeft className="size-4" aria-hidden />
-              )}
+              <TextAlignLeft className="size-4" aria-hidden />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

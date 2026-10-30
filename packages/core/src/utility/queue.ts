@@ -1,12 +1,9 @@
 import { Context, Deferred, Effect, Layer, Semaphore } from 'effect';
 
-/** Lower runs first: the drift guard blocks a send, titles are on screen, idle checks and drafts can wait. */
+/** Lower runs first: titles are on screen, the rest can wait. */
 export const PRIORITY = {
-  classify: 0,
   title: 1,
   command: 1,
-  audit: 2,
-  outcome: 2,
   simplify: 3,
   commit: 3,
   pr: 3,

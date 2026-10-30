@@ -17,7 +17,6 @@ const thread = (id: string, fields: Partial<Thread> = {}) =>
   ({
     id,
     title: id,
-    goal: '',
     status: 'settled',
     startedAt: 0,
     activity: [],
@@ -51,14 +50,13 @@ test('settled threads sort newest first, unknown times last, active ones left ou
   );
 });
 
-test('every query word must match the title, goal, branch or a PR', () => {
+test('every query word must match the title, branch or a PR', () => {
   const t = thread('Fix login', {
-    goal: 'Sessions survive a restart',
     repo: { branch: 'mochi/auth' } as Thread['repo'],
     prs: [{ number: 42, state: 'merged', title: 'Cookie fix' }],
   });
   assert.ok(matchesQuery(t, ''));
-  assert.ok(matchesQuery(t, 'LOGIN restart'));
+  assert.ok(matchesQuery(t, 'LOGIN fix'));
   assert.ok(matchesQuery(t, 'mochi/auth #42'));
   assert.ok(matchesQuery(t, 'cookie'));
   assert.equal(matchesQuery(t, 'login payments'), false);

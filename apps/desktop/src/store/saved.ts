@@ -249,10 +249,6 @@ function restoreThread(saved: Thread, now: number): Thread {
   const backgroundTasks = thread.backgroundTasks?.map((t) =>
     t.status === 'running' ? { ...t, status: 'stopped' as const } : t,
   );
-  // A check or audit Mochi quit during never finishes: the verdict would read Checking for good.
-  const criteria = thread.criteria?.map((c) =>
-    c.check?.status === 'running' ? { ...c, check: undefined } : c,
-  );
   const idle = thread.idle && { ...thread.idle, isGathering: undefined };
   const setup =
     thread.setup &&
@@ -271,7 +267,6 @@ function restoreThread(saved: Thread, now: number): Thread {
       queued,
       steering: undefined,
       isInterruptedToSend: undefined,
-      ...(criteria && { criteria }),
       ...(idle && { idle }),
       ...(reviews && { reviews }),
       ...(subagents && { subagents }),

@@ -1,11 +1,9 @@
 import type { McpServer, Thread } from './model.ts';
 import type { ThreadSummary } from './summary.ts';
-import { hasGoal } from './drift.ts';
 import { activeTasks } from './runtime/tasks.ts';
 import { plural } from '@mochi/domain/lib/format';
 
 export type SummaryCardId =
-  | 'goal'
   | 'environment'
   | 'context'
   | 'sources'
@@ -28,7 +26,6 @@ export function summaryCards({
   outputCount: number;
 }): SummaryCardId[] {
   const cards: (SummaryCardId | false)[] = [
-    hasGoal(thread) && 'goal',
     'environment',
     thread.context.max > 0 && 'context',
     'sources',

@@ -13,18 +13,11 @@ export const PIN_CHARS = 2000;
 export const KEEP_CHARS = 8000;
 
 /**
- * What Mochi asks the harness to carry through a compaction: the goal and its criteria, then your pins verbatim in transcript
- * order. Pins past `KEEP_CHARS` are left out (named by count), each clipped to `PIN_CHARS`. '' when there's nothing to keep.
+ * What Mochi asks the harness to carry through a compaction: your pins verbatim in transcript order. Pins past `KEEP_CHARS` are left out (named by count), each clipped to `PIN_CHARS`. '' when there's nothing to keep.
  */
 export function keptContext(thread: Thread, pins: Pin[]) {
-  const goal = thread.goal
-    ? [
-        `Goal: ${thread.goal}`,
-        ...(thread.criteria ?? []).map((c) => `- Done when: ${c.text}`),
-      ]
-    : [];
   const pinned: string[] = [];
-  let left = KEEP_CHARS - goal.join('\n').length;
+  let left = KEEP_CHARS;
   const sorted = [...pins].sort((a, b) => a.index - b.index);
   for (const pin of sorted) {
     const entry = thread.activity[pin.index] as ActivityEntry | undefined;
@@ -37,19 +30,11 @@ export function keptContext(thread: Thread, pins: Pin[]) {
   }
   const dropped =
     sorted.filter((p) => thread.activity[p.index]).length - pinned.length;
-  const pinBlock = pinned.length
-    ? [
-        'Pinned by the user, each word for word, in this order:',
-        ...pinned,
-        ...(dropped > 0
-          ? [`(${dropped} more pinned left out for length)`]
-          : []),
-      ]
-    : [];
+  if (!pinned.length) return '';
   return [
-    ...goal,
-    ...(goal.length && pinBlock.length ? [''] : []),
-    ...pinBlock,
+    'Pinned by the user, each word for word, in this order:',
+    ...pinned,
+    ...(dropped > 0 ? [`(${dropped} more pinned left out for length)`] : []),
   ].join('\n');
 }
 
@@ -88,7 +73,6 @@ export function compactionEntry(
     trigger,
     status: 'running',
     pins,
-    hasGoal: !!thread.goal,
     ...(focus && { focus }),
     ...(thread.context.used > 0 && { preTokens: thread.context.used }),
   };

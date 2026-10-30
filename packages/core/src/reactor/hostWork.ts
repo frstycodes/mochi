@@ -1,10 +1,5 @@
 import { Effect, Schedule } from 'effect';
-import { mayHaveEdited } from '../../../../apps/desktop/src/chat/turnChanges.ts';
-import type {
-  CheckRun,
-  GitStatus,
-} from '../../../../apps/desktop/src/host/types/git.ts';
-import type { Criterion, Thread } from '../../../../apps/desktop/src/model.ts';
+import type { Thread } from '../../../../apps/desktop/src/model.ts';
 import { startEnv } from '../../../../apps/desktop/src/runtime/startEnv.ts';
 import {
   localSimplify,
@@ -21,26 +16,17 @@ import type {
   Action,
   State,
 } from '../../../../apps/desktop/src/store/types.ts';
-import {
-  auditPrompt,
-  parseAudit,
-} from '../../../../apps/desktop/src/utility/prompts.ts';
 import type { GitHub } from '../github/service.ts';
 import type { Outcome } from './worker.ts';
 
 /**
- * What the reactor's host-backed commands use: Core's dispatch, main's `host` through the capability client (no desktop
- * client, as under `serve`, fails a call at once with `CapabilityUnavailable`), the utility model and GitHub.
+ * What the reactor's host-backed commands use: Core's dispatch, the utility model and GitHub.
  */
 export interface HostWork {
   readonly apply: (action: Action) => Effect.Effect<void, unknown>;
-  readonly host: (
-    tag: 'git.status' | 'git.runCheck',
-    args: ReadonlyArray<unknown>,
-  ) => Effect.Effect<unknown, unknown>;
   readonly utility: (
     thread: Thread,
-    task: 'audit' | 'simplify',
+    task: 'simplify',
     prompt: string,
   ) => Effect.Effect<string | null>;
   readonly github: GitHub['Service'];
@@ -55,130 +41,6 @@ const prefsOf = (state: State): ProjectionPrefs => ({
   ...DEFAULT_CONTEXT.prefs,
   ...state.context.prefs,
 });
-
-/** A turn's end with goals on: criterion checks, uncommitted files and the transcript audit, then the idle record says it's done. */
-export const gatherIdle = (
-  work: HostWork,
-  state: State,
-  t: Thread | undefined,
-): Effect.Effect<Outcome, unknown> =>
-  Effect.gen(function* () {
-    if (!t?.live || t.live.isWorking) return 'skipped';
-    yield* work.apply({ type: 'idle-start', threadId: t.id });
-    yield* Effect.all(
-      [
-        runChecks(work, t, prefsOf(state)),
-        countUncommitted(work, t),
-        audit(work, t),
-      ],
-      { concurrency: 'unbounded', discard: true },
-    );
-    yield* work.apply({
-      type: 'idle-update',
-      threadId: t.id,
-      patch: { isGathering: false },
-    });
-  });
-
-/** One at a time: two test suites at once in one worktree fight over ports and temp files. */
-const runChecks = (work: HostWork, t: Thread, prefs: ProjectionPrefs) =>
-  Effect.gen(function* () {
-    // Only a turn that could have changed files can have changed a check's result; one after a plain question keeps the last
-    // results, unless a check has never run: a criterion with a command isn't met until it has.
-    const isUnchecked = (t.criteria ?? []).some((c) => c.command && !c.check);
-    if (
-      !t.goal ||
-      prefs.idleChecks === 'off' ||
-      (prefs.idleChecks === 'edited' &&
-        !mayHaveEdited(t.activity) &&
-        !isUnchecked)
-    )
-      return;
-    for (const c of t.criteria ?? []) yield* runCheck(work, t, c);
-  });
-
-const runCheck = (work: HostWork, t: Thread, criterion: Criterion) =>
-  Effect.gen(function* () {
-    const cwd = checkFolder(t, criterion);
-    if (!cwd || !criterion.command) return;
-    const result = (yield* work
-      .apply({
-        type: 'criterion-check',
-        threadId: t.id,
-        criterionId: criterion.id,
-        result: 'running',
-      })
-      .pipe(
-        Effect.andThen(work.host('git.runCheck', [cwd, criterion.command])),
-        Effect.catch((error) =>
-          Effect.succeed<CheckRun>({
-            exitCode: null,
-            output: messageOf(error),
-            ms: 0,
-          }),
-        ),
-      )) as CheckRun;
-    yield* work.apply({
-      type: 'criterion-check',
-      threadId: t.id,
-      criterionId: criterion.id,
-      result,
-    });
-  });
-
-/** The thread's worktree (or its folder-mode project), as `checkBlockedReason` in src/goals/checks.ts allows it. */
-function checkFolder(t: Thread, criterion: Criterion) {
-  if (!t.repo || criterion.check?.status === 'running') return null;
-  // Running in the project folder would test someone else's checkout, not this thread's changes.
-  if (t.repo.mode !== 'folder' && !startEnv().worktreePath(t)) return null;
-  return startEnv().threadCwd(t);
-}
-
-const countUncommitted = (work: HostWork, t: Thread) =>
-  Effect.gen(function* () {
-    const cwd = startEnv().threadCwd(t);
-    if (!cwd) return;
-    const status = (yield* work.host('git.status', [cwd])) as GitStatus;
-    yield* work.apply({
-      type: 'idle-update',
-      threadId: t.id,
-      patch: { uncommitted: status.files.length },
-    });
-  }).pipe(Effect.ignore);
-
-/** Tasks only: a chat's reply is the answer you're reading anyway. */
-const audit = (work: HostWork, t: Thread) =>
-  Effect.gen(function* () {
-    const { start, replies } = lastTurn(t);
-    if (!t.goal || start < 0 || !replies.length) return;
-    const text = yield* work.utility(
-      t,
-      'audit',
-      auditPrompt(t.activity[start]!.text, replies),
-    );
-    const result = text && parseAudit(text, replies);
-    if (result)
-      yield* work.apply({
-        type: 'idle-update',
-        threadId: t.id,
-        patch: { audit: result },
-      });
-  });
-
-/** Your newest message's index (-1 for none) and the agents' replies after it, oldest first. */
-function lastTurn(t: Thread) {
-  const start = t.activity.findLastIndex(
-    (e) => e.who === 'you' && e.kind === 'message',
-  );
-  const replies = t.activity
-    .slice(start + 1)
-    .flatMap((e) =>
-      e.kind === 'message' && (e.who === 'claude' || e.who === 'codex')
-        ? [e.text]
-        : [],
-    );
-  return { start, replies };
-}
 
 /**
  * With Settings › Simplify › auto on, a long last reply gets its simplified version: the utility model's, else a plain cut.
@@ -248,7 +110,3 @@ export const refreshPrs = (
     }).pipe(Effect.ignore);
     yield* Effect.forkDetach(Effect.repeat(record, PR_READS));
   });
-
-// `CapabilityUnavailable` says no desktop client is connected to run it.
-const messageOf = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);

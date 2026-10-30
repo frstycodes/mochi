@@ -24,7 +24,6 @@ export function useSendCiLog(item: QueueItem) {
       type: 'send',
       threadId: thread.id,
       text,
-      reason: 'CI log from the Queue',
     });
     dispatch({ type: 'answer', queueId: item.id });
   };

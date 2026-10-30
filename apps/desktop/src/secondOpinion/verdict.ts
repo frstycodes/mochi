@@ -1,5 +1,5 @@
 import type { GitDiff } from '../host/types/git.ts';
-import { isMet, type Provider, type Thread } from '../model.ts';
+import type { Provider, Thread } from '../model.ts';
 
 export const VERDICTS = ['approve', 'concerns', 'block'] as const;
 export const SEVERITIES = ['high', 'medium', 'low'] as const;
@@ -116,9 +116,9 @@ function extractJson(text: string): unknown {
   }
 }
 
-/** The review prompt: goal, open criteria and the diff against base, cut at `maxChars` with a note saying so. */
+/** The review prompt: the thread's title and the diff against base, cut at `maxChars` with a note saying so. */
 export function reviewPrompt(
-  thread: Pick<Thread, 'title' | 'goal' | 'criteria'>,
+  thread: Pick<Thread, 'title'>,
   diff: Pick<GitDiff, 'base' | 'branch' | 'files'>,
   maxChars = MAX_DIFF_CHARS,
 ) {
@@ -127,21 +127,15 @@ export function reviewPrompt(
     .join('\n');
   const isTruncated = patch.length > maxChars;
   const shown = isTruncated ? patch.slice(0, maxChars) : patch;
-  const criteria = (thread.criteria ?? []).map(
-    (c) =>
-      `- [${isMet(c) ? 'x' : ' '}] ${c.text}${c.command ? ` (checked by \`${c.command}\`)` : ''}`,
-  );
   const prompt = [
     "You are giving a second opinion on another coding agent's work. You are read-only: do not edit files or run commands that change anything.",
     `Thread: ${thread.title}`,
-    `Goal: ${thread.goal}`,
-    criteria.length ? `Done when:\n${criteria.join('\n')}` : '',
     `Diff of ${diff.branch} against ${diff.base} (${diff.files.length} files):`,
     isTruncated
       ? `NOTE: the diff is truncated to its first ${maxChars} characters; read the remaining files in the working tree if they matter.`
       : '',
     `\`\`\`diff\n${shown || '(no changes)'}\n\`\`\``,
-    'Review for correctness bugs, risky changes and missed goal criteria; answer with a verdict.',
+    'Review for correctness bugs and risky changes; answer with a verdict.',
     'Answer with only a JSON object: {"verdict": "approve" | "concerns" | "block", "summary": "<two sentences at most>", "findings": [{"file": "<repo-relative path>", "line": <number or null>, "severity": "high" | "medium" | "low", "text": "<what is wrong and why>"}]}. Use "block" only for bugs that must be fixed before merging.',
   ];
   return { prompt: prompt.filter(Boolean).join('\n\n'), isTruncated };

@@ -44,7 +44,6 @@ test('a message from another thread reaches the agent with its sender, while the
     text: 'Keys rotate hourly',
     prompt: 'From "Crypto module": Keys rotate hourly',
     from: { threadId: sender.id, title: sender.title },
-    reason: '',
   };
   const next = run(s, send);
   assert.deepEqual(
@@ -68,19 +67,16 @@ test('saves from before `from` come back with the old prefix parsed into the sen
     type: 'send',
     threadId: receiver.id,
     text: 'From "Crypto module": Keys rotate hourly\n\nSecond line',
-    reason: '',
   });
   const gone = run(legacy, {
     type: 'send',
     threadId: receiver.id,
     text: 'From "Deleted thread": still readable',
-    reason: '',
   });
   const mine = run(gone, {
     type: 'send',
     threadId: receiver.id,
     text: 'From here on, use pnpm',
-    reason: '',
   });
   const restored = parseSaved(JSON.stringify(toSaved(mine)))!.threads.find(
     (t) => t.id === receiver.id,

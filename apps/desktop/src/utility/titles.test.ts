@@ -3,7 +3,12 @@ import { test } from 'vite-plus/test';
 import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { hasTempBranch, startTitleRequest, titleRequest } from './titles.ts';
+import {
+  hasTempBranch,
+  isConcrete,
+  startTitleRequest,
+  titleRequest,
+} from './titles.ts';
 
 const demoState = () =>
   ({
@@ -159,4 +164,24 @@ test('only a branch still on its temp name may be renamed after the title', () =
     workspace: { mode: 'worktree', branch: 'my-name' },
   }).threads.at(-1)!;
   assert.equal(named.repo!.autoBranch, undefined);
+});
+
+test('a message names a thread only with a content word in a real sentence: greetings and pleasantries do not', () => {
+  for (const text of [
+    'hi',
+    'hello there',
+    'hey, how are you doing?',
+    'good morning',
+    'thanks!',
+    'ok',
+    'auth',
+  ])
+    assert.equal(isConcrete(text), false, text);
+  for (const text of [
+    'fix auth',
+    'add a readme',
+    'hi, can you fix the login bug',
+    'what does this repo do?',
+  ])
+    assert.equal(isConcrete(text), true, text);
 });

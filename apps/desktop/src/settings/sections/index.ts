@@ -36,7 +36,7 @@ import { PluginsView } from '../../library/PluginsView';
 import { SkillsView } from '../../library/SkillsView';
 import { InstructionsView } from '../InstructionsView';
 import { AccessSection, toolRowId } from './access';
-import { isGoalTool, TOOL_NAMES } from '@mochi/domain/runtime/toolTable';
+import { TOOL_NAMES } from '@mochi/domain/runtime/toolTable';
 import { TOOL_GUIDE } from '../toolGuide';
 import { AppearanceSection } from './appearance';
 import { BrowserSection } from './browser';
@@ -402,7 +402,7 @@ export const SETTINGS_SECTIONS = [
         id: `utility-${task}`,
         label: `${UTILITY_TASK_LABELS[task]} model`,
         keywords:
-          'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr handoff summary audit transcript verdict',
+          'background utility cheap model haiku luna generate draft title commit pull request pr handoff summary',
       })),
     ],
   },
@@ -453,7 +453,7 @@ export const SETTINGS_SECTIONS = [
         keywords:
           'tools permissions read only changes settings confirm approve mcp control browser delete',
       },
-      ...TOOL_NAMES.filter((name) => !isGoalTool(name)).map((name) => ({
+      ...TOOL_NAMES.map((name) => ({
         id: toolRowId(name),
         label: TOOL_GUIDE[name].label,
         keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent`,

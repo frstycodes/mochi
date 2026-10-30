@@ -74,7 +74,7 @@ test('each ask, failure and finished turn alerts once, across a reconnect’s sn
   const f = follower();
   f.receive(m.snapshot());
   const frames = [
-    m.act({ type: 'send', threadId: m.threadId, text: 'Go', reason: '' }),
+    m.act({ type: 'send', threadId: m.threadId, text: 'Go' }),
     m.agent({
       threadId: m.threadId,
       type: 'approval',
@@ -108,7 +108,7 @@ test('each ask, failure and finished turn alerts once, across a reconnect’s sn
 
 test('the first look at a machine only sets the baseline', () => {
   const m = machine();
-  m.act({ type: 'send', threadId: m.threadId, text: 'Go', reason: '' });
+  m.act({ type: 'send', threadId: m.threadId, text: 'Go' });
   m.agent({
     threadId: m.threadId,
     type: 'question',
@@ -124,9 +124,7 @@ test('a turn that ended while this computer was away still alerts, once', () => 
   const m = machine();
   const f = follower();
   f.receive(m.snapshot());
-  f.receive(
-    m.act({ type: 'send', threadId: m.threadId, text: 'Go', reason: '' }),
-  );
+  f.receive(m.act({ type: 'send', threadId: m.threadId, text: 'Go' }));
   f.reconnect();
   m.agent({ threadId: m.threadId, type: 'turn-end', status: 'done' });
   f.receive(m.snapshot());
@@ -138,9 +136,7 @@ test('a stop you made is no news', () => {
   const m = machine();
   const f = follower();
   f.receive(m.snapshot());
-  f.receive(
-    m.act({ type: 'send', threadId: m.threadId, text: 'Go', reason: '' }),
-  );
+  f.receive(m.act({ type: 'send', threadId: m.threadId, text: 'Go' }));
   f.receive(
     m.agent({ threadId: m.threadId, type: 'turn-end', status: 'interrupted' }),
   );

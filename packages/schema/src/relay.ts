@@ -61,7 +61,7 @@ const notBlank = Schema.makeFilter(
 );
 /** `isText`: up to `max` chars with something besides whitespace. */
 const Text = (max: number) => Str(max).check(notBlank);
-/** `isText`, then trimmed: titles, goals and names a device sends. */
+/** `isText`, then trimmed: titles and names a device sends. */
 const TrimmedText = (max: number) =>
   Text(max).pipe(Schema.decodeTo(S, SchemaTransformation.trim()));
 const Id = Str(MAX_ID);
@@ -202,13 +202,12 @@ export const ThreadAction = Schema.Union([
     state: Schema.Literals(['dismissed', 'here']),
   }),
   action('proposal-start', { proposalId: Id }),
-  action('goal-remove', {}),
   action('autofix-set', { pr: Index, isOn: B }),
   action('auto-archive-set', { pr: Index, isOn: B }),
 ]);
 export type ThreadAction = typeof ThreadAction.Type;
 
-/** `operate` steers the agent and answers its cards; `manage` changes the thread itself (its goal, its PR's watchers, new threads). */
+/** `operate` steers the agent and answers its cards; `manage` changes the thread itself (its PR's watchers, new threads). */
 export const THREAD_ACTION_SCOPES = {
   controls: 'operate',
   'provider-switch': 'operate',
@@ -222,7 +221,6 @@ export const THREAD_ACTION_SCOPES = {
   'grant-answer': 'operate',
   'proposal-answer': 'operate',
   'proposal-start': 'manage',
-  'goal-remove': 'manage',
   'autofix-set': 'manage',
   'auto-archive-set': 'manage',
 } as const satisfies Record<ThreadAction['type'], Scope>;
@@ -411,7 +409,7 @@ const THREAD_OP_DATA = [
 
 /**
  * What a device can ask this computer to do, as the `device.command` RPC's payload. Fields a command doesn't take are
- * dropped; titles, goals and names come back trimmed.
+ * dropped; titles and names come back trimmed.
  */
 export const RemoteCommand = Schema.Union([
   command('catalog', {}),
@@ -489,7 +487,6 @@ export const RemoteCommand = Schema.Union([
     ),
   }),
   command('rename', { threadId: Id, title: TrimmedText(MAX_TITLE) }),
-  command('edit-goal', { threadId: Id, goal: TrimmedText(MAX_TEXT) }),
   command('pin', { threadId: Id, isPinned: B, order: opt(Schema.Finite) }),
   command('settle', { threadId: Id, isSettled: B }),
   command('schedule', {
@@ -629,7 +626,6 @@ export const COMMAND_SCOPES = {
   seen: 'operate',
   create: 'manage',
   rename: 'manage',
-  'edit-goal': 'manage',
   pin: 'manage',
   settle: 'manage',
   schedule: 'manage',

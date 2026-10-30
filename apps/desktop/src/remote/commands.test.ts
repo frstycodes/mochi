@@ -285,7 +285,6 @@ test('a thread action dispatches the thread’s own action, stamped on this mach
     { type: 'controls', controls },
     { type: 'queued-add', message: { draft: 'next' } },
     { type: 'queued-order', ids: ['m-2', 'm-1'] },
-    { type: 'goal-remove' },
     { type: 'autofix-set', pr: 7, isOn: true },
     { type: 'autofix-set', pr: 7, isOn: false },
   ] satisfies RemoteThreadAction[])
@@ -294,7 +293,7 @@ test('a thread action dispatches the thread’s own action, stamped on this mach
       { isOk: true },
       action.type,
     );
-  const [set, add, order, goal, on, off] = dispatched;
+  const [set, add, order, on, off] = dispatched;
   assert.deepEqual(set, { type: 'controls', threadId, controls });
   assert.equal(add.type, 'queued-add');
   const message = (add as Extract<Action, { type: 'queued-add' }>).message;
@@ -308,7 +307,6 @@ test('a thread action dispatches the thread’s own action, stamped on this mach
     threadId,
     ids: ['m-2', 'm-1'],
   });
-  assert.deepEqual(goal, { type: 'goal-remove', threadId });
   assert.equal((on as { since?: number }).since !== undefined, true);
   assert.deepEqual(off, { type: 'autofix-set', threadId, pr: 7 });
   assert.deepEqual(
@@ -316,7 +314,7 @@ test('a thread action dispatches the thread’s own action, stamped on this mach
       {
         type: 'thread-action',
         threadId: 'nope',
-        action: { type: 'goal-remove' },
+        action: { type: 'queued-resume' },
       },
       env,
     ),
@@ -335,7 +333,6 @@ test('operate and manage commands dispatch the same actions the UI does, and the
   const env = device(state, 'Laptop', dispatched);
   for (const command of [
     { type: 'rename', threadId, title: 'Ship the login fix' },
-    { type: 'edit-goal', threadId, goal: 'Login works with SSO' },
     { type: 'pin', threadId, isPinned: true },
     { type: 'fork', threadId, point: { kind: 'message', index: 0 } },
     // A handoff switches the thread from its next message on.
@@ -358,15 +355,7 @@ test('operate and manage commands dispatch the same actions the UI does, and the
   }
   assert.deepEqual(
     dispatched.map((a) => a.type),
-    [
-      'rename',
-      'edit-goal',
-      'reorder',
-      'fork',
-      'provider-switch',
-      'settle',
-      'create',
-    ],
+    ['rename', 'reorder', 'fork', 'provider-switch', 'settle', 'create'],
   );
 
   const applied = dispatched.reduce(
@@ -375,7 +364,6 @@ test('operate and manage commands dispatch the same actions the UI does, and the
   );
   const thread = applied.threads.find((t) => t.id === threadId)!;
   assert.equal(thread.title, 'Ship the login fix');
-  assert.equal(thread.goal, 'Login works with SSO');
   assert.equal(thread.status, 'settled');
   assert.equal(thread.providers[0], 'codex');
   assert.ok(

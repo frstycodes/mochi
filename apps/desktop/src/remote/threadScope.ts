@@ -96,4 +96,4 @@ export const isScreenAction = (action: Action) =>
 
 /** Bookkeeping the shared views dispatch that has no meaning on the owning computer: dropped without a word. */
 export const isQuietAction = (action: Action) =>
-  action.type === 'drift-verdict' || action.type === 'next-move-record';
+  action.type === 'next-move-record';

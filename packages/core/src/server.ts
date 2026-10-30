@@ -63,12 +63,7 @@ import { ThreadContext } from './switch/context.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
 import type { Gate, StaleKind, WatchKey } from './watch/keys.ts';
 import { Watch } from './watch/watch.ts';
-import {
-  agent,
-  classify,
-  handoffTurn,
-  utilityCall,
-} from './agents/handlers.ts';
+import { agent, handoffTurn, utilityCall } from './agents/handlers.ts';
 import {
   agentRpcHandlers,
   agentSettingsSaved,
@@ -513,7 +508,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           prompt,
           thread,
         }: {
-          task: Exclude<keyof typeof PRIORITY, 'classify'>;
+          task: keyof typeof PRIORITY;
           spaceId: string;
           prompt: string;
           thread?: string;
@@ -525,32 +520,6 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
             promptChars: prompt.length,
             run: utilityCall(task, spaceId, prompt),
           }),
-        'utility.classify': ({
-          prompt,
-          thread,
-        }: {
-          prompt: string;
-          thread: Parameters<typeof classify>[1];
-        }) =>
-          queue
-            .submit({
-              thread: thread.id,
-              kind: 'classify',
-              priority: PRIORITY.classify,
-              promptChars: prompt.length,
-              run: Effect.tryPromise(() => classify(prompt, thread)).pipe(
-                Effect.map((verdict) => JSON.stringify(verdict)),
-                Effect.catch((error) =>
-                  Effect.as(
-                    Effect.logWarning(`classify failed: ${error}`).pipe(
-                      Effect.annotateLogs({ source: 'core' }),
-                    ),
-                    null,
-                  ),
-                ),
-              ),
-            })
-            .pipe(Effect.map((answer) => (answer ? JSON.parse(answer) : null))),
         metrics: () => metrics.stream,
         'terminal.open': ({
           terminalId,
@@ -716,23 +685,6 @@ const deviceCommand = (
     );
     if (!stored) return yield* inWindow(capabilities, device, command);
     for (const action of stored.actions) yield* commands.apply(action);
-    const late = stored.verdict;
-    if (late)
-      yield* Effect.forkDetach(
-        Effect.promise(() => late.verdict).pipe(
-          Effect.flatMap((v) =>
-            v.kind === 'off-goal'
-              ? Effect.void
-              : commands.apply({
-                  type: 'drift-verdict',
-                  threadId: late.threadId,
-                  text: late.text,
-                  drift: v.kind,
-                  reason: v.reason,
-                }),
-          ),
-        ),
-      );
     return stored.result as Relay.CommandResult;
   }).pipe(
     Effect.catch((error) =>

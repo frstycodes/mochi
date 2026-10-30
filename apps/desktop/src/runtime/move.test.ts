@@ -65,7 +65,6 @@ test('only an idle folderless chat attaches to a project', () => {
     type: 'send',
     threadId: id,
     text: 'more',
-    reason: '',
   });
   assert.equal(run(working, attach(id)).threads.at(-1)!.repo, null);
 
@@ -102,7 +101,7 @@ test('the move makes the folder in main and carries the session; the next messag
     event: { threadId: id, type: 'worktree', path: '/wt/harness/new-1' },
     ms: 0,
   });
-  const send: Action = { type: 'send', threadId: id, text: 'go', reason: '' };
+  const send: Action = { type: 'send', threadId: id, text: 'go' };
   const [start] = calls(moved, send);
   assert.equal(start.method, 'start');
   if (start.method !== 'start') return;
@@ -127,7 +126,6 @@ test("an agent's move waits for its turn to end", () => {
     type: 'send',
     threadId: id,
     text: 'move this',
-    reason: '',
   });
   const queued = run(working, {
     type: 'attach-project-queued',

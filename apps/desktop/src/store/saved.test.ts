@@ -80,8 +80,6 @@ test('a save keeps live threads only and comes back idle, detached and without d
     type: 'send',
     threadId: id,
     text: 'and a license',
-    drift: 'on-goal',
-    reason: '',
   };
   const [call] = agentCalls(restored, send, () => run(restored, send));
   assert.deepEqual(
@@ -248,6 +246,49 @@ test('an overlap card or a step an overlap held, saved before overlaps were remo
       .status,
     'ready',
   );
+});
+
+test('a thread saved while goals existed loads, its goal fields dropped', () => {
+  const s = run(demoState(), {
+    type: 'create',
+    title: 'add a readme',
+    provider: 'claude',
+    project: '/Users/me/dev/app',
+    isLive: true,
+  });
+  const id = s.threads.at(-1)!.id;
+  const saved = toSaved(s);
+  const message = { at: 1, who: 'you', kind: 'message', text: 'go' };
+  const old = {
+    ...saved,
+    threads: saved.threads.map((t) => ({
+      ...t,
+      goal: 'A readme exists',
+      criteria: [{ id: 'c1', text: 'README.md', command: 'ls README.md' }],
+      similar: [{ threadId: 'x', relation: 'same' }],
+      isGoalOff: false,
+      revisions: [{ n: 1, at: 0, label: 'Goal set', by: 'you' }],
+      drift: { isMuted: true, keeps: 2 },
+      parent: { threadId: 'p', criterionId: 'c1' },
+      idle: { at: 1, accepted: ['g1'], uncommitted: 2, isConfirmed: true },
+      activity: [{ ...message, drift: 'off-goal' }],
+    })),
+  };
+  const back = parseSaved(JSON.stringify(old));
+  assert.ok(back, 'the save still loads');
+  const thread = back.threads.find((t) => t.id === id)!;
+  for (const key of [
+    'goal',
+    'criteria',
+    'similar',
+    'isGoalOff',
+    'revisions',
+    'drift',
+  ])
+    assert.equal(key in thread, false, key);
+  assert.deepEqual(thread.parent, { threadId: 'p' });
+  assert.deepEqual(JSON.parse(JSON.stringify(thread.idle)), { at: 1 });
+  assert.deepEqual(thread.activity[0], message);
 });
 
 test('a save splits into an index and a file per thread, re-encodes only changed threads, and joins back whole', () => {

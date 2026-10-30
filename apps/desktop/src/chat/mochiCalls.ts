@@ -32,16 +32,11 @@ export const MOCHI_CALLS = {
   ],
   send_to_thread: ['Messaging a thread', 'Messaged a thread'],
   delete_thread: ['Asking to delete a thread', 'Asked to delete a thread'],
-  get_goal: ['Reading the goal', 'Read the goal'],
-  propose_goal: ['Proposing the goal', 'Proposed the goal'],
-  claim_criterion: ['Checking off a criterion', 'Checked off a criterion'],
   report_turn: ['Reporting progress', 'Reported progress'],
   report_to_parent: [
     'Reporting to the parent thread',
     'Reported to the parent thread',
   ],
-  get_report: ['Reading the progress report', 'Read the progress report'],
-  settle_goal: ['Settling the goal', 'Settled the goal'],
   update_plan: ['Updating the plan', 'Updated the plan'],
   start_subagent: ['Starting a subagent', 'Started a subagent'],
   ask_second_opinion: [
