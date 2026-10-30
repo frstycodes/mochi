@@ -10,6 +10,8 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Refresh } from '@/icons';
+import { cn } from '@/lib/utils';
 import { toast } from '@/toast/store';
 import { useMochiAccount } from '../../account/useMochiAccount';
 import { useConfirm } from '../../git/useConfirm';
@@ -285,8 +287,15 @@ function memberDescription(member: MemberInfo, status: RemoteStatus) {
 }
 
 function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
-  const { machines, error, refresh, joining, join, closeJoining } =
-    useOtherMachines(isSignedIn);
+  const {
+    machines,
+    error,
+    refresh,
+    isRefreshing,
+    joining,
+    join,
+    closeJoining,
+  } = useOtherMachines(isSignedIn);
   const { signIn } = useMochiAccount();
   const footer =
     'Join through any one of your computers and you reach all of them. Both screens show the same code; check they match before allowing.';
@@ -312,6 +321,17 @@ function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
       id="otherComputers"
       title="Join your computers"
       footer={footer}
+      action={
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={isRefreshing}
+          onClick={() => void refresh()}
+        >
+          <Refresh className={cn(isRefreshing && 'animate-spin')} />
+          Refresh
+        </Button>
+      }
     >
       {!!error && (
         <SettingsRow
