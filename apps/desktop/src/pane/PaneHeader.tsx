@@ -97,7 +97,7 @@ export function PaneHeader({
       ref={ref}
       data-pane-header
       data-no-orbit
-      className="flex h-9 shrink-0 cursor-default items-center gap-0.5 border-b pl-3 select-none"
+      className="flex h-11 shrink-0 cursor-default items-center gap-0.5 pl-3 select-none"
     >
       <PaneTitleSlot>
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
@@ -182,7 +182,7 @@ export function PaneSlotBar() {
     <div
       ref={bar}
       data-pane-header
-      className="flex h-9 shrink-0 items-center gap-0.5 pr-1.5 pl-3 not-has-[>*>*]:hidden"
+      className="flex h-11 shrink-0 items-center gap-0.5 pr-1.5 pl-3 not-has-[>*>*]:hidden"
     >
       <PaneTitleSlot />
       <PaneActionsSlot />

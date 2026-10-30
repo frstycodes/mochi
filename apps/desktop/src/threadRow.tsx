@@ -1,4 +1,13 @@
-import { BackgroundTask, Chat } from '@/icons';
+import { BackgroundTask, Chat, Snooze } from '@/icons';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { SidebarMenuAction } from '@/components/ui/sidebar';
 import {
   Tooltip,
   TooltipContent,
@@ -8,6 +17,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import type { Thread } from './model';
+import { snoozeTimes, wakeLabel } from './snooze';
 import { workingLabel } from './agentPhase';
 import { limitStatus } from './chat/LimitCard';
 import { useThreadStatus } from './goals/VerdictChip';
@@ -28,11 +38,22 @@ export function useThreadRow(thread: Thread) {
   );
   const isWatched = useHarnessSelector((s) => s.watched.includes(thread.id));
   const status = useThreadStatus(thread);
+  // A snoozed thread that asks for you shows the ask: asking wakes it.
+  const isAsking = status.tone === 'warning' || status.tone === 'destructive';
+  const snooze =
+    !status.isWorking && !isAsking && snoozeLabel(thread.snoozedUntil);
   const detail =
-    !status.isWorking && status.verdict
+    snooze ||
+    (!status.isWorking && status.verdict
       ? status.verdict.reason
-      : threadDetail(thread, question);
+      : threadDetail(thread, question));
   return { ...status, detail, isUnread: isUnread(thread), isWatched };
+}
+
+function snoozeLabel(until: Thread['snoozedUntil']) {
+  if (until === undefined) return;
+  if (until === 'needs-you') return 'Until it needs you';
+  return `Until ${wakeLabel(until)}`;
 }
 
 export function threadDetail(thread: Thread, question?: string) {
@@ -87,14 +108,20 @@ export function ThreadProjectMark({ thread }: { thread: Thread }) {
   );
 }
 
-/** The row's detail line: shimmering while the agent works, in the warning or destructive tone when it asks for you. */
+/** The row's title, shimmering while the agent works. */
+export function ThreadTitleText({
+  title,
+  row,
+}: {
+  title: string;
+  row: ThreadRow;
+}) {
+  if (row.isWorking) return <Shimmer as="span">{title}</Shimmer>;
+  return title;
+}
+
+/** The row's detail line, in the warning or destructive tone when it asks for you. */
 export function ThreadDetailText({ row }: { row: ThreadRow }) {
-  if (row.isWorking)
-    return (
-      <Shimmer as="span" className="min-w-0 flex-1 truncate">
-        {row.detail}
-      </Shimmer>
-    );
   return (
     <span
       className={cn(
@@ -130,5 +157,48 @@ export function AgentsBadge({ thread }: { thread: Thread }) {
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** The row's Snooze button: its menu hides the thread until a time, or until it asks for you. */
+export function SnoozeAction({
+  snoozedUntil,
+  onSnooze,
+  className,
+}: {
+  snoozedUntil: Thread['snoozedUntil'];
+  onSnooze: (until: Thread['snoozedUntil']) => void;
+  className?: string;
+}) {
+  return (
+    <DropdownMenu>
+      <SidebarMenuAction showOnHover asChild className={className}>
+        <DropdownMenuTrigger aria-label="Snooze">
+          <Snooze aria-hidden />
+        </DropdownMenuTrigger>
+      </SidebarMenuAction>
+      <DropdownMenuContent side="right" align="start" className="w-56">
+        <DropdownMenuLabel>Snooze until</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => onSnooze('needs-you')}>
+          It needs you
+        </DropdownMenuItem>
+        {snoozeTimes().map(({ label, at }) => (
+          <DropdownMenuItem key={label} onSelect={() => onSnooze(at)}>
+            {label}
+            <span className="ml-auto text-muted-foreground">
+              {wakeLabel(at)}
+            </span>
+          </DropdownMenuItem>
+        ))}
+        {snoozedUntil !== undefined && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onSnooze(undefined)}>
+              Unsnooze
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

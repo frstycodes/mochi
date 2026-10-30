@@ -71,7 +71,7 @@ export function SidebarNav({
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="h-8 text-sm [&_svg]:size-4">
+            <SidebarMenuButton className="h-8 text-sm [&_svg]:size-4.5">
               <OverflowIcon />
               <span>More</span>
             </SidebarMenuButton>
@@ -193,7 +193,7 @@ export function NavItem({
       <SidebarMenuButton
         isActive={isActive}
         onClick={onClick}
-        className="h-8 text-sm [&_svg]:size-4"
+        className="h-8 text-sm [&_svg]:size-4.5"
       >
         {icon}
         <span>{label}</span>

@@ -9,6 +9,7 @@ import { Toaster } from '@/toast/Toaster';
 import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
+import { ThreadRowsPage } from './design/ThreadRowsPage';
 import { useApplyFonts } from './settings/fonts';
 import { Orbit } from './Orbit';
 import { ThreadSwitcher } from './ThreadSwitcher';
@@ -80,6 +81,8 @@ function AppContent() {
               <ReplayPage payload={embeddedReplay} />
             ) : route === 'design' ? (
               <DesignPage />
+            ) : route === 'thread-rows' ? (
+              <ThreadRowsPage />
             ) : route.startsWith('/window/') ? (
               // Outside `MachinesProvider`: a torn-off window shows this computer's threads only (the split menu doesn't tear off another computer's).
               <TornWindow threadId={route.slice('/window/'.length)} />

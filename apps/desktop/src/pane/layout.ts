@@ -17,7 +17,7 @@ export interface PaneLayout {
   columnWeights?: number[];
 }
 
-export const PANE_HEADER_H = 40;
+export const PANE_HEADER_H = 46;
 export const PANE_MIN_H = 240;
 export const COLUMN_MIN_W = 340;
 export const CHAT_MIN_W = 420;
@@ -213,7 +213,7 @@ export function resolveLayout(
         isCollapsed: heights[row].isCollapsed,
         isHidden: false,
       };
-      y += heights[row].h + GAP;
+      y += heights[row].h;
     });
     resolved.push({ x, w, kinds: c.kinds });
     x += w + GAP;
@@ -261,10 +261,7 @@ function fitColumns(layout: PaneLayout, fits: number, height: number) {
     ];
   for (let i = 0; i < cols.length && cols.length < fits; i++) {
     const { kinds } = cols[i];
-    if (
-      kinds.some(wantsFullHeight) ||
-      kinds.length * PANE_MIN_H + (kinds.length - 1) * GAP <= height
-    )
+    if (kinds.some(wantsFullHeight) || kinds.length * PANE_MIN_H <= height)
       continue;
     const half = Math.ceil(kinds.length / 2);
     cols = [
@@ -294,8 +291,7 @@ function columnHeights(
   const collapsed = new Set(owner ? kinds.filter((k) => k !== owner) : []);
   const open = () => kinds.filter((k) => !collapsed.has(k));
   const sizes = () => {
-    const free =
-      height - collapsed.size * PANE_HEADER_H - (kinds.length - 1) * GAP;
+    const free = height - collapsed.size * PANE_HEADER_H;
     const ks = open();
     const hs = distribute(
       free,
@@ -425,7 +421,7 @@ export function dropTarget(
   const c = columns[col];
   const row = c.kinds.filter((k) => rects[k]!.y + rects[k]!.h / 2 < y).length;
   const above = c.kinds[row - 1];
-  const lineY = above ? rects[above]!.y + rects[above]!.h + GAP / 2 - 1 : -1;
+  const lineY = above ? rects[above]!.y + rects[above]!.h - 1 : -1;
   return { col, row, line: bar(c.x + 16, Math.max(0, lineY), c.w - 32, 2) };
 }
 

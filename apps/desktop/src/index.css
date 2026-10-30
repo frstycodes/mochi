@@ -74,35 +74,35 @@
   /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/appZoom.ts` sets the zoom. */
   --lights-end: calc(75px / var(--app-zoom, 1));
 
-  --background: oklch(0.975 0.003 285);
-  --foreground: oklch(0.2 0.01 285);
-  --card: oklch(0.997 0.001 285);
+  --background: oklch(0.982 0.003 285);
+  --foreground: oklch(0.235 0.01 285);
+  --card: oklch(0.998 0.001 285);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.997 0.001 285);
+  --popover: oklch(0.998 0.001 285);
   --popover-foreground: var(--foreground);
   --float: oklch(0.995 0.002 285 / 0.9);
   --glass: oklch(0.995 0.002 285 / 0.62);
   --glass-edge: oklch(0.2 0.01 285 / 0.1);
-  --primary: oklch(0.22 0.01 285);
+  --primary: oklch(0.25 0.01 285);
   --primary-foreground: oklch(0.98 0.002 285);
-  --secondary: oklch(0.955 0.004 285);
+  --secondary: oklch(0.958 0.004 285);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.96 0.004 285);
-  --muted-foreground: oklch(0.46 0.012 285);
-  --subtle-foreground: oklch(0.54 0.012 285);
-  --accent: oklch(0.94 0.006 285);
+  --muted: oklch(0.962 0.004 285);
+  --muted-foreground: oklch(0.47 0.012 285);
+  --subtle-foreground: oklch(0.525 0.012 285);
+  --accent: oklch(0.945 0.006 285);
   --accent-foreground: var(--foreground);
-  --destructive: oklch(0.56 0.2 25);
-  --success: oklch(0.5 0.14 150);
+  --destructive: oklch(0.54 0.19 25);
+  --success: oklch(0.5 0.13 150);
   --diff-tint-chroma: 0.015;
-  --warning: oklch(0.48 0.13 65);
-  --info: oklch(0.5 0.15 255);
+  --warning: oklch(0.49 0.12 65);
+  --info: oklch(0.5 0.14 255);
   --unread: oklch(0.55 0.24 262);
-  --merged: oklch(0.5 0.19 300);
-  --code: oklch(0.52 0.14 40);
+  --merged: oklch(0.5 0.18 300);
+  --code: oklch(0.52 0.13 40);
   --border: oklch(0.25 0.02 285 / 0.1);
   --input: oklch(0.25 0.02 285 / 0.15);
-  --ring: oklch(0.45 0.012 285);
+  --ring: oklch(0.47 0.012 285);
   --highlight: oklch(1 0 285 / 0.7);
 
   --sidebar: oklch(0.99 0.002 285);
@@ -145,33 +145,33 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --background: oklch(0.145 0.006 285);
-    --foreground: oklch(0.965 0.003 285);
-    --card: oklch(0.19 0.007 285);
-    --popover: oklch(0.205 0.008 285);
-    --float: oklch(0.205 0.008 285 / 0.9);
-    --glass: oklch(0.22 0.008 285 / 0.55);
+    --background: oklch(0.185 0.006 285);
+    --foreground: oklch(0.93 0.004 285);
+    --card: oklch(0.235 0.007 285);
+    --popover: oklch(0.25 0.008 285);
+    --float: oklch(0.25 0.008 285 / 0.9);
+    --glass: oklch(0.26 0.008 285 / 0.55);
     --glass-edge: oklch(1 0 0 / 0.1);
-    --primary: oklch(0.965 0.003 285);
-    --primary-foreground: oklch(0.18 0.006 285);
-    --secondary: oklch(0.235 0.008 285);
-    --muted: oklch(0.215 0.007 285);
-    --muted-foreground: oklch(0.73 0.01 285);
-    --subtle-foreground: oklch(0.63 0.01 285);
-    --accent: oklch(0.25 0.009 285);
-    --destructive: oklch(0.68 0.18 25);
-    --success: oklch(0.74 0.16 150);
+    --primary: oklch(0.93 0.004 285);
+    --primary-foreground: oklch(0.2 0.006 285);
+    --secondary: oklch(0.27 0.008 285);
+    --muted: oklch(0.255 0.007 285);
+    --muted-foreground: oklch(0.735 0.01 285);
+    --subtle-foreground: oklch(0.66 0.01 285);
+    --accent: oklch(0.285 0.009 285);
+    --destructive: oklch(0.7 0.16 25);
+    --success: oklch(0.73 0.14 150);
     --diff-tint-chroma: 0.04;
-    --warning: oklch(0.82 0.14 80);
-    --info: oklch(0.76 0.12 250);
-    --unread: oklch(0.65 0.19 255);
-    --merged: oklch(0.74 0.14 300);
-    --code: oklch(0.8 0.1 45);
-    --border: oklch(0.95 0.01 285 / 0.08);
-    --input: oklch(0.95 0.01 285 / 0.12);
-    --ring: oklch(0.75 0.01 285);
+    --warning: oklch(0.79 0.12 78);
+    --info: oklch(0.75 0.1 250);
+    --unread: oklch(0.67 0.18 255);
+    --merged: oklch(0.74 0.12 300);
+    --code: oklch(0.79 0.09 45);
+    --border: oklch(0.95 0.01 285 / 0.09);
+    --input: oklch(0.95 0.01 285 / 0.13);
+    --ring: oklch(0.72 0.01 285);
     --highlight: oklch(0.98 0.005 285 / 0.06);
-    --sidebar: oklch(0.175 0.007 285);
+    --sidebar: oklch(0.21 0.007 285);
     --halo-strength: 0.15;
     --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
     --chart-1: #3987e5;
@@ -181,7 +181,7 @@
     --chart-5: #d55181;
     --chart-grid: oklch(0.95 0.01 285 / 0.06);
     --chart-axis: oklch(0.95 0.01 285 / 0.16);
-    --scrim: oklch(0.12 0.006 285 / 0.72);
+    --scrim: oklch(0.15 0.006 285 / 0.72);
     --skeleton-highlight: oklch(1 0 285 / 0.04);
     --elev-popover:
       0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
@@ -202,33 +202,33 @@
 }
 
 :root[data-theme='dark'] {
-  --background: oklch(0.145 0.006 285);
-  --foreground: oklch(0.965 0.003 285);
-  --card: oklch(0.19 0.007 285);
-  --popover: oklch(0.205 0.008 285);
-  --float: oklch(0.205 0.008 285 / 0.9);
-  --glass: oklch(0.22 0.008 285 / 0.55);
+  --background: oklch(0.185 0.006 285);
+  --foreground: oklch(0.93 0.004 285);
+  --card: oklch(0.235 0.007 285);
+  --popover: oklch(0.25 0.008 285);
+  --float: oklch(0.25 0.008 285 / 0.9);
+  --glass: oklch(0.26 0.008 285 / 0.55);
   --glass-edge: oklch(1 0 0 / 0.1);
-  --primary: oklch(0.965 0.003 285);
-  --primary-foreground: oklch(0.18 0.006 285);
-  --secondary: oklch(0.235 0.008 285);
-  --muted: oklch(0.215 0.007 285);
-  --muted-foreground: oklch(0.73 0.01 285);
-  --subtle-foreground: oklch(0.63 0.01 285);
-  --accent: oklch(0.25 0.009 285);
-  --destructive: oklch(0.68 0.18 25);
-  --success: oklch(0.74 0.16 150);
+  --primary: oklch(0.93 0.004 285);
+  --primary-foreground: oklch(0.2 0.006 285);
+  --secondary: oklch(0.27 0.008 285);
+  --muted: oklch(0.255 0.007 285);
+  --muted-foreground: oklch(0.735 0.01 285);
+  --subtle-foreground: oklch(0.66 0.01 285);
+  --accent: oklch(0.285 0.009 285);
+  --destructive: oklch(0.7 0.16 25);
+  --success: oklch(0.73 0.14 150);
   --diff-tint-chroma: 0.04;
-  --warning: oklch(0.82 0.14 80);
-  --info: oklch(0.76 0.12 250);
-  --unread: oklch(0.65 0.19 255);
-  --merged: oklch(0.74 0.14 300);
-  --code: oklch(0.8 0.1 45);
-  --border: oklch(0.95 0.01 285 / 0.08);
-  --input: oklch(0.95 0.01 285 / 0.12);
-  --ring: oklch(0.75 0.01 285);
+  --warning: oklch(0.79 0.12 78);
+  --info: oklch(0.75 0.1 250);
+  --unread: oklch(0.67 0.18 255);
+  --merged: oklch(0.74 0.12 300);
+  --code: oklch(0.79 0.09 45);
+  --border: oklch(0.95 0.01 285 / 0.09);
+  --input: oklch(0.95 0.01 285 / 0.13);
+  --ring: oklch(0.72 0.01 285);
   --highlight: oklch(0.98 0.005 285 / 0.06);
-  --sidebar: oklch(0.175 0.007 285);
+  --sidebar: oklch(0.21 0.007 285);
   --halo-strength: 0.15;
   --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
   --chart-1: #3987e5;
@@ -238,7 +238,7 @@
   --chart-5: #d55181;
   --chart-grid: oklch(0.95 0.01 285 / 0.06);
   --chart-axis: oklch(0.95 0.01 285 / 0.16);
-  --scrim: oklch(0.12 0.006 285 / 0.72);
+  --scrim: oklch(0.15 0.006 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.04);
   --elev-popover:
     0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
@@ -259,40 +259,40 @@
 
 /* Toasts take the opposite theme (dark on light, light on dark) so they stand out from the page. Only the tokens a toast reads. */
 .toast-inverse {
-  --foreground: oklch(0.965 0.003 285);
-  --popover: oklch(0.205 0.008 285);
+  --foreground: oklch(0.93 0.004 285);
+  --popover: oklch(0.25 0.008 285);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.965 0.003 285);
-  --primary-foreground: oklch(0.18 0.006 285);
-  --secondary: oklch(0.235 0.008 285);
+  --primary: oklch(0.93 0.004 285);
+  --primary-foreground: oklch(0.2 0.006 285);
+  --secondary: oklch(0.27 0.008 285);
   --secondary-foreground: var(--foreground);
-  --muted-foreground: oklch(0.73 0.01 285);
-  --accent: oklch(0.25 0.009 285);
+  --muted-foreground: oklch(0.735 0.01 285);
+  --accent: oklch(0.285 0.009 285);
   --accent-foreground: var(--foreground);
-  --destructive: oklch(0.68 0.18 25);
-  --success: oklch(0.74 0.16 150);
-  --warning: oklch(0.82 0.14 80);
-  --info: oklch(0.76 0.12 250);
-  --border: oklch(0.95 0.01 285 / 0.08);
-  --input: oklch(0.95 0.01 285 / 0.12);
-  --ring: oklch(0.75 0.01 285);
+  --destructive: oklch(0.7 0.16 25);
+  --success: oklch(0.73 0.14 150);
+  --warning: oklch(0.79 0.12 78);
+  --info: oklch(0.75 0.1 250);
+  --border: oklch(0.95 0.01 285 / 0.09);
+  --input: oklch(0.95 0.01 285 / 0.13);
+  --ring: oklch(0.72 0.01 285);
   color-scheme: dark;
 
   @variant dark {
-    --foreground: oklch(0.2 0.01 285);
-    --popover: oklch(0.997 0.001 285);
-    --primary: oklch(0.22 0.01 285);
+    --foreground: oklch(0.235 0.01 285);
+    --popover: oklch(0.998 0.001 285);
+    --primary: oklch(0.25 0.01 285);
     --primary-foreground: oklch(0.98 0.002 285);
-    --secondary: oklch(0.955 0.004 285);
-    --muted-foreground: oklch(0.46 0.012 285);
-    --accent: oklch(0.94 0.006 285);
-    --destructive: oklch(0.56 0.2 25);
-    --success: oklch(0.5 0.14 150);
-    --warning: oklch(0.48 0.13 65);
-    --info: oklch(0.5 0.15 255);
+    --secondary: oklch(0.958 0.004 285);
+    --muted-foreground: oklch(0.47 0.012 285);
+    --accent: oklch(0.945 0.006 285);
+    --destructive: oklch(0.54 0.19 25);
+    --success: oklch(0.5 0.13 150);
+    --warning: oklch(0.49 0.12 65);
+    --info: oklch(0.5 0.14 255);
     --border: oklch(0.25 0.02 285 / 0.1);
     --input: oklch(0.25 0.02 285 / 0.15);
-    --ring: oklch(0.45 0.012 285);
+    --ring: oklch(0.47 0.012 285);
     color-scheme: light;
   }
 }
@@ -427,6 +427,17 @@
   /* shadcn components size their text with text-sm; compact harness density puts it at 13px. */
   --text-sm: calc(0.8125rem * var(--text-scale, 1));
   --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
+}
+
+/* The sidebar reads one step above the compact scale, like Claude desktop's: 14px rows, 13px detail and labels. */
+[data-sidebar='sidebar'] {
+  --text-body: calc(0.875rem * var(--text-scale, 1));
+  --text-meta: calc(0.8125rem * var(--text-scale, 1));
+  --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
+  --text-caption: calc(0.75rem * var(--text-scale, 1));
+  --text-xs: calc(0.8125rem * var(--text-scale, 1));
+  --text-xs--line-height: calc(1.125rem * var(--text-scale, 1));
+  --text-sm: calc(0.875rem * var(--text-scale, 1));
 }
 
 @utility type-display {
@@ -659,17 +670,20 @@
   }
 }
 
-/* Pane headers stay compact so the pane's content gets the room: every icon button there, the shell's and what panes put in
-   PaneActions, hugs a full-size icon (2px of padding) in a plain rounded rectangle, and its hit area fills the 36px header
-   through an invisible ::after. Unlayered so it wins over the button sizes and the squircle rule above. */
-[data-pane-header] button[data-size^='icon'] {
+/* The 44px thread and pane headers share one icon button: a 28px rounded rectangle around a 16px icon, its hit area filling
+   the header's height through an invisible ::after. Covers the shell's buttons and what panes put in PaneActions; tab strips
+   keep their own compact buttons, since their scroller would clip the ::after and scroll. Unlayered so it wins over the
+   button sizes and the squircle rule above. */
+:is([data-thread-header], [data-pane-header])
+  button[data-size^='icon']:not([role='tablist'] *) {
   position: relative;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   corner-shape: round;
 }
-[data-pane-header] button[data-size^='icon']::after {
+:is([data-thread-header], [data-pane-header])
+  button[data-size^='icon']:not([role='tablist'] *)::after {
   content: '';
   position: absolute;
   /* From inside the button's 1px border: 9px reaches the header's top and bottom edges; 2px sideways stays inside the 2px gap. */
@@ -681,23 +695,25 @@
 }
 /* A toggle group there is one joined segment at the same height; only its outer corners round. */
 [data-pane-header] [data-slot='toggle-group-item'] {
-  height: 20px;
-  min-width: 24px;
-  padding-inline: 4px;
+  height: 28px;
+  min-width: 32px;
+  padding-inline: 6px;
 }
-/* Squircle like the rest of the app (the corner scale keeps it as round as the fallback), sized for a 20px control. */
+/* Squircle like the rest of the app (the corner scale keeps it as round as the fallback), sized for a 28px control. */
 [data-pane-header] [data-slot='toggle-group-item']:first-child {
-  border-radius: calc(5px * var(--corner-scale)) 0 0
-    calc(5px * var(--corner-scale));
+  border-radius: calc(8px * var(--corner-scale)) 0 0
+    calc(8px * var(--corner-scale));
 }
 [data-pane-header] [data-slot='toggle-group-item']:last-child {
-  border-radius: 0 calc(5px * var(--corner-scale))
-    calc(5px * var(--corner-scale)) 0;
+  border-radius: 0 calc(8px * var(--corner-scale))
+    calc(8px * var(--corner-scale)) 0;
 }
-[data-pane-header] [data-slot='toggle-group-item'] svg,
-[data-pane-header] button[data-size^='icon'] svg {
-  width: 13px;
-  height: 13px;
+:is([data-thread-header], [data-pane-header])
+  button[data-size^='icon']:not([role='tablist'] *)
+  svg,
+[data-pane-header] [data-slot='toggle-group-item'] svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* A caption lying on a frame: eased stops, so the fade has no visible edge. Over an image the scrim is fixed black, so white text holds in both themes. */

@@ -5,7 +5,6 @@ import {
   closeKind,
   dropTarget,
   EMPTY_LAYOUT,
-  GAP,
   moveKind,
   openKind,
   PANE_HEADER_H,
@@ -97,10 +96,10 @@ test('one pane fills the column beside the chat, which keeps its minimum width',
   assert.equal(rect.x, r.chatWidth);
 });
 
-test('two and three panes share the column height evenly, gaps included', () => {
+test('two and three panes share the column height evenly, stacked flush', () => {
   const two = resolveLayout(open('browser', 'files'), 1400, 900);
-  assert.equal(two.rects.browser!.h + two.rects.files!.h + GAP, 900);
-  assert.equal(two.rects.files!.y, two.rects.browser!.h + GAP);
+  assert.equal(two.rects.browser!.h + two.rects.files!.h, 900);
+  assert.equal(two.rects.files!.y, two.rects.browser!.h);
   const three = resolveLayout(open('browser', 'files', 'terminal'), 1400, 900);
   assert.ok(
     Object.values(three.rects).every(
@@ -137,8 +136,7 @@ test('with no room for another column, panes fold to their header, never the foc
       (rect) => rect.isCollapsed || rect.h >= PANE_MIN_H,
     ),
   );
-  const total =
-    Object.values(r.rects).reduce((a, rect) => a + rect.h, 0) + 2 * GAP;
+  const total = Object.values(r.rects).reduce((a, rect) => a + rect.h, 0);
   assert.equal(total, 600);
 });
 
@@ -153,7 +151,7 @@ test('a full-height pane folds into the other column’s pane headers when the t
     [narrow.rects.browser!.isCollapsed, narrow.rects.simulator!.isCollapsed],
     [true, false],
   );
-  assert.equal(narrow.rects.simulator!.h, 900 - PANE_HEADER_H - GAP);
+  assert.equal(narrow.rects.simulator!.h, 900 - PANE_HEADER_H);
   const picked = resolveLayout({ ...l, focused: 'browser' }, 1000, 900);
   assert.deepEqual(
     [picked.rects.browser!.isCollapsed, picked.rects.simulator!.isCollapsed],
