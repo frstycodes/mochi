@@ -544,6 +544,19 @@
   padding-left: calc(var(--lights-end) + 9px - var(--header-left, 0px));
 }
 
+/* The shell window's material (sidebar glass / Mica, electron/window.ts) shows through the docked sidebar only; the page beside it stays opaque. */
+:root[data-material] body {
+  background: transparent;
+}
+/* The wash sits on the container, not the inner panel, so it covers the border too: raw material under the 1px border read as a dark line. */
+:root[data-material] [data-slot='sidebar-container'] {
+  background: color-mix(in oklab, var(--sidebar) 35%, transparent);
+  border-color: color-mix(in oklab, var(--sidebar-border) 50%, transparent);
+}
+:root[data-material] [data-slot='sidebar-inner'] {
+  background: transparent;
+}
+
 /* Unlayered on purpose: the Artifact host wraps the page in its own skeleton, and its unlayered body colour beats `@layer base`, so text without a colour class turned light-theme dark on the dark theme. */
 #root {
   color: var(--foreground);
