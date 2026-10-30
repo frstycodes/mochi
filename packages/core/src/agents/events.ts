@@ -13,6 +13,7 @@ export interface Push {
 const taps = new Set<Tap>();
 const pushes = new Set<(push: Push) => void>();
 const busy = new Set<string>();
+const busyListeners = new Set<() => void>();
 let log: (event: SeqEvent) => void = () => {};
 
 // Starts at the clock so a number saved last launch is always below this launch's.
@@ -72,18 +73,27 @@ export function onAgentEvent(tap: Tap) {
   return () => void taps.delete(tap);
 }
 
-/** A thread's agent has a turn in flight, from `start` / `send` until it ends or hits its limit. Main mirrors the set (`agent:busy`). */
+/** A thread's agent has a turn in flight, from `start` / `send` until it ends or hits its limit. */
 export const markBusy = (threadId: string) => setBusy(threadId, true);
 export const markIdle = (threadId: string) => setBusy(threadId, false);
 export const isBusy = (threadId: string) => busy.has(threadId);
 export const busyThreads = () => [...busy];
+export const isAnyBusy = () => busy.size > 0;
+
+/** Fires when the first turn starts or the last one ends: remote access's keep-awake follows it. */
+export function onBusy(listener: () => void) {
+  busyListeners.add(listener);
+  return () => void busyListeners.delete(listener);
+}
 
 function setBusy(threadId: string, isBusy: boolean) {
   if (busy.has(threadId) === isBusy) return;
+  const was = busy.size > 0;
   if (isBusy) busy.add(threadId);
   else busy.delete(threadId);
+  if (was !== busy.size > 0) busyListeners.forEach((listener) => listener());
   push({ channel: BUSY_CHANNEL, payload: busyThreads() });
 }
 
-/** Not a window channel: main keeps the busy set for the scheduler and keep-awake. */
+/** Not a window channel: main drops it; a subscriber learns which threads are working. */
 export const BUSY_CHANNEL = 'mochi:busy';

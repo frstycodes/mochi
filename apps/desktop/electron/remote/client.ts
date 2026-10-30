@@ -15,7 +15,7 @@ import type {
   RemoteCommand,
   Scope as MemberScope,
 } from '../../src/host/types/remote.ts';
-import { asKind, PairingRefused } from './pairing.ts';
+import { asKind, PairingRefused } from '@mochi/core/remote/pairing';
 
 export type { Route };
 

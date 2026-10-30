@@ -14,6 +14,8 @@ import { startLibraryUpdates } from './library/updates.ts';
 import { ports } from './ports/host.ts';
 import { projectsHost } from './projects/host.ts';
 import { ptyHost } from './pty/host.ts';
+import { remoteHost } from './remote/host.ts';
+import { Remote } from './remote/tag.ts';
 import { settingsHost } from './settings/host.ts';
 import { useDocs } from './store/client.ts';
 import { Store } from './store/store.ts';
@@ -39,6 +41,7 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
       });
       const capabilities = yield* Capabilities;
       const account = yield* AccountService;
+      const remote = yield* Remote;
       // Tests run without a data folder; theirs is a scratch one.
       const data = userData ?? path.join(tmpdir(), 'mochi-core');
       setDataDir(data);
@@ -64,6 +67,7 @@ export class Hosted extends Context.Service<Hosted>()('mochi/core/Hosted', {
         settings: settingsHost,
         account: accountHost(account),
         library: libraryHost(forgetConnector),
+        remote: remoteHost(remote),
         usage: usageHost(data, (cwd, since, githubUser) =>
           run(github.authoredPrs(cwd, since, githubUser)),
         ),

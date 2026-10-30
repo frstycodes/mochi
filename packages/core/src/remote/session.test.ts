@@ -1,16 +1,13 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { onTestFinished, test } from 'vite-plus/test';
+import { test } from 'vite-plus/test';
 import sodium from 'libsodium-wrappers';
-import { loadDeviceKeys, type DeviceKeys } from './keys.ts';
 import {
   createHandshake,
+  type DeviceKeys,
   E2EError,
   type E2EErrorCode,
   type Session,
-} from '@mochi/core/remote/session';
+} from './session.ts';
 
 await sodium.ready;
 
@@ -111,67 +108,5 @@ test('frames from another session are rejected', async () => {
   assert.throws(
     () => ours.device.decrypt(theirs.machine.encrypt(bytes('x'))),
     rejects('tampered'),
-  );
-});
-
-function fakeStorage(
-  backend: 'basic_text' | 'gnome_libsecret' | 'unknown',
-  available = true,
-) {
-  return {
-    isEncryptionAvailable: () => available,
-    getSelectedStorageBackend: () => backend,
-    encryptString: (text: string) => Buffer.from(`enc:${text}`),
-    decryptString: (cipher: Buffer) => cipher.toString().replace(/^enc:/, ''),
-  };
-}
-
-function scratchDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'mochi-e2e-'));
-  onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
-  return dir;
-}
-
-test('the device key is stored encrypted and reloads to the same key', async () => {
-  const dir = scratchDir();
-  const first = await loadDeviceKeys(
-    fakeStorage('gnome_libsecret'),
-    dir,
-    'linux',
-  );
-  assert.equal(first.persisted, true);
-  assert.deepEqual(readdirSync(dir), ['device-key']);
-  const again = await loadDeviceKeys(
-    fakeStorage('gnome_libsecret'),
-    dir,
-    'linux',
-  );
-  assert.deepEqual(again.keys, first.keys);
-});
-
-test('a weak Linux backend keeps the key in memory only', async () => {
-  for (const storage of [
-    fakeStorage('basic_text'),
-    fakeStorage('unknown'),
-    fakeStorage('gnome_libsecret', false),
-  ]) {
-    const dir = scratchDir();
-    const first = await loadDeviceKeys(storage, dir, 'linux');
-    assert.equal(first.persisted, false);
-    assert.equal(existsSync(join(dir, 'device-key')), false);
-    assert.deepEqual(
-      (await loadDeviceKeys(storage, dir, 'linux')).keys,
-      first.keys,
-    );
-  }
-});
-
-test('the Linux backend is not consulted on macOS and Windows', async () => {
-  const storage = fakeStorage('basic_text');
-  storage.getSelectedStorageBackend = () =>
-    assert.fail('linux-only API called');
-  assert.equal(
-    (await loadDeviceKeys(storage, scratchDir(), 'darwin')).persisted,
-    true,
   );
 });

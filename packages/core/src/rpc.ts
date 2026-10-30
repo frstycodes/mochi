@@ -1,6 +1,14 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup, RpcMiddleware } from 'effect/rpc';
-import { Agent, Backend, Capabilities, HostRpcs, Model } from '@mochi/schema';
+import {
+  Agent,
+  Backend,
+  Capabilities,
+  HostRpcs,
+  Model,
+  Relay,
+  Remote,
+} from '@mochi/schema';
 import { StoreRpcs } from './store/rpc.ts';
 import { Gate, StaleKind, WatchKey, WatchValue } from './watch/keys.ts';
 import { GithubRpcs } from './github/schema.ts';
@@ -22,6 +30,16 @@ export class RunError extends Schema.TaggedError<RunError>()('RunError', {
 }) {}
 
 const Env = Schema.Record(Schema.String, Schema.String);
+
+/** A member computer main follows (`remote/registry.ts`). */
+const PairedMachine = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  kind: Schema.optional(Relay.DeviceKind),
+  publicKey: Schema.String,
+  pairedAt: Schema.Number,
+  addresses: Schema.optional(Schema.Array(Schema.String)),
+});
 
 const SpawnEvent = Schema.Union([
   Schema.TaggedStruct('started', { id: Schema.Number }),
@@ -129,6 +147,42 @@ export class CoreRpcs extends RpcGroup.make(
   /** An access token for the relay, for main's remote access; refused to a window's or a device's connection. */
   Rpc.make('account.relayToken', {
     success: Schema.String,
+    error: Schema.String,
+  }),
+  // Main's, for following your other computers as a device (electron/remote); each refused to a window's or a device's connection.
+  /** This computer's member key, its seed in base64: main pairs with it as a device. */
+  Rpc.make('remote.deviceKey', {
+    success: Schema.String,
+    error: Schema.String,
+  }),
+  /** The machines main follows and the records it sends them; each change also arrives as the `remote:onPaired` push. */
+  Rpc.make('remote.paired', {
+    success: Schema.Struct({
+      machines: Schema.Array(PairedMachine),
+      records: Schema.Unknown,
+    }),
+    error: Schema.String,
+  }),
+  /** A followed machine's membership records; none fetches the account's, as after it refused this computer. */
+  Rpc.make('remote.absorb', {
+    payload: { members: Schema.optional(Schema.Unknown) },
+    error: Schema.String,
+  }),
+  /** Where a followed machine said it listens, and its kind, from its welcome. */
+  Rpc.make('remote.noteWelcome', {
+    payload: {
+      machineId: Schema.String,
+      addresses: Schema.optional(Schema.Array(Schema.String)),
+      kind: Schema.optional(Relay.DeviceKind),
+    },
+    error: Schema.String,
+  }),
+  /** What only main knows, for `host.remote.status`: the power source, and each followed machine's connection. */
+  Rpc.make('remote.shell', {
+    payload: {
+      isOnBattery: Schema.Boolean,
+      machines: Schema.Array(Remote.FollowedMachine),
+    },
     error: Schema.String,
   }),
 ) {}

@@ -10,7 +10,6 @@ import type {
   StartWorkspace,
 } from '../../src/host/types/agent.ts';
 import type { AgentLogin } from '../../src/host/types/settings.ts';
-import type { MochiAccount } from '@mochi/domain/host/types/account';
 import type { MochiScope } from '@mochi/domain/runtime/toolTable';
 import { mainCoreClient } from '@mochi/core/host';
 import { makeHostCaller } from '@mochi/core/hostClient';
@@ -22,7 +21,6 @@ import {
 import type { MainForAgents } from '@mochi/core/agents/main';
 import { setDataDir } from '@mochi/core/agents/paths';
 import { cacheDoc, cachedDoc } from '@mochi/core/store/client';
-import { noteAccount } from '../account/session.ts';
 import { stopCompare } from '../browser/compare.ts';
 import {
   forgetAccount,
@@ -36,16 +34,16 @@ import {
   resolveToolCall,
   undeliveredToolCalls,
 } from '../mcp/server.ts';
+import { hearRemotePush } from '../remote/index.ts';
+import { holdAwake } from '../remote/keepAwake.ts';
 import { mainWindow } from '../window.ts';
 
-// Agents run in Core (packages/core/src/agents). Main relays what they push to its windows, keeps the busy set its
-// scheduler and keep-awake read, and serves Core the few things that need Electron (`mainForAgents`).
+// Agents run in Core (packages/core/src/agents). Main relays what they push to its windows and serves Core the few things
+// that need Electron (`mainForAgents`).
 
 type Tap = (event: AgentEvent) => void;
 
 const taps = new Set<Tap>();
-const busyTaps = new Set<() => void>();
-let busy = new Set<string>();
 let whenClosed: Tap = () => {};
 
 setDataDir(() => app.getPath('userData'));
@@ -91,9 +89,10 @@ function deliver({
   payload: unknown;
   windowId?: number;
 }) {
-  if (channel === 'mochi:busy') return setBusy(payload as string[]);
-  // Core's account changed: remote access follows it here, and every window hears it below.
-  if (channel === 'account:onChange') noteAccount(payload as MochiAccount);
+  // Core's busy set: keep-awake reads it there now (packages/core/src/remote/service.ts).
+  if (channel === 'mochi:busy') return;
+  // Core's account and remote access: main's followers and the main window follow them; most go on to every window too.
+  if (hearRemotePush(channel, payload)) return;
   if (channel === AGENT_SETTINGS_SAVED) {
     cacheDoc('settings', 'agent', payload);
     return agentConfigChanged();
@@ -109,12 +108,6 @@ function deliver({
     if (!mainWindow()) whenClosed(event);
   }
   for (const win of openWindows()) win.webContents.send(channel, payload);
-}
-
-function setBusy(threads: string[]) {
-  const was = busy.size > 0;
-  busy = new Set(threads);
-  if (was !== busy.size > 0) busyTaps.forEach((tap) => tap());
 }
 
 /** Starts a thread's agent in Core, as the renderer does. */
@@ -161,15 +154,6 @@ export function keepWhenClosed(keep: Tap) {
   whenClosed = keep;
 }
 
-export const isBusy = (threadId: string) => busy.has(threadId);
-export const isAnyBusy = () => busy.size > 0;
-
-/** Fires when the first turn starts or the last one ends. */
-export function onBusyChange(tap: () => void) {
-  busyTaps.add(tap);
-  return () => void busyTaps.delete(tap);
-}
-
 export const openWindows = () =>
   BrowserWindow.getAllWindows().filter((w) => !w.webContents.isDestroyed());
 
@@ -204,4 +188,5 @@ export const mainForAgents = {
     await stopCompare(threadId);
   },
   openExternal: (url: string) => shell.openExternal(url),
+  holdAwake: async (isHeld: boolean) => holdAwake(isHeld),
 } satisfies MainForAgents;

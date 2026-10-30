@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import sodium from 'libsodium-wrappers';
-import type { DeviceKeys } from './crypto/keys.ts';
+import type { DeviceKeys } from './session.ts';
 import {
   approveMember,
   mergeRecords,

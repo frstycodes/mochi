@@ -12,6 +12,8 @@ export interface TunnelOptions {
   url: string;
   /** Minted for this connection (`mintDeviceToken`): Core holds the device to its scopes like any client's. */
   token: string;
+  /** Core's own certificate when it serves TLS: trusted alone (no system CAs), so its name needn't match the address dialed. */
+  ca?: Buffer;
   onMembers?: (members: unknown) => void;
   /** A frame that is neither an RPC message nor membership records; the link is closed after it. */
   onMalformed: (frame: string) => void;
@@ -25,6 +27,11 @@ export function tunnel(link: Link, options: TunnelOptions) {
   const core = new WebSocket(
     options.url,
     Capabilities.subprotocolsFor(options.token),
+    options.ca && {
+      ca: options.ca,
+      // Node's TLS reads a returned value as the error (`tls.checkServerIdentity`); ws types it as a boolean.
+      checkServerIdentity: (() => undefined) as unknown as () => boolean,
+    },
   );
   const held: string[] = [];
   link.onMessage((text) => {

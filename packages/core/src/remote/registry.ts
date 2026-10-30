@@ -5,11 +5,11 @@ import {
   DEFAULT_SCOPES,
   type DeviceKind,
   type Scope,
-} from '../../src/host/types/remote.ts';
+} from '../../../../apps/desktop/src/host/types/remote.ts';
 import { parseRecords, type Member, type MemberRecord } from './members.ts';
 import type { PairedDevice } from './pairing.ts';
 
-/** A member computer this one follows, to control it (`client.ts` follows each). */
+/** A member computer this one follows, to control it (main's `electron/remote/client.ts` follows each). */
 export interface PairedMachine {
   id: string;
   name: string;
@@ -34,7 +34,7 @@ interface Stored {
 
 /**
  * Who this computer trusts, in its own userData: the membership records, and per member what it may do here and where it
- * was last reachable. Public keys only; the private key is `crypto/keys.ts`'s, under `safeStorage`.
+ * was last reachable. Public keys only; the private key is in `Keys` (`DEVICE_KEY` in `service.ts`).
  */
 export class Registry {
   private readonly file: string;
