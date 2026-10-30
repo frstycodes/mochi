@@ -434,6 +434,8 @@
   --text-body--line-height: calc(1.25rem * var(--text-scale, 1));
   --text-meta--line-height: calc(1.125rem * var(--text-scale, 1));
   --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
+  /* The sidebar is glass: hovers and pressed states tint it like its rows (`--sidebar-accent`), never the opaque page accent. */
+  --accent: var(--sidebar-accent);
 }
 
 @utility type-display {
@@ -677,6 +679,12 @@
   [class*='rounded-full'] {
     corner-shape: round;
   }
+}
+
+/* A header button that widens for a label (the summary toggle and its progress) keeps the icon buttons' corner beside them. */
+:is([data-thread-header], [data-pane-header]) button[data-header-chip] {
+  border-radius: 8px;
+  corner-shape: round;
 }
 
 /* The 44px thread and pane headers share one icon button: a 28px rounded rectangle around a 16px icon, its hit area filling
