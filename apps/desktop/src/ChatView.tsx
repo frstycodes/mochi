@@ -58,6 +58,7 @@ import {
 } from './git/WorkspacePicker';
 import {
   BranchLabel,
+  MetaGroup,
   ComposerCard,
   ComposerInput,
   ComposerMeta,
@@ -147,6 +148,7 @@ import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { PendingSteers } from './chat/SteerBubble';
 import { usePrefs, type Prefs } from './settings/prefs';
+import type { Access } from './runtime/access';
 import {
   MentionChips,
   MentionMenu,
@@ -213,6 +215,7 @@ export function ChatView({
     shallowEqual,
   );
   const tray = useTrayState(decisions.length);
+  const [isComposerCompact, setComposerCompact] = useState(false);
   const withActions = finalReplies(rows, isRunning);
 
   const {
@@ -328,11 +331,18 @@ export function ChatView({
           />
           {!isReadOnly && (
             <ScrollIntent
-              onScrollUp={() => (holdComposer(), tray.collapse())}
-              onReachBottom={() => (
-                tray.expand(),
-                !decisions.length && releaseComposer()
-              )}
+              onScrollUp={() => {
+                holdComposer();
+                tray.collapse();
+                // Scrolling back to check something while writing keeps the composer open.
+                if (!composerRef.current?.contains(document.activeElement))
+                  setComposerCompact(true);
+              }}
+              onReachBottom={() => {
+                tray.expand();
+                setComposerCompact(false);
+                if (!decisions.length) releaseComposer();
+              }}
             />
           )}
         </Conversation>
@@ -345,6 +355,8 @@ export function ChatView({
                 decisions={decisions}
                 isTrayOpen={tray.isOpen}
                 onToggleTray={tray.toggle}
+                isCompact={isComposerCompact}
+                onExpand={() => setComposerCompact(false)}
                 handoff={handoff}
                 restoreRef={restoreDraft}
               />
@@ -804,6 +816,8 @@ const Composer = memo(function Composer({
   decisions,
   isTrayOpen,
   onToggleTray,
+  isCompact,
+  onExpand,
   handoff,
   restoreRef,
 }: {
@@ -812,6 +826,8 @@ const Composer = memo(function Composer({
   decisions: QueueItem[];
   isTrayOpen: boolean;
   onToggleTray: () => void;
+  isCompact: boolean;
+  onExpand: () => void;
   handoff: ReturnType<typeof useComposerHandoff>;
   restoreRef: RefObject<((message: QueuedMessage) => void) | null>;
 }) {
@@ -929,6 +945,15 @@ const Composer = memo(function Composer({
           <MentionMenu menu={mention} />
           <ComposerCard
             data-composer
+            isCompact={isCompact}
+            onFocusCapture={onExpand}
+            // While compact, the first click only unfolds it, so it can't also flip a tray or press send.
+            onClickCapture={(e) => {
+              if (!isCompact) return;
+              e.stopPropagation();
+              onExpand();
+              editor.current?.focus();
+            }}
             {...threadDrop}
             className="in-data-image-over:border-ring data-mention-over:border-ring"
           >
@@ -964,6 +989,7 @@ const Composer = memo(function Composer({
                   : undefined
               }
               submitLabel={isQueueing ? 'Queue message' : 'Send'}
+              hasMentions={mention.mentions.length > 0}
               meter={
                 <ContextRing
                   provider={provider}
@@ -1046,28 +1072,15 @@ const Composer = memo(function Composer({
             />
           </ComposerCard>
         </div>
-        <ComposerMeta>
-          {!thread.isSettingsChat && (
-            <PermissionsMenu
-              threadId={thread.id}
-              provider={provider}
-              value={controls.access}
-              onChange={(access) => setControls({ ...controls, access })}
-            />
-          )}
-          {workspace ? (
-            <WorkspaceControls workspace={workspace} />
-          ) : (
-            !!thread.repo && <BranchLabel repo={thread.repo} />
-          )}
-          {thread.live?.limit ? (
-            <LimitHint limit={thread.live.limit} />
-          ) : (
-            isWorking(thread) && (
-              <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />
-            )
-          )}
-        </ComposerMeta>
+        <ThreadComposerMeta
+          thread={thread}
+          workspace={workspace}
+          access={controls.access}
+          onAccessChange={(access) => setControls({ ...controls, access })}
+          isFolded={isCompact}
+          isHeld={isHeld}
+          whileWorking={whileWorking}
+        />
         {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
     </div>
@@ -1086,6 +1099,77 @@ const suggestionOf = (thread: Thread, isAsking: boolean) =>
   isWorking(thread) || isAsking ? undefined : suggestedReply(thread);
 
 /** What holding mod does to this send: the setting's other choice. */
+/** Under the card: permissions and branch, plus the limit or hold-to hint. Folds away with the composer while you read back. */
+function ThreadComposerMeta({
+  thread,
+  workspace,
+  access,
+  onAccessChange,
+  isFolded,
+  isHeld,
+  whileWorking,
+}: {
+  thread: Thread;
+  workspace: ReturnType<typeof useThreadWorkspace>;
+  access: Access;
+  onAccessChange: (access: Access) => void;
+  isFolded: boolean;
+  isHeld: boolean;
+  whileWorking: Prefs['whileWorking'];
+}) {
+  const provider = thread.providers[0];
+  // Folds by its row height, so the card settles down instead of jumping, and blurs out as it goes; clipped only while folded, or the meta row's fade would be cut off.
+  return (
+    <div
+      inert={isFolded}
+      className={cn(
+        'grid origin-top grid-rows-[1fr] transition-[grid-template-rows,opacity,filter,scale] duration-220 ease-(--ease-out) motion-reduce:transition-[opacity]',
+        isFolded &&
+          'grid-rows-[0fr] scale-[0.97] overflow-hidden opacity-0 blur-xs motion-reduce:scale-100 motion-reduce:blur-none',
+      )}
+    >
+      {/* ComposerMeta's top padding would keep the folded row open, so a bare box takes the min-height. */}
+      <div className="min-h-0">
+        <ComposerMeta>
+          {!thread.isSettingsChat && workspace && (
+            <PermissionsMenu
+              threadId={thread.id}
+              provider={provider}
+              value={access}
+              onChange={onAccessChange}
+            />
+          )}
+          {workspace ? (
+            <WorkspaceControls workspace={workspace} />
+          ) : (
+            (!thread.isSettingsChat || !!thread.repo) && (
+              <MetaGroup aria-label="Permissions and branch">
+                {!thread.isSettingsChat && (
+                  <PermissionsMenu
+                    threadId={thread.id}
+                    provider={provider}
+                    value={access}
+                    onChange={onAccessChange}
+                    className="bg-transparent dark:bg-transparent"
+                  />
+                )}
+                {!!thread.repo && <BranchLabel repo={thread.repo} />}
+              </MetaGroup>
+            )
+          )}
+          {thread.live?.limit ? (
+            <LimitHint limit={thread.live.limit} />
+          ) : (
+            isWorking(thread) && (
+              <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />
+            )
+          )}
+        </ComposerMeta>
+      </div>
+    </div>
+  );
+}
+
 function WhileWorkingHint({
   whileWorking,
   isHeld,
