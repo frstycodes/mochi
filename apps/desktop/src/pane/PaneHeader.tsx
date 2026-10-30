@@ -97,7 +97,7 @@ export function PaneHeader({
       ref={ref}
       data-pane-header
       data-no-orbit
-      className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pl-3 select-none"
+      className="flex h-9 shrink-0 cursor-default items-center gap-0.5 border-b pl-3 select-none"
     >
       <PaneTitleSlot>
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
