@@ -550,7 +550,7 @@ const composerTheme = EditorView.theme({
   },
   '.cm-content': {
     minHeight: '3rem',
-    padding: '12px 16px 8px',
+    padding: '14px 18px 6px',
     caretColor: 'var(--foreground)',
   },
   '.cm-line': { padding: '0' },

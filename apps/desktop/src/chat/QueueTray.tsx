@@ -73,6 +73,7 @@ export function QueueTray({
       </div>
       {isOpen && (
         <motion.div
+          className="group-data-compact/composer:hidden"
           initial={reduce ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}

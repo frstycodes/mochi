@@ -5,7 +5,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from 'react';
-import { useReducedMotionConfig } from 'motion/react';
+import { useAnimate, useReducedMotionConfig } from 'motion/react';
 import { toast } from '@/toast/store';
 import {
   ArrowUp,
@@ -25,6 +25,7 @@ import {
 } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
 import { BranchIcon, BranchName } from './git/BranchLabel';
+import { branchText } from './git/workspace';
 import { openPhotos } from './photo/photos';
 import {
   PromptInput,
@@ -113,17 +114,26 @@ export function useComposerHandoff(leafId: string) {
   };
 }
 
-/** The glass card. Holds an optional tray above a ComposerInput; `isStatic` skips the height animation. */
+/**
+ * The glass card. Holds an optional tray above a ComposerInput; `isStatic` skips the height animation. `isCompact` folds it to one
+ * line of text while you read back through the chat; focusing it unfolds it.
+ */
 export function ComposerCard({
   className,
   children,
   isStatic,
+  isCompact,
   ...props
-}: ComponentProps<'div'> & { isStatic?: boolean }) {
+}: ComponentProps<'div'> & { isStatic?: boolean; isCompact?: boolean }) {
+  const [foldRef, isFolded] = useFoldCrossfade(isCompact);
   return (
     <div
+      data-compact={isFolded || undefined}
       className={cn(
-        'surface-glass-focus overflow-hidden rounded-2xl border shadow-composer transition-[border-color] has-[.cm-focused]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent',
+        'group/composer surface-glass-focus overflow-hidden rounded-2xl border shadow-composer transition-[border-color] duration-150 has-[.cm-focused]:border-foreground/16 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent',
+        // `!` beats the editor's own theme, which CodeMirror injects after our styles.
+        isFolded &&
+          'cursor-text [&_.cm-content]:min-h-0! [&_.cm-content]:py-0! [&_.cm-scroller]:max-h-[1lh]! [&_.cm-scroller]:overflow-hidden! [&_[data-slot=input-group]]:flex-row',
         className,
       )}
       {...props}
@@ -131,10 +141,69 @@ export function ComposerCard({
       {isStatic ? (
         children
       ) : (
-        <AutoHeight className="justify-end">{children}</AutoHeight>
+        <AutoHeight className="justify-end">
+          <div ref={foldRef} className="origin-bottom">
+            {children}
+          </div>
+        </AutoHeight>
       )}
     </div>
   );
+}
+
+/**
+ * Folding or unfolding is a blur crossfade: the old layout blurs out and shrinks slightly, the card swaps layout while hidden, and
+ * the new layout blurs back in as AutoHeight springs the height. Returns the layout to show, which trails `isCompact` by the
+ * fade-out. Reduced motion swaps at once and only fades in.
+ */
+function useFoldCrossfade(isCompact = false) {
+  const [scope, animate] = useAnimate<HTMLDivElement>();
+  const reduce = useReducedMotionConfig();
+  const [shown, setShown] = useState(isCompact);
+  // The layout the fade-out just swapped to, so only that swap fades in.
+  const swappedTo = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const el = scope.current;
+    if (shown === isCompact || !el) return;
+    const out = animate(
+      el,
+      { opacity: 0, filter: 'blur(4px)', scale: 0.98 },
+      { duration: reduce ? 0 : 0.09, ease: 'linear' },
+    );
+    let isCancelled = false;
+    void out.then(() => {
+      if (isCancelled) return;
+      swappedTo.current = isCompact;
+      setShown(isCompact);
+    });
+    return () => {
+      isCancelled = true;
+      out.stop();
+    };
+  }, [isCompact, shown, reduce, scope, animate]);
+
+  useEffect(() => {
+    const el = scope.current;
+    if (swappedTo.current !== shown || !el) return;
+    swappedTo.current = null;
+    const into = animate(
+      el,
+      reduce
+        ? { opacity: 1, filter: 'blur(0px)', scale: 1 }
+        : {
+            opacity: [0, 1],
+            filter: ['blur(4px)', 'blur(0px)'],
+            scale: [0.98, 1],
+          },
+      { duration: 0.2, ease: [0.23, 1, 0.32, 1] },
+    );
+    // A leftover filter would make the card a containing block for anything fixed inside it.
+    void into.then(() => el.style.removeProperty('filter'));
+    return () => into.stop();
+  }, [shown, reduce, scope, animate]);
+
+  return [scope, shown] as const;
 }
 
 type ComposerInputProps = Omit<
@@ -159,6 +228,8 @@ type ComposerInputProps = Omit<
   submitLabel?: string;
   /** Beside send: the context ring. */
   meter?: ReactNode;
+  /** Mentions sit outside the text and attachments, but still make a message worth sending. */
+  hasMentions?: boolean;
   /** Where the unsent text and attachments are kept (`threadDraftKey`, `newThreadDraftKey`); sending clears it. */
   draftKey: string;
   /** Kept with the draft; memoize it, a new object saves again. */
@@ -176,6 +247,7 @@ export function ComposerInput({
   onStop,
   submitLabel = 'Send',
   meter,
+  hasMentions,
   draftKey,
   draftExtra,
   className,
@@ -184,6 +256,7 @@ export function ComposerInput({
   const catalog = useModels(useSpace().id);
   const model = optionFor(catalog[provider], controls.model, provider);
   const draft = useComposerDraft(draftKey, draftExtra);
+  const isEmpty = useIsComposerEmpty() && !hasMentions;
   const send = async (message: PromptInputMessage) => {
     const result = await onSend(message);
     if (result !== false) draft.clear();
@@ -207,8 +280,9 @@ export function ComposerInput({
           {...editorProps}
         />
       </PromptInputBody>
-      <PromptInputFooter className="px-2 pb-2">
-        <PromptInputTools>
+      <PromptInputFooter className="px-2.5 pt-1 pb-2.5 group-data-compact/composer:w-auto group-data-compact/composer:p-1.5">
+        {/* No chevrons: the pickers read as controls without them, and the footer stays quiet. */}
+        <PromptInputTools className="group-data-compact/composer:hidden [&_[data-icon=inline-end]]:hidden [&_button:has([data-icon=inline-end])]:pr-2!">
           <PromptInputActionMenu>
             <PromptInputActionMenuTrigger
               tooltip="Attach"
@@ -243,7 +317,9 @@ export function ComposerInput({
           )}
         </PromptInputTools>
         <PromptInputTools>
-          {meter}
+          <span className="contents group-data-compact/composer:hidden">
+            {meter}
+          </span>
           {onStop ? (
             <PromptInputSubmit
               status="streaming"
@@ -251,12 +327,13 @@ export function ComposerInput({
               aria-label="Stop the agent"
               className="rounded-full"
             >
-              <Stop className="size-4" />
+              <Stop filled className="size-3.5" />
             </PromptInputSubmit>
           ) : (
             <PromptInputSubmit
               aria-label={submitLabel}
-              className="rounded-full"
+              data-empty={isEmpty || undefined}
+              className="rounded-full data-empty:bg-foreground/8 data-empty:text-subtle-foreground"
             >
               <ArrowUp className="size-4" />
             </PromptInputSubmit>
@@ -265,6 +342,12 @@ export function ComposerInput({
       </PromptInputFooter>
     </PromptInput>
   );
+}
+
+/** No text and no attachment. The send button only dims: what to do with an empty send stays the caller's call. */
+function useIsComposerEmpty() {
+  const { textInput, attachments } = usePromptInputController();
+  return !textInput.value.trim() && attachments.files.length === 0;
 }
 
 // PromptInput clears the input after onSubmit unless it throws (or rejects); it swallows the throw.
@@ -412,7 +495,7 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'relative flex min-h-8 flex-wrap items-center gap-1.5 px-1 pt-2 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
+        'relative flex min-h-8 flex-wrap items-center gap-1.5 px-1 pt-2 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-65% before:to-transparent',
         className,
       )}
       {...props}
@@ -429,11 +512,13 @@ export function PermissionsMenu({
   provider,
   value,
   onChange,
+  className,
 }: {
   threadId: string;
   provider: Provider;
   value: Access;
   onChange: (access: Access) => void;
+  className?: string;
 }) {
   const [isArmed, setIsArmed] = useState(false);
   const access = accessFor(provider, value);
@@ -456,6 +541,7 @@ export function PermissionsMenu({
       <DropdownMenuTrigger asChild>
         <MetaChip
           className={cn(
+            className,
             access === 'Full access' &&
               'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:bg-warning/12 dark:hover:bg-warning/20',
           )}
@@ -530,12 +616,26 @@ function AccessIcon({
   return <Icon aria-hidden className={className} />;
 }
 
-/** Where a started thread works: its project folder or its own worktree, and the branch. */
+/** Where a started thread works: its project folder or its own worktree, and the branch. Not a control, so it takes no hover. */
 export function BranchLabel({ repo }: { repo: Repo }) {
   return (
-    <span className="flex min-w-0 items-center gap-1 px-1.5">
+    <span className="flex h-7 min-w-0 items-center gap-1.5 px-2">
       <BranchIcon repo={repo} />
-      <BranchName repo={repo} />
+      <BranchName repo={repo} title={branchText(repo)} />
     </span>
+  );
+}
+
+/** Meta chips joined into one filled chip, a hairline between each, like the new thread's branch | worktree. */
+export function MetaGroup({ className, ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      role="group"
+      className={cn(
+        'flex h-7 min-w-0 items-center rounded-lg bg-foreground/5 [&>*+*]:relative [&>*+*]:before:absolute [&>*+*]:before:inset-y-1.75 [&>*+*]:before:left-0 [&>*+*]:before:w-px [&>*+*]:before:bg-foreground/15',
+        className,
+      )}
+      {...props}
+    />
   );
 }
