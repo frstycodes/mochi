@@ -30,3 +30,7 @@ contextBridge.exposeInMainWorld('harnessHost', bridge);
 ipcRenderer.on('core:url', (_event, url: string) =>
   window.postMessage({ channel: 'core:url', url }, '*'),
 );
+// Another computer's Core as a channel main already secured (`src/backends/channel.ts`); a port can't cross the context bridge.
+ipcRenderer.on('backend:port', (event, data: { machineId: string }) =>
+  window.postMessage({ channel: 'backend:port', ...data }, '*', event.ports),
+);

@@ -80,7 +80,8 @@ import { useShowCard } from './chat/MochiWidget';
 import { useSendCiLog } from './notify/useSendCiLog';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { remoteDecisions } from './remote/mirror';
-import { RemoteScope, useMachines } from './remote/useMachines';
+import { RemoteScope } from './remote/useMachines';
+import { useMachineViews } from './backends/remote';
 import { Seen, useSeen } from './notify/useSeen';
 import { isQueueUnread } from './store/seen';
 import { StatusMark } from './ui';
@@ -98,8 +99,8 @@ const KIND = {
 
 export function QueueView() {
   const items = useSpaceQueue();
-  const remote = useMachines()
-    .machines.flatMap(({ machine, state }) =>
+  const remote = useMachineViews()
+    .flatMap(({ machine, state }) =>
       state ? [{ machine, state, items: remoteDecisions(state) }] : [],
     )
     .filter((m) => m.items.length > 0);

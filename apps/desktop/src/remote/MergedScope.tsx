@@ -26,6 +26,7 @@ import {
 import { getRemotePins, setRemotePins, useRemotePins } from './pins';
 import { isQuietAction, isScreenAction } from './threadScope';
 import { useMachines, useRemoteDispatch } from './useMachines';
+import { useMachineViews } from '../backends/remote';
 
 /** Another computer's projects change rarely; the merged list reads them once a while it's online. */
 const PROJECTS_STALE_MS = 5 * 60_000;
@@ -135,8 +136,10 @@ export function useMergeThreads(): (
       : mergeThreads(state.threads, sources, pins, spaceIds, state.spaceId);
 }
 
+/** Each followed computer's store: its registry replica while it's connected, else its mirror (the cache, offline). */
 function useMergedSources(spaceId: string): MergeSource[] {
-  const { machines, ask } = useMachines();
+  const { ask } = useMachines();
+  const machines = useMachineViews();
   // What the Projects page already read; the merged list starts no read of this computer's own.
   const localProjects = useQuery({
     queryKey: queryKeys.projects.list(spaceId),
@@ -152,12 +155,12 @@ function useMergedSources(spaceId: string): MergeSource[] {
     })),
     combine: dataOf,
   });
-  return machines.flatMap(({ state: mirrored }, i) => {
+  return machines.flatMap(({ state }, i) => {
     const theirs = remoteProjects[i];
-    return mirrored
+    return state
       ? [
           {
-            state: mirrored,
+            state,
             projects:
               theirs && localProjects
                 ? projectMap(theirs, localProjects)

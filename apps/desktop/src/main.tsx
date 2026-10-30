@@ -7,9 +7,14 @@ import { HAS_CAPTIONS } from './windowCaptions';
 import { IS_MAC } from './keys';
 import { startStore } from './store';
 import { loadDrafts } from './chat/drafts';
+import { listenForChannels } from './backends/remote';
 import './index.css';
 
-if (host.isDesktop) showWindowChrome();
+if (host.isDesktop) {
+  showWindowChrome();
+  // Main hands over other computers' channels once the page loads: listen before then.
+  listenForChannels();
+}
 
 // The store holds Core's threads from the first render.
 startStore()
