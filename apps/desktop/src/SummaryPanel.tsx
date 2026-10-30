@@ -16,7 +16,6 @@ import {
   Code,
   Chart,
   File,
-  Folder,
   Grip,
   Image,
   Link,
@@ -61,10 +60,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
 import { useRemoteMachine } from './remote/origin';
-import { useWorktreePath } from './git/worktrees';
 import { useGitDiff } from './git/useGit';
 import { cn } from '@/lib/utils';
-import { copyText } from './clipboard';
 import {
   EDITOR_NAMES,
   openInEditor,
@@ -76,9 +73,8 @@ import { ThreadName } from './chat/ThreadMessage';
 import { refDescription, type ChecksState } from '@mochi/domain/chat/refs';
 import { CHECK } from './git/Checks';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
-import { BranchIcon, BranchName } from './git/BranchLabel';
 import { OPEN_PR_PROMPT } from './git/prs';
-import type { McpServer, Source, Thread } from './model';
+import type { Source, Thread } from './model';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { openProfileConfig } from './routes/nav';
@@ -99,7 +95,7 @@ import {
 } from './runtime/tasks';
 import { TaskIcon, useElapsed } from './agents/parts';
 import {
-  connectorStatus,
+  brokenConnectors,
   connectorUsage,
   fileCount,
   orderCards,
@@ -127,15 +123,12 @@ import type { VizLanguage } from '@mochi/domain/viz/fence';
 import type { ListeningPort } from '@mochi/domain/host/types/ports';
 
 const LIST_LIMIT = 3;
-const OPEN_BY_DEFAULT: string[] = [
-  'environment',
-  'threads',
-  'sources',
-  'servers',
-  'outputs',
-] satisfies SummaryCardId[];
+// Sources starts folded: it's reference, not something you check mid-run.
+const OPEN_BY_DEFAULT: string[] = ['threads'] satisfies SummaryCardId[];
 
-/** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. `isFloating`: cards float over the chat. */
+/**
+ * `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. `isFloating`: cards float over the chat.
+ */
 export function SummaryPanel({
   thread,
   className,
@@ -161,10 +154,11 @@ export function SummaryPanel({
 }
 
 // Docked, cards sit on the chat's own surface, a hairline the only edge; floating over the chat they need the popover's fill.
+// 22px squircle corners need a 44px-tall box: any shorter and the browser shrinks both corners to fit, so a folded card would round tighter than an open one.
 const CARD =
-  'gap-0 py-0 bg-background group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
+  'min-h-11 gap-0 rounded-lg py-0 bg-background group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float';
 
-/** What needs you first, then a card per thing the right side holds, each only once it has something: like Claude's. */
+/** What needs you first, then what runs, what it made, what it's tied to and what it used, each only once it has something; where it runs closes the column. */
 function SummaryBody({
   thread,
   onPaneOpened,
@@ -180,27 +174,21 @@ function SummaryBody({
     CHANGES_CLOSED_KEY,
     thread.id,
   );
-  const [isTasksOpen, setTasksOpen] = useOpenInThread(
-    TASKS_CLOSED_KEY,
+  const [isRunningOpen, setRunningOpen] = useOpenInThread(
+    RUNNING_CLOSED_KEY,
     thread.id,
   );
   const onOpenChange = (value: string[]) => {
-    setOpenCards(value.filter((id) => id !== 'changes' && id !== 'tasks'));
+    setOpenCards(value.filter((id) => id !== 'changes' && id !== 'running'));
     setChangesOpen(value.includes('changes'));
-    setTasksOpen(value.includes('tasks'));
+    setRunningOpen(value.includes('running'));
   };
   const props = { thread, summary, open };
   const BODIES = {
-    environment: <EnvironmentCard {...props} />,
+    running: <RunningCard {...props} ports={ports} launchNames={launchNames} />,
+    changes: <ChangesCard {...props} outputs={outputs} />,
     threads: <ThreadsCard {...links} />,
     sources: <SourcesCard {...props} />,
-    connectors: <ConnectorsCard {...props} />,
-    servers: (
-      <ServersCard ports={ports} launchNames={launchNames} onOpen={open.port} />
-    ),
-    outputs: <OutputsCard {...outputs} open={open} />,
-    changes: <ChangesCard {...props} />,
-    tasks: <TasksCard {...props} />,
   } satisfies Record<SummaryCardId, ReactNode>;
 
   return (
@@ -211,7 +199,7 @@ function SummaryBody({
         value={[
           ...openCards,
           ...(isChangesOpen ? ['changes'] : []),
-          ...(isTasksOpen ? ['tasks'] : []),
+          ...(isRunningOpen ? ['running'] : []),
         ]}
         onValueChange={onOpenChange}
         asChild
@@ -235,11 +223,12 @@ function SummaryBody({
           ))}
         </Reorder.Group>
       </Accordion>
+      <EnvironmentLine thread={thread} />
     </div>
   );
 }
 
-const orderSlice = persistedSlice<string[]>('mochi.summary-order.v1', []);
+const orderSlice = persistedSlice<string[]>('mochi.summary-order.v2', []);
 const closedSlice = persistedFamily<string[]>('', []);
 
 /** The shown cards in the order you last dragged them to, remembered on this device for every thread. */
@@ -254,9 +243,10 @@ function useCardOrder(cards: SummaryCardId[]) {
 }
 
 const CHANGES_CLOSED_KEY = 'mochi.summary-changes-closed.v1';
-const TASKS_CLOSED_KEY = 'mochi.summary-tasks-closed.v1';
+// The Running card took over Background tasks' fold, so its key stays.
+const RUNNING_CLOSED_KEY = 'mochi.summary-tasks-closed.v1';
 
-/** A card that is open unless you folded it in this thread (Changes, Background tasks); remembered on this device under `key`. */
+/** A card that is open unless you folded it in this thread (Changes, Running); remembered on this device under `key`. */
 function useOpenInThread(key: string, threadId: string) {
   const [closed, setClosed] = useState(() => closedSlice(key).getState().value);
   const isOpen = !closed.includes(threadId);
@@ -398,104 +388,84 @@ function CardBody({ children }: { children: ReactNode }) {
   );
 }
 
-/** Pending approval or question; blocked steps say so in the goal block. */
+/** What waits on you: a pending approval or question, then each connector that needs you to sign in again. */
 function NeedsYou({ thread }: { thread: Thread }) {
+  const names = useLibraryNames();
   // A held limit says so in the chat; the summary doesn't repeat it.
-  if (thread.status !== 'needs-you' || thread.live?.limit) return null;
+  const isWaiting = thread.status === 'needs-you' && !thread.live?.limit;
+  const broken = brokenConnectors(thread.agent?.mcpServers ?? []);
+  if (!isWaiting && broken.length === 0) return null;
   return (
-    <p
+    <div
       role="status"
-      className="flex items-center gap-2.5 rounded-xl border border-warning/40 bg-warning/8 px-3 py-2 type-meta text-warning"
+      className="flex min-h-11 flex-col justify-center gap-1.5 rounded-lg border border-warning/40 bg-warning/8 px-3 py-2 type-meta text-warning"
     >
-      <span className="size-1.5 shrink-0 rounded-full bg-warning" aria-hidden />
-      {currentAction(thread)?.label ?? PHASE_LABELS.wait}
-    </p>
+      {isWaiting && (
+        <p className="flex items-center gap-2.5">
+          <span
+            className="size-1.5 shrink-0 rounded-full bg-warning"
+            aria-hidden
+          />
+          {currentAction(thread)?.label ?? PHASE_LABELS.wait}
+        </p>
+      )}
+      {broken.map((server) => (
+        <button
+          key={server.name}
+          type="button"
+          onClick={() => openProfileConfig(thread.spaceId, 'mcp')}
+          className="flex min-w-0 cursor-default items-center gap-2 text-left hover:underline focus-visible:outline-2"
+        >
+          <McpServerMark server={server.name} url={server.url} />
+          <span className="truncate">
+            {names.server(server.name).title}{' '}
+            {server.status === 'failed' ? 'failed to connect' : 'needs sign-in'}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 
-function EnvironmentCard({ thread }: CardProps) {
+/** Where it runs, closing the column: device and project folder, its editor menu, and full access in warning. Branch and model live under the composer. */
+function EnvironmentLine({ thread }: { thread: Thread }) {
   const { repo, agent } = thread;
-  const worktree = useWorktreePath(thread.id);
   const fullAccess = isFullAccess(agent?.permissionMode);
   const machine = useRemoteMachine();
   const here = useThisBackend();
   return (
-    <>
-      <CardHeader title="Environment" />
-      <CardBody>
-        <SummaryRow
-          icon={
-            <DeviceIcon
-              kind={machine ? machine.kind : here.kind}
-              className="size-4"
-            />
-          }
-          label={machine?.name ?? here.name}
-        />
-        <SummaryRow
-          icon={Folder}
-          label={
-            repo ? (
-              <>
-                {repo.project}
-                {!!repo.path && (
-                  <span className="text-subtle-foreground">
-                    {' '}
-                    · {homeShort(parentDir(repo.path))}
-                  </span>
-                )}
-              </>
-            ) : (
-              'No project folder'
-            )
-          }
-        >
-          <FolderMenu thread={thread} />
-        </SummaryRow>
-        {!!repo && (
-          <SummaryRow
-            icon={
-              <BranchIcon
-                repo={repo}
-                className="size-4 text-muted-foreground"
-              />
-            }
-            label={<BranchName repo={repo} title="Copy branch name" />}
-            onClick={
-              repo.isDetached
-                ? undefined
-                : () => copyText(repo.branch, 'Branch name copied')
-            }
-          >
-            {!!worktree && (
-              <span className="pointer-events-none max-w-24 truncate type-meta text-subtle-foreground">
-                {basenameOf(worktree)}
-              </span>
-            )}
-          </SummaryRow>
-        )}
-        {fullAccess && (
-          <SummaryRow
-            icon={<ShieldAlert className="size-4 text-warning" />}
-            label={
-              <span className="text-warning">
-                {permissionLabel(agent!.permissionMode!)}
-              </span>
-            }
-          />
-        )}
-      </CardBody>
-    </>
+    // Floating over the chat it needs the cards' fill, or it reads as chat text.
+    <div className="flex min-h-7 min-w-0 items-center gap-1.5 pr-1 pl-3 type-caption text-subtle-foreground group-data-floating/summary:min-h-11 group-data-floating/summary:rounded-lg group-data-floating/summary:bg-popover group-data-floating/summary:shadow-float">
+      {fullAccess && (
+        <span className="flex shrink-0 items-center gap-1.5 text-warning">
+          <ShieldAlert className="size-3.5" aria-hidden />
+          {permissionLabel(agent!.permissionMode!)} ·
+        </span>
+      )}
+      <DeviceIcon
+        kind={machine ? machine.kind : here.kind}
+        className="size-3.5 shrink-0"
+      />
+      <span className="min-w-0 truncate" title={repo?.path}>
+        {machine?.name ?? here.name}
+        {' · '}
+        {repo ? repo.project : 'No project folder'}
+      </span>
+      <span className="ml-auto">
+        <FolderMenu thread={thread} />
+      </span>
+    </div>
   );
 }
 
-const basenameOf = (path: string) => path.replace(/\/+$/, '').split('/').pop()!;
-const parentDir = (path: string) => path.replace(/\/[^/]+\/?$/, '') || '/';
-const homeShort = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
-
-/** What the agent was handed or reached for: links, files and MCP items you added, then the skills it used. */
+/** What the agent was handed or reached for: links, files and MCP items you added, the skills it used, then the connectors it called. */
 function SourcesCard({ thread, summary, open }: CardProps) {
-  const count = thread.sources.length + summary.skills.length;
+  const connectors = connectorUsage(
+    thread.agent?.mcpServers ?? [],
+    summary.servers,
+  );
+  const count =
+    thread.sources.length + summary.skills.length + connectors.length;
   return (
     <>
       <CardHeader title="Sources" meta={count > 0 && count} />
@@ -511,6 +481,7 @@ function SourcesCard({ thread, summary, open }: CardProps) {
           )}
         </LimitedList>
         <SkillRows thread={thread} skills={summary.skills} />
+        <ConnectorRows thread={thread} rows={connectors} />
         <AddSourceRow thread={thread} />
       </CardBody>
     </>
@@ -545,64 +516,31 @@ function SkillRows({
   );
 }
 
-const MCP_STATUS_LABELS = {
-  connected: '',
-  pending: 'Connecting',
-  'needs-auth': 'Needs sign-in',
-  failed: 'Failed',
-  disabled: 'Disabled',
-} satisfies Record<McpServer['status'], string>;
-const MCP_STATUS_CLASSES = {
-  connected: '',
-  pending: 'text-subtle-foreground',
-  'needs-auth': 'text-warning',
-  failed: 'text-destructive',
-  disabled: 'text-subtle-foreground',
-} satisfies Record<McpServer['status'], string>;
-
-/** Each connector with how often this thread called it; status only when one isn't up. */
-function ConnectorsCard({ thread, summary }: CardProps) {
+function ConnectorRows({
+  thread,
+  rows,
+}: {
+  thread: Thread;
+  rows: ReturnType<typeof connectorUsage>;
+}) {
   const names = useLibraryNames();
-  const servers = thread.agent?.mcpServers ?? [];
-  const status = connectorStatus(servers);
-  const rows = connectorUsage(servers, summary.servers);
-  const manage = () => openProfileConfig(thread.spaceId, 'mcp');
   return (
-    <>
-      <CardHeader
-        title="Connectors"
-        meta={
-          <span className={cn(status.needsYou && 'text-warning')}>
-            {status.text}
+    <LimitedList items={rows}>
+      {({ server, calls }) => (
+        <SummaryRow
+          key={server.name}
+          icon={<McpServerMark server={server.name} url={server.url} />}
+          label={
+            <span title={server.name}>{names.server(server.name).title}</span>
+          }
+          onClick={() => openProfileConfig(thread.spaceId, 'mcp')}
+        >
+          <span className="tabular type-caption text-subtle-foreground">
+            ×{calls}
           </span>
-        }
-      />
-      <CardBody>
-        <LimitedList items={rows}>
-          {({ server, calls }) => (
-            <SummaryRow
-              key={server.name}
-              icon={<McpServerMark server={server.name} url={server.url} />}
-              label={
-                <span title={server.name}>
-                  {names.server(server.name).title}
-                </span>
-              }
-              onClick={manage}
-            >
-              <span
-                className={cn(
-                  'tabular type-caption',
-                  MCP_STATUS_CLASSES[server.status] || 'text-subtle-foreground',
-                )}
-              >
-                {MCP_STATUS_LABELS[server.status] || (calls > 0 && `×${calls}`)}
-              </span>
-            </SummaryRow>
-          )}
-        </LimitedList>
-      </CardBody>
-    </>
+        </SummaryRow>
+      )}
+    </LimitedList>
   );
 }
 
@@ -659,18 +597,24 @@ function ReplyRow({ to }: { to: NonNullable<Thread['replyTo']>[number] }) {
   );
 }
 
-function ServersCard({
+/** What is live right now: dev servers listening, then background tasks, each with its age and a stop button; finished tasks fold into one row. */
+function RunningCard({
+  thread,
+  open,
   ports,
   launchNames,
-  onOpen,
-}: {
+}: CardProps & {
   ports: ListeningPort[];
   launchNames: Map<number, string>;
-  onOpen: (port: number) => void;
 }) {
+  const tasks = threadTasks(thread);
+  const running = tasks.filter(isActive);
+  const finished = tasks.filter((t) => !isActive(t));
+  // Every task has its page in the Background tasks tab: an agent's transcript, a command's live output and exit code.
+  const openTask = (task: TaskRow) => () => open.agent(task.id);
   return (
     <>
-      <CardHeader title="Servers" meta={ports.length} />
+      <CardHeader title="Running" meta={ports.length + running.length} />
       <CardBody>
         {ports.map((p) => (
           <SummaryRow
@@ -681,9 +625,23 @@ function ServersCard({
                 {launchNames.get(p.port) ?? <PortLabel port={p.port} />}
               </span>
             }
-            onClick={() => onOpen(p.port)}
+            onClick={() => open.port(p.port)}
           />
         ))}
+        {running.map((task) => (
+          <SummaryRow
+            key={task.id}
+            icon={<TaskIcon thread={thread} task={task} />}
+            label={task.title}
+            onClick={openTask(task)}
+          >
+            <TaskAge task={task} />
+            <StopTask thread={thread} task={task} />
+          </SummaryRow>
+        ))}
+        {finished.length > 0 && (
+          <FinishedTasks thread={thread} tasks={finished} openTask={openTask} />
+        )}
       </CardBody>
     </>
   );
@@ -706,60 +664,62 @@ const VISUAL_ICONS = {
   'harness-diff': Diff,
 } satisfies Record<VizLanguage, IconComponent>;
 
-function OutputsCard({
+/** Files and visuals the agent made, under the diff: everything it produced in one card. */
+function OutputRows({
   files,
   visuals,
   open,
-}: {
-  files: FileArtifact[];
-  visuals: VisualArtifact[];
-  open: CardProps['open'];
-}) {
+}: Outputs & { open: CardProps['open'] }) {
   const outputs = [
     ...files.map((file) => ({ file })),
     ...visuals.map((visual) => ({ visual })),
   ];
   return (
-    <>
-      <CardHeader title="Outputs" meta={outputs.length} />
-      <CardBody>
-        <LimitedList items={outputs}>
-          {(output, i) => {
-            if ('file' in output) {
-              const { name } = splitPath(output.file.path);
-              return (
-                <SummaryRow
-                  key={output.file.path}
-                  icon={
-                    <FileIcon
-                      fileName={name}
-                      autoAssign
-                      aria-hidden
-                      className="size-4"
-                    />
-                  }
-                  label={<span title={output.file.path}>{name}</span>}
-                  onClick={() => open.output(output.file.path)}
+    <LimitedList items={outputs}>
+      {(output, i) => {
+        if ('file' in output) {
+          const { name } = splitPath(output.file.path);
+          return (
+            <SummaryRow
+              key={output.file.path}
+              icon={
+                <FileIcon
+                  fileName={name}
+                  autoAssign
+                  aria-hidden
+                  className="size-4"
                 />
-              );
-            }
-            const { visual } = output;
-            return (
-              <SummaryRow
-                key={`${visual.at}:${i}`}
-                icon={VISUAL_ICONS[visual.language]}
-                label={visual.title}
-                onClick={() => open.visual(visual)}
-              />
-            );
-          }}
-        </LimitedList>
-      </CardBody>
-    </>
+              }
+              label={<span title={output.file.path}>{name}</span>}
+              onClick={() => open.output(output.file.path)}
+            />
+          );
+        }
+        const { visual } = output;
+        return (
+          <SummaryRow
+            key={`${visual.at}:${i}`}
+            icon={VISUAL_ICONS[visual.language]}
+            label={visual.title}
+            onClick={() => open.visual(visual)}
+          />
+        );
+      }}
+    </LimitedList>
   );
 }
 
-function ChangesCard({ thread, summary, open }: CardProps) {
+interface Outputs {
+  files: FileArtifact[];
+  visuals: VisualArtifact[];
+}
+
+function ChangesCard({
+  thread,
+  summary,
+  open,
+  outputs,
+}: CardProps & { outputs: Outputs }) {
   const prs = useThreadPrs(thread, thread.prs);
   const cwd = threadCwd(thread);
   if (!thread.repo || !cwd)
@@ -768,10 +728,19 @@ function ChangesCard({ thread, summary, open }: CardProps) {
         thread={thread}
         prs={prs}
         files={summary.files}
+        outputs={outputs}
         open={open}
       />
     );
-  return <BranchChanges thread={thread} cwd={cwd} prs={prs} open={open} />;
+  return (
+    <BranchChanges
+      thread={thread}
+      cwd={cwd}
+      prs={prs}
+      outputs={outputs}
+      open={open}
+    />
+  );
 }
 
 /** The branch against its base, as the Changes pane shows it by default: edits made through shell commands count too. */
@@ -779,11 +748,13 @@ function BranchChanges({
   thread,
   cwd,
   prs,
+  outputs,
   open,
 }: {
   thread: Thread;
   cwd: string;
   prs: ThreadPr[];
+  outputs: Outputs;
   open: CardProps['open'];
 }) {
   const diffQuery = useGitDiff(cwd, 'branch', thread.repo?.base);
@@ -794,6 +765,7 @@ function BranchChanges({
       files={diffQuery.data?.files}
       error={diffQuery.error}
       onRetry={diffQuery.refresh}
+      outputs={outputs}
       open={open}
     />
   );
@@ -805,6 +777,7 @@ function ChangesBody({
   files,
   error,
   onRetry,
+  outputs,
   open,
 }: {
   thread: Thread;
@@ -812,11 +785,17 @@ function ChangesBody({
   files?: { added: number; removed: number }[];
   error?: string;
   onRetry?: () => void;
+  outputs: Outputs;
   open: CardProps['open'];
 }) {
   const added = files?.reduce((n, f) => n + f.added, 0) ?? 0;
   const removed = files?.reduce((n, f) => n + f.removed, 0) ?? 0;
   const hasChanges = !!files?.length;
+  // Without a repo, a chat that only made files has no diff worth a "No changes" row.
+  const isOutputsOnly =
+    !thread.repo &&
+    !hasChanges &&
+    outputs.files.length + outputs.visuals.length > 0;
   const canOpenPr = hasChanges && prs.length === 0 && !!thread.repo;
   return (
     <>
@@ -825,7 +804,7 @@ function ChangesBody({
         {prs.map((item) => (
           <PullRequestRow key={item.pr.number} thread={thread} item={item} />
         ))}
-        {!!files && prs.length === 0 && (
+        {!!files && prs.length === 0 && !isOutputsOnly && (
           <SummaryRow
             icon={Diff}
             label={
@@ -845,6 +824,7 @@ function ChangesBody({
         )}
         {canOpenPr && <CreatePrRow thread={thread} />}
         <SubThreadPrs parent={thread} />
+        <OutputRows {...outputs} open={open} />
       </CardBody>
     </>
   );
@@ -932,36 +912,6 @@ function CreatePrRow({ thread }: { thread: Thread }) {
     >
       <Plus className="size-3.5 text-subtle-foreground" aria-hidden />
     </SummaryRow>
-  );
-}
-
-/** Like Claude's: what runs now, each with its age and a stop button, then one "N finished" row whose list opens beside the card. */
-function TasksCard({ thread, open }: CardProps) {
-  const tasks = threadTasks(thread);
-  const running = tasks.filter(isActive);
-  const finished = tasks.filter((t) => !isActive(t));
-  // Every task has its page in the Background tasks tab: an agent's transcript, a command's live output and exit code.
-  const openTask = (task: TaskRow) => () => open.agent(task.id);
-  return (
-    <>
-      <CardHeader title="Background tasks" meta={running.length || undefined} />
-      <CardBody>
-        {running.map((task) => (
-          <SummaryRow
-            key={task.id}
-            icon={<TaskIcon thread={thread} task={task} />}
-            label={task.title}
-            onClick={openTask(task)}
-          >
-            <TaskAge task={task} />
-            <StopTask thread={thread} task={task} />
-          </SummaryRow>
-        ))}
-        {finished.length > 0 && (
-          <FinishedTasks thread={thread} tasks={finished} openTask={openTask} />
-        )}
-      </CardBody>
-    </>
   );
 }
 

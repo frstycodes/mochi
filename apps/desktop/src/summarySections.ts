@@ -3,17 +3,9 @@ import type { ThreadSummary } from './summary.ts';
 import { activeTasks } from './runtime/tasks.ts';
 import { plural } from '@mochi/domain/lib/format';
 
-export type SummaryCardId =
-  | 'environment'
-  | 'threads'
-  | 'sources'
-  | 'connectors'
-  | 'servers'
-  | 'outputs'
-  | 'changes'
-  | 'tasks';
+export type SummaryCardId = 'running' | 'changes' | 'threads' | 'sources';
 
-/** The cards with something to show, in Claude's order: where it runs and what it's tied to, what it holds, what it reaches, what it made, then what still runs. */
+/** The cards with something to show, most glanced-at first: what runs now, what it made, what it's tied to, then what it used. */
 export function summaryCards({
   thread,
   summary,
@@ -28,34 +20,23 @@ export function summaryCards({
   outputCount: number;
 }): SummaryCardId[] {
   const cards: (SummaryCardId | false)[] = [
-    'environment',
+    (activeTasks(thread).length > 0 || portCount > 0) && 'running',
+    (!!thread.repo ||
+      summary.files.length > 0 ||
+      thread.prs.length > 0 ||
+      outputCount > 0) &&
+      'changes',
     linkedThreadCount > 0 && 'threads',
     'sources',
-    !!thread.agent?.mcpServers?.length && 'connectors',
-    portCount > 0 && 'servers',
-    outputCount > 0 && 'outputs',
-    (!!thread.repo || summary.files.length > 0 || thread.prs.length > 0) &&
-      'changes',
-    activeTasks(thread).length > 0 && 'tasks',
   ];
   return cards.filter((c) => c !== false);
 }
 
-/** The connectors' state in a few words: what needs you first, else how many are up. */
-export function connectorStatus(servers: Pick<McpServer, 'status'>[]) {
-  const broken = servers.filter(
-    (s) => s.status === 'needs-auth' || s.status === 'failed',
-  ).length;
-  if (broken) return { text: `${broken} to reconnect`, needsYou: true };
-  const connected = servers.filter((s) => s.status === 'connected').length;
-  if (connected === servers.length)
-    return { text: `${connected} connected`, needsYou: false };
-  const pending = servers.filter((s) => s.status === 'pending').length;
-  if (pending) return { text: `${pending} connecting`, needsYou: false };
-  return { text: `${connected} of ${servers.length} on`, needsYou: false };
-}
+/** Connectors that can't be reached until you sign in again or fix them. */
+export const brokenConnectors = (servers: McpServer[]) =>
+  servers.filter((s) => s.status === 'needs-auth' || s.status === 'failed');
 
-/** The thread's connectors, the ones this thread called first, most called first; `calls` is 0 for the rest. */
+/** The connectors this thread called, most called first. */
 export function connectorUsage(
   servers: McpServer[],
   used: ThreadSummary['servers'],
@@ -65,6 +46,7 @@ export function connectorUsage(
       server,
       calls: used.find((u) => u.server === server.name)?.calls ?? 0,
     }))
+    .filter((row) => row.calls > 0)
     .toSorted((a, b) => b.calls - a.calls);
 }
 
