@@ -362,7 +362,7 @@ function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
         <SettingsRow
           key={machine.id}
           label={<DeviceName kind={undefined} name={machine.name} />}
-          description={machine.isOnline ? 'Online' : 'Offline'}
+          description={otherMachineStatus(machine)}
           control={
             <Button
               size="sm"
@@ -377,6 +377,12 @@ function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
       <JoiningDialog joining={joining} onClose={closeJoining} />
     </SettingsGroup>
   );
+}
+
+/** Heard on this network beats the relay's word: it answered just now, and joins without the relay's channel. */
+function otherMachineStatus(machine: OtherMachine) {
+  if (machine.isNearby) return 'On this network';
+  return machine.isOnline ? 'Online' : 'Offline';
 }
 
 /** While joining: the code to compare with the other computer's screen, until it answers. */
