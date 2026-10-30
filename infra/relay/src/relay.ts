@@ -8,19 +8,24 @@ import {
   storedKey,
   withChannel,
   type RelayToMachine,
+  type Sealed,
   type StoredRecord,
 } from './protocol.ts';
 
 /** What a socket is, kept on the socket itself so it survives the Durable Object hibernating. */
 export type Attachment =
-  | { role: 'machine'; machineId: string }
+  /** `ip`: where the machine's socket comes from, kept only while it is open, for `sameSite`. */
+  | { role: 'machine'; machineId: string; ip?: string }
   | { role: 'device'; machineId: string; deviceId: string; channel: number };
 
 export interface MachineRecord {
   id: string;
-  name: string;
   /** Ed25519, base64. Devices compare its fingerprint with the one the machine shows before trusting it. */
   publicKey: string;
+  /** Its name, kind and addresses, sealed to each member's key: the relay can't read them. */
+  sealed?: Sealed;
+  /** From a machine that registered before names were sealed; dropped when it registers again. */
+  name?: string;
   lastSeen: number;
 }
 
@@ -66,12 +71,12 @@ export class Relay<S> {
   }
 
   /** Decides before the socket is accepted. A machine replaces an older socket of its own; a device needs its machine online. */
-  admit(role: 'machine', machineId: string): Admission;
+  admit(role: 'machine', machineId: string, ip?: string): Admission;
   admit(role: 'device', machineId: string, deviceId: string): Admission;
   admit(
     role: 'machine' | 'device',
     machineId: string,
-    deviceId?: string,
+    other?: string,
   ): Admission {
     if (role === 'machine') {
       for (const old of this.room.byTag(machineTag(machineId)))
@@ -82,7 +87,7 @@ export class Relay<S> {
         );
       return {
         tags: [machineTag(machineId), MACHINES_TAG],
-        attachment: { role: 'machine', machineId },
+        attachment: { role: 'machine', machineId, ...(other && { ip: other }) },
       };
     }
     if (!this.machineSocket(machineId))
@@ -92,7 +97,7 @@ export class Relay<S> {
       channel = this.randomChannel();
     return {
       tags: [channelTag(channel), devicesOfTag(machineId)],
-      attachment: { role: 'device', machineId, deviceId: deviceId!, channel },
+      attachment: { role: 'device', machineId, deviceId: other!, channel },
     };
   }
 
@@ -168,12 +173,23 @@ export class Relay<S> {
       );
   }
 
-  async list() {
+  /** `ip`: the asker's, compared with each online machine's for `sameSite`; neither is returned. */
+  async list(ip?: string) {
     const machines = await this.room.machines();
-    return Object.values(machines).map((m) => ({
-      ...m,
-      isOnline: !!this.machineSocket(m.id),
-    }));
+    return Object.values(machines).map(({ id, publicKey, sealed, name }) => {
+      const socket = this.machineSocket(id);
+      const at = socket && this.room.attachment(socket);
+      return {
+        id,
+        publicKey,
+        ...(sealed && { sealed }),
+        ...(name !== undefined && { name }),
+        isOnline: !!socket,
+        ...(ip &&
+          at?.role === 'machine' &&
+          at.ip && { sameSite: at.ip === ip }),
+      };
+    });
   }
 
   /** Forgets a machine: its socket and its devices' channels close, and it has to register again to come back. */
@@ -228,8 +244,8 @@ export class Relay<S> {
       ...machines,
       [machineId]: {
         id: machineId,
-        name: frame.name,
         publicKey: frame.publicKey,
+        ...(frame.sealed ? { sealed: frame.sealed } : { name: frame.name }),
         lastSeen: this.now(),
       },
     });

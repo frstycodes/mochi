@@ -48,6 +48,12 @@ import {
 } from './pairing.ts';
 import { Registry, type PairedMachine } from './registry.ts';
 import {
+  openMachineInfo,
+  openRecords,
+  sealMachineInfo,
+  sealRecords,
+} from './sealed.ts';
+import {
   connectMachine,
   forgetMachineAtRelay,
   listMachines,
@@ -384,15 +390,19 @@ function makeRemote({
       registry.devices().some((d) => d.publicKey === publicKey);
     return listed
       .filter((m) => m.id !== registry.machineId && !isMember(m.publicKey))
-      .map((m) => ({
-        id: m.id,
-        name: m.name,
-        isOnline: m.isOnline,
-        pairingCode: pairingCode(
+      .map((m) => {
+        const code = pairingCode(
           sodium.from_base64(m.publicKey, sodium.base64_variants.ORIGINAL),
           own.publicKey,
-        ),
-      }));
+        );
+        return {
+          id: m.id,
+          // Its name is sealed to its members, which this computer isn't yet; an older machine still lists one in clear.
+          name: openMachineInfo(m, own)?.name ?? m.name ?? `Computer ${code}`,
+          isOnline: m.isOnline,
+          pairingCode: code,
+        };
+      });
   }
 
   /**
@@ -401,6 +411,7 @@ function makeRemote({
    * computer, so it reaches all of them and they it with no more prompts.
    */
   async function join(machineId: string, signal?: AbortSignal) {
+    let joinedName = '';
     const token = await account.accessToken();
     const [listed, own] = await Promise.all([listMachines(token), theKeys()]);
     const machine = listed.find((m) => m.id === machineId);
@@ -447,13 +458,15 @@ function makeRemote({
       if (welcome?.type !== 'welcome')
         throw new Error('That computer answered something unexpected');
       const theirs = parseRecords(welcome.members);
+      joinedName = welcome.backend.name;
       const vouch = approveMember(
         [...(theRegistry().records() ?? []), ...theirs],
         own,
         {
           publicKey: machine.publicKey,
           machineId: machine.id,
-          name: machine.name,
+          // From inside the session: the relay's listing has no name it can read.
+          name: welcome.backend.name,
           kind: asKind(welcome.backend.kind),
         },
         Date.now(),
@@ -464,7 +477,7 @@ function makeRemote({
       raw.close(1000, 'Joined');
     }
     await pullMembers();
-    return machine.name;
+    return joinedName;
   }
 
   let alone: ReturnType<typeof progressLog> | undefined;
@@ -515,17 +528,17 @@ function makeRemote({
       };
     const others = new AbortController();
     const attempts = online.map(async (machine) => {
+      const code = pairingCode(
+        sodium.from_base64(machine.publicKey, sodium.base64_variants.ORIGINAL),
+        own.publicKey,
+      );
+      // Its name is sealed to its members, which this computer isn't yet.
+      const listedName = machine.name ?? `Computer ${code}`;
       emit({
         type: 'asking',
-        machineName: machine.name,
+        machineName: listedName,
         name: machineName(),
-        code: pairingCode(
-          sodium.from_base64(
-            machine.publicKey,
-            sodium.base64_variants.ORIGINAL,
-          ),
-          own.publicKey,
-        ),
+        code,
       });
       try {
         const name = await join(machine.id, others.signal);
@@ -535,7 +548,7 @@ function makeRemote({
         if (!others.signal.aborted)
           emit({
             type: 'declined',
-            machineName: machine.name,
+            machineName: listedName,
             reason: messageOf(e),
           });
         throw e;
@@ -600,11 +613,15 @@ function makeRemote({
     broadcast();
     if (!isChanged) return;
     server?.publishMembers(records);
+    // The registration is sealed to the members: a new one can read it, a removed one no longer can.
+    relay?.reregister();
     // GAP: a failed publish waits for the next change or connection to reach the relay; links still carry the records.
     if (await isSignedIn())
       await account
         .accessToken()
-        .then((token) => publishMembers(token, records))
+        .then((token) =>
+          publishMembers(token, sealRecords(records, memberKeys(self))),
+        )
         .catch(() => {});
   }
 
@@ -637,11 +654,20 @@ function makeRemote({
   /** The account's records from the relay, when signed in. Offline computers catch up here when they next connect. */
   async function pullMembers() {
     if (!(await isSignedIn())) return;
+    const own = await theKeys();
     const listed = await account
       .accessToken()
       .then(listMembers)
       .catch(() => null);
-    if (listed) await absorb(parseRecords(listed));
+    if (listed) await absorb(parseRecords(openRecords(listed, own)));
+  }
+
+  /** Every member's key, this computer's included: what the relay's copies are sealed to. */
+  function memberKeys(self: DeviceKeys) {
+    const keys = [...(membership?.members.values() ?? [])].map((m) =>
+      sodium.from_base64(m.publicKey, sodium.base64_variants.ORIGINAL),
+    );
+    return [self.publicKey, ...keys];
   }
 
   const ownRecords = () => theRegistry().records() ?? [];
@@ -727,7 +753,17 @@ function makeRemote({
     const own = await theKeys();
     relay = connectMachine({
       machineId: theRegistry().machineId,
-      name: machineName,
+      // GAP: addresses for dialing direct first come with local-first routes (new-330); until then devices learn them in `welcome`.
+      sealed: () =>
+        sealMachineInfo(
+          {
+            name: machineName(),
+            kind: THIS_KIND,
+            addresses: [],
+            updatedAt: Date.now(),
+          },
+          memberKeys(own),
+        ),
       publicKey: sodium.to_base64(
         own.publicKey,
         sodium.base64_variants.ORIGINAL,

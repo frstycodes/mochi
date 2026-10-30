@@ -45,7 +45,7 @@ it('the machine registers again after the network drops and the token refresh fa
   const first = registered.next();
   const connection = relay.connectMachine({
     machineId: 'mac-1',
-    name: () => 'Studio',
+    sealed: () => ({}),
     publicKey: 'key',
     // Offline, the account's refresh rejects as fetch does with no network.
     token: async () => {
