@@ -10,7 +10,8 @@ import { machineStatus, presenceAge } from './status';
 
 /**
  * Whether another computer is there, like a messenger's badge: a dot while it's online (amber when it refused this one,
- * dim while connecting), how long since it was last seen while it's offline. The words are in the tooltip.
+ * dim while connecting), how long since it was last seen while it's offline. The words are in the tooltip, online ones
+ * naming the route: direct (LAN or Tailscale) or via relay.
  */
 export function MachinePresence({
   machine,
@@ -22,7 +23,7 @@ export function MachinePresence({
   const now = useNow(15_000);
   const label =
     machine.status === 'online'
-      ? `Online ${machine.route === 'lan' ? 'on your network' : 'through the relay'}`
+      ? `Online · ${machine.route === 'lan' ? 'direct' : 'via relay'}`
       : machineStatus(machine, new Date(now))!;
   const age =
     machine.status === 'offline' && machine.lastSeenAt !== undefined

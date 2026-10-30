@@ -16,9 +16,11 @@ import sodium from 'libsodium-wrappers';
 import { Capabilities, type Relay } from '@mochi/schema';
 import { coreUrl, makeCoreClient } from '../client.ts';
 import { serveCapabilities } from '../hostClient.ts';
-import { makeDeviceClient, openLan } from './device.ts';
+import { makeDeviceClient, openLan, type Route } from './device.ts';
 import { queuedReader, type Link, type RawLink } from './link.ts';
 import { mintDeviceToken } from './token.ts';
+import { networkChanged } from './reconnect.ts';
+import WebSocket from 'ws';
 import { Unauthorized } from '../rpc.ts';
 import type { ThreadItem } from '@mochi/domain';
 import { layerCore } from '../server.ts';
@@ -68,8 +70,18 @@ function pipe() {
  * Core in-process with a window client, and this computer's remote server with one paired device. The device reaches it
  * through a fake relay: each dial is a fresh channel, paired and encrypted for real, then tunnelled into Core.
  */
-/** `hosts`: the device dials the server's own addresses directly (read on each attempt) instead of the relay. */
-const setup = (scopes: Scope[], { hosts }: { hosts?: string[] } = {}) =>
+/**
+ * `hosts`: the server listens there and the device dials its addresses directly (read on each attempt). `hasRelay`: the relay
+ * route too; it is the only one without `hosts`.
+ */
+const setup = (
+  scopes: Scope[],
+  {
+    hosts,
+    hasRelay = !hosts,
+    alsoDial = [],
+  }: { hosts?: string[]; hasRelay?: boolean; alsoDial?: string[] } = {},
+) =>
   Effect.gen(function* () {
     const context = yield* Layer.build(
       layerCore({
@@ -144,34 +156,35 @@ const setup = (scopes: Scope[], { hosts }: { hosts?: string[] } = {}) =>
       secureAsDevice(raw, deviceKeys, machineKeys.publicKey, 'Laptop', true);
     const welcomes: Relay.WelcomeFrame[] = [];
     /** Each welcome, to wait for one; and each dial that found no way in (the relay down, or no address listening). */
-    const welcomed = yield* Queue.unbounded<Relay.WelcomeFrame>();
+    const welcomed = yield* Queue.unbounded<Route['kind']>();
     const turnedAway = yield* Queue.unbounded<void>();
+    const relay: Route = {
+      kind: 'relay',
+      open: async () => {
+        if (network.isDown) {
+          Queue.offerUnsafe(turnedAway, undefined);
+          throw new Error('getaddrinfo ENOTFOUND');
+        }
+        return dial();
+      },
+    };
     const client = yield* makeDeviceClient({
-      routes: () =>
-        hosts
-          ? server.addresses.length
-            ? server.addresses.map((address) => ({
-                kind: 'lan' as const,
-                open: () => openLan(address),
-              }))
-            : (Queue.offerUnsafe(turnedAway, undefined), [])
-          : [
-              {
-                kind: 'relay',
-                open: async () => {
-                  if (network.isDown) {
-                    Queue.offerUnsafe(turnedAway, undefined);
-                    throw new Error('getaddrinfo ENOTFOUND');
-                  }
-                  return dial();
-                },
-              },
-            ],
+      routes: () => {
+        const direct = [...(hosts ? server.addresses : []), ...alsoDial].map(
+          (address) => ({
+            kind: 'lan' as const,
+            open: () => openLan(address),
+          }),
+        );
+        if (hosts && !direct.length && !hasRelay)
+          Queue.offerUnsafe(turnedAway, undefined);
+        return { direct, ...(hasRelay && { relay }) };
+      },
       secure,
       isRefusal: (error) => error instanceof PairingRefused,
-      onWelcome: (welcome) => {
+      onWelcome: (welcome, route) => {
         welcomes.push(welcome);
-        Queue.offerUnsafe(welcomed, welcome);
+        Queue.offerUnsafe(welcomed, route);
       },
       onOffline: () => {},
       onRefused: (reason) => assert.fail(reason),
@@ -562,4 +575,128 @@ it.live(
       yield* client.ping();
     }),
   30_000,
+);
+
+it.live('the direct route wins over the relay when both answer', () =>
+  Effect.gen(function* () {
+    const { client, welcomed } = yield* setup(['read'], {
+      hosts: ['127.0.0.1'],
+      hasRelay: true,
+    });
+    assert.equal(yield* Queue.take(welcomed), 'lan');
+    yield* client.ping();
+  }),
+);
+
+it.live('with no direct route answering, the relay carries the session', () =>
+  Effect.gen(function* () {
+    // Port 1 refuses: an address the machine had on another network.
+    const { client, welcomed } = yield* setup(['read'], {
+      hasRelay: true,
+      alsoDial: ['127.0.0.1:1'],
+    });
+    assert.equal(yield* Queue.take(welcomed), 'relay');
+    yield* client.ping();
+  }),
+);
+
+it.live(
+  'a session on the relay moves to a direct route once one answers, losing and repeating nothing',
+  () =>
+    Effect.gen(function* () {
+      const { window, client, server, welcomed } = yield* setup(['read'], {
+        hosts: [],
+        hasRelay: true,
+      });
+      assert.equal(yield* Queue.take(welcomed), 'relay');
+      yield* seed(window, 'Fix login');
+      // Follows the thread the way a followed machine's mirror does: after a drop, from the last sequence, once welcomed again.
+      const sequences: number[] = [];
+      const titles: string[] = [];
+      const resumedOn: string[] = [];
+      const first = yield* Deferred.make<void>();
+      const last = yield* Deferred.make<void>();
+      let after = 0;
+      const follow = Stream.suspend(() =>
+        client.thread({ threadId: 'new-1', afterSequence: after }),
+      ).pipe(
+        Stream.runForEach((item) =>
+          Effect.sync(() => {
+            const sequence =
+              item._tag === 'snapshot' ? item.sequence : item.event.sequence;
+            sequences.push(sequence);
+            after = sequence;
+            if (item._tag !== 'snapshot') return;
+            const { title } = (item.saved as { thread: { title: string } })
+              .thread;
+            if (titles.at(-1) !== title) titles.push(title);
+            Deferred.doneUnsafe(first, Effect.void);
+            if (title === 'C') Deferred.doneUnsafe(last, Effect.void);
+          }),
+        ),
+        Effect.catch(() =>
+          Queue.take(welcomed).pipe(
+            Effect.map((route) => void resumedOn.push(route)),
+          ),
+        ),
+        Effect.forever,
+      );
+      yield* Effect.forkChild(follow);
+      yield* Deferred.await(first);
+      const rename = (title: string) =>
+        command(window, 'new-1', { type: 'rename', threadId: 'new-1', title });
+      yield* rename('A');
+      yield* Effect.promise(() => server.rebind(['127.0.0.1']));
+      networkChanged();
+      yield* rename('B');
+      yield* rename('C');
+      yield* Deferred.await(last);
+      assert.deepEqual(
+        sequences,
+        [...new Set(sequences)].sort((a, b) => a - b),
+        'every sequence once, in order',
+      );
+      // Core may fold saves together; what it streamed last is the last rename.
+      assert.equal(titles.at(-1), 'C');
+      assert.deepEqual(
+        resumedOn,
+        ['lan'],
+        'it moved once, to the direct route',
+      );
+      yield* client.ping();
+      assert.ok(server.devices().length >= 1);
+    }),
+  30_000,
+);
+
+it.live(
+  'a direct connection that skips the pairing exchange is refused before anything reaches Core',
+  () =>
+    Effect.gen(function* () {
+      const { server } = yield* setup(['read'], { hosts: ['127.0.0.1'] });
+      const closed = yield* Effect.promise(
+        () =>
+          new Promise<{ code: number; replies: string[] }>((resolve) => {
+            const replies: string[] = [];
+            const ws = new WebSocket(`ws://${server.addresses[0]}`);
+            ws.on('open', () =>
+              ws.send(
+                Buffer.from(
+                  JSON.stringify({ type: 'hello', version: 6 }),
+                  'utf8',
+                ),
+              ),
+            );
+            ws.on('message', (data: Buffer) =>
+              replies.push(data.toString('utf8')),
+            );
+            ws.on('close', (code) => resolve({ code, replies }));
+          }),
+      );
+      assert.equal(closed.code, 4401);
+      assert.ok(
+        closed.replies.every((r) => !r.includes('welcome')),
+        'no welcome in clear',
+      );
+    }),
 );

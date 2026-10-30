@@ -24,6 +24,7 @@ import { Capabilities } from '../hostServer.ts';
 import { KeyStore, type Keys } from '../keys/keyStore.ts';
 import { networkHosts, watchNetwork } from './interfaces.ts';
 import { networkChanged } from './reconnect.ts';
+import { asCandidate } from './routes.ts';
 import { Remote } from './tag.ts';
 import {
   approveMember,
@@ -691,7 +692,10 @@ function makeRemote({
         () => (error = undefined),
         (e: unknown) => (error = String(e)),
       );
-      if (server.addresses.join(' ') !== before || error) broadcast();
+      if (server.addresses.join(' ') === before && !error) return;
+      // Devices read the addresses from the relay before they dial.
+      relay?.reregister();
+      broadcast();
     });
     return restarting;
   }
@@ -753,13 +757,15 @@ function makeRemote({
     const own = await theKeys();
     relay = connectMachine({
       machineId: theRegistry().machineId,
-      // GAP: addresses for dialing direct first come with local-first routes (new-330); until then devices learn them in `welcome`.
+      // Its addresses too, so a device dials direct first; only members can read them.
       sealed: () =>
         sealMachineInfo(
           {
             name: machineName(),
             kind: THIS_KIND,
-            addresses: [],
+            addresses: listening.addresses.flatMap(
+              (address) => asCandidate(address) ?? [],
+            ),
             updatedAt: Date.now(),
           },
           memberKeys(own),
