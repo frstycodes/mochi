@@ -82,6 +82,8 @@ import { DeviceIcon } from './remote/DeviceIcon';
 import { remoteDecisions } from './remote/mirror';
 import { RemoteScope } from './remote/useMachines';
 import { useMachineViews } from './backends/remote';
+import { isShown, useMachineFilter } from './backends/machineFilter';
+import { LOCAL_BACKEND } from './backends/registry';
 import { Seen, useSeen } from './notify/useSeen';
 import { isQueueUnread } from './store/seen';
 import { StatusMark } from './ui';
@@ -98,10 +100,14 @@ const KIND = {
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
 
 export function QueueView() {
-  const items = useSpaceQueue();
+  const machines = useMachineFilter().selected;
+  const localItems = useSpaceQueue();
+  const items = isShown(machines, LOCAL_BACKEND) ? localItems : [];
   const remote = useMachineViews()
     .flatMap(({ machine, state }) =>
-      state ? [{ machine, state, items: remoteDecisions(state) }] : [],
+      state && isShown(machines, machine.id)
+        ? [{ machine, state, items: remoteDecisions(state) }]
+        : [],
     )
     .filter((m) => m.items.length > 0);
   const isWorking = useSpaceThreads().some(

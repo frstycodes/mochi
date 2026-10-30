@@ -134,6 +134,8 @@ import { UserMenu } from './UserMenu';
 import { FoldGroup } from './SidebarFold';
 import { filteredSidebarLists, useProjectFilter } from './projectFilter';
 import { ProjectFilterMenu } from './ProjectFilterMenu';
+import { MachineFilterMenu } from './MachineFilterMenu';
+import { useMachineFilter } from './backends/machineFilter';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { host } from './host';
 
@@ -417,6 +419,7 @@ function SpaceNav({
   };
 
   const projectFilter = useProjectFilter(spaceId, threads);
+  const machineFilter = useMachineFilter();
   const {
     pinned,
     active,
@@ -485,13 +488,14 @@ function SpaceNav({
           row={row}
           selectedIds={selection.ids}
           filterMenu={
-            <ProjectFilterMenu
-              spaceId={spaceId}
-              filter={projectFilter}
-              className="absolute top-1.5 right-3 z-10"
-            />
+            <div className="absolute top-1.5 right-3 z-10 flex gap-0.5">
+              <MachineFilterMenu filter={machineFilter} />
+              <ProjectFilterMenu spaceId={spaceId} filter={projectFilter} />
+            </div>
           }
-          isFiltered={projectFilter.selected !== null}
+          isFiltered={
+            projectFilter.selected !== null || machineFilter.selected.length > 0
+          }
         />
 
         {settled.length > 0 && (
@@ -851,7 +855,7 @@ function NoFilteredThreads({ filterMenu }: { filterMenu: ReactNode }) {
       {filterMenu}
       <SidebarGroupLabel>Threads</SidebarGroupLabel>
       <p className="px-2 type-caption text-subtle-foreground">
-        No open threads in this project
+        No open threads match the filter
       </p>
     </SidebarGroup>
   );

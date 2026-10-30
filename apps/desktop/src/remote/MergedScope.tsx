@@ -27,6 +27,7 @@ import { getRemotePins, setRemotePins, useRemotePins } from './pins';
 import { isQuietAction, isScreenAction } from './threadScope';
 import { useMachines, useRemoteDispatch } from './useMachines';
 import { useMachineViews } from '../backends/remote';
+import { narrowToMachines, useMachineFilter } from '../backends/machineFilter';
 
 /** Another computer's projects change rarely; the merged list reads them once a while it's online. */
 const PROJECTS_STALE_MS = 5 * 60_000;
@@ -42,6 +43,9 @@ export function MergedScope({ children }: { children: ReactNode }) {
   const dispatchOn = useRemoteDispatch();
   const { machines } = useMachines();
   const pins = useRemotePins();
+  const { selected } = useMachineFilter();
+  // Actions see every machine's threads: a reorder or pin keeps the order of what this window's filter hides.
+  const shown = (state: State) => narrowToMachines(derive(state), selected);
 
   const toMachines = (action: Action) => {
     for (const part of splitByMachine(action)) {
@@ -77,7 +81,7 @@ export function MergedScope({ children }: { children: ReactNode }) {
   };
 
   return (
-    <DerivedScope derive={derive} dispatch={route}>
+    <DerivedScope derive={shown} dispatch={route}>
       {children}
     </DerivedScope>
   );
@@ -121,7 +125,7 @@ function useMergedDerive(): (state: State) => State {
 
 /**
  * The sidebar's thread list as a function of this computer's state, for what numbers and orders pins (Orbit's keys, the pager)
- * without re-rendering on every streamed token: call it where the state is read, in a selector or an event handler.
+ * without re-rendering on every streamed token, narrowed to this window's machine filter: call it where the state is read, in a selector or an event handler.
  */
 export function useMergeThreads(): (
   state: Pick<State, 'threads' | 'spaceId'>,
@@ -130,10 +134,14 @@ export function useMergeThreads(): (
   const sources = useMergedSources(spaceId);
   const pins = useRemotePins();
   const spaceIds = useProfiles().map((p) => p.id);
-  return (state) =>
-    sources.length === 0
-      ? state.threads
-      : mergeThreads(state.threads, sources, pins, spaceIds, state.spaceId);
+  const { selected } = useMachineFilter();
+  return (state) => {
+    const threads =
+      sources.length === 0
+        ? state.threads
+        : mergeThreads(state.threads, sources, pins, spaceIds, state.spaceId);
+    return narrowToMachines({ threads, queue: [] }, selected).threads;
+  };
 }
 
 /** Each followed computer's store: its registry replica while it's connected, else its mirror (the cache, offline). */
