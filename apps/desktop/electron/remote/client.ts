@@ -14,7 +14,7 @@ import { Persist, type Relay } from '@mochi/schema';
 import {
   makeDeviceClient,
   type DeviceClient,
-  type Route,
+  type Routes,
 } from '@mochi/core/remote/device';
 import type { Link, RawLink } from '@mochi/core/remote/link';
 import type {
@@ -26,13 +26,11 @@ import type {
 } from '../../src/host/types/remote.ts';
 import { asKind, PairingRefused } from '@mochi/core/remote/pairing';
 
-export type { Route };
-
 export interface FollowOptions {
   /** `lastSeenAt`: from an earlier launch, for "offline since" before this one ever reached it. */
   machine: { id: string; name: string; kind?: DeviceKind; lastSeenAt?: number };
   /** Read on every attempt: addresses and the account change between them. */
-  routes: () => Route[];
+  routes: () => Routes | Promise<Routes>;
   /** The pairing exchange as a returning device (`secureAsDevice`). */
   secure: (raw: RawLink) => Promise<Link>;
   onChange: (state: FollowedMachine) => void;

@@ -13,12 +13,12 @@ import { Persist } from '@mochi/schema';
 import type { MochiAccount } from '@mochi/domain/host/types/account';
 import { coreClient, logToCore, mainCoreClient } from '@mochi/core/host';
 import { makeHostCaller } from '@mochi/core/hostClient';
-import { openLan } from '@mochi/core/remote/device';
 import { watchNetwork } from '@mochi/core/remote/interfaces';
 import { networkChanged } from '@mochi/core/remote/reconnect';
 import { deviceId, secureAsDevice } from '@mochi/core/remote/pairing';
 import type { PairedMachine } from '@mochi/core/remote/registry';
 import { openDeviceChannel } from '@mochi/core/remote/relayClient';
+import { routesTo as routes } from '@mochi/core/remote/routes';
 import type { Paired } from '@mochi/core/remote/service';
 import type { DeviceKeys } from '@mochi/core/remote/session';
 import type {
@@ -30,7 +30,7 @@ import type {
 } from '../../src/host/types/remote.ts';
 import { createWindow, mainWindow } from '../window.ts';
 import { MachineCache } from './cache.ts';
-import { followMachine, type MachineFollower, type Route } from './client.ts';
+import { followMachine, type MachineFollower } from './client.ts';
 
 // Core serves remote access itself (packages/core/src/remote/service.ts): Settings › Remote access, who this computer
 // trusts, the server devices reach it on. Main follows your other computers as a device, runs a device's command in the
@@ -279,23 +279,21 @@ function syncFollowers() {
   }
 }
 
-/** Its LAN and Tailscale addresses as it last told this computer, then the relay. */
-function routesTo(machineId: string): Route[] {
-  const addresses =
-    paired.machines.find((m) => m.id === machineId)?.addresses ?? [];
-  return [
-    ...addresses.map((address) => ({
-      kind: 'lan' as const,
-      open: () => openLan(address),
-    })),
-    {
-      kind: 'relay' as const,
+/** Its addresses as the relay holds them sealed and as its last welcome listed them, dialled together, then the relay. */
+function routesTo(machineId: string) {
+  return routes({
+    machineId,
+    known: paired.machines.find((m) => m.id === machineId)?.addresses ?? [],
+    token: relayToken,
+    keys: theKeys,
+    relay: {
+      kind: 'relay',
       open: async () => {
         const [token, own] = await Promise.all([relayToken(), theKeys()]);
         return openDeviceChannel(machineId, deviceId(own.publicKey), token);
       },
     },
-  ];
+  });
 }
 
 function broadcastMachines() {

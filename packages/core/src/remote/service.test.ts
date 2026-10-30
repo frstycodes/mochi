@@ -320,9 +320,9 @@ it.live(
 
       const welcomes: Relay.WelcomeFrame[] = [];
       const device = yield* makeDeviceClient({
-        routes: () => [
-          { kind: 'lan', open: () => openLan(status.addresses[0]!) },
-        ],
+        routes: () => ({
+          direct: [{ kind: 'lan', open: () => openLan(status.addresses[0]!) }],
+        }),
         secure: (raw) =>
           secureAsDevice(raw, deviceKeys, machineKeys.publicKey, 'Phone', true),
         isRefusal: (error) => error instanceof PairingRefused,
