@@ -62,6 +62,57 @@ const removed = (dir: string) =>
     Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
   );
 
+const WAIT_MS = 10_000;
+const ATTEMPT_MS = 2_000;
+const ATTEMPTS = 5;
+
+/**
+ * `effect`, failing with a message naming `what` if it hasn't finished in `ms` of real time, so a hang says which wait it was.
+ * The timer is real even under `it.effect`, where TestClock never advances on its own.
+ */
+const within = <A, E, R>(
+  what: string,
+  effect: Effect.Effect<A, E, R>,
+  ms = WAIT_MS,
+) =>
+  Effect.raceFirst(
+    effect,
+    Effect.callback<never>((resume) => {
+      const timer = setTimeout(
+        () =>
+          resume(
+            Effect.die(
+              new Error(`Timed out after ${ms}ms waiting for ${what}`),
+            ),
+          ),
+        ms,
+      );
+      return Effect.sync(() => clearTimeout(timer));
+    }),
+  );
+
+/**
+ * Makes a change on disk and waits for the watcher to report it, making it again if it doesn't: @parcel/watcher resolves
+ * `subscribe` before Windows is surely delivering events, so a change made right after is sometimes never reported.
+ */
+const changedUntilSeen = <A, E, R>(
+  what: string,
+  change: (attempt: number) => void,
+  seen: Effect.Effect<A, E, R>,
+) =>
+  Effect.gen(function* () {
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+      change(attempt);
+      const result = yield* seen.pipe(Effect.timeoutOption(ATTEMPT_MS));
+      if (result._tag === 'Some') return result.value;
+    }
+    return yield* Effect.die(
+      new Error(
+        `Timed out waiting for ${what}: ${ATTEMPTS} changes, none reported within ${ATTEMPT_MS}ms each`,
+      ),
+    );
+  });
+
 /** Subscribes `key` in the background; `values` fills as they arrive, and `next` waits for the next one. */
 const subscribe = (
   watch: (key: WatchKey) => Stream.Stream<WatchValue>,
@@ -101,7 +152,10 @@ it.live(
             subscribe(watch, key),
             subscribe(watch, key),
           ]);
-          yield* Effect.forEach(subs, (s) => s.next);
+          yield* within(
+            'the first value of all four subscribers',
+            Effect.forEach(subs, (s) => s.next),
+          );
           assert.deepEqual(
             subs.map((s) => s.values),
             Array(4).fill([{ _tag: 'gitDiff', diff: DIFF }]),
@@ -117,7 +171,7 @@ it.live(
             cwd: dir,
             scope: 'uncommitted',
           });
-          yield* other.next;
+          yield* within('the first value of subscriber other', other.next);
           assert.deepEqual(
             { status: calls.status, diff: calls.diff },
             { status: 1, diff: 2 },
@@ -141,7 +195,7 @@ it.effect(
             cwd: dir,
             scope: 'branch',
           });
-          yield* sub.next;
+          yield* within('the first value', sub.next);
           yield* TestClock.adjust('1 hour');
           assert.deepEqual(
             { status: calls.status, diff: calls.diff },
@@ -171,15 +225,18 @@ it.live(
             _tag: 'changes',
             root: dir,
           });
-          yield* sub.next;
+          yield* within('the first diff', sub.next);
           assert.deepEqual(
             { status: calls.status, diff: calls.diff },
             { status: 1, diff: 1 },
           );
 
-          writeFileSync(path.join(dir, 'a.txt'), 'one');
-          yield* statusRead(2);
-          assert.equal(calls.status, 2, 'a write marks git stale');
+          yield* changedUntilSeen(
+            'a write to mark git stale (a second git status)',
+            (n) => writeFileSync(path.join(dir, 'a.txt'), `one-${n}`),
+            statusRead(2),
+          );
+          assert.ok(calls.status >= 2, 'a write marks git stale');
           assert.equal(
             calls.diff,
             1,
@@ -191,20 +248,27 @@ it.live(
             isAsleep: true,
             isOnBattery: false,
           });
-          writeFileSync(path.join(dir, 'b.txt'), 'two');
-          yield* changes.nextWhere(
-            (value) =>
-              value._tag === 'changes' &&
-              value.paths.some((p) => p.endsWith('b.txt')),
+          const readsBeforeSleep = calls.status;
+          yield* changedUntilSeen(
+            "b.txt in the 'changes' stream",
+            (n) => writeFileSync(path.join(dir, 'b.txt'), `two-${n}`),
+            changes.nextWhere(
+              (value) =>
+                value._tag === 'changes' &&
+                value.paths.some((p) => p.endsWith('b.txt')),
+            ),
           );
-          assert.equal(calls.status, 2, 'asleep: no read');
+          assert.equal(calls.status, readsBeforeSleep, 'asleep: no read');
           yield* setGate({
             isVisible: true,
             isAsleep: false,
             isOnBattery: false,
           });
-          yield* statusRead(3);
-          assert.equal(calls.status, 3, 'waking reads once');
+          yield* within(
+            'a git status after waking',
+            statusRead(readsBeforeSleep + 1),
+          );
+          assert.equal(calls.status, readsBeforeSleep + 1, 'waking reads once');
         }),
       ).pipe(removed(dir));
     }),
@@ -231,11 +295,14 @@ it.live(
             cwd: dir,
             scope: 'branch',
           });
-          yield* sub.next;
+          yield* within('the first value', sub.next);
 
           isServed = true;
           yield* markStale(['git']);
-          yield* sub.nextWhere((value) => value._tag === 'gitDiff');
+          yield* within(
+            'the diff re-read after markStale',
+            sub.nextWhere((value) => value._tag === 'gitDiff'),
+          );
           assert.deepEqual(sub.values, [
             { _tag: 'error', message: 'No connected client offers host' },
             { _tag: 'gitDiff', diff: DIFF },
@@ -267,12 +334,15 @@ it.live.skipIf(process.platform === 'win32')(
             cwd: dir,
             scope: 'branch',
           });
-          yield* files.next;
-          yield* diff.next;
+          yield* within('the first value of subscriber files', files.next);
+          yield* within('the first value of subscriber diff', diff.next);
           writeFileSync(path.join(dir, 'new.txt'), 'x');
-          yield* files.next;
+          yield* within('the files list after new.txt', files.next);
           rmSync(dir, { recursive: true, force: true });
-          yield* files.nextWhere((value) => value._tag === 'error');
+          yield* within(
+            'the files key to fail after its root was deleted',
+            files.nextWhere((value) => value._tag === 'error'),
+          );
           assert.equal(files.values.at(-1)?._tag, 'error');
           for (const { fiber } of [files, changes, diff])
             assert.equal(
@@ -295,9 +365,9 @@ it.effect(
       const { calls, deps } = yield* fakeDeps('/unused');
       const { watch } = yield* makeWatch(deps);
       const a = yield* subscribe(watch, { _tag: 'ports', cwd: '/a' });
-      yield* a.next;
+      yield* within('the first value of subscriber a', a.next);
       const b = yield* subscribe(watch, { _tag: 'ports', cwd: '/b' });
-      yield* b.next;
+      yield* within('the first value of subscriber b', b.next);
       assert.deepEqual(
         calls.ports.at(-1),
         ['/a', '/b'],
