@@ -1,4 +1,3 @@
-import { Effect, Stream } from 'effect';
 import {
   AGENT_PREFIX,
   asJsonValue,
@@ -6,37 +5,27 @@ import {
   type LoggedEvent,
   type ReplicaItem,
 } from '@mochi/domain';
-import { coreClient } from '../host/desktop/rpc.ts';
+import type { Transport } from '../backends/transport.ts';
 import { host } from '../host/index.ts';
 import type { ReplicaLog } from './replica.ts';
 
-/** Core's `replica` stream and its log: the desktop app. */
-export function coreLog(): ReplicaLog {
+/** A Core's `replica` stream and its log, over any transport. */
+export function transportLog(transport: Transport): ReplicaLog {
   return {
-    follow(afterSequence, onItem, onEnd) {
-      const abort = new AbortController();
-      const follow = Effect.promise(() => coreClient()).pipe(
-        Effect.flatMap((core) =>
-          Stream.runForEach(core.replica({ afterSequence }), (item) =>
-            Effect.sync(() => onItem(item as ReplicaItem)),
-          ),
-        ),
-      );
-      Effect.runPromise(follow, { signal: abort.signal }).then(
-        () => onEnd(),
-        (error: unknown) => !abort.signal.aborted && onEnd(error),
-      );
-      return () => abort.abort();
-    },
-    append: async ({ commandId, threadId, action }) =>
-      Effect.runPromise(
-        (await coreClient())['events.append']({
-          type: COMMAND_TYPE,
-          threadId,
-          payload: asJsonValue(action),
-          commandId,
-        }),
+    follow: (afterSequence, onItem, onEnd) =>
+      transport.stream(
+        'replica',
+        { afterSequence },
+        (item) => onItem(item as ReplicaItem),
+        onEnd,
       ),
+    append: ({ commandId, threadId, action }) =>
+      transport.call('events.append', {
+        type: COMMAND_TYPE,
+        threadId,
+        payload: asJsonValue(action),
+        commandId,
+      }),
   };
 }
 
