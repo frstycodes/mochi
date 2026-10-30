@@ -1165,7 +1165,7 @@ export function ThreadItem({
         asks && (
           <span
             className={cn(
-              'truncate type-caption',
+              'truncate type-meta',
               row.tone === 'destructive' ? 'text-destructive' : 'text-warning',
             )}
           >
@@ -1282,7 +1282,7 @@ function RowDetail({
 }) {
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
   return (
-    <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
+    <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-meta text-subtle-foreground">
       <ThreadMachineMark threadId={thread.id} />
       {!isProjectHidden && <ThreadProjectMark thread={thread} />}
       <ThreadDetailText row={row} />
