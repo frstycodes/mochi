@@ -30,6 +30,6 @@
   },
   "devDependencies": {
     "@types/ws": "^8.18.2",
-    "electron": "44.7.0"
+    "electron": "45.0.0"
   }
 }
