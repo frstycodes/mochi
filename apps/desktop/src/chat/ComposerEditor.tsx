@@ -48,6 +48,11 @@ import {
   outdentListItems,
 } from './markdownEditing';
 import { mentionTokens } from './fileMentions';
+import {
+  browseHistory,
+  rememberPrompt,
+  type HistoryCursor,
+} from './promptHistory';
 import { FileMark } from './FileMark';
 import type { Mention } from './mentions';
 import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
@@ -81,7 +86,7 @@ type ComposerEditorProps = {
 /**
  * The composer's text: a CodeMirror markdown editor holding exactly the text that gets sent. Markdown renders as you type
  * (lists indent with real bullets, `code`, **bold**, fences, headings, quotes) with its markup kept in the text. Enter sends,
- * Shift+Enter continues a list, Tab and Shift+Tab nest and outdent items. Its text is the `PromptInputProvider`'s.
+ * Shift+Enter continues a list, Tab and Shift+Tab nest and outdent items, Up and Down walk your sent prompts. Its text is the `PromptInputProvider`'s.
  */
 export function ComposerEditor({
   items,
@@ -101,6 +106,7 @@ export function ComposerEditor({
   const attachments = usePromptInputAttachments();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
+  const historyCursor = useRef<HistoryCursor>({ at: null, draft: '' });
   const latest = useLatest({
     onKeyDown,
     onCaret,
@@ -153,6 +159,12 @@ export function ComposerEditor({
                 if (event.defaultPrevented) return true;
                 if (event.key === 'Enter' && !event.shiftKey)
                   return submit(view);
+                const direction = historyDirection(event);
+                if (
+                  direction &&
+                  browseHistory(view, historyCursor.current, direction)
+                )
+                  return true;
                 if (isTakingSuggestion(event, view, latest.current.suggestion))
                   return takeSuggestion(view, latest.current.suggestion!);
                 const { files, remove } = latest.current.attachments;
@@ -203,7 +215,17 @@ export function ComposerEditor({
   useLayoutEffect(() => {
     const editor = createEditor();
     view.current = editor;
-    return () => editor.destroy();
+    // Native, so it runs before React's submit handler clears the text; also catches the send button.
+    const form = editor.dom.closest('form');
+    const remember = () => {
+      rememberPrompt(editor.state.doc.toString());
+      historyCursor.current = { at: null, draft: '' };
+    };
+    form?.addEventListener('submit', remember);
+    return () => {
+      form?.removeEventListener('submit', remember);
+      editor.destroy();
+    };
   }, []);
 
   useImperativeHandle(ref, () => view.current!, []);
@@ -279,6 +301,14 @@ const isTakingSuggestion = (
   !event.altKey &&
   !event.metaKey &&
   !event.ctrlKey;
+
+function historyDirection(event: KeyboardEvent) {
+  if (event.altKey || event.shiftKey || event.metaKey || event.ctrlKey)
+    return null;
+  if (event.key === 'ArrowUp') return -1;
+  if (event.key === 'ArrowDown') return 1;
+  return null;
+}
 
 function takeSuggestion(view: EditorView, suggestion: string) {
   view.dispatch({
