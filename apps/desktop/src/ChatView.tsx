@@ -14,7 +14,7 @@ import { getDraft, threadDraftKey } from './chat/drafts';
 import { isKeyUp, isWheelUp } from './chat/scrollIntent';
 import { ThreadContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
-import { motion, useReducedMotionConfig } from 'motion/react';
+import { motion } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { ChevronDown, ChevronUp, Hourglass, Sparkles } from '@/icons';
@@ -67,8 +67,10 @@ import {
   ComposerCard,
   ComposerInput,
   ComposerMeta,
+  ComposerTrayBody,
   PermissionsMenu,
   useComposerHandoff,
+  useSharedLayout,
 } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
@@ -1123,7 +1125,7 @@ function ThreadComposerMeta({
     <div
       inert={isFolded}
       className={cn(
-        'grid origin-top grid-rows-[1fr] transition-[grid-template-rows,opacity,filter,scale] duration-220 ease-(--ease-out) motion-reduce:transition-[opacity]',
+        'grid origin-top grid-rows-[1fr] transition-[grid-template-rows,opacity,filter,scale] duration-150 ease-(--ease-out) motion-reduce:transition-[opacity]',
         isFolded &&
           'grid-rows-[0fr] scale-[0.97] overflow-hidden opacity-0 blur-xs motion-reduce:scale-100 motion-reduce:blur-none',
       )}
@@ -1200,11 +1202,12 @@ function QuestionTray({
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  const reduce = useReducedMotionConfig();
+  const sharedLayout = useSharedLayout(isOpen);
   const first = decisions[0];
   return (
-    <section aria-label="Waiting on you">
-      <button
+    <section aria-label="Waiting on you" className="relative">
+      <motion.button
+        {...sharedLayout}
         type="button"
         aria-expanded={isOpen}
         onClick={onToggle}
@@ -1234,26 +1237,20 @@ function QuestionTray({
             <ChevronUp className="size-4" />
           )}
         </span>
-      </button>
-      {isOpen && (
-        <motion.div
-          initial={reduce ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.15 }}
-        >
-          <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-[min(40vh,22rem)]">
-            <div className="flex flex-col gap-2 px-1 pb-1">
-              {decisions.map((item) => (
-                <QueueDecision
-                  key={item.id}
-                  item={item}
-                  className="border-0 bg-transparent shadow-none ring-0*:data-[slot=card-footer]:border-t-0 *:data-[slot=card-footer]:bg-transparent *:data-[slot=card-footer]:pt-0"
-                />
-              ))}
-            </div>
-          </ScrollArea>
-        </motion.div>
-      )}
+      </motion.button>
+      <ComposerTrayBody isOpen={isOpen}>
+        <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-[min(40vh,22rem)]">
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            {decisions.map((item) => (
+              <QueueDecision
+                key={item.id}
+                item={item}
+                className="border-0 bg-transparent shadow-none ring-0*:data-[slot=card-footer]:border-t-0 *:data-[slot=card-footer]:bg-transparent *:data-[slot=card-footer]:pt-0"
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </ComposerTrayBody>
     </section>
   );
 }

@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { motion, Reorder, useReducedMotionConfig } from 'motion/react';
+import { motion, Reorder } from 'motion/react';
+import {
+  ComposerTrayBody,
+  useIsComposerCompact,
+  useSharedLayout,
+} from '../Composer';
 import {
   ChevronDown,
   ChevronUp,
@@ -28,8 +33,11 @@ export function QueueTray({
   onEdit: (message: QueuedMessage) => void;
 }) {
   const dispatch = useDispatch();
-  const reduce = useReducedMotionConfig();
   const [isOpen, setOpen] = useState(true);
+  // Folding the composer folds the list too, without forgetting it was open.
+  const isCompact = useIsComposerCompact();
+  const isListShown = isOpen && !isCompact;
+  const sharedLayout = useSharedLayout(isListShown);
   const queued = thread.queued ?? [];
   if (queued.length === 0) return null;
   const ids = queued.map((m) => m.id);
@@ -37,8 +45,11 @@ export function QueueTray({
     dispatch({ type: 'queued-order', threadId: thread.id, ids: next });
 
   return (
-    <section aria-label="Queued messages">
-      <div className="flex h-9 items-center gap-2 pr-2 type-meta">
+    <section aria-label="Queued messages" className="relative">
+      <motion.div
+        {...sharedLayout}
+        className="flex h-9 items-center gap-2 pr-2 type-meta"
+      >
         <button
           type="button"
           aria-expanded={isOpen}
@@ -70,42 +81,35 @@ export function QueueTray({
             Resume
           </Button>
         )}
-      </div>
-      {isOpen && (
-        <motion.div
-          className="group-data-compact/composer:hidden"
-          initial={reduce ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.15 }}
-        >
-          <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-[min(30vh,14rem)]">
-            <Reorder.Group
-              as="ol"
-              axis="y"
-              values={ids}
-              onReorder={order}
-              className="flex flex-col gap-0.5 px-1 pb-1 select-none"
-            >
-              {queued.map((message) => (
-                <QueueRow
-                  key={message.id}
-                  message={message}
-                  onSendNow={onSendNow}
-                  onEdit={onEdit}
-                  onRemove={() =>
-                    dispatch({
-                      type: 'queued-remove',
-                      threadId: thread.id,
-                      id: message.id,
-                    })
-                  }
-                  onMove={(step) => order(moveQueued(ids, message.id, step))}
-                />
-              ))}
-            </Reorder.Group>
-          </ScrollArea>
-        </motion.div>
-      )}
+      </motion.div>
+      <ComposerTrayBody isOpen={isListShown}>
+        <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-[min(30vh,14rem)]">
+          <Reorder.Group
+            as="ol"
+            axis="y"
+            values={ids}
+            onReorder={order}
+            className="flex flex-col gap-0.5 px-1 pb-1 select-none"
+          >
+            {queued.map((message) => (
+              <QueueRow
+                key={message.id}
+                message={message}
+                onSendNow={onSendNow}
+                onEdit={onEdit}
+                onRemove={() =>
+                  dispatch({
+                    type: 'queued-remove',
+                    threadId: thread.id,
+                    id: message.id,
+                  })
+                }
+                onMove={(step) => order(moveQueued(ids, message.id, step))}
+              />
+            ))}
+          </Reorder.Group>
+        </ScrollArea>
+      </ComposerTrayBody>
     </section>
   );
 }

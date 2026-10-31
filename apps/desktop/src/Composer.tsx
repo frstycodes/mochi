@@ -1,11 +1,13 @@
 import {
+  createContext,
+  use,
   useEffect,
   useRef,
   useState,
   type ComponentProps,
   type ReactNode,
 } from 'react';
-import { useAnimate, useReducedMotionConfig } from 'motion/react';
+import { motion, useReducedMotionConfig } from 'motion/react';
 import { toast } from '@/toast/store';
 import {
   ArrowUp,
@@ -43,7 +45,7 @@ import {
   usePromptInputController,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input';
-import { AutoHeight } from '@/components/ui/auto-height';
+import { AUTO_HEIGHT_SPRING, AutoHeight } from '@/components/ui/auto-height';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -122,88 +124,74 @@ export function ComposerCard({
   className,
   children,
   isStatic,
-  isCompact,
+  isCompact = false,
   ...props
 }: ComponentProps<'div'> & { isStatic?: boolean; isCompact?: boolean }) {
-  const [foldRef, isFolded] = useFoldCrossfade(isCompact);
   return (
-    <div
-      data-compact={isFolded || undefined}
-      className={cn(
-        'group/composer surface-glass-focus overflow-hidden rounded-2xl border shadow-composer transition-[border-color] duration-150 has-[.cm-focused]:border-foreground/16 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent',
-        // `!` beats the editor's own theme, which CodeMirror injects after our styles.
-        isFolded &&
-          'cursor-text [&_.cm-content]:min-h-0! [&_.cm-content]:py-0! [&_.cm-scroller]:max-h-[1lh]! [&_.cm-scroller]:overflow-hidden! [&_[data-slot=input-group]]:flex-row',
-        className,
-      )}
-      {...props}
-    >
-      {isStatic ? (
-        children
-      ) : (
-        <AutoHeight className="justify-end">
-          <div ref={foldRef} className="origin-bottom">
-            {children}
-          </div>
-        </AutoHeight>
-      )}
-    </div>
+    <ComposerFoldContext value={isCompact}>
+      <div
+        data-compact={isCompact || undefined}
+        className={cn(
+          'group/composer surface-glass-focus overflow-hidden rounded-2xl border shadow-composer transition-[border-color] duration-150 has-[.cm-focused]:border-foreground/16 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent',
+          // `!` beats the editor's own theme, which CodeMirror injects after our styles. The text keeps its top padding, so the first
+          // line only travels; the bottom padding centres it on send (footer pb-2.5 + half the 32px button).
+          isCompact &&
+            'cursor-text [&_.cm-content]:min-h-0! [&_.cm-content]:pr-13! [&_.cm-content]:pb-[calc(26px-0.5lh)]! [&_.cm-scroller]:max-h-[calc(40px+0.5lh)]! [&_.cm-scroller]:overflow-hidden!',
+          className,
+        )}
+        {...props}
+      >
+        {isStatic ? (
+          children
+        ) : (
+          <AutoHeight className="justify-end">{children}</AutoHeight>
+        )}
+      </div>
+    </ComposerFoldContext>
   );
 }
 
+const ComposerFoldContext = createContext(false);
+
+export function useIsComposerCompact() {
+  return use(ComposerFoldContext);
+}
+
 /**
- * Folding or unfolding is a blur crossfade: the old layout blurs out and shrinks slightly, the card swaps layout while hidden, and
- * the new layout blurs back in as AutoHeight springs the height. Returns the layout to show, which trails `isCompact` by the
- * fade-out. Reduced motion swaps at once and only fades in.
+ * Folding, or opening a tray, is one motion: the card's height springs, what both layouts share slides to its new place on the same
+ * spring, and only what one layout lacks fades. Spread this on each shared part; `dependency` is the state that moves it.
  */
-function useFoldCrossfade(isCompact = false) {
-  const [scope, animate] = useAnimate<HTMLDivElement>();
+export function useSharedLayout(dependency: unknown) {
   const reduce = useReducedMotionConfig();
-  const [shown, setShown] = useState(isCompact);
-  // The layout the fade-out just swapped to, so only that swap fades in.
-  const swappedTo = useRef<boolean | null>(null);
+  return {
+    layout: reduce ? false : ('position' as const),
+    layoutDependency: dependency,
+    transition: AUTO_HEIGHT_SPRING,
+  };
+}
 
-  useEffect(() => {
-    const el = scope.current;
-    if (shown === isCompact || !el) return;
-    const out = animate(
-      el,
-      { opacity: 0, filter: 'blur(4px)', scale: 0.98 },
-      { duration: reduce ? 0 : 0.09, ease: 'linear' },
-    );
-    let isCancelled = false;
-    void out.then(() => {
-      if (isCancelled) return;
-      swappedTo.current = isCompact;
-      setShown(isCompact);
-    });
-    return () => {
-      isCancelled = true;
-      out.stop();
-    };
-  }, [isCompact, shown, reduce, scope, animate]);
-
-  useEffect(() => {
-    const el = scope.current;
-    if (swappedTo.current !== shown || !el) return;
-    swappedTo.current = null;
-    const into = animate(
-      el,
-      reduce
-        ? { opacity: 1, filter: 'blur(0px)', scale: 1 }
-        : {
-            opacity: [0, 1],
-            filter: ['blur(4px)', 'blur(0px)'],
-            scale: [0.98, 1],
-          },
-      { duration: 0.2, ease: [0.23, 1, 0.32, 1] },
-    );
-    // A leftover filter would make the card a containing block for anything fixed inside it.
-    void into.then(() => el.style.removeProperty('filter'));
-    return () => into.stop();
-  }, [shown, reduce, scope, animate]);
-
-  return [scope, shown] as const;
+/**
+ * A tray's content. Closed, it leaves the flow but keeps its place above what follows, fading as the header slides down over it. Its
+ * section needs `relative`.
+ */
+export function ComposerTrayBody({
+  isOpen,
+  className,
+  ...props
+}: ComponentProps<typeof motion.div> & { isOpen: boolean }) {
+  const sharedLayout = useSharedLayout(isOpen);
+  return (
+    <motion.div
+      {...sharedLayout}
+      inert={!isOpen}
+      className={cn(
+        FADE,
+        !isOpen && 'absolute inset-x-0 bottom-0 opacity-0 blur-xs',
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 type ComposerInputProps = Omit<
@@ -257,6 +245,8 @@ export function ComposerInput({
   const model = optionFor(catalog[provider], controls.model, provider);
   const draft = useComposerDraft(draftKey, draftExtra);
   const isEmpty = useIsComposerEmpty() && !hasMentions;
+  const isCompact = useIsComposerCompact();
+  const sharedLayout = useSharedLayout(isCompact);
   const send = async (message: PromptInputMessage) => {
     const result = await onSend(message);
     if (result !== false) draft.clear();
@@ -274,15 +264,24 @@ export function ComposerInput({
     >
       <ComposerAttachments />
       <PromptInputBody>
-        <ComposerEditor
-          items={slashItems}
-          className={cn('type-prose max-md:text-base', className)}
-          {...editorProps}
-        />
+        <motion.div {...sharedLayout} className="w-full min-w-0">
+          <ComposerEditor
+            items={slashItems}
+            className={cn('type-prose max-md:text-base', className)}
+            {...editorProps}
+          />
+        </motion.div>
       </PromptInputBody>
-      <PromptInputFooter className="px-2.5 pt-1 pb-2.5 group-data-compact/composer:w-auto group-data-compact/composer:p-1.5">
+      {/* Folded, the footer lies over the text's row instead of under it, so send stays exactly where it was. */}
+      <PromptInputFooter className="px-2.5 pt-1 pb-2.5 group-data-compact/composer:absolute group-data-compact/composer:inset-x-0 group-data-compact/composer:bottom-0">
         {/* No chevrons: the pickers read as controls without them, and the footer stays quiet. */}
-        <PromptInputTools className="group-data-compact/composer:hidden [&_[data-icon=inline-end]]:hidden [&_button:has([data-icon=inline-end])]:pr-2!">
+        <PromptInputTools
+          inert={isCompact}
+          className={cn(
+            FOLD_FADE,
+            '[&_[data-icon=inline-end]]:hidden [&_button:has([data-icon=inline-end])]:pr-2!',
+          )}
+        >
           <PromptInputActionMenu>
             <PromptInputActionMenuTrigger
               tooltip="Attach"
@@ -317,7 +316,7 @@ export function ComposerInput({
           )}
         </PromptInputTools>
         <PromptInputTools>
-          <span className="contents group-data-compact/composer:hidden">
+          <span inert={isCompact} className={cn('flex', FOLD_FADE)}>
             {meter}
           </span>
           {onStop ? (
@@ -343,6 +342,10 @@ export function ComposerInput({
     </PromptInput>
   );
 }
+
+const FADE = 'transition-[opacity,filter] duration-150 ease-(--ease-out)';
+// What only the open layout has fades in place while the shared parts move.
+const FOLD_FADE = `${FADE} group-data-compact/composer:opacity-0 group-data-compact/composer:blur-xs`;
 
 /** No text and no attachment. The send button only dims: what to do with an empty send stays the caller's call. */
 function useIsComposerEmpty() {
@@ -419,13 +422,25 @@ function useComposerDraft(key: string, extra: unknown) {
   };
 }
 
+const MotionHeader = motion.create(PromptInputHeader);
+
 function ComposerAttachments() {
   const { files, remove } = usePromptInputAttachments();
+  const isCompact = useIsComposerCompact();
+  const sharedLayout = useSharedLayout(isCompact);
   if (files.length === 0) return null;
   const images = files.filter((f) => f.mediaType?.startsWith('image/'));
   const others = files.filter((f) => !f.mediaType?.startsWith('image/'));
   return (
-    <PromptInputHeader className="gap-2 px-3 pt-3">
+    // Folded, it leaves the flow but stays just above the text, travelling with it as it fades and the card's top edge clips it.
+    <MotionHeader
+      {...sharedLayout}
+      inert={isCompact}
+      className={cn(
+        'gap-2 px-3 pt-3 group-data-compact/composer:absolute group-data-compact/composer:inset-x-0 group-data-compact/composer:bottom-full',
+        FOLD_FADE,
+      )}
+    >
       {images.length > 0 && (
         <Attachments variant="grid" className="ml-0">
           {images.map((f, i) => (
@@ -471,7 +486,7 @@ function ComposerAttachments() {
           ))}
         </Attachments>
       )}
-    </PromptInputHeader>
+    </MotionHeader>
   );
 }
 
