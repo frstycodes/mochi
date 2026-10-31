@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, MouseEvent } from 'react';
 import type { ExtraProps } from 'streamdown';
 import { cn } from '@/lib/utils';
 import { FileLinkButton, useWorktreeLink } from '../chat/ChatLink';
@@ -24,6 +24,7 @@ export function FileCode({
       <code
         data-streamdown="inline-code"
         className={cn(INLINE_CODE, 'leading-none text-code', className)}
+        onMouseDown={selectCodeOnTripleClick}
         {...props}
       >
         {children}
@@ -41,4 +42,11 @@ export function FileCode({
       <code className="truncate">{children}</code>
     </FileLinkButton>
   );
+}
+
+// The browser's triple-click selects the whole paragraph; the code alone is what you want to copy.
+function selectCodeOnTripleClick(e: MouseEvent<HTMLElement>) {
+  if (e.detail !== 3) return;
+  e.preventDefault();
+  window.getSelection()?.selectAllChildren(e.currentTarget);
 }
