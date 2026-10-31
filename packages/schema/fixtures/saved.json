@@ -160,7 +160,6 @@
      "branch": "feat/api-rate-limits"
     },
     "title": "Public API rate limiting",
-    "goal": "Every public API key is rate limited by plan tier, with per-key overrides and clear 429s.",
     "providers": [
      "claude"
     ],
@@ -168,20 +167,6 @@
     "line": 1,
     "startedAt": 710,
     "orbitSlot": 1,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 710,
-      "label": "Goal set",
-      "by": "you"
-     },
-     {
-      "n": 2,
-      "at": 802,
-      "label": "Added per-key overrides",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "rl1",
@@ -514,7 +499,6 @@
      "branch": "feat/admin-usage"
     },
     "title": "Admin usage dashboard",
-    "goal": "Admins see API usage per key and per day, can export it, and the page stays fast at 10k keys.",
     "providers": [
      "codex"
     ],
@@ -522,14 +506,6 @@
     "line": 2,
     "startedAt": 770,
     "orbitSlot": 2,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 770,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "ad1",
@@ -643,12 +619,6 @@
       "text": "Related work: #45 is open, #49 is still a draft, #47 merged and #30 was closed. #46 has conflicts with main and #48 is failing CI. Issues: #12 is open, #9 was fixed, #8 closed as not planned, and #999 is one gh cannot read. Upstream there is vercel/streamdown#120 and https://github.com/frstycodes/mochi/pull/45. The header lives in src/App.tsx:3 and styles in [the stylesheet](src/index.css); src/missing.ts stays plain, and this is our #1 priority. On GitHub: frstycodes/mochi#45, frstycodes/mochi#47, frstycodes/mochi#7 and frstycodes/mochi#50."
      },
      {
-      "at": 810,
-      "who": "harness",
-      "kind": "event",
-      "text": "Finished \"Usage query endpoint\""
-     },
-     {
       "at": 811,
       "who": "codex",
       "kind": "tool",
@@ -753,21 +723,12 @@
      "branch": "fix/checkout-e2e"
     },
     "title": "Fix flaky checkout e2e",
-    "goal": "checkout.spec passes 20 runs in a row in CI.",
     "providers": [
      "codex"
     ],
     "status": "needs-you",
     "line": 3,
     "startedAt": 805,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 805,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "e1",
@@ -857,7 +818,41 @@
     "live": {
      "isWorking": false
     }
-   }
+   },
+   "queue": [
+    {
+     "id": "q-question",
+     "kind": "question",
+     "threadId": "e2e",
+     "title": "Answer 2 questions",
+     "detail": "The flake is the webhook landing after the success page asserts. Stubbing is faster; recorded fixtures catch payload changes.",
+     "questions": [
+      {
+       "text": "Stub Stripe webhooks or record fixtures?",
+       "options": [
+        "Stub webhooks",
+        "Record fixtures"
+       ],
+       "multiSelect": false
+      },
+      {
+       "text": "Which checkout flows should the e2e suite cover?",
+       "options": [
+        "One-time payment",
+        "Subscription",
+        "Refund",
+        "3-D Secure"
+       ],
+       "multiSelect": true
+      }
+     ],
+     "blocks": {
+      "steps": 2,
+      "threads": 1
+     },
+     "createdAt": 843
+    }
+   ]
   },
   {
    "thread": {
@@ -868,7 +863,6 @@
      "branch": "feat/better-auth"
     },
     "title": "Migrate auth to Better Auth",
-    "goal": "All sign-in paths run on Better Auth, existing sessions survive, old auth code is deleted.",
     "providers": [
      "claude",
      "codex"
@@ -877,20 +871,6 @@
     "line": 4,
     "startedAt": 560,
     "orbitSlot": 3,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 560,
-      "label": "Goal set",
-      "by": "you"
-     },
-     {
-      "n": 2,
-      "at": 700,
-      "label": "Split into two PRs",
-      "by": "claude"
-     }
-    ],
     "steps": [
      {
       "id": "au1",
@@ -1032,7 +1012,34 @@
     "live": {
      "isWorking": false
     }
-   }
+   },
+   "queue": [
+    {
+     "id": "q-approve",
+     "kind": "approval",
+     "threadId": "auth",
+     "title": "Run the session backfill",
+     "detail": "Claude wants to run a script that rewrites 18,204 rows in the local sessions table.",
+     "code": "pnpm tsx scripts/backfill-sessions.ts --db local",
+     "blocks": {
+      "steps": 1,
+      "threads": 1
+     },
+     "createdAt": 851
+    },
+    {
+     "id": "q-review",
+     "kind": "review",
+     "threadId": "auth",
+     "title": "Review PR #482",
+     "detail": "Session backfill and legacy removal. 14 files, +612 −389. Codex already reviewed it once.",
+     "blocks": {
+      "steps": 0,
+      "threads": 1
+     },
+     "createdAt": 830
+    }
+   ]
   },
   {
    "thread": {
@@ -1043,21 +1050,12 @@
      "branch": "feat/onboarding-emails"
     },
     "title": "Onboarding emails",
-    "goal": "New workspaces get a 3-email onboarding sequence.",
     "providers": [
      "claude"
     ],
     "status": "settled",
     "line": 5,
     "startedAt": 300,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 300,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "o1",
@@ -1105,21 +1103,12 @@
      "branch": "feat/chat-visuals"
     },
     "title": "Chat visuals gallery",
-    "goal": "Show every inline visual an agent can emit.",
     "providers": [
      "claude"
     ],
     "status": "settled",
     "line": 3,
     "startedAt": 820,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 820,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [],
     "activity": [
      {
@@ -1191,7 +1180,6 @@
      "branch": "feat/lobby"
     },
     "title": "Realtime veto lobby",
-    "goal": "Realtime veto lobby",
     "providers": [
      "claude"
     ],
@@ -1199,14 +1187,6 @@
     "line": 1,
     "startedAt": 700,
     "orbitSlot": 1,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 700,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "lobby0",
@@ -1270,21 +1250,12 @@
      "branch": "feat/timer"
     },
     "title": "Sync timer across devices",
-    "goal": "Sync timer across devices",
     "providers": [
      "codex"
     ],
     "status": "running",
     "line": 2,
     "startedAt": 760,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 760,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "timer0",
@@ -1336,21 +1307,12 @@
     "spaceId": "personal",
     "repo": null,
     "title": "Compare Postgres job queues",
-    "goal": "Compare Postgres job queues",
     "providers": [
      "claude"
     ],
     "status": "running",
     "line": 3,
     "startedAt": 790,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 790,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "queues0",
@@ -1398,7 +1360,6 @@
      "branch": "feat/cfg"
     },
     "title": "Per-space config dirs",
-    "goal": "Per-space config dirs",
     "providers": [
      "claude"
     ],
@@ -1406,14 +1367,6 @@
     "line": 1,
     "startedAt": 720,
     "orbitSlot": 1,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 720,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "cfg0",
@@ -1475,21 +1428,12 @@
      "branch": "feat/tele"
     },
     "title": "Skill telemetry",
-    "goal": "Skill telemetry",
     "providers": [
      "codex"
     ],
     "status": "running",
     "line": 2,
     "startedAt": 800,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 800,
-      "label": "Goal set",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "tele0",
@@ -1539,7 +1483,6 @@
      "isExisting": false
     },
     "title": "Live thread",
-    "goal": "Every public API key is rate limited by plan tier, with per-key overrides and clear 429s.",
     "providers": [
      "claude"
     ],
@@ -1547,20 +1490,6 @@
     "line": 1,
     "startedAt": 710,
     "orbitSlot": 1,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 710,
-      "label": "Goal set",
-      "by": "you"
-     },
-     {
-      "n": 2,
-      "at": 802,
-      "label": "Added per-key overrides",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "rl1",
@@ -1910,7 +1839,6 @@
        "trigger": "auto",
        "status": "done",
        "pins": 2,
-       "hasGoal": true,
        "preTokens": 100,
        "postTokens": 10
       },
@@ -2001,7 +1929,6 @@
        "rulesKey": "k",
        "isShown": true
       },
-      "drift": "scope-add",
       "seconds": 3
      },
      {
@@ -2063,33 +1990,8 @@
      ]
     },
     "isTitleGenerated": true,
-    "criteria": [
-     {
-      "id": "c1",
-      "text": "Tests pass",
-      "command": "pnpm test",
-      "claim": {
-       "evidence": "ran it",
-       "at": 900,
-       "by": "claude"
-      },
-      "check": {
-       "status": "passed",
-       "at": 901,
-       "ms": 1200,
-       "output": "ok"
-      }
-     }
-    ],
-    "similar": [
-     {
-      "threadId": "cfg",
-      "relation": "related"
-     }
-    ],
     "parent": {
      "threadId": "timer",
-     "criterionId": "c9",
      "handedBackAt": 950
     },
     "report": {
@@ -2115,46 +2017,11 @@
     "idle": {
      "at": 911,
      "turn": 2,
-     "uncommitted": 3,
-     "audit": {
-      "question": "Which env?",
-      "unverified": [
-       {
-        "text": "deploy works",
-        "quote": "should deploy"
-       }
-      ]
-     },
-     "accepted": [
-      "g1"
-     ],
-     "isConfirmed": true,
      "isMoveAnswered": true
     },
     "turn": {
      "start": 4,
      "isAgentDriven": true
-    },
-    "proposal": {
-     "goal": "Retries",
-     "criteria": [
-      {
-       "text": "Retries 3 times",
-       "command": "pnpm t"
-      }
-     ],
-     "basis": "issue #4",
-     "at": 905,
-     "by": "codex",
-     "state": "waiting",
-     "before": {
-      "goal": "",
-      "criteria": []
-     }
-    },
-    "drift": {
-     "isMuted": false,
-     "keeps": 1
     },
     "session": {
      "provider": "claude",
@@ -2338,7 +2205,6 @@
        "kind": "message",
        "text": "also cover the retry path"
       },
-      "reason": "on goal",
       "hasReportBefore": true,
       "sendNow": "pending"
      }
@@ -2360,7 +2226,6 @@
        "branch": "feat/api-rate-limits"
       },
       "title": "Public API rate limiting",
-      "goal": "Every public API key is rate limited by plan tier, with per-key overrides and clear 429s.",
       "providers": [
        "claude"
       ],
@@ -2368,20 +2233,6 @@
       "line": 1,
       "startedAt": 710,
       "orbitSlot": 1,
-      "revisions": [
-       {
-        "n": 1,
-        "at": 710,
-        "label": "Goal set",
-        "by": "you"
-       },
-       {
-        "n": 2,
-        "at": 802,
-        "label": "Added per-key overrides",
-        "by": "you"
-       }
-      ],
       "steps": [
        {
         "id": "rl1",
@@ -2711,7 +2562,81 @@
     "at": 900,
     "label": "Fork",
     "checkpoint": 1
-   }
+   },
+   "queue": [
+    {
+     "id": "qt",
+     "kind": "setting",
+     "threadId": "live",
+     "title": "Change model",
+     "detail": "",
+     "blocks": {
+      "steps": 0,
+      "threads": 0
+     },
+     "tool": {
+      "callId": "c1",
+      "options": [
+       {
+        "id": "o",
+        "label": "O"
+       }
+      ],
+      "pick": "one",
+      "isDestructive": true,
+      "isHandoff": false,
+      "edits": [
+       {
+        "path": ".mcp.json",
+        "before": "",
+        "after": "{}"
+       }
+      ],
+      "notes": [
+       "n"
+      ]
+     },
+     "settings": {
+      "by": "claude",
+      "reason": "r",
+      "changes": [
+       {
+        "key": "model",
+        "value": "x",
+        "profileId": "personal"
+       }
+      ],
+      "addServer": {
+       "profileId": "personal",
+       "provider": "claude",
+       "server": {
+        "name": "gh",
+        "type": "stdio",
+        "command": "gh",
+        "args": [
+         "mcp"
+        ],
+        "env": {
+         "A": "b"
+        }
+       }
+      },
+      "before": {
+       "model": "y"
+      }
+     },
+     "ci": {
+      "pr": 4,
+      "url": "https://github.com/o/r/pull/4",
+      "check": {
+       "name": "test",
+       "link": "https://x"
+      }
+     },
+     "createdAt": 919,
+     "isSeen": true
+    }
+   ]
   }
  ],
  "legacy": {
@@ -2727,7 +2652,6 @@
      "branch": "feat/api-rate-limits"
     },
     "title": "Public API rate limiting",
-    "goal": "Every public API key is rate limited by plan tier, with per-key overrides and clear 429s.",
     "providers": [
      "claude"
     ],
@@ -2735,20 +2659,6 @@
     "line": 1,
     "startedAt": 710,
     "orbitSlot": 1,
-    "revisions": [
-     {
-      "n": 1,
-      "at": 710,
-      "label": "Goal set",
-      "by": "you"
-     },
-     {
-      "n": 2,
-      "at": 802,
-      "label": "Added per-key overrides",
-      "by": "you"
-     }
-    ],
     "steps": [
      {
       "id": "rl1",

@@ -448,7 +448,6 @@ export const FIXED_KEYS: { keys: Key[]; what: string }[] = [
   },
   { keys: ['alt', 'up'], what: 'Move a focused pinned thread up or down' },
   { keys: ['left', 'right'], what: 'Step through files and photos' },
-  { keys: ['1'], what: 'Answer a drift card (1 to 3)' },
   {
     keys: ['mod', 'Enter'],
     what: 'Send a review comment or a note on a change',

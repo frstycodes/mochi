@@ -430,7 +430,6 @@ function AgentTranscript({
                     type: 'send',
                     threadId: thread.id,
                     text: reportOf(subagent),
-                    reason: 'A subagent report you sent on',
                   })
                 }
               >

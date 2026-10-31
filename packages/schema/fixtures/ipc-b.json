@@ -732,20 +732,6 @@
     "input": [
      "m1",
      {
-      "type": "edit-goal",
-      "threadId": "t",
-      "goal": "Login works with SSO"
-     }
-    ],
-    "output": {
-     "isOk": false,
-     "error": "Other computers need the desktop app"
-    }
-   },
-   {
-    "input": [
-     "m1",
-     {
       "type": "pin",
       "threadId": "t",
       "isPinned": true,

@@ -202,7 +202,6 @@ export type RemoteCommand =
       images?: SentImage[];
     }
   | { type: 'rename'; threadId: string; title: string }
-  | { type: 'edit-goal'; threadId: string; goal: string }
   /** `order`: where the pin sorts among all your computers' pins (`pinAt`); unset pins it last. */
   | { type: 'pin'; threadId: string; isPinned: boolean; order?: number }
   | { type: 'settle'; threadId: string; isSettled: boolean }
@@ -344,7 +343,6 @@ export type RemoteThreadAction =
   | { type: 'proposal-answer'; proposalId: string; state: 'dismissed' | 'here' }
   // manage
   | { type: 'proposal-start'; proposalId: string }
-  | { type: 'goal-remove' }
   /** On from when that computer gets it. */
   | { type: 'autofix-set'; pr: number; isOn: boolean }
   | { type: 'auto-archive-set'; pr: number; isOn: boolean };

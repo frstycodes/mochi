@@ -118,7 +118,7 @@ const setUp = (dir: string, asks: HandoffAsk[]) =>
         payload: { ...event, threadId: THREAD },
       });
     const say = (text: string) =>
-      command({ type: 'send', threadId: THREAD, text, reason: '' });
+      command({ type: 'send', threadId: THREAD, text });
     /** Runs `during`, then waits for the fold that leaves the thread `isReady`; watching starts before `during` does. */
     const afterFold = <B, E>(
       isReady: (t: Thread) => boolean,
@@ -153,7 +153,6 @@ const setUp = (dir: string, asks: HandoffAsk[]) =>
           type: 'send',
           threadId: THREAD,
           text: 'Go on',
-          reason: '',
         };
         const [call] = agentCalls(state, send, () => project(state, send));
         assert.ok(call?.method === 'start');

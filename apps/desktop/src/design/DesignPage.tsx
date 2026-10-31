@@ -92,7 +92,7 @@ import { PipLayer } from '../Browser';
 import { DriveBar } from '../browser/Toolbar';
 import { SidePane } from '../SidePane';
 import { AppSidebar, ThreadItem } from '../Sidebar';
-import { proposalFixture, verdictFixtures } from './verdictFixtures';
+import { verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
 import { AssumptionsBlock } from './sections/assumptions';
 import { SteerBlock } from './sections/steer';
@@ -102,7 +102,6 @@ import { TiltedDragBlock } from './sections/tilted-drag';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
 import { OrchestrationGrantBlock } from './sections/orchestration-grant';
 import { MergeButtonBlock } from './sections/merge-button';
-import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
 import { SplitContext } from '../layout/SplitContext';
@@ -826,25 +825,11 @@ function Display() {
         </Block>
         <Block
           title="Progress"
-          use="One segment per criterion, in the thread's line colour, the count beside it; green once all are met, spinning while the agent works, no count without criteria. Never a percent."
+          use="The thread's ring: spinning in its line colour while the agent works, resting grey when idle. Never a percent."
         >
-          <div className="flex flex-col gap-3">
-            {RING_SAMPLES.map(({ met, total, isWorking }, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 type-caption text-muted-foreground"
-              >
-                <ProgressRing
-                  met={met}
-                  total={total}
-                  slot={((i % 5) + 1) as LineSlot}
-                  isWorking={isWorking}
-                />
-                <span className="tabular">
-                  {total ? `${met}/${total}` : 'No criteria'}
-                </span>
-                {isWorking && <span>Working</span>}
-              </div>
+          <div className="flex items-center gap-3">
+            {([1, 2, 3, 4, 5] as LineSlot[]).map((slot) => (
+              <ProgressRing key={slot} slot={slot} isWorking={slot < 3} />
             ))}
           </div>
         </Block>
@@ -1120,32 +1105,6 @@ function Recipes() {
             </SidebarProvider>
           </div>
         </Block>
-        <Block
-          title="Proposed goal"
-          use="The goal the agent writes after its first look: the vague draft struck through, criteria marked as a command Mochi runs or you check. Settings › Goals and checks decides Accept or Apply, with undo."
-          wide
-        >
-          <div className="flex w-full flex-col gap-4">
-            <ProposalCard
-              thread={{
-                ...rl,
-                proposal: proposalFixture(
-                  rl.activity.at(-1)?.at ?? 0,
-                  'waiting',
-                ),
-              }}
-            />
-            <ProposalCard
-              thread={{
-                ...rl,
-                proposal: proposalFixture(
-                  rl.activity.at(-1)?.at ?? 0,
-                  'applied',
-                ),
-              }}
-            />
-          </div>
-        </Block>
         <NextMoveBlock rl={rl} />
         <AssumptionsBlock rl={rl} />
         <SteerBlock />
@@ -1159,7 +1118,7 @@ function Recipes() {
           <Block
             key={label}
             title={`Verdict · ${label}`}
-            use="The end-of-turn card: Mochi's verdict, the agent's summary, one line of evidence, gaps as call rows, then one question with the move as the primary with its shortcut, and one other answer."
+            use="The end-of-turn card: Mochi's verdict, the agent's summary, then the question that waits on you."
             wide
           >
             <VizThreadProvider value={rl.id}>
@@ -1171,23 +1130,12 @@ function Recipes() {
         ))}
         <Block
           title="Report card"
-          use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes."
+          use="End of a turn of work: what needs you, decisions, what's left, the turn's changes."
           wide
         >
           <VizThreadProvider value={rl.id}>
             <PromptInputProvider>
               <ReportCardDemo thread={reportFixture(rl)} />
-            </PromptInputProvider>
-          </VizThreadProvider>
-        </Block>
-        <Block
-          title="Report, criteria met"
-          use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to open one with gh pr create; with a PR open the chip is the next step; merged, Settle thread."
-          wide
-        >
-          <VizThreadProvider value={rl.id}>
-            <PromptInputProvider>
-              <ReportCardDemo thread={metReportFixture(rl)} />
             </PromptInputProvider>
           </VizThreadProvider>
         </Block>
@@ -1411,15 +1359,6 @@ function Pair({
   );
 }
 
-const RING_SAMPLES = [
-  { met: 0, total: 3, isWorking: true },
-  { met: 1, total: 3, isWorking: true },
-  { met: 2, total: 5, isWorking: false },
-  { met: 4, total: 4, isWorking: false },
-  { met: 0, total: 0, isWorking: true },
-  { met: 0, total: 0, isWorking: false },
-];
-
 /** A fixture's report card, on the turn it anchors to. */
 function ReportCardDemo({ thread }: { thread: Thread }) {
   const anchor = turnAnchor(thread);
@@ -1433,47 +1372,12 @@ function ReportCardDemo({ thread }: { thread: Thread }) {
   );
 }
 
-function metReportFixture(rl: Thread): Thread {
-  const at = rl.activity.at(-1)?.at ?? 0;
-  const claim = {
-    evidence: 'pnpm test: 214 passed',
-    at,
-    by: 'claude' as const,
-  };
-  return {
-    ...reportFixture(rl),
-    prs: [],
-    criteria: [
-      { id: 'c1', text: 'Every 429 carries Retry-After', claim },
-      { id: 'c2', text: 'pnpm test passes', command: 'pnpm test', claim },
-    ],
-    report: {
-      at,
-      by: 'claude',
-      decisions: ['Kept the plain-text 429 body'],
-      left: [],
-    },
-  };
-}
-
-/** A goal thread as it looks after its agent claimed one criterion and reported. */
+/** A thread as it looks after its agent reported. */
 function reportFixture(rl: Thread): Thread {
   const at = rl.activity.at(-1)?.at ?? 0;
   return {
     ...rl,
     live: undefined,
-    criteria: [
-      {
-        id: 'c1',
-        text: 'Every 429 carries Retry-After',
-        claim: {
-          evidence: 'curl -i /v1/search shows Retry-After: 30',
-          at,
-          by: 'claude',
-        },
-      },
-      { id: 'c2', text: 'pnpm test passes', command: 'pnpm test' },
-    ],
     report: {
       at,
       by: 'claude',

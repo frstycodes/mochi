@@ -11,7 +11,7 @@ import {
 } from '../model';
 import { useHarness, useHarnessSelector } from '../store';
 import { SubThreadState } from '../goals/SubThreads';
-import { useThreadStatus } from '../goals/VerdictChip';
+import { threadStatus } from '../goals/VerdictChip';
 import {
   durationText,
   grantStatus,
@@ -250,7 +250,7 @@ function LiveState({ sub }: { sub: Thread }) {
   return (
     <SubThreadState
       sub={sub}
-      status={useThreadStatus(sub)}
+      status={threadStatus(sub)}
       className="type-meta"
     />
   );

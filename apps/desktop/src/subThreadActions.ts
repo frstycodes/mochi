@@ -22,7 +22,6 @@ export function unnestWithUndo(
           type: 'nest',
           threadId: thread.id,
           parentId: link.threadId,
-          criterionId: link.criterionId,
         }),
     },
   });

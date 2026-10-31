@@ -119,7 +119,6 @@ function reduce(state: State, action: Action): State {
     // A thread you start or fork opens in the focused split; one an agent started in the background doesn't. The thread slice
     // ran first, so the new thread's id took the sequence number before the current one.
     case 'create':
-    case 'drift-new-thread':
     case 'fork': {
       const id = `${action.type === 'fork' ? 'fork' : 'new'}-${state.seq - 1}`;
       if (

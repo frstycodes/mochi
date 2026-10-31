@@ -26,31 +26,22 @@ const said = (who: ActivityEntry['who'], text: string): ActivityEntry => ({
   text,
 });
 const thread = (activity: ActivityEntry[], extra: Partial<Thread> = {}) =>
-  ({ id: 't', goal: '', activity, ...extra }) as Thread;
+  ({ id: 't', activity, ...extra }) as Thread;
 const pin = (index: number, text = ''): Pin => ({
   id: `${index}:${text}`,
   index,
   text,
 });
 
-test('kept context lists the goal and criteria, then pins in transcript order, whole messages or the pinned passage', () => {
-  const t = thread(
-    [
-      said('you', 'Use Redis for the cache.'),
-      said('claude', 'Done, with a 5 minute TTL.'),
-      said('you', 'Never touch the billing table.'),
-    ],
-    {
-      goal: 'Cache the pricing API',
-      criteria: [{ id: 'c1', text: 'p95 under 50ms' }],
-    },
-  );
+test('kept context lists pins in transcript order, whole messages or the pinned passage', () => {
+  const t = thread([
+    said('you', 'Use Redis for the cache.'),
+    said('claude', 'Done, with a 5 minute TTL.'),
+    said('you', 'Never touch the billing table.'),
+  ]);
   assert.equal(
     keptContext(t, [pin(2), pin(0), pin(1, 'a 5 minute TTL')]),
     [
-      'Goal: Cache the pricing API',
-      '- Done when: p95 under 50ms',
-      '',
       'Pinned by the user, each word for word, in this order:',
       '1. User: Use Redis for the cache.',
       '2. Claude: a 5 minute TTL',
@@ -68,7 +59,10 @@ test('kept context lists the goal and criteria, then pins in transcript order, w
     'a pin past the transcript (rewound) is skipped',
   );
   assert.equal(compactInstructions(''), '');
-  assert.match(compactInstructions('Goal: x'), /verbatim[\s\S]*Goal: x$/);
+  assert.match(
+    compactInstructions('1. User: x'),
+    /verbatim[\s\S]*1\. User: x$/,
+  );
 });
 
 test('kept context caps each pin and the whole, naming how many pins were left out', () => {
@@ -143,7 +137,6 @@ test('/compact runs when idle, queues behind a working turn (it can’t steer on
             trigger: 'manual',
             status: 'running',
             pins: 0,
-            hasGoal: false,
           },
         },
       ],
@@ -209,7 +202,6 @@ test('a compaction opens one entry, fills in its sizes and summary, and moves th
     trigger: 'manual',
     status: 'done',
     pins: 1,
-    hasGoal: false,
     focus: 'the cache',
     preTokens: 182_000,
     postTokens: 24_000,

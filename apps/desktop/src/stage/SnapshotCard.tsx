@@ -26,24 +26,13 @@ export const SnapshotCard = memo(function SnapshotCard({
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center gap-2">
-          <ProgressRing
-            met={snap.met}
-            total={snap.total}
-            slot={snap.line}
-            size={14}
-            isWorking={snap.isWorking}
-          />
+          <ProgressRing slot={snap.line} size={14} isWorking={snap.isWorking} />
           <span className="min-w-0 flex-1 truncate type-title">
             {snap.title}
           </span>
           {needsYou && <LiveDot className="text-warning" />}
         </div>
         <p className="flex min-w-0 gap-1.5 type-meta text-muted-foreground">
-          {!!snap.total && (
-            <span className="shrink-0 tabular">
-              {snap.met}/{snap.total}
-            </span>
-          )}
           <span className={cn('truncate', needsYou && 'text-foreground')}>
             {snap.nowStep}
           </span>

@@ -4,7 +4,6 @@ import type { DiffFile } from '../host/types/git.ts';
 import { DEFAULT_SETTINGS, mergeSettings } from '../host/types/settings.ts';
 import {
   commitPrompt,
-  parseAudit,
   parseCommit,
   parsePr,
   parseTitle,
@@ -25,12 +24,8 @@ const file = (path: string, patch: string): DiffFile => ({
   hunks: [],
 });
 
-test('every task but the turn audit defaults to Haiku 5.5, and changing one task keeps the others', () => {
-  assert.deepEqual(DEFAULT_SETTINGS.utilityModels.audit, {
-    provider: 'claude',
-    model: 'claude-sonnet-5-5',
-  });
-  for (const task of UTILITY_TASKS.filter((t) => t !== 'audit'))
+test('every task defaults to Haiku 5.5, and changing one task keeps the others', () => {
+  for (const task of UTILITY_TASKS)
     assert.deepEqual(DEFAULT_SETTINGS.utilityModels[task], {
       provider: 'claude',
       model: 'claude-haiku-5-5',
@@ -79,8 +74,8 @@ test('prompt builders carry the input and cut what would stall a call', () => {
   assert.match(commit, /^src\/auth\.ts \(modified, \+2 −1\)\n@@ -1 \+1 @@/);
   assert.match(commit, /logo\.png \(modified, \+2 −1\)$/);
   assert.match(
-    prPrompt('Login fix', 'Fix the login redirect', [file('a.ts', '+x')]),
-    /^Thread: Login fix\nGoal: Fix the login redirect\n\na\.ts/,
+    prPrompt('Login fix', [file('a.ts', '+x')]),
+    /^Thread: Login fix\n\na\.ts/,
   );
   const huge = commitPrompt([file('big.ts', 'x'.repeat(50_000))]);
   assert.ok(huge.length < 25_000 && huge.endsWith('… (cut)'));
@@ -109,19 +104,4 @@ test('parsers clean what models add around the answer', () => {
       body: '## What\nThe callback keeps it.',
     },
   );
-});
-
-test('an audit keeps only gaps quoted from what the agent wrote, and an empty question is none', () => {
-  const replies = ["Opened #135. I haven't checked it in the app."];
-  const answer =
-    '```json\n{"question": "", "unverified": [{"text": "Not checked in the app", "quote": "I haven\'t checked it in the app"}, {"text": "Invented", "quote": "I never ran the tests"}]}\n```';
-  assert.deepEqual(parseAudit(answer, replies), {
-    unverified: [
-      {
-        text: 'Not checked in the app',
-        quote: "I haven't checked it in the app",
-      },
-    ],
-  });
-  assert.equal(parseAudit('not json', replies), null);
 });

@@ -176,7 +176,7 @@ function rowGroups(
     patch: Partial<Thread> = {},
   ): Thread => ({ ...seen(from), id, subagents: [], ...patch });
 
-  const parent = make('mock-parent', fixture('Done · in review').thread, {
+  const parent = make('mock-parent', fixture('Idle · in review').thread, {
     title: 'Remote device architecture design',
   });
   const all: Entry[] = [
@@ -191,12 +191,12 @@ function rowGroups(
     })),
     {
       thread: {
-        ...make('mock-unread', fixture('Done · merged').thread, {
+        ...make('mock-unread', fixture('Idle · merged').thread, {
           title: 'Unread: finished while you were away',
         }),
         seenActivity: 0,
       },
-      caption: 'Done · unread',
+      caption: 'Idle · unread',
     },
     { thread: parent, caption: 'Parent with three sub-threads' },
     {
@@ -222,7 +222,7 @@ function rowGroups(
       isSub: true,
     },
     {
-      thread: make('mock-sub-done', fixture('Done · merged').thread, {
+      thread: make('mock-sub-done', fixture('Idle · merged').thread, {
         title: 'PR 15: Machine filter per window over the merged views',
         parent: { threadId: parent.id },
         prs: [pr(143, 'merged'), pr(144, 'open')],
@@ -232,7 +232,7 @@ function rowGroups(
       isLast: true,
     },
     {
-      thread: make('mock-snooze-time', fixture('Done · no PR yet').thread, {
+      thread: make('mock-snooze-time', fixture('Idle · no PR yet').thread, {
         title: 'Thread view extra widgets',
       }),
       caption: 'Snoozed to a time · wakes unread',

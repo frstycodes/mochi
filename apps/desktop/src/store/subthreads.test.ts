@@ -15,7 +15,6 @@ const thread = (id: string, patch: Partial<Thread> = {}) =>
     activity: [],
     prs: [],
     startedAt: 0,
-    criteria: [],
     ...patch,
   }) as unknown as Thread;
 const start = (threads: Thread[]) =>
@@ -52,13 +51,11 @@ test('nesting unpins the sub-thread, goes a second level deep, and refuses a cyc
   );
 });
 
-test('handing back claims the covered criterion once and leaves a result row in the parent', () => {
-  const parent = thread('p', {
-    criteria: [{ id: 'load', text: 'Holds 2k req/s' }],
-  });
+test('handing back happens once and leaves a result row in the parent', () => {
+  const parent = thread('p');
   const child = thread('c', {
     title: 'Load test',
-    parent: { threadId: 'p', criterionId: 'load' },
+    parent: { threadId: 'p' },
   });
   const s = run(
     start([parent, child]),
@@ -70,10 +67,6 @@ test('handing back claims the covered criterion once and leaves a result row in 
     { type: 'subthread-handback', threadId: 'c', evidence: 'again' },
   );
   assert.equal(byId(s, 'c').parent?.handedBackAt, 9);
-  assert.equal(
-    byId(s, 'p').criteria![0].claim?.evidence,
-    'p99 41ms at 2k req/s, PR #142',
-  );
   assert.deepEqual(
     byId(s, 'p')
       .activity.filter((e) => e.subThread)
@@ -125,4 +118,22 @@ test('settling cascades down a two-level tree, stopping at a settled sub-thread 
     1,
     'an already settled one keeps its time',
   );
+});
+
+test('nesting leaves a row in each chat naming the other thread', () => {
+  const s = run(start([thread('p'), thread('c')]), {
+    type: 'nest',
+    threadId: 'c',
+    parentId: 'p',
+  });
+  assert.deepEqual(byId(s, 'p').activity.at(-1)?.threadLink, {
+    role: 'sub',
+    threadId: 'c',
+    title: 'c',
+  });
+  assert.deepEqual(byId(s, 'c').activity.at(-1)?.threadLink, {
+    role: 'parent',
+    threadId: 'p',
+    title: 'p',
+  });
 });

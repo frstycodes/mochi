@@ -1,7 +1,6 @@
 import { useLatest } from '../useLatest.ts';
 import { useQueries } from '@tanstack/react-query';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
-import { goalProgress } from '../progress';
 import { isWorking } from '../agentPhase';
 import { threadDetail } from '../threadRow';
 import { useHarness, type State } from '../store';
@@ -13,8 +12,6 @@ export interface ThreadSnapshot {
   title: string;
   line: LineSlot;
   status: ThreadStatus;
-  met: number;
-  total: number;
   nowStep: string;
   isWorking: boolean;
   lastMessage: { who: Author; text: string } | null;
@@ -48,14 +45,11 @@ function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
   const tab = state.panes
     .find((p) => p.threadId === thread.id)
     ?.tabs.find((t) => t.kind === 'browser');
-  const { met, total } = goalProgress(thread);
   return {
     id: thread.id,
     title: thread.title,
     line: thread.line,
     status: thread.status,
-    met,
-    total,
     nowStep: threadDetail(
       thread,
       state.queue.find((q) => q.threadId === thread.id)?.title,

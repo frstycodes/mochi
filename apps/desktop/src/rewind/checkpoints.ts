@@ -91,7 +91,7 @@ export function checkpointAt(list: Checkpoint[], t: number) {
   return list.findLast((c) => c.at <= t) ?? list[0];
 }
 
-/** Rebuilds the thread as it stood at `t` from its own history: steps added by then with their status then, activity and revisions up to `t`. */
+/** Rebuilds the thread as it stood at `t` from its own history: steps added by then with their status then, activity up to `t`. */
 export function threadAt(thread: Thread, t: number): Thread {
   const steps = thread.steps.flatMap((s): Step[] => {
     const status = statusAt(s, t);
@@ -122,7 +122,6 @@ export function threadAt(thread: Thread, t: number): Thread {
     settledAt: undefined,
     settledMs: undefined,
     activity: thread.activity.filter((a) => a.at <= t),
-    revisions: thread.revisions.filter((r) => r.at <= t),
   };
 }
 
@@ -220,7 +219,7 @@ function yourNewMessages(prev: Thread, next: Thread) {
 const isYourMessage = (e: ActivityEntry) =>
   e.who === 'you' && e.kind === 'message';
 
-/** Puts the thread's steps, transcript and goal back to checkpoint `n` and drops later checkpoints and queue items; one undo is kept. */
+/** Puts the thread's steps and transcript back to checkpoint `n` and drops later checkpoints and queue items; one undo is kept. */
 export function rewind(
   state: State,
   threadId: string,
@@ -246,7 +245,7 @@ export function rewind(
 }
 
 /**
- * Back to just before the message at `index` in the thread's activity: the transcript stops before it, steps and goal are rebuilt for that moment,
+ * Back to just before the message at `index` in the thread's activity: the transcript stops before it, steps are rebuilt for that moment,
  * and the worktree's files come from the latest checkpoint at or before it (the closest saved files).
  */
 export function rewindToMessage(
@@ -317,7 +316,6 @@ function restore(
   const list = state.checkpoints[threadId] ?? [];
   const cp = list[cpIndex];
   if (!current || !cp || rewindBlockedReason(current)) return state;
-  const revision = base.revisions.length + 1;
   const restored: Thread = {
     ...base,
     // Work resumes now: a step that was running at the checkpoint restarts its clock instead of claiming the hours since.
@@ -338,16 +336,6 @@ function restore(
     providers: current.providers,
     session: current.session,
     live: current.live && liveAfterRewind(current, base, forkAt),
-    revisions: [
-      ...base.revisions,
-      {
-        n: revision,
-        at: state.now,
-        label: `Rewound to ${phrase}`,
-        by: 'you',
-        diff: rewindDiff(current, base),
-      },
-    ],
   };
   const hasFiles = mode === 'files' && !!cp.ref;
   const files = hasFiles ? 'files and transcript' : 'transcript';
@@ -433,21 +421,6 @@ export function transcriptSeed(activity: ActivityEntry[]) {
 export function excerpt(text: string) {
   const line = text.replace(/\s+/g, ' ').trim();
   return line.length > 40 ? `${line.slice(0, 39)}…` : line;
-}
-
-function rewindDiff(from: Thread, to: Thread) {
-  const kept = new Set(to.steps.map((s) => s.id));
-  const removed = from.steps
-    .filter((s) => !kept.has(s.id))
-    .map((s) => `− ${s.title}`);
-  const reopened = to.steps
-    .filter(
-      (s) =>
-        s.status !== 'done' &&
-        from.steps.find((f) => f.id === s.id)?.status === 'done',
-    )
-    .map((s) => `~ Reopened "${s.title}"`);
-  return [...removed, ...reopened];
 }
 
 export function undoRewind(state: State): State {

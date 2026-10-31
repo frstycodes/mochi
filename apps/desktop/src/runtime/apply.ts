@@ -52,7 +52,7 @@ const MAIN_EVENTS = new Set<AgentEvent['type']>([
   'title',
 ]);
 
-/** Folds one agent event into the store. The goal is Mochi's and yours; the agent's plan is mirrored as its steps, never the goal. */
+/** Folds one agent event into the store. The agent's plan is mirrored as its steps. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
   state = heard(state, event);
   const thread = state.threads.find((t) => t.id === event.threadId);
@@ -125,7 +125,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         };
       });
     case 'steer-read':
-      return update((t) => readSteer(t, event.id, now));
+      return update((t) => readSteer(t, event.id));
     case 'reasoning':
       return update((t) =>
         log(t, { at: now, who, kind: 'reasoning', text: event.text }),
@@ -775,7 +775,6 @@ function endTurn(
         },
       ),
     );
-  // Whether the goal is met is the idle verdict's to say (`src/goals/verdict.ts`), once Mochi has checked the turn.
   return state;
 }
 

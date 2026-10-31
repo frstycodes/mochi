@@ -106,10 +106,7 @@ test('promoting to the thread posts the answer as one message and leaves goal, s
     kind: 'message',
     text: 'From the side chat:\n\nShared state.',
   });
-  assert.deepEqual(
-    [t.goal, t.steps, t.revisions],
-    [thread(state).goal, thread(state).steps, thread(state).revisions],
-  );
+  assert.deepEqual(t.steps, thread(state).steps);
   assert.equal(
     chatFor(promoted, 'rl', at.tabId).messages[1].promotedTo,
     'message',

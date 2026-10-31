@@ -87,7 +87,7 @@ export function SettledView() {
               <InputGroupInput
                 value={page.query}
                 onChange={(e) => page.setQuery(e.target.value)}
-                placeholder="Search by title, goal, branch or PR"
+                placeholder="Search by title, branch or PR"
                 aria-label="Search settled threads"
               />
             </InputGroup>

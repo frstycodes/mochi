@@ -19,13 +19,12 @@ export function settledMsOf(thread: Thread) {
   );
 }
 
-/** Every word of `query` appears in the thread's title, goal, branch or one of its PRs (number or title). */
+/** Every word of `query` appears in the thread's title, branch or one of its PRs (number or title). */
 export function matchesQuery(thread: Thread, query: string) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return true;
   const text = [
     thread.title,
-    thread.goal,
     thread.repo?.branch,
     ...thread.prs.flatMap((pr) => [`#${pr.number}`, pr.title]),
   ]

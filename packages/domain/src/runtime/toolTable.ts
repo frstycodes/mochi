@@ -143,7 +143,7 @@ export const TOOL_TABLE = {
   get_thread: {
     tier: 'read',
     description:
-      "Read one thread in detail: goal, its agent's plan (title and status of each item), its last activity, pull requests, and anything it's waiting on you for.",
+      "Read one thread in detail: its agent's plan (title and status of each item), its last activity, pull requests, and anything it's waiting on you for.",
     shape: { threadId },
   },
   rename_thread: {
@@ -250,7 +250,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with New thread, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message). At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread reports) can only use own_initiative, unless the user allowed an orchestration grant (request_orchestration_grant): then a nested user_asked thread on a model the grant allows starts at once while its budget lasts, and once it runs out the call puts the thread on a card instead. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a report in your transcript, and you are started with the reports once all your sub-threads are idle, or at once for a blocked, needs_input or failed one. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Pass `criterionId` to hand it one piece of your goal. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread doesn\'t start: it goes on this turn\'s card with the others, which the user starts (Start, or Start all) or dismisses, so don\'t retry or wait on it.',
+      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with New thread, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message). At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread reports) can only use own_initiative, unless the user allowed an orchestration grant (request_orchestration_grant): then a nested user_asked thread on a model the grant allows starts at once while its budget lasts, and once it runs out the call puts the thread on a card instead. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a report in your transcript, and you are started with the reports once all your sub-threads are idle, or at once for a blocked, needs_input or failed one. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. From a sub-thread, a user_asked thread doesn\'t start: it goes on this turn\'s card with the others, which the user starts (Start, or Start all) or dismisses, so don\'t retry or wait on it.',
     shape: {
       initiation: Schema.optionalKey(
         Schema.Literals(THREAD_INITIATIONS).annotate({
@@ -276,12 +276,6 @@ export const TOOL_TABLE = {
         Schema.String.annotate({
           description:
             'Start a card you proposed (its taskId) because the user told you to; nothing else is needed',
-        }),
-      ),
-      criterionId: Schema.optionalKey(
-        Schema.String.annotate({
-          description:
-            'Hand this criterion of your goal (an id from get_goal) to the new thread as a sub-thread; its result claims it when handed back',
         }),
       ),
       isTopLevel: Schema.optionalKey(
@@ -387,62 +381,7 @@ export const TOOL_TABLE = {
       'Delete threads for good: stops their agents and removes their history. The user approves in the thread and can choose to remove the worktrees too. Not your own thread.',
     shape: { threadIds },
   },
-  // {GOALS}
-  get_goal: {
-    tier: 'read',
-    description:
-      "Read a thread's goal (empty until a researched working-agent goal is accepted, or for a chat) and what done means: its criteria, each with its id, its check command when Mochi runs one, your claim and Mochi's check result.",
-    shape: { threadId },
-  },
-  propose_goal: {
-    tier: 'change',
-    quiet: true,
-    description:
-      "Mochi writes no goal for you. For a task with a checkable outcome, after your first look at the code, propose this thread's goal (skip it for a question, a chat or a small one-step change): the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. The user accepts it, or Mochi applies it with an undo. Call it again only when what done means has to change; it replaces the whole goal. Keep working while it waits.",
-    shape: {
-      goal: Schema.String.check(
-        Schema.isMinLength(1),
-        Schema.isMaxLength(120),
-      ).annotate({
-        description:
-          'What will be true when this is done, specific to what you found',
-      }),
-      criteria: Schema.Array(
-        Schema.Struct({
-          text: Schema.String.check(
-            Schema.isMinLength(1),
-            Schema.isMaxLength(120),
-          ),
-          command: Schema.optionalKey(
-            Schema.String.annotate({
-              description:
-                'A command that proves it, like "pnpm test"; leave out for what the user checks',
-            }),
-          ),
-        }),
-      ).check(Schema.isMinLength(1), Schema.isMaxLength(4)),
-      basis: Schema.optionalKey(
-        Schema.String.check(Schema.isMaxLength(200)).annotate({
-          description: 'One line: what you saw that makes this the goal',
-        }),
-      ),
-    },
-  },
-  claim_criterion: {
-    tier: 'change',
-    quiet: true,
-    description:
-      "Say one of your goal's criteria is met, with one line of evidence the user can check (a command and its result, a file, a URL). Call it as soon as each criterion is met; get_goal lists the criterion ids.",
-    shape: {
-      criterionId: Schema.String.annotate({
-        description: 'A criterion id from get_goal',
-      }),
-      evidence: Schema.String.check(
-        Schema.isMinLength(1),
-        Schema.isMaxLength(240),
-      ),
-    },
-  },
+  // {REPORTS}
   report_turn: {
     tier: 'change',
     quiet: true,
@@ -551,21 +490,6 @@ export const TOOL_TABLE = {
       ),
     },
   },
-  get_report: {
-    tier: 'read',
-    description:
-      "Read a thread's latest report as data: goal, criteria with claims, decisions, what's left, the open question, PRs and status. For coordinating other threads without reading their transcripts.",
-    shape: { threadId },
-  },
-  settle_goal: {
-    tier: 'change',
-    description:
-      'Close out a goal and settle the thread, with your reason. Use when the goal is met or no longer wanted. Not your own thread.',
-    shape: {
-      threadId: otherThread,
-      reason: Schema.String.check(Schema.isMinLength(1)),
-    },
-  },
   // {AGENTS}
   update_plan: {
     tier: 'read',
@@ -646,7 +570,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      "Ask the other provider (Codex from a Claude thread, Claude from a Codex thread) to review your branch's diff against its base, read-only, with your goal as context. Use it before you call risky or wide changes done. Commit or at least save your edits first: it reviews what's on disk. Returns at once; its verdict and findings come to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
+      "Ask the other provider (Codex from a Claude thread, Claude from a Codex thread) to review your branch's diff against its base, read-only. Use it before you call risky or wide changes done. Commit or at least save your edits first: it reviews what's on disk. Returns at once; its verdict and findings come to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
     shape: {},
   },
   // {BROWSER}
@@ -1196,18 +1120,6 @@ export type ToolName = keyof typeof TOOL_TABLE;
 
 export const TOOL_NAMES = Object.keys(TOOL_TABLE) as ToolName[];
 
-/** Only served while goals are on, and goals are retired: agents never see them. */
-export const GOAL_TOOLS = [
-  'get_goal',
-  'propose_goal',
-  'claim_criterion',
-  'get_report',
-  'settle_goal',
-] as const satisfies ToolName[];
-
-export const isGoalTool = (name: string) =>
-  (GOAL_TOOLS as readonly string[]).includes(name);
-
 /** Served only in a profile's settings chat (Settings › Ask Mochi), which gets nothing else; every other thread gets everything but these. */
 export const SETTINGS_CHAT_TOOLS = [
   'get_settings',
@@ -1221,7 +1133,6 @@ export const SETTINGS_CHAT_TOOLS = [
 
 /** What kind of session a Mochi server serves; read at session start. */
 export interface MochiScope {
-  isGoalsOff?: boolean;
   isSettingsChat?: boolean;
   isSubThread?: boolean;
   /** The turn spine is off (Settings): report_turn takes plain decisions and no assumptions, update_plan no why. */
@@ -1266,16 +1177,13 @@ const isSubThreadTool = (name: ToolName) =>
   (SUB_THREAD_TOOLS as readonly string[]).includes(name);
 
 export function servedTools({
-  isGoalsOff,
   isSettingsChat,
   isSubThread,
 }: MochiScope): ToolName[] {
   if (isSettingsChat) return [...SETTINGS_CHAT_TOOLS];
   return TOOL_NAMES.filter(
     (name) =>
-      !isSettingsChatTool(name) &&
-      !(isGoalsOff && isGoalTool(name)) &&
-      !(!isSubThread && isSubThreadTool(name)),
+      !isSettingsChatTool(name) && !(!isSubThread && isSubThreadTool(name)),
   );
 }
 
@@ -1312,7 +1220,7 @@ const devThread = Schema.String.check(Schema.isMinLength(1));
 export const DEV_TOOL_TABLE = {
   inspect: {
     description:
-      'Inspect this dev build. Omit threadId to list threads; supply it for paginated transcript, goal, criteria, plan, report, verdict and next action. PR state is the last recorded state, not a fresh GitHub fetch.',
+      'Inspect this dev build. Omit threadId to list threads; supply it for paginated transcript, plan, report, verdict and next action. PR state is the last recorded state, not a fresh GitHub fetch.',
     shape: {
       threadId: Schema.optionalKey(Schema.String),
       offset: Schema.optionalKey(
@@ -1335,14 +1243,9 @@ export const DEV_TOOL_TABLE = {
       project: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1))),
     },
   },
-  accept_goal: {
-    description:
-      'Accept a test task’s researched goal in this opted-in dev build, as through its proposal card. This does not verify any criteria; it only makes them available for progress reporting.',
-    shape: { threadId: devThread },
-  },
   continue_task: {
     description:
-      'Send the next prompt to an idle dev task, as through its composer. Inspect its transcript, criteria and next action first. Refuses running or settled tasks.',
+      'Send the next prompt to an idle dev task, as through its composer. Inspect its transcript and next action first. Refuses running or settled tasks.',
     shape: { threadId: devThread, text: taskText },
   },
 } as const satisfies Record<

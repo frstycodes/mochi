@@ -502,24 +502,6 @@ export const Step = Schema.Struct({
 });
 export type Step = typeof Step.Type;
 
-export const Criterion = Schema.Struct({
-  id: Schema.String,
-  text: Schema.String,
-  command: opt(Schema.String),
-  claim: opt(
-    Schema.Struct({ evidence: Schema.String, at: Schema.Number, by: Provider }),
-  ),
-  check: opt(
-    Schema.Struct({
-      status: Schema.Literals(['running', 'passed', 'failed']),
-      at: Schema.Number,
-      ms: opt(Schema.Number),
-      output: opt(Schema.String),
-    }),
-  ),
-});
-export type Criterion = typeof Criterion.Type;
-
 export const NextOption = Schema.Struct({
   label: Schema.String,
   reply: Schema.String,
@@ -586,54 +568,15 @@ export const ParentReport = Schema.Struct({
 });
 export type ParentReport = typeof ParentReport.Type;
 
-const GoalCriteria = Schema.Array(
-  Schema.Struct({ text: Schema.String, command: opt(Schema.String) }),
-);
-
-export const GoalProposal = Schema.Struct({
-  goal: Schema.String,
-  criteria: GoalCriteria,
-  basis: opt(Schema.String),
-  at: Schema.Number,
-  by: Provider,
-  state: Schema.Literals(['waiting', 'accepted', 'applied', 'kept', 'undone']),
-  before: Schema.Struct({ goal: Schema.String, criteria: GoalCriteria }),
-});
-
 export const IdleCheck = Schema.Struct({
   at: Schema.Number,
   turn: opt(Schema.Number),
-  uncommitted: opt(Schema.Number),
   isGathering: opt(Schema.Boolean),
-  audit: opt(
-    Schema.Struct({
-      question: opt(Schema.String),
-      unverified: Schema.Array(
-        Schema.Struct({ text: Schema.String, quote: Schema.String }),
-      ),
-    }),
-  ),
-  accepted: Schema.Array(Schema.String),
-  isConfirmed: opt(Schema.Boolean),
   isMoveAnswered: opt(Schema.Boolean),
-});
-
-export const Similar = Schema.Struct({
-  threadId: Schema.String,
-  relation: Schema.Literals(['same', 'related']),
-});
-
-export const Revision = Schema.Struct({
-  n: Schema.Number,
-  at: Schema.Number,
-  label: Schema.String,
-  by: Author,
-  diff: opt(Schema.Array(Schema.String)),
 });
 
 export const SubThreadLink = Schema.Struct({
   threadId: Schema.String,
-  criterionId: opt(Schema.String),
   handedBackAt: opt(Schema.Number),
 });
 export type SubThreadLink = typeof SubThreadLink.Type;
@@ -691,7 +634,6 @@ export const Compaction = Schema.Struct({
   trigger: Schema.Literals(['manual', 'auto']),
   status: Schema.Literals(['running', 'done', 'failed']),
   pins: Schema.Number,
-  hasGoal: Schema.Boolean,
   focus: opt(Schema.String),
   preTokens: opt(Schema.Number),
   postTokens: opt(Schema.Number),
@@ -713,7 +655,6 @@ export const ActivityEntry = Schema.Struct({
   ),
   detail: opt(Schema.String),
   seconds: opt(Schema.Number),
-  drift: opt(Schema.Literals(['on-goal', 'scope-add', 'off-goal'])),
   toolId: opt(Schema.String),
   description: opt(Schema.String),
   output: opt(Schema.String),
@@ -754,6 +695,13 @@ export const ActivityEntry = Schema.Struct({
     Schema.Struct({
       kind: AutofixKind,
       pr: Schema.Number,
+      title: Schema.String,
+    }),
+  ),
+  threadLink: opt(
+    Schema.Struct({
+      role: Schema.Literals(['sub', 'parent']),
+      threadId: Schema.String,
       title: Schema.String,
     }),
   ),
@@ -798,7 +746,6 @@ export const QueuedMessage = Schema.Struct({
 export const PendingSteer = Schema.Struct({
   message: QueuedMessage,
   entry: ActivityEntry,
-  reason: Schema.String,
   hasReportBefore: opt(Schema.Literal(true)),
   sendNow: opt(Schema.Literals(['pending', 'turn-ended'])),
 });
@@ -908,11 +855,7 @@ export const Thread = Schema.Struct({
   title: Schema.String,
   isTitleRenamed: opt(Schema.Boolean),
   isTitleGenerated: opt(Schema.Boolean),
-  goal: Schema.String,
-  criteria: opt(Schema.Array(Criterion)),
-  similar: opt(Schema.Array(Similar)),
   parent: opt(SubThreadLink),
-  isGoalOff: opt(Schema.Boolean),
   report: opt(TurnReport),
   parentReport: opt(ParentReport),
   replyTo: opt(
@@ -929,13 +872,11 @@ export const Thread = Schema.Struct({
       isAgentDriven: opt(Schema.Literal(true)),
     }),
   ),
-  proposal: opt(GoalProposal),
   providers: Schema.Array(Provider),
   status: Schema.Literals(['running', 'needs-you', 'review', 'settled']),
   line: Schema.Literals([1, 2, 3, 4, 5]),
   startedAt: Schema.Number,
   steps: Schema.Array(Step),
-  revisions: Schema.Array(Revision),
   activity: Schema.Array(ActivityEntry),
   prs: Schema.Array(PullRequest),
   sources: Schema.Array(
@@ -950,9 +891,6 @@ export const Thread = Schema.Struct({
   snoozedUntil: opt(Schema.Union([Schema.Number, Schema.Literal('needs-you')])),
   settledAt: opt(Schema.Number),
   settledMs: opt(Schema.Number),
-  drift: opt(
-    Schema.Struct({ isMuted: Schema.Boolean, keeps: opt(Schema.Number) }),
-  ),
   session: opt(
     Schema.Struct({
       provider: Provider,

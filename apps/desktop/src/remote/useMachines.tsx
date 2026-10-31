@@ -319,7 +319,6 @@ const COMMAND_VERBS = {
   handoff: 'hand off the thread',
   create: 'start the thread',
   rename: 'rename the thread',
-  'edit-goal': 'edit the goal',
   pin: 'pin the thread',
   settle: 'change the thread',
   schedule: 'change the schedule',

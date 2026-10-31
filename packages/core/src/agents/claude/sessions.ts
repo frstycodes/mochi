@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { goalNudge } from './goalNudge.ts';
 import { planNudge } from './planNudge.ts';
 import { killGuard } from './killGuard.ts';
 import { killDecision } from '../processKill.ts';
@@ -545,10 +544,7 @@ async function launch(session: Session) {
         },
         hooks: {
           ...compactHooks(threadId),
-          PreToolUse: [
-            killGuard(threadId),
-            ...(options.isGoalsOff ? [] : [goalNudge(threadId)]),
-          ],
+          PreToolUse: [killGuard(threadId)],
           PostToolUse: [planNudge(threadId)],
         },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],

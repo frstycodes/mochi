@@ -4,7 +4,7 @@ import type { Action, State } from '../store/index.tsx';
 /**
  * A thread's recording (JSON lines, one file per thread in main): the thread and its queue items as they stood when
  * recording began, then every store action that changed them, stamped with the wall clock (`t`) and the app clock (`now`).
- * Agent events are recorded raw; your own actions (messages, answers, goal edits) ride along so the replay shows them too.
+ * Agent events are recorded raw; your own actions (messages, answers) ride along so the replay shows them too.
  */
 export type ReplayLine = ReplayBase | ReplayStep | { t: number; capped: true };
 
@@ -35,20 +35,12 @@ const RECORDED = [
   'resume',
   'say',
   'rename',
-  'edit-goal',
-  'goal-drafted',
-  'goal-remove',
   'simplified',
   'simplify-toggle',
-  'criterion-claim',
-  'criterion-check',
   'report',
   'parent-report',
   'pivot',
   'pivot-why',
-  'similar-dismiss',
-  'drift-verdict',
-  'drift-keep',
   'controls',
   'handoff-draft',
   'handoff',

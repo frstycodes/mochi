@@ -183,7 +183,6 @@ test('Codex: your own message or settling cancels Resume at reset', () => {
         type: 'send',
         threadId: start.id,
         text: 'try again',
-        reason: '',
       }).threads,
       AFTER,
     ),

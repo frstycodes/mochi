@@ -1,12 +1,10 @@
 import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
-import type { CheckRun, Head } from '../host/types/git.ts';
-import type { DraftedCriterion } from '../utility/prompts.ts';
+import type { Head } from '../host/types/git.ts';
 import {
   NOW0,
   seedThreads,
   type ActivityEntry,
   type Assumption,
-  type Author,
   type Handoff,
   type IdleCheck,
   type LineSlot,
@@ -18,7 +16,6 @@ import {
   type PullRequest,
   type QueuedMessage,
   type SentImage,
-  type Similar,
   type Source,
   type Step,
   type SubThreadLink,
@@ -40,9 +37,6 @@ import { interruptsToSend, orderQueue, pauseQueue } from '../chat/queued.ts';
 import { compactionEntry } from '../chat/compaction.ts';
 import { shownImage } from '../chat/images.ts';
 import { sourcePrompt } from '../sources.ts';
-import { hasGoal, KEEPS_TO_MUTE, type DriftKind } from '../drift.ts';
-import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
-import { goalProgress } from '../progress.ts';
 import { nestBlocker, openSubtree, pinAt, reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
@@ -91,7 +85,7 @@ import {
 } from './context.ts';
 import { leftSession, switchProvider } from '../rewind/switch.ts';
 import { threadRoot } from '../git/root.ts';
-import { projectRef, repoFor } from '../projectRef.ts';
+import { repoFor } from '../projectRef.ts';
 import { autofixTitle } from '../git/autofix.ts';
 import { canAutofix } from '../git/autofixToggle.ts';
 import { recordPrs } from '../git/prs.ts';
@@ -150,7 +144,6 @@ export type ThreadsAction =
       /** A project ref (`src/projects.ts`); null for a folderless chat. */ project:
         | string
         | null;
-      branchFrom?: string;
       controls?: ThreadControls;
       isLive?: boolean;
       /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean;
@@ -164,9 +157,9 @@ export type ThreadsAction =
       /** The profile's settings chat (Settings › Ask Mochi). */ isSettingsChat?: true;
     }
   /** Make `threadId` a sub-thread of `parentId` (a drag, the Similar row, the row menu); it leaves Pinned, sub-threads aren't pinned. */
-  | { type: 'nest'; threadId: string; parentId: string; criterionId?: string }
+  | { type: 'nest'; threadId: string; parentId: string }
   | { type: 'unnest'; threadId: string }
-  /** A sub-thread's result goes back to its parent: a row in the parent's chat, and the criterion it covers claimed with `evidence`. */
+  /** A sub-thread's result goes back to its parent: a row in the parent's chat with `evidence`. */
   | { type: 'subthread-handback'; threadId: string; evidence: string }
   /** What the thread's checkout really has (`useWorktreeRecovery`); `worktree`: its own worktree, found on disk. */
   | { type: 'repo-head'; threadId: string; head: Head; worktree?: string }
@@ -182,15 +175,13 @@ export type ThreadsAction =
   | { type: 'resume'; threadId: string; onApiKey?: boolean; atReset?: boolean }
   | { type: 'limit-auto-resume'; threadId: string; isOn: boolean }
   /**
-   * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
+   * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references).
    * `queuedId`: the queued message this sends, which leaves the queue. `steers`: joins the turn in flight instead of waiting for it to end (every `sendMessage`).
    */
   | {
       type: 'send';
       threadId: string;
       text: string;
-      drift?: DriftKind;
-      reason: string;
       prompt?: string;
       images?: AgentImage[];
       /** The images you attached, as the transcript shows them. */ shownImages?: string[];
@@ -220,38 +211,6 @@ export type ThreadsAction =
   | { type: 'source-add'; threadId: string; source: Source }
   /** PRs Mochi learned of for the thread (gh's read of its branch, a PR it opened): added, or updated by number. */
   | { type: 'prs-seen'; threadId: string; prs: PullRequest[] }
-  | {
-      type: 'drift-verdict';
-      threadId: string;
-      text: string;
-      drift: DriftKind;
-      reason: string;
-    }
-  | {
-      type: 'drift-new-thread';
-      threadId: string;
-      prompt: string;
-      branchFrom: 'current' | 'base';
-    }
-  | { type: 'drift-settings'; threadId: string; isMuted: boolean }
-  | { type: 'drift-keep'; threadId: string }
-  | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
-  /** The background model's goal for a thread that had none; dropped when one was set meanwhile or you removed it. */
-  | {
-      type: 'goal-drafted';
-      threadId: string;
-      outcome: string;
-      criteria: DraftedCriterion[];
-      similar?: Similar[];
-    }
-  | {
-      type: 'criterion-check';
-      threadId: string;
-      criterionId: string;
-      result: CheckRun | 'running';
-    }
-  | { type: 'similar-dismiss'; threadId: string; otherId: string }
-  | { type: 'goal-remove'; threadId: string }
   /** A reply's bullets from Simplify, shown in its place; display only. */
   | {
       type: 'simplified';
@@ -261,13 +220,6 @@ export type ThreadsAction =
       rulesKey: string;
     }
   | { type: 'simplify-toggle'; threadId: string; index: number }
-  | {
-      type: 'criterion-claim';
-      threadId: string;
-      criterionId: string;
-      evidence: string;
-      by: Provider;
-    }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
   | {
       type: 'parent-report';
@@ -277,29 +229,12 @@ export type ThreadsAction =
   /** update_plan dropped or renamed steps; `why` alone (`pivot-why`) gives the reason for the turn's last pivot that has none. */
   | { type: 'pivot'; threadId: string; pivot: Omit<Pivot, 'turn'> }
   | { type: 'pivot-why'; threadId: string; why: string }
-  /** The agent went idle: a fresh record replaces the last turn's, accepted gaps and Open anyway included. */
-  /** The agent's `propose_goal`; `isApplied` when Settings › Goals and checks applies proposals with an undo instead of asking. */
-  | {
-      type: 'goal-propose';
-      threadId: string;
-      goal: string;
-      criteria: { text: string; command?: string }[];
-      basis?: string;
-      by: Provider;
-      isApplied: boolean;
-    }
-  | {
-      type: 'goal-proposal';
-      threadId: string;
-      decision: 'accept' | 'keep' | 'undo';
-    }
+  /** The agent went idle: a fresh record replaces the last turn's. */
   | { type: 'idle-start'; threadId: string }
-  /** `turn`: only that turn's record takes the patch, so a late answer can't land on the next turn's. */
   | {
       type: 'idle-update';
       threadId: string;
       patch: Partial<Omit<IdleCheck, 'at'>>;
-      turn?: number;
     }
   /** You accepted an assumption the agent made, or asked to change it. */
   | {
@@ -477,7 +412,7 @@ function reduce(state: State, action: Action): State {
         ),
       };
     case 'settle': {
-      // A parent settles with its open sub-threads at every depth: they were parts of its goal. A settled one's subtree already stands on its own.
+      // A parent settles with its open sub-threads at every depth: they were parts of its work. A settled one's subtree already stands on its own.
       const ids = new Set([
         action.threadId,
         ...openSubtree(state.threads, action.threadId).map((t) => t.id),
@@ -506,20 +441,28 @@ function reduce(state: State, action: Action): State {
         queue: state.queue.filter((q) => !ids.has(q.threadId)),
       };
     }
-    case 'nest':
+    case 'nest': {
       if (nestBlocker(state.threads, action.threadId, action.parentId))
         return state;
+      const parent = state.threads.find((t) => t.id === action.parentId);
+      const sub = state.threads.find((t) => t.id === action.threadId);
       return {
         ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({
-          ...t,
-          parent: {
-            threadId: action.parentId,
-            ...(action.criterionId && { criterionId: action.criterionId }),
-          },
-          orbitSlot: undefined,
-        })),
+        threads: state.threads.map((t) => {
+          if (t.id === action.parentId && sub)
+            return log(t, linkRow('sub', sub, state.now));
+          if (t.id !== action.threadId) return t;
+          const nested = {
+            ...t,
+            parent: { threadId: action.parentId },
+            orbitSlot: undefined,
+          };
+          return parent
+            ? log(nested, linkRow('parent', parent, state.now))
+            : nested;
+        }),
       };
+    }
     case 'unnest':
       return {
         ...state,
@@ -771,79 +714,6 @@ function reduce(state: State, action: Action): State {
             : t,
         ),
       };
-    case 'drift-new-thread':
-      return driftNewThread(state, action);
-    case 'drift-verdict':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          tagSent(t, action, state.now),
-        ),
-      };
-    case 'drift-settings':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({
-          ...t,
-          drift: { ...t.drift, isMuted: action.isMuted },
-        })),
-      };
-    case 'drift-keep':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          keepHere(t, state.now),
-        ),
-      };
-    case 'goal-drafted':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          setDraftedGoal(
-            t,
-            action.outcome,
-            action.criteria,
-            action.similar ?? [],
-            state.now,
-          ),
-        ),
-      };
-    case 'similar-dismiss':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({
-          ...t,
-          similar: t.similar?.filter((s) => s.threadId !== action.otherId),
-        })),
-      };
-    case 'criterion-check':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          checkCriterion(t, action, state.now),
-        ),
-      };
-    case 'criterion-claim':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          claimCriterion(t, action, state.now),
-        ),
-      };
-    case 'goal-propose':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          propose(t, action, state.now),
-        ),
-      };
-    case 'goal-proposal':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          decideProposal(t, action.decision, state.now),
-        ),
-      };
     case 'idle-start':
       return {
         ...state,
@@ -852,7 +722,6 @@ function reduce(state: State, action: Action): State {
           idle: {
             at: state.now,
             turn: (t.idle?.turn ?? 0) + 1,
-            accepted: [],
             isGathering: true,
           },
         })),
@@ -865,7 +734,7 @@ function reduce(state: State, action: Action): State {
             {
               ...t,
               idle: {
-                ...(t.idle ?? { at: state.now, accepted: [] }),
+                ...(t.idle ?? { at: state.now }),
                 isMoveAnswered: true,
               },
             },
@@ -883,9 +752,7 @@ function reduce(state: State, action: Action): State {
       return {
         ...state,
         threads: mapThread(state.threads, action.threadId, (t) =>
-          t.idle && (action.turn === undefined || t.idle.turn === action.turn)
-            ? { ...t, idle: { ...t.idle, ...action.patch } }
-            : t,
+          t.idle ? { ...t, idle: { ...t.idle, ...action.patch } } : t,
         ),
       };
     case 'pivot':
@@ -981,20 +848,6 @@ function reduce(state: State, action: Action): State {
                 }
               : e,
           ),
-        ),
-      };
-    case 'goal-remove':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          removeGoal(t, state.now),
-        ),
-      };
-    case 'edit-goal':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          applyDraft(t, action.draft, state.now, action.by),
         ),
       };
     case 'reorder':
@@ -1284,7 +1137,7 @@ function windowLoaded(state: State, threadIds: string[]): State {
  * The agent read a message you sent into its turn: it joins the transcript here, after the agent's latest step. Read after the turn
  * ended, it started the next one; a report written while it waited answered a turn your message changed.
  */
-export function readSteer(t: Thread, id: string, now: number): Thread {
+export function readSteer(t: Thread, id: string): Thread {
   const pending = t.steering?.find((s) => s.message.id === id);
   if (!pending) return t;
   const rest = withSteering(
@@ -1300,9 +1153,7 @@ export function readSteer(t: Thread, id: string, now: number): Thread {
     { ...rest, report, live, status: rest.live ? 'running' : rest.status },
     pending.entry,
   );
-  return pending.entry.drift
-    ? applyDrift(said, pending.entry.drift, pending.reason, now)
-    : said;
+  return said;
 }
 
 /** Taken-back steers head the queue, `ids` order first; the turn Send now was clicked in, if still running, is interrupted for them (`agentCalls`). */
@@ -1612,24 +1463,12 @@ function create(
       : null,
     title: action.name ?? titleFrom(action.title),
     ...(action.name && { isTitleRenamed: true }),
-    goal: '',
     providers: [action.provider],
     status: 'running',
     line: freeLine(state.threads.filter((t) => t.spaceId === spaceId)),
     startedAt: now,
-    revisions: [],
     steps,
     activity: [
-      ...(action.branchFrom
-        ? [
-            {
-              at: now,
-              who: 'harness' as const,
-              kind: 'event' as const,
-              text: `Branched off ${action.branchFrom}`,
-            },
-          ]
-        : []),
       {
         at: now,
         who: 'you',
@@ -1646,7 +1485,7 @@ function create(
     ...(action.isSettingsChat && { isSettingsChat: true }),
     // An agent wrote its first prompt, so its first turn is no one's request: it can only propose threads.
     ...(action.isBackground && {
-      turn: { start: action.branchFrom ? 1 : 0, isAgentDriven: true as const },
+      turn: { start: 0, isAgentDriven: true as const },
     }),
   };
   if (isLive)
@@ -1661,8 +1500,36 @@ function create(
       text: `Scheduled: ${describeTrigger(action.schedule.when)}`,
     });
   }
-  const threads = [...state.threads, thread];
+  // A sub-thread opens on the row naming its parent, ahead of its first message; the parent's chat gets one naming it.
+  const parent =
+    action.parent &&
+    state.threads.find((t) => t.id === action.parent!.threadId);
+  if (parent) thread.activity.unshift(linkRow('parent', parent, now));
+  const threads = [
+    ...state.threads.map((t) =>
+      t.id === parent?.id ? log(t, linkRow('sub', thread, now)) : t,
+    ),
+    thread,
+  ];
   return { ...state, threads, seq: state.seq + 1 };
+}
+
+/** The row in one chat that names the other side of a sub-thread link: `sub` in the parent's, `parent` in the sub-thread's. */
+function linkRow(
+  role: 'sub' | 'parent',
+  other: Thread,
+  at: number,
+): ActivityEntry {
+  return {
+    at,
+    who: 'harness',
+    kind: 'event',
+    text:
+      role === 'sub'
+        ? `Started sub-thread ${other.title}`
+        : `Sub-thread of ${other.title}`,
+    threadLink: { role, threadId: other.id, title: other.title },
+  };
 }
 
 /** The temp branch `create` gives the next thread, which the composer shows before you send. */
@@ -1777,7 +1644,6 @@ export function send(
         who: 'you',
         kind: 'message',
         text: action.text,
-        drift: action.drift,
         ...(action.queuedId && !action.typed?.isSentNow && { wasQueued: true }),
         ...(action.shownImages?.length && { images: action.shownImages }),
         ...(from && { from }),
@@ -1796,7 +1662,6 @@ export function send(
             {
               message: action.typed,
               entry: { ...entry, isSeen: true },
-              reason: action.reason,
             },
           ],
         };
@@ -1812,9 +1677,7 @@ export function send(
         },
         entry,
       );
-      return action.drift
-        ? applyDrift(said, action.drift, action.reason, now)
-        : said;
+      return said;
     }),
   };
 }
@@ -1853,7 +1716,6 @@ function addSource(
       type: 'send',
       threadId: action.threadId,
       text: sourcePrompt(action.source),
-      reason: '',
     });
   return {
     ...added,
@@ -1875,184 +1737,19 @@ export const withGeneratedTitle = (t: Thread, title: string): Thread =>
 const titleFrom = (text: string) =>
   text.length > 48 ? `${text.slice(0, 47)}…` : text;
 
-function setDraftedGoal(
-  t: Thread,
-  outcome: string,
-  criteria: DraftedCriterion[],
-  similar: Similar[],
-  now: number,
-): Thread {
-  if (t.goal || t.isGoalOff) return t;
-  const n = (t.revisions.at(-1)?.n ?? 0) + 1;
-  const set = {
-    ...t,
-    goal: outcome,
-    ...(similar.length && { similar }),
-    criteria: criteria.map((c, i) => ({ id: `${t.id}-c${n}-${i}`, ...c })),
-    revisions: [
-      ...t.revisions,
-      {
-        n,
-        at: now,
-        label: 'Goal drafted',
-        by: 'harness' as const,
-        diff: [
-          `+ Goal: ${outcome}`,
-          ...criteria.map((c) => `+ Done when: ${c.text}`),
-        ],
-      },
-    ],
-  };
-  return log(set, {
-    at: now,
-    who: 'harness',
-    kind: 'event',
-    text: `Goal: ${outcome}`,
-  });
-}
-
-function propose(
-  t: Thread,
-  action: Extract<Action, { type: 'goal-propose' }>,
-  now: number,
-): Thread {
-  const before = {
-    goal: t.goal,
-    criteria: (t.criteria ?? []).map(({ text, command }) => ({
-      text,
-      command,
-    })),
-  };
-  const proposal = {
-    goal: action.goal,
-    criteria: action.criteria,
-    basis: action.basis,
-    at: now,
-    by: action.by,
-    state: 'waiting' as const,
-    before,
-  };
-  if (!action.isApplied)
-    return log(
-      { ...t, proposal },
-      {
-        at: now,
-        who: action.by,
-        kind: 'event',
-        text: `Proposed a goal: ${action.goal}`,
-        detail: action.basis,
-      },
-    );
-  return {
-    ...withGoal(t, proposal, now, action.by),
-    proposal: { ...proposal, state: 'applied' },
-  };
-}
-
-/** Accept puts the proposal in place, Keep leaves the draft, Undo puts back what an applied proposal replaced. */
-function decideProposal(
-  t: Thread,
-  decision: 'accept' | 'keep' | 'undo',
-  now: number,
-): Thread {
-  const p = t.proposal;
-  if (!p) return t;
-  if (decision === 'keep')
-    return log(
-      { ...t, proposal: { ...p, state: 'kept' } },
-      {
-        at: now,
-        who: 'you',
-        kind: 'event',
-        text: `Kept the draft goal: ${t.goal}`,
-      },
-    );
-  if (decision === 'undo')
-    return {
-      ...withGoal(t, p.before, now, 'you'),
-      proposal: { ...p, state: 'undone' },
-    };
-  return {
-    ...withGoal(t, p, now, 'you'),
-    proposal: { ...p, state: 'accepted' },
-  };
-}
-
-function withGoal(
-  t: Thread,
-  goal: { goal: string; criteria: { text: string; command?: string }[] },
-  now: number,
-  by: Author,
-): Thread {
-  return applyDraft(
-    t,
-    { ...draftFrom(t), goal: goal.goal, criteria: goal.criteria },
-    now,
-    by,
-  );
-}
-
-function checkCriterion(
-  t: Thread,
-  action: Extract<Action, { type: 'criterion-check' }>,
-  now: number,
-): Thread {
-  const criterion = t.criteria?.find((c) => c.id === action.criterionId);
-  if (!criterion) return t;
-  const { result } = action;
-  const check =
-    result === 'running'
-      ? { status: 'running' as const, at: now }
-      : {
-          status:
-            result.exitCode === 0 ? ('passed' as const) : ('failed' as const),
-          at: now,
-          ms: result.ms,
-          output: result.output,
-        };
-  const checked = {
-    ...t,
-    criteria: t.criteria!.map((c) =>
-      c.id === criterion.id ? { ...c, check } : c,
-    ),
-  };
-  if (check.status === 'running') return checked;
-  return log(checked, {
-    at: now,
-    who: 'harness',
-    kind: 'event',
-    text: `Check ${check.status}: ${criterion.text}`,
-    detail: `\`${criterion.command}\``,
-  });
-}
-
 function handBack(
   state: State,
   action: Extract<Action, { type: 'subthread-handback' }>,
 ): State {
   const sub = state.threads.find((t) => t.id === action.threadId);
   if (!sub?.parent || sub.parent.handedBackAt !== undefined) return state;
-  const { threadId: parentId, criterionId } = sub.parent;
-  const by = sub.providers[0];
+  const { threadId: parentId } = sub.parent;
   const now = state.now;
   const threads = state.threads.map((t) => {
     if (t.id === sub.id)
       return { ...t, parent: { ...sub.parent!, handedBackAt: now } };
     if (t.id !== parentId) return t;
-    const claimed = criterionId
-      ? claimCriterion(
-          t,
-          {
-            type: 'criterion-claim',
-            threadId: t.id,
-            criterionId,
-            evidence: action.evidence,
-            by,
-          },
-          now,
-        )
-      : t;
-    return log(claimed, {
+    return log(t, {
       at: now,
       who: 'harness',
       kind: 'event',
@@ -2063,110 +1760,6 @@ function handBack(
   return { ...state, threads };
 }
 
-function claimCriterion(
-  t: Thread,
-  action: Extract<Action, { type: 'criterion-claim' }>,
-  now: number,
-): Thread {
-  const criterion = t.criteria?.find((c) => c.id === action.criterionId);
-  if (!criterion) return t;
-  const criteria = t.criteria!.map((c) =>
-    c.id === criterion.id
-      ? { ...c, claim: { evidence: action.evidence, at: now, by: action.by } }
-      : c,
-  );
-  return log(
-    { ...t, criteria },
-    {
-      at: now,
-      who: action.by,
-      kind: 'event',
-      text: `Done: ${criterion.text}`,
-      detail: action.evidence,
-    },
-  );
-}
-
-function removeGoal(t: Thread, now: number): Thread {
-  if (!t.goal) return { ...t, isGoalOff: true };
-  return log(
-    { ...t, goal: '', criteria: [], isGoalOff: true },
-    { at: now, who: 'harness', kind: 'event', text: 'Goal removed' },
-  );
-}
-
-function keepHere(t: Thread, now: number): Thread {
-  const keeps = (t.drift?.keeps ?? 0) + 1;
-  const isMuted = keeps >= KEEPS_TO_MUTE;
-  const kept = {
-    ...t,
-    drift: { ...t.drift, isMuted: !!t.drift?.isMuted || isMuted, keeps },
-  };
-  return isMuted && !t.drift?.isMuted
-    ? log(kept, {
-        at: now,
-        who: 'harness',
-        kind: 'event',
-        text: 'Drift guard off for this thread',
-        detail: `You kept ${keeps} suggestions here`,
-      })
-    : kept;
-}
-
-/** A late verdict for a message sent while the classifier was out: the newest untagged message with that text. */
-function tagSent(
-  t: Thread,
-  action: Extract<Action, { type: 'drift-verdict' }>,
-  now: number,
-): Thread {
-  const i = t.activity.findLastIndex(
-    (e) =>
-      e.who === 'you' &&
-      e.kind === 'message' &&
-      !e.drift &&
-      e.text === action.text,
-  );
-  const waiting = t.steering?.find(
-    (s) => !s.entry.drift && s.entry.text === action.text,
-  );
-  if (i < 0 && waiting)
-    return {
-      ...t,
-      steering: t.steering!.map((s) =>
-        s === waiting
-          ? {
-              ...s,
-              entry: { ...s.entry, drift: action.drift },
-              reason: action.reason,
-            }
-          : s,
-      ),
-    };
-  if (i < 0) return t;
-  const activity = t.activity.map((e, j) =>
-    j === i ? { ...e, drift: action.drift } : e,
-  );
-  return applyDrift({ ...t, activity }, action.drift, action.reason, now);
-}
-
-function applyDrift(
-  t: Thread,
-  drift: DriftKind,
-  reason: string,
-  now: number,
-): Thread {
-  return drift === 'off-goal'
-    ? log(t, {
-        at: now,
-        who: 'harness',
-        kind: 'event',
-        text: 'Sent off-goal · not counted',
-        detail: reason,
-      })
-    : t;
-}
-
-/** Off-goal prompt to a new thread. A finished goal is settled first: its review stays queued while a PR is open, otherwise it resolves. */
 function answerGrant(
   thread: Thread,
   action: Extract<Action, { type: 'grant-answer' }>,
@@ -2207,71 +1800,6 @@ function startProposal(
       updateProposal(t, proposal.id, { state: 'started', threadId: id }),
     ),
   };
-}
-
-function driftNewThread(
-  state: State,
-  action: Extract<Action, { type: 'drift-new-thread' }>,
-): State {
-  const source = state.threads.find((t) => t.id === action.threadId);
-  if (!source) return state;
-  const now = state.now;
-  const isGoalDone = hasGoal(source) && goalProgress(source).phase === 'ready';
-  const hasOpenPr = source.prs.some((p) => p.state === 'open');
-  const short =
-    action.prompt.length > 40
-      ? `${action.prompt.slice(0, 39)}…`
-      : action.prompt;
-  let next: State = state;
-  if (isGoalDone) {
-    const outcome = hasOpenPr
-      ? 'its PR review stays in your queue'
-      : 'review resolved';
-    next = {
-      ...next,
-      threads: mapThread(next.threads, source.id, (t) =>
-        log(markSettled(t, now), {
-          at: now,
-          who: 'harness',
-          kind: 'event',
-          text: `Goal done, settled to start a new thread; ${outcome}`,
-        }),
-      ),
-      queue: next.queue.filter(
-        (q) => q.threadId !== source.id || (hasOpenPr && q.kind === 'review'),
-      ),
-    };
-  }
-  next = {
-    ...next,
-    threads: mapThread(next.threads, source.id, (t) =>
-      log(t, {
-        at: now,
-        who: 'harness',
-        kind: 'event',
-        text: 'Moved to a new thread',
-        detail: `"${short}"`,
-      }),
-    ),
-  };
-  const branchFrom =
-    action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
-  // Branching off the current branch is a new worktree from it; off the base, the default.
-  const workspace: WorkspaceDraft | undefined =
-    source.repo && action.branchFrom === 'current'
-      ? { mode: 'worktree', base: source.repo.branch }
-      : undefined;
-  return create(next, {
-    type: 'create',
-    spaceId: source.spaceId,
-    title: action.prompt,
-    provider: source.providers[0],
-    project: projectRef(source.repo),
-    branchFrom: source.repo ? branchFrom : undefined,
-    controls: source.controls,
-    isLive: !!source.live,
-    workspace,
-  });
 }
 
 /** A handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */

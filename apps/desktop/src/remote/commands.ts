@@ -50,23 +50,12 @@ export interface CommandEnv {
 
 const ok: CommandResult = { isOk: true };
 
-/** A store command's actions, here; a send's late drift verdict as the composer's would come. */
+/** A store command's actions, here. */
 function applyStored(
-  { result, actions, verdict }: StoreCommand,
+  { result, actions }: StoreCommand,
   dispatch: Dispatch<Action>,
 ): CommandResult {
   for (const action of actions) dispatch(action);
-  void verdict?.verdict.then(
-    (v) =>
-      v.kind !== 'off-goal' &&
-      dispatch({
-        type: 'drift-verdict',
-        threadId: verdict.threadId,
-        text: verdict.text,
-        drift: v.kind,
-        reason: v.reason,
-      }),
-  );
   return result;
 }
 const fail = (error: string): CommandResult => ({ isOk: false, error });

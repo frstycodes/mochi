@@ -27,7 +27,7 @@ export type StepStatus = 'done' | 'running' | 'ready' | 'blocked' | 'dropped';
 export type ThreadStatus = 'running' | 'needs-you' | 'review' | 'settled';
 export type LineSlot = 1 | 2 | 3 | 4 | 5;
 
-/** One item of the agent's own to-do list, mirrored as it plans (`applyPlan`); never the goal, which is its criteria. */
+/** One item of the agent's own to-do list, mirrored as it plans (`applyPlan`). */
 export interface Step {
   id: string;
   title: string;
@@ -46,26 +46,6 @@ export interface Step {
   /** Why it's blocked or was dropped. */
   note?: string;
 }
-
-/** What done means for a goal: checkable (a command Mochi can run) or judged (a sentence). */
-export interface Criterion {
-  id: string;
-  text: string;
-  command?: string;
-  /** The agent says it's met (`claim_criterion`), with one line of evidence; checking it is yours or Mochi's. */
-  claim?: { evidence: string; at: number; by: Provider };
-  /** Mochi ran `command` in the worktree when you asked; a failed check outweighs a claim. */
-  check?: {
-    status: 'running' | 'passed' | 'failed';
-    at: number;
-    ms?: number;
-    output?: string;
-  };
-}
-
-/** Met when its check passed. One with a command counts only then; one you judge also counts once the agent claims it or you confirm it. */
-export const isMet = (c: Criterion, isConfirmed = false) =>
-  c.check?.status === 'passed' || (!c.command && (!!c.claim || isConfirmed));
 
 /** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
 export interface TurnReport {
@@ -162,55 +142,14 @@ export interface NextOption {
   isDraft?: boolean;
 }
 
-/** A goal the agent wrote after its first look: waiting for your Accept, or applied with an Undo (Settings › Goals and checks). */
-export interface GoalProposal {
-  goal: string;
-  criteria: { text: string; command?: string }[];
-  /** What the agent saw that makes this the goal, one line. */
-  basis?: string;
-  at: number;
-  by: Provider;
-  state: 'waiting' | 'accepted' | 'applied' | 'kept' | 'undone';
-  /** The goal it replaces: struck through on the card, put back by Undo. */
-  before: { goal: string; criteria: { text: string; command?: string }[] };
-}
-
 export interface IdleCheck {
   at: number;
   /** Counts the thread's ended turns; a report stamped with the same number is this turn's. `at` can't tell: it ticks once a minute. */
   turn?: number;
-  /** Uncommitted files in the thread's folder; unset without one or until read. */
-  uncommitted?: number;
-  /** Checks, git status and the transcript audit are still coming in; the verdict reads Checking until they have. */
+  /** Set by `idle-start` and cleared by the `idle-update` right after it: the flip notifications read as the turn's end. */
   isGathering?: boolean;
-  /** Unset when no model could read the turn. */
-  audit?: TurnAudit;
-  /** Gap ids you accepted this turn. */
-  accepted: string[];
-  /** You said this turn got you what you wanted: what only you can check counts as met, until your next message. */
-  isConfirmed?: boolean;
   /** You answered this turn's next-move card (or wrote instead); it stays in the chat as a record, not a card. */
   isMoveAnswered?: boolean;
-}
-
-/** What the agent's last turn says, read by a model: a question it asked in prose, things it says it didn't verify. */
-export interface TurnAudit {
-  question?: string;
-  unverified: { text: string; quote: string }[];
-}
-
-/** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
-export interface Similar {
-  threadId: string;
-  relation: 'same' | 'related';
-}
-
-export interface Revision {
-  n: number;
-  at: number;
-  label: string;
-  by: Author;
-  diff?: string[];
 }
 
 export interface ActivityEntry {
@@ -223,7 +162,6 @@ export interface ActivityEntry {
   /** Events only: the why, shown muted under the label. */
   detail?: string;
   seconds?: number;
-  drift?: 'on-goal' | 'scope-add' | 'off-goal';
   /** The agent's id for a tool call, so its end can find the entry its start logged. */
   toolId?: string;
   /** Tool calls: the agent's own plain-language line for it, the command's output and exit code, an edit's unified diff. */
@@ -273,6 +211,8 @@ export interface ActivityEntry {
   from?: ThreadRef;
   /** Messages: an Auto-fix event Mochi sent the agent about one of the thread's PRs; `text` is the event, the row shows `title`. */
   autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
+  /** Events only: a sub-thread started from or nested under this thread (`sub`), or this one became a sub-thread of `parent`. */
+  threadLink?: { role: 'sub' | 'parent'; threadId: string; title: string };
   /** Events only: a sub-thread handed its result back here. */
   subThread?: { threadId: string; title: string; text: string };
   /** Events only: a sub-thread reported here (`reportParent`), or a thread messaged with `expectReply` answered; `text` is the body. */
@@ -367,14 +307,13 @@ export interface Handoff {
 }
 
 /**
- * One compaction of a thread's conversation. `pins` and `hasGoal`: what Mochi asked it to keep. `focus`: what you typed after
+ * One compaction of a thread's conversation. `pins`: what Mochi asked it to keep. `focus`: what you typed after
  * `/compact`. Token counts as the harness reported them; Codex reports none after a compaction (0.155.1), so its rows carry no sizes.
  */
 export interface Compaction {
   trigger: 'manual' | 'auto';
   status: 'running' | 'done' | 'failed';
   pins: number;
-  hasGoal: boolean;
   focus?: string;
   preTokens?: number;
   postTokens?: number;
@@ -385,8 +324,6 @@ export interface Compaction {
 /** Another thread, with its title when the entry was written; a renamed or deleted thread still reads. `threadId` is missing only on messages migrated from the old `From "…":` prefix whose sender is gone. */
 export interface SubThreadLink {
   threadId: string;
-  /** The parent's criterion this sub-thread covers; handing back claims it. Unset when nested by hand. */
-  criterionId?: string;
   /** Its result went back to the parent (`subthread-handback`); the parent stops waiting on it. */
   handedBackAt?: number;
 }
@@ -451,7 +388,6 @@ export interface WebLink {
   title?: string;
 }
 
-/** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
 /** Shown with the other threads (sidebar, palette, queue, list_threads); a settings chat lives only in Settings. */
 export const isListed = (thread: Thread) => !thread.isSettingsChat;
 
@@ -473,10 +409,11 @@ export function isStreamedOnly(a: Thread, b: Thread) {
   );
 }
 
+/** What you first asked: the agent's opening prompt and a schedule's default. */
 export function firstPrompt(thread: Thread) {
   return (
     thread.activity.find((e) => e.who === 'you' && e.kind === 'message')
-      ?.text ?? thread.goal
+      ?.text ?? ''
   );
 }
 
@@ -568,15 +505,8 @@ export interface Thread {
   isTitleRenamed?: boolean;
   /** A model named the thread after its first exchange (the reactor's `title.generate`). */
   isTitleGenerated?: boolean;
-  /** The drafted or edited outcome; '' while the thread has no goal (a question, a chat). */
-  goal: string;
-  criteria?: Criterion[];
-  /** Open until you dismiss them on the goal card. */
-  similar?: Similar[];
-  /** A sub-thread: the thread it was started for or nested under, and the parent's criterion it covers when known. */
+  /** A sub-thread: the thread it was started for or nested under. */
   parent?: SubThreadLink;
-  /** You removed the goal: drafts don't bring it back, an edit does. */
-  isGoalOff?: boolean;
   /** The latest `report`; a newer message from you starts a turn it no longer describes. */
   report?: TurnReport;
   /** A sub-thread's latest `report_to_parent`. */
@@ -591,13 +521,11 @@ export interface Thread {
   idle?: IdleCheck;
   /** Where the latest turn began (an `activity` index) and whether another thread or an automated event began it, not you. */
   turn?: { start: number; isAgentDriven?: true };
-  proposal?: GoalProposal;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;
   startedAt: number;
   steps: Step[];
-  revisions: Revision[];
   activity: ActivityEntry[];
   prs: PullRequest[];
   sources: Source[];
@@ -610,8 +538,6 @@ export interface Thread {
   settledAt?: number;
   /** Wall-clock ms it settled (`markSettled`); `settledAt` is on the app clock. */
   settledMs?: number;
-  /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
-  drift?: { isMuted: boolean; keeps?: number };
   session?: {
     provider: Provider;
     id: string;
@@ -649,13 +575,11 @@ export interface Thread {
   seenActivity?: number;
 }
 
-/** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
+/** A message as you wrote it; references and skills resolve when it's sent, not when it's queued. */
 /** A message sent into a running turn, until the agent reads it: what Take back returns to the composer, and the entry it logs then. */
 export interface PendingSteer {
   message: QueuedMessage;
   entry: ActivityEntry;
-  /** The drift guard's why, for the off-goal line logged with the entry. */
-  reason: string;
   /** The agent reported its turn while this waited: reading it makes that report one written before your message. */
   hasReportBefore?: true;
   /** Send now is taking it back: `pending` while the turn it was clicked in runs, `turn-ended` once that turn is over. */
@@ -1046,16 +970,11 @@ function rateLimiting(): Thread {
     spaceId: 'latitude',
     repo: { project: 'latitude', branch: 'feat/api-rate-limits' },
     title: 'Public API rate limiting',
-    goal: 'Every public API key is rate limited by plan tier, with per-key overrides and clear 429s.',
     providers: ['claude'],
     status: 'running',
     line: 1,
     startedAt: s,
     orbitSlot: 1,
-    revisions: [
-      { n: 1, at: s, label: 'Goal set', by: 'you' },
-      { n: 2, at: at(s, 92), label: 'Added per-key overrides', by: 'you' },
-    ],
     steps: [
       step('rl1', 'Agree limit tiers per plan', {
         status: 'done',
@@ -1276,13 +1195,11 @@ function adminDashboard(): Thread {
     spaceId: 'latitude',
     repo: { project: 'latitude', branch: 'feat/admin-usage' },
     title: 'Admin usage dashboard',
-    goal: 'Admins see API usage per key and per day, can export it, and the page stays fast at 10k keys.',
     providers: ['codex'],
     status: 'running',
     line: 2,
     startedAt: s,
     orbitSlot: 2,
-    revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [
       step('ad1', 'Usage query endpoint', {
         status: 'done',
@@ -1453,12 +1370,10 @@ function flakyCheckout(): Thread {
     spaceId: 'latitude',
     repo: { project: 'latitude', branch: 'fix/checkout-e2e' },
     title: 'Fix flaky checkout e2e',
-    goal: 'checkout.spec passes 20 runs in a row in CI.',
     providers: ['codex'],
     status: 'needs-you',
     line: 3,
     startedAt: s,
-    revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [
       step('e1', 'Reproduce in CI', {
         status: 'done',
@@ -1548,16 +1463,11 @@ function authMigration(): Thread {
     spaceId: 'latitude',
     repo: { project: 'latitude', branch: 'feat/better-auth' },
     title: 'Migrate auth to Better Auth',
-    goal: 'All sign-in paths run on Better Auth, existing sessions survive, old auth code is deleted.',
     providers: ['claude', 'codex'],
     status: 'review',
     line: 4,
     startedAt: s,
     orbitSlot: 3,
-    revisions: [
-      { n: 1, at: s, label: 'Goal set', by: 'you' },
-      { n: 2, at: at(s, 140), label: 'Split into two PRs', by: 'claude' },
-    ],
     steps: [
       done('au1', 'Install and configure Better Auth', 0, 25),
       done('au2', 'Port email + password sign-in', 25, 70),
@@ -1638,12 +1548,10 @@ function onboardingEmails(): Thread {
     spaceId: 'latitude',
     repo: { project: 'latitude', branch: 'feat/onboarding-emails' },
     title: 'Onboarding emails',
-    goal: 'New workspaces get a 3-email onboarding sequence.',
     providers: ['claude'],
     status: 'settled',
     line: 5,
     startedAt: s,
-    revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: [
       step('o1', 'Email templates', {
         status: 'done',
@@ -1684,13 +1592,11 @@ function simpleThread(
     spaceId,
     repo: project ? { project, branch: `feat/${id}` } : null,
     title,
-    goal: title,
     providers: [provider],
     status: 'running',
     line,
     startedAt: s,
     orbitSlot: slot,
-    revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
     steps: titles.map((t, i) => {
       const base = step(`${id}${i}`, t, { addedAt: s, addedBy: provider });
       if (i < doneCount)

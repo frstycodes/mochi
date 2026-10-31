@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer';
 import {
   Tooltip,
   TooltipContent,
@@ -39,12 +39,10 @@ import {
   usePinDrop,
   type PinnableKind,
 } from './pane/headerPins';
-import { isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
 import { ChatView } from './ChatView';
-import { goalProgress, progressLabel } from './progress';
 import { SidePane, useSplitTabIds } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
 import { THREAD_ACTIONS_MENU, THREAD_HEADER_MENU } from './menus/menus';
@@ -54,8 +52,7 @@ import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
 import { TitleBar } from './TitleBar';
 import { useDispatch, useHarnessSelector } from './store';
-import { hasGoal } from './drift';
-import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { OverflowIcon, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
 import { useSeen } from './notify/useSeen';
 import { toast } from '@/toast/store';
@@ -183,20 +180,24 @@ export function ThreadView({ thread }: { thread: Thread }) {
         )}
       </div>
       {!isWide && (
-        <Sheet open={isSummarySheetOpen} onOpenChange={setSummarySheetOpen}>
-          <SheetContent side="right" className="w-[300px] p-0 sm:max-w-[300px]">
-            <SheetTitle className="sr-only">Thread summary</SheetTitle>
+        <Drawer
+          direction="right"
+          open={isSummarySheetOpen}
+          onOpenChange={setSummarySheetOpen}
+        >
+          <DrawerContent className="w-[300px] data-[vaul-drawer-direction=right]:sm:max-w-[300px]">
+            <DrawerTitle className="sr-only">Thread summary</DrawerTitle>
             <SummaryPanel
               thread={thread}
-              // Room for the sheet's close button, which otherwise covers the summary's menu.
-              className="h-full px-3 pt-10 pb-3"
+              variant="flat"
+              className="h-full p-2"
               onPaneOpened={() => {
                 setSummarySheetOpen(false);
                 setPaneTabOpen(true);
               }}
             />
-          </SheetContent>
-        </Sheet>
+          </DrawerContent>
+        </Drawer>
       )}
     </div>
   );
@@ -338,7 +339,7 @@ function FloatingSummary({
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
       <SummaryPanel
         thread={shown}
-        isFloating
+        variant="floating"
         className={cn('max-h-full', isOpen && 'pointer-events-auto')}
       />
     </div>
@@ -372,7 +373,6 @@ function ThreadHeader({
 }) {
   const { isFirst, isMulti, leafId } = useSplit();
   const machine = useRemoteMachine();
-  const progress = goalProgress(thread);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
@@ -424,20 +424,7 @@ function ThreadHeader({
                 isSummaryOpen && 'bg-accent text-foreground',
               )}
             >
-              {hasGoal(thread) ? (
-                <>
-                  <ProgressRing
-                    met={progress.met}
-                    total={progress.total}
-                    slot={thread.line}
-                    size={14}
-                    isWorking={isWorking(thread)}
-                  />
-                  <span className="tabular">{progressLabel(progress)}</span>
-                </>
-              ) : (
-                <TextAlignLeft className="size-4" aria-hidden />
-              )}
+              <TextAlignLeft className="size-4" aria-hidden />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

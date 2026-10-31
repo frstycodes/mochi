@@ -37,14 +37,6 @@ test('parsePrefs falls back to defaults for missing, mistyped and unparseable va
   assert.equal(prefs.branchPrefix, 'me/');
 });
 
-test("parsePrefs carries over the drift card's old branch-from choice only when the store has none", () => {
-  assert.equal(parsePrefs(null, 'base').branchFrom, 'base');
-  assert.equal(
-    parsePrefs(JSON.stringify({ branchFrom: 'current' }), 'base').branchFrom,
-    'current',
-  );
-});
-
 test('setPrefs persists, notifies, and survives a reload from storage', () => {
   let calls = 0;
   const unsubscribe = subscribePrefs(() => calls++);
@@ -65,7 +57,7 @@ test('setPrefs persists, notifies, and survives a reload from storage', () => {
 test("new threads' temp branches start with mochi/ by default, follow the Branch prefix setting, and the old '' default becomes mochi/", async () => {
   assert.equal(DEFAULT_PREFS.branchPrefix, 'mochi/');
   assert.equal(
-    parsePrefs(JSON.stringify({ branchPrefix: '' }), null).branchPrefix,
+    parsePrefs(JSON.stringify({ branchPrefix: '' })).branchPrefix,
     'mochi/',
   );
   const { initialThreads, threadsReducer } =
@@ -136,8 +128,4 @@ test('removed thread model restrictions are discarded from saved preferences', (
       ),
       false,
     );
-});
-
-test('goals stay off: a saved goals: true from before they were retired is ignored', () => {
-  assert.equal(parsePrefs(JSON.stringify({ goals: true })).goals, false);
 });

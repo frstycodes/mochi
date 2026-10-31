@@ -138,7 +138,6 @@ test('a failed or interrupted turn and a usage limit pause the queue; Resume or 
       type: 'send',
       threadId: id,
       text: 'go on',
-      reason: '',
     });
     assert.equal(
       thread(sent, id).queuePause,
@@ -155,7 +154,6 @@ test('Send now steers the turn in flight with that message instead of interrupti
     type: 'send',
     threadId: id,
     text: 'second',
-    reason: '',
     queuedId: second.id,
     steers: true,
   };
@@ -223,7 +221,7 @@ test("a message you send mid-stream stays whole: the rest of the agent's streame
     text: 'I can start ',
     isDelta: false,
   });
-  s = run(s, { type: 'send', threadId: id, text: 'hi', reason: '' });
+  s = run(s, { type: 'send', threadId: id, text: 'hi' });
   s = event(s, {
     threadId: id,
     type: 'message',

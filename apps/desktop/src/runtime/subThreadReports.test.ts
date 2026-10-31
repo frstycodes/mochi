@@ -122,7 +122,6 @@ test("a working parent isn't woken; the reports ride with its next message", () 
     type: 'send',
     threadId: parent,
     text: 'go on',
-    reason: '',
   };
   const [call] = agentCalls(s, send, () => run(s, send));
   assert.ok(
@@ -285,7 +284,7 @@ test("a turn's report_to_parent becomes the parent's note, compactly; a turn wit
   );
   assert.ok(!note.includes('A long reply'));
 
-  s = run(s, { type: 'send', threadId: a, text: 'one more thing', reason: '' });
+  s = run(s, { type: 'send', threadId: a, text: 'one more thing' });
   s = agent(s, {
     threadId: a,
     type: 'message',
@@ -330,7 +329,6 @@ test('a thread messaged with expectReply replies to the sender at its next turn 
     type: 'send',
     threadId: parent,
     text: 'take the reports',
-    reason: '',
   });
   s = ended(s, parent);
   const other = run(s, {
@@ -346,7 +344,6 @@ test('a thread messaged with expectReply replies to the sender at its next turn 
     type: 'send',
     threadId: o,
     text: 'Which table?',
-    reason: '',
     from: { threadId: parent, title: 'Split the work' },
     expectReply: true,
   });
@@ -367,10 +364,7 @@ test('a thread messaged with expectReply replies to the sender at its next turn 
     [parent],
   );
   const count = reports(s, parent).length;
-  s = ended(
-    run(s, { type: 'send', threadId: o, text: 'thanks', reason: '' }),
-    o,
-  );
+  s = ended(run(s, { type: 'send', threadId: o, text: 'thanks' }), o);
   assert.equal(reports(s, parent).length, count, 'only the next turn end');
 });
 
@@ -406,7 +400,6 @@ test("report_to_parent shows in the parent's transcript at once; a message of yo
     type: 'send',
     threadId: parent,
     text: 'go on',
-    reason: '',
   };
   const [call] = agentCalls(s, send, () => run(s, send));
   assert.ok(call.method === 'send');
@@ -457,10 +450,7 @@ test('a no_change report stays with the sub-thread: no row in the parent, no wak
 test("an Auto-fix turn's done report is stored as no_change, so it stays with the sub-thread", () => {
   let { s, parent, a, thread } = family();
   s = ended(ended(s, parent), a);
-  s = ended(
-    run(s, { type: 'send', threadId: parent, text: 'ok', reason: '' }),
-    parent,
-  );
+  s = ended(run(s, { type: 'send', threadId: parent, text: 'ok' }), parent);
   assert.deepEqual(reports(s, parent), [], 'the first turn end went out');
   s = run(s, {
     type: 'prs-seen',

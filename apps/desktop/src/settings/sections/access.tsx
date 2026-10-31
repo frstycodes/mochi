@@ -22,7 +22,6 @@ import {
   type ToolPolicy,
 } from '../../runtime/toolPolicy';
 import {
-  isGoalTool,
   tierOf,
   TOOL_NAMES,
   type Tier,
@@ -95,11 +94,11 @@ export function AccessSection() {
 const LEVELS = {
   read: {
     title: 'Read only',
-    body: 'Agents can look at threads, goals, the browser and settings. Nothing changes.',
+    body: 'Agents can look at threads, the browser and settings. Nothing changes.',
   },
   changes: {
     title: 'Changes',
-    body: 'Agents change threads, goals, panes and the browser on their own, with Undo. No deletes or settings.',
+    body: 'Agents change threads, panes and the browser on their own, with Undo. No deletes or settings.',
   },
   everything: {
     title: 'Everything',
@@ -155,10 +154,7 @@ function groupTools(query: string) {
   };
   return TOOL_GROUPS.flatMap((group) => {
     const tools = TOOL_NAMES.filter(
-      (name) =>
-        TOOL_GUIDE[name].group === group &&
-        !isGoalTool(name) &&
-        (!q || matches(name)),
+      (name) => TOOL_GUIDE[name].group === group && (!q || matches(name)),
     );
     return tools.length ? [{ group, tools }] : [];
   });

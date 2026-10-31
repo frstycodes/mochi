@@ -155,7 +155,6 @@ const commands = [
     ],
   },
   { type: 'rename', threadId: 't', title: 'Login fix' },
-  { type: 'edit-goal', threadId: 't', goal: 'Login works with SSO' },
   { type: 'pin', threadId: 't', isPinned: true, order: 1.5 },
   { type: 'settle', threadId: 't', isSettled: true },
   { type: 'schedule', threadId: 't', action: 'pause' },

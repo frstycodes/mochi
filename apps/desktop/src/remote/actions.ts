@@ -72,12 +72,6 @@ export function commandFor(
         point: { kind: 'message', index: action.index },
         mode: action.mode ?? 'files',
       };
-    case 'edit-goal':
-      return {
-        type: 'edit-goal',
-        threadId: action.threadId,
-        goal: action.draft.goal,
-      };
     case 'delete':
       return action.threadIds.length === 1
         ? { type: 'delete', threadId: action.threadIds[0] }
@@ -181,8 +175,6 @@ function threadActionFor(action: Action): RemoteThreadAction | null {
       };
     case 'proposal-start':
       return { type: 'proposal-start', proposalId: action.proposalId };
-    case 'goal-remove':
-      return { type: 'goal-remove' };
     case 'autofix-set':
       return {
         type: 'autofix-set',

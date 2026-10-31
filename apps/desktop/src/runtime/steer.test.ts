@@ -44,7 +44,6 @@ const steer = (id: string, draft: string): Action & { type: 'send' } => {
     type: 'send',
     threadId: id,
     text: draft,
-    reason: '',
     steers: true,
     typed,
   };
@@ -282,7 +281,6 @@ test('Send now takes the message back with the other unread ones, interrupts, an
       type: 'send',
       threadId: id,
       text: due.draft,
-      reason: '',
       steers: true,
       queuedId: due.id,
       typed: due,

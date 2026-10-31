@@ -12,7 +12,7 @@ const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><r
 const files = new Map<string, { text: string; mtimeMs: number }>(
   Object.entries({
     'README.md':
-      '# Mochi\n\nA calm workspace for running many coding agents at once.\n\n- **Threads** with goals and steps\n- A side pane with `Preview`, `Changes`, `Terminal` and `Files`\n\n```ts\nexport const answer = 42;\n```\n',
+      '# Mochi\n\nA calm workspace for running many coding agents at once.\n\n- **Threads** with steps\n- A side pane with `Preview`, `Changes`, `Terminal` and `Files`\n\n```ts\nexport const answer = 42;\n```\n',
     'package.json':
       '{\n  "name": "harness-proto",\n  "private": true,\n  "scripts": { "dev": "vite", "test": "node --test" },\n  "dependencies": { "react": "^19.3.0" }\n}\n',
     'src/App.tsx':

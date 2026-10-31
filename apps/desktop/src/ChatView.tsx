@@ -12,7 +12,7 @@ import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { isKeyUp, isWheelUp } from './chat/scrollIntent';
-import { ContextRing } from './ContextRing';
+import { ThreadContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
@@ -49,7 +49,12 @@ import { CardEntry, EventLine } from './chat/MochiWidget';
 import { PlanRow } from './chat/PlanRow';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
-import { shallowEqual, useDispatch, useHarnessSelector } from './store';
+import {
+  shallowEqual,
+  useDispatch,
+  useGetState,
+  useHarnessSelector,
+} from './store';
 import { ProviderMark } from './ui';
 import {
   WorkspaceControls,
@@ -91,15 +96,12 @@ import {
 } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
-import { DriftCard, useDriftGuard } from './goals/DriftGuard';
-import { GoalCard } from './goals/GoalCard';
 import { EarlierTurnCard, ReportCard } from './goals/ReportCard';
-import { NextMoveRecord, ThreadPlan, useNextMove } from './goals/NextMove';
-import { SubThreadResultRow } from './goals/SubThreads';
+import { NextMoveRecord, ThreadPlan, nextMoveOf } from './goals/NextMove';
+import { SubThreadResultRow, ThreadLinkRow } from './goals/SubThreads';
 import { ProposalEntry } from './chat/ThreadProposals';
 import { GrantEntry } from './chat/GrantCard';
 import { showsVerdictCard, suggestedReply } from './goals/report';
-import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import {
   AutofixEventRow,
@@ -111,7 +113,6 @@ import {
   type TurnAnchor,
   useTurnAnchor,
 } from './chat/turnAnchor';
-import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
 import { MessageActions } from './chat/MessageActions';
@@ -138,7 +139,7 @@ import {
   useThreadServers,
   useThreadSkills,
 } from './chat/SlashMenu';
-import { queuedMessage, shouldQueue } from './chat/outbox';
+import { queuedMessage, sendMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
 import { DevServerCard } from './chat/DevServerCard';
@@ -268,7 +269,6 @@ export function ChatView({
               )}
             >
               <div ref={messages} className="contents">
-                {hasGoal(thread) && <GoalCard thread={thread} />}
                 {!!thread.setup && (
                   <SetupRow thread={thread} setup={thread.setup} />
                 )}
@@ -301,14 +301,10 @@ export function ChatView({
                     onTakeBack={(message) => restoreDraft.current?.(message)}
                   />
                 )}
-                <ProposalCard thread={thread} />
                 <ReportCard
                   thread={thread}
                   anchor={anchor}
                   isReadOnly={isReadOnly}
-                  onJump={(quote) =>
-                    jumpToQuote(transcript.current, rows, quote)
-                  }
                 />
                 <ThreadPlan thread={thread} isWorking={isRunning} />
                 <ChatMochi
@@ -460,13 +456,7 @@ const ChatRowView = memo(function ChatRowView({
       />
     );
   if (row.kind === 'earlier-turn')
-    return (
-      <EarlierTurnCard
-        thread={thread}
-        anchor={row.anchor}
-        record={row.record}
-      />
-    );
+    return <EarlierTurnCard anchor={row.anchor} record={row.record} />;
   if (row.kind === 'subagent')
     return <SubagentGroup thread={thread} entries={row.entries} />;
   if (row.kind === 'image')
@@ -494,6 +484,8 @@ const ChatRowView = memo(function ChatRowView({
     return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.nextMove)
     return <NextMoveRecord record={row.entry.nextMove} />;
+  if (row.kind === 'event' && row.entry.threadLink)
+    return <ThreadLinkRow thread={thread} link={row.entry.threadLink} />;
   if (row.kind === 'event' && row.entry.subThread)
     return (
       <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />
@@ -867,7 +859,19 @@ const Composer = memo(function Composer({
     useThreadMentionFiles(thread),
   );
   const threadDrop = useThreadMentionDrop(mention);
-  const drift = useDriftGuard(thread, mention.clear);
+  const getState = useGetState();
+  const submit = (message: QueuedMessage, extra?: { queuedId?: string }) => {
+    // The newest thread: the composer may hold one a few streamed tokens old (`useWithoutStreamedText`).
+    const state = getState();
+    sendMessage(
+      dispatch,
+      state,
+      state.threads.find((t) => t.id === thread.id) ?? thread,
+      message,
+      extra,
+    );
+    mention.clear();
+  };
   const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
   const items = slashItems.map((i) =>
@@ -938,7 +942,6 @@ const Composer = memo(function Composer({
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
-      <DriftCard guard={drift} thread={thread} />
       <motion.div {...handoff.layout}>
         <div className="relative">
           <SlashMenu menu={slash} />
@@ -967,9 +970,7 @@ const Composer = memo(function Composer({
             <QueueTray
               thread={thread}
               onEdit={edit}
-              onSendNow={(message) =>
-                drift.submit(message, { queuedId: message.id })
-              }
+              onSendNow={(message) => submit(message, { queuedId: message.id })}
             />
             <MentionChips menu={mention} />
             <ComposerInput
@@ -991,10 +992,9 @@ const Composer = memo(function Composer({
               submitLabel={isQueueing ? 'Queue message' : 'Send'}
               hasMentions={mention.mentions.length > 0}
               meter={
-                <ContextRing
+                <ThreadContextRing
+                  thread={thread}
                   provider={provider}
-                  spaceId={thread.spaceId}
-                  context={thread.context}
                   usage={threadUsage(thread)}
                 />
               }
@@ -1032,7 +1032,7 @@ const Composer = memo(function Composer({
                   isCommand: !!resolveToken(trimmed, slashItems),
                   typedSkills: typedSkills(trimmed, slashItems),
                 });
-                if (!isQueueing) return drift.submit(message);
+                if (!isQueueing) return submit(message);
                 dispatch({ type: 'queued-add', threadId: thread.id, message });
                 mention.clear();
               }}
@@ -1295,22 +1295,10 @@ function useOpeningResize() {
   return isOpening ? 'instant' : 'smooth';
 }
 
-/** Scrolls to the agent's last message holding `quote`: a verdict gap's source. */
-function jumpToQuote(
-  transcript: TranscriptHandle | null,
-  rows: ChatRow[],
-  quote: string,
-) {
-  const i = rows.findLastIndex(
-    (r) => r.kind === 'message' && r.entry.text.includes(quote),
-  );
-  if (i >= 0) transcript?.scrollToIndex(i, { align: 'center' });
-}
-
 /** Writing instead of answering keeps the card in the chat too, as its question with no answer. */
 function useRecordUnanswered(thread: Thread) {
   const dispatch = useDispatch();
-  const next = useNextMove(thread);
+  const next = nextMoveOf(thread);
   return () => {
     if (!next?.question || !showsVerdictCard(thread)) return;
     dispatch({

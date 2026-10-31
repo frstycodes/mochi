@@ -257,14 +257,13 @@ const serverLine = (name: string, provider: Provider) =>
 const pluginLine = (name: string) =>
   `For this message, prefer what the "${name}" plugin brings (its skills, commands and tools, named "${name}:…") over other ways to do the same thing.`;
 
-/** A compact transcript: the goal, where it stands, then the latest messages. Tool calls and events are left out. */
+/** A compact transcript: where it stands, then the latest messages. Tool calls and events are left out. */
 export function threadDigest(thread: Thread) {
   const done = thread.steps.filter((s) => s.status === 'done').length;
   const messages = thread.activity
     .filter((a) => a.kind === 'message')
     .slice(-DIGEST_MESSAGES);
   const lines = [
-    `Goal: ${thread.goal}`,
     `Status: ${thread.status}, ${done}/${thread.steps.length} steps done${thread.repo ? `, ${thread.repo.project} on ${thread.repo.branch}` : ''}`,
     ...messages.map((m) => `${m.who}: ${clip(m.text)}`),
   ];

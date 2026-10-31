@@ -15,12 +15,6 @@ export type ToolVerb =
   | 'Mcp';
 
 export interface ThreadSummary {
-  /** Built-in tools by verb; skills and MCP calls are counted in `skills` and `servers` instead. */
-  tools: { verb: CountedVerb; count: number }[];
-  /** Every tool call, MCP calls included. */
-  toolTotal: number;
-  added: number;
-  removed: number;
   files: FileChange[];
   /** Most recently used first; `lastAt` is the app clock's minute. */
   skills: { name: string; uses: number; lastAt: number }[];
@@ -28,15 +22,13 @@ export interface ThreadSummary {
   servers: { server: string; calls: number; tools: string[] }[];
 }
 
-export type CountedVerb = Exclude<ToolVerb, 'Skill' | 'Mcp'>;
-
 export interface FileChange {
   path: string;
   added: number;
   removed: number;
 }
 
-const COUNTED = [
+const VERBS = [
   'Read',
   'Edit',
   'Write',
@@ -44,8 +36,9 @@ const COUNTED = [
   'Browser',
   'Search',
   'Fetch',
-] satisfies CountedVerb[];
-const VERBS = [...COUNTED, 'Skill', 'Mcp'] satisfies ToolVerb[];
+  'Skill',
+  'Mcp',
+] satisfies ToolVerb[];
 
 export function toolVerb(text: string): ToolVerb {
   const first = text.split(' ')[0];
@@ -89,13 +82,9 @@ export function toolCall(
 }
 
 export function summarize(activity: ActivityEntry[]): ThreadSummary {
-  const counts = new Map<ToolVerb, number>();
   const files = new Map<string, FileChange>();
   const skills = new Map<string, ThreadSummary['skills'][number]>();
   const servers = new Map<string, ThreadSummary['servers'][number]>();
-  let added = 0;
-  let removed = 0;
-  let mcpCalls = 0;
 
   for (const entry of activity) {
     if (entry.kind !== 'tool') continue;
@@ -122,11 +111,9 @@ export function summarize(activity: ActivityEntry[]): ThreadSummary {
           ? usage.tools
           : [...usage.tools, tool],
       });
-      mcpCalls++;
       continue;
     }
     const call = toolCall(entry);
-    counts.set(call.verb, (counts.get(call.verb) ?? 0) + 1);
     if (call.verb !== 'Edit' && call.verb !== 'Write') continue;
     const file = files.get(call.target) ?? {
       path: call.target,
@@ -136,19 +123,9 @@ export function summarize(activity: ActivityEntry[]): ThreadSummary {
     files.set(call.target, file);
     file.added += call.added ?? 0;
     file.removed += call.removed ?? 0;
-    added += call.added ?? 0;
-    removed += call.removed ?? 0;
   }
 
-  const tools = COUNTED.filter((v) => counts.has(v)).map((verb) => ({
-    verb,
-    count: counts.get(verb)!,
-  }));
   return {
-    tools,
-    toolTotal: tools.reduce((n, t) => n + t.count, mcpCalls),
-    added,
-    removed,
     files: [...files.values()],
     skills: [...skills.values()].sort((a, b) => b.lastAt - a.lastAt),
     servers: [...servers.values()].sort((a, b) => b.calls - a.calls),

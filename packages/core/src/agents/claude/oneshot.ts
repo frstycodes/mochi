@@ -8,16 +8,10 @@ import {
   type SpareProcess,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentInstall } from '../../../../../apps/desktop/src/host/types/settings.ts';
-import {
-  CLASSIFY_PROMPT,
-  classifyInput,
-} from '../../../../../apps/desktop/src/drift.ts';
-import type { Thread } from '../../../../../apps/desktop/src/model.ts';
 import { cached, uncache } from '../../../../../apps/desktop/electron/cache.ts';
 import { detect } from '../../settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
 
-const CLASSIFY_MODEL = 'claude-haiku-5-5';
 const SIDE_CHAT_MODEL = 'claude-sonnet-5-5';
 const DETECT_TTL = '5 minutes';
 const SPARE_IDLE_MS = 10 * 60_000;
@@ -52,36 +46,6 @@ export async function* askClaude(
         message.errors?.join('\n') || `Claude stopped: ${message.subtype}`,
       );
   }
-}
-
-/**
- * Drift guard's model pass; resolves to the parsed `{ verdict, reason }`, which the caller validates.
- * The JSON comes from the prompt, not `outputFormat`: that option is fixed at prewarm, and the spare is shared with side chat.
- */
-export async function classifyClaude(
-  prompt: string,
-  thread: Thread,
-  signal: AbortSignal,
-) {
-  const abort = new AbortController();
-  signal.addEventListener('abort', () => abort.abort(), { once: true });
-  for await (const message of run(
-    await runner(thread.spaceId),
-    classifyInput(prompt, thread),
-    CLASSIFY_MODEL,
-    CLASSIFY_PROMPT,
-    abort,
-  )) {
-    if (message.type !== 'result') continue;
-    if (message.subtype !== 'success') return null;
-    return JSON.parse(
-      message.result.slice(
-        message.result.indexOf('{'),
-        message.result.lastIndexOf('}') + 1,
-      ),
-    ) as unknown;
-  }
-  return null;
 }
 
 /** `supportedModels()` from the profile's account. */

@@ -1,6 +1,4 @@
-import { isMet, type Step, type StepStatus, type Thread } from './model.ts';
-import { summarize } from './summary.ts';
-import { prefsNow } from './store/context.ts';
+import type { Step, StepStatus } from './model.ts';
 
 export function statusAt(step: Step, t: number): StepStatus | null {
   if (step.addedAt > t) return null;
@@ -11,51 +9,6 @@ export function statusAt(step: Step, t: number): StepStatus | null {
     return finishedLater ? 'running' : step.status;
   if (finishedLater || step.status === 'running') return 'ready';
   return step.status;
-}
-
-export type Phase = 'planning' | 'building' | 'verifying' | 'ready' | 'settled';
-
-export const GOAL_PHASE_LABELS = {
-  planning: 'Planning',
-  building: 'Building',
-  verifying: 'Verifying',
-  ready: 'Ready for review',
-  settled: 'Settled',
-} satisfies Record<Phase, string>;
-
-/**
- * The ring: criteria met out of the goal's criteria (what done means); no criteria, no count. Steps never count: they aren't
- * equal in size and a re-plan would move the count backwards. `phase` is read from what Mochi saw happen (edits, claims,
- * checks), never from the agent's own percentage.
- */
-export function goalProgress(thread: Thread) {
-  const criteria = prefsNow().goals ? (thread.criteria ?? []) : [];
-  const met = criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length;
-  return {
-    met,
-    total: criteria.length,
-    phase: phaseOf(thread, criteria.length > 0 && met === criteria.length),
-  };
-}
-
-function phaseOf(thread: Thread, isAllMet: boolean): Phase {
-  if (thread.status === 'settled') return 'settled';
-  // `review` is a status only threads saved before the verdict decided readiness still carry (and the demo's).
-  if (isAllMet || thread.status === 'review') return 'ready';
-  if (thread.criteria?.some((c) => c.claim || c.check)) return 'verifying';
-  if (
-    thread.steps.some((s) => s.status === 'done' || s.status === 'running') ||
-    summarize(thread.activity).files.length
-  )
-    return 'building';
-  return 'planning';
-}
-
-/** "Building · 1/3" with criteria, "Building" without. */
-export function progressLabel(p: ReturnType<typeof goalProgress>) {
-  return p.total
-    ? `${GOAL_PHASE_LABELS[p.phase]} · ${p.met}/${p.total}`
-    : GOAL_PHASE_LABELS[p.phase];
 }
 
 /** Each step's column on the board: its place in its thread's plan. */

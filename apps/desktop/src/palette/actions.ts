@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Plugin,
   Skill,
-  Flag,
   Link,
   Search,
   ArrowLeft,
@@ -67,9 +66,6 @@ import { openRewind } from '../rewind/requests';
 import { PROVIDER_NAME } from '../rewind/handoff';
 import { isSwitchPending, otherProvider, switchHere } from '../rewind/switch';
 import { openSchedule } from '../schedule/ScheduleDialog';
-import { openGoalEditor } from '../goals/GoalEditor';
-import { hasGoal } from '../drift';
-import { getPrefs } from '../settings/prefs';
 import { startRename } from '../rename';
 import { openSettings } from '../routes/nav';
 import { openDeveloper, openReplay } from '../routes/nav';
@@ -358,26 +354,6 @@ export const ACTIONS = [
     keywords: 'recording session share html',
     when: when.thread,
     run: onThread((t, { state }) => void shareReplay(state, t)),
-  },
-  {
-    id: 'thread-goal-make',
-    group: 'Thread',
-    title: 'Make this a goal',
-    icon: Flag,
-    keywords: 'goal outcome criteria done task track progress',
-    when: (s) => when.thread(s) && getPrefs().goals && !hasGoal(s.thread!),
-    run: onThread((t) => openGoalEditor(t.id)),
-  },
-  {
-    id: 'thread-goal-remove',
-    group: 'Thread',
-    title: 'Remove goal',
-    icon: XSquare,
-    keywords: 'goal chat question untrack progress',
-    when: (s) => when.thread(s) && hasGoal(s.thread!),
-    run: onThread((t, { dispatch }) =>
-      dispatch({ type: 'goal-remove', threadId: t.id }),
-    ),
   },
   {
     id: 'thread-handoff',

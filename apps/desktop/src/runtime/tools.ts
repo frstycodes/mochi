@@ -45,12 +45,7 @@ import {
   type ThreadProposal,
 } from '../model.ts';
 import { projectName, projectRef } from '../projects.ts';
-import {
-  activeThreads,
-  dropPin,
-  pinnedThreads,
-  subThreadsOf,
-} from '../reorder.ts';
+import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_CONTROL } from '../settings/settingOptions.ts';
 import {
@@ -68,7 +63,6 @@ import { resolveRun } from './models.ts';
 import {
   APPROVAL_TIMEOUT_MS,
   decodeArgs,
-  isGoalTool,
   isQuiet,
   tierOf,
   TOOL_TABLE,
@@ -289,10 +283,6 @@ export async function runTool(
     if (isChosen && policy === 'off')
       throw new Error(
         `The user turned ${name} off for agents in Settings › Mochi access. Don't call it again unless they turn it back on.`,
-      );
-    if (isGoalTool(name) && !env.prefs.get().goals)
-      throw new Error(
-        "Mochi has no goals any more. Carry on without one and don't call goal tools again.",
       );
     if (!isChosen) gate(ctx, name, LEVEL[tier]);
     const asked = spec.ask?.(ctx);
@@ -608,7 +598,6 @@ const THREAD_SPECS = {
       return {
         result: {
           ...summary(thread),
-          goal: thread.goal,
           branch: thread.repo?.branch ?? null,
           plan: thread.steps
             .filter((s) => s.status !== 'dropped')
@@ -986,8 +975,6 @@ const THREAD_SPECS = {
         prompt: receivedPrompt(from, text),
         from,
         ...(expectReply && { expectReply: true as const }),
-        drift: 'on-goal',
-        reason: `Sent by ${authorName(caller.providers[0])} from another thread`,
       });
       return {
         changed: `messaged "${thread.title}"`,
@@ -1050,79 +1037,9 @@ const THREAD_SPECS = {
   },
 } satisfies Partial<Specs>;
 
-const GOAL_SPECS = {
-  get_goal: {
-    run: ({ state, caller, args }) => ({
-      result: goalOf(target(state(), caller, args.threadId), state().threads),
-    }),
-  },
-  propose_goal: {
-    run: ({ state, env, caller, args, dispatch }) => {
-      if (caller.isGoalOff)
-        throw new Error(
-          "The user removed this thread's goal; carry on without one",
-        );
-      const isApplied = env.prefs.get().proposedGoals === 'apply';
-      const criteria = args.criteria.map((c) => ({
-        text: c.text.trim(),
-        ...(c.command?.trim() && { command: c.command.trim() }),
-      }));
-      dispatch({
-        type: 'goal-propose',
-        threadId: caller.id,
-        goal: args.goal.trim(),
-        criteria,
-        basis: args.basis?.trim() || undefined,
-        by: caller.providers[0],
-        isApplied,
-      });
-      const result = isApplied
-        ? 'Applied; the user can undo it. get_goal lists the new criterion ids.'
-        : 'Waiting for the user to accept it; keep working on the current goal meanwhile.';
-      return {
-        changed: isApplied
-          ? `set the goal: ${args.goal}`
-          : `proposed the goal: ${args.goal}`,
-        result: {
-          status: result,
-          goal: goalOf(target(state(), caller, caller.id)),
-        },
-      };
-    },
-  },
-  claim_criterion: {
-    run: ({ state, caller, args, dispatch }) => {
-      const criterion = caller.criteria?.find((c) => c.id === args.criterionId);
-      if (!caller.goal)
-        throw new Error('This thread has no goal; nothing to claim');
-      if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
-      if (!criterion)
-        throw new Error(
-          `No criterion ${args.criterionId}; get_goal lists them`,
-        );
-      dispatch({
-        type: 'criterion-claim',
-        threadId: caller.id,
-        criterionId: criterion.id,
-        evidence: args.evidence.trim(),
-        by: caller.providers[0],
-      });
-      return {
-        changed: `claimed "${criterion.text}"`,
-        result: goalOf(target(state(), caller, caller.id)),
-      };
-    },
-  },
+const REPORT_SPECS = {
   report_turn: {
     run: ({ env, state, caller, args, dispatch }) => {
-      // The end-of-turn card outlived goals: only a goals-on build still asks for one first.
-      if (env.prefs.get().goals) {
-        if (!caller.goal && caller.proposal?.state !== 'waiting')
-          throw new Error(
-            'This thread has no goal; propose a researched goal before reporting',
-          );
-        if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
-      }
       const { summary, next, options } = args;
       const isSpineOn = env.prefs.get().turnSpine;
       const decisions = reportItems(args.decisions);
@@ -1181,30 +1098,6 @@ const GOAL_SPECS = {
       return {
         changed: `reported ${status} to the parent thread`,
         result: { status, parentThreadId: caller.parent.threadId },
-      };
-    },
-  },
-  get_report: {
-    run: ({ state, caller, args }) => ({
-      result: reportOf(target(state(), caller, args.threadId)),
-    }),
-  },
-  settle_goal: {
-    run: ({ state, caller, args, dispatch }) => {
-      const [thread] = others(state(), caller, [args.threadId], 'settle');
-      dispatch({
-        type: 'say',
-        threadId: thread.id,
-        entry: {
-          who: caller.providers[0],
-          kind: 'event',
-          text: `Goal settled by ${authorName(caller.providers[0])}: ${args.reason}`,
-        },
-      });
-      dispatch({ type: 'settle', threadId: thread.id });
-      return {
-        changed: `settled the goal of "${thread.title}"`,
-        result: goalOf(target(state(), caller, thread.id)),
       };
     },
   },
@@ -1421,7 +1314,7 @@ const AGENT_SPECS = {
 
 const SPECS = {
   ...THREAD_SPECS,
-  ...GOAL_SPECS,
+  ...REPORT_SPECS,
   ...LAYOUT_SPECS,
   ...USER_SPECS,
   ...AGENT_SPECS,
@@ -1601,18 +1494,11 @@ function others(state: State, caller: Thread, ids: string[], verb: string) {
 }
 
 function reportOf(thread: Thread) {
-  const { goal, criteria = [], report, prs, status } = thread;
+  const { report, prs, status } = thread;
   return {
     threadId: thread.id,
     title: thread.title,
     status,
-    goal,
-    criteria: criteria.map(({ id, text, claim, check }) => ({
-      id,
-      text,
-      claimed: claim?.evidence ?? null,
-      check: check?.status ?? null,
-    })),
     report: report ?? null,
     prs: prs.map(({ number, state, title }) => ({ number, state, title })),
   };
@@ -1631,23 +1517,9 @@ const isPinned = (t: Thread) =>
 const providerOf = (provider: Provider | undefined, caller: Thread) =>
   provider ?? caller.providers[0];
 
-/** The link a new thread starts with: to the caller and the criterion it covers, at any depth; none for `isTopLevel`. */
-function subThreadLink(
-  caller: Thread,
-  args: { criterionId?: string; isTopLevel?: boolean },
-) {
-  if (args.isTopLevel && args.criterionId)
-    throw new Error('A criterion goes to a sub-thread; leave out isTopLevel');
-  if (args.isTopLevel) return undefined;
-  if (
-    args.criterionId &&
-    !caller.criteria?.some((c) => c.id === args.criterionId)
-  )
-    throw new Error(`No criterion ${args.criterionId}; get_goal lists them`);
-  return {
-    threadId: caller.id,
-    ...(args.criterionId && { criterionId: args.criterionId }),
-  };
+/** The link a new thread starts with: to the caller, at any depth; none for `isTopLevel`. */
+function subThreadLink(caller: Thread, args: { isTopLevel?: boolean }) {
+  return args.isTopLevel ? undefined : { threadId: caller.id };
 }
 
 const PLACEMENTS = [
@@ -1902,50 +1774,6 @@ const asObject = (v: unknown) =>
   v && typeof v === 'object' && !Array.isArray(v) ? v : { result: v };
 
 const fail = (text: string): AgentToolResult => ({ text, isError: true });
-
-/** `threads`, when given, lists the thread's sub-threads and which criterion each covers. */
-function goalOf(thread: Thread, threads?: Thread[]) {
-  const subs = threads
-    ? subThreadsOf(threads, thread.id).map((t) => ({
-        threadId: t.id,
-        title: t.title,
-        criterionId: t.parent?.criterionId ?? null,
-        status: t.status,
-        isHandedBack: !!t.parent?.handedBackAt,
-      }))
-    : [];
-  return {
-    threadId: thread.id,
-    title: thread.title,
-    goal: thread.goal,
-    criteria: thread.criteria ?? [],
-    status: thread.status,
-    ...(subs.length && { subThreads: subs }),
-    ...(isDraftGoal(thread) && { isDraft: true, next: DRAFT_NEXT }),
-    ...(!thread.goal &&
-      !thread.isGoalOff && {
-        next:
-          thread.proposal?.state === 'waiting'
-            ? 'Your researched goal is waiting for acceptance. Keep working and report progress; claim criteria after acceptance.'
-            : 'For a task with a checkable outcome, research the code and request first, then call propose_goal with the concrete outcome and checkable criteria. A question, a chat or a small one-step change needs no goal.',
-      }),
-    ...(thread.proposal?.state === 'waiting' && { proposal: thread.proposal }),
-  };
-}
-
-/** A goal only Mochi's drafter has written: guessed from the first message, never checked against the code, so the agent replaces it with propose_goal. */
-function isDraftGoal(thread: Thread) {
-  return (
-    !!thread.goal &&
-    !thread.proposal &&
-    thread.revisions.every((r) => r.by === 'harness')
-  );
-}
-
-const DRAFT_NEXT =
-  "This goal is Mochi's guess from the user's first message, not checked against the code. Once you've looked at the code, call propose_goal with the real outcome and 2 to 4 criteria (a command for each where one proves it); claim_criterion and report_turn wait until you have.";
-
-const DRAFT_REFUSAL = `Call propose_goal first. ${DRAFT_NEXT}`;
 
 const PLAN_STATUS = {
   pending: 'pending',

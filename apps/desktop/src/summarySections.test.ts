@@ -1,17 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import type { Thread } from './model.ts';
+import type { McpServer, Thread } from './model.ts';
 import { summarize } from './summary.ts';
 import {
-  connectorStatus,
+  brokenConnectors,
+  connectorUsage,
   orderCards,
   savedOrder,
   summaryCards,
 } from './summarySections.ts';
-import { setPrefs } from './settings/prefs.ts';
-
-// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
-setPrefs({ goals: true });
 
 const thread = (patch: Partial<Thread>) =>
   ({
@@ -29,39 +26,34 @@ const thread = (patch: Partial<Thread>) =>
     context: { used: 0, max: 0 },
     ...patch,
   }) as Thread;
-const cards = (t: Thread, portCount = 0, outputCount = 0) =>
+const cards = (
+  t: Thread,
+  portCount = 0,
+  outputCount = 0,
+  linkedThreadCount = 0,
+) =>
   summaryCards({
     thread: t,
     summary: summarize(t.activity),
+    linkedThreadCount,
     portCount,
     outputCount,
   });
 
-test('a folderless chat shows only where it runs and its sources', () => {
-  assert.deepEqual(cards(thread({})), ['environment', 'sources']);
+test('a folderless chat shows only its sources', () => {
+  assert.deepEqual(cards(thread({})), ['sources']);
 });
 
-test('the context card appears once the thread knows its window', () => {
-  assert.deepEqual(cards(thread({ context: { used: 0, max: 200_000 } })), [
-    'environment',
-    'context',
-    'sources',
-  ]);
+test('the threads card appears once a parent, sub-thread or reply is linked', () => {
+  assert.deepEqual(cards(thread({}), 0, 0, 1), ['threads', 'sources']);
 });
 
-test('servers, outputs and connectors appear only once there are some', () => {
-  const t = thread({
-    agent: {
-      mcpServers: [{ name: 'linear', status: 'connected' }],
-    } as Thread['agent'],
-  });
-  assert.deepEqual(cards(t, 1, 2), [
-    'environment',
-    'sources',
-    'connectors',
-    'servers',
-    'outputs',
-  ]);
+test('a listening server shows the running card first', () => {
+  assert.deepEqual(cards(thread({}), 1), ['running', 'sources']);
+});
+
+test('outputs alone bring the changes card, even without a repo', () => {
+  assert.deepEqual(cards(thread({}), 0, 2), ['changes', 'sources']);
 });
 
 test('a repo always has a changes card, so a PR can be opened from it', () => {
@@ -69,79 +61,67 @@ test('a repo always has a changes card, so a PR can be opened from it', () => {
     cards(
       thread({ repo: { project: 'mochi', branch: 'b' } as Thread['repo'] }),
     ),
-    ['environment', 'sources', 'changes'],
+    ['changes', 'sources'],
   );
 });
 
 test('a PR keeps the changes card in a chat without a repo', () => {
   assert.deepEqual(
     cards(thread({ prs: [{ number: 1, state: 'open', title: 'x' }] })),
-    ['environment', 'sources', 'changes'],
+    ['changes', 'sources'],
   );
 });
 
-test('connector status leads with what needs you', () => {
+test('only connectors that need sign-in or failed need you', () => {
   assert.deepEqual(
-    connectorStatus([
-      { status: 'connected' },
-      { status: 'needs-auth' },
-      { status: 'failed' },
-    ]),
-    { text: '2 to reconnect', needsYou: true },
-  );
-  assert.deepEqual(
-    connectorStatus([{ status: 'connected' }, { status: 'connected' }]),
-    { text: '2 connected', needsYou: false },
-  );
-  assert.deepEqual(
-    connectorStatus([{ status: 'connected' }, { status: 'pending' }]),
-    { text: '1 connecting', needsYou: false },
-  );
-  assert.deepEqual(
-    connectorStatus([{ status: 'connected' }, { status: 'disabled' }]),
-    { text: '1 of 2 on', needsYou: false },
+    brokenConnectors([
+      { name: 'a', status: 'connected' },
+      { name: 'b', status: 'needs-auth' },
+      { name: 'c', status: 'failed' },
+      { name: 'd', status: 'pending' },
+    ]).map((s) => s.name),
+    ['b', 'c'],
   );
 });
 
-test('a goal leads the cards', () => {
-  assert.deepEqual(cards(thread({ goal: 'Ship it' })).slice(0, 2), [
-    'goal',
-    'environment',
+test('only connectors this thread called, most called first', () => {
+  const servers = [
+    { name: 'figma', status: 'connected' },
+    { name: 'linear', status: 'connected' },
+    { name: 'slack', status: 'connected' },
+  ] satisfies McpServer[];
+  const rows = connectorUsage(servers, [
+    { server: 'linear', calls: 3, tools: ['get_issue'] },
+    { server: 'slack', calls: 1, tools: ['post'] },
   ]);
+  assert.deepEqual(
+    rows.map((r) => [r.server.name, r.calls]),
+    [
+      ['linear', 3],
+      ['slack', 1],
+    ],
+  );
 });
 
 test('dragged order wins; cards never placed keep their default slot', () => {
   assert.deepEqual(
-    orderCards(
-      ['environment', 'sources', 'changes'],
-      ['changes', 'environment'],
-    ),
-    ['changes', 'sources', 'environment'],
+    orderCards(['running', 'changes', 'sources'], ['sources', 'running']),
+    ['sources', 'changes', 'running'],
   );
-  assert.deepEqual(
-    orderCards(
-      ['environment', 'sources', 'servers', 'changes'],
-      ['changes', 'sources', 'environment'],
-    ),
-    ['changes', 'sources', 'servers', 'environment'],
-  );
-  assert.deepEqual(
-    orderCards(['environment', 'sources'], ['bogus', 'sources']),
-    ['environment', 'sources'],
-  );
+  assert.deepEqual(orderCards(['changes', 'sources'], ['bogus', 'sources']), [
+    'changes',
+    'sources',
+  ]);
 });
 
 test('a drag keeps hidden cards in the saved order', () => {
   assert.deepEqual(
-    savedOrder(
-      ['sources', 'environment'],
-      ['servers', 'environment', 'sources'],
-    ),
-    ['sources', 'environment', 'servers'],
+    savedOrder(['sources', 'changes'], ['running', 'changes', 'sources']),
+    ['sources', 'changes', 'running'],
   );
 });
 
-test('the background tasks card shows only while a task runs', () => {
+test('the running card shows only while a task runs', () => {
   const task = (status: 'running' | 'done') =>
     ({
       id: 'b1',
@@ -152,13 +132,12 @@ test('the background tasks card shows only while a task runs', () => {
       startedAt: 0,
     }) as const;
   assert.deepEqual(cards(thread({ backgroundTasks: [task('running')] })), [
-    'environment',
+    'running',
     'sources',
-    'tasks',
   ]);
   assert.deepEqual(
     cards(thread({ backgroundTasks: [task('done')] })),
-    ['environment', 'sources'],
+    ['sources'],
     'finished tasks stay in the tab, not the card',
   );
 });

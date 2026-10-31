@@ -136,7 +136,6 @@ const calls: Record<string, [string, unknown[]][]> = {
     ['restoreFiles', [cwd, 't-1', 'undo', ['a.ts']]],
     ['rewindPreview', [cwd, 't-1', 2]],
     ['turnDiff', [cwd, 'a'.repeat(40)]],
-    ['runCheck', [cwd, 'pnpm test']],
     ['repoSlug', [cwd]],
   ],
   library: [

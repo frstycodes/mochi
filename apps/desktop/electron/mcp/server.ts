@@ -32,11 +32,10 @@ import { toolCalls } from './calls.ts';
 /** Codex: a streamable-HTTP URL on localhost for its `mcp_servers` config, one path per thread behind a per-launch secret. */
 export async function codexUrl(
   thread: string,
-  { isGoalsOff, isSettingsChat, isSpineOff, isSubThread }: MochiScope = {},
+  { isSettingsChat, isSpineOff, isSubThread }: MochiScope = {},
 ) {
   const { port } = (await listening()).address() as AddressInfo;
   const query = new URLSearchParams({
-    ...(isGoalsOff && { goals: 'off' }),
     ...(isSettingsChat && { kind: 'settings' }),
     ...(isSubThread && { kind: 'sub' }),
     ...(isSpineOff && { spine: 'off' }),
@@ -168,7 +167,6 @@ function listening() {
         return void res.writeHead(403).end();
       const query = new URLSearchParams(match[3]);
       const scope: MochiScope = {
-        isGoalsOff: query.get('goals') === 'off',
         isSettingsChat: query.get('kind') === 'settings',
         isSubThread: query.get('kind') === 'sub',
         isSpineOff: query.get('spine') === 'off',
@@ -237,7 +235,7 @@ export async function startDevMcp() {
 }
 
 const DEV_INSTRUCTIONS =
-  'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.';
+  'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account.';
 
 const devTools = () =>
   Object.entries(DEV_TOOL_TABLE).map(([name, t]): ServedTool => ({

@@ -37,7 +37,7 @@ const thread = (
     activity,
     steps: [],
     live: { isWorking },
-    idle: { at: 0, turn: 1, accepted: [] },
+    idle: { at: 0, turn: 1 },
     ...patch,
   }) as Thread;
 

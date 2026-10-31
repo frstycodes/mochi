@@ -63,9 +63,8 @@ const KIND_ICONS = {
   idle: { icon: CheckCircle, className: 'text-success' },
 } satisfies Record<NoticeKind, { icon: IconComponent; className: string }>;
 
-/** An idle notice takes its verdict's look; done keeps the `idle` default. */
+/** An idle notice takes its verdict's look. */
 const VERDICT_ICONS = {
-  gaps: { icon: Warning, className: 'text-warning' },
   'needs-you': { icon: Warning, className: 'text-warning' },
   stalled: { icon: Hourglass, className: 'text-destructive' },
 } satisfies Partial<

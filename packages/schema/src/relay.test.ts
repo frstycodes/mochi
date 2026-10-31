@@ -322,7 +322,6 @@ test('each thread action needs its own scope, and one Core doesn’t know needs 
   assert.equal(commandScope(action('controls')), 'operate');
   assert.equal(commandScope(action('queued-add')), 'operate');
   assert.equal(commandScope(action('grant-answer')), 'operate');
-  assert.equal(commandScope(action('goal-remove')), 'manage');
   assert.equal(commandScope(action('autofix-set')), 'manage');
   assert.equal(commandScope(action('proposal-start')), 'manage');
   for (const unknown of ['delete', 'toString', '__proto__', 'constructor'])
@@ -331,7 +330,6 @@ test('each thread action needs its own scope, and one Core doesn’t know needs 
   assert.equal(commandScope({ type: 'hasOwnProperty' }), 'local');
   assert.equal(commandScope({ type: 'send' }), 'operate');
   assert.equal(commandScope(undefined), 'local');
-  assert.equal(commandScope(action('goal-remove')), 'manage');
 });
 
 test('a send carries the composer’s images and references, and needs something to send', () => {

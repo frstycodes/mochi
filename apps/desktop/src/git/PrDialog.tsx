@@ -19,7 +19,7 @@ import { parsePr, prPrompt } from '../utility/prompts';
 import { useDraft } from '../utility/useDraft';
 
 /**
- * The pull request before it opens: title and description start as the thread's title and goal, are replaced by a draft
+ * The pull request before it opens: the title starts as the thread's title, title and description are replaced by a draft
  * from the branch's changes when one arrives, and stay yours to edit. Fields you already changed are never replaced.
  */
 export function PrDialog({
@@ -41,7 +41,7 @@ export function PrDialog({
     text: thread.title,
   });
   const [body, setBody] = useState<{ text: string; isEdited?: boolean }>({
-    text: thread.goal,
+    text: '',
   });
   const { draft, isDrafting } = useDraft('pr', thread.spaceId);
   const base = diff.base.replace(/^origin\//, '');
@@ -51,9 +51,7 @@ export function PrDialog({
       (d) => d.files,
       () => diff.files,
     );
-    return draft(
-      branchFiles.then((files) => prPrompt(thread.title, thread.goal, files)),
-    );
+    return draft(branchFiles.then((files) => prPrompt(thread.title, files)));
   });
   useEffect(() => {
     let isCurrent = true;

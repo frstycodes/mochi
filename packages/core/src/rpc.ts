@@ -5,7 +5,6 @@ import {
   Backend,
   Capabilities,
   HostRpcs,
-  Model,
   Relay,
   Remote,
 } from '@mochi/schema';
@@ -113,10 +112,6 @@ export class CoreRpcs extends RpcGroup.make(
       thread: Schema.optional(Schema.String),
     },
     success: Schema.NullOr(Schema.String),
-  }),
-  Rpc.make('utility.classify', {
-    payload: { prompt: Schema.String, thread: Model.Thread },
-    success: Schema.NullOr(Agent.DriftVerdict),
   }),
   /** This Core's descriptor as this connection sees it. */
   Rpc.make('backend.info', { success: Backend.BackendInfo }),

@@ -11,7 +11,6 @@ import { ask, utility, type Asker } from './ask.ts';
 const context: AgentAskContext = {
   spaceId: 'work',
   title: 'Rate limiter',
-  goal: 'Add a rate limiter',
   steps: [],
   activity: [],
   diff: null,
@@ -57,7 +56,7 @@ test('a side chat choice reaches its own provider with the same context, on the 
     calls[1][2],
     'both providers get the same instructions',
   );
-  assert.match(calls[0][2] as string, /Add a rate limiter/);
+  assert.match(calls[0][2] as string, /Rate limiter/);
 });
 
 test('a background task runs on your choice, then Haiku, then Luna, and gives up with null for the local fallback', async () => {

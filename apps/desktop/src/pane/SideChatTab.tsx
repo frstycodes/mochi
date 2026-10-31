@@ -201,8 +201,8 @@ export function EmptySideChat() {
       <div className="flex max-w-64 flex-col gap-1">
         <h3 className="type-title">Ask without derailing the thread</h3>
         <p className="type-meta text-muted-foreground">
-          Answers see the goal, steps, recent activity and diff, but nothing
-          here reaches the agent unless you send it.
+          Answers see the steps, recent activity and diff, but nothing here
+          reaches the agent unless you send it.
         </p>
       </div>
     </ConversationEmptyState>

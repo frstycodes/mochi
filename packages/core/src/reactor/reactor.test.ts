@@ -235,18 +235,14 @@ it.effect(
         github: '',
         nativeOff: ['claude:claude-default:skill:user:ui', 'codex:x'],
       };
-      // An earlier run: the thread's turn ended, and a window had moved your profiles and prefs into Core.
+      // An earlier run: the thread's turn ended, and a window had moved your profiles into Core.
       yield* Effect.scoped(
         Effect.gen(function* () {
           const store = yield* Store;
           const { context } = (yield* (yield* Projection).current).domain;
           yield* command(store, {
             type: 'context',
-            context: {
-              ...context,
-              prefs: { ...context.prefs, goals: false },
-              profiles: [profile],
-            },
+            context: { ...context, profiles: [profile] },
           });
           yield* command(store, create);
           yield* turnEnd(store);
@@ -288,7 +284,6 @@ it.effect(
       assert.deepEqual(start.options.nativeOff, [
         'claude:claude-default:skill:user:ui',
       ]);
-      assert.equal(start.options.isGoalsOff, true);
       assert.equal(start.options.permissionMode, 'auto', "the thread's Auto");
     }),
 );

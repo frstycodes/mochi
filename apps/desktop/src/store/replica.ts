@@ -277,13 +277,10 @@ const Pin = Schema.Struct({
 });
 const ContextSchema = Schema.Struct({
   prefs: Schema.Struct({
-    goals: Schema.Boolean,
-    driftGuard: Schema.Boolean,
     autofixPrs: Schema.Boolean,
     autoArchivePrs: Schema.Boolean,
     workspaceMode: Schema.Literals(['worktree', 'folder']),
     branchPrefix: Schema.String,
-    idleChecks: Schema.Literals(['edited', 'always', 'off']),
     simplifyAuto: Schema.Boolean,
     simplifyAutoWords: Schema.Number,
     // Joined the context after the rest: a context Core saved before then has none.

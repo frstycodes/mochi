@@ -129,11 +129,7 @@ function CompactionLine({
   );
 }
 
-/** "kept 2 pins and the goal". */
-function keptLine({ pins, hasGoal }: Compaction) {
-  const parts = [
-    pins > 0 && `${pins} ${plural(pins, 'pin', 'pins')}`,
-    hasGoal && 'the goal',
-  ].filter(Boolean);
-  return parts.length ? `kept ${parts.join(' and ')}` : '';
+/** "kept 2 pins". */
+function keptLine({ pins }: Compaction) {
+  return pins > 0 ? `kept ${pins} ${plural(pins, 'pin', 'pins')}` : '';
 }

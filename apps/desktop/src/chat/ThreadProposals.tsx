@@ -10,7 +10,7 @@ import {
 } from '../model';
 import { useHarness, useHarnessSelector } from '../store';
 import { SubThreadState } from '../goals/SubThreads';
-import { useThreadStatus } from '../goals/VerdictChip';
+import { threadStatus } from '../goals/VerdictChip';
 import { isExpired, OFFER_REPLY, suggestionHereReply } from './proposals';
 import { ThreadName } from './ThreadMessage';
 
@@ -50,7 +50,6 @@ export function ProposalEntry({
       type: 'send',
       threadId: thread.id,
       text,
-      reason: `Answered "${p.title}"`,
     });
   };
   const proposals = shown.filter((p) => p.initiation !== 'offer');
@@ -279,7 +278,7 @@ function LiveState({ sub }: { sub: Thread }) {
   return (
     <SubThreadState
       sub={sub}
-      status={useThreadStatus(sub)}
+      status={threadStatus(sub)}
       className="type-meta"
     />
   );

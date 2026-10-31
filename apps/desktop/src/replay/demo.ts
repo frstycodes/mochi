@@ -157,8 +157,6 @@ function entryEvents(
         type: 'send',
         threadId,
         text: entry.text,
-        reason: '',
-        drift: 'on-goal',
         ...(entry.from && { from: entry.from }),
       },
     ];

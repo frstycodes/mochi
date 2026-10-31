@@ -81,9 +81,8 @@ test("a turn's end stops a running step's clock without finishing it; the agent 
   );
 });
 
-test('an unknown plan item lands as a plan step, no revision, after the item it follows', () => {
+test('an unknown plan item lands as a plan step, after the item it follows', () => {
   let s = base();
-  const before = thread(s, 'adm').revisions;
   const items = titles(s, 'adm').map((title) => ({
     title,
     status: 'pending' as const,
@@ -97,7 +96,6 @@ test('an unknown plan item lands as a plan step, no revision, after the item it 
   const added = adm.steps[1];
   assert.equal(added.title, 'Index api_usage_daily by key');
   assert.deepEqual([added.addedBy, added.status], ['codex', 'ready']);
-  assert.equal(adm.revisions, before);
   assert.equal(
     adm.activity.at(-1)!.text,
     'Plan: Codex added "Index api_usage_daily by key"',
