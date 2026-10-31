@@ -825,12 +825,20 @@ function makeRemote({
     /** Starts listening when Settings › Remote access is on, and reads the account's records. */
     start() {
       identify();
-      if (settings.isEnabled) void restart();
+      // On the desktop the account is sealed with main's keychain: read before main connects it reads as signed out, and the
+      // relay would never start.
+      const ready = hasKeychain
+        ? capabilities.whenOffered('main')
+        : Promise.resolve();
+      void ready.then(() => {
+        if (settings.isEnabled) void restart();
+      });
       stopWatching ??= watchNetwork(() => {
         networkChanged();
         void rebind();
       });
-      void absorb([])
+      void ready
+        .then(() => absorb([]))
         .then(pullMembers)
         .then(serveAlone)
         .catch((e: unknown) => log(`Couldn’t read the members: ${String(e)}`));
