@@ -279,7 +279,7 @@ export function ScrollDock<T extends string>({
                 bottom: anchor.bottom,
                 width: DOCK_WIDTH,
               }}
-              className="surface-glass fixed z-50 flex origin-bottom flex-col items-center rounded-2xl pb-2 shadow-float"
+              className="fixed z-50 flex origin-bottom flex-col items-center rounded-2xl bg-popover pb-2 text-popover-foreground shadow-overlay"
             >
               <DockStrip
                 ref={stripRef}
