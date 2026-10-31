@@ -119,3 +119,21 @@ test('settling cascades down a two-level tree, stopping at a settled sub-thread 
     'an already settled one keeps its time',
   );
 });
+
+test('nesting leaves a row in each chat naming the other thread', () => {
+  const s = run(start([thread('p'), thread('c')]), {
+    type: 'nest',
+    threadId: 'c',
+    parentId: 'p',
+  });
+  assert.deepEqual(byId(s, 'p').activity.at(-1)?.threadLink, {
+    role: 'sub',
+    threadId: 'c',
+    title: 'c',
+  });
+  assert.deepEqual(byId(s, 'c').activity.at(-1)?.threadLink, {
+    role: 'parent',
+    threadId: 'p',
+    title: 'p',
+  });
+});

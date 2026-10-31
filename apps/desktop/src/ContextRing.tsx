@@ -8,7 +8,7 @@ import {
   ContextContentHeader,
   ContextTrigger,
 } from '@/components/ai-elements/context';
-import type { Provider } from './model';
+import type { Provider, Thread } from './model';
 import { useRemoteMachine } from './remote/origin';
 import { ProviderMark } from './ui';
 import { LimitBars, UpdatedAt } from './usage/LimitBars';
@@ -16,12 +16,37 @@ import { hottest, TONE_COLORS, toneFor } from './usage/limits';
 import type { Usage } from './usage/model';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { TOKENS } from '@mochi/domain/lib/format';
+import type { ContextUsage } from './host/types/agent';
+import { contextBreakdown, type ContextRow } from './usage/contextBreakdown';
+import { useContextUsage } from './usage/useContextUsage';
 
 const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
 const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<
   Provider,
   string
 >;
+
+/** A thread's ring, its detail split by category (Claude Code's `/context`) while a live Claude session can say. */
+export function ThreadContextRing({
+  thread,
+  provider,
+  usage,
+}: {
+  thread: Thread;
+  provider: Provider;
+  usage?: Usage;
+}) {
+  const { data: breakdown = null } = useContextUsage(thread);
+  return (
+    <ContextRing
+      provider={provider}
+      spaceId={thread.spaceId}
+      context={thread.context}
+      usage={usage}
+      breakdown={breakdown}
+    />
+  );
+}
 
 /**
  * The thread's context window as a ring in the composer footer. Hover or focus opens the detail: context, this session's
@@ -32,11 +57,13 @@ export function ContextRing({
   spaceId,
   context,
   usage,
+  breakdown = null,
 }: {
   provider: Provider;
   spaceId: string;
   context: { used: number; max: number };
   usage?: Usage;
+  breakdown?: ContextUsage | null;
 }) {
   // Another computer's thread runs on that computer's account: this one's plan windows would be the wrong ones.
   const isRemote = !!useRemoteMachine();
@@ -92,12 +119,18 @@ export function ContextRing({
               {TOKENS.format(context.used)} of {TOKENS.format(context.max)}{' '}
               tokens
             </p>
-            <Progress
-              value={pct}
-              className="bg-muted-foreground/20"
-              aria-label={`Context: ${pct}% used`}
-              style={{ '--progress-color': TONE_COLORS[tone] } as CSSProperties}
-            />
+            {breakdown ? (
+              <ContextBreakdown usage={breakdown} context={context} />
+            ) : (
+              <Progress
+                value={pct}
+                className="bg-muted-foreground/20"
+                aria-label={`Context: ${pct}% used`}
+                style={
+                  { '--progress-color': TONE_COLORS[tone] } as CSSProperties
+                }
+              />
+            )}
             <p className="type-caption text-subtle-foreground">
               {PROVIDER_NAMES[provider]} compacts the conversation automatically
               near the limit.
@@ -140,6 +173,88 @@ export function ContextRing({
         </ContextContentBody>
       </ContextContent>
     </Context>
+  );
+}
+
+const PERCENT = new Intl.NumberFormat('en', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+});
+
+/** The window as one stacked bar, then each category with its tokens and share; deferred tools listed apart, outside the window. */
+function ContextBreakdown({
+  usage,
+  context,
+}: {
+  usage: ContextUsage;
+  context: { used: number; max: number };
+}) {
+  const { rows, deferred } = contextBreakdown(usage, context);
+  return (
+    <>
+      <ContextBar rows={rows} />
+      <ul className="flex flex-col gap-1">
+        {rows.map((row) => (
+          <ContextLegendRow key={row.name} row={row} />
+        ))}
+      </ul>
+      {deferred.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {deferred.map((row) => (
+            <li
+              key={row.name}
+              className="flex items-center gap-2 type-caption text-subtle-foreground"
+            >
+              <span className="min-w-0 flex-1 truncate">{row.name}</span>
+              <span className="tabular">{TOKENS.format(row.tokens)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function ContextBar({ rows }: { rows: ContextRow[] }) {
+  return (
+    <div
+      role="img"
+      aria-label={rows
+        .map((r) => `${r.name} ${PERCENT.format(r.share)}`)
+        .join(', ')}
+      className="flex h-1.5 w-full gap-px overflow-hidden rounded-full bg-muted"
+    >
+      {rows
+        .filter((row) => row.kind !== 'free')
+        .map((row) => (
+          <span
+            key={row.name}
+            className="h-full min-w-0.5"
+            style={{ width: `${row.share * 100}%`, background: row.color }}
+          />
+        ))}
+    </div>
+  );
+}
+
+function ContextLegendRow({ row }: { row: ContextRow }) {
+  return (
+    <li className="flex items-center gap-2 type-caption">
+      <span
+        aria-hidden
+        className="size-2 shrink-0 rounded-[3px] ring-1 ring-foreground/10 ring-inset"
+        style={{ background: row.color }}
+      />
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+        {row.name}
+      </span>
+      <span className="tabular text-muted-foreground">
+        {TOKENS.format(row.tokens)}
+      </span>
+      <span className="w-11 shrink-0 text-right tabular text-subtle-foreground">
+        {PERCENT.format(row.share)}
+      </span>
+    </li>
   );
 }
 

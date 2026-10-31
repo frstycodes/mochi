@@ -210,7 +210,9 @@ function autofixEvent(
   const escalation = prEscalation(thread, event);
   const next = autofixApply(state, thread, event);
   return reportPrsEnded(
-    escalation ? reportPr(next, thread, event.pr, escalation) : next,
+    escalation
+      ? reportPr(next, thread, event.pr, escalation, { isUrgent: true })
+      : next,
     thread,
   );
 }

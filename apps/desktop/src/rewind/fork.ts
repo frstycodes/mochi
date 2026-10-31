@@ -2,7 +2,13 @@ import type { Thread } from '../model.ts';
 import { freeLine, log, mapThread } from '../store/threads.ts';
 import type { State } from '../store/types.ts';
 import { markSettled } from '../settled/settled.ts';
-import { checkpointAt, threadAt, type Checkpoint } from './checkpoints.ts';
+import {
+  checkpointAt,
+  checkpointOf,
+  checkpointThread,
+  threadAt,
+  type Checkpoint,
+} from './checkpoints.ts';
 
 export type ForkPoint =
   | { kind: 'message'; index: number }
@@ -65,7 +71,7 @@ export function forkThread(
     n: state.checkpointSeq,
     at: now,
     label: 'Fork point',
-    thread: child,
+    ...checkpointOf(child),
     wantsFiles: true,
   };
   const threads = mapThread(state.threads, parent.id, (t) =>
@@ -100,7 +106,7 @@ function forkSource(
     const checkpoint = checkpoints.find((c) => c.n === point.n);
     return (
       checkpoint && {
-        thread: checkpoint.thread,
+        thread: checkpointThread(parent, checkpoint),
         at: checkpoint.at,
         label: checkpoint.label,
         checkpoint,

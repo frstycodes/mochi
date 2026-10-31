@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 
+export const AUTO_HEIGHT_SPRING = { type: 'spring', visualDuration: 0.15, bounce: 0 } as const;
+
 /** Animates its height to fit its children, retargeting mid-flight so per-keystroke changes stay smooth. */
 export function AutoHeight({ className, children }: Pick<ComponentProps<'div'>, 'className' | 'children'>) {
   const reduce = useReducedMotionConfig();
@@ -20,7 +22,7 @@ export function AutoHeight({ className, children }: Pick<ComponentProps<'div'>, 
     <motion.div
       initial={false}
       animate={{ height }}
-      transition={reduce ? { duration: 0 } : { type: 'spring', visualDuration: 0.15, bounce: 0 }}
+      transition={reduce ? { duration: 0 } : AUTO_HEIGHT_SPRING}
       className={cn('flex flex-col overflow-hidden', className)}
     >
       {/* flex-col lets callers pick which edge stays put while clipped: `justify-end` keeps the bottom visible on bottom-anchored boxes */}

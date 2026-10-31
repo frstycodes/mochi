@@ -441,17 +441,28 @@ function reduce(state: State, action: Action): State {
         queue: state.queue.filter((q) => !ids.has(q.threadId)),
       };
     }
-    case 'nest':
+    case 'nest': {
       if (nestBlocker(state.threads, action.threadId, action.parentId))
         return state;
+      const parent = state.threads.find((t) => t.id === action.parentId);
+      const sub = state.threads.find((t) => t.id === action.threadId);
       return {
         ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({
-          ...t,
-          parent: { threadId: action.parentId },
-          orbitSlot: undefined,
-        })),
+        threads: state.threads.map((t) => {
+          if (t.id === action.parentId && sub)
+            return log(t, linkRow('sub', sub, state.now));
+          if (t.id !== action.threadId) return t;
+          const nested = {
+            ...t,
+            parent: { threadId: action.parentId },
+            orbitSlot: undefined,
+          };
+          return parent
+            ? log(nested, linkRow('parent', parent, state.now))
+            : nested;
+        }),
       };
+    }
     case 'unnest':
       return {
         ...state,
@@ -1489,8 +1500,36 @@ function create(
       text: `Scheduled: ${describeTrigger(action.schedule.when)}`,
     });
   }
-  const threads = [...state.threads, thread];
+  // A sub-thread opens on the row naming its parent, ahead of its first message; the parent's chat gets one naming it.
+  const parent =
+    action.parent &&
+    state.threads.find((t) => t.id === action.parent!.threadId);
+  if (parent) thread.activity.unshift(linkRow('parent', parent, now));
+  const threads = [
+    ...state.threads.map((t) =>
+      t.id === parent?.id ? log(t, linkRow('sub', thread, now)) : t,
+    ),
+    thread,
+  ];
   return { ...state, threads, seq: state.seq + 1 };
+}
+
+/** The row in one chat that names the other side of a sub-thread link: `sub` in the parent's, `parent` in the sub-thread's. */
+function linkRow(
+  role: 'sub' | 'parent',
+  other: Thread,
+  at: number,
+): ActivityEntry {
+  return {
+    at,
+    who: 'harness',
+    kind: 'event',
+    text:
+      role === 'sub'
+        ? `Started sub-thread ${other.title}`
+        : `Sub-thread of ${other.title}`,
+    threadLink: { role, threadId: other.id, title: other.title },
+  };
 }
 
 /** The temp branch `create` gives the next thread, which the composer shows before you send. */

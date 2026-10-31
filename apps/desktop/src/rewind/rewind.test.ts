@@ -6,7 +6,11 @@ import { initialThreads, mapThread, threadsReducer } from '../store/threads.ts';
 import type { Action } from '../store/index.tsx';
 import { applyAgentEvent } from '../runtime/apply.ts';
 import { agentCalls, resumeAfterLostProcess } from '../runtime/live.ts';
-import { rewindBlockedReason, threadAt } from './checkpoints.ts';
+import {
+  checkpointThread,
+  rewindBlockedReason,
+  threadAt,
+} from './checkpoints.ts';
 import { forkRelatives } from './fork.ts';
 import { failDrafts } from './handoff.ts';
 // Sets the start env the agent calls read (a thread's folder).
@@ -397,6 +401,7 @@ function liveThread() {
     sessionId: 'sess-1',
   });
   turn('Wrote one.');
+  const beforeSend = thread(s, id);
   s = threadsReducer(s, {
     type: 'send',
     threadId: id,
@@ -413,7 +418,7 @@ function liveThread() {
   const index = thread(s, id).activity.findIndex(
     (a) => a.text === 'Now write two',
   );
-  return { s, id, index };
+  return { s, id, index, beforeSend };
 }
 
 test('a working agent blocks every rewind and the undo until its turn ends', () => {
@@ -476,11 +481,54 @@ test('a working agent blocks every rewind and the undo until its turn ends', () 
   );
 });
 
+test('a checkpoint rebuilt from the thread later is the thread as it stood then, with the session it has now', () => {
+  const { s, id, index, beforeSend } = liveThread();
+  const later = thread(s, id);
+  const cp = s.checkpoints[id].find((c) => c.before === index)!;
+  assert.ok(later.activity.length > index, 'the thread moved on since');
+  assert.deepEqual(checkpointThread(later, cp), {
+    ...beforeSend,
+    agent: later.agent,
+    setup: later.setup,
+  });
+});
+
+test('a rewind keeps no checkpoint that counts past the transcript it leaves', () => {
+  const { s: s0, id } = liveThread();
+  const last = thread(s0, id);
+  // A step's checkpoint from later in the same minute: rewinding to the agent's last reply picks it by time.
+  const sameMinute = {
+    ...s0.checkpoints[id].at(-1)!,
+    n: s0.checkpointSeq,
+    before: undefined,
+    at: last.activity.at(-1)!.at,
+    activityCount: last.activity.length,
+  };
+  const s = threadsReducer(
+    {
+      ...s0,
+      checkpoints: {
+        ...s0.checkpoints,
+        [id]: [...s0.checkpoints[id], sameMinute],
+      },
+    },
+    {
+      type: 'rewind-message',
+      threadId: id,
+      index: last.activity.length - 1,
+      mode: 'chat',
+    },
+  );
+  const kept = s.checkpoints[id];
+  assert.equal(kept.at(-1)!.n, sameMinute.n, 'the rewind kept it');
+  for (const c of kept) assert.ok(c.activityCount <= last.activity.length - 1);
+});
+
 test('each of your messages saves a checkpoint of the files it found', () => {
   const { s, id, index } = liveThread();
   const cp = s.checkpoints[id].find((c) => c.before === index)!;
   assert.equal(cp.label, 'Before "Now write two"');
-  assert.equal(cp.thread.activity.length, index);
+  assert.equal(cp.activityCount, index);
 });
 
 test('rewind chat: transcript back, files untouched, the agent stops and its next start forks the session at that point', () => {

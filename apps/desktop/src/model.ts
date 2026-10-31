@@ -98,7 +98,7 @@ export interface SubReport {
   status: string;
   /** Wakes the parent's agent at once instead of waiting for every sub-thread to go idle. */
   isUrgent?: true;
-  /** A `no_change` report: never wakes the parent's agent, alone or in an all-idle wake; it goes out with its next message or wake. */
+  /** Never wakes the parent's agent, alone or in an all-idle wake; it goes out with its next message or wake. Saves from before no_change stayed with the sub-thread have it on those rows too. */
   isQuiet?: true;
   /** From a thread this one messaged with `expectReply`, not a sub-thread. */
   isReply?: true;
@@ -211,6 +211,8 @@ export interface ActivityEntry {
   from?: ThreadRef;
   /** Messages: an Auto-fix event Mochi sent the agent about one of the thread's PRs; `text` is the event, the row shows `title`. */
   autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
+  /** Events only: a sub-thread started from or nested under this thread (`sub`), or this one became a sub-thread of `parent`. */
+  threadLink?: { role: 'sub' | 'parent'; threadId: string; title: string };
   /** Events only: a sub-thread handed its result back here. */
   subThread?: { threadId: string; title: string; text: string };
   /** Events only: a sub-thread reported here (`reportParent`), or a thread messaged with `expectReply` answered; `text` is the body. */

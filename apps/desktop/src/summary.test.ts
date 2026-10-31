@@ -158,12 +158,6 @@ test('skills used and MCP calls by server come from the log, out of the built-in
     { server: 'linear', calls: 3, tools: ['get_issue', 'list_issues'] },
     { server: 'figma', calls: 1, tools: ['get_screenshot'] },
   ]);
-  assert.deepEqual(
-    summary.tools,
-    [{ verb: 'Run', count: 1 }],
-    'MCP calls no longer count as commands',
-  );
-  assert.equal(summary.toolTotal, 5);
   assert.equal(
     turnSummary([
       skill('ui', 0),

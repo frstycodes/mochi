@@ -67,7 +67,7 @@ export const MOCHI_SERVER = 'mochi';
 /** `update_plan`'s scope: this thread's first task, or more of the same work. Unrelated work is a `create_thread` offer. */
 export const PLAN_SCOPES = ['first_task', 'continuation'] as const;
 
-/** `report_to_parent`'s status. Done waits for every sub-thread to be idle, no_change never wakes the parent, the rest wake it at once (`dueWakes`). */
+/** `report_to_parent`'s status. Done waits for every sub-thread to be idle, no_change never reaches the parent, the rest wake it at once (`dueWakes`). */
 export const SUB_THREAD_STATUSES = [
   'done',
   'no_change',
@@ -448,11 +448,11 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      "Sub-threads only: end every turn with one report to the thread that started you; it shows in that thread's transcript and reaches its agent. blocked, needs_input or failed wakes it at once, even while its other sub-threads work; done waits until they are all idle; no_change never wakes it and goes out with its next message. Facts only: leave out what you did not do or run.",
+      "Sub-threads only: end every turn with one report to the thread that started you; it shows in that thread's transcript and reaches its agent. blocked, needs_input or failed wakes it at once, even while its other sub-threads work; done waits until they are all idle; no_change stays with you, and the parent never sees it. Facts only: leave out what you did not do or run.",
     shape: {
       status: Schema.Literals(SUB_THREAD_STATUSES).annotate({
         description:
-          'done: your piece is finished; no_change: this turn changed nothing and needs nothing from the parent (a bot comment with nothing in it), so the parent agent is not woken for it; blocked: something outside your piece stops you; needs_input: a decision only the parent or the user can make; failed: you tried and it did not work',
+          'done: your piece is finished; no_change: this turn changed nothing and needs nothing from the parent (a bot comment with nothing in it), so it stays with you and the parent never sees it; blocked: something outside your piece stops you; needs_input: a decision only the parent or the user can make; failed: you tried and it did not work',
       }),
       summary: Schema.String.check(
         Schema.isMinLength(1),

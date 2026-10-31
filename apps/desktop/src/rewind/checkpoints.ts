@@ -16,11 +16,46 @@ export interface Checkpoint {
   at: number;
   label: string;
   stepId?: string;
-  thread: Thread;
+  /** The thread then, less what `checkpointThread` takes from the live thread. */
+  thread: CheckpointThread;
+  /** How many of the live thread's `activity` entries and `subagents` it held: both only grow, and a rewind cuts them back. */
+  activityCount: number;
+  subagentCount: number;
   ref?: string;
   wantsFiles?: boolean;
   /** Saved just before your message at this activity index, so rewinding to it restores exactly the files it found. */
   before?: number;
+}
+
+/** Copying the transcript into every checkpoint grew the store with the square of a thread's length. */
+export type CheckpointThread = Omit<
+  Thread,
+  'activity' | 'subagents' | 'agent' | 'setup'
+>;
+
+/** A thread as a checkpoint keeps it: what only grows becomes a count, what follows the session stays with the live thread. */
+export function checkpointOf(
+  thread: Thread,
+): Pick<Checkpoint, 'thread' | 'activityCount' | 'subagentCount'> {
+  const { activity, subagents, agent: _agent, setup: _setup, ...kept } = thread;
+  return {
+    thread: kept,
+    activityCount: activity.length,
+    subagentCount: subagents?.length ?? 0,
+  };
+}
+
+/** The thread as it stood at `checkpoint`, rebuilt from `live`, the same thread now: its transcript and subagents cut back, its session current. */
+export function checkpointThread(live: Thread, checkpoint: Checkpoint): Thread {
+  return {
+    ...checkpoint.thread,
+    activity: live.activity.slice(0, checkpoint.activityCount),
+    ...(live.subagents && {
+      subagents: live.subagents.slice(0, checkpoint.subagentCount),
+    }),
+    agent: live.agent,
+    setup: live.setup,
+  };
 }
 
 /** `chat`: transcript, steps and the agent's session go back, files stay. `files`: the worktree goes back too. */
@@ -111,7 +146,7 @@ export function seedCheckpoints(
       n: firstN,
       at: thread.startedAt,
       label: 'Start',
-      thread: threadAt(thread, thread.startedAt),
+      ...checkpointOf(threadAt(thread, thread.startedAt)),
       wantsFiles,
     },
     ...done.map((s, i) => ({
@@ -119,7 +154,7 @@ export function seedCheckpoints(
       at: s.doneAt!,
       label: `After "${s.title}"`,
       stepId: s.id,
-      thread: threadAt(thread, s.doneAt!),
+      ...checkpointOf(threadAt(thread, s.doneAt!)),
     })),
   ];
 }
@@ -152,7 +187,10 @@ export function recordCheckpoints(prev: State, next: State): State {
         at: next.now,
         label: `Before "${excerpt(thread.activity[index].text)}"`,
         before: index,
-        thread: { ...before!, activity: thread.activity.slice(0, index) },
+        ...checkpointOf({
+          ...before!,
+          activity: thread.activity.slice(0, index),
+        }),
         wantsFiles: true,
       })),
       ...finished.map((s): Checkpoint => ({
@@ -160,7 +198,7 @@ export function recordCheckpoints(prev: State, next: State): State {
         at: next.now,
         label: `After "${s.title}"`,
         stepId: s.id,
-        thread,
+        ...checkpointOf(thread),
         wantsFiles: true,
       })),
     ];
@@ -190,13 +228,14 @@ export function rewind(
   forkAt?: string | null,
   ms?: number,
 ): State {
+  const current = state.threads.find((t) => t.id === threadId);
   const list = state.checkpoints[threadId] ?? [];
   const index = list.findIndex((c) => c.n === n);
-  if (index < 0) return state;
+  if (!current || index < 0) return state;
   return restore(
     state,
     threadId,
-    list[index].thread,
+    checkpointThread(current, list[index]),
     index,
     checkpointPhrase(list[index]),
     mode,
@@ -312,7 +351,7 @@ function restore(
     ),
     checkpoints: {
       ...state.checkpoints,
-      [threadId]: list.slice(0, cpIndex + 1),
+      [threadId]: list.slice(0, cpIndex + 1).map((c) => cutTo(c, restored)),
     },
     queue: state.queue.filter(
       (q) => q.threadId !== threadId || q.createdAt <= cp.at,
@@ -325,6 +364,24 @@ function restore(
       hasFiles,
     },
   };
+}
+
+/** A kept checkpoint never counts past the rewound thread: what follows its cut is new and isn't the checkpoint's. A message's rewind can keep a checkpoint from later in the same minute. */
+function cutTo(checkpoint: Checkpoint, base: Thread): Checkpoint {
+  const activityCount = Math.min(
+    checkpoint.activityCount,
+    base.activity.length,
+  );
+  const subagentCount = Math.min(
+    checkpoint.subagentCount,
+    base.subagents?.length ?? 0,
+  );
+  if (
+    activityCount === checkpoint.activityCount &&
+    subagentCount === checkpoint.subagentCount
+  )
+    return checkpoint;
+  return { ...checkpoint, activityCount, subagentCount };
 }
 
 /**

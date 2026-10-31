@@ -37,7 +37,7 @@ export function ThreadPeek({
   thread: Thread;
   pinNumber?: number;
   isDisabled: boolean;
-  side?: 'right' | 'top';
+  side?: 'right' | 'left' | 'top';
   children: ReactNode;
 }) {
   const [isOpen, setOpen] = useState(false);
@@ -81,7 +81,7 @@ export function ThreadPeek({
       <HoverCardContent
         side={side}
         align="start"
-        sideOffset={side === 'right' ? 12 : 4}
+        sideOffset={side === 'top' ? 4 : 12}
         className="flex w-80 flex-col gap-2.5 p-3"
       >
         <PeekCard listed={thread} pinNumber={pinNumber} />

@@ -421,3 +421,14 @@ test("an earlier turn's widgets go right after its last row, its answered next m
     'earlier(0, no record)',
   ]);
 });
+
+test('a sub-thread started mid-turn is its own row where it started; the turn goes on in a new accordion', () => {
+  const link: ActivityEntry = {
+    ...e('event', 'harness', 'Started sub-thread Fix e2e'),
+    threadLink: { role: 'sub', threadId: 'c', title: 'Fix e2e' },
+  };
+  assert.deepEqual(
+    shape([e('tool', 'claude', 'Read a'), link, e('tool', 'claude', 'Read b')]),
+    ['work(Read a)', 'Started sub-thread Fix e2e', 'work(Read b)'],
+  );
+});
