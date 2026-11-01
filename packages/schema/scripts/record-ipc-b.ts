@@ -92,6 +92,7 @@ await record('remote.setDeviceScopes', remote.setDeviceScopes, 'd-laptop', [
   'operate',
 ]);
 await record('remote.otherMachines', remote.otherMachines);
+await record('remote.diagnostics', remote.diagnostics);
 await record('remote.machines', remote.machines);
 await record('remote.cachedMachines', remote.cachedMachines);
 await record('remote.answerApproval', remote.answerApproval, 'a1', true);

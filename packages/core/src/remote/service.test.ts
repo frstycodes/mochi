@@ -72,6 +72,53 @@ it.live(
     }),
 );
 
+it.live(
+  'diagnostics read what decides reaching your computers: settings, addresses, the relay and the events, with no secrets',
+  () =>
+    Effect.gen(function* () {
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-diagnostics-'));
+      const context = yield* Layer.build(
+        layerCore({
+          port: 0,
+          tokens: new Map([[TOKEN, Contract.allScopes]]),
+          origins: [],
+          remotePort: 0,
+          userData,
+        }),
+      );
+      const port = (
+        Context.get(context, HttpServer.HttpServer).address as { port: number }
+      ).port;
+      const main = yield* makeCoreClient(coreUrl(port, TOKEN));
+      const call = makeHostCaller(main);
+      yield* Effect.promise(() => call('remote.set', [{ isEnabled: true }]));
+      const text = (yield* Effect.promise(() =>
+        call('remote.diagnostics', []),
+      )) as string;
+      const report = JSON.parse(text) as {
+        settings: { isEnabled: boolean };
+        addresses: string[];
+        account: string;
+        relayListing: unknown;
+        events: { message: string }[];
+      };
+      assert.equal(report.settings.isEnabled, true);
+      assert.match(report.addresses[0] ?? '', /^127\.0\.0\.1:[1-9]\d*$/);
+      assert.ok(
+        report.events.some((e) => e.message.startsWith('Listening on')),
+        'the listen is an event',
+      );
+      assert.ok(
+        typeof report.relayListing === 'object' && report.relayListing,
+        'the relay listing, or why it couldn’t be read',
+      );
+      const seed = yield* main['remote.deviceKey']();
+      assert.ok(!text.includes(seed), 'no device key');
+      assert.ok(!text.includes(TOKEN), 'no token');
+      yield* Effect.promise(() => call('remote.set', [{ isEnabled: false }]));
+    }),
+);
+
 const noKeychain = {
   isAvailable: () => false,
   seal: async () => assert.fail('no keychain'),

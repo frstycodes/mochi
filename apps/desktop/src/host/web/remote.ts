@@ -39,6 +39,9 @@ export const remote: RemoteHost = {
   async otherMachines() {
     return [];
   },
+  async diagnostics() {
+    return JSON.stringify({ error: 'Devices need the desktop app' }, null, 2);
+  },
   async join() {
     throw new Error('Joining needs the desktop app');
   },

@@ -28,5 +28,6 @@ export const remoteHost = (remote: Remote['Service']) =>
     answerApproval: async (_caller, id, isAllowed) =>
       remote.answerApproval(id, isAllowed),
     otherMachines: () => remote.otherMachines(),
+    diagnostics: () => remote.diagnostics(),
     join: (_caller, machineId) => remote.join(machineId),
   }) satisfies HostMethods<Omit<RemoteHost, InMain>>;
