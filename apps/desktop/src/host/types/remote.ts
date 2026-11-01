@@ -95,7 +95,7 @@ export interface FollowedMachine {
   name: string;
   kind?: DeviceKind;
   status: 'connecting' | 'online' | 'offline' | 'refused';
-  route?: 'lan' | 'relay';
+  route?: 'iroh' | 'lan' | 'relay';
   /** What it lets this computer do; empty until it welcomed this one. */
   scopes: Scope[];
   /** Why the last attempt failed, or the machine's refusal. */

@@ -40,7 +40,11 @@ export interface FollowOptions {
     output: { terminalId: string } & typeof Relay.TerminalOutput.Type,
   ) => void;
   /** What it said about itself, to remember for the next launch. */
-  onWelcome: (welcome: { addresses: string[]; kind?: DeviceKind }) => void;
+  onWelcome: (welcome: {
+    addresses: string[];
+    kind?: DeviceKind;
+    irohRelay?: string;
+  }) => void;
   /** This computer's membership records, sent in each hello. */
   members?: () => unknown;
   /** The machine's records, from its welcome or a later `members` frame. */
@@ -118,7 +122,11 @@ export function followMachine(options: FollowOptions): MachineFollower {
         onMembers: options.onMembers,
         onWelcome: (welcome, route) => {
           const kind = asKind(welcome.backend.kind) ?? state.kind;
-          options.onWelcome({ addresses: [...welcome.addresses], kind });
+          options.onWelcome({
+            addresses: [...welcome.addresses],
+            kind,
+            ...(welcome.irohRelay && { irohRelay: welcome.irohRelay }),
+          });
           if (welcome.members !== undefined)
             options.onMembers?.(welcome.members);
           current.online.openUnsafe();

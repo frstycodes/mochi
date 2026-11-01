@@ -129,6 +129,9 @@
     "vite-plugin-singlefile": "^2.3.3",
     "vite-plus": "catalog:"
   },
+  "optionalDependencies": {
+    "@number0/iroh": "1.2.0"
+  },
   "build": {
     "appId": "dev.mochi.app",
     "productName": "Mochi",
@@ -140,7 +143,10 @@
       "node_modules/node-pty/lib/**/*.js",
       "node_modules/node-pty/prebuilds/${platform}-${arch}/**",
       "node_modules/playwright-core/**",
-      "node_modules/@parcel/watcher-${platform}-${arch}*/**"
+      "node_modules/@parcel/watcher-${platform}-${arch}*/**",
+      "node_modules/@number0/iroh/package.json",
+      "node_modules/@number0/iroh/index.js",
+      "node_modules/@number0/iroh-${platform}-${arch}*/**"
     ],
     "afterPack": "scripts/after-pack.mjs",
     "electronFuses": {
@@ -155,7 +161,8 @@
     "npmRebuild": false,
     "asarUnpack": [
       "node_modules/node-pty/prebuilds/**",
-      "node_modules/@parcel/watcher-*/**"
+      "node_modules/@parcel/watcher-*/**",
+      "node_modules/@number0/iroh-*/**"
     ],
     "directories": {
       "output": "release"

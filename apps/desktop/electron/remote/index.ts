@@ -17,6 +17,7 @@ import { watchNetwork } from '@mochi/core/remote/interfaces';
 import { networkChanged } from '@mochi/core/remote/reconnect';
 import { deviceId, secureAsDevice } from '@mochi/core/remote/pairing';
 import type { PairedMachine } from '@mochi/core/remote/registry';
+import { irohThroughCore } from '@mochi/core/remote/irohPipe';
 import { openDeviceChannel } from '@mochi/core/remote/relayClient';
 import { routesTo as routes } from '@mochi/core/remote/routes';
 import type { Paired } from '@mochi/core/remote/service';
@@ -300,13 +301,22 @@ function syncFollowers() {
   }
 }
 
-/** Its addresses as the relay holds them sealed and as its last welcome listed them, dialled together, then the relay. */
+/**
+ * Its EndpointId over iroh, through Core's endpoint (the one this computer's key is bound to); then its addresses as the
+ * relay holds them sealed and as its last welcome listed them, dialled together; then the relay.
+ */
 function routesTo(machineId: string) {
+  const machine = paired.machines.find((m) => m.id === machineId);
   return routes({
     machineId,
-    known: paired.machines.find((m) => m.id === machineId)?.addresses ?? [],
+    known: machine?.addresses ?? [],
+    knownIrohRelay: machine?.irohRelay,
     token: relayToken,
     keys: theKeys,
+    ...(machine && {
+      iroh: async (relay) =>
+        irohThroughCore(await coreClient(), machine.publicKey, { relay }),
+    }),
     relay: {
       kind: 'relay',
       open: async () => {

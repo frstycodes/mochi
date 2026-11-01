@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { Schema } from 'effect';
 import { WebSocketServer } from 'ws';
 import { Backend, Relay } from '@mochi/schema';
+import type { IrohLink, IrohPath } from './iroh.ts';
 import { socketLink, type Link, type RawLink } from './link.ts';
 import type { DeviceGrant } from './token.ts';
 import { tunnel } from './tunnel.ts';
@@ -34,6 +35,8 @@ export interface RemoteServerOptions {
   onDevicesChange?: () => void;
   /** This computer's membership records, sent in each welcome. */
   members?: () => unknown;
+  /** This computer's iroh home relay, named in each welcome as a hint for dialling it. */
+  irohRelay?: () => string | undefined;
   /** A device's records, from its hello or a later `members` frame. */
   onMembers?: (members: unknown) => void;
 }
@@ -49,8 +52,13 @@ export interface RemoteServer {
    */
   rebind(hosts: string[]): Promise<void>;
   devices(): ConnectedDevice[];
-  /** A relay channel: the same pairing and tunnel as a LAN socket, but the device came through your account. */
-  attach(raw: RawLink): void;
+  /** How each connected device reached this computer, and over iroh which path its packets take now. */
+  routes(): { deviceId: string; origin: Origin; path?: IrohPath }[];
+  /**
+   * A relay channel or an iroh connection: the same pairing and tunnel as a LAN socket. Through the relay the device came
+   * through your account; over iroh, like the LAN, it may be anyone.
+   */
+  attach(raw: RawLink, origin?: Exclude<Origin, 'lan'>): void;
   /** Ends a device's connections, after it was removed or its scopes changed. */
   disconnect(deviceId: string): void;
   /** Membership records changed: every welcomed device hears them. */
@@ -68,6 +76,8 @@ interface Connection {
   socket: Link;
   device: AuthenticatedDevice;
   connectedAt: number;
+  origin: Origin;
+  path?: () => IrohPath | undefined;
 }
 
 /**
@@ -168,7 +178,13 @@ export async function startRemoteServer(
       onMalformed: (frame) =>
         options.onRejected(device.name, `Malformed frame: ${frame}`),
     });
-    const connection = { socket, device, connectedAt: Date.now() };
+    const connection: Connection = {
+      socket,
+      device,
+      connectedAt: Date.now(),
+      origin,
+      ...('path' in raw && { path: () => (raw as IrohLink).path() }),
+    };
     connections.add(connection);
     socket.onClose(() => {
       connections.delete(connection);
@@ -181,6 +197,7 @@ export async function startRemoteServer(
       deviceId: device.deviceId,
       backend: await options.backend(device.scopes),
       addresses: reachable(),
+      ...withIrohRelay(options.irohRelay?.()),
       ...(options.members && { members: options.members() }),
     });
   }
@@ -201,7 +218,12 @@ export async function startRemoteServer(
         scopes: device.scopes,
         connectedAt,
       })),
-    attach: (raw) => void accept(raw, 'relay'),
+    routes: () =>
+      [...connections].map(({ device, origin, path }) => {
+        const now = path?.();
+        return { deviceId: device.deviceId, origin, ...(now && { path: now }) };
+      }),
+    attach: (raw, origin = 'relay') => void accept(raw, origin),
     disconnect(deviceId) {
       for (const { socket, device } of connections)
         if (device.deviceId === deviceId)
@@ -267,6 +289,9 @@ function refuse(socket: Link, reason: string) {
 function send(socket: Link, frame: Relay.MachineLinkFrame) {
   if (socket.isOpen()) socket.send(JSON.stringify(frame));
 }
+
+const withIrohRelay = (irohRelay: string | undefined) =>
+  irohRelay ? { irohRelay } : {};
 
 const formatAddress = ({ address, port, family }: AddressInfo) =>
   family === 'IPv6' ? `[${address}]:${port}` : `${address}:${port}`;

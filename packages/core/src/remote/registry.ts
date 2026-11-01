@@ -19,6 +19,8 @@ export interface PairedMachine {
   pairedAt: number;
   /** `host:port` it last said it listens on, LAN or Tailscale: tried before the relay. */
   addresses?: string[];
+  /** Its iroh home relay as it last said: a hint for dialling its EndpointId. */
+  irohRelay?: string;
 }
 
 interface Stored {
@@ -91,6 +93,7 @@ export class Registry {
           publicKey: m.publicKey,
           pairedAt: m.addedAt,
           ...(known?.addresses && { addresses: known.addresses }),
+          ...(known?.irohRelay && { irohRelay: known.irohRelay }),
         },
       ];
     });
@@ -138,13 +141,17 @@ export class Registry {
   }
 
   /** What a machine said about itself in its last welcome. */
-  noteWelcome(id: string, welcome: Pick<PairedMachine, 'addresses' | 'kind'>) {
+  noteWelcome(
+    id: string,
+    welcome: Pick<PairedMachine, 'addresses' | 'kind' | 'irohRelay'>,
+  ) {
     const machine = this.stored.machines.find((m) => m.id === id);
     if (
       !machine ||
       (JSON.stringify(machine.addresses ?? []) ===
         JSON.stringify(welcome.addresses ?? []) &&
-        machine.kind === welcome.kind)
+        machine.kind === welcome.kind &&
+        machine.irohRelay === welcome.irohRelay)
     )
       return;
     this.save({

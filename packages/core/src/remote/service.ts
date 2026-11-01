@@ -63,6 +63,16 @@ import {
   publishMembers,
   type MachineConnection,
 } from './relayClient.ts';
+import {
+  bindIroh,
+  customRelays,
+  loadIroh,
+  type IrohHint,
+  type IrohLink,
+  type IrohNode,
+  type IrohPath,
+  type IrohPreset,
+} from './iroh.ts';
 import type { RawLink } from './link.ts';
 import { startRemoteServer, type RemoteServer } from './server.ts';
 import type { DeviceKeys } from './session.ts';
@@ -187,7 +197,15 @@ interface RemoteOptions {
   log: (message: string) => void;
   /** `mochi serve`'s output: set, it turns remote access on once signed in and joins your computers (`serveAlone`). */
   serving?: (line: string) => void;
+  /** How the iroh endpoint reaches the world; n0's relays and discovery by default, loopback in tests. */
+  irohPreset?: IrohPreset;
 }
+
+/** How this computer's iroh endpoint stands, for `diagnostics`. */
+type IrohState =
+  | { status: 'off' }
+  | { status: 'bound' }
+  | { status: 'unavailable' | 'failed'; reason: string };
 
 /**
  * The machine side of remote access: Settings › Remote access, who this computer trusts (membership records), the server
@@ -203,6 +221,7 @@ function makeRemote({
   hasKeychain,
   log: logWarning,
   serving,
+  irohPreset,
 }: RemoteOptions) {
   /** The last connection events, newest last, for `diagnostics`. */
   const events: { at: string; message: string }[] = [];
@@ -247,6 +266,71 @@ function makeRemote({
   const coreEndpoint = new Promise<CoreEndpoint>((resolve) => (core = resolve));
   const isSignedIn = async () =>
     (await account.current()).status === 'signed-in';
+
+  let iroh: Promise<IrohNode | undefined> | undefined;
+  let irohNode: IrohNode | undefined;
+  let irohState: IrohState = { status: 'off' };
+  let isIrohAccepting = false;
+  /** Links main dialled through this endpoint, by the id its `remote.irohDial` stream named. */
+  const piped = new Map<number, IrohLink>();
+  let nextPiped = 1;
+  /**
+   * This computer's one iroh endpoint, keyed with its device seed, bound on first use: accepting devices, or main dialling
+   * a machine it follows. When the binding can't load, it stays unbound and every route but iroh carries on.
+   */
+  const theIroh = () =>
+    (iroh ??= bindOwnIroh().catch((e: unknown) => {
+      iroh = undefined;
+      irohState = { status: 'failed', reason: messageOf(e) };
+      log(`iroh couldn’t bind: ${messageOf(e)}`);
+      return undefined;
+    }));
+  async function bindOwnIroh() {
+    const loaded = await loadIroh();
+    if ('reason' in loaded) {
+      irohState = { status: 'unavailable', reason: loaded.reason };
+      log(
+        `iroh isn’t available here, so remote access uses its other routes: ${loaded.reason}`,
+      );
+      return undefined;
+    }
+    const seed = await theSeed();
+    await sodium.ready;
+    const node = await bindIroh(loaded.iroh, sodium.from_base64(seed), {
+      preset: irohPreset,
+      note,
+      // The sealed registration names the home relay.
+      onHomeRelay: () => relay?.reregister(),
+    });
+    irohNode = node;
+    irohState = { status: 'bound' };
+    note(`iroh: bound as ${node.id}`);
+    return node;
+  }
+  /** A link main asked for, through this computer's endpoint: two endpoints must never hold one key. */
+  async function irohOpen(target: { publicKey: string } & IrohHint) {
+    const node = await theIroh();
+    if (!node)
+      throw new Error(
+        `iroh isn’t available: ${'reason' in irohState ? irohState.reason : irohState.status}`,
+      );
+    await sodium.ready;
+    const link = await node.dial(
+      sodium.from_base64(target.publicKey, sodium.base64_variants.ORIGINAL),
+      target,
+    );
+    const id = nextPiped++;
+    piped.set(id, link);
+    link.onClose(() => piped.delete(id));
+    return { id, link };
+  }
+  /** Whether a key the account lists as one of its machines: what lets an unknown key over iroh ask to join. */
+  async function isOnAccount(publicKey: Uint8Array) {
+    if (!(await isSignedIn())) return false;
+    const listed = await account.accessToken().then(listMachines);
+    const key = sodium.to_base64(publicKey, sodium.base64_variants.ORIGINAL);
+    return listed.some((m) => m.publicKey === key);
+  }
   const machineName = () => settings.machineName || hostname();
 
   function status(): RemoteStatus {
@@ -369,6 +453,7 @@ function makeRemote({
       keys: await theKeys(),
       find: (id) => registry.findDevice(id),
       refresh: pullMembers,
+      isOnAccount,
       approve,
       add: async (device) => {
         await absorb([
@@ -409,6 +494,14 @@ function makeRemote({
       (e: unknown) => ({ error: messageOf(e) }),
     );
     const { members, devices } = status();
+    const routes = server?.routes() ?? [];
+    const dialled = irohNode?.links().filter((l) => l.side === 'dialled') ?? [];
+    const pathTo = (publicKey: string) =>
+      dialled.find(
+        (l) =>
+          sodium.to_base64(l.peer, sodium.base64_variants.ORIGINAL) ===
+          publicKey,
+      );
     return JSON.stringify(
       {
         at: new Date().toISOString(),
@@ -420,6 +513,16 @@ function makeRemote({
         relay: relayState,
         ...(error && { error }),
         addresses: server?.addresses ?? [],
+        iroh: {
+          ...irohState,
+          isAccepting: isIrohAccepting,
+          ...(irohNode && {
+            endpointId: irohNode.id,
+            homeRelay: irohNode.homeRelay() ?? null,
+            sockets: irohNode.sockets(),
+          }),
+          relays: customRelays().length ? customRelays() : 'n0',
+        },
         isRemoved: membership?.isRemoved ?? false,
         members: members.map(({ id, name, kind, machineStatus }) => ({
           id,
@@ -427,11 +530,25 @@ function makeRemote({
           kind,
           machineStatus,
         })),
-        connectedDevices: devices.map(({ id, name, connectedAt }) => ({
-          id,
-          name,
-          connectedAt: new Date(connectedAt).toISOString(),
-        })),
+        connectedDevices: devices.map(({ id, name, connectedAt }) => {
+          const route = routes.find((r) => r.deviceId === id);
+          return {
+            id,
+            name,
+            connectedAt: new Date(connectedAt).toISOString(),
+            route: route?.origin,
+            ...(route?.path && { path: route.path }),
+          };
+        }),
+        followedMachines: shell.machines.map(({ id, status, route }) => {
+          const publicKey = registry
+            .machines()
+            .find((m) => m.id === id)?.publicKey;
+          const link =
+            route === 'iroh' && publicKey ? pathTo(publicKey) : undefined;
+          const path: IrohPath | undefined = link?.path();
+          return { id, status, route, ...(path && { path }) };
+        }),
         relayListing: listing,
         events,
       },
@@ -789,8 +906,18 @@ function makeRemote({
     );
   }
 
+  async function acceptIroh(listening: RemoteServer) {
+    const node = await theIroh();
+    if (!node) return;
+    node.accept((link) => listening.attach(link, 'iroh'));
+    isIrohAccepting = true;
+    note('iroh: accepting devices');
+  }
+
   function restart() {
     restarting = restarting.then(async () => {
+      irohNode?.accept(undefined);
+      isIrohAccepting = false;
       relay?.close();
       relay = undefined;
       await server?.close();
@@ -824,6 +951,7 @@ function makeRemote({
           onDevicesChange: broadcast,
           members: ownRecords,
           onMembers: (members) => void absorb(parseRecords(members)),
+          irohRelay: () => irohNode?.homeRelay(),
         });
       } catch (e) {
         error = String(e);
@@ -831,6 +959,8 @@ function makeRemote({
       }
       if (server) note(`Listening on ${server.addresses.join(', ')}`);
       const isRelayWanted = !!server && settings.reachesAnywhere;
+      // Over iroh it is reachable from anywhere, through n0's relays: the same setting as the relay governs it.
+      if (isRelayWanted) await acceptIroh(server!);
       if (isRelayWanted && (await isSignedIn())) await startRelay(server!);
       else if (isRelayWanted) note('Not on the relay: signed out');
       broadcast();
@@ -851,6 +981,7 @@ function makeRemote({
             addresses: listening.addresses.flatMap(
               (address) => asCandidate(address) ?? [],
             ),
+            ...withIrohRelay(irohNode?.homeRelay()),
             updatedAt: Date.now(),
           },
           memberKeys(own),
@@ -960,7 +1091,7 @@ function makeRemote({
       members === undefined ? pullMembers() : absorb(parseRecords(members)),
     noteWelcome(
       machineId: string,
-      welcome: Pick<PairedMachine, 'addresses' | 'kind'>,
+      welcome: Pick<PairedMachine, 'addresses' | 'kind' | 'irohRelay'>,
     ) {
       theRegistry().noteWelcome(machineId, welcome);
       push({ channel: PAIRED_CHANNEL, payload: paired() });
@@ -969,6 +1100,10 @@ function makeRemote({
       shell = next;
       broadcast();
     },
+    irohOpen,
+    irohSend: (id: number, bytes: Uint8Array) => piped.get(id)?.send(bytes),
+    irohClose: (id: number, code: number, reason: string) =>
+      piped.get(id)?.close(code, reason),
     async close() {
       offBusy();
       offAccount();
@@ -976,6 +1111,7 @@ function makeRemote({
       relay?.close();
       await restarting;
       await server?.close();
+      await (await iroh)?.close();
     },
   };
 }
@@ -989,7 +1125,12 @@ export const layerRemote = (
   {
     hasKeychain,
     serving,
-  }: { hasKeychain: boolean; serving?: (line: string) => void },
+    irohPreset,
+  }: {
+    hasKeychain: boolean;
+    serving?: (line: string) => void;
+    irohPreset?: IrohPreset;
+  },
 ) =>
   Layer.effect(
     Remote,
@@ -1005,6 +1146,7 @@ export const layerRemote = (
         backend: yield* Backend,
         hasKeychain,
         serving,
+        irohPreset,
         log: (message) =>
           void Effect.runPromiseWith(services)(
             Effect.logWarning(message).pipe(
@@ -1067,6 +1209,9 @@ function progressLog() {
 }
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+const withIrohRelay = (irohRelay: string | undefined) =>
+  irohRelay ? { irohRelay } : {};
 
 const MAX_EVENTS = 100;
 const DIAGNOSTICS_TIMEOUT_MS = 5000;

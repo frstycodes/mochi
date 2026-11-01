@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import type { RelayWire } from '@mochi/schema';
 import { openLan, type Route, type Routes } from './device.ts';
+import type { RawLink } from './link.ts';
 import { isPrivate } from './interfaces.ts';
 import { listMachines } from './relayClient.ts';
 import { openMachineInfo, type MachineAddress } from './sealed.ts';
@@ -41,19 +42,23 @@ export interface RoutesToOptions {
   machineId: string;
   /** What its last welcome listed, kept with the paired machine. */
   known: readonly string[];
+  /** Its home relay as its last welcome named it. */
+  knownIrohRelay?: string;
   token: () => Promise<string>;
   keys: () => Promise<DeviceKeys>;
   /** The relay route, when signed in. */
   relay?: Route;
+  /** Dials its EndpointId, with a home relay to try first when one is known. */
+  iroh?: (relay: string | undefined) => Promise<RawLink>;
   /** The relay's listing, for tests; `listMachines` by default. */
   list?: (token: string) => Promise<readonly RelayWire.RelayMachine[]>;
 }
 
 /**
- * Every way to reach a machine right now: its addresses as the relay holds them (sealed to this computer, so the relay never
- * read them) together with the ones its last welcome listed, dialled together, then the relay. Asked before every dial, so the
- * first connection, and one after either side changed networks, tries direct first. A listing that fails or is slow only
- * means the known addresses are dialled.
+ * Every way to reach a machine right now: its EndpointId over iroh, hinted with the home relay it last sealed or welcomed
+ * with; its addresses as the relay holds them (sealed to this computer, so the relay never read them) together with the
+ * ones its last welcome listed, dialled together; then the relay. Asked before every dial, so the first connection, and one
+ * after either side changed networks, tries direct first. A listing that fails or is slow only means the known hints are used.
  */
 export async function routesTo(options: RoutesToOptions): Promise<Routes> {
   const listed = await listing(options);
@@ -62,7 +67,10 @@ export async function routesTo(options: RoutesToOptions): Promise<Routes> {
     ...(info?.addresses.map(formatAddress) ?? []),
     ...options.known,
   ]);
+  const { iroh } = options;
+  const irohRelay = info?.irohRelay ?? options.knownIrohRelay;
   return {
+    ...(iroh && { iroh: { kind: 'iroh', open: () => iroh(irohRelay) } }),
     direct: [...addresses].map((address): Route => ({
       kind: 'lan',
       open: () => openLan(address),

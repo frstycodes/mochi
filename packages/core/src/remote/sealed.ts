@@ -60,6 +60,8 @@ export interface MachineInfo {
   name: string;
   kind: DeviceKind;
   addresses: MachineAddress[];
+  /** Its iroh home relay, a hint for dialling its EndpointId; sealed like its addresses. */
+  irohRelay?: string;
   updatedAt: number;
 }
 
@@ -92,6 +94,7 @@ export function openMachineInfo(
         Number.isInteger(a.port) &&
         (a.via === 'lan' || a.via === 'tailscale'),
     ),
+    ...(typeof info.irohRelay === 'string' && { irohRelay: info.irohRelay }),
     updatedAt: info.updatedAt,
   };
 }

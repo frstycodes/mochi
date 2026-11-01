@@ -45,7 +45,7 @@ export const FollowedMachine = Schema.Struct({
   name: S,
   kind: opt(DeviceKind),
   status: MachineStatus,
-  route: opt(Schema.Literals(['lan', 'relay'])),
+  route: opt(Schema.Literals(['iroh', 'lan', 'relay'])),
   scopes: Schema.Array(Scope),
   error: opt(S),
   lastSeenAt: opt(N),

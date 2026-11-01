@@ -5,6 +5,7 @@ import { queuedReader, type RawLink } from './link.ts';
 import { DEFAULT_SCOPES } from '../../../../apps/desktop/src/host/types/remote.ts';
 import type { DeviceKeys } from './session.ts';
 import {
+  ACCOUNT_FIRST,
   deviceId,
   pairingCode,
   PairingRefused,
@@ -54,13 +55,19 @@ function machineSide(
   keys: DeviceKeys,
   answer: boolean,
   known: PairedDevice[] = [],
+  onAccount: Uint8Array[] = [],
 ) {
   const asked: { name: string; code: string }[] = [];
   const added: PairedDevice[] = [];
+  const looked: string[] = [];
   const side: MachineSide = {
     keys,
     find: (id) => [...known, ...added].find((d) => d.id === id),
     refresh: async () => {},
+    isOnAccount: async (publicKey) => {
+      looked.push(deviceId(publicKey));
+      return onAccount.some((key) => sodium.memcmp(key, publicKey));
+    },
     approve: async (request) => (asked.push(request), answer),
     add: async (d) => {
       const paired = { ...d, scopes: DEFAULT_SCOPES, pairedAt: 1 };
@@ -68,7 +75,7 @@ function machineSide(
       return paired;
     },
   };
-  return { side, asked, added };
+  return { side, asked, added, looked };
 }
 
 async function pairOver(
@@ -230,6 +237,49 @@ test('an unknown device on the LAN is refused without asking; a paired one conne
     ['read'],
     'the scopes this machine gave it',
   );
+});
+
+test('an unknown key over iroh is refused without asking unless the account lists it as one of its machines', async () => {
+  const machineKeys = keypair();
+  const device = keypair();
+  const stranger = machineSide(machineKeys, true);
+  const refused = await pairOver('iroh', stranger, machineKeys, device);
+  assert.equal(
+    refused.deviceResult.status === 'rejected' &&
+      (refused.deviceResult.reason as Error).message,
+    ACCOUNT_FIRST,
+  );
+  assert.deepEqual(stranger.asked, []);
+  assert.deepEqual(stranger.looked, [deviceId(device.publicKey)]);
+
+  const yours = machineSide(machineKeys, true, [], [device.publicKey]);
+  const joined = await pairOver('iroh', yours, machineKeys, device);
+  assert.equal(joined.deviceResult.status, 'fulfilled');
+  assert.deepEqual(yours.asked, [
+    {
+      name: 'Laptop',
+      code: pairingCode(machineKeys.publicKey, device.publicKey),
+    },
+  ]);
+  assert.equal(yours.added[0]?.id, deviceId(device.publicKey));
+});
+
+test('a member over iroh connects with no account lookup and no prompt', async () => {
+  const machineKeys = keypair();
+  const device = keypair();
+  const known = machineSide(machineKeys, false, [
+    {
+      id: deviceId(device.publicKey),
+      name: 'Laptop',
+      publicKey: '',
+      scopes: ['read'],
+      pairedAt: 1,
+    },
+  ]);
+  const paired = await pairOver('iroh', known, machineKeys, device);
+  assert.equal(paired.deviceResult.status, 'fulfilled');
+  assert.deepEqual(known.asked, []);
+  assert.deepEqual(known.looked, []);
 });
 
 test('a relay that swaps the machine’s key is refused before anyone is asked, and the codes would differ', async () => {

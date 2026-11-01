@@ -35,7 +35,12 @@ import { Hosted } from './hosted.ts';
 import { AccountService } from './account/service.ts';
 import { KeyStore } from './keys/keyStore.ts';
 import { Metrics } from './metrics/metrics.ts';
-import { CoreWsRpcs, ScopeAuthorization, Unauthorized } from './rpc.ts';
+import {
+  CoreWsRpcs,
+  ScopeAuthorization,
+  Unauthorized,
+  type IrohEvent,
+} from './rpc.ts';
 import { scopeOf } from './scopes.ts';
 import { verifyDeviceToken, type DeviceGrant } from './remote/token.ts';
 import { directCall, type DirectCall } from './remote/adapter.ts';
@@ -45,6 +50,7 @@ import {
   REMOTE_PORT,
   type JoinProgress,
 } from './remote/service.ts';
+import type { IrohPreset } from './remote/iroh.ts';
 import { Remote } from './remote/tag.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem, visibleSnapshot } from './remote/visible.ts';
@@ -92,6 +98,8 @@ export interface ServerOptions {
   readonly backend?: Partial<BackendOptions>;
   /** Where remote access listens for devices when it is on; 0 picks a free port (tests). */
   readonly remotePort?: number;
+  /** How remote access's iroh endpoint reaches the world; unset, n0's relays and discovery. Tests bind on loopback. */
+  readonly irohPreset?: IrohPreset;
   /** Main serves `secureStorage` once it connects: a new device key waits for it instead of landing unsealed. */
   readonly hasKeychain?: boolean;
   /** `mochi serve`'s output: once signed in, remote access turns on and joins your computers, printing each code here. */
@@ -144,6 +152,7 @@ export const layerCore = (options: ServerOptions) => {
       layerRemote(options.userData, options.remotePort ?? REMOTE_PORT, {
         hasKeychain: options.hasKeychain ?? false,
         serving: options.serving,
+        irohPreset: options.irohPreset,
       }),
     ),
     Layer.provideMerge(
@@ -328,6 +337,37 @@ const agentHandlers = (windowId: number | undefined) =>
     }),
   );
 
+/** A link main dials through this computer's iroh endpoint: its id once open, then its frames and its close, in order. */
+const irohDial = (
+  remote: Remote['Service'],
+  target: Parameters<Remote['Service']['irohOpen']>[0],
+) =>
+  Stream.callback<IrohEvent, string>((queue) =>
+    Effect.acquireRelease(
+      Effect.tryPromise({
+        try: () => remote.irohOpen(target),
+        catch: messageOf,
+      }),
+      ({ link }) =>
+        Effect.sync(() => link.close(1000, 'This computer stopped following')),
+    ).pipe(
+      Effect.tap(({ id, link }) =>
+        Effect.sync(() => {
+          Queue.offerUnsafe(queue, { _tag: 'open', id });
+          link.onMessage((bytes) =>
+            Queue.offerUnsafe(queue, { _tag: 'message', bytes }),
+          );
+          const closed = (code: number, reason: string) => {
+            Queue.offerUnsafe(queue, { _tag: 'closed', code, reason });
+            Queue.endUnsafe(queue);
+          };
+          link.onClose(closed);
+          if (!link.isOpen()) closed(1006, 'Closed before it opened');
+        }),
+      ),
+    ),
+  );
+
 const refuse = (status: number, reason: string) =>
   Effect.as(
     Effect.logWarning(`Refused a socket: ${reason}`).pipe(
@@ -477,6 +517,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           machineId: string;
           addresses?: ReadonlyArray<string>;
           kind?: Relay.DeviceKind;
+          irohRelay?: string;
         }) =>
           mainOnly(async () =>
             remote.noteWelcome(machineId, {
@@ -500,6 +541,21 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
             : Stream.fail('Only main may ask for this'),
         'remote.shell': (shell: Parameters<typeof remote.setShell>[0]) =>
           mainOnly(async () => remote.setShell(shell)),
+        'remote.irohDial': (target: Parameters<typeof remote.irohOpen>[0]) =>
+          windowId === undefined && !identity.device
+            ? irohDial(remote, target)
+            : Stream.fail('Only main may ask for this'),
+        'remote.irohSend': ({ id, bytes }: { id: number; bytes: Uint8Array }) =>
+          mainOnly(async () => remote.irohSend(id, bytes)),
+        'remote.irohClose': ({
+          id,
+          code,
+          reason,
+        }: {
+          id: number;
+          code: number;
+          reason: string;
+        }) => mainOnly(async () => remote.irohClose(id, code, reason)),
         'watch.stale': ({ kinds }: { kinds: ReadonlyArray<StaleKind> }) =>
           watch.markStale(kinds),
         'utility.run': ({
