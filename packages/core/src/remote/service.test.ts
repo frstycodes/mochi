@@ -353,6 +353,54 @@ it.live(
 );
 
 it.live(
+  'on the desktop remote access waits for main before it starts, so the keychain-sealed account is read signed in',
+  () =>
+    Effect.gen(function* () {
+      const userData = mkdtempSync(path.join(tmpdir(), 'mochi-wait-main-'));
+      writeFileSync(
+        path.join(userData, 'remote.json'),
+        JSON.stringify({ isEnabled: true }),
+      );
+      const context = yield* Layer.build(
+        layerCore({
+          port: 0,
+          tokens: new Map([[TOKEN, Contract.allScopes]]),
+          origins: [],
+          remotePort: 0,
+          userData,
+          hasKeychain: true,
+        }),
+      );
+      const port = (
+        Context.get(context, HttpServer.HttpServer).address as { port: number }
+      ).port;
+      const main = yield* makeCoreClient(coreUrl(port, TOKEN));
+      const call = makeHostCaller(main);
+      const readStatus = () =>
+        call('remote.status', []) as Promise<RemoteStatus>;
+      const isListening = (s: RemoteStatus) => s.addresses.length > 0;
+      const listenedEarly = yield* Effect.promise(() =>
+        expect
+          .poll(readStatus, { timeout: 300 })
+          .toSatisfy(isListening)
+          .then(
+            () => true,
+            () => false,
+          ),
+      );
+      assert.equal(listenedEarly, false, 'not before main');
+      yield* main['capabilities.serve']({ names: ['main'] }).pipe(
+        Stream.runDrain,
+        Effect.forkChild,
+      );
+      yield* Effect.promise(() =>
+        expect.poll(readStatus).toSatisfy(isListening),
+      );
+      yield* Effect.promise(() => call('remote.set', [{ isEnabled: false }]));
+    }),
+);
+
+it.live(
   'where main can’t seal (Linux `basic_text`) it offers no `secureStorage`: with no passphrase the key stays in memory, never on disk in plain text, and remote access starts',
   () =>
     Effect.gen(function* () {
