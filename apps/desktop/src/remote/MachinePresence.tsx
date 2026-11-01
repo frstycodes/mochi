@@ -11,7 +11,8 @@ import { machineStatus, presenceAge } from './status';
 /**
  * Whether another computer is there, like a messenger's badge: a dot while it's online (amber when it refused this one,
  * dim while connecting), how long since it was last seen while it's offline. The words are in the tooltip, online ones
- * naming the route: direct (LAN or Tailscale) or via relay.
+ * naming the route: direct (LAN or Tailscale) or via relay. GAP: over iroh, whether the path is direct or relayed is known
+ * only in Core (`remote.diagnostics`), so the tooltip says just "Online".
  */
 export function MachinePresence({
   machine,
@@ -23,7 +24,7 @@ export function MachinePresence({
   const now = useNow(15_000);
   const label =
     machine.status === 'online'
-      ? `Online · ${machine.route === 'lan' ? 'direct' : 'via relay'}`
+      ? `Online${ROUTE_SUFFIX[machine.route ?? 'relay']}`
       : machineStatus(machine, new Date(now))!;
   const age =
     machine.status === 'offline' && machine.lastSeenAt !== undefined
@@ -64,3 +65,9 @@ export const PRESENCE_DOT = {
   offline: 'border border-subtle-foreground',
   refused: 'bg-warning',
 } satisfies Record<FollowedMachine['status'], string>;
+
+const ROUTE_SUFFIX = {
+  lan: ' · direct',
+  relay: ' · via relay',
+  iroh: '',
+} satisfies Record<NonNullable<FollowedMachine['route']>, string>;

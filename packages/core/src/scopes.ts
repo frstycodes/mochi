@@ -53,6 +53,9 @@ export const CORE_SCOPES = {
   'remote.absorb': L,
   'remote.noteWelcome': L,
   'remote.shell': L,
+  'remote.irohDial': L,
+  'remote.irohSend': L,
+  'remote.irohClose': L,
   // `mochi login` following a headless join: the pairing codes it shows.
   'remote.joinAlone': L,
   // Keys are roots and cwds the caller names.

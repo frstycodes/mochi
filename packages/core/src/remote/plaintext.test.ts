@@ -112,6 +112,7 @@ it('a connection that opens with a plain command instead of the pairing handshak
       pairedAt: 0,
     }),
     refresh: async () => {},
+    isOnAccount: async () => false,
     approve: async (request) => (asked.push(request.name), true),
     add: async () => undefined,
   };

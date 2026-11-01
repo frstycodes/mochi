@@ -31,5 +31,8 @@
   "devDependencies": {
     "@types/ws": "^8.18.2",
     "electron": "44.7.0"
+  },
+  "optionalDependencies": {
+    "@number0/iroh": "1.2.0"
   }
 }

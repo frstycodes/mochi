@@ -43,7 +43,8 @@ const PAIR_TIMEOUT_MS = 15_000;
 /** Long enough for someone to walk over to the machine and read its screen. */
 export const APPROVAL_TIMEOUT_MS = 2 * 60_000;
 
-export type Origin = 'lan' | 'relay';
+/** How the device reached this machine. Anyone can dial a LAN address or an EndpointId; the relay checked the account. */
+export type Origin = 'lan' | 'relay' | 'iroh';
 
 /** A paired device as one connection knows it. */
 export interface AuthenticatedDevice {
@@ -68,6 +69,8 @@ export interface MachineSide {
   find(deviceId: string): PairedDevice | undefined;
   /** Fetches the account's membership records, for a key another computer may have approved since. */
   refresh(): Promise<void>;
+  /** The key is a machine on this computer's account (`GET /v1/machines`); false when signed out or the listing fails. */
+  isOnAccount(publicKey: Uint8Array): Promise<boolean>;
   /**
    * "Let <name> join?" on this machine's screen, showing `code`; false on No, after `APPROVAL_TIMEOUT_MS`, or once `left`
    * aborts (the device closed the link: it joined through another computer, or gave up), which dismisses the prompt.
@@ -109,19 +112,15 @@ export async function secureAsMachine(
     return refuse(raw, 'The pairing request wasn’t signed by the key it names');
   }
   let device = side.find(id);
+  const isYours = !device && (await isOnAccount(origin, side, pair.publicKey));
   // Another computer of yours may have let it join since this one last heard.
-  if (!device && origin === 'relay')
+  if (isYours)
     device = await side.refresh().then(
       () => side.find(id),
       () => undefined,
     );
   if (!device) {
-    // On the LAN nothing vouches that the device is yours; through the relay it is signed in to your account.
-    if (origin === 'lan')
-      return refuse(
-        raw,
-        'Join your computers through your Mochi account first',
-      );
+    if (!isYours) return refuse(raw, ACCOUNT_FIRST);
     // Reconnecting on its own after being removed here: nobody at that device asked, so nobody here is asked either.
     if (pair.isReturning)
       return refuse(raw, 'That computer doesn’t trust this one; join again');
@@ -213,7 +212,20 @@ export async function secureAsDevice(
   }
 }
 
+/** Through the relay the device is signed in to your account; over iroh only the account's listing says so; on the LAN nothing does. */
+async function isOnAccount(
+  origin: Origin,
+  side: MachineSide,
+  publicKey: Uint8Array,
+) {
+  if (origin === 'relay') return true;
+  if (origin === 'lan') return false;
+  return side.isOnAccount(publicKey).catch(() => false);
+}
+
 const NOT_A_PAIRING = 'The first frame must be a pairing request';
+export const ACCOUNT_FIRST =
+  'Join your computers through your Mochi account first';
 const WRONG_KEY =
   'That computer’s key doesn’t match; pair again from its current listing';
 

@@ -38,7 +38,16 @@ const PairedMachine = Schema.Struct({
   publicKey: Schema.String,
   pairedAt: Schema.Number,
   addresses: Schema.optional(Schema.Array(Schema.String)),
+  irohRelay: Schema.optional(Schema.String),
 });
+
+/** What `remote.irohDial` streams: the link's id once open, each frame, then how it closed. */
+export const IrohEvent = Schema.Union([
+  Schema.TaggedStruct('open', { id: Schema.Number }),
+  Schema.TaggedStruct('message', { bytes: Schema.Uint8Array }),
+  Schema.TaggedStruct('closed', { code: Schema.Number, reason: Schema.String }),
+]);
+export type IrohEvent = typeof IrohEvent.Type;
 
 const SpawnEvent = Schema.Union([
   Schema.TaggedStruct('started', { id: Schema.Number }),
@@ -169,6 +178,7 @@ export class CoreRpcs extends RpcGroup.make(
       machineId: Schema.String,
       addresses: Schema.optional(Schema.Array(Schema.String)),
       kind: Schema.optional(Relay.DeviceKind),
+      irohRelay: Schema.optional(Schema.String),
     },
     error: Schema.String,
   }),
@@ -198,6 +208,29 @@ export class CoreRpcs extends RpcGroup.make(
     ]),
     error: Schema.String,
     stream: true,
+  }),
+  /**
+   * A followed machine's EndpointId dialled through Core's iroh endpoint, the one this computer's key is bound to: the
+   * link's frames as they arrive, ending with its close. `relay` and `addresses` are hints; its EndpointId is its key.
+   */
+  Rpc.make('remote.irohDial', {
+    payload: {
+      publicKey: Schema.String,
+      relay: Schema.optional(Schema.String),
+      addresses: Schema.optional(Schema.Array(Schema.String)),
+    },
+    success: IrohEvent,
+    error: Schema.String,
+    stream: true,
+  }),
+  /** A frame on a link `remote.irohDial` opened; main sends one at a time, so they arrive in order. */
+  Rpc.make('remote.irohSend', {
+    payload: { id: Schema.Number, bytes: Schema.Uint8Array },
+    error: Schema.String,
+  }),
+  Rpc.make('remote.irohClose', {
+    payload: { id: Schema.Number, code: Schema.Number, reason: Schema.String },
+    error: Schema.String,
   }),
   /** What only main knows, for `host.remote.status`: the power source, and each followed machine's connection. */
   Rpc.make('remote.shell', {

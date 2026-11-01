@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => ({
       electron({
         // node-pty is a native addon: bundling it breaks its `.node` and spawn-helper lookups.
         // playwright-core resolves its own package.json and reads files beside it at runtime.
+        // @number0/iroh loads its platform's `.node` from a sibling package, and is optional: Core loads it at runtime.
         main: {
           // `serve.js` is `mochi serve` (bin/mochi.mjs): the same Core under plain Node.
           entry: [
@@ -39,7 +40,11 @@ export default defineConfig(({ mode }) => ({
             },
             build: {
               rolldownOptions: {
-                external: ['node-pty', /^playwright-core(\/|$)/],
+                external: [
+                  'node-pty',
+                  /^playwright-core(\/|$)/,
+                  '@number0/iroh',
+                ],
               },
             },
           },

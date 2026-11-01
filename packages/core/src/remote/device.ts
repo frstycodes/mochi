@@ -7,14 +7,18 @@ import { CoreWsRpcs } from '../rpc.ts';
 import { keepAlive, socketLink, type Link, type RawLink } from './link.ts';
 import { backoff, onNetworkChange } from './reconnect.ts';
 
-/** One way to reach a machine: a LAN or Tailscale address (`lan`), or the relay. */
+/** One way to reach a machine: its iroh EndpointId (`iroh`), a LAN or Tailscale address (`lan`), or the relay. */
 export interface Route {
-  kind: 'lan' | 'relay';
+  kind: 'iroh' | 'lan' | 'relay';
   open(): Promise<RawLink>;
 }
 
-/** Every way to reach it on one attempt: the direct ones are dialled together, the relay a little later. */
+/**
+ * Every way to reach it on one attempt: iroh first; once it failed or had `IROH_BUDGET_MS`, the direct ones together and
+ * the relay a little later.
+ */
 export interface Routes {
+  iroh?: Route;
   direct: Route[];
   relay?: Route;
   /** The relay saw both computers at one public address: the same site, so direct gets longer before the relay starts. */
@@ -26,7 +30,10 @@ export interface DeviceOptions {
   routes: () => Routes | Promise<Routes>;
   /** The pairing exchange as a returning device; every route runs it, direct ones included. */
   secure: (raw: RawLink) => Promise<Link>;
-  /** Only a refusal through the relay is final: an address on the LAN may since belong to another computer. */
+  /**
+   * Only a refusal through the relay or iroh is final: there the machine's key is checked before it answers, while an
+   * address on the LAN may since belong to another computer.
+   */
   isRefusal: (error: unknown) => boolean;
   /** This computer's membership records, sent in each hello. */
   members?: () => unknown;
@@ -42,6 +49,8 @@ const WELCOME_TIMEOUT_MS = 15_000;
 const LAN_TIMEOUT_MS = 2000;
 /** How long one route has to open and finish the pairing exchange. */
 const ATTEMPT_TIMEOUT_MS = 15_000;
+/** The head start iroh gets before the other routes are dialled too. */
+export const IROH_BUDGET_MS = 4000;
 /** The head start direct routes get before the relay is dialled too; longer on the same site. */
 export const RELAY_DELAY_MS = 1500;
 export const SAME_SITE_RELAY_DELAY_MS = 4000;
@@ -147,9 +156,9 @@ function connected(
 }
 
 /**
- * Dials every direct route at once and the relay after `RELAY_DELAY_MS` (sooner once every direct one failed), and takes the
- * first that finishes the pairing exchange; the others are closed as they answer. Rejects when all failed, or at once when
- * the relay refused this computer.
+ * Dials iroh first, then, once it failed or after `IROH_BUDGET_MS`, every direct route at once and the relay after
+ * `RELAY_DELAY_MS` (sooner once every direct one failed); takes the first that finishes the pairing exchange, and closes the
+ * others as they answer. Rejects when all failed, or at once when the relay or iroh refused this computer.
  */
 export function dialFirst(
   routes: Routes,
@@ -159,53 +168,76 @@ export function dialFirst(
   const relay = hasRelay ? routes.relay : undefined;
   return new Promise((resolve, reject) => {
     let isDone = false;
+    let isFallbackDialled = false;
     let isRelayDialled = !relay;
     let pending = 0;
+    let pendingDirect = 0;
     let lastError: unknown = new Error('No way to reach it');
+    let relayTimer: ReturnType<typeof setTimeout> | undefined;
+    const stopTimers = () => {
+      clearTimeout(irohTimer);
+      clearTimeout(relayTimer);
+    };
     const finish = () => {
-      if (!isDone && pending === 0 && isRelayDialled) {
+      if (!isDone && pending === 0 && isFallbackDialled && isRelayDialled) {
         isDone = true;
         reject(lastError);
       }
     };
     const dialRelay = () => {
-      clearTimeout(timer);
+      clearTimeout(relayTimer);
       if (isRelayDialled) return;
       isRelayDialled = true;
       attempt(relay!);
     };
+    const dialFallback = () => {
+      clearTimeout(irohTimer);
+      if (isFallbackDialled) return;
+      isFallbackDialled = true;
+      const delay = routes.isSameSite
+        ? SAME_SITE_RELAY_DELAY_MS
+        : RELAY_DELAY_MS;
+      relayTimer = setTimeout(dialRelay, routes.direct.length ? delay : 0);
+      routes.direct.forEach(attempt);
+      finish();
+    };
     function attempt(route: Route) {
       pending++;
+      if (route.kind === 'lan') pendingDirect++;
       void secured(route, options.secure).then(
         (link) => {
           pending--;
+          if (route.kind === 'lan') pendingDirect--;
           if (isDone) return link.close(1000, 'Another route answered first');
           isDone = true;
-          clearTimeout(timer);
+          stopTimers();
           resolve({ link, route: route.kind });
         },
         (error: unknown) => {
           pending--;
+          if (route.kind === 'lan') pendingDirect--;
           if (isDone) return;
-          if (route.kind === 'relay' && options.isRefusal(error)) {
+          if (route.kind !== 'lan' && options.isRefusal(error)) {
             isDone = true;
-            clearTimeout(timer);
+            stopTimers();
             options.onRefused(
               error instanceof Error ? error.message : String(error),
             );
             return reject(error);
           }
           lastError = error;
+          if (route.kind === 'iroh') return dialFallback();
           // Every direct route failed: the relay needn't wait out its head start.
-          if (route.kind !== 'relay' && pending === 0) dialRelay();
+          if (route.kind === 'lan' && pendingDirect === 0) dialRelay();
           finish();
         },
       );
     }
-    const delay = routes.isSameSite ? SAME_SITE_RELAY_DELAY_MS : RELAY_DELAY_MS;
-    const timer = setTimeout(dialRelay, routes.direct.length ? delay : 0);
-    routes.direct.forEach(attempt);
-    finish();
+    const irohTimer = routes.iroh
+      ? setTimeout(dialFallback, IROH_BUDGET_MS)
+      : undefined;
+    if (routes.iroh) attempt(routes.iroh);
+    else dialFallback();
   });
 }
 
@@ -219,11 +251,18 @@ async function secured(route: Route, secure: DeviceOptions['secure']) {
       ATTEMPT_TIMEOUT_MS,
     );
   });
+  const opening = route.open();
   try {
-    raw = await Promise.race([route.open(), timeout]);
+    raw = await Promise.race([opening, timeout]);
     return await Promise.race([secure(raw), timeout]);
   } catch (error) {
-    raw?.close(1000, 'Pairing failed');
+    if (raw) raw.close(1000, 'Pairing failed');
+    // Opened after it was given up on: nothing else holds it.
+    else
+      void opening.then(
+        (late) => late.close(1000, 'Too late'),
+        () => {},
+      );
     throw error;
   } finally {
     clearTimeout(timer);
@@ -231,7 +270,7 @@ async function secured(route: Route, secure: DeviceOptions['secure']) {
 }
 
 /**
- * While the session rides the relay, looks for a direct route every `PROBE_MS` and on every network change. One that pairs
+ * While the session rides the relay, looks for iroh or a direct route every `PROBE_MS` and on every network change. One that pairs
  * and welcomes waits in `dial.next`; once no call is in flight (or after `DRAIN_MS`) the relay link closes, the protocol
  * redials at once, takes it, and every stream resumes from its last sequence. Nothing is sent twice: a call in flight either
  * finishes on the relay first or fails as a drop.
@@ -243,7 +282,7 @@ function lookForDirect(socket: LinkSocket, options: DeviceOptions, dial: Dial) {
     isProbing = true;
     try {
       const routes = await options.routes();
-      if (!routes.direct.length) return;
+      if (!routes.iroh && !routes.direct.length) return;
       const { link, route } = await dialFirst(routes, options, {
         hasRelay: false,
       });

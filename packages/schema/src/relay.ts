@@ -687,7 +687,10 @@ export const HelloFrame = Schema.Struct({
 });
 export type HelloFrame = typeof HelloFrame.Type;
 
-/** `addresses`: where the machine listens on its LAN or Tailscale, so the device tries those before the relay next time. */
+/**
+ * `addresses`: where the machine listens on its LAN or Tailscale, so the device tries those before the relay next time.
+ * `irohRelay`: its iroh home relay, a hint for dialling its EndpointId next time.
+ */
 export const WelcomeFrame = Schema.Struct({
   type: Schema.Literal('welcome'),
   version: Schema.Number,
@@ -695,6 +698,7 @@ export const WelcomeFrame = Schema.Struct({
   /** The machine's own descriptor (`backend.info`), with `scopes` what this device may do there. */
   backend: BackendInfo,
   addresses: Schema.Array(S),
+  irohRelay: opt(S),
   members: opt(Schema.Unknown),
 });
 export type WelcomeFrame = typeof WelcomeFrame.Type;
