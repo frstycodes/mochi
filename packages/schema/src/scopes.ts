@@ -262,6 +262,7 @@ export const HOST_SCOPES = {
     setDeviceScopes: L,
     answerApproval: L,
     otherMachines: L,
+    diagnostics: L,
     join: L,
     machines: L,
     follow: L,

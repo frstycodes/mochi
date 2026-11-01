@@ -14,6 +14,7 @@ import { Refresh } from '@/icons';
 import { cn } from '@/lib/utils';
 import { toast } from '@/toast/store';
 import { useMochiAccount } from '../../account/useMochiAccount';
+import { copyText } from '../../clipboard';
 import { useConfirm } from '../../git/useConfirm';
 import { host } from '../../host';
 import {
@@ -57,6 +58,7 @@ function RemoteAccess() {
       <SettingsGroup
         title="This computer"
         footer="While devices can control it, closing the window keeps Mochi running in the background. The relay is encrypted between your devices; it can’t read anything."
+        action={<CopyDiagnosticsButton />}
       >
         <SettingsRow
           id="remoteEnabled"
@@ -136,6 +138,23 @@ function RemoteAccess() {
       <Members status={status} />
       <OtherComputers isSignedIn={isSignedIn} />
     </div>
+  );
+}
+
+/** What decides whether this computer reaches your others, for a report; no secrets. */
+function CopyDiagnosticsButton() {
+  const copy = () =>
+    host.remote.diagnostics().then(
+      (text) => copyText(text, 'Diagnostics copied'),
+      (e: Error) =>
+        toast.error('Couldn’t read the diagnostics', {
+          description: ipcMessage(e),
+        }),
+    );
+  return (
+    <Button size="sm" variant="ghost" onClick={() => void copy()}>
+      Copy diagnostics
+    </Button>
   );
 }
 

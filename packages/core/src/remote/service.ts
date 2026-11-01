@@ -201,9 +201,19 @@ function makeRemote({
   capabilities,
   backend,
   hasKeychain,
-  log,
+  log: logWarning,
   serving,
 }: RemoteOptions) {
+  /** The last connection events, newest last, for `diagnostics`. */
+  const events: { at: string; message: string }[] = [];
+  const note = (message: string) => {
+    events.push({ at: new Date().toISOString(), message });
+    if (events.length > MAX_EVENTS) events.shift();
+  };
+  const log = (message: string) => {
+    note(message);
+    logWarning(message);
+  };
   const file = joinPath(dir, 'remote.json');
   let settings = loadSettings(file);
   let server: RemoteServer | undefined;
@@ -377,6 +387,59 @@ function makeRemote({
     return secured;
   }
 
+  /**
+   * Everything that decides whether this computer reaches the others, as text to paste into a report: no secrets, only ids,
+   * public keys' ids and states. The relay's listing is read fresh, so it shows what the other computers see now.
+   */
+  async function diagnostics(): Promise<string> {
+    const registry = theRegistry();
+    const own = await theKeys().catch(() => undefined);
+    const self = own && deviceId(own.publicKey);
+    const listing = await withTimeout(
+      account.accessToken().then(listMachines),
+      DIAGNOSTICS_TIMEOUT_MS,
+    ).then(
+      (listed) =>
+        listed.map((m) => ({
+          id: m.id,
+          isOnline: m.isOnline,
+          isThisComputer: m.id === registry.machineId,
+          isMember: registry.devices().some((d) => d.publicKey === m.publicKey),
+        })),
+      (e: unknown) => ({ error: messageOf(e) }),
+    );
+    const { members, devices } = status();
+    return JSON.stringify(
+      {
+        at: new Date().toISOString(),
+        machineId: registry.machineId,
+        deviceId: self ?? 'unreadable',
+        machineName: machineName(),
+        account: (await account.current()).status,
+        settings: { ...settings, machineName: undefined },
+        relay: relayState,
+        ...(error && { error }),
+        addresses: server?.addresses ?? [],
+        isRemoved: membership?.isRemoved ?? false,
+        members: members.map(({ id, name, kind, machineStatus }) => ({
+          id,
+          name,
+          kind,
+          machineStatus,
+        })),
+        connectedDevices: devices.map(({ id, name, connectedAt }) => ({
+          id,
+          name,
+          connectedAt: new Date(connectedAt).toISOString(),
+        })),
+        relayListing: listing,
+        events,
+      },
+      null,
+      2,
+    );
+  }
+
   /** Computers on your account that aren't members yet, from the relay, each with the code both screens show to join. */
   async function otherMachines(): Promise<OtherMachine[]> {
     const [listed, own] = await Promise.all([
@@ -412,6 +475,17 @@ function makeRemote({
    * computer, so it reaches all of them and they it with no more prompts.
    */
   async function join(machineId: string, signal?: AbortSignal) {
+    note(`Joining through ${machineId}`);
+    return joinThrough(machineId, signal).then(
+      (name) => (note(`Joined through ${machineId}`), name),
+      (e: unknown) => {
+        note(`Joining through ${machineId} failed: ${messageOf(e)}`);
+        throw e;
+      },
+    );
+  }
+
+  async function joinThrough(machineId: string, signal?: AbortSignal) {
     let joinedName = '';
     const token = await account.accessToken();
     const [listed, own] = await Promise.all([listMachines(token), theKeys()]);
@@ -603,6 +677,12 @@ function makeRemote({
     const records = mergeRecords(merged.records, fresh).records;
     const isChanged = !held || merged.changed || fresh.length > 0;
     if (!isChanged && membership) return;
+    if (resolved.isRemoved !== (membership?.isRemoved ?? false))
+      note(
+        resolved.isRemoved
+          ? 'Another of your computers removed this one'
+          : 'Joined your computers again',
+      );
     membership = resolved;
     if (isChanged) registry.saveRecords(records);
     for (const id of registry.reconcile(
@@ -693,6 +773,7 @@ function makeRemote({
         (e: unknown) => (error = String(e)),
       );
       if (server.addresses.join(' ') === before && !error) return;
+      note(`Network changed: listening on ${server.addresses.join(', ')}`);
       // Devices read the addresses from the relay before they dial.
       relay?.reregister();
       broadcast();
@@ -748,8 +829,10 @@ function makeRemote({
         error = String(e);
         log(`Remote access couldn’t start: ${error}`);
       }
-      if (server && settings.reachesAnywhere && (await isSignedIn()))
-        await startRelay(server);
+      if (server) note(`Listening on ${server.addresses.join(', ')}`);
+      const isRelayWanted = !!server && settings.reachesAnywhere;
+      if (isRelayWanted && (await isSignedIn())) await startRelay(server!);
+      else if (isRelayWanted) note('Not on the relay: signed out');
       broadcast();
     });
     return restarting;
@@ -779,6 +862,10 @@ function makeRemote({
       token: () => account.accessToken(),
       onChannel: (raw) => listening.attach(raw),
       onState: (state) => {
+        if (state.status !== relayState.status)
+          note(
+            `Relay ${state.status}${state.status === 'error' ? `: ${state.error}` : ''}`,
+          );
         if (state.status === 'error' && relayState.status !== 'error')
           log(`The relay connection failed: ${state.error}`);
         relayState = state;
@@ -838,6 +925,7 @@ function makeRemote({
     /** Core's own socket, once bound: where a device's tunnel reaches it, and the token its device tokens are signed with. */
     bindCore: (endpoint: CoreEndpoint) => core(endpoint),
     status,
+    diagnostics,
     set,
     removeMember,
     setDeviceScopes,
@@ -971,6 +1059,18 @@ function progressLog() {
 }
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+const MAX_EVENTS = 100;
+const DIAGNOSTICS_TIMEOUT_MS = 5000;
+
+const withTimeout = <T>(promise: Promise<T>, ms: number) =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`No answer in ${ms / 1000} s`)),
+      ms,
+    );
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
 
 function loadSettings(file: string): RemoteSettings {
   try {

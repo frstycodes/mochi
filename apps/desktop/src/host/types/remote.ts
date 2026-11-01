@@ -446,6 +446,8 @@ export interface RemoteHost {
   answerApproval(id: string, isAllowed: boolean): Promise<void>;
   /** Computers on your account that aren't among yours yet, through the relay. */
   otherMachines(): Promise<OtherMachine[]>;
+  /** What decides whether this computer reaches your others, as JSON text for a report; no secrets. */
+  diagnostics(): Promise<string>;
   /** Joins your computers through that one; resolves once it allowed this one, rejects with its reason otherwise. */
   join(machineId: string): Promise<void>;
   /** The computers this one follows, and how each connection stands. */
@@ -476,6 +478,7 @@ export const remoteMethods = {
   onApproval: 'event',
   answerApproval: 'invoke',
   otherMachines: 'invoke',
+  diagnostics: 'invoke',
   join: 'invoke',
   machines: 'invoke',
   onMachines: 'event',

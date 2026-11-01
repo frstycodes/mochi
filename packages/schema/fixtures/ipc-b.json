@@ -429,6 +429,12 @@
     "output": []
    }
   ],
+  "remote.diagnostics": [
+   {
+    "input": [],
+    "output": "{\n  \"error\": \"Devices need the desktop app\"\n}"
+   }
+  ],
   "remote.machines": [
    {
     "input": [],

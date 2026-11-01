@@ -125,6 +125,7 @@ export const remoteRpc = {
   onApproval: event(ApprovalRequest),
   answerApproval: invoke(T([MachineId, B]), Void),
   otherMachines: invoke(T([]), Schema.Array(OtherMachine)),
+  diagnostics: invoke(T([]), S),
   join: invoke(T([MachineId]), Void),
   machines: invoke(T([]), Schema.Array(FollowedMachine)),
   onMachines: event(Schema.Array(FollowedMachine)),
