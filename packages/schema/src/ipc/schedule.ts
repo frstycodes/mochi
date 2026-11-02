@@ -1,5 +1,5 @@
 import { Schema } from 'effect';
-import { AgentEvent, AgentStartOptions } from '../agent.ts';
+import { AgentStartOptions } from '../agent.ts';
 import { event, Id, invoke, Str } from '../checks.ts';
 import { AutofixEvent } from '../model.ts';
 import { PrCheck } from './git.ts';
@@ -106,7 +106,6 @@ export const ScheduleEvent = Schema.Union([
     threadId: S,
     event: AutofixEvent,
   }),
-  Schema.Struct({ type: Schema.Literal('agent'), event: AgentEvent }),
 ]);
 export type ScheduleEvent = typeof ScheduleEvent.Type;
 
@@ -116,7 +115,5 @@ export const scheduleRpc = {
   remove: invoke(T([Id]), Void),
   setPaused: invoke(T([Id, Schema.Boolean]), Void),
   runNow: invoke(T([Id]), Void),
-  drain: invoke(T([]), Schema.Array(ScheduleEvent)),
   onChange: event(Schema.Array(Trigger)),
-  onEvent: event(ScheduleEvent),
 };

@@ -93,9 +93,8 @@ export const CORE_SCOPES = {
   'terminal.close': L,
   'terminal.watched': L,
   'terminal.output': 'terminal',
-  // Every trigger's folder and start options; main's handoff of events no window took.
+  // Every trigger's folder and start options.
   'schedule.watch': L,
-  'schedule.keep': L,
 } as const satisfies Record<CoreTag, Capabilities.AuthScope>;
 
 const hostScope = (tag: string): Capabilities.AuthScope | undefined => {

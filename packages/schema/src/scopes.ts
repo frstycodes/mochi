@@ -341,6 +341,5 @@ export const HOST_SCOPES = {
     remove: 'manage',
     setPaused: 'manage',
     runNow: 'manage',
-    drain: L,
   },
 } as const satisfies HostScopes;

@@ -1,6 +1,5 @@
 import { Effect, Schema } from 'effect';
 import { definitionOf } from '@mochi/schema';
-import type { ScheduleEvent } from '../../../../apps/desktop/src/host/types/schedule.ts';
 import { Scheduler } from './scheduler.ts';
 
 type Service = Scheduler['Service'];
@@ -15,7 +14,6 @@ export const scheduleHandlers = (scheduler: Service) => {
     'schedule.setPaused': ([threadId, isPaused]: [string, boolean]) =>
       scheduler.setPaused(threadId, isPaused),
     'schedule.runNow': ([threadId]: [string]) => scheduler.runNow(threadId),
-    'schedule.drain': () => scheduler.drain,
   };
   return Object.fromEntries(
     Object.entries(methods).map(([tag, handle]) => {
@@ -45,6 +43,4 @@ export const scheduleHandlers = (scheduler: Service) => {
 /** The handlers of `ScheduleRpcs`. */
 export const scheduleRpcHandlers = (scheduler: Service) => ({
   'schedule.watch': () => scheduler.changes,
-  'schedule.keep': ({ event }: { event: unknown }) =>
-    scheduler.keep(event as ScheduleEvent),
 });

@@ -60,10 +60,11 @@ import type { DocTable } from './store/migrations.ts';
 import { importJson } from './store/importJson.ts';
 import { storeCommand } from '../../../apps/desktop/src/remote/storeCommands.ts';
 import type { RemoteCommand } from '../../../apps/desktop/src/host/types/remote.ts';
-import type { State } from '../../../apps/desktop/src/store/types.ts';
+import type { Action, State } from '../../../apps/desktop/src/store/types.ts';
 import { AgentCaller, Commands } from './store/commands.ts';
 import { Projection } from './store/projection.ts';
-import { Store } from './store/store.ts';
+import { Store, type AppendInput } from './store/store.ts';
+import { COMMAND_TYPE } from '@mochi/domain';
 import { layerReactor } from './reactor/execute.ts';
 import { ThreadContext } from './switch/context.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
@@ -639,6 +640,16 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
                 ) => Effect.Effect<unknown, unknown>
               )(payload),
           ),
+        // A window's command is Core's to act on: the agent calls it means are made here, not in the window.
+        'events.append': (input: AppendInput) =>
+          input.type === COMMAND_TYPE
+            ? commands.submit(input.payload as Action, input.commandId).pipe(
+                Effect.map(({ done: _done, ...logged }) => logged),
+                Effect.mapError((error) =>
+                  error instanceof Error ? error.message : String(error),
+                ),
+              )
+            : stored['events.append'](input),
         // Main's settings writes land here; the agents read them without a restart.
         'docs.set': (input: {
           table: DocTable;
