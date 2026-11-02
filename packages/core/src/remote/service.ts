@@ -247,6 +247,7 @@ function makeRemote({
   /** Who this computer trusts, from the records in `devices.json`; set by the first `absorb`. */
   let membership: Membership | undefined;
   let absorbing: Promise<unknown> = Promise.resolve();
+  let servingAlone: Promise<void> = Promise.resolve();
   let registry: Registry | undefined;
   const theRegistry = () => (registry ??= new Registry(dir));
   let seed: Promise<string> | undefined;
@@ -755,8 +756,17 @@ function makeRemote({
     );
   }
 
-  /** Under `mochi serve`, once signed in: remote access on, reachable through the relay, and joined when it trusts nobody. */
-  async function serveAlone() {
+  /**
+   * Under `mochi serve`, once signed in: remote access on, reachable through the relay, and joined when it trusts nobody.
+   * One at a time: `set` turns it on before its restart settles, so an overlapping call would skip the line and join first.
+   */
+  function serveAlone(): Promise<void> {
+    const run = servingAlone.then(turnOnAlone);
+    servingAlone = run.catch(() => {});
+    return run;
+  }
+
+  async function turnOnAlone() {
     if (!serving || !(await isSignedIn())) return;
     if (!settings.isEnabled || !settings.reachesAnywhere) {
       await set({ isEnabled: true, reachesAnywhere: true });
