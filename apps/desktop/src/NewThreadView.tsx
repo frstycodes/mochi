@@ -241,7 +241,7 @@ function NewThread() {
         title,
         provider,
         project: remoteProject,
-        ...(picked && { controls }),
+        controls,
         ...(images.length > 0 && { images }),
       });
       if (!result.isOk) return false;
