@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import {
   Context,
+  Data,
   Deferred,
   Effect,
   Layer,
@@ -52,11 +53,11 @@ import { Store } from './store.ts';
 export class AgentCaller extends Context.Service<
   AgentCaller,
   {
-    readonly call: (call: AgentCall) => Effect.Effect<unknown, unknown>;
+    readonly call: (call: AgentCall) => Effect.Effect<unknown, AgentError>;
     readonly resolve: (
       requestId: string,
       decision: AgentDecision,
-    ) => Effect.Effect<unknown, unknown>;
+    ) => Effect.Effect<unknown, AgentError>;
   }
 >()('mochi/core/AgentCaller') {
   static readonly layer = Layer.succeed(this, {
@@ -71,12 +72,12 @@ export class AgentCaller extends Context.Service<
               ...args: unknown[]
             ) => Promise<unknown>
           )(undefined, call.threadId, ...agentCallArgs(call)),
-        catch: asError,
+        catch: toAgentError,
       }),
     resolve: (requestId: string, decision: AgentDecision) =>
       Effect.tryPromise({
         try: () => agent.resolve(undefined, requestId, decision),
-        catch: asError,
+        catch: toAgentError,
       }),
   });
 }
@@ -302,8 +303,14 @@ export class Commands extends Context.Service<Commands>()(
   static readonly layer = Layer.effect(this, this.make);
 }
 
-const isLostProcess = (error: unknown) =>
-  error instanceof Error && error.message.includes(NO_AGENT_PROCESS);
+export class AgentError extends Data.TaggedError('AgentError')<{
+  readonly message: string;
+}> {}
 
-const asError = (error: unknown) =>
-  error instanceof Error ? error : new Error(String(error));
+const isLostProcess = (error: unknown) =>
+  error instanceof AgentError && error.message.includes(NO_AGENT_PROCESS);
+
+const toAgentError = (error: unknown) =>
+  new AgentError({
+    message: error instanceof Error ? error.message : String(error),
+  });

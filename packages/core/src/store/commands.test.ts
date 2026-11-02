@@ -15,7 +15,7 @@ import { applyFrame } from '../../../../apps/desktop/src/remote/mirror.ts';
 import { createReplica } from '../../../../apps/desktop/src/store/replica.ts';
 import { mirrorState } from '../../../../apps/desktop/src/store/root.ts';
 import type { Action } from '../../../../apps/desktop/src/store/types.ts';
-import { AgentCaller, Commands } from './commands.ts';
+import { AgentCaller, AgentError, Commands } from './commands.ts';
 import { Projection } from './projection.ts';
 import { Store } from './store.ts';
 
@@ -63,6 +63,7 @@ it.effect('Core logs a thread as starting before it makes the start call', () =>
                       Effect.flatMap((logged) =>
                         Deferred.succeed(startedAfter, logged),
                       ),
+                      Effect.orDie,
                     )
                   : Effect.void,
               resolve: () => Effect.void,
@@ -84,7 +85,7 @@ it.effect('Core logs a thread as starting before it makes the start call', () =>
 
 /** Core with `call` as its agents; `calls` records each in order. */
 const withAgents = (
-  call: (agentCall: AgentCall) => Effect.Effect<unknown, unknown>,
+  call: (agentCall: AgentCall) => Effect.Effect<unknown, AgentError>,
 ) => {
   const calls: AgentCall[] = [];
   const layer = Commands.layer.pipe(
@@ -121,7 +122,7 @@ it.effect(
     Effect.gen(function* () {
       const { calls, layer } = withAgents((agentCall) =>
         agentCall.method === 'send'
-          ? Effect.fail(new Error(NO_AGENT_PROCESS))
+          ? Effect.fail(new AgentError({ message: NO_AGENT_PROCESS }))
           : Effect.void,
       );
       const types = yield* Effect.gen(function* () {
@@ -149,7 +150,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { layer } = withAgents(() =>
-        Effect.fail(new Error('Claude Code is not installed')),
+        Effect.fail(
+          new AgentError({ message: 'Claude Code is not installed' }),
+        ),
       );
       const error = yield* Effect.gen(function* () {
         yield* (yield* Commands).apply(create);
