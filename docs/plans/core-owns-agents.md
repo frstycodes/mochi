@@ -107,18 +107,22 @@ Each step ships alone and leaves the app working.
    A call that would ask expires at once: approvals resolve in the window's process (`decideTool`), so nobody can answer
    one raised in Core. GAP: route every thread tool to Core once a window can show the toast and Undo from the folded
    command.
-   6–7. **Remote browser view (done, uncommitted; built the terminal way instead of moving tabs into Core).** A browser
-   tab of another computer's thread now opens on that computer: the device sends `browser-open` (`operate` scope), the
-   owning computer's window hosts the page as that thread's own tab (`pages.ts`, same `threadId/tabId` key, so its agent's
-   browser tools and the device drive one page, and localhost is the owner's), mirrors it, and feeds its frames to Core
-   (`browser.feed`, `packages/core/src/remote/browsers.ts`). The device's main subscribes to `browser.frames` and hands
-   frames to its window (`remote:onBrowserFrame`); `RemoteBrowser.tsx` shows them, with back/forward/reload and an address
-   bar, and sends clicks, wheel and keys as `browser-input`, run on the page by a new `browserView` method `input`
-   (`runInput` in `packages/core/src/browser/drive.ts`, used by main's Electron views and Core's headless Chromium).
-   Moving tabs into Core (the original step 6) is no longer needed for this: the owner's window already keys pages by
-   thread and tab. Limits: like a device terminal, it needs the app open on the owning computer; while a device watches,
-   a window on the owner showing the same tab shows frames, not the live view; no devtools, element picker, find or
-   compare on another computer's page.
+   6–7. **Browser tabs on the thread, page on the owner (done, uncommitted).** A thread's browser tabs (id, url, title) fold on
+   the thread (`browser-tab`, `browser-tab-close`). Core's `Browsers` (`packages/core/src/remote/browsers.ts`) opens a tab's
+   page through `browserView` (`page.open`) and logs its url and title as it navigates. Main sends the events of a view Core
+   opened back to Core (`relayView` in `electron/browser/views.ts`, `page.event`). The owner's window creates a thread tab's
+   view through `page.open`, so its pane, its agent's browser tools and a paired device all drive one page, with localhost
+   the owner's. Every window adds the thread's folded tabs to its pane (`useThreadBrowserTabs`). A device opens or shows a
+   tab with `browser-open` and follows its frames over `page.watch`; `browser-input` and `browser-navigate` run in Core
+   (`directCall`). All of them need `operate`. `RemoteBrowser.tsx` shows the frames and sends clicks, wheel and keys.
+   Limits:
+   - Pages live as long as Core's views: a restart forgets the view, and the folded tab reopens at its url when next shown.
+   - Only the main window can attach a view Core opened (main makes them in it).
+   - A hidden or minimized window on the owner doesn't paint, so a watching device gets no frames until it shows again.
+   - One viewport per page.
+   - Closing a tab in another computer's pane only closes it there.
+   - Popups stay window tabs.
+   - Under `mochi serve`, the agent's browser tools keep their own tabs, apart from the folded ones.
 6. **Remote viewer writes: rejected on review.** `device.command` decodes every device input through the relay schema
    (`Relay.RemoteCommand`) and maps it to actions itself (`storeCommand`), so a device never sends a raw store action.
    Letting another computer append arbitrary actions to this Core's `Commands.submit` would widen that trust boundary.

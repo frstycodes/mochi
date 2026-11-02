@@ -260,7 +260,7 @@ export type RemoteCommand =
     }
   /** Output from offset `after` on; the device polls with the `next` it got. */
   | { type: 'terminal-close'; threadId: string; terminalId: string }
-  /** The thread's browser tab, hosted on the machine and streamed to the device (`browser.frames`). */
+  /** The thread's browser tab, hosted on the machine and streamed to the device (`page.watch`). */
   | {
       type: 'browser-open';
       threadId: string;

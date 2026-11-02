@@ -246,7 +246,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
       return interrupt(current.browsers, key);
     if (current.browsers.has(key)) return;
     const frames = Stream.suspend(() =>
-      client['browser.frames']({ threadId, tabId }),
+      client['page.watch']({ threadId, tabId }),
     ).pipe(
       Stream.runForEach((frame) =>
         Effect.sync(() => options.onBrowserFrame({ threadId, tabId, frame })),

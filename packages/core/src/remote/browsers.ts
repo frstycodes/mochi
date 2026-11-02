@@ -1,88 +1,48 @@
-import { Context, Effect, Layer, PubSub, Schema, Stream } from 'effect';
+import { Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
 import { Relay } from '@mochi/schema';
 
-const PageKey = { threadId: Schema.String, tabId: Schema.String };
-
-/**
- * The browser tabs a device watches on this computer belong to the window that owns the store, as the terminals do: the device
- * opens one (`browser-open`), the window hosts the page as its own tab would be and feeds its frames here (`browser.feed`), and
- * a device with the `operate` scope subscribes to `browser.frames`.
- */
-export class BrowserRpcs extends RpcGroup.make(
-  Rpc.make('browser.feed', {
-    payload: { ...PageKey, frame: Relay.BrowserFrame },
-  }),
-  Rpc.make('browser.close', { payload: PageKey }),
-  /** The latest frame, then each new one; ends when the page closes. A subscriber may come before the first frame. */
-  Rpc.make('browser.frames', {
-    payload: PageKey,
-    success: Relay.BrowserFrame,
-    stream: true,
-  }),
+export class PageUnknown extends Schema.TaggedError<PageUnknown>()(
+  'PageUnknown',
+  { threadId: Schema.String, tabId: Schema.String },
 ) {}
 
-type Frame = typeof Relay.BrowserFrame.Type;
+const PageKey = { threadId: Schema.String, tabId: Schema.String };
+const Viewport = Schema.Struct({ width: Schema.Number, height: Schema.Number });
 
-interface Watched {
-  latest: Frame | null;
-  /** `null` once the page closes: its streams end. */
-  changed: PubSub.PubSub<Frame | null>;
-}
-
-export class Browsers extends Context.Service<Browsers>()(
-  'mochi/core/Browsers',
-  {
-    make: Effect.sync(() => {
-      const pages = new Map<string, Watched>();
-      const keyOf = (threadId: string, tabId: string) => `${threadId}/${tabId}`;
-
-      const pageOf = (threadId: string, tabId: string) =>
-        Effect.gen(function* () {
-          const key = keyOf(threadId, tabId);
-          const known = pages.get(key);
-          if (known) return known;
-          const page: Watched = {
-            latest: null,
-            changed: yield* PubSub.sliding<Frame | null>(1),
-          };
-          pages.set(key, page);
-          return page;
-        });
-
-      const feed = (threadId: string, tabId: string, frame: Frame) =>
-        Effect.gen(function* () {
-          const page = yield* pageOf(threadId, tabId);
-          page.latest = frame;
-          PubSub.publishUnsafe(page.changed, frame);
-        });
-
-      const close = (threadId: string, tabId: string) =>
-        Effect.sync(() => {
-          const key = keyOf(threadId, tabId);
-          const page = pages.get(key);
-          if (!page) return;
-          pages.delete(key);
-          PubSub.publishUnsafe(page.changed, null);
-        });
-
-      /** Keyed by thread and tab: only the window hosting that tab feeds it. */
-      const frames = (threadId: string, tabId: string) =>
-        Stream.unwrap(
-          Effect.gen(function* () {
-            const page = yield* pageOf(threadId, tabId);
-            // Subscribed before reading the latest, so a frame fed in between isn't missed.
-            const next = yield* PubSub.subscribe(page.changed);
-            return Stream.concat(
-              Stream.fromIterable(page.latest ? [page.latest] : []),
-              Stream.fromSubscription(next),
-            ).pipe(Stream.takeWhile((frame): frame is Frame => frame !== null));
-          }),
-        );
-
-      return { feed, close, frames };
-    }),
-  },
-) {
-  static readonly layer = Layer.effect(this, this.make);
-}
+/**
+ * A thread's browser tabs, their pages run on this computer through `browserView` (main's views, or headless Chromium), so the
+ * agent's tools, this computer's window and a paired device all name one page and localhost is this computer's. Each tab's url
+ * and title fold on the thread (`browser-tab`). A device opens or shows a tab with `browser-open` and follows `page.watch`.
+ */
+export class BrowserRpcs extends RpcGroup.make(
+  /** A thread tab's page, opened at `url` if it has none yet; the native view's id, for the window that shows it. */
+  Rpc.make('page.open', {
+    payload: {
+      ...PageKey,
+      url: Schema.String,
+      viewport: Schema.optional(Viewport),
+    },
+    success: Schema.String,
+    error: PageUnknown,
+  }),
+  Rpc.make('page.input', {
+    payload: { ...PageKey, input: Relay.BrowserInput },
+    error: PageUnknown,
+  }),
+  Rpc.make('page.navigate', {
+    payload: { ...PageKey, to: Relay.BrowserNavigation },
+    error: PageUnknown,
+  }),
+  /** Stops streaming its frames; the tab stays open. */
+  Rpc.make('page.unwatch', { payload: PageKey }),
+  /** The latest frame, then each new one; ends when the tab closes. */
+  Rpc.make('page.watch', {
+    payload: PageKey,
+    success: Relay.BrowserFrame,
+    error: PageUnknown,
+    stream: true,
+  }),
+  /** Main's events for the views Core opened (`relayToCore` in `electron/browser/views.ts`). */
+  Rpc.make('page.event', { payload: { event: Schema.Unknown } }),
+) {}

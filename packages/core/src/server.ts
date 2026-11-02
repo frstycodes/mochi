@@ -52,7 +52,8 @@ import {
 } from './remote/service.ts';
 import type { IrohPreset } from './remote/iroh.ts';
 import { Remote } from './remote/tag.ts';
-import { Browsers } from './remote/browsers.ts';
+import type { BrowserEvent } from '@mochi/domain/host/types/browser';
+import { Browsers } from './remote/pages.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem, visibleSnapshot } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
@@ -171,9 +172,12 @@ export const layerCore = (options: ServerOptions) => {
         UtilityQueue.layer,
         Turns.layer,
         Terminals.layer,
-        Browsers.layer,
-        layerStore(options.userData).pipe(
-          Layer.provideMerge(layerCapabilities(options.browserView)),
+        Browsers.layer.pipe(
+          Layer.provideMerge(
+            layerStore(options.userData).pipe(
+              Layer.provideMerge(layerCapabilities(options.browserView)),
+            ),
+          ),
         ),
       ).pipe(Layer.provideMerge(Run.layer)),
     ),
@@ -615,29 +619,13 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           threadId: string;
           after: number;
         }) => terminals.output(terminalId, threadId, after),
-        'browser.feed': ({
-          threadId,
-          tabId,
-          frame,
-        }: {
-          threadId: string;
-          tabId: string;
-          frame: Relay.BrowserFrame;
-        }) => browsers.feed(threadId, tabId, frame),
-        'browser.close': ({
-          threadId,
-          tabId,
-        }: {
-          threadId: string;
-          tabId: string;
-        }) => browsers.close(threadId, tabId),
-        'browser.frames': ({
-          threadId,
-          tabId,
-        }: {
-          threadId: string;
-          tabId: string;
-        }) => browsers.frames(threadId, tabId),
+        'page.open': browsers.open,
+        'page.input': browsers.input,
+        'page.navigate': browsers.navigate,
+        'page.unwatch': browsers.unwatch,
+        'page.watch': browsers.watch,
+        'page.event': ({ event }: { event: unknown }) =>
+          browsers.heard(event as BrowserEvent),
         ...host,
         ...hosted,
         ...scheduleHandlers(scheduler),

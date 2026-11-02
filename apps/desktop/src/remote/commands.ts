@@ -35,7 +35,6 @@ import { HARNESS_IDS } from '../settings/harnesses.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { askSideChat } from '../sidechat/ask.ts';
 import { REMOTE_SIDE_CHAT_TAB } from '../store/remoteSideChat.ts';
-import { isBrowserCommand, runBrowserCommand } from './browsers.ts';
 import { closeShell, openShell, shellOf } from './terminals.ts';
 import { handoffBlocker } from '../rewind/handoff.ts';
 import { switchHere } from '../rewind/switch.ts';
@@ -123,7 +122,6 @@ export async function runRemoteCommand(
     case 'unsteer':
       return unsteer(thread, command, dispatch);
   }
-  if (isBrowserCommand(command)) return runBrowserCommand(thread, command);
   if (command.type === 'read-image' || command.type === 'read-task-output')
     return threadFile(thread, command);
   const cwd = threadCwd(thread);

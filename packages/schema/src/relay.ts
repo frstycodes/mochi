@@ -82,6 +82,12 @@ export const BrowserFrame = Schema.Struct({
 });
 export type BrowserFrame = typeof BrowserFrame.Type;
 
+export { BrowserInput };
+export const BrowserNavigation = Schema.Union([
+  Schema.Literals(['back', 'forward', 'reload']),
+  Schema.Struct({ url: Str(MAX_URL) }),
+]);
+
 /**
  * A path inside the thread's folder as this computer lists it: posix separators, nothing absolute, no `..` (`isRelativePath`).
  */
@@ -549,7 +555,7 @@ export const RemoteCommand = Schema.Union([
     rows: Size,
   }),
   command('terminal-close', { threadId: Id, terminalId: Id }),
-  /** Opens (or shows again) the thread's browser tab on the machine and streams it to the device (`browser.frames`). */
+  /** Opens (or shows again) the thread's browser tab on the machine and streams it to the device (`page.watch`). */
   command('browser-open', {
     threadId: Id,
     tabId: NonEmptyId,
@@ -565,10 +571,7 @@ export const RemoteCommand = Schema.Union([
   command('browser-navigate', {
     threadId: Id,
     tabId: NonEmptyId,
-    to: Schema.Union([
-      Schema.Literals(['back', 'forward', 'reload']),
-      Schema.Struct({ url: Str(MAX_URL) }),
-    ]),
+    to: BrowserNavigation,
   }),
   /** Stops streaming; the tab stays open on the machine. */
   command('browser-close', { threadId: Id, tabId: NonEmptyId }),

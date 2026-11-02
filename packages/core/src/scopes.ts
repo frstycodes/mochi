@@ -95,10 +95,15 @@ export const CORE_SCOPES = {
   'terminal.close': L,
   'terminal.watched': L,
   'terminal.output': 'terminal',
-  // The window hosting a device's browser tab feeding its frames; the device reads them with `browser.frames`.
-  'browser.feed': L,
-  'browser.close': L,
-  'browser.frames': 'operate',
+  // A thread's browser tab: the page carries this computer's signed-in sessions, and `operate` already lets a device have its
+  // agent drive the same browser.
+  'page.open': 'operate',
+  'page.input': 'operate',
+  'page.navigate': 'operate',
+  'page.unwatch': 'operate',
+  'page.watch': 'operate',
+  // Main's events for the views Core opened.
+  'page.event': L,
   // Every trigger's folder and start options.
   'schedule.watch': L,
 } as const satisfies Record<CoreTag, Capabilities.AuthScope>;
