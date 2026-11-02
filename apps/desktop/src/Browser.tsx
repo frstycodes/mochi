@@ -47,6 +47,8 @@ import { useHarness, useDispatch, useHarnessSelector } from './store';
 import { isWorking } from './agentPhase';
 import { isCommand } from './keymap';
 import { PreviewContext } from './layout/SplitContext';
+import { RemoteBrowser } from './browser/RemoteBrowser';
+import { useThreadOrigin } from './remote/origin';
 
 type Corner = 'tl' | 'tr' | 'bl' | 'br';
 type Viewport = { width: number; height: number };
@@ -62,6 +64,21 @@ const TUCK_TAB = 28;
 const LAYER_INSET = 12;
 
 export function BrowserView({
+  thread,
+  tab,
+  isDriving,
+}: {
+  thread: Thread;
+  tab: PaneTab;
+  isDriving: boolean;
+}) {
+  const origin = useThreadOrigin();
+  if (origin.kind === 'remote')
+    return <RemoteBrowser machine={origin.machine} thread={thread} tab={tab} />;
+  return <LocalBrowserView thread={thread} tab={tab} isDriving={isDriving} />;
+}
+
+function LocalBrowserView({
   thread,
   tab,
   isDriving,

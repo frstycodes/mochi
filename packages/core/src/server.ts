@@ -52,6 +52,7 @@ import {
 } from './remote/service.ts';
 import type { IrohPreset } from './remote/iroh.ts';
 import { Remote } from './remote/tag.ts';
+import { Browsers } from './remote/browsers.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem, visibleSnapshot } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
@@ -170,6 +171,7 @@ export const layerCore = (options: ServerOptions) => {
         UtilityQueue.layer,
         Turns.layer,
         Terminals.layer,
+        Browsers.layer,
         layerStore(options.userData).pipe(
           Layer.provideMerge(layerCapabilities(options.browserView)),
         ),
@@ -440,6 +442,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const stored = storeHandlers(store, projection);
       const metrics = yield* Metrics;
       const terminals = yield* Terminals;
+      const browsers = yield* Browsers;
       const scheduler = yield* Scheduler;
       const hosted = yield* (yield* Hosted).handlers(windowId);
       const backend = yield* Backend;
@@ -612,6 +615,29 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           threadId: string;
           after: number;
         }) => terminals.output(terminalId, threadId, after),
+        'browser.feed': ({
+          threadId,
+          tabId,
+          frame,
+        }: {
+          threadId: string;
+          tabId: string;
+          frame: Relay.BrowserFrame;
+        }) => browsers.feed(threadId, tabId, frame),
+        'browser.close': ({
+          threadId,
+          tabId,
+        }: {
+          threadId: string;
+          tabId: string;
+        }) => browsers.close(threadId, tabId),
+        'browser.frames': ({
+          threadId,
+          tabId,
+        }: {
+          threadId: string;
+          tabId: string;
+        }) => browsers.frames(threadId, tabId),
         ...host,
         ...hosted,
         ...scheduleHandlers(scheduler),

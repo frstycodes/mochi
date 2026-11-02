@@ -117,6 +117,7 @@ it('what a device may call directly, by scope', () => {
       'agent.stop',
       'agent.stopTask',
       'agent.unsteer',
+      'browser.frames',
     ],
     manage: [
       'agent.keepTitle',

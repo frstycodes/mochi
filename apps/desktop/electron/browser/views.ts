@@ -9,6 +9,7 @@ import {
 import type { Locator, Page } from 'playwright-core';
 import type {
   BrowserAct,
+  BrowserInput,
   BrowserWait,
   BrowserBounds,
   BrowserCommand,
@@ -36,6 +37,7 @@ import {
   locate,
   rethrowForAgent,
   runAct,
+  runInput,
   snapshotPage,
   waitOnPage,
 } from '@mochi/core/browser/drive';
@@ -792,6 +794,16 @@ export function viewLogs(owner: WebContents, id: string) {
 }
 
 /** Playwright's input goes through CDP, so the page gets trusted events, the same a person's input makes. */
+export async function inputToView(
+  owner: WebContents,
+  id: string,
+  input: BrowserInput,
+) {
+  const entry = get(owner, id);
+  await runInput(await pageFor(entry), input);
+  kickMirror(id, entry);
+}
+
 export async function actOnView(
   owner: WebContents,
   id: string,

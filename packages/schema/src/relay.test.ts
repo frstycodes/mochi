@@ -523,3 +523,37 @@ test('thread ops refuse what their handlers never should see', () => {
     { type: 'attach-project', threadId: 't', project: 'p1' },
   );
 });
+
+test('a browser tab on another computer needs `operate`, and its input is a click, wheel, key or text at most', () => {
+  const tab = { threadId: 't', tabId: 'b1' };
+  for (const type of [
+    'browser-open',
+    'browser-input',
+    'browser-navigate',
+    'browser-close',
+  ])
+    assert.equal(commandScope({ type }), 'operate', type);
+  assert.deepEqual(
+    decode({
+      type: 'browser-open',
+      ...tab,
+      url: 'http://localhost:5173',
+      width: 1280,
+      height: 800,
+    }),
+    {
+      type: 'browser-open',
+      ...tab,
+      url: 'http://localhost:5173',
+      width: 1280,
+      height: 800,
+    },
+  );
+  for (const bad of [
+    { type: 'browser-open', ...tab, url: 'x', width: 0, height: 800 },
+    { type: 'browser-open', ...tab, tabId: '', url: 'x', width: 1, height: 1 },
+    { type: 'browser-input', ...tab, input: { kind: 'eval', code: '1' } },
+    { type: 'browser-navigate', ...tab, to: 'stop' },
+  ])
+    assert.ok(isRefused(bad), JSON.stringify(bad));
+});

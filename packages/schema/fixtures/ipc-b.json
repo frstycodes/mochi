@@ -2154,6 +2154,20 @@
      "exitCode": 0
     }
    }
+  ],
+  "remote.onBrowserFrame": [
+   {
+    "event": {
+     "machineId": "m1",
+     "threadId": "t1",
+     "tabId": "b1",
+     "frame": {
+      "data": "data:image/jpeg;base64,AA==",
+      "url": "http://localhost:5173/",
+      "title": "Counter"
+     }
+    }
+   }
   ]
  },
  "rejected": {

@@ -4,6 +4,7 @@ import type { AgentRpcs } from './agents/rpc.ts';
 import type { GithubRpcs } from './github/schema.ts';
 import type { MetricsRpcs } from './metrics/schema.ts';
 import type { DeviceRpcs } from './remote/rpc.ts';
+import type { BrowserRpcs } from './remote/browsers.ts';
 import type { TerminalRpcs } from './remote/terminals.ts';
 import type { CoreRpcs } from './rpc.ts';
 import type { ScheduleRpcs } from './schedule/rpc.ts';
@@ -19,6 +20,7 @@ export type CoreTag =
   | Tags<typeof AgentRpcs>
   | Tags<typeof MetricsRpcs>
   | Tags<typeof TerminalRpcs>
+  | Tags<typeof BrowserRpcs>
   | Tags<typeof ScheduleRpcs>
   | Exclude<Tags<typeof DeviceRpcs>, 'device.command'>;
 
@@ -93,6 +95,10 @@ export const CORE_SCOPES = {
   'terminal.close': L,
   'terminal.watched': L,
   'terminal.output': 'terminal',
+  // The window hosting a device's browser tab feeding its frames; the device reads them with `browser.frames`.
+  'browser.feed': L,
+  'browser.close': L,
+  'browser.frames': 'operate',
   // Every trigger's folder and start options.
   'schedule.watch': L,
 } as const satisfies Record<CoreTag, Capabilities.AuthScope>;
