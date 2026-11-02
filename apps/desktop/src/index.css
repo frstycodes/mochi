@@ -649,6 +649,10 @@
     background: var(--glass);
     backdrop-filter: blur(20px) saturate(1.6);
   }
+  /* Over a see-through window (`data-material`), Chromium left stale patches in the sidebar after repaints while this blur was on. */
+  :root[data-material] &:focus-within {
+    backdrop-filter: none;
+  }
   @media (prefers-reduced-transparency: reduce) {
     &:focus-within {
       background: var(--card);
