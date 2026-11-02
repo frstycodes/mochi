@@ -70,6 +70,7 @@ import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
 import { useIsMultiSplit } from './SidebarToggle';
 import { LightsStandIn, placeLights } from './trafficLights';
+import { useSidebarTint } from './sidebarTint';
 import {
   extendSelection,
   selectRange,
@@ -164,6 +165,7 @@ export function AppSidebar({
     onSettle: (page) => dispatch({ type: 'space', id: profiles[page].id }),
     onCross: haptic,
   });
+  useSidebarTint();
 
   return (
     <Sidebar collapsible={collapsible}>

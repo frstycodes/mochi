@@ -59,6 +59,7 @@ export const windowsRpc = {
   showAppMenu: invoke(T([Coordinate, Coordinate]), Void),
   resetZoom: invoke(T([]), Void),
   placeLights: invoke(T([LightsPlacement]), Void),
+  tintSidebar: invoke(T([Coordinate]), Void),
   setAppearance: invoke(T([Appearance]), Void),
   listApps: invoke(
     T([]),
