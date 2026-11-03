@@ -114,24 +114,8 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     const machineName =
       latest.current.find((m) => m.machine.id === machineId)?.machine.name ??
       'That computer';
-    if (command.type === 'push' || command.type === 'open-pr') {
-      const isSent = await confirm(
-        command.type === 'push'
-          ? {
-              title: `Push from ${machineName}?`,
-              description: `${machineName} pushes this thread’s branch to GitHub with its own GitHub login.`,
-              confirm: 'Push',
-              cancel: 'Cancel',
-            }
-          : {
-              title: `Open a pull request from ${machineName}?`,
-              description: `“${command.title}” opens on GitHub with ${machineName}’s GitHub login.`,
-              confirm: 'Open pull request',
-              cancel: 'Cancel',
-            },
-      );
-      if (!isSent) return NOT_SENT;
-    }
+    const question = askFirst(command, machineName);
+    if (question && !(await confirm(question))) return NOT_SENT;
     const result = await host.remote
       .command(machineId, toWire(command))
       .catch((error: unknown): CommandResult => ({
@@ -155,6 +139,33 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       {dialog}
     </MachinesContext.Provider>
   );
+}
+
+/** What others will see happen (a push, a pull request) is confirmed here first, as the ship bar does; undefined for the rest. */
+function askFirst(command: RemoteCommand, machineName: string) {
+  const push = {
+    title: `Push from ${machineName}?`,
+    confirm: 'Push',
+    cancel: 'Cancel',
+  };
+  if (command.type === 'push')
+    return {
+      ...push,
+      description: `${machineName} pushes this thread’s branch to GitHub with its own GitHub login.`,
+    };
+  if (command.type === 'sync-project' && command.direction === 'push')
+    return {
+      ...push,
+      description: `${machineName} pushes the project’s branch to GitHub with its own GitHub login.`,
+    };
+  if (command.type === 'open-pr')
+    return {
+      title: `Open a pull request from ${machineName}?`,
+      description: `“${command.title}” opens on GitHub with ${machineName}’s GitHub login.`,
+      confirm: 'Open pull request',
+      cancel: 'Cancel',
+    };
+  return undefined;
 }
 
 const CACHE_EVERY_MS = 5000;
@@ -363,6 +374,7 @@ const COMMAND_VERBS = {
   'add-project': 'create the project',
   'clone-project': 'clone the project',
   'link-project': 'link the project',
+  'sync-project': 'sync the project',
   send: 'send the message',
   'thread-action': 'change the thread',
   unsteer: 'take the message back',
@@ -405,6 +417,7 @@ const COMMAND_VERBS = {
 const SUCCESS: Partial<Record<RemoteCommand['type'], string>> = {
   commit: 'Committed',
   'open-pr': 'Opened the pull request',
+  'sync-project': 'Synced',
 };
 
 /** The files of another computer's thread as its `files` lists them, while `isNeeded`; null before then or for this computer's own. */

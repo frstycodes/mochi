@@ -222,6 +222,11 @@ export type RemoteCommand =
   | { type: 'clone-project'; source: CloneSource }
   /** Links one of this computer's projects (by id) to copies elsewhere carrying `linkId`; null makes it its own project again. */
   | { type: 'link-project'; project: string; linkId: string | null }
+  /**
+   * Pull (a fast-forward from `origin/<branch>`) or push one project's checked-out branch, as this computer's git and GitHub
+   * login. Push is visible to others: the device asks its user first.
+   */
+  | { type: 'sync-project'; project: string; direction: 'pull' | 'push' }
   /** A Settings catalog row (`src/settings/catalog.ts`) on this computer only: never synced, never Devices, accounts or profiles. */
   | { type: 'setting'; key: string; value: string }
   // code

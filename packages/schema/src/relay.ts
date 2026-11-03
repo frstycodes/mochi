@@ -510,6 +510,10 @@ export const RemoteCommand = Schema.Union([
     project: NonEmptyId,
     linkId: Schema.NullOr(NonEmptyId),
   }),
+  command('sync-project', {
+    project: NonEmptyId,
+    direction: Schema.Literals(['pull', 'push']),
+  }),
   command('setting', { key: Text(MAX_ID), value: Str(MAX_TEXT) }),
   command('diff', { threadId: Id, scope: DiffScope }),
   command('checkpoint-diff', { threadId: Id, n: Index }),
@@ -666,6 +670,7 @@ export const COMMAND_SCOPES = {
   'add-project': 'manage',
   'clone-project': 'manage',
   'link-project': 'manage',
+  'sync-project': 'manage',
   diff: 'code',
   'checkpoint-diff': 'code',
   change: 'code',

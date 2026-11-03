@@ -420,6 +420,13 @@ function BranchNameInput({
   );
 }
 
+/** The branch the thread's code starts from: a new worktree's base, else the branch it checks out or the folder is on. */
+export function startBranch({ draft, branches, branch }: Workspace) {
+  return draft.mode === 'worktree' && !draft.isExisting
+    ? (draft.base ?? branches.list?.defaultBranch)
+    : branch;
+}
+
 /** One line under the meta row for what the choice will do that you'd want to know first. */
 export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
   const { draft, branches, sharers, error, root, isDirty } = workspace;

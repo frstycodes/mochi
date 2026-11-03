@@ -3,7 +3,7 @@ import { configuredCommands } from '../chat/slash.ts';
 import { sendSteerNow } from '../chat/outbox.ts';
 import { splitPath } from '../chat/imageSrc.ts';
 import { imageMime } from '../files/kinds.ts';
-import { copyStatus } from '../git/copyStatus.ts';
+import { copyStatus, syncCopy } from '../git/copyStatus.ts';
 import { openedPr } from '../git/prs.ts';
 import type { SearchHits } from '@mochi/domain/host/types/fs';
 import { threadCwd } from '../host/cwd.ts';
@@ -84,6 +84,7 @@ export async function runRemoteCommand(
   if (command.type === 'add-project' || command.type === 'clone-project')
     return addProject(command, state);
   if (command.type === 'link-project') return linkProject(command, state);
+  if (command.type === 'sync-project') return syncProject(command, state);
   if (command.type === 'create') return create(command, env);
   if (isThreadOp(command))
     return runThreadOp(command, state, dispatch, () => projectsHere(state));
@@ -436,6 +437,21 @@ async function linkProject(
 ): Promise<CommandResult> {
   return host.projects.link(state.spaceId, project, linkId).then(
     () => ok,
+    (error: unknown) => fail((error as Error).message),
+  );
+}
+
+/** Pull or Push on one of this computer's projects, named by id, as this profile's GitHub login. */
+async function syncProject(
+  { project, direction }: Extract<RemoteCommand, { type: 'sync-project' }>,
+  state: State,
+): Promise<CommandResult> {
+  const found = (await projectsHere(state)).find(
+    (p) => p.id === project && !p.isMissing,
+  );
+  if (!found) return fail('That project isn’t on this machine');
+  return syncCopy(found.path, direction, githubUserOf(state)).then(
+    (detail) => ({ isOk: true, detail }),
     (error: unknown) => fail((error as Error).message),
   );
 }

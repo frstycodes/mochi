@@ -1,8 +1,10 @@
 import type { CloneSource } from '@mochi/domain/host/types/projects';
 import { toast } from '@/toast/store';
+import { syncCopy, type SyncDirection } from './git/copyStatus';
 import { host } from './host';
+import type { CopyStatus } from './host/types/remote';
 import type { ProjectCopy, ProjectWithCopies } from './projectCopies';
-import { cloneProject } from './projects';
+import { cloneProject, githubUserOf } from './projects';
 import { queryClient } from './query';
 import { queryKeys } from './queryKeys';
 import { startBlocker, type Computer } from './remote/computers';
@@ -78,7 +80,40 @@ export function useCopyActions() {
       }),
     );
 
-  return { clone, link, unlink };
+  /** Pull or Push, run on the computer that holds the copy; another computer asks you first before it pushes. */
+  const sync = async (copy: ProjectCopy, direction: SyncDirection) => {
+    if (!copy.local) {
+      const result = await run(copy.machineId!, {
+        type: 'sync-project',
+        project: copy.ref,
+        direction,
+      });
+      if (result.isOk) refreshCatalog(copy.machineId!);
+      return;
+    }
+    const { path } = copy.local;
+    await syncCopy(path, direction, githubUserOf(spaceId)).then(
+      (detail) => toast.success(detail),
+      (error: unknown) =>
+        toast.error(`Couldn’t ${direction} ${copy.name}`, {
+          description: (error as Error).message,
+        }),
+    );
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.git.copyStatus(path),
+    });
+  };
+
+  return { clone, link, unlink, sync };
+}
+
+/** The one git action a copy needs: Pull when it's only behind (a fast-forward), Push when it has commits of its own. */
+export function syncNeed(status: CopyStatus | null | undefined) {
+  const upstream = status?.upstream;
+  if (!upstream) return null;
+  if (upstream.ahead > 0) return 'push';
+  if (upstream.behind > 0) return 'pull';
+  return null;
 }
 
 /** GitHub as the computer's own gh login; any other host over HTTPS with that computer's git credentials. */
