@@ -230,6 +230,27 @@ const SaveUrl = Str(1_000_000).check(
 );
 
 /** `BrowserHost` (`src/host/types/browser.ts`). Main still checks `autoReload`'s root and `compareStart`'s cwd are folders and a download still exists. */
+
+/** Trusted input at a point of the page, in its CSS px: a watching device's click, wheel and keys (`browser-input`). */
+export const BrowserInput = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('click'),
+    x: Schema.Finite,
+    y: Schema.Finite,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('scroll'),
+    x: Schema.Finite,
+    y: Schema.Finite,
+    dx: Schema.Finite,
+    dy: Schema.Finite,
+  }),
+  /** A key by its DOM `key` name: Enter, Backspace, ArrowDown. */
+  Schema.Struct({ kind: Schema.Literal('key'), key: Str(32) }),
+  Schema.Struct({ kind: Schema.Literal('text'), text: Str(256 * 1024) }),
+]);
+export type BrowserInput = typeof BrowserInput.Type;
+
 export const browserRpc = {
   create: invoke(
     T([
@@ -245,6 +266,7 @@ export const browserRpc = {
   command: invoke(T([ViewId, BrowserCommand]), Schema.Void),
   setBounds: invoke(T([ViewId, Schema.NullOr(BrowserBounds)]), Schema.Void),
   setZoom: invoke(T([ViewId, Num(0.1, 5)]), Schema.Void),
+  input: invoke(T([ViewId, BrowserInput]), Schema.Void),
   mirror: invoke(
     T([
       ViewId,

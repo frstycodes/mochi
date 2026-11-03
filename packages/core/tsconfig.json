@@ -7,7 +7,10 @@
     "emitDeclarationOnly": false,
     "noEmit": true,
     "lib": ["ES2023", "DOM"],
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    // The thread tools run the window's own modules (`runtime/tools.ts`), which import through `@/` and reach the `.tsx` store.
+    "jsx": "react-jsx",
+    "paths": { "@/*": ["../../apps/desktop/src/*"] }
   },
   "include": ["src"]
 }

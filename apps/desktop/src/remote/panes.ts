@@ -14,6 +14,8 @@ const REMOTE_PANES = {
   agents: { scope: 'read', needsFolder: false },
   visual: { scope: 'read', needsFolder: false },
   pr: { scope: 'code', needsFolder: true },
+  // The page runs there (`page.watch`), with its signed-in sessions.
+  browser: { scope: 'operate', needsFolder: false },
 } as const satisfies Partial<
   Record<
     PaneTabKind,

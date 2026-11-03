@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { cn } from '@/lib/utils';
 import type { DiffFile } from '../host/types/git';
 import { visibleRows } from '@mochi/domain/files/tree';
@@ -81,12 +81,9 @@ export function ChangeTree({
                         className="size-3.5 shrink-0"
                       />
                     ) : (
-                      <ChevronRight
-                        aria-hidden
-                        className={cn(
-                          'size-3 shrink-0 text-subtle-foreground transition-transform duration-150',
-                          isOpen && 'rotate-90',
-                        )}
+                      <FoldChevron
+                        isOpen={isOpen}
+                        className="text-subtle-foreground"
                       />
                     )}
                     <span

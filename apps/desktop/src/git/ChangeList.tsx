@@ -2,7 +2,8 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import type { DiffLineAnnotation } from '@pierre/diffs';
 import { PatchDiff } from '../files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronDown, MessageText, Minus, PlusBold, Undo } from '@/icons';
+import { MessageText, Minus, PlusBold, Undo } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -12,7 +13,7 @@ import type {
   DiffHunk,
   ReviewThread,
 } from '../host/types/git';
-import { DiffStat } from '../WorkLog';
+import { DiffStat, Expand } from '../WorkLog';
 import { fileKey, hunkCovers, type ChangeSection } from './files';
 import { isMod } from '../keys';
 import { SectionLabel, TooltipIconButton } from '../ui';
@@ -135,13 +136,7 @@ function FileDiff({
           title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
           className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          <ChevronDown
-            aria-hidden
-            className={cn(
-              'size-3 shrink-0 text-subtle-foreground transition-transform duration-150',
-              !isOpen && '-rotate-90',
-            )}
-          />
+          <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
           <FileIcon
             fileName={name}
             autoAssign
@@ -203,7 +198,9 @@ function FileDiff({
           </span>
         )}
       </div>
-      {isOpen && <FileBody file={file} actions={actions} />}
+      <Expand isOpen={isOpen}>
+        <FileBody file={file} actions={actions} />
+      </Expand>
     </div>
   );
 }

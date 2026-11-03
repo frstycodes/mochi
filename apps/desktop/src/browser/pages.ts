@@ -1,6 +1,8 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
 import { useSyncExternalStore } from 'react';
+import { Effect } from 'effect';
 import { host } from '@/host';
+import { coreClient } from '../host/desktop/rpc.ts';
 import type {
   BrowserContextMenu,
   BrowserDevtools,
@@ -163,7 +165,7 @@ export async function ensureView(key: string, spaceId: string) {
   if (!host.isDesktop || !page || page.hostId || creating.has(key)) return;
   creating.add(key);
   try {
-    const { id } = await host.browser.create({ url: page.url, spaceId });
+    const id = await createView(key, page.url, spaceId);
     byHostId.set(id, key);
     updatePage(key, { hostId: id });
   } finally {
@@ -171,6 +173,15 @@ export async function ensureView(key: string, spaceId: string) {
   }
 }
 const creating = new Set<string>();
+
+/** A thread's tab is Core's (`ThreadPages`), so the agent and a paired device name the same page; a compare base stays this window's. */
+async function createView(key: string, url: string, spaceId: string) {
+  if (key !== tabPageKey(key))
+    return (await host.browser.create({ url, spaceId })).id;
+  const [threadId, tabId] = key.split('/') as [string, string];
+  const client = await coreClient();
+  return Effect.runPromise(client['page.open']({ threadId, tabId, url }));
+}
 
 /** The page and its native view without a mounted surface, so an agent can drive a tab while its thread is off screen. */
 export function openPage(key: string, url: string, spaceId: string) {

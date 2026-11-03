@@ -25,6 +25,7 @@ import WebSocket from 'ws';
 import { Unauthorized } from '../rpc.ts';
 import type { ThreadItem } from '@mochi/domain';
 import { layerCore } from '../server.ts';
+import { AgentCaller } from '../store/commands.ts';
 import type { Scope } from '../../../../apps/desktop/src/host/types/remote.ts';
 import type { DeviceKeys } from './session.ts';
 import {
@@ -89,6 +90,7 @@ const setup = (
         port: 0,
         tokens: new Map([[TOKEN, Capabilities.allScopes]]),
         origins: [],
+        agents: AgentCaller.layerTest,
       }),
     );
     const port = (

@@ -920,6 +920,15 @@ export const Thread = Schema.Struct({
   isInterruptedToSend: opt(Schema.Literal(true)),
   isSettingsChat: opt(Schema.Literal(true)),
   seenActivity: opt(Schema.Number),
+  browserTabs: opt(
+    Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        url: Schema.String,
+        title: Schema.String,
+      }),
+    ),
+  ),
 });
 export type Thread = typeof Thread.Type;
 
@@ -933,6 +942,12 @@ export const ToolWidget = Schema.Struct({
   isHandoff: opt(Schema.Boolean),
   edits: opt(Schema.Array(FileEdit)),
   notes: opt(Schema.Array(Schema.String)),
+  decision: opt(
+    Schema.Struct({
+      isApproved: Schema.Boolean,
+      options: opt(Schema.Array(Schema.String)),
+    }),
+  ),
 });
 
 export const SettingsSuggestion = Schema.Struct({
