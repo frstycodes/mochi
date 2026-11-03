@@ -506,6 +506,10 @@ export const RemoteCommand = Schema.Union([
     publish: opt(Schema.Literals(['private', 'public'])),
   }),
   command('clone-project', { source: RemoteCloneSource }),
+  command('link-project', {
+    project: NonEmptyId,
+    linkId: Schema.NullOr(NonEmptyId),
+  }),
   command('setting', { key: Text(MAX_ID), value: Str(MAX_TEXT) }),
   command('diff', { threadId: Id, scope: DiffScope }),
   command('checkpoint-diff', { threadId: Id, n: Index }),
@@ -545,6 +549,7 @@ export const CatalogProject = Schema.Struct({
   ref: S,
   name: S,
   origin: opt(Schema.NullOr(S)),
+  linkId: opt(S),
   icon: opt(Project.fields.icon),
   copy: opt(
     Schema.NullOr(
@@ -660,6 +665,7 @@ export const COMMAND_SCOPES = {
   setting: 'manage',
   'add-project': 'manage',
   'clone-project': 'manage',
+  'link-project': 'manage',
   diff: 'code',
   'checkpoint-diff': 'code',
   change: 'code',

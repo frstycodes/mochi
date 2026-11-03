@@ -26,6 +26,7 @@ export const Project = Schema.Struct({
   favicon: Schema.NullOr(S),
   isMissing: Schema.Boolean,
   favoriteOrder: Schema.NullOr(Schema.Number),
+  linkId: opt(S),
 });
 export type Project = typeof Project.Type;
 
@@ -87,6 +88,7 @@ export const projectsRpc = {
   remove: invoke(T([Id, Id]), Schema.Void),
   relocate: invoke(T([Id, Id, Str()]), Project),
   setFavorites: invoke(T([Id, ArrayOf(Id, 1000)]), Schema.Void),
+  link: invoke(T([Id, Id, Schema.NullOr(Id)]), Schema.Void),
   // A data URL of an icon at its 512 KB cap, base64, with room for its header.
   setIcon: invoke(T([Id, Id, Str(720 * 1024)]), Project),
   githubRepos: invoke(

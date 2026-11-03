@@ -165,6 +165,22 @@ test('a project shows the favicon its folder has, or the image you upload, or it
   );
 });
 
+test('link sets and clears a project’s link, and it survives a reload', async () => {
+  const { dir, repo, icons } = scratch();
+  const registry = projectRegistry(icons, dir);
+  const [project] = await registry.migrate('personal', [repo]);
+  assert.equal(project.linkId, undefined);
+
+  await registry.link('personal', project.id, 'link-1');
+  const [linked] = await projectRegistry(icons, dir).list('personal');
+  assert.equal(linked.linkId, 'link-1');
+
+  await registry.link('personal', project.id, null);
+  const [unlinked] = await registry.list('personal');
+  assert.equal(unlinked.linkId, undefined);
+  await assert.rejects(registry.link('personal', 'nope', 'link-1'));
+});
+
 test('setFavorites orders the favorites, unfavorites the rest, and survives a reload', async () => {
   const { dir, repo, plain, icons } = scratch();
   const registry = projectRegistry(icons, dir);

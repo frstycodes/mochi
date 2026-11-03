@@ -173,6 +173,22 @@
     ]
    }
   ],
+  "projects.link": [
+   {
+    "input": [
+     "personal",
+     "60a1a905-df0c-432a-8c91-47acbec001a7",
+     "0b6c4a52-1f0e-4d7a-9a51-3c2f8e7d9b10"
+    ]
+   },
+   {
+    "input": [
+     "personal",
+     "60a1a905-df0c-432a-8c91-47acbec001a7",
+     null
+    ]
+   }
+  ],
   "projects.setIcon": [
    {
     "input": [

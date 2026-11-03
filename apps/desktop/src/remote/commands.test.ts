@@ -825,6 +825,34 @@ test('a device’s clone lands in this machine’s projects folder, and its fail
   );
 });
 
+test('link-project sets or clears the link on the project it names, and says when that fails', async () => {
+  const { state } = machine();
+  const link = vi
+    .spyOn(host.projects, 'link')
+    .mockImplementation(async (_spaceId, id) => {
+      if (id !== 'p1')
+        throw new Error('That project isn’t in the list any more');
+    });
+  const run = (project: string, linkId: string | null) =>
+    runRemoteCommand(
+      { type: 'link-project', project, linkId },
+      device(state, 'Laptop', []),
+    );
+  assert.deepEqual(await run('p1', 'l1'), { isOk: true });
+  assert.deepEqual(await run('p1', null), { isOk: true });
+  assert.deepEqual(
+    link.mock.calls.map((c) => c.slice(1)),
+    [
+      ['p1', 'l1'],
+      ['p1', null],
+    ],
+  );
+  assert.deepEqual(await run('gone', 'l1'), {
+    isOk: false,
+    error: 'That project isn’t in the list any more',
+  });
+});
+
 test('settings a device writes stay on the machine; Devices and the demo switch can’t be changed from one', async () => {
   const { state } = machine();
   vi.spyOn(host.settings, 'get').mockImplementation(

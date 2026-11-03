@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Download,
   Edit,
   Folder,
   FolderMove,
@@ -17,9 +18,11 @@ import {
   Image,
   Link,
   Monitor,
+  Plus,
   Search,
   Star,
   Trash,
+  Unlink,
 } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
@@ -35,6 +38,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -62,11 +68,14 @@ import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import type { Project } from '@mochi/domain/host/types/projects';
 import { AddProject } from './AddProject';
+import { useCopyActions } from './copyActions';
 import { gitError } from './git/useGit';
 import { host } from './host';
 import { GithubMarkIcon } from './icons/github';
 import { CopyFactLine, placeIn, WARNING_TEXT } from './PlacePicker';
+import { SkippedItem } from './menus/ActionItems';
 import {
+  isOtherRepo,
   useProjectsWithCopies,
   type ProjectCopy,
   type ProjectWithCopies,
@@ -82,6 +91,7 @@ import {
 import {
   ComputerAvatar,
   HereBadge,
+  startBlocker,
   useComputers,
   type Computer,
 } from './remote/computers';
@@ -418,11 +428,16 @@ function ProjectDetail({
         </Button>
       </header>
       <div className="flex flex-col gap-2">
-        <h3 className="type-meta font-medium text-foreground">
-          {isMulti
-            ? `On ${plural(project.copies.length, '1 computer', `${project.copies.length} computers`)}`
-            : 'Folder'}
-        </h3>
+        <div className="flex min-h-7 items-center justify-between gap-3">
+          <h3 className="type-meta font-medium text-foreground">
+            {isMulti
+              ? `On ${plural(project.copies.length, '1 computer', `${project.copies.length} computers`)}`
+              : 'Folder'}
+          </h3>
+          {isMulti && (
+            <AddCopyMenu project={project} all={all} computers={computers} />
+          )}
+        </div>
         <ul className="flex flex-col rounded-xl border bg-card">
           {project.copies.map((copy) => (
             <CopyRow
@@ -473,9 +488,33 @@ function CopyRow({
   onRename: () => void;
 }) {
   const { local } = copy;
+  const { unlink } = useCopyActions();
+  // Only a hand link can be undone: copies joined by their remote stay one project.
+  const unlinkAction: MenuAction[] =
+    copy.linkId && project.copies.length > 1
+      ? [
+          {
+            label: 'Make it its own project',
+            icon: <Unlink />,
+            onSelect: () => void unlink(copy),
+            blocker: startBlocker(computer),
+            startsGroup: true,
+          },
+        ]
+      : [];
   const actions = local
-    ? localActions(spaceId, local, localProjects, onNewThread, onRename)
-    : [{ label: NEW_THREAD, icon: <Edit />, onSelect: onNewThread }];
+    ? localActions(
+        spaceId,
+        local,
+        localProjects,
+        onNewThread,
+        onRename,
+        unlinkAction,
+      )
+    : [
+        { label: NEW_THREAD, icon: <Edit />, onSelect: onNewThread },
+        ...unlinkAction,
+      ];
   return (
     <WithContextMenu actions={actions}>
       <li className="flex items-center gap-3 px-4 py-3 not-first:border-t">
@@ -491,11 +530,7 @@ function CopyRow({
             </span>
             {isMulti && <HereBadge computer={computer} />}
           </span>
-          <CopyFactLine
-            copy={copy}
-            origin={project.origin}
-            className="type-meta"
-          />
+          <CopyFactLine copy={copy} project={project} className="type-meta" />
           {isMulti && !!local && (
             <span className="truncate type-caption text-subtle-foreground">
               {local.path}
@@ -524,6 +559,104 @@ function CopyRow({
 
 const NEW_THREAD = 'New thread here';
 
+/**
+ * Puts the project on a computer that doesn't have it: Clone there from its remote, or Link one of the projects already
+ * there as its copy (a fork, a renamed remote, a plain folder). Clone on every computer first when more than one can.
+ */
+function AddCopyMenu({
+  project,
+  all,
+  computers,
+}: {
+  project: ProjectWithCopies;
+  all: ProjectWithCopies[];
+  computers: Computer[];
+}) {
+  const { clone, link } = useCopyActions();
+  const holders = holdersOf(project, computers);
+  const missing = computers.filter((c) => !holders.includes(c));
+  if (missing.length === 0) return null;
+  const cloneable = project.origin
+    ? missing.filter((c) => !startBlocker(c))
+    : [];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="xs">
+          <Plus />
+          Add a copy
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        {cloneable.length > 1 && (
+          <>
+            <DropdownMenuItem
+              onSelect={() => cloneable.forEach((c) => void clone(project, c))}
+            >
+              <Download />
+              Clone on every computer
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {missing.map((c, i) => {
+          const blocker = startBlocker(c);
+          const candidates = all.flatMap((p) =>
+            p === project ? [] : p.copies.filter((k) => k.machineId === c.id),
+          );
+          return (
+            <Fragment key={computerKey(c.id)}>
+              {i > 0 && <DropdownMenuSeparator />}
+              {!!project.origin &&
+                (blocker ? (
+                  <SkippedItem
+                    menu="dropdown"
+                    icon={<Download />}
+                    title={`Clone on ${c.name}`}
+                    reason={blocker}
+                  />
+                ) : (
+                  <DropdownMenuItem onSelect={() => void clone(project, c)}>
+                    <Download />
+                    Clone on {c.name}
+                  </DropdownMenuItem>
+                ))}
+              {blocker || candidates.length === 0 ? (
+                <SkippedItem
+                  menu="dropdown"
+                  icon={<Link />}
+                  title={`Link a project on ${c.name}`}
+                  reason={blocker ?? `${c.name} has no other projects`}
+                />
+              ) : (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Link />
+                    Link a project on {c.name}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-60">
+                    {candidates.map((k) => (
+                      <DropdownMenuItem
+                        key={k.ref}
+                        onSelect={() => void link(project, k, computers)}
+                      >
+                        <ProjectIcon name={k.name} icon={k.icon} />
+                        <span className="min-w-0 flex-1 truncate">
+                          {k.name}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+            </Fragment>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** What this computer's own copy offers: the registry's actions, run here. */
 function localActions(
   spaceId: string,
@@ -531,6 +664,8 @@ function localActions(
   all: Project[],
   onNewThread: () => void,
   onRename: () => void,
+  /** Placed just before Remove, the destructive one, which stays last. */
+  more: MenuAction[],
 ): MenuAction[] {
   const remove = () =>
     attempt('Removing', async () => {
@@ -573,6 +708,7 @@ function localActions(
       icon: <FolderMove />,
       onSelect: () => void relocate(spaceId, project),
     },
+    ...more,
     {
       label: 'Remove from list',
       icon: <Trash />,
@@ -602,6 +738,8 @@ function projectNudge(project: ProjectWithCopies, computers: Computer[]) {
     computers.find((c) => c.id === copy.machineId)?.name ?? 'Another computer';
   const missing = project.copies.find((c) => c.local?.isMissing);
   if (missing) return 'Folder not found on this computer';
+  const other = project.copies.find((c) => isOtherRepo(c, project));
+  if (other) return `Different repo on ${nameOf(other)}`;
   const behind = project.copies.find(
     (c) => (c.status?.upstream?.behind ?? 0) > 0,
   );
@@ -720,6 +858,8 @@ interface MenuAction {
   icon: ReactNode;
   onSelect: () => void;
   disabled?: boolean;
+  /** Why it can't run right now, shown on the item instead of running it. */
+  blocker?: string;
   isDestructive?: boolean;
   startsGroup?: boolean;
 }
@@ -779,14 +919,23 @@ function MenuItems({
   return actions.map((a, i) => (
     <Fragment key={a.label}>
       {a.startsGroup && i > 0 && <Separator />}
-      <Item
-        disabled={a.disabled}
-        variant={a.isDestructive ? 'destructive' : 'default'}
-        onSelect={a.onSelect}
-      >
-        {a.icon}
-        {a.label}
-      </Item>
+      {a.blocker ? (
+        <SkippedItem
+          menu={kind}
+          icon={a.icon}
+          title={a.label}
+          reason={a.blocker}
+        />
+      ) : (
+        <Item
+          disabled={a.disabled}
+          variant={a.isDestructive ? 'destructive' : 'default'}
+          onSelect={a.onSelect}
+        >
+          {a.icon}
+          {a.label}
+        </Item>
+      )}
     </Fragment>
   ));
 }

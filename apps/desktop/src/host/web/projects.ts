@@ -137,6 +137,9 @@ export const projects: ProjectsHost = {
     }));
     changeListeners.forEach((l) => l(spaceId));
   },
+  async link(spaceId, id, linkId) {
+    update(spaceId, id, { linkId: linkId ?? undefined });
+  },
   async setIcon(spaceId, id, icon) {
     if (icon === 'auto' || icon === 'none')
       return update(spaceId, id, { iconMode: icon, icon: null });

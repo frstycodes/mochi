@@ -220,6 +220,8 @@ export type RemoteCommand =
   | { type: 'add-project'; name: string; publish?: 'private' | 'public' }
   /** Cloned into this computer's projects folder, which this computer picks: a device never names a folder here. */
   | { type: 'clone-project'; source: CloneSource }
+  /** Links one of this computer's projects (by id) to copies elsewhere carrying `linkId`; null makes it its own project again. */
+  | { type: 'link-project'; project: string; linkId: string | null }
   /** A Settings catalog row (`src/settings/catalog.ts`) on this computer only: never synced, never Devices, accounts or profiles. */
   | { type: 'setting'; key: string; value: string }
   // code
@@ -410,6 +412,8 @@ export interface CatalogProject {
   name: string;
   /** `normalizeOrigin` of its remote, what makes it the same project on every computer; null with none. */
   origin?: string | null;
+  /** Shared with the copies it was linked to by hand (`Project.linkId`). */
+  linkId?: string;
   /** null shows the letter, and so does an icon too big to send. */
   icon?: Project['icon'];
   /** Its git state there; null when the folder isn't a repo. */

@@ -18,6 +18,8 @@ export interface Project {
   isMissing: boolean;
   /** Place among the favorites (0 first); null when it isn't one. */
   favoriteOrder: number | null;
+  /** Shared with copies on other computers you linked by hand (`link`); unset when only its remote joins it to them. */
+  linkId?: string;
 }
 
 export type ProjectIconMode = 'auto' | 'custom' | 'none';
@@ -63,6 +65,8 @@ export interface ProjectsHost {
   relocate(spaceId: string, id: string, path: string): Promise<Project>;
   /** The favorites, in order; every other project stops being one. */
   setFavorites(spaceId: string, ids: string[]): Promise<void>;
+  /** Makes it a copy of the project other computers' copies carry `linkId` for; null makes it its own project again. */
+  link(spaceId: string, id: string, linkId: string | null): Promise<void>;
   /** An uploaded image (a data URL, up to 512 KB), `auto` to use the folder's favicon, or `none` for the letter. */
   setIcon(spaceId: string, id: string, icon: string): Promise<Project>;
   githubRepos(githubUser?: string): Promise<GithubRepo[]>;
@@ -83,6 +87,7 @@ export const projectsMethods = {
   relocate: 'invoke',
   setIcon: 'invoke',
   setFavorites: 'invoke',
+  link: 'invoke',
   githubRepos: 'invoke',
   onChange: 'event',
   onProgress: 'event',

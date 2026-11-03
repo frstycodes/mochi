@@ -154,6 +154,13 @@ export function projectRegistry(iconDir: string, key = 'registry') {
         }
       });
     },
+    link(spaceId: string, id: string, linkId: string | null) {
+      return change(spaceId, async (space) => {
+        const project = find(space, id);
+        if (linkId === null) delete project.linkId;
+        else project.linkId = linkId;
+      });
+    },
     async setIcon(spaceId: string, id: string, icon: string) {
       return withOne(
         await change(spaceId, async (space) => {

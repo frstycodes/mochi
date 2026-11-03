@@ -66,6 +66,9 @@ export const projectsHost = (userData: string) => {
     async setFavorites(_caller, spaceId, ids) {
       await changing(spaceId, registry.setFavorites(spaceId, ids));
     },
+    async link(_caller, spaceId, projectId, linkId) {
+      await changing(spaceId, registry.link(spaceId, projectId, linkId));
+    },
     async setIcon(_caller, spaceId, projectId, icon) {
       return changing(spaceId, registry.setIcon(spaceId, projectId, icon));
     },
