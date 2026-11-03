@@ -1,8 +1,9 @@
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 import { project } from '@mochi/domain';
 import type { ToolName } from '@mochi/domain/runtime/toolTable';
 import type { AgentToolResult } from '../../../../apps/desktop/src/host/types/agent.ts';
 import {
+  hearToolDecision,
   runTool,
   type ToolEnv,
 } from '../../../../apps/desktop/src/runtime/tools.ts';
@@ -16,7 +17,10 @@ import type { Commands } from '../store/commands.ts';
 import type { Projection } from '../store/projection.ts';
 import { agent } from './handlers.ts';
 
-/** The tools Core runs itself when no window can: each reads and changes only threads, through Core's own dispatch. */
+/**
+ * The tools Core runs, whether or not a window is open: each reads and changes only threads, through Core's own dispatch.
+ * `watch_thread` isn't one: the watch list is a window's (`watched`).
+ */
 export const CORE_TOOLS = new Set<ToolName>([
   'list_threads',
   'get_thread',
@@ -26,7 +30,6 @@ export const CORE_TOOLS = new Set<ToolName>([
   'pin_thread',
   'unpin_thread',
   'reorder_threads',
-  'watch_thread',
   'settle_when_merged',
   'create_thread',
   'request_orchestration_grant',
@@ -40,10 +43,10 @@ export const CORE_TOOLS = new Set<ToolName>([
 
 /**
  * Runs a thread tool in Core on its own projection: an action applies to the call's view of the state at once and goes to
- * `Commands`, which makes the agent calls it means; the call answers once its commands are logged. Nobody is here to answer
- * a card or see a toast, so a call that would ask expires at once (nothing is done), and one that changes something shows
- * only in the thread. Without your agent settings in Core's context yet (a window sends them), every call is refused rather
- * than run on the defaults.
+ * `Commands`, which makes the agent calls it means; the call answers once its commands are logged. A call that asks waits
+ * for a `tool-decision` from any window or device (`hearDecisions`), until its deadline. None of these tools toasts: what
+ * one changes shows in the thread. Without your agent settings in Core's context yet (a window sends them), every call is
+ * refused rather than run on the defaults.
  */
 export function coreToolRunner(
   projection: Projection['Service'],
@@ -76,12 +79,17 @@ export function coreToolRunner(
         args: args as Record<string, unknown>,
       },
       coreEnv(() => state, dispatch),
-      Date.now(),
     );
     await sent;
     return result;
   };
 }
+
+/** Every `tool-decision` Core folds, from a window or a device, reaches the call in Core waiting on it. */
+export const hearDecisions = (projection: Projection['Service']) =>
+  Stream.runForEach(projection.folded, ({ action, before }) =>
+    Effect.sync(() => hearToolDecision(action, before as unknown as State)),
+  );
 
 function coreEnv(
   getState: () => State,
