@@ -44,7 +44,7 @@ import {
   type Thread,
   type ThreadProposal,
 } from '../model.ts';
-import { projectName, projectRef } from '../projects.ts';
+import { projectName, projectRef } from '../projectRef.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_CONTROL } from '../settings/settingOptions.ts';
