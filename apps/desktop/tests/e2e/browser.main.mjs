@@ -332,7 +332,7 @@ const pwApi = {
     });
     pw.view = createView(pw.win);
     await pw.view.webContents.loadURL(`${a}/browser-smoke.html`);
-    pw.entry = { view: pw.view, automation: null };
+    pw.entry = { view: pw.view, automation: null, mirror: null };
   },
   async reuse() {
     const { playwright } = await ready;
