@@ -79,6 +79,9 @@ interface NewThreadPicks {
   picked: ThreadControls | null;
   project: string | null;
   mentions: Mention[];
+  /** The computer it runs on and that computer's project; absent in drafts kept before either was. */
+  runsOn?: string | null;
+  remoteProject?: string | null;
 }
 
 export function NewThreadView() {
@@ -154,7 +157,7 @@ function NewThread() {
     mode: getPrefs().workspaceMode,
   }));
   const machines = useMachines();
-  const [runsOn, setRunsOn] = useState<string | null>(null);
+  const [runsOn, setRunsOn] = useState<string | null>(saved?.runsOn ?? null);
   const remote = machines.machines.find(
     (m) => m.machine.id === runsOn,
   )?.machine;
@@ -165,7 +168,9 @@ function NewThread() {
     if (!remote) keepAsDefaults(next, model);
   };
   const { catalog, reload: reloadCatalog } = useMachineCatalog(remote);
-  const [remoteProject, setRemoteProject] = useState<string | null>(null);
+  const [remoteProject, setRemoteProject] = useState<string | null>(
+    saved?.remoteProject ?? null,
+  );
   // Another computer's projects and models are its own: picks made for this one don't carry over, either way.
   const changeRunsOn = (next: string | null) => {
     setRunsOn(next);
@@ -180,7 +185,14 @@ function NewThread() {
   const hasDraft =
     !!draft || attachments.files.length > 0 || mention.mentions.length > 0;
   const draftExtra: NewThreadPicks | undefined = hasDraft
-    ? { provider, picked, project, mentions: mention.mentions }
+    ? {
+        provider,
+        picked,
+        project,
+        mentions: mention.mentions,
+        runsOn,
+        remoteProject,
+      }
     : undefined;
   // The worktree checkbox remembers your last choice for the next new thread.
   const changeWorkspace = (next: WorkspaceDraft) => {
