@@ -3,7 +3,28 @@ import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'vite-plus/test';
-import { cloneProject, initProject } from './add.ts';
+import { cloneProject, initProject, publishFolder } from './add.ts';
+import { runGit } from '../git/run.ts';
+
+test('Put on GitHub refuses a folder that already has a remote, and a bad name, before anything runs', async () => {
+  const dir = scratch();
+  const path = await initProject(dir, 'onlinerepo');
+  await runGit(path, [
+    'remote',
+    'add',
+    'origin',
+    'https://github.com/me/onlinerepo.git',
+  ]);
+  await assert.rejects(
+    publishFolder(path, 'onlinerepo', 'private', undefined),
+    // Not the path in a pattern: a Windows path's backslashes would read as escapes.
+    /is already on github\.com\/me\/onlinerepo$/,
+  );
+  await assert.rejects(
+    publishFolder(path, '../escape', 'private', undefined),
+    /A repository name takes letters/,
+  );
+});
 
 const scratch = () => realpathSync(mkdtempSync(join(tmpdir(), 'mochi-clone-')));
 

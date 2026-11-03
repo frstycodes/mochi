@@ -100,6 +100,67 @@ export async function publishProject(
   );
 }
 
+/**
+ * A plain folder onto GitHub in one step, on the computer that holds it (plan › Put on GitHub): `git init` if it isn't a
+ * repository, a first commit if it has none, then `gh repo create --source --push` as the profile's GitHub account. A
+ * folder that already has a remote is refused before anything runs. Resolves to its new `origin`, normalised.
+ */
+export async function publishFolder(
+  path: string,
+  name: string,
+  visibility: 'private' | 'public',
+  account: GithubAccountRef | undefined,
+) {
+  if (!NAME.test(name) || name === '.' || name === '..')
+    throw new Error(
+      'A repository name takes letters, digits, “.”, “-” and “_”',
+    );
+  const existing = await originUrl(path);
+  if (existing)
+    throw new Error(
+      `${path} is already on ${normalizeOrigin(existing) ?? existing}`,
+    );
+  const isRepo = await runGit(path, [
+    'rev-parse',
+    '--is-inside-work-tree',
+  ]).then(
+    () => true,
+    () => false,
+  );
+  if (!isRepo) await runGit(path, ['init']);
+  const hasCommit = await runGit(path, ['rev-parse', '--verify', 'HEAD']).then(
+    () => true,
+    () => false,
+  );
+  if (!hasCommit) {
+    await runGit(path, ['add', '-A']);
+    await runGit(path, ['commit', '--allow-empty', '-m', 'Initial commit']);
+  }
+  await runGhOn(
+    account,
+    [
+      'repo',
+      'create',
+      name,
+      `--${visibility}`,
+      '--source',
+      path,
+      '--remote',
+      'origin',
+      '--push',
+    ],
+    path,
+  );
+  const url = await originUrl(path);
+  return url ? normalizeOrigin(url) : null;
+}
+
+const originUrl = (path: string) =>
+  runGit(path, ['remote', 'get-url', 'origin']).then(
+    (url) => url.trim(),
+    () => '',
+  );
+
 /** The account's own repositories, most recently updated first. */
 export async function githubRepos(
   account: GithubAccountRef | undefined,

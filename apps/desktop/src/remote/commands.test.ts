@@ -889,6 +889,41 @@ test('link-project sets or clears the link on the project it names, and says whe
   });
 });
 
+test('publish-project puts the folder it names on GitHub there and answers with its origin', async () => {
+  const { state } = machine();
+  const env = device(state, 'Laptop', []);
+  const publish = vi
+    .spyOn(host.projects, 'publish')
+    .mockImplementation(async (_spaceId, id, name) => {
+      if (id !== 'p1')
+        throw new Error('That project isn’t in the list any more');
+      return { origin: `github.com/me/${name}` } as never;
+    });
+  const run = (project: string) =>
+    runRemoteCommand(
+      {
+        type: 'publish-project',
+        project,
+        name: 'notes',
+        visibility: 'private',
+      },
+      env,
+    );
+  assert.deepEqual(await run('p1'), {
+    isOk: true,
+    detail: 'github.com/me/notes',
+  });
+  assert.deepEqual(publish.mock.calls[0].slice(1, 4), [
+    'p1',
+    'notes',
+    'private',
+  ]);
+  assert.deepEqual(await run('gone'), {
+    isOk: false,
+    error: 'That project isn’t in the list any more',
+  });
+});
+
 test('sync-project fast-forwards or pushes the project it names, and refuses a pull that would merge', async () => {
   const { state } = machine();
   const env = device(state, 'Laptop', []);

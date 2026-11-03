@@ -134,6 +134,7 @@ export const queryKeys = {
     cachedMachines: () => ['cached-machines'] as const,
     otherMachines: () => ['other-machines'] as const,
     status: () => ['remote-status'] as const,
+    outbox: () => ['remote-outbox'] as const,
     catalog: (machineId: string | undefined, isOnline: boolean) =>
       ['machine-catalog', machineId, isOnline] as const,
     cachedCatalog: (machineId: string | undefined) =>

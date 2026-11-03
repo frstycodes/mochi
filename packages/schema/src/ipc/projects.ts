@@ -89,6 +89,10 @@ export const projectsRpc = {
   relocate: invoke(T([Id, Id, Str()]), Project),
   setFavorites: invoke(T([Id, ArrayOf(Id, 1000)]), Schema.Void),
   link: invoke(T([Id, Id, Schema.NullOr(Id)]), Schema.Void),
+  publish: invoke(
+    T([Id, Id, Name, Visibility, Schema.optional(GithubUser)]),
+    Project,
+  ),
   // A data URL of an icon at its 512 KB cap, base64, with room for its header.
   setIcon: invoke(T([Id, Id, Str(720 * 1024)]), Project),
   githubRepos: invoke(

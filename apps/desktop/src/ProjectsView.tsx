@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useId,
   useRef,
   useState,
   type ChangeEvent,
@@ -52,7 +53,10 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   InputGroup,
   InputGroupAddon,
@@ -75,7 +79,15 @@ import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import type { Project } from '@mochi/domain/host/types/projects';
 import { AddProject } from './AddProject';
-import { syncNeed, useCopyActions } from './copyActions';
+import {
+  copyBlocker,
+  isAway,
+  queuedClone,
+  repoNameFor,
+  syncNeed,
+  useCopyActions,
+  useOutbox,
+} from './copyActions';
 import type { SyncDirection } from './git/copyStatus';
 import { gitError } from './git/useGit';
 import { host } from './host';
@@ -371,6 +383,7 @@ function ProjectDetail({
   const { state, dispatch } = useHarness();
   const threads = useSpaceThreads();
   const [isRenaming, setRenaming] = useState(false);
+  const { outbox, cancel } = useOutbox();
   const isMulti = computers.length > 1;
   const local = project.copies.find((c) => !!c.local)?.local;
   const usage = local && projectUsage(threads).get(local.path);
@@ -463,12 +476,29 @@ function ProjectDetail({
               }
               isMulti={isMulti}
               localProjects={localProjects}
+              cloneTo={computers.filter(
+                (c) =>
+                  !project.copies.some((k) => k.machineId === c.id) &&
+                  !copyBlocker(c),
+              )}
               onNewThread={() =>
                 newThread({ machineId: copy.machineId, ref: copy.ref })
               }
               onRename={() => setRenaming(true)}
             />
           ))}
+          {computers.map((c) => {
+            const mail = queuedClone(outbox, project, c);
+            return (
+              !!mail && (
+                <QueuedCopyRow
+                  key={mail.id}
+                  computer={c}
+                  onCancel={() => void cancel(mail)}
+                />
+              )
+            );
+          })}
         </ul>
         <p className="px-1 type-caption text-muted-foreground">{FOOTER}</p>
       </div>
@@ -484,6 +514,7 @@ function CopyRow({
   computer,
   isMulti,
   localProjects,
+  cloneTo,
   onNewThread,
   onRename,
 }: {
@@ -493,6 +524,8 @@ function CopyRow({
   computer: Computer;
   isMulti: boolean;
   localProjects: Project[];
+  /** The computers without a copy that a published folder can be cloned onto. */
+  cloneTo: Computer[];
   onNewThread: () => void;
   onRename: () => void;
 }) {
@@ -507,8 +540,8 @@ function CopyRow({
           {
             label: 'Make it its own project',
             icon: <Unlink />,
-            onSelect: () => void unlink(copy),
-            blocker: startBlocker(computer),
+            onSelect: () => void unlink(copy, [computer]),
+            blocker: copyBlocker(computer),
             startsGroup: true,
           },
         ]
@@ -565,6 +598,15 @@ function CopyRow({
               onSync={() => sync(copy, need)}
             />
           )}
+          {/* A project with no remote anywhere: the folder itself goes up, from the computer that holds it. */}
+          {!project.origin && !local?.isMissing && (
+            <PublishButton
+              project={project}
+              copy={copy}
+              computer={computer}
+              cloneTo={cloneTo}
+            />
+          )}
           <OverflowMenu
             actions={actions}
             label={`${project.name} on ${computer.name} actions`}
@@ -576,6 +618,136 @@ function CopyRow({
 }
 
 const NEW_THREAD = 'New thread here';
+
+/** A clone waiting in an offline computer's mailbox: it runs when that computer connects, until you take it back. */
+function QueuedCopyRow({
+  computer,
+  onCancel,
+}: {
+  computer: Computer;
+  onCancel: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-3 px-4 py-3 not-first:border-t">
+      <ComputerAvatar
+        computer={computer}
+        size="lg"
+        surface="card"
+        className="opacity-60"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate type-body font-medium text-foreground">
+          {computer.name}
+        </span>
+        <span className="truncate type-meta text-muted-foreground">
+          Clones when it’s back online
+        </span>
+      </div>
+      <Button variant="ghost" size="xs" onClick={onCancel}>
+        Cancel
+      </Button>
+    </li>
+  );
+}
+
+/**
+ * Put on GitHub: the repository's name (the folder's, made safe), private by default, and the other computers it's then
+ * cloned onto, ticked. Runs on the computer that holds the folder, with its own GitHub login; that computer must be online.
+ */
+function PublishButton({
+  project,
+  copy,
+  computer,
+  cloneTo,
+}: {
+  project: ProjectWithCopies;
+  copy: ProjectCopy;
+  computer: Computer;
+  cloneTo: Computer[];
+}) {
+  const { publish } = useCopyActions();
+  const [isOpen, setOpen] = useState(false);
+  const [name, setName] = useState(() => repoNameFor(copy.name));
+  const [isPrivate, setPrivate] = useState(true);
+  const [isCloning, setCloning] = useState(true);
+  const [isBusy, setBusy] = useState(false);
+  const blocker = startBlocker(computer);
+  const nameId = useId();
+  const privateId = useId();
+  const cloneId = useId();
+  const submit = async () => {
+    setBusy(true);
+    const origin = await publish(project, copy, {
+      name: name.trim(),
+      visibility: isPrivate ? 'private' : 'public',
+      cloneTo: isCloning ? cloneTo : [],
+    });
+    setBusy(false);
+    if (origin) setOpen(false);
+  };
+  return (
+    <Popover open={isOpen} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="xs" disabled={!!blocker}>
+          <GithubMarkIcon className="size-3" />
+          Put on GitHub
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="flex w-80 flex-col gap-3 p-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={nameId}>Repository name</Label>
+          <Input
+            id={nameId}
+            autoFocus
+            value={name}
+            maxLength={100}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <label
+          htmlFor={privateId}
+          className="flex items-center justify-between gap-3 type-body"
+        >
+          Private
+          <Switch
+            id={privateId}
+            checked={isPrivate}
+            onCheckedChange={setPrivate}
+          />
+        </label>
+        {cloneTo.length > 0 && (
+          <label htmlFor={cloneId} className="flex items-start gap-2 type-body">
+            <Checkbox
+              id={cloneId}
+              checked={isCloning}
+              onCheckedChange={(on) => setCloning(on === true)}
+              className="mt-0.5"
+            />
+            <span className="flex min-w-0 flex-col">
+              Then clone it on every computer
+              <span className="type-caption text-muted-foreground">
+                {cloneTo.map((c) => c.name).join(', ')}; one that’s offline
+                clones when it’s back
+              </span>
+            </span>
+          </label>
+        )}
+        <p className="type-caption text-muted-foreground">
+          {computer.name} commits what’s in the folder and pushes it, with its
+          own GitHub login.
+        </p>
+        <Button
+          size="sm"
+          disabled={isBusy || !name.trim()}
+          onClick={() => void submit()}
+        >
+          {isBusy && <Spinner />}
+          Put on GitHub
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** The one git action a copy needs, run on its computer; busy while it runs, and saying why when that computer can't. */
 function SyncButton({
@@ -633,11 +805,15 @@ function AddCopyMenu({
   computers: Computer[];
 }) {
   const { clone, link } = useCopyActions();
+  const { outbox } = useOutbox();
   const holders = holdersOf(project, computers);
-  const missing = computers.filter((c) => !holders.includes(c));
+  const missing = computers.filter(
+    (c) => !holders.includes(c) && !queuedClone(outbox, project, c),
+  );
   if (missing.length === 0) return null;
+  // An offline computer is cloned on by mail, once it's back.
   const cloneable = project.origin
-    ? missing.filter((c) => !startBlocker(c))
+    ? missing.filter((c) => !copyBlocker(c))
     : [];
   return (
     <DropdownMenu>
@@ -660,7 +836,7 @@ function AddCopyMenu({
           </>
         )}
         {missing.map((c, i) => {
-          const blocker = startBlocker(c);
+          const blocker = copyBlocker(c);
           const candidates = all.flatMap((p) =>
             p === project ? [] : p.copies.filter((k) => k.machineId === c.id),
           );
@@ -679,6 +855,7 @@ function AddCopyMenu({
                   <DropdownMenuItem onSelect={() => void clone(project, c)}>
                     <Download />
                     Clone on {c.name}
+                    {isAway(c) && ' when it’s back'}
                   </DropdownMenuItem>
                 ))}
               {blocker || candidates.length === 0 ? (

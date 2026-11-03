@@ -30,7 +30,13 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { AddProject } from './AddProject';
-import { useCopyActions } from './copyActions';
+import {
+  copyBlocker,
+  isAway,
+  queuedClone,
+  useCopyActions,
+  useOutbox,
+} from './copyActions';
 import { isMod } from './keys';
 import { MetaChip } from './MetaChip';
 import {
@@ -43,12 +49,7 @@ import {
 } from './projectCopies';
 import { ProjectIcon } from './ProjectIcon';
 import { refreshProjects, type Place } from './projects';
-import {
-  ComputerAvatar,
-  HereBadge,
-  startBlocker,
-  type Computer,
-} from './remote/computers';
+import { ComputerAvatar, HereBadge, type Computer } from './remote/computers';
 import { ScrollDock } from './ScrollDock';
 import { useHarnessSelector } from './store';
 
@@ -432,9 +433,11 @@ function MissingCopyOption({
   computer: Computer;
 }) {
   const { clone } = useCopyActions();
+  const { outbox } = useOutbox();
   const [isCloning, setCloning] = useState(false);
-  const blocker = startBlocker(computer);
-  const canClone = !!project.origin && project.key !== NO_PROJECT;
+  const blocker = copyBlocker(computer);
+  const isQueued = !!queuedClone(outbox, project, computer);
+  const canClone = !!project.origin && project.key !== NO_PROJECT && !isQueued;
   return (
     <li className="flex min-h-12 shrink-0 items-center gap-2.5 rounded-md px-2 py-1.5">
       <ComputerAvatar computer={computer} size="md" className="opacity-40" />
@@ -443,7 +446,7 @@ function MissingCopyOption({
           {computer.name}
         </span>
         <span className="truncate type-caption text-subtle-foreground">
-          {isCloning ? 'Cloning…' : 'Not on this computer'}
+          {missingCopyText(isCloning, isQueued)}
         </span>
       </span>
       {canClone && (
@@ -469,12 +472,20 @@ function MissingCopyOption({
           </TooltipTrigger>
           <TooltipContent>
             {blocker ??
-              `Clones ${project.origin} into ${computer.name}’s projects folder`}
+              (isAway(computer)
+                ? `${computer.name} is offline: it clones ${project.origin} when it’s back`
+                : `Clones ${project.origin} into ${computer.name}’s projects folder`)}
           </TooltipContent>
         </Tooltip>
       )}
     </li>
   );
+}
+
+function missingCopyText(isCloning: boolean, isQueued: boolean) {
+  if (isCloning) return 'Cloning…';
+  if (isQueued) return 'Clones when it’s back online';
+  return 'Not on this computer';
 }
 
 /** A copy's state with its branch as a branch, not as the words "On main"; nothing while it's read. */

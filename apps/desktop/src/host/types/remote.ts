@@ -149,6 +149,21 @@ export interface RemoteStatus {
 }
 
 /** A new thread's workspace as a device sends it: a mode and branch names, never a path or this computer's temp branch name. */
+/** What the mailbox carries to an offline computer: project operations that spend no usage and are safe to run late. */
+export type MailCommand = Extract<
+  RemoteCommand,
+  { type: 'clone-project' | 'link-project' }
+>;
+
+/** A message this computer queued for another, until that one runs it or it's taken back. */
+export interface QueuedMail {
+  id: string;
+  machineId: string;
+  command: MailCommand;
+  at: number;
+  expiresAt: number;
+}
+
 export interface RemoteWorkspace {
   mode: 'worktree' | 'folder';
   /** A new worktree's base; unset, the default branch. */
@@ -246,6 +261,16 @@ export type RemoteCommand =
    * login. Push is visible to others: the device asks its user first.
    */
   | { type: 'sync-project'; project: string; direction: 'pull' | 'push' }
+  /**
+   * A plain folder there onto GitHub as that computer's gh login (`projects.publish`); answers with its new origin in
+   * `detail`. Visible to others: the device asks its user first.
+   */
+  | {
+      type: 'publish-project';
+      project: string;
+      name: string;
+      visibility: 'private' | 'public';
+    }
   /** A Settings catalog row (`src/settings/catalog.ts`) on this computer only: never synced, never Devices, accounts or profiles. */
   | { type: 'setting'; key: string; value: string }
   // code
@@ -535,6 +560,15 @@ export interface RemoteHost {
   diagnostics(): Promise<string>;
   /** Joins your computers through that one; resolves once it allowed this one, rejects with its reason otherwise. */
   join(machineId: string): Promise<void>;
+  /**
+   * Work for a computer that's offline, signed and sealed to it, run when it next connects: cloning or linking a project
+   * only. Resolves to the message's id.
+   */
+  queueMail(machineId: string, command: MailCommand): Promise<string>;
+  /** What this computer queued that hasn't run yet. */
+  outbox(): Promise<QueuedMail[]>;
+  /** Takes a queued message back before it runs. */
+  cancelMail(machineId: string, id: string): Promise<void>;
   /** The computers this one follows, and how each connection stands. */
   machines(): Promise<FollowedMachine[]>;
   onMachines(listener: (machines: FollowedMachine[]) => void): () => void;
@@ -570,6 +604,9 @@ export const remoteMethods = {
   otherMachines: 'invoke',
   diagnostics: 'invoke',
   join: 'invoke',
+  queueMail: 'invoke',
+  outbox: 'invoke',
+  cancelMail: 'invoke',
   machines: 'invoke',
   onMachines: 'event',
   follow: 'invoke',

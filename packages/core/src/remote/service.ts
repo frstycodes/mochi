@@ -6,15 +6,17 @@ import { join as joinPath } from 'node:path';
 import sodium from 'libsodium-wrappers';
 import { Effect, Layer, Option, Schema } from 'effect';
 import { Relay } from '@mochi/schema';
-import type {
-  ApprovalRequest,
-  FollowedMachine,
-  MemberInfo,
-  OtherMachine,
-  RelayState,
-  RemoteSettings,
-  RemoteStatus,
-  Scope,
+import {
+  DEFAULT_SCOPES,
+  type ApprovalRequest,
+  type FollowedMachine,
+  type MailCommand,
+  type MemberInfo,
+  type OtherMachine,
+  type RelayState,
+  type RemoteSettings,
+  type RemoteStatus,
+  type Scope,
 } from '../../../../apps/desktop/src/host/types/remote.ts';
 import type { MochiAccount } from '@mochi/domain/host/types/account';
 import { AccountService } from '../account/service.ts';
@@ -50,6 +52,7 @@ import {
   type Origin,
 } from './pairing.ts';
 import { Registry, type PairedMachine } from './registry.ts';
+import { mailService } from './mailService.ts';
 import {
   openMachineInfo,
   openRecords,
@@ -1026,6 +1029,50 @@ function makeRemote({
     return restarting;
   }
 
+  const mail = mailService({
+    dir,
+    keys: theKeys,
+    token: () => account.accessToken(),
+    machineId: () => theRegistry().machineId,
+    senderOf: (id) => {
+      const member = membership?.members.get(id);
+      if (!member) return undefined;
+      const scopes = theRegistry().findDevice(id)?.scopes ?? DEFAULT_SCOPES;
+      return {
+        name: member.name,
+        publicKey: sodium.from_base64(
+          member.publicKey,
+          sodium.base64_variants.ORIGINAL,
+        ),
+        mayManage: scopes.includes('manage'),
+      };
+    },
+    run: (request) => runInWindow(request),
+    log,
+  });
+
+  /** A command as a device's runs here, in an open interface; refused without one. */
+  async function runInWindow(request: {
+    id: string;
+    deviceName: string;
+    command: unknown;
+  }) {
+    if (!capabilities.offers('remote'))
+      return { isOk: false, error: 'No interface is open on this computer' };
+    const encoded = await Effect.runPromise(
+      Schema.encodeUnknownEffect(
+        Schema.toCodecJson(Relay.RemoteCommandRequest),
+      )(request),
+    );
+    return Effect.runPromise(
+      capabilities.call({
+        capability: 'remote',
+        method: 'run',
+        args: [encoded],
+      }),
+    );
+  }
+
   /** Announces this computer on its networks and listens for your others (`nearby.ts`); main dials the members it hears. */
   async function startLooking() {
     const publicKey = sodium.to_base64(
@@ -1071,6 +1118,13 @@ function makeRemote({
           );
         if (state.status === 'error' && relayState.status !== 'error')
           log(`The relay connection failed: ${state.error}`);
+        // Back on the relay: run what waited while this computer was away.
+        if (state.status === 'connected' && relayState.status !== 'connected')
+          void mail
+            .drain()
+            .catch((e: unknown) =>
+              log(`Couldn’t read the mailbox: ${String(e)}`),
+            );
         relayState = state;
         broadcast();
       },
@@ -1150,6 +1204,10 @@ function makeRemote({
     answerApproval: (id: string, isAllowed: boolean) =>
       approvals.get(id)?.(isAllowed),
     otherMachines,
+    queueMail: (machineId: string, command: MailCommand) =>
+      mail.queue(machineId, command),
+    outbox: () => mail.outbox(),
+    cancelMail: (machineId: string, id: string) => mail.cancel(machineId, id),
     join: (machineId: string) => join(machineId).then(() => {}),
     /**
      * `mochi login` following the join from another process: it signed in there, so this Core reads the account again and,

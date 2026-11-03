@@ -7,9 +7,11 @@ import {
   type StoredRecord,
 } from './protocol.ts';
 import {
+  MAILBOX,
   Relay,
   type Attachment,
   type MachineRecord,
+  type Mail,
   type Room,
 } from './relay.ts';
 
@@ -26,7 +28,10 @@ function room() {
   const sockets: FakeSocket[] = [];
   let machines: Record<string, MachineRecord> = {};
   let records: Record<string, StoredRecord> = {};
+  const mailboxes = new Map<string, Mail[]>();
   const fake: Room<FakeSocket> = {
+    mailbox: async (machineId) => mailboxes.get(machineId) ?? [],
+    saveMailbox: async (machineId, mail) => void mailboxes.set(machineId, mail),
     byTag: (tag) => sockets.filter((s) => !s.closed && s.tags.includes(tag)),
     attachment: (s) => s.attachment,
     send: (s, data) => void s.sent.push(data),
@@ -61,6 +66,7 @@ function room() {
     accept,
     stored: () => machines,
     storedRecords: () => records,
+    storedMail: (machineId: string) => mailboxes.get(machineId) ?? [],
   };
 }
 
@@ -286,5 +292,90 @@ test('a member record naming its computer in clear is refused, so nothing stored
   assert.doesNotMatch(
     JSON.stringify(storedRecords()),
     /"name"|"kind"|"addresses"/,
+  );
+});
+
+test('a mailbox keeps only ciphertext, an id and an expiry, within its limits, and an ack deletes', async () => {
+  const { relay, storedMail } = room();
+  const NOW = 1000;
+  const mail = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    sealed: 'c2VhbGVk',
+    expiresAt: NOW + 60_000,
+    ...extra,
+  });
+
+  assert.equal(
+    await relay.post(
+      'm1',
+      mail('a', { command: 'clone-project', from: 'mac' }),
+    ),
+    undefined,
+  );
+  assert.deepEqual(
+    storedMail('m1'),
+    [mail('a')],
+    'nothing but the three fields is kept',
+  );
+  assert.equal(await relay.post('m1', mail('a')), 'That message is queued');
+  assert.equal(
+    await relay.post(
+      'm1',
+      mail('big', { sealed: 'x'.repeat(MAILBOX.maxChars + 1) }),
+    ),
+    'That message is too big',
+  );
+  assert.equal(
+    await relay.post('m1', mail('old', { expiresAt: NOW })),
+    'That message has already expired',
+  );
+  assert.equal(
+    await relay.post('m1', { sealed: 'x', expiresAt: NOW + 1 }),
+    'A message needs an id',
+  );
+  await relay.post(
+    'm1',
+    mail('far', { expiresAt: NOW + 10 * MAILBOX.maxAgeMs }),
+  );
+  assert.equal(
+    storedMail('m1').at(-1)!.expiresAt,
+    NOW + MAILBOX.maxAgeMs,
+    'held to the limit',
+  );
+  assert.deepEqual(await relay.mail('m2'), [], 'each machine has its own');
+
+  await relay.ack('m1', 'a');
+  assert.deepEqual(
+    (await relay.mail('m1')).map((m) => m.id),
+    ['far'],
+  );
+
+  for (let i = 0; i < MAILBOX.maxPerMachine + 5; i++)
+    await relay.post('m3', mail(`n${i}`));
+  const held = await relay.mail('m3');
+  assert.equal(held.length, MAILBOX.maxPerMachine);
+  assert.equal(held[0].id, 'n5', 'a full mailbox drops its oldest');
+});
+
+test('expired mail is gone the next time the mailbox is read', async () => {
+  let now = 1000;
+  const mailboxes = new Map<string, Mail[]>();
+  const relay = new Relay<never>(
+    {
+      mailbox: async (id) => mailboxes.get(id) ?? [],
+      saveMailbox: async (id, mail) => void mailboxes.set(id, mail),
+    } as Room<never>,
+    () => now,
+  );
+  await relay.post('m1', { id: 'a', sealed: 'x', expiresAt: 2000 });
+  await relay.post('m1', { id: 'b', sealed: 'x', expiresAt: 5000 });
+  now = 3000;
+  assert.deepEqual(
+    (await relay.mail('m1')).map((m) => m.id),
+    ['b'],
+  );
+  assert.deepEqual(
+    mailboxes.get('m1')!.map((m) => m.id),
+    ['b'],
   );
 });

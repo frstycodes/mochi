@@ -89,6 +89,7 @@ export async function runRemoteCommand(
     return addProject(command, state);
   if (command.type === 'link-project') return linkProject(command, state);
   if (command.type === 'sync-project') return syncProject(command, state);
+  if (command.type === 'publish-project') return publishProject(command, state);
   if (command.type === 'create') return create(command, env);
   if (isThreadOp(command))
     return runThreadOp(command, state, dispatch, () => projectsHere(state));
@@ -443,6 +444,26 @@ async function linkProject(
     () => ok,
     (error: unknown) => fail((error as Error).message),
   );
+}
+
+/** Put on GitHub for one of this computer's folders, named by id, as this profile's GitHub login; `detail` is its new origin. */
+async function publishProject(
+  {
+    project,
+    name,
+    visibility,
+  }: Extract<RemoteCommand, { type: 'publish-project' }>,
+  state: State,
+): Promise<CommandResult> {
+  return host.projects
+    .publish(state.spaceId, project, name, visibility, githubUserOf(state))
+    .then(
+      (published) =>
+        published.origin
+          ? { isOk: true, detail: published.origin }
+          : fail('It was created, but its origin couldn’t be read'),
+      (error: unknown) => fail((error as Error).message),
+    );
 }
 
 /** Pull or Push on one of this computer's projects, named by id, as this profile's GitHub login. */

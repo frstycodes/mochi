@@ -376,6 +376,7 @@ const COMMAND_VERBS = {
   'clone-project': 'clone the project',
   'link-project': 'link the project',
   'sync-project': 'sync the project',
+  'publish-project': 'put the project on GitHub',
   send: 'send the message',
   'thread-action': 'change the thread',
   unsteer: 'take the message back',
@@ -423,6 +424,7 @@ const SUCCESS: Partial<Record<RemoteCommand['type'], string>> = {
   commit: 'Committed',
   'open-pr': 'Opened the pull request',
   'sync-project': 'Synced',
+  'publish-project': 'On GitHub',
 };
 
 /** The files of another computer's thread as its `files` lists them, while `isNeeded`; null before then or for this computer's own. */

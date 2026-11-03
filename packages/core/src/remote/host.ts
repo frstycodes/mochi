@@ -32,4 +32,8 @@ export const remoteHost = (remote: Remote['Service']) =>
     otherMachines: () => remote.otherMachines(),
     diagnostics: () => remote.diagnostics(),
     join: (_caller, machineId) => remote.join(machineId),
+    queueMail: (_caller, machineId, command) =>
+      remote.queueMail(machineId, command),
+    outbox: () => remote.outbox(),
+    cancelMail: (_caller, machineId, id) => remote.cancelMail(machineId, id),
   }) satisfies HostMethods<Omit<RemoteHost, InMain>>;

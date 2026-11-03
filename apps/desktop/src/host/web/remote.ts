@@ -45,6 +45,13 @@ export const remote: RemoteHost = {
   async join() {
     throw new Error('Joining needs the desktop app');
   },
+  async queueMail() {
+    throw new Error('Queueing for another computer needs the desktop app');
+  },
+  async outbox() {
+    return [];
+  },
+  async cancelMail() {},
   async machines() {
     return [];
   },

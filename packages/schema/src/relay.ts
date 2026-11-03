@@ -301,6 +301,31 @@ const command = <const T extends string, F extends Schema.Struct.Fields>(
   fields: F,
 ) => Schema.Struct({ type: Schema.Literal(type), ...fields });
 
+const CloneProjectCommand = command('clone-project', {
+  source: RemoteCloneSource,
+});
+const LinkProjectCommand = command('link-project', {
+  project: NonEmptyId,
+  linkId: Schema.NullOr(NonEmptyId),
+});
+
+/** What the mailbox carries to an offline computer (`packages/core/src/remote/mailbox.ts`): project operations only. */
+export const MailCommand = Schema.Union([
+  CloneProjectCommand,
+  LinkProjectCommand,
+]);
+export type MailCommand = typeof MailCommand.Type;
+
+/** A message this computer queued for another, until that one runs it or it's taken back. */
+export const QueuedMail = Schema.Struct({
+  id: S,
+  machineId: S,
+  command: MailCommand,
+  at: Schema.Number,
+  expiresAt: Schema.Number,
+});
+export type QueuedMail = typeof QueuedMail.Type;
+
 const MAX_PATTERN = 1024;
 const CommitRef = Str(64).check(Schema.isPattern(/^[0-9a-f]{4,64}$/));
 /** A path on this computer that the thread itself names (an image it attached, a task's output file): checked against the thread. */
@@ -537,14 +562,16 @@ export const RemoteCommand = Schema.Union([
     name: Str(MAX_TITLE).check(Schema.isPattern(PROJECT_NAME)),
     publish: opt(Schema.Literals(['private', 'public'])),
   }),
-  command('clone-project', { source: RemoteCloneSource }),
-  command('link-project', {
-    project: NonEmptyId,
-    linkId: Schema.NullOr(NonEmptyId),
-  }),
+  CloneProjectCommand,
+  LinkProjectCommand,
   command('sync-project', {
     project: NonEmptyId,
     direction: Schema.Literals(['pull', 'push']),
+  }),
+  command('publish-project', {
+    project: NonEmptyId,
+    name: Str(MAX_TITLE).check(Schema.isPattern(PROJECT_NAME)),
+    visibility: Schema.Literals(['private', 'public']),
   }),
   command('setting', { key: Text(MAX_ID), value: Str(MAX_TEXT) }),
   command('diff', { threadId: Id, scope: DiffScope }),
@@ -725,6 +752,7 @@ export const COMMAND_SCOPES = {
   'clone-project': 'manage',
   'link-project': 'manage',
   'sync-project': 'manage',
+  'publish-project': 'manage',
   diff: 'code',
   'checkpoint-diff': 'code',
   change: 'code',

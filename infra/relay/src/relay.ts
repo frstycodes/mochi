@@ -1,5 +1,6 @@
 import {
   CLOSE,
+  isId,
   MAX_FRAME_BYTES,
   MAX_RECORDS,
   parseMachineFrame,
@@ -40,7 +41,26 @@ export interface Room<S> {
   /** Signed membership records by `storedKey`. */
   records(): Promise<Record<string, StoredRecord>>;
   saveRecords(records: Record<string, StoredRecord>): Promise<void>;
+  /** One machine's mailbox, oldest first. */
+  mailbox(machineId: string): Promise<Mail[]>;
+  saveMailbox(machineId: string, mail: Mail[]): Promise<void>;
 }
+
+/**
+ * Work waiting for an offline machine (plan › Mailbox): `sealed` is signed by the sender and sealed to the machine's key, so
+ * the relay holds ciphertext, an id and an expiry, never what it asks or who asked.
+ */
+export interface Mail {
+  id: string;
+  sealed: string;
+  expiresAt: number;
+}
+
+export const MAILBOX = {
+  maxPerMachine: 100,
+  maxChars: 16 * 1024,
+  maxAgeMs: 14 * 24 * 60 * 60_000,
+};
 
 export type Admission =
   | { tags: string[]; attachment: Attachment }
@@ -225,6 +245,38 @@ export class Relay<S> {
       this.control(machine, { type: 'members' });
   }
 
+  /** What waits for a machine, expired mail gone. */
+  async mail(machineId: string) {
+    const held = await this.room.mailbox(machineId);
+    const live = held.filter((m) => m.expiresAt > this.now());
+    if (live.length !== held.length)
+      await this.room.saveMailbox(machineId, live);
+    return live;
+  }
+
+  /**
+   * Queues one message: an id it doesn't hold yet, ciphertext up to the size limit, an expiry no later than the limit allows.
+   * A full mailbox drops its oldest. Returns why it refused, if it did.
+   */
+  async post(machineId: string, body: unknown): Promise<string | undefined> {
+    const mail = parseMail(body, this.now());
+    if (typeof mail === 'string') return mail;
+    const held = await this.mail(machineId);
+    if (held.some((m) => m.id === mail.id)) return 'That message is queued';
+    await this.room.saveMailbox(
+      machineId,
+      [...held, mail].slice(-MAILBOX.maxPerMachine),
+    );
+  }
+
+  /** The machine ran it, or its sender took it back. */
+  async ack(machineId: string, id: string) {
+    const held = await this.mail(machineId);
+    const rest = held.filter((m) => m.id !== id);
+    if (rest.length !== held.length)
+      await this.room.saveMailbox(machineId, rest);
+  }
+
   private async onControl(socket: S, machineId: string, raw: string) {
     const frame = parseMachineFrame(raw);
     if (!frame) {
@@ -264,4 +316,20 @@ export class Relay<S> {
   private control(socket: S, frame: RelayToMachine) {
     this.room.send(socket, JSON.stringify(frame));
   }
+}
+
+/** A `POST /v1/mailbox/:machine` body, or why it's refused; the expiry is held to the limit. */
+function parseMail(body: unknown, now: number): Mail | string {
+  const { id, sealed, expiresAt } = (body ?? {}) as Partial<Mail>;
+  if (!isId(id)) return 'A message needs an id';
+  if (typeof sealed !== 'string' || !sealed)
+    return 'A message needs its sealed body';
+  if (sealed.length > MAILBOX.maxChars) return 'That message is too big';
+  if (typeof expiresAt !== 'number' || expiresAt <= now)
+    return 'That message has already expired';
+  return {
+    id,
+    sealed,
+    expiresAt: Math.min(expiresAt, now + MAILBOX.maxAgeMs),
+  };
 }

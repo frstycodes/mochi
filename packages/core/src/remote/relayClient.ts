@@ -258,6 +258,48 @@ export const forgetMachineAtRelay = (token: string, machineId: string) =>
     () => Effect.void,
   );
 
+const mailboxUrl = (machineId: string, id?: string) =>
+  url(
+    `/v1/mailbox/${encodeURIComponent(machineId)}${id === undefined ? '' : `/${encodeURIComponent(id)}`}`,
+  );
+
+/** What waits for that machine: ids, expiries and ciphertext (`mailbox.ts`). */
+export const listMail = (token: string, machineId: string) =>
+  relayHttp(
+    token,
+    HttpClientRequest.get(mailboxUrl(machineId)),
+    HttpClientResponse.schemaBodyJson(
+      Schema.Array(
+        Schema.Struct({
+          id: Schema.String,
+          sealed: Schema.String,
+          expiresAt: Schema.Number,
+        }),
+      ),
+    ),
+  );
+
+export const postMail = (
+  token: string,
+  machineId: string,
+  body: { id: string; sealed: string; expiresAt: number },
+) =>
+  relayHttp(
+    token,
+    HttpClientRequest.post(mailboxUrl(machineId)).pipe(
+      HttpClientRequest.bodyJsonUnsafe(body),
+    ),
+    () => Effect.void,
+  );
+
+/** The machine ran it, or its sender took it back. */
+export const ackMail = (token: string, machineId: string, id: string) =>
+  relayHttp(
+    token,
+    HttpClientRequest.delete(mailboxUrl(machineId, id)),
+    () => Effect.void,
+  );
+
 const RELAY_TIMEOUT = '15 seconds';
 
 /** The relay's HTTP API, for main: a status outside 2xx rejects with `RelayRefused`, a body of the wrong shape with a `SchemaError`. */

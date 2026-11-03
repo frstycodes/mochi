@@ -122,6 +122,8 @@ function memoryRoom() {
     },
     records: async () => records,
     saveRecords: async (next) => void (records = next),
+    mailbox: async () => [],
+    saveMailbox: async () => {},
   };
   return {
     room,
