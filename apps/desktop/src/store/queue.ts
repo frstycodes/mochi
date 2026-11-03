@@ -3,6 +3,7 @@ import {
   seedQueue,
   type EventGlyph,
   type QueueItem,
+  type ToolDecision,
 } from '../model.ts';
 import type { Action, State } from './types.ts';
 import type { Saved } from './saved.ts';
@@ -16,6 +17,8 @@ export interface QueueState {
 /** `answers` is each question's picked labels and typed text, for question items. */
 export type QueueAction =
   | { type: 'answer'; queueId: string; answers?: string[][] }
+  /** A Mochi widget's answer, from any view: the call waiting on it goes on wherever it runs (`hearToolDecision`). */
+  | ({ type: 'tool-decision'; queueId: string } & ToolDecision)
   /** A Mochi widget (a delete, a setting change, a browser escalation, or a setting a blocked call points at) joins the queue. */
   | { type: 'queue-add'; item: QueueItem }
   /** Closes a Mochi widget: the card leaves the queue and its place in the thread becomes the one-line `text`. */
@@ -38,6 +41,8 @@ export function queueReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'answer':
       return answer(state, action.queueId, action.answers);
+    case 'tool-decision':
+      return decideCard(state, action);
     case 'queue-add':
       // The same card again (a setting card from a later blocked call) replaces the old one in place.
       return state.queue.some((q) => q.id === action.item.id)
@@ -81,6 +86,22 @@ export function queueReducer(state: State, action: Action): State {
     default:
       return state;
   }
+}
+
+/** The first answer holds: a second view answering before the first folds changes nothing. */
+function decideCard(
+  state: State,
+  { queueId, isApproved, options }: Extract<Action, { type: 'tool-decision' }>,
+): State {
+  const item = state.queue.find((q) => q.id === queueId);
+  if (!item?.tool || item.tool.decision) return state;
+  const decision = { isApproved, ...(options && { options }) };
+  return {
+    ...state,
+    queue: state.queue.map((q) =>
+      q === item ? { ...q, tool: { ...item.tool!, decision } } : q,
+    ),
+  };
 }
 
 export function rankQueue(items: QueueItem[]) {

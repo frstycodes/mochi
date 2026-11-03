@@ -14,6 +14,19 @@ export function directCall(
   command: Relay.RemoteCommand,
 ): DirectCall | undefined {
   switch (command.type) {
+    case 'browser-open': {
+      const { threadId, tabId, url, width, height } = command;
+      return {
+        tag: 'page.open',
+        payload: { threadId, tabId, url, viewport: { width, height } },
+      };
+    }
+    case 'browser-input':
+    case 'browser-navigate':
+    case 'browser-close': {
+      const { type, ...payload } = command;
+      return { tag: BROWSER_TAGS[type], payload };
+    }
     case 'setup-choice':
       return {
         tag: 'agent.setupChoice',
@@ -33,3 +46,9 @@ export function directCall(
   }
   return undefined;
 }
+
+const BROWSER_TAGS = {
+  'browser-input': 'page.input',
+  'browser-navigate': 'page.navigate',
+  'browser-close': 'page.unwatch',
+} as const;

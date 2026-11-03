@@ -212,14 +212,16 @@ export async function secureAsDevice(
   }
 }
 
-/** Through the relay the device is signed in to your account; over iroh only the account's listing says so; on the LAN nothing does. */
+/**
+ * Through the relay the device is signed in to your account; over iroh or the LAN only the account's listing says so: anyone
+ * on the same network can connect, and must never get as far as a prompt.
+ */
 async function isOnAccount(
   origin: Origin,
   side: MachineSide,
   publicKey: Uint8Array,
 ) {
   if (origin === 'relay') return true;
-  if (origin === 'lan') return false;
   return side.isOnAccount(publicKey).catch(() => false);
 }
 

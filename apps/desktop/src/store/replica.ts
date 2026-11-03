@@ -11,6 +11,7 @@ import {
   type LoggedEvent,
   type ReplicaItem,
 } from '@mochi/domain';
+import { AGENT_CONTROLS } from '../settings/prefsDefaults.ts';
 import type { ProjectionContext } from './context.ts';
 import { reducer } from './root.ts';
 import { savedFrom, toSaved, type Saved } from './saved.ts';
@@ -288,6 +289,10 @@ const ContextSchema = Schema.Struct({
     simplifyNeedsFirst: Schema.optional(Schema.Boolean),
     simplifyRules: Schema.optional(Schema.String),
     turnSpine: Schema.optional(Schema.Boolean),
+    agentControl: Schema.optional(Schema.Literals(AGENT_CONTROLS)),
+    toolPolicies: Schema.optional(
+      Schema.Record(Schema.String, Schema.Literals(['allow', 'ask', 'off'])),
+    ),
     whileWorking: Schema.Literals(['queue', 'steer']),
   }),
   pins: Schema.Record(Schema.String, Schema.Array(Pin)),

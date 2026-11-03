@@ -44,7 +44,7 @@ import {
   type Thread,
   type ThreadProposal,
 } from '../model.ts';
-import { projectName, projectRef } from '../projects.ts';
+import { projectName, projectRef } from '../projectRef.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_CONTROL } from '../settings/settingOptions.ts';
@@ -320,7 +320,18 @@ export async function runTool(
   }
 }
 
-/** Apply / Delete / Keep / Cancel on a widget land here; the waiting call goes on. */
+/**
+ * A `tool-decision` folding onto `before`, from this window or another view: the call waiting on it goes on if it runs here.
+ * As the fold does, a card already answered keeps its first answer.
+ */
+export function hearToolDecision(action: Action, before: State) {
+  if (action.type !== 'tool-decision') return;
+  const { queueId, isApproved, options } = action;
+  if (before.queue.find((q) => q.id === queueId)?.tool?.decision) return;
+  decideTool(queueId, { isApproved, ...(options && { options }) });
+}
+
+/** Resolves the call waiting on a widget in this process; views answer with a `tool-decision` instead. */
 export function decideTool(
   queueId: string,
   decision: { isApproved: boolean; options?: string[] },

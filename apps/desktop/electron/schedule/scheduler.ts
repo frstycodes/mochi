@@ -1,15 +1,15 @@
 import { Cause, Effect, Schedule, Stream } from 'effect';
+import { asJsonValue, COMMAND_TYPE } from '@mochi/domain';
 import { mainCoreClient } from '@mochi/core/host';
 import type { Change } from '@mochi/core/schedule/scheduler';
 import type { ScheduleEvent } from '../../src/host/types/schedule.ts';
-import { keepWhenClosed, openWindows } from '../agents/events.ts';
-import { mainWindow } from '../window.ts';
+import type { Action } from '../../src/store/types.ts';
+import { openWindows } from '../agents/events.ts';
 
-// The scheduler runs in Core (packages/core/src/schedule), so triggers fire while every window is closed. Main only
-// hands what Core reports to its windows, and gives events back to Core to keep when no window is open.
+// The scheduler runs in Core (packages/core/src/schedule), so triggers fire while every window is closed, and logs its runs
+// there. Main hands Core's trigger changes to its windows, and logs what it watches itself (PR checks, Auto-fix) in Core.
 
 export function startScheduler() {
-  keepWhenClosed((event) => keep({ type: 'agent', event }));
   // The stream ends with the socket; after Core restarts, the redialled client subscribes again.
   void mainCoreClient().then((client) =>
     Effect.runFork(
@@ -29,21 +29,30 @@ export function startScheduler() {
   );
 }
 
-export function deliver(event: ScheduleEvent) {
-  if (!mainWindow()) return keep(event);
-  for (const win of openWindows())
-    win.webContents.send('schedule:onEvent', event);
+/** A PR's settled checks or an Auto-fix change, as the command Core acts on (an Auto-fix message goes to the agent there). */
+export function deliver(
+  event: Extract<ScheduleEvent, { type: 'ci' | 'autofix' }>,
+) {
+  const action: Action =
+    event.type === 'ci'
+      ? { type: 'ci-result', event }
+      : { type: 'autofix', threadId: event.threadId, event: event.event };
+  void mainCoreClient()
+    .then((client) =>
+      Effect.runPromise(
+        client['events.append']({
+          type: COMMAND_TYPE,
+          threadId: event.threadId,
+          payload: asJsonValue(action),
+        }),
+      ),
+    )
+    .catch((error: unknown) =>
+      console.warn(`Logging ${event.type} in Core failed`, error),
+    );
 }
 
 function forward(change: Change) {
-  if (change.type === 'event') return deliver(change.event);
   for (const win of openWindows())
     win.webContents.send('schedule:onChange', change.triggers);
 }
-
-const keep = (event: ScheduleEvent) =>
-  void mainCoreClient()
-    .then((client) => Effect.runPromise(client['schedule.keep']({ event })))
-    .catch((error: unknown) =>
-      console.warn('Keeping a schedule event failed', error),
-    );
