@@ -2,7 +2,6 @@ import { Card } from '@/components/ui/card';
 import { useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import {
-  ChevronRight,
   XCircle,
   Refresh,
   ArrowUp,
@@ -24,6 +23,7 @@ import type { Thread } from '../model';
 import { useDispatch } from '../store';
 import { ProviderMark } from '../ui';
 import { Expand } from '../WorkLog';
+import { FoldChevron } from '../Fold';
 import { askSecondOpinion, sendFindings } from './run';
 import {
   providerName,
@@ -61,12 +61,7 @@ function ReviewProgress({ review }: { review: Review }) {
         onClick={() => setOpen((o) => !o)}
         className="flex h-7 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground"
       >
-        <ChevronRight
-          className={cn(
-            'size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150',
-            isOpen && 'rotate-90',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         <AgentLoader
           phase={!current ? 'think' : READING.test(current) ? 'read' : 'run'}
           className="size-3.5 shrink-0 text-foreground"

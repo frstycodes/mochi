@@ -1,13 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import {
-  ArrowLeft,
-  BackgroundTask,
-  ChevronRight,
-  ArrowUp,
-  Stop,
-} from '@/icons';
+import { ArrowLeft, BackgroundTask, ArrowUp, Stop } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
@@ -64,6 +58,7 @@ import {
   Expand,
   RunOutput,
 } from '../WorkLog';
+import { FoldChevron } from '../Fold';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 import { queryKeys } from '../queryKeys';
@@ -126,13 +121,7 @@ function TaskList({ thread, tasks }: { thread: Thread; tasks: TaskRow[] }) {
               className="flex h-6 w-fit cursor-default items-center gap-1 rounded-md px-1 type-meta text-subtle-foreground hover:text-muted-foreground"
             >
               Finished <span className="tabular">{finished.length}</span>
-              <ChevronRight
-                aria-hidden
-                className={cn(
-                  'size-3 transition-transform duration-150',
-                  isFinishedOpen && 'rotate-90',
-                )}
-              />
+              <FoldChevron isOpen={isFinishedOpen} />
             </button>
             <Expand isOpen={isFinishedOpen}>
               <TaskCards thread={thread} tasks={finished} />
