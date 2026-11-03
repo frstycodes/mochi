@@ -80,6 +80,12 @@ export class AgentCaller extends Context.Service<
         catch: toAgentError,
       }),
   });
+
+  /** Every call succeeds and starts nothing. */
+  static readonly layerTest = Layer.succeed(this, {
+    call: () => Effect.void,
+    resolve: () => Effect.void,
+  });
 }
 
 /** A thread's worktree as Core knows it: the folder its agent ran in, while that is still on disk and isn't the project folder. */
