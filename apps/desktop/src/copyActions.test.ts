@@ -9,7 +9,7 @@ import {
   syncNeed,
 } from './copyActions.ts';
 import type { ProjectWithCopies } from './projectCopies.ts';
-import type { Computer } from './remote/computers.ts';
+import type { Computer } from './remote/computers.tsx';
 
 const pc = (status: FollowedMachine['status'], scopes: string[]): Computer => ({
   id: 'pc',
