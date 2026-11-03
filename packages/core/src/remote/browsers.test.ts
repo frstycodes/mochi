@@ -7,6 +7,7 @@ import { COMMAND_TYPE } from '@mochi/domain';
 import { coreUrl, makeCoreClient } from '../client.ts';
 import type { LocalCapability } from '../hostServer.ts';
 import { layerCore } from '../server.ts';
+import { AgentCaller } from '../store/commands.ts';
 
 const TOKEN = 'browsers-test-token';
 const THREAD = 'new-1';
@@ -36,6 +37,7 @@ const startCore = (browserView: LocalCapability) =>
         tokens: new Map([[TOKEN, Capabilities.allScopes]]),
         origins: [],
         browserView,
+        agents: AgentCaller.layerTest,
       }),
     );
     const { port } = Context.get(context, HttpServer.HttpServer).address as {
