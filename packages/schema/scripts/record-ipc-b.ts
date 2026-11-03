@@ -79,6 +79,15 @@ await record(
 );
 await record('projects.link', projects.link, 'personal', added.id, null);
 await record(
+  'projects.publish',
+  projects.publish,
+  'personal',
+  added.id,
+  'notes',
+  'private',
+  'alice',
+);
+await record(
   'projects.setIcon',
   projects.setIcon,
   'personal',

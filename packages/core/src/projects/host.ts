@@ -6,6 +6,7 @@ import {
   cloneProject,
   githubRepos,
   initProject,
+  publishFolder,
   publishProject,
 } from './add.ts';
 import { projectRegistry } from './registry.ts';
@@ -68,6 +69,24 @@ export const projectsHost = (userData: string) => {
     },
     async link(_caller, spaceId, projectId, linkId) {
       await changing(spaceId, registry.link(spaceId, projectId, linkId));
+    },
+    async publish(_caller, spaceId, projectId, name, visibility, githubUser) {
+      const project = (await registry.list(spaceId)).find(
+        (p) => p.id === projectId,
+      );
+      if (!project || project.isMissing)
+        throw new Error('That project isn’t in the list any more');
+      await publishFolder(
+        project.path,
+        name,
+        visibility,
+        githubAccount(githubUser),
+      );
+      // Relocating to the same folder reads its new origin.
+      return changing(
+        spaceId,
+        registry.relocate(spaceId, projectId, project.path),
+      );
     },
     async setIcon(_caller, spaceId, projectId, icon) {
       return changing(spaceId, registry.setIcon(spaceId, projectId, icon));

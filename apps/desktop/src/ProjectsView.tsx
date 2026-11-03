@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useId,
   useRef,
   useState,
   type ChangeEvent,
@@ -52,7 +53,10 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   InputGroup,
   InputGroupAddon,
@@ -79,6 +83,7 @@ import {
   copyBlocker,
   isAway,
   queuedClone,
+  repoNameFor,
   syncNeed,
   useCopyActions,
   useOutbox,
@@ -471,6 +476,11 @@ function ProjectDetail({
               }
               isMulti={isMulti}
               localProjects={localProjects}
+              cloneTo={computers.filter(
+                (c) =>
+                  !project.copies.some((k) => k.machineId === c.id) &&
+                  !copyBlocker(c),
+              )}
               onNewThread={() =>
                 newThread({ machineId: copy.machineId, ref: copy.ref })
               }
@@ -504,6 +514,7 @@ function CopyRow({
   computer,
   isMulti,
   localProjects,
+  cloneTo,
   onNewThread,
   onRename,
 }: {
@@ -513,6 +524,8 @@ function CopyRow({
   computer: Computer;
   isMulti: boolean;
   localProjects: Project[];
+  /** The computers without a copy that a published folder can be cloned onto. */
+  cloneTo: Computer[];
   onNewThread: () => void;
   onRename: () => void;
 }) {
@@ -585,6 +598,15 @@ function CopyRow({
               onSync={() => sync(copy, need)}
             />
           )}
+          {/* A project with no remote anywhere: the folder itself goes up, from the computer that holds it. */}
+          {!project.origin && !local?.isMissing && (
+            <PublishButton
+              project={project}
+              copy={copy}
+              computer={computer}
+              cloneTo={cloneTo}
+            />
+          )}
           <OverflowMenu
             actions={actions}
             label={`${project.name} on ${computer.name} actions`}
@@ -625,6 +647,105 @@ function QueuedCopyRow({
         Cancel
       </Button>
     </li>
+  );
+}
+
+/**
+ * Put on GitHub: the repository's name (the folder's, made safe), private by default, and the other computers it's then
+ * cloned onto, ticked. Runs on the computer that holds the folder, with its own GitHub login; that computer must be online.
+ */
+function PublishButton({
+  project,
+  copy,
+  computer,
+  cloneTo,
+}: {
+  project: ProjectWithCopies;
+  copy: ProjectCopy;
+  computer: Computer;
+  cloneTo: Computer[];
+}) {
+  const { publish } = useCopyActions();
+  const [isOpen, setOpen] = useState(false);
+  const [name, setName] = useState(() => repoNameFor(copy.name));
+  const [isPrivate, setPrivate] = useState(true);
+  const [isCloning, setCloning] = useState(true);
+  const [isBusy, setBusy] = useState(false);
+  const blocker = startBlocker(computer);
+  const nameId = useId();
+  const privateId = useId();
+  const cloneId = useId();
+  const submit = async () => {
+    setBusy(true);
+    const origin = await publish(project, copy, {
+      name: name.trim(),
+      visibility: isPrivate ? 'private' : 'public',
+      cloneTo: isCloning ? cloneTo : [],
+    });
+    setBusy(false);
+    if (origin) setOpen(false);
+  };
+  return (
+    <Popover open={isOpen} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="xs" disabled={!!blocker}>
+          <GithubMarkIcon className="size-3" />
+          Put on GitHub
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="flex w-80 flex-col gap-3 p-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={nameId}>Repository name</Label>
+          <Input
+            id={nameId}
+            autoFocus
+            value={name}
+            maxLength={100}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <label
+          htmlFor={privateId}
+          className="flex items-center justify-between gap-3 type-body"
+        >
+          Private
+          <Switch
+            id={privateId}
+            checked={isPrivate}
+            onCheckedChange={setPrivate}
+          />
+        </label>
+        {cloneTo.length > 0 && (
+          <label htmlFor={cloneId} className="flex items-start gap-2 type-body">
+            <Checkbox
+              id={cloneId}
+              checked={isCloning}
+              onCheckedChange={(on) => setCloning(on === true)}
+              className="mt-0.5"
+            />
+            <span className="flex min-w-0 flex-col">
+              Then clone it on every computer
+              <span className="type-caption text-muted-foreground">
+                {cloneTo.map((c) => c.name).join(', ')}; one that’s offline
+                clones when it’s back
+              </span>
+            </span>
+          </label>
+        )}
+        <p className="type-caption text-muted-foreground">
+          {computer.name} commits what’s in the folder and pushes it, with its
+          own GitHub login.
+        </p>
+        <Button
+          size="sm"
+          disabled={isBusy || !name.trim()}
+          onClick={() => void submit()}
+        >
+          {isBusy && <Spinner />}
+          Put on GitHub
+        </Button>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -296,6 +296,7 @@ export const HOST_SCOPES = {
     relocate: L,
     setFavorites: L,
     link: L,
+    publish: L,
     setIcon: L,
     githubRepos: L,
   },

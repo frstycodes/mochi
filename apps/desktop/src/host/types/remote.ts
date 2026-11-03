@@ -258,6 +258,16 @@ export type RemoteCommand =
    * login. Push is visible to others: the device asks its user first.
    */
   | { type: 'sync-project'; project: string; direction: 'pull' | 'push' }
+  /**
+   * A plain folder there onto GitHub as that computer's gh login (`projects.publish`); answers with its new origin in
+   * `detail`. Visible to others: the device asks its user first.
+   */
+  | {
+      type: 'publish-project';
+      project: string;
+      name: string;
+      visibility: 'private' | 'public';
+    }
   /** A Settings catalog row (`src/settings/catalog.ts`) on this computer only: never synced, never Devices, accounts or profiles. */
   | { type: 'setting'; key: string; value: string }
   // code

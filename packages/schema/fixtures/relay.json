@@ -38,6 +38,7 @@
     { "type": "link-project", "project": "p1", "linkId": null },
     { "type": "sync-project", "project": "p1", "direction": "pull" },
     { "type": "sync-project", "project": "p1", "direction": "push" },
+    { "type": "publish-project", "project": "p1", "name": "scratch", "visibility": "private" },
     { "type": "setting", "key": "shell", "value": "zsh" },
     { "type": "diff", "threadId": "t", "scope": "branch" },
     { "type": "checkpoint-diff", "threadId": "t", "n": 0 },

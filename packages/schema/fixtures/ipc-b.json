@@ -189,6 +189,29 @@
     ]
    }
   ],
+  "projects.publish": [
+   {
+    "input": [
+     "personal",
+     "60a1a905-df0c-432a-8c91-47acbec001a7",
+     "notes",
+     "private",
+     "alice"
+    ],
+    "output": {
+     "id": "60a1a905-df0c-432a-8c91-47acbec001a7",
+     "name": "Notes",
+     "path": "/Users/me/notes",
+     "origin": "github.com/alice/notes",
+     "addedAt": 1792651399796,
+     "iconMode": "auto",
+     "icon": null,
+     "favicon": null,
+     "isMissing": false,
+     "favoriteOrder": null
+    }
+   }
+  ],
   "projects.setIcon": [
    {
     "input": [

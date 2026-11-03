@@ -6,6 +6,7 @@ import {
   copyBlocker,
   isAway,
   queuedClone,
+  repoNameFor,
   syncNeed,
 } from './copyActions.ts';
 import type { ProjectWithCopies } from './projectCopies.ts';
@@ -78,6 +79,13 @@ test('a copy needs Push for commits of its own, Pull when only behind, nothing o
   assert.equal(syncNeed(at(0, 0)), null);
   assert.equal(syncNeed({ branch: 'wip', changed: 0 }), null);
   assert.equal(syncNeed(null), null);
+});
+
+test('a repository name comes from the folder’s, with what GitHub refuses dashed', () => {
+  assert.equal(repoNameFor('latitude'), 'latitude');
+  assert.equal(repoNameFor('My Notes (2026)'), 'My-Notes-2026');
+  assert.equal(repoNameFor('..hidden'), 'hidden');
+  assert.equal(repoNameFor('🥟'), 'project');
 });
 
 test('a GitHub remote clones as owner/repo with gh, any other host over HTTPS', () => {

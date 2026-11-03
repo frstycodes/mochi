@@ -131,8 +131,60 @@ export function useCopyActions() {
     });
   };
 
-  return { clone, link, unlink, sync };
+  /**
+   * Put on GitHub, run where the folder is, as that computer's GitHub login; then, if asked, a clone onto each computer in
+   * `cloneTo` (by mail for one that's offline). Resolves to the new origin, or undefined when it didn't happen.
+   */
+  const publish = async (
+    project: ProjectWithCopies,
+    copy: ProjectCopy,
+    {
+      name,
+      visibility,
+      cloneTo,
+    }: { name: string; visibility: 'private' | 'public'; cloneTo: Computer[] },
+  ) => {
+    const origin = await publishCopy(copy, name, visibility);
+    if (!origin) return undefined;
+    toast.success(`${project.name} is on GitHub`, { description: origin });
+    for (const computer of cloneTo)
+      await clone({ ...project, origin }, computer);
+    return origin;
+  };
+
+  async function publishCopy(
+    copy: ProjectCopy,
+    name: string,
+    visibility: 'private' | 'public',
+  ) {
+    if (!copy.local) {
+      const result = await run(copy.machineId!, {
+        type: 'publish-project',
+        project: copy.ref,
+        name,
+        visibility,
+      });
+      if (!result.isOk) return undefined;
+      refreshCatalog(copy.machineId!);
+      return result.detail;
+    }
+    return host.projects
+      .publish(spaceId, copy.local.id, name, visibility, githubUserOf(spaceId))
+      .then(
+        (published) => published.origin ?? undefined,
+        (error: unknown) =>
+          void toast.error(`Couldn’t put ${copy.name} on GitHub`, {
+            description: (error as Error).message,
+          }),
+      );
+  }
+
+  return { clone, link, unlink, sync, publish };
 }
+
+/** A repository name from a folder's: what GitHub accepts, the rest dashed. */
+export const repoNameFor = (folder: string) =>
+  folder.replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'project';
 
 /** The one git action a copy needs: Pull when it's only behind (a fast-forward), Push when it has commits of its own. */
 export function syncNeed(status: CopyStatus | null | undefined) {

@@ -67,6 +67,17 @@ export interface ProjectsHost {
   setFavorites(spaceId: string, ids: string[]): Promise<void>;
   /** Makes it a copy of the project other computers' copies carry `linkId` for; null makes it its own project again. */
   link(spaceId: string, id: string, linkId: string | null): Promise<void>;
+  /**
+   * Puts a plain folder on GitHub as a new repository named `name`, its origin, with a first commit pushed; refused when
+   * it already has a remote. `githubUser` as in `create`.
+   */
+  publish(
+    spaceId: string,
+    id: string,
+    name: string,
+    visibility: 'private' | 'public',
+    githubUser?: string,
+  ): Promise<Project>;
   /** An uploaded image (a data URL, up to 512 KB), `auto` to use the folder's favicon, or `none` for the letter. */
   setIcon(spaceId: string, id: string, icon: string): Promise<Project>;
   githubRepos(githubUser?: string): Promise<GithubRepo[]>;
@@ -88,6 +99,7 @@ export const projectsMethods = {
   setIcon: 'invoke',
   setFavorites: 'invoke',
   link: 'invoke',
+  publish: 'invoke',
   githubRepos: 'invoke',
   onChange: 'event',
   onProgress: 'event',

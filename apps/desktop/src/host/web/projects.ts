@@ -140,6 +140,10 @@ export const projects: ProjectsHost = {
   async link(spaceId, id, linkId) {
     update(spaceId, id, { linkId: linkId ?? undefined });
   },
+  async publish(spaceId, id, name) {
+    await wait(400);
+    return update(spaceId, id, { origin: `github.com/you/${name}` });
+  },
   async setIcon(spaceId, id, icon) {
     if (icon === 'auto' || icon === 'none')
       return update(spaceId, id, { iconMode: icon, icon: null });
