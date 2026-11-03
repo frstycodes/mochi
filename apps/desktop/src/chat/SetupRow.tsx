@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from '@/toast/store';
-import { Box, Check, ChevronRight, FileCopy, Terminal } from '@/icons';
+import { Box, Check, FileCopy, Terminal } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -126,13 +127,7 @@ function SetupStepRow({ step }: { step: SetupStep }) {
         )}
         <StepStatus step={step} />
         {hasDetail ? (
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150',
-              isOpen && 'rotate-90',
-            )}
-          />
+          <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         ) : (
           <span aria-hidden className="size-3.5 shrink-0" />
         )}

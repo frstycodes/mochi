@@ -17,7 +17,8 @@ import { threadUsage } from './usage/model';
 import { motion } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Hourglass, Sparkles } from '@/icons';
+import { Hourglass, Sparkles } from '@/icons';
+import { FoldChevron } from './Fold';
 import {
   Conversation,
   ConversationContent,
@@ -1231,11 +1232,7 @@ function QuestionTray({
           {first.title}
         </span>
         <span className="ml-auto text-subtle-foreground">
-          {isOpen ? (
-            <ChevronDown className="size-4" />
-          ) : (
-            <ChevronUp className="size-4" />
-          )}
+          <FoldChevron isOpen={isOpen} />
         </span>
       </motion.button>
       <ComposerTrayBody isOpen={isOpen}>

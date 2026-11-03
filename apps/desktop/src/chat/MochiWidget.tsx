@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Expand, FoldChevron } from '@/Fold';
 import {
-  ChevronRight,
   Cursor,
   Flag,
   Globe,
@@ -213,10 +213,12 @@ export function MochiWidget({ item }: { item: QueueItem }) {
           </ul>
         )}
         {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
-        {!!item.code && isCodeOpen && (
-          <pre className="-mx-(--card-spacing) max-h-48 overflow-auto bg-muted/40 px-(--card-spacing) py-2 font-mono type-caption whitespace-pre-wrap">
-            {item.code}
-          </pre>
+        {!!item.code && (
+          <Expand isOpen={isCodeOpen}>
+            <pre className="-mx-(--card-spacing) max-h-48 overflow-auto bg-muted/40 px-(--card-spacing) py-2 font-mono type-caption whitespace-pre-wrap">
+              {item.code}
+            </pre>
+          </Expand>
         )}
         {kind === 'choose' && (
           <RadioGroup
@@ -294,11 +296,7 @@ function ShowCodeButton({
       className="-ms-2 me-auto text-muted-foreground"
     >
       {isOpen ? 'Hide code' : 'Show code'}
-      <ChevronRight
-        aria-hidden
-        data-icon="inline-end"
-        className={cn('size-3 transition-transform', isOpen && 'rotate-90')}
-      />
+      <FoldChevron data-icon="inline-end" isOpen={isOpen} />
     </Button>
   );
 }

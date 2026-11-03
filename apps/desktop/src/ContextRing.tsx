@@ -1,3 +1,4 @@
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -15,12 +16,15 @@ import { LimitBars, UpdatedAt } from './usage/LimitBars';
 import { hottest, TONE_COLORS, toneFor } from './usage/limits';
 import type { Usage } from './usage/model';
 import { useAccountLimits } from './usage/useAccountLimits';
-import { TOKENS } from '@mochi/domain/lib/format';
+import { TOKEN_FORMAT, TOKENS } from '@mochi/domain/lib/format';
 import type { ContextUsage } from './host/types/agent';
 import { contextBreakdown, type ContextRow } from './usage/contextBreakdown';
 import { useContextUsage } from './usage/useContextUsage';
 
-const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
+const USD = {
+  style: 'currency',
+  currency: 'USD',
+} satisfies Intl.NumberFormatOptions;
 const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<
   Provider,
   string
@@ -111,12 +115,13 @@ export function ContextRing({
                   color: tone === 'normal' ? undefined : TONE_COLORS[tone],
                 }}
               >
-                {pct}%
+                <AnimatedNumber value={pct} suffix="%" />
               </span>
             }
           >
             <p className="tabular type-caption text-muted-foreground">
-              {TOKENS.format(context.used)} of {TOKENS.format(context.max)}{' '}
+              <AnimatedNumber value={context.used} format={TOKEN_FORMAT} /> of{' '}
+              <AnimatedNumber value={context.max} format={TOKEN_FORMAT} />{' '}
               tokens
             </p>
             {breakdown ? (
@@ -144,16 +149,26 @@ export function ContextRing({
               aside={
                 usage.costUsd !== null && (
                   <span className="tabular type-caption text-muted-foreground">
-                    {USD.format(usage.costUsd)}
+                    <AnimatedNumber value={usage.costUsd} format={USD} />
                   </span>
                 )
               }
             >
               <p className="tabular type-caption text-muted-foreground">
-                {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)}{' '}
+                <AnimatedNumber value={usage.input} format={TOKEN_FORMAT} /> in
+                · <AnimatedNumber value={usage.output} format={TOKEN_FORMAT} />{' '}
                 out
-                {usage.cached !== undefined &&
-                  ` · ${TOKENS.format(usage.cached)} cached`}
+                {usage.cached !== undefined && (
+                  <>
+                    {' '}
+                    ·{' '}
+                    <AnimatedNumber
+                      value={usage.cached}
+                      format={TOKEN_FORMAT}
+                    />{' '}
+                    cached
+                  </>
+                )}
               </p>
             </Section>
           )}
@@ -176,10 +191,11 @@ export function ContextRing({
   );
 }
 
-const PERCENT = new Intl.NumberFormat('en', {
+const PERCENT_FORMAT = {
   style: 'percent',
   maximumFractionDigits: 1,
-});
+} satisfies Intl.NumberFormatOptions;
+const PERCENT = new Intl.NumberFormat('en', PERCENT_FORMAT);
 
 /** The window as one stacked bar, then each category with its tokens and share; deferred tools listed apart, outside the window. */
 function ContextBreakdown({
@@ -249,10 +265,10 @@ function ContextLegendRow({ row }: { row: ContextRow }) {
         {row.name}
       </span>
       <span className="tabular text-muted-foreground">
-        {TOKENS.format(row.tokens)}
+        <AnimatedNumber value={row.tokens} format={TOKEN_FORMAT} />
       </span>
       <span className="w-11 shrink-0 text-right tabular text-subtle-foreground">
-        {PERCENT.format(row.share)}
+        <AnimatedNumber value={row.share} format={PERCENT_FORMAT} />
       </span>
     </li>
   );
