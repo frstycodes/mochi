@@ -1,4 +1,4 @@
-import { ArrowUp, Check, CheckSingle, X } from '@/icons';
+import { ArrowUp, Check, CheckRead, X } from '@/icons';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import {
   Tooltip,
@@ -152,7 +152,7 @@ export function ReadMark({
   const label = isRead
     ? `Seen by ${agent}`
     : `Not read yet: ${agent} takes it at its next step`;
-  const Icon = isRead ? Check : CheckSingle;
+  const Icon = isRead ? CheckRead : Check;
   return (
     <Tooltip>
       <TooltipTrigger asChild>

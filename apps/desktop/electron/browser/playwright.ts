@@ -61,7 +61,9 @@ export function dropPage(entry: Automated) {
     .catch(() => {});
   // A view whose page closed itself has no webContents left.
   const wc = entry.view.webContents as WebContents | undefined;
-  if (!wc || wc.isDestroyed() || !wc.debugger.isAttached()) return;
+  if (!wc || wc.isDestroyed()) return;
+  wc.setBackgroundThrottling(true);
+  if (!wc.debugger.isAttached()) return;
   for (const [method, params] of RESETS)
     wc.debugger.sendCommand(method, params).catch(() => {});
 }
@@ -96,6 +98,9 @@ async function open(entry: Automated, automation: Automation) {
   await dbg.sendCommand('Emulation.setFocusEmulationEnabled', {
     enabled: true,
   });
+  // On Linux a window hidden after a hover stops sending frames despite focus emulation, and Playwright's stability check
+  // waits on requestAnimationFrame: without this a click in a hidden window waits out its timeout.
+  wc.setBackgroundThrottling(false);
   const browser = await chromium.connectOverCDP(relay.endpoint, {
     timeout: CONNECT_TIMEOUT_MS,
     isLocal: true,

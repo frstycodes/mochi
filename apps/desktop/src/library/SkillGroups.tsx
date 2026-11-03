@@ -1,6 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import { ChevronDown } from '@/icons';
-import { cn } from '@/lib/utils';
+import { FoldChevron } from '@/Fold';
 import {
   Accordion,
   AccordionContent,
@@ -96,12 +95,7 @@ function GroupRow({
             aria-hidden
             onClick={onToggle}
           >
-            <ChevronDown
-              className={cn(
-                'transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
-                isOpen && 'rotate-180',
-              )}
-            />
+            <FoldChevron isOpen={isOpen} />
           </Button>
         </div>
       </div>

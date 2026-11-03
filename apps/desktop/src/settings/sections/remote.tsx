@@ -37,6 +37,7 @@ import {
   SettingsRow,
   settingControlId,
 } from '../parts';
+import { AnimatedText } from '../../ui';
 
 /** Turning on remote access, how far it reaches, what this computer is called, your computers, and joining them. */
 export function RemoteSection() {
@@ -187,10 +188,14 @@ function RelayState({ status }: { status: RemoteStatus }) {
   const { relay } = status;
   if (relay.status === 'error')
     return <span className="text-warning">{relay.error}</span>;
-  if (relay.status === 'connected') return 'Connected to Mochi’s relay';
-  if (relay.status === 'connecting') return 'Connecting to Mochi’s relay…';
-  return 'Off';
+  return <AnimatedText>{RELAY_LABELS[relay.status]}</AnimatedText>;
 }
+
+const RELAY_LABELS = {
+  connected: 'Connected to Mochi’s relay',
+  connecting: 'Connecting to Mochi’s relay…',
+  off: 'Off',
+} satisfies Record<Exclude<RemoteStatus['relay']['status'], 'error'>, string>;
 
 function Members({ status }: { status: RemoteStatus }) {
   const { confirm, dialog } = useConfirm();
