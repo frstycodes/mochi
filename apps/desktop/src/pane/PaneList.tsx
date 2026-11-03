@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { Item, ItemActions } from '@/components/ui/item';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { cn } from '@/lib/utils';
 
 export function PaneSection({
@@ -45,9 +46,10 @@ export function PaneSectionTitle({
     >
       {children}
       {count !== undefined && (
-        <span className="font-normal tabular-nums text-muted-foreground">
-          {count}
-        </span>
+        <AnimatedNumber
+          value={count}
+          className="font-normal text-muted-foreground"
+        />
       )}
     </h3>
   );

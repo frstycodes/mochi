@@ -19,6 +19,7 @@ import type {
   Trigger,
   TriggerInput,
 } from '../../../../apps/desktop/src/host/types/schedule.ts';
+import type { Provider } from '../../../../apps/desktop/src/model.ts';
 import { describeCron, parseCron } from '@mochi/domain/schedule/cron';
 import {
   afterLaunch,
@@ -35,24 +36,23 @@ import { agent } from '../agents/handlers.ts';
 import { keyedStreams } from '../github/client.ts';
 import type { OpenPr } from '../github/schema.ts';
 import { GitHub } from '../github/service.ts';
+import { asJsonValue, COMMAND_TYPE } from '@mochi/domain';
 import { Store } from '../store/store.ts';
 
-/** What the scheduler tells whoever is listening (main, which hands it to the windows or keeps it with `keep`). */
-export type Change =
-  | { readonly type: 'change'; readonly triggers: ReadonlyArray<Trigger> }
-  | { readonly type: 'event'; readonly event: ScheduleEvent };
+/** What the scheduler tells whoever is listening (main, which hands the triggers to the windows). */
+export type Change = {
+  readonly type: 'change';
+  readonly triggers: ReadonlyArray<Trigger>;
+};
 
 interface Saved {
   version: 1;
   triggers: Trigger[];
-  outbox: ScheduleEvent[];
 }
 
 const TICK = '30 seconds';
 // PR triggers whose thread was busy when their PRs changed fire on this beat once it's idle.
 const POLL = '2 minutes';
-// A day of quiet windows stays far under this; past it the oldest agent events go, run events are always kept.
-const MAX_OUTBOX = 5_000;
 const MAX_SEEN = 500;
 const SAVE_DEBOUNCE = '200 millis';
 
@@ -78,8 +78,8 @@ const messageOf = (error: unknown) =>
 
 /**
  * Triggers live in Core, so they fire while every window is closed (Mochi still running). A run starts the thread's
- * agent through the same `agent.start` a window calls, so the concurrency cap and the profile's account apply. While no
- * window is open, main hands run and agent events back with `keep` and the next window's `drain` collects them.
+ * agent through the same `agent.start` a window calls, so the concurrency cap and the profile's account apply. A run's
+ * start and end are logged in Core's log, so every view folds them, whether or not a window is open.
  */
 export class Scheduler extends Context.Service<Scheduler>()(
   'mochi/core/Scheduler',
@@ -114,7 +114,6 @@ export class Scheduler extends Context.Service<Scheduler>()(
           launchedAt,
         ),
       );
-      let outbox: ScheduleEvent[] = saved?.outbox ?? [];
       /** PR trigger's thread id → the open PRs Core last read for its watch, and which watch they came from. */
       const openPrs = new Map<
         string,
@@ -130,7 +129,6 @@ export class Scheduler extends Context.Service<Scheduler>()(
         .setDoc('schedule', 'schedules', {
           version: 1,
           triggers,
-          outbox,
         } satisfies Saved)
         .pipe(
           // The next change writes the whole document again.
@@ -152,7 +150,6 @@ export class Scheduler extends Context.Service<Scheduler>()(
       // As JSON: a run's outcome leaves optional fields undefined, which the socket's encoder refuses.
       const publish = (change: Change) =>
         PubSub.publishUnsafe(changes, JSON.parse(JSON.stringify(change)));
-      const emit = (event: ScheduleEvent) => publish({ type: 'event', event });
 
       const prStreams = keyedStreams(
         ({ cwd, isReviewRequested, githubUser }: PrWatch) =>
@@ -204,7 +201,7 @@ export class Scheduler extends Context.Service<Scheduler>()(
         };
         const trigger = triggers.find((t) => t.threadId === threadId);
         if (trigger) record(trigger, run);
-        emit({ type: 'run-end', run, name: current.name });
+        fork(logRun(store, { type: 'run-end', run, name: current.name }));
       }
 
       /** A trigger saved before workspaces carries `worktree: <branch>`; the start RPC takes only `workspace`. */
@@ -243,22 +240,27 @@ export class Scheduler extends Context.Service<Scheduler>()(
             message: '',
           });
           record(trigger, run);
-          emit({ type: 'run-start', run, name: trigger.name, prompt });
-          return Effect.tryPromise({
-            try: () =>
-              agent.start(
-                undefined,
-                trigger.threadId,
-                startOptions(trigger, prompt),
+          const start = startOptions(trigger, prompt);
+          return logRunStart(
+            store,
+            { type: 'run-start', run, name: trigger.name, prompt },
+            start.provider,
+          )
+            .pipe(
+              Effect.andThen(
+                Effect.tryPromise({
+                  try: () => agent.start(undefined, trigger.threadId, start),
+                  catch: messageOf,
+                }),
               ),
-            catch: messageOf,
-          }).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                finish(trigger.threadId, { status: 'failed', error }),
+            )
+            .pipe(
+              Effect.catch((error) =>
+                Effect.sync(() =>
+                  finish(trigger.threadId, { status: 'failed', error }),
+                ),
               ),
-            ),
-          );
+            );
         });
 
       const tick = Effect.sync(() => {
@@ -409,43 +411,6 @@ export class Scheduler extends Context.Service<Scheduler>()(
               );
             return startRun(trigger, 'Run now', trigger.prompt);
           }),
-        drain: Effect.sync(() => {
-          const events = outbox;
-          outbox = [];
-          Queue.offerUnsafe(saves, undefined);
-          return events;
-        }),
-        /** Main had no window to hand `event` to: it waits for the next window's `drain`. Agent text deltas fold into the previous kept event, so a long run keeps one message per turn. */
-        keep: (event: ScheduleEvent) =>
-          Effect.sync(() => {
-            const last = outbox.at(-1);
-            if (
-              event.type === 'agent' &&
-              event.event.type === 'message' &&
-              event.event.isDelta &&
-              last?.type === 'agent' &&
-              last.event.type === 'message' &&
-              last.event.threadId === event.event.threadId
-            ) {
-              outbox = [
-                ...outbox.slice(0, -1),
-                {
-                  type: 'agent',
-                  event: {
-                    ...last.event,
-                    text: last.event.text + event.event.text,
-                  },
-                },
-              ];
-            } else {
-              outbox = [...outbox, event];
-            }
-            if (outbox.length > MAX_OUTBOX) {
-              const drop = outbox.findIndex((e) => e.type === 'agent');
-              if (drop >= 0) outbox.splice(drop, 1);
-            }
-            Queue.offerUnsafe(saves, undefined);
-          }),
         changes: Stream.fromPubSub(changes),
       };
       live = service;
@@ -464,6 +429,49 @@ let live: Scheduler['Service'] | undefined;
 /** A deleted thread loses its schedule; for the store's commands, which are built before the scheduler is. */
 export const removeSchedule = (threadId: string) =>
   live?.remove(threadId) ?? Effect.void;
+
+export const setSchedule = (input: TriggerInput) =>
+  live?.set(input) ?? Effect.void;
+
+export const listSchedules = () => live?.list ?? Effect.succeed([]);
+
+/** A run's start or end, logged in Core's log as the command every view folds (`scheduleReducer`). */
+const logRun = (
+  store: Store['Service'],
+  event: Extract<ScheduleEvent, { type: 'run-start' | 'run-end' }>,
+) =>
+  store
+    .append({
+      type: COMMAND_TYPE,
+      threadId: event.run.threadId,
+      payload: asJsonValue({ type: 'schedule-run', event }),
+    })
+    .pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Logging a run failed: ${messageOf(error)}`),
+      ),
+    );
+
+/** A run's start, then its thread as starting: logged before the agent starts, so its reply folds after them and every view shows it starting. */
+export const logRunStart = (
+  store: Store['Service'],
+  event: Extract<ScheduleEvent, { type: 'run-start' }>,
+  provider: Provider,
+) =>
+  logRun(store, event).pipe(
+    Effect.andThen(
+      store.append({
+        type: COMMAND_TYPE,
+        threadId: event.run.threadId,
+        payload: {
+          type: 'agent-starting',
+          threadId: event.run.threadId,
+          provider,
+        },
+      }),
+    ),
+    Effect.ignore,
+  );
 
 const strip = ({ seen: _seen, ...trigger }: Trigger): Trigger => trigger;
 const runId = () => `run-${randomUUID()}`;

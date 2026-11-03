@@ -3,6 +3,7 @@ import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
 import { host } from '../host/index.ts';
 import type {
   MachineCatalog,
+  RemoteCommand,
   RemoteThreadAction,
   RemoteWorkspace,
 } from '../host/types/remote.ts';
@@ -377,6 +378,40 @@ test('operate and manage commands dispatch the same actions the UI does, and the
     true,
     'a device never moves the view on this machine',
   );
+});
+
+test('a new thread starts on the device’s picks, else on this computer’s default model', async () => {
+  const { state } = machine();
+  vi.spyOn(host.settings, 'get').mockImplementation(
+    async () =>
+      ({
+        harnesses: { claude: { model: 'opus' }, codex: { model: '' } },
+      }) as never,
+  );
+  const startedWith = async (
+    controls?: Extract<RemoteCommand, { type: 'create' }>['controls'],
+  ) => {
+    const dispatched: Action[] = [];
+    await runRemoteCommand(
+      {
+        type: 'create',
+        title: 'Write the changelog',
+        provider: 'claude',
+        project: null,
+        ...(controls && { controls }),
+      },
+      device(state, 'Laptop', dispatched),
+    );
+    return (dispatched.at(-1) as Extract<Action, { type: 'create' }>).controls;
+  };
+  const picked = {
+    model: 'sonnet',
+    effort: 'low',
+    speed: '',
+    access: 'Auto',
+  } as const;
+  assert.deepEqual(await startedWith(picked), picked);
+  assert.equal((await startedWith())?.model, 'opus');
 });
 
 test('commands that would change nothing say so or do nothing', async () => {

@@ -263,7 +263,7 @@ function NewThread() {
         title,
         provider,
         project: place.ref,
-        ...(picked && { controls }),
+        controls,
         ...(images.length > 0 && { images }),
         ...(remoteProject && { workspace: remoteWorkspace(workspaceDraft) }),
       });
