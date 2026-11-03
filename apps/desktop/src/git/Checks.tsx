@@ -1,10 +1,5 @@
-import {
-  ChevronDown,
-  XCircle,
-  MinusCircle,
-  CheckCircle,
-  type IconComponent,
-} from '@/icons';
+import { XCircle, MinusCircle, CheckCircle, type IconComponent } from '@/icons';
+import { FoldChevron } from '../Fold';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { CheckState, PrCheck } from '../host/types/git';
@@ -64,12 +59,10 @@ export function ChecksSummary({
       <span className="tabular">
         {failed ? `${failed} failing` : `${passed}/${checks.length} checks`}
       </span>
-      <ChevronDown
+      <FoldChevron
         data-icon="inline-end"
-        className={cn(
-          'text-subtle-foreground transition-transform duration-150',
-          isOpen && 'rotate-180',
-        )}
+        isOpen={isOpen}
+        className="text-subtle-foreground"
       />
     </Button>
   );

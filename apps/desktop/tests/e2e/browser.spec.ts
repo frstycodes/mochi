@@ -672,6 +672,8 @@ test.describe('electron/browser/views.ts', () => {
   });
 
   test('k. click in a hidden window', async () => {
+    // A pointer over the page when its window hides is what stopped frames on Linux; earlier tests leave it there only sometimes.
+    await act({ kind: 'hover', ref: ref('button', 'Count') });
     await rpc('views.setHidden', [KEY, true]);
     await expect.poll(() => rpc('views.isVisible', [KEY])).toBe(false);
     await act({ kind: 'click', ref: ref('button', 'Count') });
@@ -733,6 +735,86 @@ test.describe('electron/browser/views.ts', () => {
     snap = await rpc<Snapshot>('views.snapshot', [KEY]);
     await act({ kind: 'click', ref: ref('button', 'Count') });
     expect(await dom("document.getElementById('count').textContent")).toBe('1');
+  });
+});
+
+test.describe('views.ts relayed to Core', () => {
+  const KEY = 'relayed';
+  const relayed = (type: string) =>
+    rpc<{ type: string; url?: string }[]>('views.relayed', [KEY, type]);
+  const dom = (expression: string) =>
+    rpc<string>('views.dom', [KEY, expression]);
+
+  test.beforeAll(async () => {
+    await rpc('views.open', [KEY]);
+    await rpc('views.relay', [KEY]);
+    await expect.poll(() => rpc('views.isLoaded', [KEY])).toBe(true);
+  });
+
+  test('l. a page Core opened relays its state and frames to Core, and a device’s click lands', async () => {
+    await rpc('views.run', [KEY, 'reload']);
+    await expect
+      .poll(async () => (await relayed('state')).at(-1)?.url ?? '')
+      .toContain('browser-smoke.html');
+    await rpc('views.mirror', [KEY, { width: 900, height: 700 }]);
+    await expect
+      .poll(async () => (await relayed('frame')).length)
+      .toBeGreaterThan(0);
+
+    const at = await dom(
+      "JSON.stringify((({ x, y, width, height }) => ({ x: x + width / 2, y: y + height / 2 }))(document.getElementById('counter').getBoundingClientRect()))",
+    );
+    const count = () =>
+      dom("document.getElementById('count').textContent").then(Number);
+    const before = await count();
+    const frames = (await relayed('frame')).length;
+    await rpc('views.input', [KEY, { kind: 'click', ...JSON.parse(at) }]);
+    expect(await count()).toBe(before + 1);
+    // The click changed the page, so the device gets a new frame.
+    await expect
+      .poll(async () => (await relayed('frame')).length)
+      .toBeGreaterThan(frames);
+
+    await rpc('views.mirror', [KEY, null]);
+  });
+
+  test('m. a device watching gets frames while this computer’s window is hidden or minimized', async () => {
+    await rpc('views.mirror', [KEY, { width: 900, height: 700 }]);
+    await expect
+      .poll(async () => (await relayed('frame')).length)
+      .toBeGreaterThan(0);
+    const at = await dom(
+      "JSON.stringify((({ x, y, width, height }) => ({ x: x + width / 2, y: y + height / 2 }))(document.getElementById('counter').getBoundingClientRect()))",
+    );
+    const clickChangesFrame = async () => {
+      const frames = (await relayed('frame')).length;
+      await rpc('views.input', [KEY, { kind: 'click', ...JSON.parse(at) }]);
+      await expect
+        .poll(async () => (await relayed('frame')).length)
+        .toBeGreaterThan(frames);
+      // The 900 px viewport, at most MIRROR_MAX_WIDTH (960) on a 2x display: a real capture, not an empty one.
+      const { width } = await rpc<{ width: number }>('views.lastFrameSize', [
+        KEY,
+      ]);
+      expect(width).toBeGreaterThanOrEqual(900);
+    };
+
+    await rpc('views.setHidden', [KEY, true]);
+    await expect.poll(() => rpc('views.isVisible', [KEY])).toBe(false);
+    await clickChangesFrame();
+    await rpc('views.setHidden', [KEY, false]);
+
+    // CI's Linux runs under Xvfb with no window manager, which never minimizes a window.
+    if (process.platform !== 'linux') {
+      await rpc('views.setMinimized', [KEY, true]);
+      await expect.poll(() => rpc('views.isMinimized', [KEY])).toBe(true);
+      await clickChangesFrame();
+      await rpc('views.setMinimized', [KEY, false]);
+    }
+
+    await rpc('views.mirror', [KEY, null]);
+    await rpc('views.close', [KEY]);
+    expect(await relayed('closed')).toHaveLength(1);
   });
 });
 

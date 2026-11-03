@@ -20,6 +20,7 @@ import { visibleSnapshot } from './remote/visible.ts';
 import { CoreWsRpcs, Unauthorized } from './rpc.ts';
 import { isClassified, scopeOf } from './scopes.ts';
 import { layerCore, refusal } from './server.ts';
+import { AgentCaller } from './store/commands.ts';
 
 const TOKEN = 'local-token';
 const TAGS = [...CoreWsRpcs.requests.keys()];
@@ -117,6 +118,11 @@ it('what a device may call directly, by scope', () => {
       'agent.stop',
       'agent.stopTask',
       'agent.unsteer',
+      'page.input',
+      'page.navigate',
+      'page.open',
+      'page.unwatch',
+      'page.watch',
     ],
     manage: [
       'agent.keepTitle',
@@ -133,6 +139,22 @@ it('what a device may call directly, by scope', () => {
 it('a command the adapter runs as an RPC needs that RPC’s scope', () => {
   const commands: Relay.RemoteCommand[] = [
     { type: 'setup-choice', threadId: 't', choice: 'retry' },
+    {
+      type: 'browser-open',
+      threadId: 't',
+      tabId: 'b',
+      url: 'http://localhost:5173/',
+      width: 800,
+      height: 600,
+    },
+    {
+      type: 'browser-input',
+      threadId: 't',
+      tabId: 'b',
+      input: { kind: 'key', key: 'Enter' },
+    },
+    { type: 'browser-navigate', threadId: 't', tabId: 'b', to: 'reload' },
+    { type: 'browser-close', threadId: 't', tabId: 'b' },
     ...(['run', 'pause', 'resume', 'remove'] as const).map(
       (action): Relay.RemoteCommand => ({
         type: 'schedule',
@@ -186,6 +208,7 @@ const startCore = Effect.gen(function* () {
       port: 0,
       tokens: new Map([[TOKEN, Capabilities.allScopes]]),
       origins: [],
+      agents: AgentCaller.layerTest,
     }),
   );
   return (
@@ -265,12 +288,28 @@ it.live('a device’s scopes hold over its own socket', () =>
     const port = yield* startCore;
     const reader = yield* deviceOn(port, ['read']);
     assert.equal(yield* reader.ping(), 'pong');
-    const operate = yield* host(reader)['agent.interrupt']!(['t']).pipe(
-      Effect.exit,
-    );
+    for (const call of [
+      host(reader)['agent.interrupt']!(['t']),
+      reader['page.watch']({ threadId: 't', tabId: 'b' }).pipe(Stream.runDrain),
+      reader['page.input']({
+        threadId: 't',
+        tabId: 'b',
+        input: { kind: 'click', x: 1, y: 1 },
+      }),
+    ]) {
+      const operate = yield* Effect.exit(call);
+      assert.equal(
+        Exit.isFailure(operate) &&
+          (Cause.squash(operate.cause) as Unauthorized).scope,
+        'operate',
+      );
+    }
+    const command = yield* reader['device.command']({
+      command: { type: 'browser-close', threadId: 't', tabId: 'b' },
+    }).pipe(Effect.exit);
     assert.equal(
-      Exit.isFailure(operate) &&
-        (Cause.squash(operate.cause) as Unauthorized).scope,
+      Exit.isFailure(command) &&
+        (Cause.squash(command.cause) as Unauthorized).scope,
       'operate',
     );
     const everything = yield* deviceOn(port, DEVICE);

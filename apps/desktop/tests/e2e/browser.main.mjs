@@ -3,6 +3,7 @@
 import {
   app,
   BrowserWindow,
+  nativeImage,
   session,
   WebContentsView,
   webContents,
@@ -331,7 +332,7 @@ const pwApi = {
     });
     pw.view = createView(pw.win);
     await pw.view.webContents.loadURL(`${a}/browser-smoke.html`);
-    pw.entry = { view: pw.view, automation: null };
+    pw.entry = { view: pw.view, automation: null, mirror: null };
   },
   async reuse() {
     const { playwright } = await ready;
@@ -378,6 +379,7 @@ const pwApi = {
 
 // electron/browser/views.ts as the IPC handlers call it. Each opened view keeps the events it sent its owner.
 const V = new Map();
+const RELAYED = new Map();
 const tab = (key) => {
   const entry = V.get(key);
   if (!entry) throw new Error(`no harness view ${key}`);
@@ -465,6 +467,27 @@ const viewsApi = {
     t.win.destroy();
     V.delete(key);
   },
+  // As main does for a view Core opened (`relayView`): its events also go to Core, kept here as `relayed`.
+  async relay([key]) {
+    const { views } = await ready;
+    const relayed = [];
+    RELAYED.set(key, relayed);
+    views.relayView(tab(key).id, (event) => relayed.push(event));
+  },
+  // Kept past `close`, which is when the view says it closed.
+  relayed: ([key, type]) => RELAYED.get(key).filter((e) => e.type === type),
+  lastFrameSize([key]) {
+    const frame = RELAYED.get(key).findLast((e) => e.type === 'frame');
+    return frame && nativeImage.createFromDataURL(frame.data).getSize();
+  },
+  async mirror([key, viewport]) {
+    const { views } = await ready;
+    await views.setViewMirror(tab(key).owner, tab(key).id, viewport);
+  },
+  async input([key, input]) {
+    const { views } = await ready;
+    await views.inputToView(tab(key).owner, tab(key).id, input);
+  },
   // The user clicking in the page, not an agent action.
   userClicks: ([key, selector]) =>
     void tab(key)
@@ -473,6 +496,9 @@ const viewsApi = {
   crash: ([key]) => tab(key).wc.forcefullyCrashRenderer(),
   setHidden: ([key, hidden]) =>
     hidden ? tab(key).win.hide() : tab(key).win.show(),
+  setMinimized: ([key, minimized]) =>
+    minimized ? tab(key).win.minimize() : tab(key).win.restore(),
+  isMinimized: ([key]) => tab(key).win.isMinimized(),
   isVisible: ([key]) => tab(key).win.isVisible(),
   webContentsCount: () => webContents.getAllWebContents().length,
   popupHardening() {

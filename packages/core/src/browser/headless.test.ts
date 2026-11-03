@@ -157,6 +157,41 @@ it.live(
         /^data:image\/jpeg;base64,/,
       );
       yield* Effect.promise(() => call('browser.mirror', [id, null]));
+
+      // A watching device clicks at a point and types, as a person at the page would.
+      const at = JSON.parse(
+        (
+          (yield* Effect.promise(() =>
+            call('browser.eval', [
+              id,
+              `(() => { const r = document.querySelector('button').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`,
+            ]),
+          )) as { value: string }
+        ).value,
+      ) as { x: number; y: number };
+      yield* Effect.promise(() =>
+        call('browser.input', [id, { kind: 'click', ...at }]),
+      );
+      const clicked = (yield* Effect.promise(() =>
+        call('browser.waitFor', [
+          id,
+          { text: 'Clicked 2 times', timeoutMs: 5000 },
+        ]),
+      )) as { isMet: boolean };
+      assert.equal(clicked.isMet, true);
+      yield* Effect.promise(() =>
+        call('browser.eval', [
+          id,
+          `document.body.insertAdjacentHTML('beforeend', '<input id=field>'); document.getElementById('field').focus()`,
+        ]),
+      );
+      yield* Effect.promise(() =>
+        call('browser.input', [id, { kind: 'text', text: 'hi' }]),
+      );
+      const typed = (yield* Effect.promise(() =>
+        call('browser.eval', [id, `document.getElementById('field').value`]),
+      )) as { value: string };
+      assert.equal(typed.value, '"hi"');
       yield* Effect.promise(() => call('browser.destroy', [id]));
     }).pipe(Effect.scoped),
   60_000,

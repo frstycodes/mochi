@@ -9,6 +9,7 @@ import {
   type IconComponent,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import {
   Dialog,
   DialogContent,
@@ -71,7 +72,7 @@ export function SidebarNav({
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="h-8 text-sm [&_svg]:size-4.5">
+            <SidebarMenuButton className="h-8 text-sm">
               <OverflowIcon />
               <span>More</span>
             </SidebarMenuButton>
@@ -193,7 +194,7 @@ export function NavItem({
       <SidebarMenuButton
         isActive={isActive}
         onClick={onClick}
-        className="h-8 text-sm [&_svg]:size-4.5"
+        className="h-8 text-sm"
       >
         {icon}
         <span>{label}</span>
@@ -204,7 +205,9 @@ export function NavItem({
         )}
       </SidebarMenuButton>
       {badge !== undefined && (
-        <SidebarMenuBadge className="tabular">{badge}</SidebarMenuBadge>
+        <SidebarMenuBadge>
+          <AnimatedNumber value={badge} />
+        </SidebarMenuBadge>
       )}
     </SidebarMenuItem>
   );

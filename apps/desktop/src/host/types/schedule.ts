@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentStartOptions } from './agent.ts';
+import type { AgentStartOptions } from './agent.ts';
 import type { AutofixEvent } from '../../git/autofix.ts';
 import type { CiResult } from '../../notify/watch.ts';
 import type { Manifest } from '@mochi/domain/host/types/manifest';
@@ -64,16 +64,14 @@ export interface ScheduleRun {
   resetsAt?: string;
 }
 
-/** What main tells windows about runs. Sent live when a window is open, otherwise kept and handed out by `drain` on the next window. */
+/** A run's start or end (logged by Core's scheduler), a PR's settled checks or an Auto-fix change (appended by main); each folds as its command. */
 export type ScheduleEvent =
   | { type: 'run-start'; run: ScheduleRun; name: string; prompt: string }
   | { type: 'run-end'; run: ScheduleRun; name: string }
   /** A watched thread's PR checks settled (`src/notify/watch.ts`); a failure becomes a Queue item. */
   | { type: 'ci'; threadId: string; result: CiResult }
   /** An Auto-fix PR changed (`src/git/autofix.ts`): it goes to the thread's agent as its own message, or turns Auto-fix off. */
-  | { type: 'autofix'; threadId: string; event: AutofixEvent }
-  /** An agent event that happened while no window was open. */
-  | { type: 'agent'; event: AgentEvent };
+  | { type: 'autofix'; threadId: string; event: AutofixEvent };
 
 export interface ScheduleHost {
   list(): Promise<Trigger[]>;
@@ -83,10 +81,7 @@ export interface ScheduleHost {
   setPaused(threadId: string, isPaused: boolean): Promise<void>;
   /** Starts a run now unless one is going; a busy thread throws. */
   runNow(threadId: string): Promise<void>;
-  /** Events kept while no window was open, oldest first; returns each only once. */
-  drain(): Promise<ScheduleEvent[]>;
   onChange(listener: (triggers: Trigger[]) => void): () => void;
-  onEvent(listener: (event: ScheduleEvent) => void): () => void;
 }
 
 export const scheduleMethods = {
@@ -95,7 +90,5 @@ export const scheduleMethods = {
   remove: 'invoke',
   setPaused: 'invoke',
   runNow: 'invoke',
-  drain: 'invoke',
   onChange: 'event',
-  onEvent: 'event',
 } satisfies Manifest<ScheduleHost>;
