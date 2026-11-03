@@ -33,12 +33,10 @@ import {
 import { useLimitDocs } from './limits.ts';
 import { push } from './events.ts';
 import { mochiToolWithoutMain, useMain } from './main.ts';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolName } from '@mochi/domain/runtime/toolTable';
 import { agentBrowserTools } from '../browser/agentTools.ts';
-import { NO_WINDOW } from '../browser/answers.ts';
 import { Commands } from '../store/commands.ts';
-import { CORE_TOOLS, coreToolRunner } from './coreTools.ts';
+import { CORE_TOOLS, coreToolRunner, hearDecisions } from './coreTools.ts';
 import { setThreadHistory } from './mochiTools.ts';
 import { noteLogin } from './models.ts';
 import { setDataDir } from './paths.ts';
@@ -135,6 +133,7 @@ export const layerAgents = (userData: string | undefined) =>
       // The call crosses as JSON: an `undefined` field is dropped and an `undefined` argument arrives as null.
       // With no main (`mochi serve`), Mochi's tools are answered here; every other call fails as unavailable, as before.
       const coreTool = coreToolRunner(projection, yield* Commands);
+      yield* hearDecisions(projection).pipe(Effect.forkScoped);
       // Thread tools Core runs itself; every other tool is the browser's here, or answers that it needs the app.
       const withoutWindow = (thread: string, name: string, args: unknown) =>
         CORE_TOOLS.has(name as ToolName)
@@ -146,20 +145,13 @@ export const layerAgents = (userData: string | undefined) =>
           method,
           JSON.parse(JSON.stringify(args)) as ReadonlyArray<unknown>,
         );
-      useMain(async (method, args) => {
-        if (method !== 'mochiTool') return toMain(method, args);
-        if (!capabilities.offers('main'))
-          return mochiToolWithoutMain(withoutWindow, args);
-        const answer = (await toMain(method, args)) as CallToolResult;
-        const text = answer.content[0];
-        // Main is up with no window: a thread tool still runs, here.
-        return answer.isError &&
-          text?.type === 'text' &&
-          text.text === NO_WINDOW &&
-          CORE_TOOLS.has(args[1] as ToolName)
+      // Thread tools run here whether or not a window is open; the rest go to main's window.
+      useMain(async (method, args) =>
+        method === 'mochiTool' &&
+        (!capabilities.offers('main') || CORE_TOOLS.has(args[1] as ToolName))
           ? mochiToolWithoutMain(withoutWindow, args)
-          : answer;
-      });
+          : toMain(method, args),
+      );
       useCoreClient(Promise.resolve(clientFromRun(run)));
       // In emit order: one fiber appends them, so the log's sequence follows the agents' own.
       const appends = yield* Queue.unbounded<SeqEvent>();
