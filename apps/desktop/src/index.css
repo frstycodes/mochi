@@ -71,6 +71,8 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
+  /* Solar draws a 1.5 stroke on its 24px grid, ~1px at 16px; 2 matches the weight of 14px text. */
+  --solar-stroke-width: 2;
   /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/appZoom.ts` sets the zoom. */
   --lights-end: calc(75px / var(--app-zoom, 1));
 
@@ -105,12 +107,12 @@
   --ring: oklch(0.47 0.012 285);
   --highlight: oklch(1 0 285 / 0.7);
 
-  --sidebar: oklch(0.99 0.002 285);
+  --sidebar: oklch(0.965 0.004 285);
   --halo-strength: 0.3;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.25 0.02 285 / 0.07);
+  --sidebar-accent: oklch(0.25 0.02 285 / 0.1);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -173,7 +175,7 @@
     --highlight: oklch(0.98 0.005 285 / 0.06);
     --sidebar: oklch(0.21 0.007 285);
     --halo-strength: 0.15;
-    --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
+    --sidebar-accent: oklch(0.95 0.01 285 / 0.11);
     --chart-1: #3987e5;
     --chart-2: #d95926;
     --chart-3: #199e70;
@@ -230,7 +232,7 @@
   --highlight: oklch(0.98 0.005 285 / 0.06);
   --sidebar: oklch(0.21 0.007 285);
   --halo-strength: 0.15;
-  --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
+  --sidebar-accent: oklch(0.95 0.01 285 / 0.11);
   --chart-1: #3987e5;
   --chart-2: #d95926;
   --chart-3: #199e70;
@@ -436,6 +438,21 @@
   --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
   /* The sidebar is glass: hovers and pressed states tint it like its rows (`--sidebar-accent`), never the opaque page accent. */
   --accent: var(--sidebar-accent);
+}
+[data-sidebar='sidebar']
+  :is(
+    [data-sidebar='menu-button'],
+    [data-slot='collapsible-trigger']
+  ):focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+/* macOS greys the selection while the window isn't key (useWindowInactive). */
+:root[data-window-inactive]
+  [data-sidebar='sidebar']
+  [data-sidebar='menu-button'][data-active='true'] {
+  background: color-mix(in oklab, var(--sidebar-accent) 65%, transparent);
 }
 
 @utility type-display {
