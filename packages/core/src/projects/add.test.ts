@@ -17,7 +17,8 @@ test('Put on GitHub refuses a folder that already has a remote, and a bad name, 
   ]);
   await assert.rejects(
     publishFolder(path, 'onlinerepo', 'private', undefined),
-    new RegExp(`${path} is already on github\\.com/me/onlinerepo`),
+    // Not the path in a pattern: a Windows path's backslashes would read as escapes.
+    /is already on github\.com\/me\/onlinerepo$/,
   );
   await assert.rejects(
     publishFolder(path, '../escape', 'private', undefined),
