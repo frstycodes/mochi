@@ -58,7 +58,7 @@ import type { AgentInstall } from './host/types/settings';
 import { linkedAccountId } from './settings/accounts';
 import { HARNESS_IDS, HARNESSES } from './settings/harnesses';
 import { useSpace } from './store';
-import { ProviderMark } from './ui';
+import { AnimatedText, ProviderMark } from './ui';
 import { IS_MAC, isMod, shortcutText } from './keys';
 
 /**
@@ -787,7 +787,7 @@ export function EffortPicker({
               levels={efforts.length}
               level={effort ? efforts.indexOf(effort) + 1 : 0}
             />
-            {label}
+            <AnimatedText>{label}</AnimatedText>
             <ChevronDown
               data-icon="inline-end"
               className="text-subtle-foreground"
