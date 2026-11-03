@@ -122,6 +122,7 @@ import { OverlaysSection } from './sections/overlays';
 import { ImagesSection } from './sections/images';
 import { EmbedsSection } from './sections/embeds';
 import { NativeItemsSection } from './sections/native-items';
+import { ProfileLibrarySection } from './sections/profile-library-variants';
 import { McpAppFrame } from '../chat/McpAppCard';
 import { EmbedFrame } from '../viz/EmbedFrame';
 import { MOBBIN_RESOURCE, MOBBIN_WIDGET } from './mcpAppFixtures';
@@ -145,6 +146,7 @@ const SECTIONS = [
   ['embeds', 'Embeds'],
   ['recipes', 'Recipes'],
   ['profiles', 'Profiles'],
+  ['profile-library', 'Profile library'],
   ['rules', 'Do and don’t'],
 ] as const;
 
@@ -175,6 +177,7 @@ export function DesignPage() {
             <EmbedsSection />
             <Recipes />
             <NativeItemsSection />
+            <ProfileLibrarySection />
             <Rules />
           </main>
         </ScrollArea>
