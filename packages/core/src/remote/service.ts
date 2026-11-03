@@ -22,7 +22,9 @@ import { isAnyBusy, onBusy, push } from '../agents/events.ts';
 import { Backend } from '../backend/backend.ts';
 import { Capabilities } from '../hostServer.ts';
 import { KeyStore, type Keys } from '../keys/keyStore.ts';
+import { openLan } from './device.ts';
 import { networkHosts, watchNetwork } from './interfaces.ts';
+import { mergeNearby, startNearby, type Nearby } from './nearby.ts';
 import { networkChanged } from './reconnect.ts';
 import { asCandidate } from './routes.ts';
 import { Remote } from './tag.ts';
@@ -102,10 +104,14 @@ const decodeMachineFrame = Schema.decodeUnknownOption(
   Schema.fromJsonString(Relay.MachineLinkFrame),
 );
 
-/** What main follows: every paired machine, and this computer's records it sends each in its hello. */
+/**
+ * What main follows: every paired machine, and this computer's records it sends each in its hello. `nearby`: where each key
+ * was heard on this network (`host:port`), dialled with a machine's other addresses.
+ */
 export interface Paired {
   machines: PairedMachine[];
   records: MemberRecord[];
+  nearby: Record<string, string>;
 }
 
 /** What only main knows: the power source, and how its connection to each machine it follows stands. */
@@ -237,6 +243,7 @@ function makeRemote({
   let settings = loadSettings(file);
   let server: RemoteServer | undefined;
   let relay: MachineConnection | undefined;
+  let nearby: Nearby | undefined;
   let relayState: RelayState = { status: 'off' };
   let error: string | undefined;
   let restarting: Promise<void> = Promise.resolve();
@@ -325,7 +332,7 @@ function makeRemote({
     link.onClose(() => piped.delete(id));
     return { id, link };
   }
-  /** Whether a key the account lists as one of its machines: what lets an unknown key over iroh ask to join. */
+  /** Whether the account lists the key as one of its machines: what lets an unknown key over iroh or the LAN ask to join. */
   async function isOnAccount(publicKey: Uint8Array) {
     if (!(await isSignedIn())) return false;
     const listed = await account.accessToken().then(listMachines);
@@ -558,10 +565,26 @@ function makeRemote({
     );
   }
 
-  /** Computers on your account that aren't members yet, from the relay, each with the code both screens show to join. */
+  /**
+   * The relay's listing joined with the computers heard on this network. The listing alone may fail: what's nearby still
+   * shows (joining through one then needs the relay on its side). Nothing nearby, the failure is the answer.
+   */
+  async function joinable() {
+    const near = nearby?.computers() ?? [];
+    const listed = await account
+      .accessToken()
+      .then(listMachines)
+      .catch((e: unknown) => {
+        if (near.length === 0) throw e;
+        return undefined;
+      });
+    return { machines: mergeNearby(listed ?? [], near), listed };
+  }
+
+  /** Computers on your account or this network that aren't members yet, each with the code both screens show to join. */
   async function otherMachines(): Promise<OtherMachine[]> {
-    const [listed, own] = await Promise.all([
-      account.accessToken().then(listMachines),
+    const [{ machines }, own] = await Promise.all([
+      joinable(),
       theKeys(),
       pullMembers(),
     ]);
@@ -570,27 +593,32 @@ function makeRemote({
       publicKey ===
         sodium.to_base64(own.publicKey, sodium.base64_variants.ORIGINAL) ||
       registry.devices().some((d) => d.publicKey === publicKey);
-    return listed
+    return machines
       .filter((m) => m.id !== registry.machineId && !isMember(m.publicKey))
       .map((m) => {
         const code = pairingCode(
           sodium.from_base64(m.publicKey, sodium.base64_variants.ORIGINAL),
           own.publicKey,
         );
+        // Its name is sealed to its members, which this computer isn't yet; an older machine still lists one in clear.
+        const name = m.listed
+          ? (openMachineInfo(m.listed, own)?.name ?? m.listed.name)
+          : undefined;
         return {
           id: m.id,
-          // Its name is sealed to its members, which this computer isn't yet; an older machine still lists one in clear.
-          name: openMachineInfo(m, own)?.name ?? m.name ?? `Computer ${code}`,
+          name: name ?? `Computer ${code}`,
           isOnline: m.isOnline,
           pairingCode: code,
+          ...(m.isNearby && { isNearby: true }),
         };
       });
   }
 
   /**
-   * Joins your computers through one of them: through the relay, its key checked against the relay's listing and, by you,
-   * the code on both screens. Once it allowed this one, each vouches for the other, and every member's records reach this
-   * computer, so it reaches all of them and they it with no more prompts.
+   * Joins your computers through one of them: over this network when it was heard here, else through the relay; its key
+   * checked against the relay's listing (or its announcement, when only heard) and, by you, the code on both screens. Once it
+   * allowed this one, each vouches for the other, and every member's records reach this computer, so it reaches all of them
+   * and they it with no more prompts.
    */
   async function join(machineId: string, signal?: AbortSignal) {
     note(`Joining through ${machineId}`);
@@ -605,9 +633,11 @@ function makeRemote({
 
   async function joinThrough(machineId: string, signal?: AbortSignal) {
     let joinedName = '';
-    const token = await account.accessToken();
-    const [listed, own] = await Promise.all([listMachines(token), theKeys()]);
-    const machine = listed.find((m) => m.id === machineId);
+    const [{ machines, listed }, own] = await Promise.all([
+      joinable(),
+      theKeys(),
+    ]);
+    const machine = machines.find((m) => m.id === machineId);
     if (!machine)
       throw new Error('That computer isn’t on your account anymore');
     if (!machine.isOnline) throw new Error('That computer is offline');
@@ -615,11 +645,22 @@ function makeRemote({
       machine.publicKey,
       sodium.base64_variants.ORIGINAL,
     );
-    const raw = await openDeviceChannel(
-      machineId,
-      deviceId(own.publicKey),
-      token,
+    const ownKey = sodium.to_base64(
+      own.publicKey,
+      sodium.base64_variants.ORIGINAL,
     );
+    // The machine lets one join over the LAN only once the relay lists its key; unlisted, the relay's own channel still works.
+    const isLanJoinable =
+      !!machine.address &&
+      (!listed || listed.some((m) => m.publicKey === ownKey));
+    const raw =
+      (isLanJoinable &&
+        (await openLan(machine.address!).catch(() => undefined))) ||
+      (await openDeviceChannel(
+        machineId,
+        deviceId(own.publicKey),
+        await account.accessToken(),
+      ));
     // Closing the channel ends the attempt, and dismisses the prompt on that computer (`secureAsMachine`).
     const stop = () => raw.close(1000, 'Joined through another computer');
     if (signal?.aborted) stop();
@@ -883,6 +924,9 @@ function makeRemote({
   const paired = (): Paired => ({
     machines: theRegistry().machines(),
     records: ownRecords(),
+    nearby: Object.fromEntries(
+      (nearby?.computers() ?? []).map((c) => [c.publicKey, c.address]),
+    ),
   });
 
   /** Loopback always; this computer's private addresses as they are now, when devices on the network are allowed. */
@@ -931,6 +975,8 @@ function makeRemote({
       isIrohAccepting = false;
       relay?.close();
       relay = undefined;
+      nearby?.close();
+      nearby = undefined;
       await server?.close();
       server = undefined;
       error = undefined;
@@ -969,6 +1015,7 @@ function makeRemote({
         log(`Remote access couldn’t start: ${error}`);
       }
       if (server) note(`Listening on ${server.addresses.join(', ')}`);
+      if (server && settings.allowsNetwork) await startLooking();
       const isRelayWanted = !!server && settings.reachesAnywhere;
       // Over iroh it is reachable from anywhere, through n0's relays: the same setting as the relay governs it.
       if (isRelayWanted) await acceptIroh(server!);
@@ -977,6 +1024,19 @@ function makeRemote({
       broadcast();
     });
     return restarting;
+  }
+
+  /** Announces this computer on its networks and listens for your others (`nearby.ts`); main dials the members it hears. */
+  async function startLooking() {
+    const publicKey = sodium.to_base64(
+      (await theKeys()).publicKey,
+      sodium.base64_variants.ORIGINAL,
+    );
+    nearby = startNearby({
+      announcement: () => ({ id: theRegistry().machineId, publicKey, port }),
+      onChange: () => push({ channel: PAIRED_CHANNEL, payload: paired() }),
+      onError: (e) => log(`Couldn’t look for computers nearby: ${String(e)}`),
+    });
   }
 
   async function startRelay(listening: RemoteServer) {
@@ -1128,6 +1188,7 @@ function makeRemote({
       offAccount();
       stopWatching?.();
       relay?.close();
+      nearby?.close();
       await restarting;
       await server?.close();
       await (await iroh)?.close();
