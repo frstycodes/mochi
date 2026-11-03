@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { CheckCircle, ChevronRight, Route } from '@/icons';
+import { CheckCircle, Route } from '@/icons';
 import { cn } from '@/lib/utils';
 import type { Assumption } from '../model';
 import { SectionLabel } from '../ui';
 import { Expand } from '../WorkLog';
+import { FoldChevron } from '../Fold';
 import { AssumptionLine } from './Assumptions';
 
 /** Something the agent did on a step that you'd otherwise only find in its prose. Assumptions point into the thread's ledger. */
@@ -216,15 +217,9 @@ function HeaderRail({
         )}
         <span className="flex h-5 shrink-0 items-center pr-2">
           {onToggle ? (
-            <ChevronRight
-              aria-hidden
-              className={cn(
-                'size-3.5 text-subtle-foreground transition-transform duration-150',
-                isOpen && 'rotate-90',
-              )}
-            />
+            <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
           ) : (
-            <span aria-hidden className="size-3.5" />
+            <span aria-hidden className="size-[0.85em]" />
           )}
         </span>
       </span>

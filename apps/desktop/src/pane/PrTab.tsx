@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ArrowUpRight, ChevronDown, MessageText, ArrowUp } from '@/icons';
+import { ArrowUpRight, MessageText, ArrowUp } from '@/icons';
+import { FoldChevron } from '../Fold';
+import { Expand } from '../WorkLog';
 import { GitPullRequestIcon, PrStateIcon } from '@/icons/github';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Badge } from '@/components/ui/badge';
@@ -322,7 +324,9 @@ function Checks({ review }: { review: PrReview }) {
         isOpen={isOpen}
         onToggle={() => setOpen((o) => !o)}
       />
-      {isOpen && <CheckList checks={review.checks} />}
+      <Expand isOpen={isOpen}>
+        <CheckList checks={review.checks} />
+      </Expand>
     </div>
   );
 }
@@ -482,13 +486,7 @@ function ThreadCard({
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5 px-2.5 py-1.5 text-left type-meta focus-visible:outline-2 focus-visible:outline-offset-2"
       >
-        <ChevronDown
-          aria-hidden
-          className={cn(
-            'size-3 shrink-0 text-subtle-foreground transition-transform duration-150',
-            !isOpen && '-rotate-90',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         <MessageText
           aria-hidden
           className="size-3.5 shrink-0 text-subtle-foreground"
@@ -502,7 +500,7 @@ function ThreadCard({
           {plural(thread.comments.length, 'comment', 'comments')}
         </span>
       </button>
-      {isOpen && (
+      <Expand isOpen={isOpen}>
         <div className="flex flex-col gap-2 border-t px-2.5 py-2">
           {thread.comments.map((c) => (
             <div key={c.id} className="flex flex-col gap-0.5">
@@ -571,7 +569,7 @@ function ThreadCard({
             </Button>
           </div>
         </div>
-      )}
+      </Expand>
     </div>
   );
 }

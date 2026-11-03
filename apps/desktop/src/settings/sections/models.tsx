@@ -4,7 +4,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { FoldChevron } from '@/Fold';
 import { ChevronDown } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -149,13 +149,7 @@ function BackgroundModels() {
             disabled={differing.length > 0}
             className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground disabled:hover:text-muted-foreground"
           >
-            <ChevronDown
-              aria-hidden
-              className={cn(
-                'size-3.5 transition-transform duration-200',
-                !isOpen && '-rotate-90',
-              )}
-            />
+            <FoldChevron isOpen={isOpen} />
             Choose per task
           </button>
         </CollapsibleTrigger>
