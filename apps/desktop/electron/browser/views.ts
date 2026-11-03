@@ -45,6 +45,7 @@ import {
   debuggerFor,
   dropPage,
   pageFor,
+  syncThrottling,
   type Automated,
 } from './playwright.ts';
 import {
@@ -278,8 +279,7 @@ export async function setViewMirror(
     delay: MIRROR_INTERVAL_MS,
     last: null,
   };
-  // A device watching keeps capturing while this computer's window is hidden: on Linux a throttled hidden page stops painting.
-  entry.view.webContents.setBackgroundThrottling(!entry.mirror);
+  syncThrottling(entry);
   layout(entry);
   const e = entry.emulation;
   const dbg = await debuggerFor(entry.view.webContents);
