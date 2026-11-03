@@ -4,10 +4,12 @@ export function plural(n: number, one: string, other: string) {
   return PLURAL.select(n) === 'one' ? one : other;
 }
 
-export const TOKENS = new Intl.NumberFormat('en', {
+export const TOKEN_FORMAT = {
   notation: 'compact',
   maximumFractionDigits: 1,
-});
+} satisfies Intl.NumberFormatOptions;
+
+export const TOKENS = new Intl.NumberFormat('en', TOKEN_FORMAT);
 
 const BYTE_LABELS = ['B', 'kB', 'MB', 'GB'];
 const BYTE_NUMBER = new Intl.NumberFormat('en', { maximumFractionDigits: 1 });

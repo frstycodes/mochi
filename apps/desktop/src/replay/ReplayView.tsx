@@ -10,7 +10,6 @@ import {
 } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import {
-  ChevronDownSmall,
   Rewind10,
   FileText,
   Share,
@@ -61,6 +60,7 @@ import { TITLE_BAR, TitleBar } from '../TitleBar';
 import { summarize } from '../summary';
 import { TooltipIconButton } from '../ui';
 import { DiffStat, DiffView, Expand } from '../WorkLog';
+import { FoldChevron } from '../Fold';
 import type { ReplayExport } from './export';
 import {
   exportedCheckpoints,
@@ -763,13 +763,7 @@ function DiffFileRow({ file }: { file: DiffFile }) {
         <FilePath path={file.path} />
         <span className="flex-1" />
         <DiffStat added={file.added} removed={file.removed} />
-        <ChevronDownSmall
-          aria-hidden
-          className={cn(
-            'size-3.5 shrink-0 text-muted-foreground transition-transform duration-150',
-            isOpen && 'rotate-180',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} className="text-muted-foreground" />
       </button>
       <Expand isOpen={isOpen}>
         <div className="px-1 pt-1 pb-2">

@@ -1,3 +1,4 @@
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { Card } from '@/components/ui/card';
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
 import {
@@ -365,7 +366,7 @@ function CardHeader({ title, meta }: { title: string; meta?: ReactNode }) {
   return (
     // The chevron sits beside the title, like Claude's; `order-last` puts the meta after it, on the right. One down chevron
     // turns instead of the primitive's down/up icon swap.
-    <AccordionTrigger className="items-center justify-start gap-1 rounded-xl px-3 py-2.5 hover:no-underline focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 **:data-[slot=accordion-trigger-icon]:ml-0 **:data-[slot=accordion-trigger-icon]:size-3.5 [&>svg:last-child]:hidden! aria-expanded:[&>svg:nth-last-child(2)]:inline! aria-expanded:[&>svg:nth-last-child(2)]:rotate-180 [&>svg]:transition-transform [&>svg]:duration-150 [&>svg]:ease-[cubic-bezier(0.23,1,0.32,1)]">
+    <AccordionTrigger className="items-center justify-start gap-1 rounded-xl px-3 py-2.5 hover:no-underline focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 **:data-[slot=accordion-trigger-icon]:ml-0 **:data-[slot=accordion-trigger-icon]:size-3.5">
       <span className="type-meta font-medium">{title}</span>
       {!!meta && (
         <span
@@ -869,8 +870,8 @@ function SubThreadPrRows({ sub }: { sub: Thread }) {
 function DiffCount({ added, removed }: { added: number; removed: number }) {
   return (
     <span className="tabular shrink-0 type-caption whitespace-nowrap">
-      <span className="text-success">+{added}</span>{' '}
-      <span className="text-destructive">−{removed}</span>
+      <AnimatedNumber value={added} prefix="+" className="text-success" />{' '}
+      <AnimatedNumber value={removed} prefix="−" className="text-destructive" />
     </span>
   );
 }
@@ -1188,7 +1189,10 @@ function CheckCount({
           CHECK[checks ?? 'pending'].tone,
         )}
       />
-      {counts.passed}/{counts.total}
+      <span>
+        <AnimatedNumber value={counts.passed} />/
+        <AnimatedNumber value={counts.total} />
+      </span>
     </span>
   );
 }
