@@ -54,6 +54,8 @@ export function connectMachine(options: {
   onMembers: () => void;
   /** A control frame from the relay that isn't one: dropped. */
   onMalformed?: (raw: string) => void;
+  /** An open socket closed, with the code and reason the relay gave. */
+  onDropped?: (code: number, reason: string) => void;
 }): MachineConnection {
   const channels = new Map<number, ReturnType<typeof channelLink>>();
   let live: WebSocket | undefined;
@@ -114,7 +116,8 @@ export function connectMachine(options: {
       });
       // Every failure also closes the socket; the close is what's acted on.
       ws.on('error', () => {});
-      ws.on('close', () => {
+      ws.on('close', (code, reason) => {
+        if (isOpen) options.onDropped?.(code, reason.toString());
         clearInterval(heartbeat);
         offChange();
         if (live === ws) live = undefined;
