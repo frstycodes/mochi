@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Progress } from '@/components/ui/progress';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import type { AccountLimits, LimitWindow } from '../host/types/agent.ts';
 import { timeAgo } from '../progress.ts';
 import { useNow } from '../useNow.ts';
@@ -41,7 +42,7 @@ function LimitBar({ window: w, now }: { window: LimitWindow; now: number }) {
           className="tabular text-muted-foreground"
           style={{ color: tone === 'normal' ? undefined : TONE_COLORS[tone] }}
         >
-          {pct}% used
+          <AnimatedNumber value={pct} suffix="%" /> used
         </span>
       </div>
       <Progress

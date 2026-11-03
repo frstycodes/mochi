@@ -70,6 +70,8 @@ import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
 import { useIsMultiSplit } from './SidebarToggle';
 import { LightsStandIn, placeLights } from './trafficLights';
+import { useSidebarTint } from './sidebarTint';
+import { useSourceList } from './sourceList';
 import {
   extendSelection,
   selectRange,
@@ -92,6 +94,7 @@ import {
 import { SidebarResizer } from './SidebarResizer';
 import { NavItem, SidebarNav } from './SidebarNav';
 import { useSettle } from './useSettle';
+import { Fold, FoldContent } from './Fold';
 import { NextRunBadge } from './schedule/NextRunBadge';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
@@ -129,7 +132,7 @@ import { spaceCommand } from './keymap';
 import { openSubpage } from './routes/nav';
 import { ThreadMachineMark } from './remote/MachineMark';
 import { UserMenu } from './UserMenu';
-import { FoldGroup } from './SidebarFold';
+import { FoldGroup, SectionToggle } from './SidebarFold';
 import { filteredSidebarLists, useProjectFilter } from './projectFilter';
 import { ProjectFilterMenu } from './ProjectFilterMenu';
 import { MachineFilterMenu } from './MachineFilterMenu';
@@ -164,16 +167,19 @@ export function AppSidebar({
     onSettle: (page) => dispatch({ type: 'space', id: profiles[page].id }),
     onCross: haptic,
   });
+  useSidebarTint();
+  const list = useRef<HTMLDivElement>(null);
+  useSourceList(list);
 
   return (
-    <Sidebar collapsible={collapsible}>
+    <Sidebar collapsible={collapsible} aria-label="Sidebar" role="navigation">
       {profiles.length > 1 && (
         <SpaceHalo profiles={profiles} currentId={spaceId} />
       )}
       <ContextMenu>
         {/* `contents`: the header, list and footer stay the sidebar's own flex children. */}
         <ContextMenuTrigger asChild>
-          <div className="contents">
+          <div ref={list} className="contents">
             <SpaceHeader />
             {/* Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility. */}
             <SidebarContent
@@ -639,6 +645,8 @@ function ThreadList({
 }) {
   const dispatch = useDispatch();
   const listRef = useRef<HTMLUListElement>(null);
+  const [isPinnedOpen, setPinnedOpen] = useState(true);
+  const [isThreadsOpen, setThreadsOpen] = useState(true);
   const pins = pinned.map(localRow);
   const pinnedIds = pinned.map((g) => g.thread.id);
   const activeIds = active.map((g) => g.thread.id);
@@ -812,32 +820,54 @@ function ThreadList({
         {...drag.handlers}
       >
         <SidebarMenu ref={listRef} className="relative select-none">
-          <AnimatePresence initial={false} custom={!!drag.state}>
+          <AnimatePresence initial={false}>
+            {/* A drag opens both sections: their rows are its drop slots. */}
             {showPinned && (
-              <motion.li key="pinned-label" {...glide}>
-                <SidebarGroupLabel>Pinned</SidebarGroupLabel>
-              </motion.li>
-            )}
-            {section(pins, true)}
-            {!!drag.state && isPinnedEmpty && (
-              <motion.li
-                key="pin-drop"
-                {...glide}
-                aria-hidden
-                className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground"
+              <Fold
+                key="pinned"
+                asChild
+                open={isPinnedOpen || !!drag.state}
+                onOpenChange={setPinnedOpen}
               >
-                Drop here to pin
-              </motion.li>
+                <motion.li {...glide} className="mt-2">
+                  <SectionToggle label="Pinned" />
+                  <FoldContent>
+                    <SidebarMenu>
+                      <AnimatePresence initial={false} custom={!!drag.state}>
+                        {section(pins, true)}
+                        {!!drag.state && isPinnedEmpty && (
+                          <motion.li
+                            key="pin-drop"
+                            {...glide}
+                            aria-hidden
+                            className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground"
+                          >
+                            Drop here to pin
+                          </motion.li>
+                        )}
+                      </AnimatePresence>
+                    </SidebarMenu>
+                  </FoldContent>
+                </motion.li>
+              </Fold>
             )}
-            <motion.li
-              key="threads-label"
-              {...glide}
-              data-threads-label
-              className="mt-6"
+            <Fold
+              key="threads"
+              asChild
+              open={isThreadsOpen || !!drag.state}
+              onOpenChange={setThreadsOpen}
             >
-              <SidebarGroupLabel>Threads</SidebarGroupLabel>
-            </motion.li>
-            {section(active.map(localRow), false)}
+              <motion.li {...glide} className={showPinned ? 'mt-3.5' : 'mt-2'}>
+                <SectionToggle label="Threads" data-threads-label />
+                <FoldContent>
+                  <SidebarMenu>
+                    <AnimatePresence initial={false} custom={!!drag.state}>
+                      {section(active.map(localRow), false)}
+                    </AnimatePresence>
+                  </SidebarMenu>
+                </FoldContent>
+              </motion.li>
+            </Fold>
           </AnimatePresence>
         </SidebarMenu>
         {/* After the list: its layout effect reads the list's ref, which React attaches in tree order. */}

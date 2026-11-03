@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 import type { LightsPlacement } from '../src/host/types/windows.ts';
 import { attachSidebarGlass } from './sidebarGlass/sidebarGlass.ts';
+import { tintSidebar, trackSidebarTint } from './sidebarTint/sidebarTint.ts';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
 const background = () =>
@@ -20,7 +21,21 @@ const background = () =>
 // Windows 11 22H2 (build 22621) and up draw Mica; older Windows and Linux keep the solid sidebar.
 const hasMica = () =>
   process.platform === 'win32' && Number(release().split('.')[2]) >= 22621;
+/**
+ * macOS's sidebar material by version, as Claude's desktop app splits it: AppKit's own sidebar glass from macOS 27
+ * (Darwin 26), a glass strip under the sidebar on macOS 26, and Electron's `vibrancy` before it, which blurs the windows
+ * behind where the glass shows only the wallpaper.
+ */
+function macMaterial(): Material | undefined {
+  if (process.platform !== 'darwin') return undefined;
+  const darwin = Number(release().split('.')[0]);
+  if (darwin >= 26) return 'appkit';
+  return darwin === 25 ? 'glass' : 'vibrancy';
+}
+type Material = 'appkit' | 'glass' | 'vibrancy' | 'mica';
 const materialWindows = new WeakSet<BrowserWindow>();
+/** Windows whose native material failed: they keep the solid sidebar until they close. */
+const solidWindows = new WeakSet<BrowserWindow>();
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
@@ -114,6 +129,7 @@ export function fitWindowButtons(win: BrowserWindow) {
 export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
   const isMica = !route && hasMica();
+  const material = route ? undefined : macMaterial();
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -124,6 +140,7 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     ...titleBar(),
     backgroundColor: background(),
     ...(isMica && { backgroundMaterial: 'mica' }),
+    ...(material === 'vibrancy' && { vibrancy: 'sidebar' }),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -131,11 +148,8 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
       nodeIntegration: false,
     },
   });
-  if (isMica) showMaterial(win);
-  else if (!route)
-    void attachSidebarGlass(win).then(
-      (isAttached) => isAttached && showMaterial(win),
-    );
+  if (isMica) showMaterial(win, 'mica');
+  else if (material) showMacMaterial(win, material);
   win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => {
     fitWindowButtons(win);
@@ -180,27 +194,58 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   return win;
 }
 
+function showMacMaterial(win: BrowserWindow, material: Material) {
+  // Tracked from the start, before the glass attaches: the renderer reports its width once, on mount. Until
+  // `showMaterial`, the opaque page covers the tint.
+  trackSidebarTint(win, material === 'glass', () => dropMaterial(win));
+  if (material !== 'appkit') return showMaterial(win, material);
+  void attachSidebarGlass(win).then(
+    (isAttached) => isAttached && showMaterial(win, 'appkit'),
+  );
+}
+
 /**
- * The shell window's sidebar shows the window material (sidebar glass on macOS 26+, Mica on Windows 11) through the page: `data-material` in index.css.
- * Off in full screen, where there's no wallpaper to light it, so the sidebar keeps the theme's own colour.
+ * The shell window's sidebar shows the window material (`macMaterial` on macOS, Mica on Windows 11) through the page: `data-material` in index.css.
+ * Off in full screen, where there's no wallpaper to light it, and with Reduce Transparency on: the opaque page then covers
+ * the material and the sidebar keeps the theme's own colour. That setting is re-read on focus, as no event reports it.
  */
-function showMaterial(win: BrowserWindow) {
+function showMaterial(win: BrowserWindow, material: Material) {
   materialWindows.add(win);
   win.setBackgroundColor('#00000000');
-  const mark = () =>
+  const mark = () => {
+    const isShown =
+      !solidWindows.has(win) &&
+      !win.isFullScreen() &&
+      !nativeTheme.prefersReducedTransparency;
     void win.webContents.executeJavaScript(
-      `document.documentElement.toggleAttribute('data-material', ${!win.isFullScreen()})`,
+      isShown
+        ? `document.documentElement.dataset.material = '${material}'`
+        : `delete document.documentElement.dataset.material`,
     );
+  };
   if (!win.webContents.isLoading()) mark();
   win.webContents.on('dom-ready', mark);
   win.on('enter-full-screen', mark);
   win.on('leave-full-screen', mark);
+  win.on('focus', mark);
+}
+
+/** A native material that failed: the page goes opaque over it and the sidebar keeps the theme's colour. */
+function dropMaterial(win: BrowserWindow) {
+  if (win.isDestroyed() || solidWindows.has(win)) return;
+  solidWindows.add(win);
+  materialWindows.delete(win);
+  win.setBackgroundColor(background());
+  void win.webContents.executeJavaScript(
+    `delete document.documentElement.dataset.material`,
+  );
 }
 
 nativeTheme.on('updated', () =>
   BrowserWindow.getAllWindows().forEach((win) => {
     if (!materialWindows.has(win)) win.setBackgroundColor(background());
     fitWindowButtons(win);
+    void tintSidebar(win);
   }),
 );
 

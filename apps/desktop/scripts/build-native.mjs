@@ -24,6 +24,11 @@ const HELPERS = {
   fonts: ['electron/fonts/fonts.swift', '13.0'],
 };
 
+const ADDONS = {
+  'sidebar-glass': 'electron/sidebarGlass/sidebarGlass.mm',
+  'sidebar-tint': 'electron/sidebarTint/sidebarTint.mm',
+};
+
 const MAC_ARCHS = { arm64: 'arm64', x64: 'x86_64' };
 
 if (process.platform === 'darwin') {
@@ -49,26 +54,29 @@ if (process.platform === 'darwin') {
     });
     lipo(slices, `build/native/${name}`);
   }
-  // The sidebar glass is a Node-API add-on loaded into Electron, not a helper process: same flags as OBJC_ADDON in electron/native.ts.
-  execFileSync(
-    'xcrun',
-    [
-      'clang++',
-      '-O2',
-      '-fobjc-arc',
-      '-bundle',
-      '-undefined',
-      'dynamic_lookup',
-      '-framework',
-      'AppKit',
-      ...Object.values(MAC_ARCHS).flatMap((arch) => ['-arch', arch]),
-      '-mmacosx-version-min=13.0',
-      'electron/sidebarGlass/sidebarGlass.mm',
-      '-o',
-      'build/native/sidebar-glass',
-    ],
-    { stdio: 'inherit' },
-  );
+  // The sidebar glass and tint are Node-API add-ons loaded into Electron, not helper processes: same flags as OBJC_ADDON in electron/native.ts.
+  for (const [name, source] of Object.entries(ADDONS))
+    execFileSync(
+      'xcrun',
+      [
+        'clang++',
+        '-O2',
+        '-fobjc-arc',
+        '-bundle',
+        '-undefined',
+        'dynamic_lookup',
+        '-framework',
+        'AppKit',
+        '-framework',
+        'QuartzCore',
+        ...Object.values(MAC_ARCHS).flatMap((arch) => ['-arch', arch]),
+        '-mmacosx-version-min=13.0',
+        source,
+        '-o',
+        `build/native/${name}`,
+      ],
+      { stdio: 'inherit' },
+    );
 }
 
 // uv runs the Google Workspace connector's server (electron/library/googleWorkspace.ts). GAP: Windows (a .zip) isn't fetched yet.

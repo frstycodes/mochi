@@ -15,7 +15,7 @@ import { useDispatch, useGetState } from '../store';
 import { refreshPorts, usePorts } from '../terminal/ports';
 import { runTarget } from '../terminal/runTarget';
 import { paneOpeners } from '../terminal/usePaneOpeners';
-import { OverflowIcon, TooltipIconButton } from '../ui';
+import { AnimatedText, OverflowIcon, TooltipIconButton } from '../ui';
 import { useImageUrls } from './imageSrc';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
@@ -73,7 +73,7 @@ export function DevServerCard({
           onClick={isStopped ? start : open}
         >
           {isStopped && <Play aria-hidden />}
-          {isStopped ? 'Start' : 'Open'}
+          <AnimatedText>{isStopped ? 'Start' : 'Open'}</AnimatedText>
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

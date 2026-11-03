@@ -19,7 +19,7 @@ export type IconComponent = ForwardRefExoticComponent<
   IconProps & RefAttributes<SVGSVGElement>
 >;
 
-/** A glyph Solar doesn't ship, as SVG markup drawn on its 24px grid at its 1.5 stroke. */
+/** A glyph Solar doesn't ship, as SVG markup drawn on its 24px grid at the app's 2 stroke (`--solar-stroke-width`). */
 export function customIcon(name: string, markup: string): IconComponent {
   const Icon = forwardRef<SVGSVGElement, IconProps>(
     ({ filled: _filled, size = 24, ...props }, ref) => (

@@ -42,6 +42,8 @@ export interface WindowsHost {
   resetZoom(): Promise<void>;
   /** Moves or hides the macOS traffic lights with the sidebar; a no-op elsewhere. */
   placeLights(placement: LightsPlacement): Promise<void>;
+  /** The docked sidebar's visible width in CSS px (0 while collapsed), for the native tint over macOS vibrancy; a no-op elsewhere. */
+  tintSidebar(width: number): Promise<void>;
   /** Settings' Light / Dark / System for native chrome (menus), which otherwise follows the OS. */
   setAppearance(appearance: Appearance): Promise<void>;
   /** Other apps' windows on every Space (macOS) or on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
@@ -61,6 +63,7 @@ export const windowsMethods = {
   showAppMenu: 'invoke',
   resetZoom: 'invoke',
   placeLights: 'invoke',
+  tintSidebar: 'invoke',
   setAppearance: 'invoke',
   listApps: 'invoke',
   captureApp: 'invoke',

@@ -191,7 +191,7 @@ export function themeTokens(
     ),
     '--highlight': pick('--highlight') ?? withAlpha(foreground, 0.06),
     '--sidebar': sidebar,
-    '--sidebar-accent': pick('--sidebar-accent') ?? withAlpha(foreground, 0.07),
+    '--sidebar-accent': pick('--sidebar-accent') ?? withAlpha(foreground, 0.1),
     // A dot, not text: the theme's blue at full saturation, held to 3:1 on the sidebar it marks.
     '--unread': nudge(ansiColor('terminal.ansiBlue', ansi.blue), [sidebar], 3),
     '--chart-1': chart(ansiColor('terminal.ansiBlue', ansi.blue)),

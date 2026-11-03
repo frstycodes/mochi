@@ -672,6 +672,8 @@ test.describe('electron/browser/views.ts', () => {
   });
 
   test('k. click in a hidden window', async () => {
+    // A pointer over the page when its window hides is what stopped frames on Linux; earlier tests leave it there only sometimes.
+    await act({ kind: 'hover', ref: ref('button', 'Count') });
     await rpc('views.setHidden', [KEY, true]);
     await expect.poll(() => rpc('views.isVisible', [KEY])).toBe(false);
     await act({ kind: 'click', ref: ref('button', 'Count') });

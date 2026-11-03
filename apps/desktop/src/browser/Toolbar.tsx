@@ -13,6 +13,7 @@ import {
   X,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -188,7 +189,7 @@ function ConsoleButton({
               )}
             >
               <Bug className="size-4" />
-              {page.console.length}
+              <AnimatedNumber value={page.console.length} />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
