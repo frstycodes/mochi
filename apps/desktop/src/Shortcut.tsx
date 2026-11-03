@@ -53,7 +53,9 @@ function KeyCap({ name }: { name: Key }) {
   const Icon =
     (IS_MAC && MAC_ICONS[name as keyof typeof MAC_ICONS]) ||
     ARROW_ICONS[name as keyof typeof ARROW_ICONS];
-  return <Kbd aria-hidden>{Icon ? <Icon /> : keyName(name)}</Kbd>;
+  return (
+    <Kbd aria-hidden>{Icon ? <Icon className="size-3" /> : keyName(name)}</Kbd>
+  );
 }
 
 const MAC_ICONS = {
