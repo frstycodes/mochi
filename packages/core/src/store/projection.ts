@@ -247,8 +247,26 @@ export class Projection extends Context.Service<Projection>()(
             },
           );
 
+        /** Once every event through `upTo` has folded: a command's caller reads the state it made. */
+        const foldedThrough = (upTo: number) =>
+          Effect.scoped(
+            Effect.gen(function* () {
+              // Subscribed before the check, so a fold in between isn't missed.
+              const live = yield* PubSub.subscribe(folded);
+              if (sequence >= upTo) return;
+              yield* Stream.fromSubscription(live).pipe(
+                Stream.filter(({ event }) => event.sequence >= upTo),
+                Stream.take(1),
+                Stream.runDrain,
+              );
+            }),
+          );
+
         return {
           current: Effect.sync(() => ({ sequence, domain })),
+          /** Whether a window has sent your prefs and pins; until then `domain.context` holds the defaults. */
+          isContextSet: Effect.sync(() => isContextSet),
+          foldedThrough,
           folded: Stream.fromPubSub(folded),
           replica,
         };

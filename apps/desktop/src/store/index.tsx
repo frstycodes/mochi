@@ -14,19 +14,11 @@ import {
 import { replaceAllPins, useAllPins } from '../chat/pins.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
-import { NO_AGENT_PROCESS, type AgentToolCall } from '../host/types/agent.ts';
-import { isListed, type Thread } from '../model.ts';
+import type { AgentToolCall } from '../host/types/agent.ts';
+import { isListed } from '../model.ts';
 import { isSameListing } from '../reorder.ts';
 import { followProfiles, storedProfiles, useProfiles } from '../profiles.ts';
-import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
-import {
-  agentCallArgs,
-  agentCalls,
-  resumeAfterLostProcess,
-  unsentTurns,
-  type AgentCall,
-} from '../runtime/live.ts';
 import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
@@ -44,11 +36,9 @@ import { backends, LOCAL_BACKEND } from '../backends/registry.ts';
 import { loopbackTransport, pageTransport } from '../backends/transport.ts';
 import { saveSideChats } from './sidechat.ts';
 import { shallow as shallowEqual } from 'zustand/vanilla/shallow';
-import { initialState, reducer } from './root.ts';
+import { initialState } from './root.ts';
+import { pageCommand } from './pageCommand.ts';
 import type { Action, Snapshot, State } from './types.ts';
-import { actedOn } from '../notify/slice.ts';
-import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
-import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
 import { markOwnAnswer } from '@mochi/domain/remote/answers';
 import { WindowReactor } from '../reactor/WindowReactor.tsx';
@@ -99,7 +89,7 @@ function requireReplica() {
 
 /** The main window's store: `StoreProvider`'s, plus the work only one window does (Mochi tool calls, scheduled runs). */
 export function HarnessProvider({ children }: { children: ReactNode }) {
-  const { replica, value, apply } = useStoreValue();
+  const { replica, value } = useStoreValue();
   const { dispatch } = value;
   const state = useStore(replica.store);
   // Agent events and other windows' commands, as they fold; this window's own are recorded as they are dispatched.
@@ -113,31 +103,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     const id = setInterval(() => dispatch({ type: 'tick' }), DEMO_TICK_MS);
     return () => clearInterval(id);
   }, [state.paused, dispatch]);
-  useEffect(() => {
-    const onSchedule = (event: ScheduleEvent) => {
-      if (event.type === 'agent')
-        return apply({ type: 'agent', event: event.event, ms: Date.now() });
-      // Dispatched, not applied: the message it becomes must reach the agent (`agentCalls`).
-      if (event.type === 'autofix')
-        return dispatch({
-          type: 'autofix',
-          threadId: event.threadId,
-          event: event.event,
-        });
-      apply(
-        event.type === 'ci'
-          ? { type: 'ci-result', event }
-          : { type: 'schedule-run', event },
-      );
-    };
-    const off = host.schedule.onEvent(onSchedule);
-    // What happened while no window was open: runs and their agent's events, in order.
-    void host.schedule.drain().then(
-      (events) => events.forEach(onSchedule),
-      (error: unknown) => console.error('Reading scheduled runs failed', error),
-    );
-    return off;
-  }, [apply, dispatch]);
   useEffect(() => {
     const onToolCall = (call: AgentToolCall) => {
       const env = toolEnv(replica.getState, dispatch);
@@ -241,15 +206,16 @@ export function DerivedScope({
 
 function useStoreValue() {
   const replica = requireReplica();
-  const { dispatch, apply } = storeDispatch(replica);
+  const dispatch = storeDispatch(replica);
   useProjectionContext(replica, dispatch);
   const value = { store: replica.store, getState: replica.getState, dispatch };
-  return { replica, value, apply };
+  return { replica, value };
 }
 
 /**
- * Applies an action here and sends it to Core when it changes the projection (`Replica.dispatch`), with what it sets off:
- * the agent calls it means (`agentCalls`), an answer to the agent that asked, the schedule's trigger.
+ * Applies an action here and sends it to Core when it changes the projection (`Replica.dispatch`). Core acts on it: the agent
+ * calls it means, the answer to the agent that asked, the schedule's trigger (`Commands` in packages/core/src/store/commands.ts).
+ * The web build has no Core, so the page acts on its own commands (`pageCommand`).
  */
 function storeDispatch(replica: Replica) {
   const apply = (action: Action) => {
@@ -261,79 +227,10 @@ function storeDispatch(replica: Replica) {
     const action = withDispatchContext(before, dispatched);
     recordAction(before, action);
     if (action.type === 'answer') markOwnAnswer(action.queueId);
-    const answer = resolution(before, action);
-    if (answer)
-      host.agent
-        .resolve(answer.requestId, answer.decision)
-        .catch((error: unknown) =>
-          apply({
-            type: 'say',
-            threadId: answer.threadId,
-            entry: undelivered(answer, error),
-          }),
-        );
-    let after: State | undefined;
-    const next = () => (after ??= reducer(before, action));
-    const calls = agentCalls(before, action, next);
-    for (const input of scheduleCalls(before, action, next))
-      host.schedule
-        .set(input)
-        .catch((error: unknown) =>
-          console.error('Saving the schedule failed', error),
-        );
-    // A deleted thread takes its trigger with it.
-    if (action.type === 'delete')
-      for (const id of action.threadIds)
-        host.schedule
-          .remove(id)
-          .catch((error: unknown) =>
-            console.error('Removing the schedule failed', error),
-          );
-    replica.dispatch(action, next());
-    for (const call of calls) {
-      // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
-      callAgent(replica, call).catch((error: unknown) => {
-        const thread =
-          call.method === 'send' && isLostProcess(error)
-            ? replica.getState().threads.find((t) => t.id === call.threadId)
-            : undefined;
-        const retry =
-          thread && call.method === 'send'
-            ? resumeAfterLostProcess(thread, call)
-            : [];
-        if (retry.length === 0) return apply(failed(call.threadId, error));
-        for (const again of retry) {
-          if (again.method === 'start')
-            replica.dispatch({
-              type: 'agent-starting',
-              threadId: again.threadId,
-              provider: again.options.provider,
-            });
-          callAgent(replica, again).catch((e: unknown) =>
-            apply(failed(again.threadId, e)),
-          );
-        }
-      });
-    }
-    for (const threadId of unsentTurns(before, next(), calls))
-      apply(failed(threadId, new Error('Mochi had no agent to send this to')));
-    // After the action: a new thread only exists once it has applied.
-    for (const call of calls)
-      if (call.method === 'start')
-        replica.dispatch({
-          type: 'agent-starting',
-          threadId: call.threadId,
-          provider: call.options.provider,
-        });
-    if (action.type === 'workspace')
-      void retarget(next().threads.find((t) => t.id === action.threadId));
-    const acted = actedOn(action, before.queue);
-    if (acted)
-      host.notify
-        .addressed({ threadId: acted, isActedOn: true })
-        .catch(() => undefined);
+    if (host.hasCore) return replica.dispatch(action);
+    pageCommand(replica, before, action, apply);
   };
-  return { dispatch, apply };
+  return dispatch;
 }
 
 /** What a fold reads from this window, put on the action, so Core and other windows fold it the same way. */
@@ -389,40 +286,6 @@ function useProjectionContext(replica: Replica, dispatch: Dispatch<Action>) {
 function adoptContext({ prefs, pins }: ProjectionContext) {
   setPrefs(projectionPrefs(prefs));
   replaceAllPins(pins);
-}
-
-// Sequential: a handoff's stop must reach the old agent before the new one starts in the same thread.
-let pending: Promise<unknown> = Promise.resolve();
-
-function callAgent(replica: Replica, call: AgentCall) {
-  const run = () =>
-    (
-      host.agent[call.method] as (
-        threadId: string,
-        ...args: unknown[]
-      ) => Promise<unknown>
-    )(call.threadId, ...agentCallArgs(call));
-  // After the commands sent so far are logged: the agent's reply folds after the message it answers.
-  const next = pending.then(() => replica.sent()).then(run);
-  pending = next.catch(() => {});
-  return next;
-}
-
-function isLostProcess(error: unknown) {
-  return error instanceof Error && error.message.includes(NO_AGENT_PROCESS);
-}
-
-function failed(threadId: string, error: unknown): Action {
-  return {
-    type: 'agent',
-    event: {
-      threadId,
-      type: 'turn-end',
-      status: 'failed',
-      error: error instanceof Error ? error.message : String(error),
-    },
-    ms: Date.now(),
-  };
 }
 
 function useHarnessStore() {
@@ -501,26 +364,4 @@ export function useSpaceQueue(spaceId?: string) {
 
 export function snapshot(state: State): Snapshot {
   return { threads: state.threads, queue: state.queue };
-}
-
-/** A scheduled thread's trigger keeps how main starts it; a new workspace before its first run replaces that. */
-async function retarget(thread: Thread | undefined) {
-  if (!thread) return;
-  const trigger = (await host.schedule.list()).find(
-    (t) => t.threadId === thread.id,
-  );
-  const input =
-    trigger &&
-    triggerInput(thread, {
-      when: trigger.when,
-      missed: trigger.missed,
-      name: trigger.name,
-      prompt: trigger.prompt,
-    });
-  if (input)
-    await host.schedule
-      .set(input)
-      .catch((error: unknown) =>
-        console.error('Saving the schedule failed', error),
-      );
 }

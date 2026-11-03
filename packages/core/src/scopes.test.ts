@@ -20,6 +20,7 @@ import { visibleSnapshot } from './remote/visible.ts';
 import { CoreWsRpcs, Unauthorized } from './rpc.ts';
 import { isClassified, scopeOf } from './scopes.ts';
 import { layerCore, refusal } from './server.ts';
+import { AgentCaller } from './store/commands.ts';
 
 const TOKEN = 'local-token';
 const TAGS = [...CoreWsRpcs.requests.keys()];
@@ -186,6 +187,7 @@ const startCore = Effect.gen(function* () {
       port: 0,
       tokens: new Map([[TOKEN, Capabilities.allScopes]]),
       origins: [],
+      agents: AgentCaller.layerTest,
     }),
   );
   return (
