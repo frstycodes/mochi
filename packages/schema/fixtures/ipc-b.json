@@ -1386,12 +1386,6 @@
     ]
    }
   ],
-  "schedule.drain": [
-   {
-    "input": [],
-    "output": []
-   }
-  ],
   "schedule.onChange": [
    {
     "event": [
@@ -1430,78 +1424,6 @@
     "input": [
      "t1"
     ]
-   }
-  ],
-  "schedule.onEvent": [
-   {
-    "event": {
-     "type": "run-start",
-     "run": {
-      "id": "r1",
-      "threadId": "t1",
-      "reason": "Every day at 02:00",
-      "startedAt": 1760000000000,
-      "status": "running"
-     },
-     "name": "Nightly deps",
-     "prompt": "Update dependencies"
-    }
-   },
-   {
-    "event": {
-     "type": "run-end",
-     "run": {
-      "id": "r1",
-      "threadId": "t1",
-      "reason": "Every day at 02:00",
-      "startedAt": 1760000000000,
-      "status": "limited",
-      "endedAt": 1760000100000,
-      "resetsAt": "2026-10-23T02:00:00Z"
-     },
-     "name": "Nightly deps"
-    }
-   },
-   {
-    "event": {
-     "type": "ci",
-     "threadId": "t1",
-     "result": {
-      "pr": 12,
-      "url": "https://github.com/o/r/pull/12",
-      "status": "fail",
-      "failed": [
-       {
-        "name": "lint",
-        "state": "fail",
-        "link": "https://github.com/o/r/runs/1"
-       }
-      ]
-     }
-    }
-   },
-   {
-    "event": {
-     "type": "autofix",
-     "threadId": "t1",
-     "event": {
-      "kind": "conflict",
-      "pr": 12,
-      "url": "https://github.com/o/r/pull/12",
-      "head": "abc123"
-     }
-    }
-   },
-   {
-    "event": {
-     "type": "agent",
-     "event": {
-      "v": 1,
-      "threadId": "t1",
-      "type": "turn-end",
-      "status": "done"
-     }
-    }
    }
   ],
   "sim.list": [
@@ -2297,6 +2219,20 @@
      "data": "",
      "next": 4,
      "exitCode": 0
+    }
+   }
+  ],
+  "remote.onBrowserFrame": [
+   {
+    "event": {
+     "machineId": "m1",
+     "threadId": "t1",
+     "tabId": "b1",
+     "frame": {
+      "data": "data:image/jpeg;base64,AA==",
+      "url": "http://localhost:5173/",
+      "title": "Counter"
+     }
     }
    }
   ]

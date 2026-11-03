@@ -254,7 +254,7 @@ function NewThread() {
         title,
         provider,
         project: place.ref,
-        ...(picked && { controls }),
+        controls,
         ...(images.length > 0 && { images }),
       });
       if (!result.isOk) return false;

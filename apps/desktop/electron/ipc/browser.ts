@@ -31,6 +31,7 @@ import {
   setDevtools,
   setViewBounds,
   setViewMirror,
+  inputToView,
   setViewZoom,
   snapshotView,
   viewLogs,
@@ -54,6 +55,9 @@ export const browser = {
   },
   async setBounds(sender, id, bounds) {
     setViewBounds(sender, id, bounds);
+  },
+  async input(sender, id, input) {
+    await inputToView(sender, id, input);
   },
   async mirror(sender, id, viewport) {
     await setViewMirror(sender, id, viewport);

@@ -14,6 +14,7 @@ import {
   RewindPreview,
   SyncResult,
 } from './ipc/git.ts';
+import { BrowserInput } from './ipc/browser.ts';
 import { PortsListing } from './ipc/ports.ts';
 import { MissedRuns, Trigger, TriggerWhen } from './ipc/schedule.ts';
 import { Project } from './ipc/projects.ts';
@@ -68,6 +69,24 @@ const Id = Str(MAX_ID);
 const NonEmptyId = Id.check(Schema.isMinLength(1));
 const Index = Int.check(Schema.isGreaterThanOrEqualTo(0));
 const Size = Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 }));
+/** A browser viewport side in CSS px. */
+const ViewSize = Int.check(Schema.isBetween({ minimum: 1, maximum: 8192 }));
+const MAX_URL = 8192;
+
+/** One frame of a page a device watches, with what its address bar shows. */
+export const BrowserFrame = Schema.Struct({
+  /** A JPEG data URL. */
+  data: S,
+  url: S,
+  title: S,
+});
+export type BrowserFrame = typeof BrowserFrame.Type;
+
+export { BrowserInput };
+export const BrowserNavigation = Schema.Union([
+  Schema.Literals(['back', 'forward', 'reload']),
+  Schema.Struct({ url: Str(MAX_URL) }),
+]);
 
 /**
  * A path inside the thread's folder as this computer lists it: posix separators, nothing absolute, no `..` (`isRelativePath`).
@@ -544,6 +563,26 @@ export const RemoteCommand = Schema.Union([
     rows: Size,
   }),
   command('terminal-close', { threadId: Id, terminalId: Id }),
+  /** Opens (or shows again) the thread's browser tab on the machine and streams it to the device (`page.watch`). */
+  command('browser-open', {
+    threadId: Id,
+    tabId: NonEmptyId,
+    url: Str(MAX_URL),
+    width: ViewSize,
+    height: ViewSize,
+  }),
+  command('browser-input', {
+    threadId: Id,
+    tabId: NonEmptyId,
+    input: BrowserInput,
+  }),
+  command('browser-navigate', {
+    threadId: Id,
+    tabId: NonEmptyId,
+    to: BrowserNavigation,
+  }),
+  /** Stops streaming; the tab stays open on the machine. */
+  command('browser-close', { threadId: Id, tabId: NonEmptyId }),
   ...PANE_COMMANDS,
   ...THREAD_OP_COMMANDS,
 ]);
@@ -681,6 +720,11 @@ export const COMMAND_SCOPES = {
   'terminal-write': 'terminal',
   'terminal-resize': 'terminal',
   'terminal-close': 'terminal',
+  // The page carries the machine's signed-in sessions; `operate` already lets a device have its agent drive the same browser.
+  'browser-open': 'operate',
+  'browser-input': 'operate',
+  'browser-navigate': 'operate',
+  'browser-close': 'operate',
   'write-file': 'code',
   search: 'code',
   'turn-diff': 'code',

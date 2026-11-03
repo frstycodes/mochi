@@ -11,18 +11,10 @@ import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { File, PatchDiff } from './files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
-import {
-  Check,
-  ChevronRight,
-  Flag,
-  Globe,
-  GlobeSearch,
-  Note,
-  Terminal,
-  X,
-} from '@/icons';
+import { Check, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { ErrorFallback } from '@/components/ErrorFallback';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
@@ -66,8 +58,7 @@ import { ICON_SWAP } from './ui';
 import { MessageImages } from './chat/MessageImages';
 import { isFilePath, revealFile, useImageUrls } from './chat/imageSrc';
 import { openPhotos } from './photo/photos';
-
-const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
+import { Expand, FoldChevron } from './Fold';
 
 /**
  * One work group (the calls between two messages), folded to a line like Claude's: while live the line names the current
@@ -319,15 +310,9 @@ export function CallRow({
         )}
         {/* Rows with nothing to open keep the chevron's width, so stats line up. */}
         {detail ? (
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150',
-              isOpen && 'rotate-90',
-            )}
-          />
+          <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         ) : (
-          <span aria-hidden className="size-3.5 shrink-0" />
+          <span aria-hidden className="size-[0.85em] shrink-0" />
         )}
       </div>
       {!!detail && (
@@ -599,12 +584,7 @@ export function TrailIcon({
   isOpen: boolean;
 }) {
   const chevron = (
-    <ChevronRight
-      className={cn(
-        'size-3 text-subtle-foreground transition-transform duration-150',
-        isOpen && 'rotate-90',
-      )}
-    />
+    <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
   );
   return (
     <span className="grid size-3 shrink-0 place-items-center *:col-start-1 *:row-start-1">
@@ -858,31 +838,6 @@ function sum(calls: ToolCall[], key: 'added' | 'removed') {
   return calls.reduce((n, c) => n + (c[key] ?? 0), 0);
 }
 
-export function Expand({
-  isOpen,
-  children,
-}: {
-  isOpen: boolean;
-  children: ReactNode;
-}) {
-  const reduce = useReducedMotionConfig();
-  return (
-    <AnimatePresence initial={false}>
-      {isOpen && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={reduce ? { duration: 0 } : EXPAND}
-          className="overflow-hidden"
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
 /** A skill the agent loaded: its name in the resolved-token colour and what it is for. */
 function SkillRow({
   name,
@@ -942,8 +897,8 @@ export function DiffStat({
 }) {
   return (
     <span className="flex items-center gap-1.5 font-mono text-xs tabular">
-      <span className="text-success">+{added}</span>
-      <span className="text-destructive">−{removed}</span>
+      <AnimatedNumber value={added} prefix="+" className="text-success" />
+      <AnimatedNumber value={removed} prefix="−" className="text-destructive" />
       {withBar && <DiffBar added={added} removed={removed} />}
     </span>
   );
@@ -1106,13 +1061,7 @@ function ThoughtRow({ entry }: { entry: ActivityEntry }) {
       >
         <span className="size-4 shrink-0" />
         <span className="flex-1">Thought for {entry.seconds ?? 1}s</span>
-        <ChevronRight
-          aria-hidden
-          className={cn(
-            'size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150',
-            isOpen && 'rotate-90',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
       </button>
       <Expand isOpen={isOpen}>
         <p className="px-3 pb-3 pl-9.5 type-meta text-pretty text-muted-foreground">
@@ -1122,3 +1071,6 @@ function ThoughtRow({ entry }: { entry: ActivityEntry }) {
     </li>
   );
 }
+
+// Its callers import the shared fold from here.
+export { Expand } from './Fold';

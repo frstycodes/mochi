@@ -11,6 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { NO_WINDOW } from '@mochi/core/browser/answers';
 import {
   DEV_TOOL_TABLE,
   MOCHI_TIMEOUT_MS,
@@ -125,7 +126,7 @@ export async function callMochi(
   const win = mainWindow();
   if (!win)
     return {
-      content: [{ type: 'text', text: 'Mochi has no window open' }],
+      content: [{ type: 'text', text: NO_WINDOW }],
       isError: true,
     };
   const result = await calls.call(win.webContents, {
