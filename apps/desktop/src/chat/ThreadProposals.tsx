@@ -10,6 +10,8 @@ import {
 } from '../model';
 import { useHarness, useHarnessSelector } from '../store';
 import { SubThreadState } from '../goals/SubThreads';
+import { Expand } from '../WorkLog';
+import { FoldChevron } from '@/Fold';
 import { threadStatus } from '../goals/VerdictChip';
 import { isExpired, OFFER_REPLY, suggestionHereReply } from './proposals';
 import { ThreadName } from './ThreadMessage';
@@ -241,9 +243,9 @@ function ProposalRow({
           )}
         </span>
       </div>
-      {isPending && isBriefOpen && (
+      <Expand isOpen={isPending && isBriefOpen}>
         <Brief text={proposal.brief} className="pl-6" />
-      )}
+      </Expand>
       {isPending && (
         <div className="flex items-center justify-end gap-1.5 pt-1.5">
           <Button size="sm" variant="ghost" onClick={onDismiss}>
@@ -330,7 +332,9 @@ export function OfferCard({
               onToggle={() => setBriefOpen((o) => !o)}
             />
           </p>
-          {isBriefOpen && <Brief text={proposal.brief} />}
+          <Expand isOpen={isBriefOpen}>
+            <Brief text={proposal.brief} />
+          </Expand>
         </div>
       </div>
       <div className="flex items-center justify-end gap-1.5">
@@ -387,13 +391,7 @@ function Disclosure({
       className="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md px-1 type-caption text-subtle-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
     >
       Brief
-      <ChevronRight
-        aria-hidden
-        className={cn(
-          'size-3 transition-transform duration-150',
-          isOpen && 'rotate-90',
-        )}
-      />
+      <FoldChevron isOpen={isOpen} />
     </button>
   );
 }

@@ -1,15 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import {
-  ArrowLeft,
-  BackgroundTask,
-  ChevronRight,
-  ArrowUp,
-  Stop,
-} from '@/icons';
+import { ArrowLeft, BackgroundTask, ArrowUp, Stop } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import {
   Empty,
   EmptyDescription,
@@ -19,7 +14,8 @@ import {
 } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { plural, TOKENS } from '@mochi/domain/lib/format';
+import { plural, TOKEN_FORMAT } from '@mochi/domain/lib/format';
+import type { Format } from '@number-flow/react';
 import { formatElapsed } from '../progress';
 import {
   SubagentAvatar,
@@ -62,6 +58,7 @@ import {
   Expand,
   RunOutput,
 } from '../WorkLog';
+import { FoldChevron } from '../Fold';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 import { queryKeys } from '../queryKeys';
@@ -124,13 +121,7 @@ function TaskList({ thread, tasks }: { thread: Thread; tasks: TaskRow[] }) {
               className="flex h-6 w-fit cursor-default items-center gap-1 rounded-md px-1 type-meta text-subtle-foreground hover:text-muted-foreground"
             >
               Finished <span className="tabular">{finished.length}</span>
-              <ChevronRight
-                aria-hidden
-                className={cn(
-                  'size-3 transition-transform duration-150',
-                  isFinishedOpen && 'rotate-90',
-                )}
-              />
+              <FoldChevron isOpen={isFinishedOpen} />
             </button>
             <Expand isOpen={isFinishedOpen}>
               <TaskCards thread={thread} tasks={finished} />
@@ -243,11 +234,11 @@ function AgentCard({
           <SubagentModel provider={subagent.provider} model={subagent.model} />
         )}
         {subagent.tokens > 0 && (
-          <Count value={TOKENS.format(subagent.tokens)} unit="tokens" />
+          <Count value={subagent.tokens} format={TOKEN_FORMAT} unit="tokens" />
         )}
         {subagent.steps.length > 0 && (
           <Count
-            value={String(subagent.steps.length)}
+            value={subagent.steps.length}
             unit={plural(subagent.steps.length, 'tool use', 'tool uses')}
           />
         )}
@@ -303,10 +294,23 @@ const TASK_KINDS = {
   monitor: 'Monitor',
 } satisfies Record<TaskRow['kind'], string>;
 
-function Count({ value, unit }: { value: string; unit: string }) {
+function Count({
+  value,
+  format,
+  unit,
+}: {
+  value: number;
+  format?: Format;
+  unit: string;
+}) {
   return (
     <span className="shrink-0">
-      <span className="tabular text-muted-foreground">{value}</span> {unit}
+      <AnimatedNumber
+        value={value}
+        format={format}
+        className="text-muted-foreground"
+      />{' '}
+      {unit}
     </span>
   );
 }

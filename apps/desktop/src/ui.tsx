@@ -1,5 +1,6 @@
 import { type ComponentProps, type CSSProperties, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { TextMorph } from 'torph/react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -26,6 +27,7 @@ import {
   type IconComponent as LucideIcon,
   type IconProps,
 } from '@/icons';
+import { usePrefs } from './settings/prefs';
 import type {
   LineSlot,
   Provider,
@@ -450,5 +452,23 @@ export function IconSwap({
         </motion.span>
       </AnimatePresence>
     </span>
+  );
+}
+
+/**
+ * A short label changing in place while visible (Connecting to Connected, Start to Open): shared letters slide to their new place, the rest fade.
+ * Plain text only, and not for streamed text or numeric counters.
+ */
+export function AnimatedText({ children }: { children: string }) {
+  const { reduceMotion } = usePrefs();
+  return (
+    <TextMorph
+      duration={200}
+      ease="cubic-bezier(0.23, 1, 0.32, 1)"
+      disabled={reduceMotion === 'on'}
+      respectReducedMotion={reduceMotion === 'system'}
+    >
+      {children}
+    </TextMorph>
   );
 }

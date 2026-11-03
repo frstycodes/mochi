@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { cn } from '@/lib/utils';
 import { PATCHES } from '../fixtures';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
@@ -87,13 +87,5 @@ export function FileRow({
 }
 
 export function Chevron({ isOpen }: { isOpen: boolean }) {
-  return (
-    <ChevronRight
-      aria-hidden
-      className={cn(
-        'size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
-        isOpen && 'rotate-90',
-      )}
-    />
-  );
+  return <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />;
 }

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Warning, History, Stop } from '@/icons';
-import { ForkIcon } from '../ui';
+import { AnimatedText, ForkIcon } from '../ui';
 import {
   Alert,
   AlertAction,
@@ -258,7 +258,9 @@ function WorkingNotice({
     <Alert>
       <Stop aria-hidden />
       <AlertTitle>
-        {isStopping ? 'Stopping the agent…' : STOP_TO_REWIND}
+        <AnimatedText>
+          {isStopping ? 'Stopping the agent…' : STOP_TO_REWIND}
+        </AnimatedText>
       </AlertTitle>
       <AlertDescription>
         {isStopping
@@ -273,7 +275,9 @@ function WorkingNotice({
             disabled={isStopping}
             onClick={onStop}
           >
-            {isStopping ? 'Stopping…' : 'Stop and rewind'}
+            <AnimatedText>
+              {isStopping ? 'Stopping…' : 'Stop and rewind'}
+            </AnimatedText>
           </Button>
         </AlertAction>
       )}

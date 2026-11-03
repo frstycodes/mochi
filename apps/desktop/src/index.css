@@ -71,6 +71,8 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
+  /* Solar draws a 1.5 stroke on its 24px grid, ~1px at 16px; 2 matches the weight of 14px text. */
+  --solar-stroke-width: 2;
   /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/appZoom.ts` sets the zoom. */
   --lights-end: calc(75px / var(--app-zoom, 1));
 
@@ -105,12 +107,12 @@
   --ring: oklch(0.47 0.012 285);
   --highlight: oklch(1 0 285 / 0.7);
 
-  --sidebar: oklch(0.99 0.002 285);
+  --sidebar: oklch(0.965 0.004 285);
   --halo-strength: 0.3;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.25 0.02 285 / 0.07);
+  --sidebar-accent: oklch(0.25 0.02 285 / 0.1);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -135,9 +137,6 @@
     0 24px 56px -12px oklch(0.2 0.02 285 / 0.22),
     0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-  --elev-kbd:
-    inset 0 -1px 0 oklch(0.25 0.02 285 / 0.16),
-    inset 0 0 0 0.5px oklch(0.25 0.02 285 / 0.08);
   --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
@@ -173,7 +172,7 @@
     --highlight: oklch(0.98 0.005 285 / 0.06);
     --sidebar: oklch(0.21 0.007 285);
     --halo-strength: 0.15;
-    --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
+    --sidebar-accent: oklch(0.95 0.01 285 / 0.11);
     --chart-1: #3987e5;
     --chart-2: #d95926;
     --chart-3: #199e70;
@@ -193,9 +192,6 @@
       0 28px 64px -12px oklch(0.05 0.01 285 / 0.7),
       0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-    --elev-kbd:
-      inset 0 1px 0 oklch(1 0 0 / 0.07),
-      inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
     --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
@@ -230,7 +226,7 @@
   --highlight: oklch(0.98 0.005 285 / 0.06);
   --sidebar: oklch(0.21 0.007 285);
   --halo-strength: 0.15;
-  --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
+  --sidebar-accent: oklch(0.95 0.01 285 / 0.11);
   --chart-1: #3987e5;
   --chart-2: #d95926;
   --chart-3: #199e70;
@@ -250,9 +246,6 @@
     0 28px 64px -12px oklch(0.05 0.01 285 / 0.7),
     0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-  --elev-kbd:
-    inset 0 1px 0 oklch(1 0 0 / 0.07),
-    inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
   --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
@@ -359,7 +352,6 @@
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
-  --shadow-kbd: var(--elev-kbd);
   --shadow-composer: var(--elev-composer);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -436,6 +428,21 @@
   --text-sm--line-height: calc(1.25rem * var(--text-scale, 1));
   /* The sidebar is glass: hovers and pressed states tint it like its rows (`--sidebar-accent`), never the opaque page accent. */
   --accent: var(--sidebar-accent);
+}
+[data-sidebar='sidebar']
+  :is(
+    [data-sidebar='menu-button'],
+    [data-slot='collapsible-trigger']
+  ):focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+/* macOS greys the selection while the window isn't key (useWindowInactive). */
+:root[data-window-inactive]
+  [data-sidebar='sidebar']
+  [data-sidebar='menu-button'][data-active='true'] {
+  background: color-mix(in oklab, var(--sidebar-accent) 65%, transparent);
 }
 
 @utility type-display {
@@ -553,16 +560,26 @@
   padding-left: calc(var(--lights-end) + 9px - var(--header-left, 0px));
 }
 
-/* The shell window's material (sidebar glass / Mica, electron/window.ts) shows through the docked sidebar only; the page beside it stays opaque. */
+/* The shell window's material (`macMaterial` / Mica, electron/window.ts) shows through the docked sidebar only; the page beside it stays opaque. */
 :root[data-material] body {
   background: transparent;
 }
-/* The wash sits on the container, not the inner panel, so it covers the border too: raw material under the 1px border read as a dark line. */
+/* Mica's wash sits on the container, not the inner panel, so it covers the border too: raw material under the 1px border read as a dark line. */
 :root[data-material] [data-slot='sidebar-container'] {
   background: color-mix(in oklab, var(--sidebar) 35%, transparent);
   border-color: color-mix(in oklab, var(--sidebar-border) 50%, transparent);
 }
 :root[data-material] [data-slot='sidebar-inner'] {
+  background: transparent;
+}
+/* macOS's tint is native (electron/sidebarTint), under the page, so the sidebar paints none of its own: a see-through wash
+   painted by Chromium came back in blocks of different shades after partial redraws (hovering rows), like Claude's app avoids. */
+:root:is(
+    [data-material='appkit'],
+    [data-material='glass'],
+    [data-material='vibrancy']
+  )
+  [data-slot='sidebar-container'] {
   background: transparent;
 }
 
@@ -638,6 +655,10 @@
   &:focus-within {
     background: var(--glass);
     backdrop-filter: blur(20px) saturate(1.6);
+  }
+  /* Over a see-through window (`data-material`), Chromium left stale patches in the sidebar after repaints while this blur was on. */
+  :root[data-material] &:focus-within {
+    backdrop-filter: none;
   }
   @media (prefers-reduced-transparency: reduce) {
     &:focus-within {
