@@ -19,7 +19,7 @@ import { isListed } from '../model.ts';
 import { isSameListing } from '../reorder.ts';
 import { followProfiles, storedProfiles, useProfiles } from '../profiles.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
-import { runTool } from '../runtime/tools.ts';
+import { hearToolDecision, runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
 import { setPrefs, usePrefs } from '../settings/prefs.ts';
@@ -94,7 +94,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   const state = useStore(replica.store);
   // Agent events and other windows' commands, as they fold; this window's own are recorded as they are dispatched.
   useEffect(
-    () => replica.listen((action, before) => recordAction(before, action)),
+    () =>
+      replica.listen((action, before) => {
+        recordAction(before, action);
+        hearToolDecision(action, before);
+      }),
     [replica],
   );
   // The demo's clock runs 60× fast; real threads keep Core's, one tick a minute.
@@ -226,6 +230,7 @@ function storeDispatch(replica: Replica) {
     const before = replica.getState();
     const action = withDispatchContext(before, dispatched);
     recordAction(before, action);
+    hearToolDecision(action, before);
     if (action.type === 'answer') markOwnAnswer(action.queueId);
     if (host.hasCore) return replica.dispatch(action);
     pageCommand(replica, before, action, apply);
