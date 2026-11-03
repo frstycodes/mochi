@@ -31,6 +31,8 @@ export const OBJC_ADDON: Compiler = {
     'dynamic_lookup',
     '-framework',
     'AppKit',
+    '-framework',
+    'QuartzCore',
     source,
     '-o',
     out,
