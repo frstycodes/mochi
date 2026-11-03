@@ -1,6 +1,5 @@
 import {
   BrowserWindow,
-  screen,
   session,
   WebContentsView,
   type BrowserWindowConstructorOptions,
@@ -9,6 +8,7 @@ import {
 import type { Locator, Page } from 'playwright-core';
 import type {
   BrowserAct,
+  BrowserInput,
   BrowserWait,
   BrowserBounds,
   BrowserCommand,
@@ -36,6 +36,7 @@ import {
   locate,
   rethrowForAgent,
   runAct,
+  runInput,
   snapshotPage,
   waitOnPage,
 } from '@mochi/core/browser/drive';
@@ -44,6 +45,7 @@ import {
   debuggerFor,
   dropPage,
   pageFor,
+  syncThrottling,
   type Automated,
 } from './playwright.ts';
 import {
@@ -78,6 +80,8 @@ interface Entry extends Automated {
   dialog: BrowserDialog | null;
   /** The page's own icon (http(s) or data URL), for its tab; dropped when the main frame navigates until the new page names one. */
   favicon: string | null;
+  /** Core opened it (a thread's tab, `ThreadPages`): its events go to Core too, which the device watching it follows. */
+  relay: ((event: BrowserEvent) => void) | null;
 }
 
 interface Mirror {
@@ -87,8 +91,6 @@ interface Mirror {
   delay: number;
   /** The last frame sent; an identical capture isn't sent again. */
   last: string | null;
-  /** Set while the window is hidden or minimized; its 'show' or 'restore' resumes the mirror. */
-  isPaused: boolean;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -164,16 +166,19 @@ function register(
     snapshotGeneration: 0,
     dialog: null,
     favicon: null,
+    relay: null,
   };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
   wire(id, entry);
-  resumeMirrorsOn(win);
   win.once('closed', () => {
+    // destroyView or the page closing itself unregistered it first, and told Core then.
+    if (views.get(id) !== entry) return;
     entry.stopAutoReload?.();
     dropPage(entry);
     views.delete(id);
+    entry.relay?.({ id, type: 'closed' });
   });
   // The page closed itself (a popup's window.close()); destroyView and the window closing unregister first.
   view.webContents.once('destroyed', () => {
@@ -221,6 +226,7 @@ export function destroyView(owner: WebContents, id: string) {
 }
 
 function unregister(id: string, entry: Entry) {
+  entry.relay?.({ id, type: 'closed' });
   stopMirror(entry);
   views.delete(id);
   entry.stopAutoReload?.();
@@ -272,8 +278,8 @@ export async function setViewMirror(
     timer: null,
     delay: MIRROR_INTERVAL_MS,
     last: null,
-    isPaused: false,
   };
+  syncThrottling(entry);
   layout(entry);
   const e = entry.emulation;
   const dbg = await debuggerFor(entry.view.webContents);
@@ -300,49 +306,31 @@ async function sendFrame(id: string, entry: Entry) {
   )
     return;
   mirror.timer = null;
-  if (!entry.win.isVisible() || entry.win.isMinimized())
-    return void (mirror.isPaused = true);
-  const dbg = await debuggerFor(entry.view.webContents);
-  // CDP, not capturePage: the view is hidden, and CDP renders it anyway. Screencast sends no frames for a hidden view.
-  const scale = Math.min(
-    1,
-    MIRROR_MAX_WIDTH /
-      (mirror.width *
-        screen.getDisplayMatching(entry.win.getBounds()).scaleFactor),
-  );
-  const shot = await (async () => {
-    // The clip is in document coordinates, so it follows the scroll position to stay on the viewport.
-    const { cssVisualViewport: v } = (await dbg.sendCommand(
-      'Page.getLayoutMetrics',
-    )) as {
-      cssVisualViewport: {
-        pageX: number;
-        pageY: number;
-        clientWidth: number;
-        clientHeight: number;
-      };
-    };
-    const clip = {
-      x: v.pageX,
-      y: v.pageY,
-      width: v.clientWidth,
-      height: v.clientHeight,
-      scale,
-    };
-    return (await dbg.sendCommand('Page.captureScreenshot', {
-      format: 'jpeg',
-      quality: MIRROR_QUALITY,
-      clip,
-    })) as { data: string };
-  })().catch(() => null);
+  // capturePage, not CDP's captureScreenshot: a capture counts as a capturer, so the page paints while its window is hidden
+  // or minimized, and CDP's capture alone then gets no new frame.
+  const shot = await entry.view.webContents
+    .capturePage(undefined, { stayHidden: true })
+    .then((image) =>
+      image.isEmpty()
+        ? null
+        : {
+            data: image
+              .resize({
+                width: Math.min(MIRROR_MAX_WIDTH, image.getSize().width),
+              })
+              .toJPEG(MIRROR_QUALITY)
+              .toString('base64'),
+          },
+    )
+    .catch(() => null);
   if (entry.mirror !== mirror) return;
   const isChanged = !!shot && shot.data !== mirror.last;
-  if (isChanged && !entry.owner.isDestroyed())
-    entry.owner.send('browser:onEvent', {
+  if (isChanged)
+    emitFrom(entry, {
       id,
       type: 'frame',
       data: `data:image/jpeg;base64,${shot.data}`,
-    } satisfies BrowserEvent);
+    });
   if (isChanged) mirror.last = shot.data;
   mirror.delay = isChanged
     ? MIRROR_INTERVAL_MS
@@ -355,23 +343,9 @@ function kickMirror(id: string, entry: Entry) {
   const mirror = entry.mirror;
   if (!mirror) return;
   mirror.delay = MIRROR_INTERVAL_MS;
-  if (!mirror.timer && !mirror.isPaused) return;
-  clearTimeout(mirror.timer ?? undefined);
-  mirror.isPaused = false;
+  if (!mirror.timer) return;
+  clearTimeout(mirror.timer);
   void sendFrame(id, entry);
-}
-
-const resumable = new WeakSet<BrowserWindow>();
-
-function resumeMirrorsOn(win: BrowserWindow) {
-  if (resumable.has(win)) return;
-  resumable.add(win);
-  const resume = () => {
-    for (const [id, entry] of views)
-      if (entry.win === win && entry.mirror?.isPaused) kickMirror(id, entry);
-  };
-  win.on('show', resume);
-  win.on('restore', resume);
 }
 
 function stopMirror(entry: Entry) {
@@ -792,6 +766,16 @@ export function viewLogs(owner: WebContents, id: string) {
 }
 
 /** Playwright's input goes through CDP, so the page gets trusted events, the same a person's input makes. */
+export async function inputToView(
+  owner: WebContents,
+  id: string,
+  input: BrowserInput,
+) {
+  const entry = get(owner, id);
+  await runInput(await pageFor(entry), input);
+  kickMirror(id, entry);
+}
+
 export async function actOnView(
   owner: WebContents,
   id: string,
@@ -874,6 +858,17 @@ export async function waitForView(
   return waitOnPage(page, until, start);
 }
 
+function emitFrom(entry: Entry, event: BrowserEvent) {
+  if (!entry.owner.isDestroyed()) entry.owner.send('browser:onEvent', event);
+  entry.relay?.(event);
+}
+
+/** Core opened view `id`: its events go to `relay` too. GAP: a popup it opens stays the window's tab, unknown to Core. */
+export function relayView(id: string, relay: (event: BrowserEvent) => void) {
+  const entry = views.get(id);
+  if (entry) entry.relay = relay;
+}
+
 function get(owner: WebContents, id: string) {
   const entry = views.get(id);
   if (!entry || entry.owner.id !== owner.id)
@@ -883,8 +878,7 @@ function get(owner: WebContents, id: string) {
 
 function wire(id: string, entry: Entry) {
   const wc = entry.view.webContents;
-  const emit = (event: BrowserEvent) =>
-    !entry.owner.isDestroyed() && entry.owner.send('browser:onEvent', event);
+  const emit = (event: BrowserEvent) => emitFrom(entry, event);
   const state = () => {
     kickMirror(id, entry);
     emit({

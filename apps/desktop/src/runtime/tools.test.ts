@@ -40,7 +40,13 @@ import { scheduleReducer } from '../schedule/slice.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { pickTarget, startedPort } from './devServerTools.ts';
-import { decideTool, runTool, type ToolEnv } from './tools.ts';
+import {
+  decideTool,
+  hearToolDecision,
+  runTool,
+  type ToolEnv,
+} from './tools.ts';
+import { storeCommand } from '../remote/storeCommands.ts';
 import type { Project } from '@mochi/domain/host/types/projects';
 import {
   asks,
@@ -1094,6 +1100,67 @@ test('a tool set to Off refuses, Ask waits on a widget showing the call, and you
   decideTool(denied.card.tool!.callId, { isApproved: false });
   assert.match((await denied.result).text, /denied/);
   assert.equal(t.thread('rl').title, 'Renamed');
+});
+
+test('a tool card answered from any view goes on wherever the call waits, and the first answer holds', async () => {
+  const t = setup();
+  t.env.prefs.set({ toolPolicies: { rename_thread: 'ask' } });
+  // What a window's store does with an action it folds, its own or another view's.
+  const fold = (action: Action) => {
+    const before = t.state();
+    t.env.dispatch(action);
+    hearToolDecision(action, before);
+  };
+  const { result, card } = await t.asking('rename_thread', {
+    title: 'Renamed',
+  });
+  fold({ type: 'tool-decision', queueId: card.id, isApproved: true });
+  fold({ type: 'tool-decision', queueId: card.id, isApproved: false });
+  assert.ok(!(await result).isError);
+  assert.equal(t.thread('rl').title, 'Renamed');
+
+  const denied = await t.asking('rename_thread', { title: 'Again' });
+  fold({ type: 'tool-decision', queueId: denied.card.id, isApproved: false });
+  assert.deepEqual(
+    t.state().queue.find((q) => q.id === denied.card.id)?.tool?.decision,
+    { isApproved: false },
+    'every view sees the card answered',
+  );
+  fold({ type: 'tool-decision', queueId: denied.card.id, isApproved: true });
+  assert.match((await denied.result).text, /denied/);
+});
+
+test('a device approving a tool card answers the call, with the option it picked by label', async () => {
+  const t = setup();
+  t.env.prefs.set({ toolPolicies: { create_thread: 'ask' } });
+  const { result, card } = await t.asking('create_thread', {
+    initiation: 'user_asked',
+    prompt: 'Fix login',
+    isTopLevel: true,
+  });
+  const picked = card.tool!.options!.at(-1)!;
+  assert.deepEqual(
+    storeCommand({ type: 'resolve', queueId: card.id }, t.state(), 'Pixel')
+      ?.result,
+    { isOk: false, error: 'Pick one of its options' },
+  );
+  const { result: answered, actions } = storeCommand(
+    { type: 'resolve', queueId: card.id, answers: [[picked.label]] },
+    t.state(),
+    'Pixel',
+  )!;
+  assert.deepEqual(answered, { isOk: true });
+  assert.deepEqual(actions, [
+    {
+      type: 'tool-decision',
+      queueId: card.id,
+      isApproved: true,
+      options: [picked.id],
+    },
+  ]);
+  const before = t.state();
+  actions.forEach((a) => (t.env.dispatch(a), hearToolDecision(a, before)));
+  assert.ok(!(await result).isError);
 });
 
 test("deletes can't be set to run on their own: a saved Allow is ignored and they still ask", async () => {

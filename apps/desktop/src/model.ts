@@ -573,6 +573,14 @@ export interface Thread {
   isSettingsChat?: true;
   /** How many `activity` entries you had seen when you last had it open, on any device; more now is unread. */
   seenActivity?: number;
+  /** Browser tabs whose pages run on this thread's computer (`ThreadPages` in Core), so every window, device and the agent name the same page. */
+  browserTabs?: ThreadBrowserTab[];
+}
+
+export interface ThreadBrowserTab {
+  id: string;
+  url: string;
+  title: string;
 }
 
 /** A message as you wrote it; references and skills resolve when it's sent, not when it's queued. */
@@ -756,6 +764,13 @@ export interface ToolWidget {
   edits?: FileEdit[];
   /** Mochi's own facts under the title, like which other profiles share the account. */
   notes?: string[];
+  /** Answered from some view (`tool-decision`); the card closes once the call that asked records what it did. */
+  decision?: ToolDecision;
+}
+
+export interface ToolDecision {
+  isApproved: boolean;
+  options?: string[];
 }
 
 /**

@@ -22,6 +22,7 @@ import type {
   WriteResult,
 } from '@mochi/domain/host/types/fs';
 import type { MissedRuns, Trigger, TriggerWhen } from './schedule.ts';
+import type { BrowserInput } from '@mochi/domain/host/types/browser';
 import type { PortsListing } from '@mochi/domain/host/types/ports';
 import type { Manifest } from '@mochi/domain/host/types/manifest';
 import type { CloneSource, Project } from '@mochi/domain/host/types/projects';
@@ -84,6 +85,8 @@ export interface OtherMachine {
   isOnline: boolean;
   /** The six digits both screens show while joining. */
   pairingCode: string;
+  /** Heard on this computer's network, not only listed by the relay. */
+  isNearby?: boolean;
 }
 
 /**
@@ -259,6 +262,28 @@ export type RemoteCommand =
     }
   /** Output from offset `after` on; the device polls with the `next` it got. */
   | { type: 'terminal-close'; threadId: string; terminalId: string }
+  /** The thread's browser tab, hosted on the machine and streamed to the device (`page.watch`). */
+  | {
+      type: 'browser-open';
+      threadId: string;
+      tabId: string;
+      url: string;
+      width: number;
+      height: number;
+    }
+  | {
+      type: 'browser-input';
+      threadId: string;
+      tabId: string;
+      input: BrowserInput;
+    }
+  | {
+      type: 'browser-navigate';
+      threadId: string;
+      tabId: string;
+      to: 'back' | 'forward' | 'reload' | { url: string };
+    }
+  | { type: 'browser-close'; threadId: string; tabId: string }
   // the side pane on another computer's thread: saving and searching its files, turn diffs, transcript images, task output
   | {
       type: 'write-file';
@@ -432,6 +457,15 @@ export interface TerminalOutput {
   exitCode?: number;
 }
 
+/** One frame of a browser tab on a followed machine, with what its address bar shows. */
+export interface BrowserFrameMessage {
+  machineId: string;
+  /** The machine's own (bare) thread id. */
+  threadId: string;
+  tabId: string;
+  frame: { data: string; url: string; title: string };
+}
+
 /** One push of a followed machine's terminal. */
 export interface TerminalChunk extends TerminalOutput {
   machineId: string;
@@ -485,6 +519,7 @@ export interface RemoteHost {
   ): () => void;
   /** Output of a terminal opened on a followed machine (`terminal-open`), pushed as it prints; the last chunk of an exited shell has `exitCode`. */
   onTerminalOutput(listener: (message: TerminalChunk) => void): () => void;
+  onBrowserFrame(listener: (message: BrowserFrameMessage) => void): () => void;
   /** Keeps a followed machine's store (`toSaved` JSON) encrypted on this computer, for launch and offline reading. */
   cacheMachine(machineId: string, saved: string): Promise<void>;
   cachedMachines(): Promise<{ machineId: string; saved: string }[]>;
@@ -514,6 +549,7 @@ export const remoteMethods = {
   follow: 'invoke',
   onMachineFrame: 'event',
   onTerminalOutput: 'event',
+  onBrowserFrame: 'event',
   cacheMachine: 'invoke',
   cachedMachines: 'invoke',
   cacheCatalog: 'invoke',

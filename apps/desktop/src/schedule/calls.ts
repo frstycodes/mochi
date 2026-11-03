@@ -4,7 +4,7 @@ import type {
   TriggerWhen,
 } from '../host/types/schedule.ts';
 import { firstPrompt, type Thread } from '../model.ts';
-import { getProfiles } from '../profiles.ts';
+import { profilesNow } from '../store/context.ts';
 import { scheduledStart } from '../runtime/live.ts';
 import type { Action, State } from '../store/types.ts';
 
@@ -38,7 +38,7 @@ export function triggerInput(
   const start = scheduledStart(thread);
   if (!start) return;
   const githubUser =
-    getProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
+    profilesNow().find((p) => p.id === thread.spaceId)?.github || undefined;
   return {
     threadId: thread.id,
     ...draft,
@@ -46,4 +46,22 @@ export function triggerInput(
     sessionId: thread.session?.id,
     githubUser,
   };
+}
+
+/** A scheduled thread's trigger keeps how main starts it; a new workspace before its first run replaces that. Undefined without a trigger. */
+export function retargeted(
+  thread: Thread,
+  trigger:
+    | Pick<TriggerInput, 'when' | 'missed' | 'name' | 'prompt'>
+    | undefined,
+): TriggerInput | undefined {
+  return (
+    trigger &&
+    triggerInput(thread, {
+      when: trigger.when,
+      missed: trigger.missed,
+      name: trigger.name,
+      prompt: trigger.prompt,
+    })
+  );
 }

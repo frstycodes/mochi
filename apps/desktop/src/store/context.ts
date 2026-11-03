@@ -2,7 +2,7 @@ import type { Pin, Pins } from '../chat/pins.ts';
 import type { Space } from '../model.ts';
 import { DEFAULT_PREFS, type Prefs } from '../settings/prefsDefaults.ts';
 
-/** The prefs the thread projection and Core's reactor rules read; the rest of `Prefs` is this window's own. */
+/** The prefs the thread projection, Core's reactor rules and Core's own tool runs read; the rest of `Prefs` is this window's own. */
 export type ProjectionPrefs = Pick<
   Prefs,
   | 'autofixPrs'
@@ -16,6 +16,8 @@ export type ProjectionPrefs = Pick<
   | 'simplifyRules'
   | 'whileWorking'
   | 'turnSpine'
+  | 'agentControl'
+  | 'toolPolicies'
 >;
 
 /**
@@ -41,6 +43,8 @@ export const projectionPrefs = ({
   simplifyRules,
   whileWorking,
   turnSpine,
+  agentControl,
+  toolPolicies,
 }: ProjectionPrefs): ProjectionPrefs => ({
   autofixPrs,
   autoArchivePrs,
@@ -53,6 +57,8 @@ export const projectionPrefs = ({
   simplifyRules,
   whileWorking,
   turnSpine,
+  agentControl,
+  toolPolicies,
 });
 
 /**

@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises';
 import { errors, type Locator, type Page } from 'playwright-core';
 import type {
+  BrowserInput,
   BrowserAct,
   BrowserSnapshot,
   BrowserWait,
@@ -58,6 +59,21 @@ function formFlags(target: Locator) {
 const FAIL_CLOSED_FLAGS = { isSubmit: true, isPassword: true };
 const SNAPSHOT_TIMEOUT_MS = 10_000;
 const FLAGS_TIMEOUT_MS = 2000;
+
+/** A watching device's input at a point of the page, as trusted mouse and keyboard events. */
+export async function runInput(page: Page, input: BrowserInput) {
+  switch (input.kind) {
+    case 'click':
+      return page.mouse.click(input.x, input.y);
+    case 'scroll':
+      await page.mouse.move(input.x, input.y);
+      return page.mouse.wheel(input.dx, input.dy);
+    case 'key':
+      return page.keyboard.press(input.key);
+    case 'text':
+      return page.keyboard.insertText(input.text);
+  }
+}
 
 export async function runAct(
   page: Page,

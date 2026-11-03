@@ -4,6 +4,7 @@ import type { AgentRpcs } from './agents/rpc.ts';
 import type { GithubRpcs } from './github/schema.ts';
 import type { MetricsRpcs } from './metrics/schema.ts';
 import type { DeviceRpcs } from './remote/rpc.ts';
+import type { BrowserRpcs } from './remote/browsers.ts';
 import type { TerminalRpcs } from './remote/terminals.ts';
 import type { CoreRpcs } from './rpc.ts';
 import type { ScheduleRpcs } from './schedule/rpc.ts';
@@ -19,6 +20,7 @@ export type CoreTag =
   | Tags<typeof AgentRpcs>
   | Tags<typeof MetricsRpcs>
   | Tags<typeof TerminalRpcs>
+  | Tags<typeof BrowserRpcs>
   | Tags<typeof ScheduleRpcs>
   | Exclude<Tags<typeof DeviceRpcs>, 'device.command'>;
 
@@ -93,9 +95,17 @@ export const CORE_SCOPES = {
   'terminal.close': L,
   'terminal.watched': L,
   'terminal.output': 'terminal',
-  // Every trigger's folder and start options; main's handoff of events no window took.
+  // A thread's browser tab: the page carries this computer's signed-in sessions, and `operate` already lets a device have its
+  // agent drive the same browser.
+  'page.open': 'operate',
+  'page.input': 'operate',
+  'page.navigate': 'operate',
+  'page.unwatch': 'operate',
+  'page.watch': 'operate',
+  // Main's events for the views Core opened.
+  'page.event': L,
+  // Every trigger's folder and start options.
   'schedule.watch': L,
-  'schedule.keep': L,
 } as const satisfies Record<CoreTag, Capabilities.AuthScope>;
 
 const hostScope = (tag: string): Capabilities.AuthScope | undefined => {

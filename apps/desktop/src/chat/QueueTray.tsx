@@ -5,15 +5,10 @@ import {
   useIsComposerCompact,
   useSharedLayout,
 } from '../Composer';
-import {
-  ChevronDown,
-  ChevronUp,
-  Edit,
-  Mention,
-  Paperclip,
-  Trash,
-} from '@/icons';
+import { Edit, Mention, Paperclip, Trash } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { Button } from '@/components/ui/button';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { QueuedMessage, Thread } from '../model';
@@ -62,11 +57,7 @@ export function QueueTray({
             preview={isOpen ? undefined : queued[0].draft}
           />
           <span className="ml-auto shrink-0 text-subtle-foreground">
-            {isOpen ? (
-              <ChevronDown className="size-4" />
-            ) : (
-              <ChevronUp className="size-4" />
-            )}
+            <FoldChevron isOpen={isOpen} />
           </span>
         </button>
         {!!thread.queuePause && thread.queuePause !== 'limit' && (
@@ -232,7 +223,7 @@ function ExtraCount({
       className="flex shrink-0 items-center gap-0.5 type-caption text-subtle-foreground tabular"
     >
       <Icon aria-hidden className="size-3.5" />
-      {count}
+      <AnimatedNumber value={count} />
     </span>
   );
 }

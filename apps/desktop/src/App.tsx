@@ -159,6 +159,22 @@ function useHashRoute() {
   return hash;
 }
 
+/** Flags the root while the window isn't key, so the sidebar's selection greys like macOS's. */
+function useWindowInactive() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () =>
+      root.toggleAttribute('data-window-inactive', !document.hasFocus());
+    sync();
+    window.addEventListener('focus', sync);
+    window.addEventListener('blur', sync);
+    return () => {
+      window.removeEventListener('focus', sync);
+      window.removeEventListener('blur', sync);
+    };
+  }, []);
+}
+
 function Shell() {
   const [isSearchOpen, setSearchOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
@@ -167,6 +183,7 @@ function Shell() {
   const isSettingsOpen = !!useSettingsRoute();
   const pathname = usePathname();
   useSettingsShortcut();
+  useWindowInactive();
 
   const content = (
     <SidebarProvider

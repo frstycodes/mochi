@@ -52,6 +52,8 @@ import {
 } from './remote/service.ts';
 import type { IrohPreset } from './remote/iroh.ts';
 import { Remote } from './remote/tag.ts';
+import type { BrowserEvent } from '@mochi/domain/host/types/browser';
+import { Browsers } from './remote/pages.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem, visibleSnapshot } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
@@ -60,10 +62,11 @@ import type { DocTable } from './store/migrations.ts';
 import { importJson } from './store/importJson.ts';
 import { storeCommand } from '../../../apps/desktop/src/remote/storeCommands.ts';
 import type { RemoteCommand } from '../../../apps/desktop/src/host/types/remote.ts';
-import type { State } from '../../../apps/desktop/src/store/types.ts';
+import type { Action, State } from '../../../apps/desktop/src/store/types.ts';
 import { AgentCaller, Commands } from './store/commands.ts';
 import { Projection } from './store/projection.ts';
-import { Store } from './store/store.ts';
+import { Store, type AppendInput } from './store/store.ts';
+import { COMMAND_TYPE } from '@mochi/domain';
 import { layerReactor } from './reactor/execute.ts';
 import { ThreadContext } from './switch/context.ts';
 import { PRIORITY, UtilityQueue } from './utility/queue.ts';
@@ -104,6 +107,8 @@ export interface ServerOptions {
   readonly hasKeychain?: boolean;
   /** `mochi serve`'s output: once signed in, remote access turns on and joins your computers, printing each code here. */
   readonly serving?: (line: string) => void;
+  /** Core's agents. Unset: the real Claude Code and Codex. Tests pass `AgentCaller.layerTest`, so no agent starts. */
+  readonly agents?: Layer.Layer<AgentCaller>;
 }
 
 /** Everything Core runs, serving RPC on `ws://<host>:<port>/ws`. The `HttpServer` is exposed so tests can read the bound port. */
@@ -169,8 +174,12 @@ export const layerCore = (options: ServerOptions) => {
         UtilityQueue.layer,
         Turns.layer,
         Terminals.layer,
-        layerStore(options.userData).pipe(
-          Layer.provideMerge(layerCapabilities(options.browserView)),
+        Browsers.layer.pipe(
+          Layer.provideMerge(
+            layerStore(options.userData, options.agents).pipe(
+              Layer.provideMerge(layerCapabilities(options.browserView)),
+            ),
+          ),
         ),
       ).pipe(Layer.provideMerge(Run.layer)),
     ),
@@ -208,9 +217,12 @@ const layerCapabilities = (browserView: LocalCapability | undefined) =>
   );
 
 /** The store, its projection and Core's own dispatch, after the one-time import of main's JSON files, so neither reads it before they are in. */
-const layerStore = (userData: string | undefined) =>
+const layerStore = (
+  userData: string | undefined,
+  agents: Layer.Layer<AgentCaller> = AgentCaller.layer,
+) =>
   Commands.layer.pipe(
-    Layer.provide(AgentCaller.layer),
+    Layer.provide(agents),
     Layer.provideMerge(Projection.layer(userData)),
     Layer.provideMerge(
       Layer.effectDiscard(
@@ -439,6 +451,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const stored = storeHandlers(store, projection);
       const metrics = yield* Metrics;
       const terminals = yield* Terminals;
+      const browsers = yield* Browsers;
       const scheduler = yield* Scheduler;
       const hosted = yield* (yield* Hosted).handlers(windowId);
       const backend = yield* Backend;
@@ -611,6 +624,13 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           threadId: string;
           after: number;
         }) => terminals.output(terminalId, threadId, after),
+        'page.open': browsers.open,
+        'page.input': browsers.input,
+        'page.navigate': browsers.navigate,
+        'page.unwatch': browsers.unwatch,
+        'page.watch': browsers.watch,
+        'page.event': ({ event }: { event: unknown }) =>
+          browsers.heard(event as BrowserEvent),
         ...host,
         ...hosted,
         ...scheduleHandlers(scheduler),
@@ -639,6 +659,16 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
                 ) => Effect.Effect<unknown, unknown>
               )(payload),
           ),
+        // A window's command is Core's to act on: the agent calls it means are made here, not in the window.
+        'events.append': (input: AppendInput) =>
+          input.type === COMMAND_TYPE
+            ? commands.submit(input.payload as Action, input.commandId).pipe(
+                Effect.map(({ done: _done, ...logged }) => logged),
+                Effect.mapError((error) =>
+                  error instanceof Error ? error.message : String(error),
+                ),
+              )
+            : stored['events.append'](input),
         // Main's settings writes land here; the agents read them without a restart.
         'docs.set': (input: {
           table: DocTable;

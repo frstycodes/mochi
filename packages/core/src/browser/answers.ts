@@ -3,3 +3,6 @@ export const NO_BROWSER = 'this computer has no browser';
 
 /** What a Mochi tool answers when no Mochi app is open here to run it: under `mochi serve`, only the browser tools run in Core. */
 export const NEEDS_APP = 'needs the Mochi app open on this computer';
+
+/** What main answers a Mochi tool while it has no window to run it in. */
+export const NO_WINDOW = 'Mochi has no window open';

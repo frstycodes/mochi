@@ -206,7 +206,7 @@ test('No on the machine refuses the device and trusts nothing', async () => {
   assert.deepEqual(machine.added, []);
 });
 
-test('an unknown device on the LAN is refused without asking; a paired one connects with no prompt', async () => {
+test('an unknown device on the LAN is refused without asking unless the account lists it; a paired one connects with no prompt', async () => {
   const machineKeys = keypair();
   const device = keypair();
   const stranger = machineSide(machineKeys, true);
@@ -214,9 +214,20 @@ test('an unknown device on the LAN is refused without asking; a paired one conne
   assert.equal(
     refused.deviceResult.status === 'rejected' &&
       (refused.deviceResult.reason as Error).message,
-    'Join your computers through your Mochi account first',
+    ACCOUNT_FIRST,
   );
   assert.deepEqual(stranger.asked, []);
+  assert.deepEqual(stranger.looked, [deviceId(device.publicKey)]);
+
+  const yours = machineSide(machineKeys, true, [], [device.publicKey]);
+  const joined = await pairOver('lan', yours, machineKeys, device);
+  assert.equal(joined.deviceResult.status, 'fulfilled');
+  assert.deepEqual(yours.asked, [
+    {
+      name: 'Laptop',
+      code: pairingCode(machineKeys.publicKey, device.publicKey),
+    },
+  ]);
 
   const known = machineSide(machineKeys, false, [
     {
