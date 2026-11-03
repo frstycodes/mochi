@@ -3,6 +3,7 @@
 import {
   app,
   BrowserWindow,
+  nativeImage,
   session,
   WebContentsView,
   webContents,
@@ -475,6 +476,10 @@ const viewsApi = {
   },
   // Kept past `close`, which is when the view says it closed.
   relayed: ([key, type]) => RELAYED.get(key).filter((e) => e.type === type),
+  lastFrameSize([key]) {
+    const frame = RELAYED.get(key).findLast((e) => e.type === 'frame');
+    return frame && nativeImage.createFromDataURL(frame.data).getSize();
+  },
   async mirror([key, viewport]) {
     const { views } = await ready;
     await views.setViewMirror(tab(key).owner, tab(key).id, viewport);
@@ -491,6 +496,9 @@ const viewsApi = {
   crash: ([key]) => tab(key).wc.forcefullyCrashRenderer(),
   setHidden: ([key, hidden]) =>
     hidden ? tab(key).win.hide() : tab(key).win.show(),
+  setMinimized: ([key, minimized]) =>
+    minimized ? tab(key).win.minimize() : tab(key).win.restore(),
+  isMinimized: ([key]) => tab(key).win.isMinimized(),
   isVisible: ([key]) => tab(key).win.isVisible(),
   webContentsCount: () => webContents.getAllWebContents().length,
   popupHardening() {

@@ -1,6 +1,5 @@
 import {
   BrowserWindow,
-  screen,
   session,
   WebContentsView,
   type BrowserWindowConstructorOptions,
@@ -91,8 +90,6 @@ interface Mirror {
   delay: number;
   /** The last frame sent; an identical capture isn't sent again. */
   last: string | null;
-  /** Set while the window is hidden or minimized; its 'show' or 'restore' resumes the mirror. */
-  isPaused: boolean;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -174,7 +171,6 @@ function register(
   view.setVisible(false);
   win.contentView.addChildView(view);
   wire(id, entry);
-  resumeMirrorsOn(win);
   win.once('closed', () => {
     // destroyView or the page closing itself unregistered it first, and told Core then.
     if (views.get(id) !== entry) return;
@@ -281,8 +277,9 @@ export async function setViewMirror(
     timer: null,
     delay: MIRROR_INTERVAL_MS,
     last: null,
-    isPaused: false,
   };
+  // A device watching keeps capturing while this computer's window is hidden: on Linux a throttled hidden page stops painting.
+  entry.view.webContents.setBackgroundThrottling(!entry.mirror);
   layout(entry);
   const e = entry.emulation;
   const dbg = await debuggerFor(entry.view.webContents);
@@ -309,43 +306,23 @@ async function sendFrame(id: string, entry: Entry) {
   )
     return;
   mirror.timer = null;
-  // GAP: a hidden or minimized window doesn't paint (CDP's and capturePage's captures both wait for a frame), so a device
-  // watching a page Core opened gets no frames until this computer's window shows again.
-  if (!entry.win.isVisible() || entry.win.isMinimized())
-    return void (mirror.isPaused = true);
-  const dbg = await debuggerFor(entry.view.webContents);
-  // CDP, not capturePage: the view is hidden, and CDP renders it anyway. Screencast sends no frames for a hidden view.
-  const scale = Math.min(
-    1,
-    MIRROR_MAX_WIDTH /
-      (mirror.width *
-        screen.getDisplayMatching(entry.win.getBounds()).scaleFactor),
-  );
-  const shot = await (async () => {
-    // The clip is in document coordinates, so it follows the scroll position to stay on the viewport.
-    const { cssVisualViewport: v } = (await dbg.sendCommand(
-      'Page.getLayoutMetrics',
-    )) as {
-      cssVisualViewport: {
-        pageX: number;
-        pageY: number;
-        clientWidth: number;
-        clientHeight: number;
-      };
-    };
-    const clip = {
-      x: v.pageX,
-      y: v.pageY,
-      width: v.clientWidth,
-      height: v.clientHeight,
-      scale,
-    };
-    return (await dbg.sendCommand('Page.captureScreenshot', {
-      format: 'jpeg',
-      quality: MIRROR_QUALITY,
-      clip,
-    })) as { data: string };
-  })().catch(() => null);
+  // capturePage, not CDP's captureScreenshot: a capture counts as a capturer, so the page paints while its window is hidden
+  // or minimized, and CDP's capture alone then gets no new frame.
+  const shot = await entry.view.webContents
+    .capturePage(undefined, { stayHidden: true })
+    .then((image) =>
+      image.isEmpty()
+        ? null
+        : {
+            data: image
+              .resize({
+                width: Math.min(MIRROR_MAX_WIDTH, image.getSize().width),
+              })
+              .toJPEG(MIRROR_QUALITY)
+              .toString('base64'),
+          },
+    )
+    .catch(() => null);
   if (entry.mirror !== mirror) return;
   const isChanged = !!shot && shot.data !== mirror.last;
   if (isChanged)
@@ -366,23 +343,9 @@ function kickMirror(id: string, entry: Entry) {
   const mirror = entry.mirror;
   if (!mirror) return;
   mirror.delay = MIRROR_INTERVAL_MS;
-  if (!mirror.timer && !mirror.isPaused) return;
-  clearTimeout(mirror.timer ?? undefined);
-  mirror.isPaused = false;
+  if (!mirror.timer) return;
+  clearTimeout(mirror.timer);
   void sendFrame(id, entry);
-}
-
-const resumable = new WeakSet<BrowserWindow>();
-
-function resumeMirrorsOn(win: BrowserWindow) {
-  if (resumable.has(win)) return;
-  resumable.add(win);
-  const resume = () => {
-    for (const [id, entry] of views)
-      if (entry.win === win && entry.mirror?.isPaused) kickMirror(id, entry);
-  };
-  win.on('show', resume);
-  win.on('restore', resume);
 }
 
 function stopMirror(entry: Entry) {
