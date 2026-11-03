@@ -981,6 +981,7 @@ function makeRemote({
 
   async function startRelay(listening: RemoteServer) {
     const own = await theKeys();
+    let lastDrop: string | undefined;
     relay = connectMachine({
       machineId: theRegistry().machineId,
       // Its addresses too, so a device dials direct first; only members can read them.
@@ -1016,6 +1017,13 @@ function makeRemote({
       onMembers: () => void pullMembers(),
       onMalformed: (frame) =>
         log(`the relay sent a malformed control frame: ${frame.slice(0, 200)}`),
+      // Logged once per distinct cause, so a reconnect loop doesn't flood the log.
+      onDropped: (code, reason) => {
+        const drop = `Relay dropped: ${code}${reason ? ` ${reason}` : ''}`;
+        if (drop === lastDrop) return note(drop);
+        lastDrop = drop;
+        log(drop);
+      },
     });
   }
 
