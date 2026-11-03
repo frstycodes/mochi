@@ -65,6 +65,7 @@ import { imageProblem, sentImages } from './chat/images';
 import {
   WorkspaceControls,
   WorkspaceNotes,
+  remoteWorkspace,
   startBranch,
   useWorkspace,
   type Workspace,
@@ -193,17 +194,24 @@ function NewThread() {
       setPrefs({ workspaceMode: next.mode });
     setWorkspaceDraft(next);
   };
+  // Another computer's project, by its id there: its branches are read there and it checks the names itself.
+  const remoteProject =
+    runsOn !== null && place.ref !== null
+      ? { machineId: runsOn, project: place.ref }
+      : undefined;
   const workspace = useWorkspace(
     project ?? '',
     workspaceDraft,
     changeWorkspace,
+    { remote: remoteProject },
   );
+  const hasWorkspace = !!project || !!remoteProject;
   const placeProject = projectOf(projects, runsOn, place.ref);
   const notes = usePlaceNotes({
     project: placeProject,
     picked: placeProject?.copies.find((c) => c.machineId === runsOn),
     mode: workspaceDraft.mode,
-    startBranch: project ? startBranch(workspace) : undefined,
+    startBranch: hasWorkspace ? startBranch(workspace) : undefined,
     computers,
   });
 
@@ -239,6 +247,7 @@ function NewThread() {
       // A reference names a thread or file on this computer, which means nothing there.
       const problem =
         startBlocker(computer) ??
+        workspace.error ??
         (mention.mentions.length > 0
           ? `References can’t go to ${remote.name}`
           : imageProblem(files));
@@ -256,6 +265,7 @@ function NewThread() {
         project: place.ref,
         controls,
         ...(images.length > 0 && { images }),
+        ...(remoteProject && { workspace: remoteWorkspace(workspaceDraft) }),
       });
       if (!result.isOk) return false;
       mention.clear();
@@ -384,7 +394,7 @@ function NewThread() {
                 place={place}
                 onChoose={changePlace}
               />
-              {!!project && <WorkspaceControls workspace={workspace} />}
+              {hasWorkspace && <WorkspaceControls workspace={workspace} />}
               <PermissionsMenu
                 threadId={layoutId}
                 provider={provider}

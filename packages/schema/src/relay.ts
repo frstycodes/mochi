@@ -3,6 +3,7 @@ import { AgentModel } from './agent.ts';
 import { BackendInfo } from './backend.ts';
 import { Int, Str } from './checks.ts';
 import {
+  BranchList,
   DiffFile,
   DiffScope,
   GitDiff,
@@ -246,6 +247,16 @@ export const THREAD_ACTION_SCOPES = {
 
 const PROJECT_NAME = /^(?!\.\.?$)[\w.-]+$/;
 const OWNER_REPO = /^[\w.-]+\/(?!\.\.?$)[\w.-]+$/;
+/** A branch name, local or `origin/…`: never a path (absolute, `..`), an option (`-x`) or a revision expression (`@{`, `~`, `^`, `:`). */
+const BRANCH_REF = /^(?![-/.])(?!.*\.\.)(?!.*\/\/)(?!.*@\{)[\w./+-]+(?<![/.])$/;
+const BranchRef = Str(MAX_TITLE).check(Schema.isPattern(BRANCH_REF));
+/** Where a new thread on that computer works, by branch names only; the computer checks each against its own branches. */
+const RemoteWorkspace = Schema.Struct({
+  mode: Schema.Literals(['worktree', 'folder']),
+  base: opt(BranchRef),
+  branch: opt(BranchRef),
+  isExisting: opt(B),
+});
 
 /** A device names what to clone, never where; exactly one of `url` (a network git remote) or `github` (`owner/repo`). */
 const RemoteCloneSource = Schema.Record(S, Schema.Unknown)
@@ -434,6 +445,7 @@ export const RemoteCommand = Schema.Union([
   command('catalog', {}),
   command('settings', {}),
   command('projects', {}),
+  command('branches', { project: NonEmptyId }),
   /**
    * The composer's send, `text` as typed. `queuedId`: Send now on a message in the machine's queue, which then goes as queued
    * there. `steers`: true sends into the turn in flight, false queues it; unset, the machine's While the agent is working.
@@ -504,6 +516,7 @@ export const RemoteCommand = Schema.Union([
     images: opt(
       Schema.Array(RemoteImage).check(Schema.isMaxLength(MAX_IMAGES)),
     ),
+    workspace: opt(RemoteWorkspace),
   }),
   command('rename', { threadId: Id, title: TrimmedText(MAX_TITLE) }),
   command('pin', { threadId: Id, isPinned: B, order: opt(Schema.Finite) }),
@@ -650,6 +663,7 @@ const CommandData = Schema.Union([
   ...PaneCommandData,
   MachineCatalog,
   GitDiff,
+  BranchList,
   Schema.Struct({ paths: Schema.Array(S), isTruncated: B }),
   Schema.Array(Project),
   Schema.Record(S, S),
@@ -684,6 +698,7 @@ export const COMMAND_SCOPES = {
   catalog: 'read',
   settings: 'read',
   projects: 'read',
+  branches: 'read',
   send: 'operate',
   // At least `operate`; each action's own scope is `THREAD_ACTION_SCOPES` (`commandScope`).
   'thread-action': 'operate',

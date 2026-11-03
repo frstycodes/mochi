@@ -4,6 +4,7 @@ import { sendSteerNow } from '../chat/outbox.ts';
 import { splitPath } from '../chat/imageSrc.ts';
 import { imageMime } from '../files/kinds.ts';
 import { copyStatus, syncCopy } from '../git/copyStatus.ts';
+import { workspaceProblem } from '../git/remoteWorkspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { SearchHits } from '@mochi/domain/host/types/fs';
 import { threadCwd } from '../host/cwd.ts';
@@ -13,6 +14,7 @@ import type {
   CommandResult,
   MachineCatalog,
   RemoteCommand,
+  RemoteWorkspace,
 } from '../host/types/remote.ts';
 import type { Project } from '@mochi/domain/host/types/projects';
 import { offItems } from '../library/nativeOverrides.ts';
@@ -82,6 +84,7 @@ export async function runRemoteCommand(
     return { isOk: true, data: writableValues(await machineSources(state)) };
   if (command.type === 'projects')
     return { isOk: true, data: (await projectsHere(state)).map(withSmallIcon) };
+  if (command.type === 'branches') return branches(command, state);
   if (command.type === 'add-project' || command.type === 'clone-project')
     return addProject(command, state);
   if (command.type === 'link-project') return linkProject(command, state);
@@ -469,6 +472,12 @@ async function create(
           (p) => p.id === command.project && !p.isMissing,
         );
   if (project === undefined) return fail('That project isn’t on this machine');
+  const { workspace } = command;
+  const problem =
+    workspace &&
+    project &&
+    (await workspaceProblemHere(workspace, project.path));
+  if (problem) return fail(problem);
   const threadId = nextThreadId(state);
   // A device that sends none starts on this computer's defaults, as a thread started here does.
   const controls =
@@ -484,10 +493,38 @@ async function create(
     project: project?.path ?? null,
     controls,
     ...(command.images && { images: command.images }),
+    ...(workspace && project && { workspace }),
     isLive: host.isDesktop,
     isBackground: true,
   });
   return { isOk: true, data: { threadId } };
+}
+
+/** A device's workspace against this checkout: its branches as they are now, and a new branch's name as git would take it. */
+async function workspaceProblemHere(workspace: RemoteWorkspace, path: string) {
+  const list = await host.git.branches(path).catch(() => null);
+  if (!list) return 'That project isn’t a git repository here';
+  const problem = workspaceProblem(workspace, list, path);
+  if (problem) return problem;
+  const isNew = workspace.mode === 'worktree' && !workspace.isExisting;
+  return isNew && workspace.branch
+    ? host.git.branchNameError(path, workspace.branch)
+    : null;
+}
+
+/** One project's branches here, for a device's branch and worktree pickers. */
+async function branches(
+  { project }: Extract<RemoteCommand, { type: 'branches' }>,
+  state: State,
+): Promise<CommandResult> {
+  const found = (await projectsHere(state)).find(
+    (p) => p.id === project && !p.isMissing,
+  );
+  if (!found) return fail('That project isn’t on this machine');
+  return host.git.branches(found.path).then(
+    (data) => ({ isOk: true, data }),
+    (error: unknown) => fail((error as Error).message),
+  );
 }
 
 /**

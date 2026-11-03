@@ -217,6 +217,32 @@ test('malformed commands are refused, never half-read', () => {
       'https://github.com/a/b',
     ].map((source) => ({ type: 'clone-project', source })),
     { type: 'sync-project', project: 'p1', direction: 'rebase' },
+    ...[
+      '/etc/passwd',
+      '../main',
+      'a/../b',
+      '-delete',
+      'main@{1}',
+      'main~2',
+      'a b',
+      'main/',
+      'feat//x',
+    ].flatMap((ref) =>
+      (['base', 'branch'] as const).map((field) => ({
+        type: 'create',
+        title: 'x',
+        provider: 'claude',
+        project: 'p',
+        workspace: { mode: 'worktree', [field]: ref },
+      })),
+    ),
+    {
+      type: 'create',
+      title: 'x',
+      provider: 'claude',
+      project: 'p',
+      workspace: { mode: 'sandbox' },
+    },
     { type: 'sync-project', project: '', direction: 'pull' },
   ])
     assert.ok(isRefused(bad), JSON.stringify(bad));

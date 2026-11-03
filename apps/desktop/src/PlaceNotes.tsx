@@ -71,7 +71,7 @@ export function usePlaceNotes({
     project,
     picked,
     mode,
-    // Another computer's worktree starts from its own default branch, which its catalog doesn't carry yet (step 7).
+    // Until another computer's branches are read, its copy's own branch stands in for where the thread starts.
     startBranch:
       startBranch ?? (picked.machineId ? picked.status?.branch : undefined),
     statusOf: (c) => (c.machineId === null ? localStatus : c.status),
