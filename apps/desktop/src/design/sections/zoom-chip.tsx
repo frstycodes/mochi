@@ -10,7 +10,7 @@ export function ZoomChipBlock() {
   return (
     <Block
       title="Zoom chip"
-      use="Top centre while the app zoom (⌘+ / ⌘−) is off 100%. Click resets. Pick a level to see it enter and leave."
+      use="Top centre on each app zoom change (⌘+ / ⌘−), hiding after 2s unless hovered or focused. Pick a level to see it enter and leave."
     >
       <ToggleGroup
         type="single"

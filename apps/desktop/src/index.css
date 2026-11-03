@@ -137,9 +137,6 @@
     0 24px 56px -12px oklch(0.2 0.02 285 / 0.22),
     0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-  --elev-kbd:
-    inset 0 -1px 0 oklch(0.25 0.02 285 / 0.16),
-    inset 0 0 0 0.5px oklch(0.25 0.02 285 / 0.08);
   --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
@@ -195,9 +192,6 @@
       0 28px 64px -12px oklch(0.05 0.01 285 / 0.7),
       0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-    --elev-kbd:
-      inset 0 1px 0 oklch(1 0 0 / 0.07),
-      inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
     --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
@@ -252,9 +246,6 @@
     0 28px 64px -12px oklch(0.05 0.01 285 / 0.7),
     0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
-  --elev-kbd:
-    inset 0 1px 0 oklch(1 0 0 / 0.07),
-    inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
   --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
@@ -361,7 +352,6 @@
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
-  --shadow-kbd: var(--elev-kbd);
   --shadow-composer: var(--elev-composer);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);

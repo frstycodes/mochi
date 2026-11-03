@@ -1,3 +1,4 @@
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { Card } from '@/components/ui/card';
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
 import {
@@ -869,8 +870,8 @@ function SubThreadPrRows({ sub }: { sub: Thread }) {
 function DiffCount({ added, removed }: { added: number; removed: number }) {
   return (
     <span className="tabular shrink-0 type-caption whitespace-nowrap">
-      <span className="text-success">+{added}</span>{' '}
-      <span className="text-destructive">−{removed}</span>
+      <AnimatedNumber value={added} prefix="+" className="text-success" />{' '}
+      <AnimatedNumber value={removed} prefix="−" className="text-destructive" />
     </span>
   );
 }
@@ -1188,7 +1189,10 @@ function CheckCount({
           CHECK[checks ?? 'pending'].tone,
         )}
       />
-      {counts.passed}/{counts.total}
+      <span>
+        <AnimatedNumber value={counts.passed} />/
+        <AnimatedNumber value={counts.total} />
+      </span>
     </span>
   );
 }

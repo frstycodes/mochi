@@ -14,6 +14,7 @@ import { FileIcon } from '@react-symbols/icons/utils';
 import { Check, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { ErrorFallback } from '@/components/ErrorFallback';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
@@ -896,8 +897,8 @@ export function DiffStat({
 }) {
   return (
     <span className="flex items-center gap-1.5 font-mono text-xs tabular">
-      <span className="text-success">+{added}</span>
-      <span className="text-destructive">−{removed}</span>
+      <AnimatedNumber value={added} prefix="+" className="text-success" />
+      <AnimatedNumber value={removed} prefix="−" className="text-destructive" />
       {withBar && <DiffBar added={added} removed={removed} />}
     </span>
   );
