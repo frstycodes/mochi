@@ -60,23 +60,29 @@ export function projectUsage(threads: readonly Thread[]) {
   return usage;
 }
 
-const requestedStore = createStore<{ ref: string | null }>(() => ({
-  ref: null,
+/** Where a new thread starts: a project's copy (its computer, null for this one, and its ref there), or no folder (`ref` null). */
+export interface Place {
+  machineId: string | null;
+  ref: string | null;
+}
+
+const requestedStore = createStore<{ place: Place | null }>(() => ({
+  place: null,
 }));
 
-/** Opens the new-thread page on this project (the sidebar's Projects); the page takes it once (`takeRequestedProject`). */
-export function requestNewThreadIn(ref: string) {
-  requestedStore.setState({ ref });
+/** Opens the new-thread page on this place (the sidebar's and Projects' New thread); the page takes it once (`takeRequestedProject`). */
+export function requestNewThreadIn(place: Place) {
+  requestedStore.setState({ place });
 }
 
 export function useRequestedProject() {
-  return useStore(requestedStore, (s) => s.ref);
+  return useStore(requestedStore, (s) => s.place);
 }
 
 export function takeRequestedProject() {
-  const { ref } = requestedStore.getState();
-  requestedStore.setState({ ref: null });
-  return ref;
+  const { place } = requestedStore.getState();
+  requestedStore.setState({ place: null });
+  return place;
 }
 
 /**

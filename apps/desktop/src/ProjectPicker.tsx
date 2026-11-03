@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
-import { Chat, Check, ChevronDown, Folder, FolderPlus, Star } from '@/icons';
+import { Chat, Check, FolderPlus, Star } from '@/icons';
 import type { Project } from '@mochi/domain/host/types/projects';
 import { ProjectIcon } from './ProjectIcon';
 import {
@@ -12,18 +12,11 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import type { FollowedMachine } from './host/types/remote';
-import { MetaChip } from './MetaChip';
-import { ScrollDock } from './ScrollDock';
 import { cn } from '@/lib/utils';
 import { AddProject, type AddedProject } from './AddProject';
 import { useHarnessSelector, useSpaceThreads } from './store';
-import { refreshProjects, useProjects } from './projects';
+import { useProjects } from './projects';
 import { isMod } from './keys';
 import { Shortcut } from './Shortcut';
 import { toggleFavorite } from './toggleFavorite';
@@ -38,94 +31,6 @@ export interface PickerProject {
   /** This computer's projects only: their registry id and place among the favorites (null when not one). */
   id?: string;
   favoriteOrder?: number | null;
-}
-
-/**
- * Where a new thread runs: one of the chosen computer's projects, or no folder at all, with Add project… at the bottom.
- * Scroll or drag over the chip to step through the favorites, ending at No project.
- * `machine` is another computer the list and Add project belong to; unset, this one.
- */
-export function ProjectPicker({
-  value,
-  projects,
-  machine,
-  onChange,
-  onAdded,
-}: {
-  value: string | null;
-  projects: PickerProject[];
-  machine?: FollowedMachine;
-  onChange: (project: string | null) => void;
-  onAdded?: () => void;
-}) {
-  const spaceId = useHarnessSelector((s) => s.spaceId);
-  const [isOpen, setOpen] = useState(false);
-  const chosen = projects.find((p) => p.ref === value);
-  const name = value && (chosen?.name ?? value);
-
-  const choose = (project: string | null) => {
-    onChange(project);
-    setOpen(false);
-  };
-  const stops = dockStops(projects, chosen);
-
-  return (
-    <Popover
-      open={isOpen}
-      onOpenChange={(open) => {
-        setOpen(open);
-        if (open && !machine) refreshProjects(spaceId);
-      }}
-    >
-      <ScrollDock
-        label="Project"
-        value={value ?? NO_PROJECT}
-        onChange={(ref) => onChange(ref === NO_PROJECT ? null : ref)}
-        items={stops}
-      >
-        <PopoverTrigger asChild>
-          <MetaChip aria-label={`Project: ${name ?? 'No project'}`}>
-            {!value && <Chat />}
-            {!!value &&
-              (chosen?.icon ? (
-                <ProjectIcon name={chosen.name} icon={chosen.icon} />
-              ) : (
-                <Folder />
-              ))}
-            <span className="truncate">{name ?? 'No project'}</span>
-            <ChevronDown data-icon="inline-end" />
-          </MetaChip>
-        </PopoverTrigger>
-      </ScrollDock>
-      <PopoverContent align="start" className="w-80 p-0">
-        <ProjectChooser
-          value={value}
-          projects={projects}
-          machine={machine}
-          onChoose={choose}
-          onAdded={onAdded}
-        />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ScrollDock values are strings; a path is never empty.
-const NO_PROJECT = '';
-
-/** What the dock steps through: the favorites, the chosen project if it isn't one, and No project always last. */
-function dockStops(projects: PickerProject[], chosen?: PickerProject) {
-  const stops = projects.filter(
-    (p) => !p.isMissing && (p.favoriteOrder != null || p === chosen),
-  );
-  return [
-    ...stops.map((p) => ({
-      value: p.ref,
-      label: p.name,
-      icon: <ProjectIcon name={p.name} icon={p.icon} className="size-5" />,
-    })),
-    { value: NO_PROJECT, label: 'No project', icon: <Chat /> },
-  ];
 }
 
 const NO_ROWS: PickerProject[] = [];
@@ -146,7 +51,7 @@ export function useProjectRows(spaceId: string): PickerProject[] {
   );
 }
 
-/** The searchable list with Add project… in place: the picker's popover, the new-thread page's first step, and a folderless chat's Add to project. */
+/** The searchable list with Add project… in place, for a folderless chat's Add to project: this computer's projects only. */
 export function ProjectChooser({
   value,
   projects,
