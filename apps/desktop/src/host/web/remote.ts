@@ -52,6 +52,7 @@ export const remote: RemoteHost = {
   async follow() {},
   onMachineFrame: () => () => {},
   onTerminalOutput: () => () => {},
+  onBrowserFrame: () => () => {},
   async cacheMachine() {},
   async cachedMachines() {
     return [];

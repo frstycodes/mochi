@@ -285,6 +285,11 @@ function syncFollowers() {
           machineId: machine.id,
           ...output,
         }),
+      onBrowserFrame: (frame) =>
+        mainWindow()?.webContents.send('remote:onBrowserFrame', {
+          machineId: machine.id,
+          ...frame,
+        }),
       onWelcome: (welcome) =>
         void core((client) =>
           client['remote.noteWelcome']({ machineId: machine.id, ...welcome }),

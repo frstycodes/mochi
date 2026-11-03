@@ -920,6 +920,15 @@ export const Thread = Schema.Struct({
   isInterruptedToSend: opt(Schema.Literal(true)),
   isSettingsChat: opt(Schema.Literal(true)),
   seenActivity: opt(Schema.Number),
+  browserTabs: opt(
+    Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        url: Schema.String,
+        title: Schema.String,
+      }),
+    ),
+  ),
 });
 export type Thread = typeof Thread.Type;
 

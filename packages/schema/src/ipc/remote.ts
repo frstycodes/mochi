@@ -131,6 +131,15 @@ export const remoteRpc = {
   onMachines: event(Schema.Array(FollowedMachine)),
   follow: invoke(T([]), Void),
   onMachineFrame: event(Schema.Struct({ machineId: S, frame: MirrorFrame })),
+  /** A followed machine's browser tab, pushed as its page changes (`page.watch`). */
+  onBrowserFrame: event(
+    Schema.Struct({
+      machineId: S,
+      threadId: S,
+      tabId: S,
+      frame: Schema.Struct({ data: S, url: S, title: S }),
+    }),
+  ),
   /** A followed machine's terminal, pushed as its shell prints (`terminal.output`); `next` is the offset after `data`. */
   onTerminalOutput: event(
     Schema.Struct({

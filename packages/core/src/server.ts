@@ -52,6 +52,8 @@ import {
 } from './remote/service.ts';
 import type { IrohPreset } from './remote/iroh.ts';
 import { Remote } from './remote/tag.ts';
+import type { BrowserEvent } from '@mochi/domain/host/types/browser';
+import { Browsers } from './remote/pages.ts';
 import { Terminals } from './remote/terminals.ts';
 import { visibleItem, visibleSnapshot } from './remote/visible.ts';
 import { asRunError, Run } from './run.ts';
@@ -172,8 +174,12 @@ export const layerCore = (options: ServerOptions) => {
         UtilityQueue.layer,
         Turns.layer,
         Terminals.layer,
-        layerStore(options.userData, options.agents).pipe(
-          Layer.provideMerge(layerCapabilities(options.browserView)),
+        Browsers.layer.pipe(
+          Layer.provideMerge(
+            layerStore(options.userData, options.agents).pipe(
+              Layer.provideMerge(layerCapabilities(options.browserView)),
+            ),
+          ),
         ),
       ).pipe(Layer.provideMerge(Run.layer)),
     ),
@@ -445,6 +451,7 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
       const stored = storeHandlers(store, projection);
       const metrics = yield* Metrics;
       const terminals = yield* Terminals;
+      const browsers = yield* Browsers;
       const scheduler = yield* Scheduler;
       const hosted = yield* (yield* Hosted).handlers(windowId);
       const backend = yield* Backend;
@@ -617,6 +624,13 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
           threadId: string;
           after: number;
         }) => terminals.output(terminalId, threadId, after),
+        'page.open': browsers.open,
+        'page.input': browsers.input,
+        'page.navigate': browsers.navigate,
+        'page.unwatch': browsers.unwatch,
+        'page.watch': browsers.watch,
+        'page.event': ({ event }: { event: unknown }) =>
+          browsers.heard(event as BrowserEvent),
         ...host,
         ...hosted,
         ...scheduleHandlers(scheduler),

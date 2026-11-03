@@ -39,6 +39,21 @@ test('another computer’s thread opens the panes that run there, given their sc
       { ...machine, scopes: [...machine.scopes] },
       inFolder,
     ),
+    'Studio hasn’t given this computer the operate scope',
+  );
+  assert.equal(
+    remotePaneReason('browser', { ...machine, scopes: ['read', 'operate'] }, {
+      repo: undefined,
+      live: undefined,
+    } as never),
+    undefined,
+  );
+  assert.equal(
+    remotePaneReason(
+      'ports',
+      { ...machine, scopes: [...machine.scopes] },
+      inFolder,
+    ),
     'Do this on Studio itself for now',
   );
 });

@@ -14,6 +14,7 @@ import { GithubRpcs } from './github/schema.ts';
 import { AgentRpcs } from './agents/rpc.ts';
 import { DeviceRpcs } from './remote/rpc.ts';
 import { MetricsRpcs } from './metrics/schema.ts';
+import { BrowserRpcs } from './remote/browsers.ts';
 import { TerminalRpcs } from './remote/terminals.ts';
 import { ScheduleRpcs } from './schedule/rpc.ts';
 
@@ -266,5 +267,6 @@ export class CoreWsRpcs extends CoreRpcs.merge(
   DeviceRpcs,
   MetricsRpcs,
   TerminalRpcs,
+  BrowserRpcs,
   ScheduleRpcs,
 ).middleware(ScopeAuthorization) {}
