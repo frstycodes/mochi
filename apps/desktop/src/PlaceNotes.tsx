@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { plural } from '@mochi/domain/lib/format';
 import { useCopyActions } from './copyActions';
 import type { SyncDirection } from './git/copyStatus';
-import type { CopyStatus } from './host/types/remote';
+import type { CopyStatus, HarnessReadiness } from './host/types/remote';
 import {
   useCopyStatus,
   type ProjectCopy,
@@ -56,12 +56,14 @@ export function usePlaceNotes({
   mode,
   startBranch,
   computers,
+  harness,
 }: {
   project: ProjectWithCopies | undefined;
   picked: ProjectCopy | undefined;
   mode: 'worktree' | 'folder';
   startBranch: string | undefined;
   computers: Computer[];
+  harness?: { name: string; readiness: HarnessReadiness | undefined };
 }): PlaceNote[] {
   const localStatus = useCopyStatus(
     project?.copies.find((c) => c.machineId === null),
@@ -77,6 +79,7 @@ export function usePlaceNotes({
     statusOf: (c) => (c.machineId === null ? localStatus : c.status),
     nameOf: (c) =>
       computers.find((k) => k.id === c.machineId)?.name ?? 'Another computer',
+    ...(harness && { harness }),
   });
 }
 
@@ -96,6 +99,7 @@ export function placeNotes({
   startBranch,
   statusOf,
   nameOf,
+  harness,
 }: {
   project: ProjectWithCopies;
   picked: ProjectCopy;
@@ -103,10 +107,21 @@ export function placeNotes({
   startBranch: string | undefined;
   statusOf: (copy: ProjectCopy) => CopyStatus | null | undefined;
   nameOf: (copy: ProjectCopy) => string;
+  /** The picked computer's harness, as its catalog reports it; unset for this computer, which says so itself. */
+  harness?: { name: string; readiness: HarnessReadiness | undefined };
 }): PlaceNote[] {
   const notes: PlaceNote[] = [];
   const own = statusOf(picked)?.upstream;
   const name = nameOf(picked);
+  const readiness = harness?.readiness;
+  if (readiness && !readiness.isInstalled)
+    notes.push({
+      text: `${harness.name} isn’t installed on ${name}; install it there to start this thread.`,
+    });
+  else if (readiness && !readiness.isSignedIn)
+    notes.push({
+      text: `${harness.name} is signed out on ${name}; sign in there to start this thread.`,
+    });
   const branch = statusOf(picked)?.branch;
   if (mode === 'folder' && own && own.behind > 0)
     notes.push(

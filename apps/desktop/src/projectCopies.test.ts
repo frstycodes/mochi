@@ -7,7 +7,9 @@ import {
   isOtherRepo,
   joinCopies,
   projectOf,
+  threadProjectKey,
 } from './projectCopies.ts';
+import { remoteThreadId } from './remote/ids.ts';
 
 const here = (
   path: string,
@@ -140,6 +142,31 @@ test('a project keeps its key when a copy joins ahead of the first, and keys sta
   );
   assert.equal(after[0].key, before[0].key);
   assert.equal(new Set(after.map((p) => p.key)).size, after.length);
+});
+
+test('a thread keys to its project whichever computer runs it; an unlisted folder keys by computer and folder', () => {
+  const joined = joinCopies(
+    [here('/dev/mochi', MOCHI)],
+    [{ machineId: 'pc', projects: [there('mochi', MOCHI)] }],
+  );
+  const thread = (id: string, path: string | null, project = 'mochi') => ({
+    id,
+    repo: path === null ? null : { project, branch: 'main', path },
+  });
+  const key = joined[0].key;
+  assert.equal(threadProjectKey(thread('t1', '/dev/mochi'), joined), key);
+  assert.equal(
+    threadProjectKey(
+      thread(remoteThreadId('pc', 't2'), 'C:\\dev\\mochi'),
+      joined,
+    ),
+    key,
+  );
+  assert.equal(
+    threadProjectKey(thread('t3', '/tmp/other', 'other'), joined),
+    'here:/tmp/other',
+  );
+  assert.equal(threadProjectKey(thread('t4', null), joined), null);
 });
 
 test('no projects anywhere joins to nothing', () => {

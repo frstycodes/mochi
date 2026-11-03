@@ -3,8 +3,11 @@ import type { Project } from '@mochi/domain/host/types/projects';
 import { plural } from '@mochi/domain/lib/format';
 import { copyStatus } from './git/copyStatus';
 import type { CatalogProject, CopyStatus } from './host/types/remote';
+import type { Thread } from './model';
+import { projectRef } from './projectRef';
 import { useProjects } from './projects';
 import { queryKeys } from './queryKeys';
+import { parseRemoteThreadId } from './remote/ids';
 import { useLastKnownCatalogs, useMachines } from './remote/useMachines';
 import { useSpaceThreads } from './store';
 
@@ -157,6 +160,36 @@ export function isOtherRepo(copy: ProjectCopy, project: ProjectWithCopies) {
 }
 
 const HERE = 'here';
+
+/**
+ * The project a thread works in, as a `ProjectWithCopies.key`, so one repo's threads on every computer group as one; a
+ * folder no project lists keys by its computer and folder. Null for a folderless chat.
+ */
+export function threadProjectKey(
+  thread: Pick<Thread, 'id' | 'repo'>,
+  projects: readonly ProjectWithCopies[],
+): string | null {
+  const ref = projectRef(thread.repo);
+  if (!thread.repo || !ref) return null;
+  const machineId = parseRemoteThreadId(thread.id)?.machineId ?? null;
+  // GAP: another computer's thread carries its folder there, not its catalog id; the copy there of the same name stands in.
+  const { project } = thread.repo;
+  const isCopy = (c: ProjectCopy) =>
+    c.machineId === machineId &&
+    (machineId === null ? c.ref === ref : c.name === project);
+  const joined = projects.find((p) => p.copies.some(isCopy));
+  return joined?.key ?? `${machineId ?? HERE}:${ref}`;
+}
+
+/** `threadProjectKey` over this profile's projects as they join now. */
+export function useThreadProjectKey(spaceId: string) {
+  const projects = useProjectsWithCopies(spaceId) ?? [];
+  return {
+    keyOf: (thread: Pick<Thread, 'id' | 'repo'>) =>
+      threadProjectKey(thread, projects),
+    nameOf: (key: string) => projects.find((p) => p.key === key)?.name,
+  };
+}
 
 /** The project holding the copy at `ref` on that computer. */
 export function projectOf(

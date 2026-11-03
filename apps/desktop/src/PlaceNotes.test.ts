@@ -78,6 +78,34 @@ test('another computer’s unpushed commits on the start branch offer Push from 
   ]);
 });
 
+test('the picked computer’s harness says when it isn’t installed or is signed out there', () => {
+  const picked = copy('pc', at('main', 0, 0));
+  const project: ProjectWithCopies = {
+    key: 'k',
+    name: 'mochi',
+    origin: null,
+    icon: null,
+    copies: [picked],
+  };
+  const texts = (isInstalled: boolean, isSignedIn: boolean) =>
+    placeNotes({
+      project,
+      picked,
+      mode: 'worktree',
+      startBranch: 'main',
+      statusOf: (c) => c.status,
+      nameOf: () => 'Windows PC',
+      harness: { name: 'Codex', readiness: { isInstalled, isSignedIn } },
+    }).map((n) => n.text);
+  assert.deepEqual(texts(false, false), [
+    'Codex isn’t installed on Windows PC; install it there to start this thread.',
+  ]);
+  assert.deepEqual(texts(true, false), [
+    'Codex is signed out on Windows PC; sign in there to start this thread.',
+  ]);
+  assert.deepEqual(texts(true, true), []);
+});
+
 test('a copy in step with its remote says nothing', () => {
   assert.deepEqual(
     notesFor(

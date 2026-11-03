@@ -38,6 +38,25 @@ test('options list each project once, the latest started first', () => {
   );
 });
 
+test('one repo’s threads on two computers are one option, named as the project and found by this computer’s folder', () => {
+  const threads = [
+    t('a', 'api', { startedAt: 1 }),
+    t('pc~b', 'api', { startedAt: 7 }),
+    t('c', 'web', { startedAt: 5 }),
+  ];
+  const keyOf = (thread: Thread) =>
+    thread.repo?.project === 'api' ? 'origin:api' : (thread.repo?.path ?? null);
+  const options = projectFilterOptions(threads, keyOf, (key) =>
+    key === 'origin:api' ? 'API' : undefined,
+  );
+  assert.deepEqual(options, [
+    { ref: 'origin:api', name: 'API', path: '/code/api' },
+    { ref: '/code/web', name: 'web', path: '/code/web' },
+  ]);
+  const { active } = filteredSidebarLists(threads, 's', 'origin:api', keyOf);
+  assert.deepEqual(active.map((g) => g.thread.id).toSorted(), ['a', 'pc~b']);
+});
+
 test('a saved project no thread uses any more reads as all projects', () => {
   const options = projectFilterOptions([t('a', 'api')]);
   assert.equal(resolveFilter('/code/api', options, false), '/code/api');

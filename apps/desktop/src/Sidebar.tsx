@@ -424,7 +424,12 @@ function SpaceNav({
     pinned,
     active,
     settled: allSettled,
-  } = filteredSidebarLists(threads, spaceId, projectFilter.selected);
+  } = filteredSidebarLists(
+    threads,
+    spaceId,
+    projectFilter.selected,
+    projectFilter.keyOf,
+  );
   const settled = allSettled.slice(0, SIDEBAR_SETTLED);
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
   const order = [...flattenGroups([...pinned, ...active]), ...settled].map(

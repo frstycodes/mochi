@@ -59,7 +59,7 @@ import type { ThreadControls } from './runtime/controls';
 import { initialControls } from './runtime/startOptions';
 import { contextMax, FAST, type ModelOption } from './runtime/models';
 import { ContextRing } from './ContextRing';
-import type { Provider } from './model';
+import { authorName, type Provider } from './model';
 import { toast } from '@/toast/store';
 import { imageProblem, sentImages } from './chat/images';
 import {
@@ -213,6 +213,12 @@ function NewThread() {
     mode: workspaceDraft.mode,
     startBranch: hasWorkspace ? startBranch(workspace) : undefined,
     computers,
+    ...(remote && {
+      harness: {
+        name: authorName(provider),
+        readiness: catalog?.harnesses?.[provider],
+      },
+    }),
   });
 
   // Bases and branch names belong to one project; another computer's models are its own, so picks don't carry over.
@@ -412,10 +418,10 @@ function NewThread() {
         {step === 'compose' && !remote && !!project && (
           <WorkspaceNotes workspace={workspace} />
         )}
-        {step === 'compose' && !remote && (
+        {step === 'compose' && (
           <HeroRows
-            project={project}
-            isDirty={!!project && workspace.isDirty}
+            projectKey={placeProject?.key ?? null}
+            isDirty={hasWorkspace && workspace.isDirty}
             onStarter={textInput.setInput}
           />
         )}

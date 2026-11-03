@@ -85,8 +85,13 @@ function Switcher() {
 function useSwitcherThreads() {
   const spaceId = useHarnessSelector((s) => s.spaceId);
   const threads = useSpaceListing(spaceId);
-  const filter = useProjectFilter(spaceId, threads).selected;
-  const { pinned, active } = filteredSidebarLists(threads, spaceId, filter);
+  const { selected, keyOf } = useProjectFilter(spaceId, threads);
+  const { pinned, active } = filteredSidebarLists(
+    threads,
+    spaceId,
+    selected,
+    keyOf,
+  );
   return flattenGroups([...pinned, ...active]);
 }
 

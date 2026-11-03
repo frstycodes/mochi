@@ -4,9 +4,9 @@ import type { IconComponent } from '@/icons';
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { Thread } from './model';
-import { projectRef } from './projectRef';
+import { useThreadProjectKey } from './projectCopies';
 import { ThreadItem } from './Sidebar';
-import { useSpaceThreads } from './store';
+import { useHarnessSelector, useSpaceListing } from './store';
 import { useOpenThread } from './goals/SubThreads';
 
 export function heroTitle(projectName: string | null) {
@@ -16,15 +16,16 @@ export function heroTitle(projectName: string | null) {
 }
 
 export function HeroRows({
-  project,
+  projectKey,
   isDirty,
   onStarter,
 }: {
-  project: string | null;
+  /** `ProjectWithCopies.key`: its threads on every computer are recent here. */
+  projectKey: string | null;
   isDirty: boolean;
   onStarter: (prompt: string) => void;
 }) {
-  const threads = useProjectThreads(project).slice(0, 3);
+  const threads = useProjectThreads(projectKey).slice(0, 3);
   const openThread = useOpenThread();
   const starters = STARTERS.filter((s) => !s.needsDirty || isDirty);
   return (
@@ -98,11 +99,14 @@ function StarterRow({
   );
 }
 
-function useProjectThreads(project: string | null): Thread[] {
-  const threads = useSpaceThreads();
-  if (!project) return [];
+/** The project's open threads on every computer, as the sidebar lists them, the latest started first. */
+function useProjectThreads(projectKey: string | null): Thread[] {
+  const spaceId = useHarnessSelector((s) => s.spaceId);
+  const threads = useSpaceListing(spaceId);
+  const { keyOf } = useThreadProjectKey(spaceId);
+  if (!projectKey) return [];
   return threads
-    .filter((t) => t.status !== 'settled' && projectRef(t.repo) === project)
+    .filter((t) => t.status !== 'settled' && keyOf(t) === projectKey)
     .toSorted((a, b) => b.startedAt - a.startedAt);
 }
 
