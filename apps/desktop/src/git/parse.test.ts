@@ -8,6 +8,7 @@ import {
   parseDiff,
   parseGhAuthStatus,
   parseStatus,
+  parseUpstream,
   parseWorktrees,
 } from './parse.ts';
 
@@ -150,6 +151,28 @@ test('parseStatus reads porcelain v1 -z including renames', () => {
     { path: 'new.ts', status: 'modified' },
     { path: 'gone.ts', status: 'deleted' },
     { path: 'notes.md', status: 'untracked' },
+  ]);
+});
+
+test('parseUpstream reads the --branch header, and parseStatus skips it', () => {
+  const status = (header: string) => [header, ' M a.ts', ''].join('\0');
+  assert.deepEqual(
+    parseUpstream(status('## main...origin/main [ahead 2, behind 1]')),
+    { ahead: 2, behind: 1 },
+  );
+  assert.deepEqual(parseUpstream(status('## main...origin/main [behind 4]')), {
+    ahead: 0,
+    behind: 4,
+  });
+  assert.deepEqual(parseUpstream(status('## main...origin/main')), {
+    ahead: 0,
+    behind: 0,
+  });
+  assert.equal(parseUpstream(status('## main')), undefined);
+  assert.equal(parseUpstream(status('## HEAD (no branch)')), undefined);
+  assert.equal(parseUpstream(' M a.ts\0'), undefined);
+  assert.deepEqual(parseStatus(status('## main...origin/main [ahead 2]')), [
+    { path: 'a.ts', status: 'modified' },
   ]);
 });
 

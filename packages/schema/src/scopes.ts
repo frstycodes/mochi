@@ -270,6 +270,8 @@ export const HOST_SCOPES = {
     follow: L,
     cacheMachine: L,
     cachedMachines: L,
+    cacheCatalog: L,
+    cachedCatalog: L,
     command: L,
   },
   // The Mochi account session.

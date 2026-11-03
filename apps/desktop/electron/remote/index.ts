@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import sodium from 'libsodium-wrappers';
 import { Effect, Option, Schema } from 'effect';
-import { Persist } from '@mochi/schema';
+import { Persist, Relay } from '@mochi/schema';
 import type { MochiAccount } from '@mochi/domain/host/types/account';
 import { coreClient, logToCore, mainCoreClient } from '@mochi/core/host';
 import { makeHostCaller } from '@mochi/core/hostClient';
@@ -25,6 +25,7 @@ import type { DeviceKeys } from '@mochi/core/remote/session';
 import type {
   CommandResult,
   FollowedMachine,
+  MachineCatalog,
   RemoteCommand,
   RemoteCommandRequest,
   RemoteStatus,
@@ -47,6 +48,13 @@ let isQuitting = false;
 let cache: MachineCache | undefined;
 const theCache = () =>
   (cache ??= new MachineCache(app.getPath('userData'), safeStorage));
+let catalogCache: MachineCache | undefined;
+const theCatalogCache = () =>
+  (catalogCache ??= new MachineCache(
+    app.getPath('userData'),
+    safeStorage,
+    'catalog-cache',
+  ));
 let keys: Promise<DeviceKeys> | undefined;
 /** This computer's member key, from Core, which keeps it. */
 const theKeys = () =>
@@ -186,6 +194,28 @@ export function cacheMachine(
   theCache().write(machineId, saved);
 }
 
+/** The main window's latest catalog from a followed machine, so its projects list while it's offline and after a relaunch. */
+export function cacheCatalog(
+  sender: WebContents,
+  machineId: string,
+  catalog: MachineCatalog,
+) {
+  if (sender !== mainWindow()?.webContents || !followers.has(machineId)) return;
+  theCatalogCache().write(machineId, JSON.stringify(catalog));
+}
+
+/** A followed machine's last catalog as JSON; null when there's none, or one that no longer decodes. */
+export function cachedCatalog(machineId: string): string | null {
+  const saved = followers.has(machineId)
+    ? theCatalogCache().read(machineId)
+    : undefined;
+  if (saved === undefined || Option.isNone(decodeCatalog(saved))) return null;
+  return saved;
+}
+const decodeCatalog = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Relay.MachineCatalog),
+);
+
 /** Each cached thread file that still decodes; a cache from before `thread` streams (a whole store) yields none. */
 export const cachedMachines = () =>
   [...followers.keys()].flatMap((machineId) => {
@@ -239,6 +269,7 @@ function syncFollowers() {
     follower.close();
     followers.delete(id);
     theCache().remove(id);
+    theCatalogCache().remove(id);
   }
   for (const machine of machines) {
     const follower = followers.get(machine.id);

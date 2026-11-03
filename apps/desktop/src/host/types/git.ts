@@ -15,6 +15,8 @@ export interface GitFileStatus {
 export interface GitStatus {
   branch: string;
   files: GitFileStatus[];
+  /** Commits against its upstream as of the last fetch; absent with no upstream. */
+  upstream?: { ahead: number; behind: number };
 }
 
 /** `branch`: the worktree (committed or not) against its merge base with the base branch. `uncommitted`: staged and unstaged changes. */

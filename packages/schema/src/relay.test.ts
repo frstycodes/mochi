@@ -524,6 +524,41 @@ test('thread ops refuse what their handlers never should see', () => {
   );
 });
 
+test('a catalog keeps each copy’s git state and each harness’s readiness through the wire, and an older one still decodes', () => {
+  const roundTrip = (data: unknown) =>
+    Schema.encodeSync(CommandResult)(
+      Schema.decodeUnknownSync(CommandResult)({ isOk: true, data }),
+    );
+  const older = {
+    projects: [{ ref: 'p1', name: 'api' }],
+    models: {},
+    defaults: { claude: '', codex: '' },
+  };
+  const current = {
+    ...older,
+    projects: [
+      {
+        ref: 'p1',
+        name: 'api',
+        origin: 'github.com/acme/api',
+        icon: null,
+        copy: {
+          branch: 'main',
+          changed: 2,
+          upstream: { ahead: 1, behind: 4 },
+        },
+      },
+      { ref: 'p2', name: 'notes', origin: null, icon: null, copy: null },
+    ],
+    harnesses: {
+      claude: { isInstalled: true, isSignedIn: true },
+      codex: { isInstalled: false, isSignedIn: false },
+    },
+  };
+  assert.deepEqual(roundTrip(older), { isOk: true, data: older });
+  assert.deepEqual(roundTrip(current), { isOk: true, data: current });
+});
+
 test('a browser tab on another computer needs `operate`, and its input is a click, wheel, key or text at most', () => {
   const tab = { threadId: 't', tabId: 'b1' };
   for (const type of [

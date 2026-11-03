@@ -580,7 +580,25 @@ export const RemoteCommand = Schema.Union([
 ]);
 export type RemoteCommand = typeof RemoteCommand.Type;
 
-export const CatalogProject = Schema.Struct({ ref: S, name: S });
+export const CatalogProject = Schema.Struct({
+  ref: S,
+  name: S,
+  origin: opt(Schema.NullOr(S)),
+  icon: opt(Project.fields.icon),
+  copy: opt(
+    Schema.NullOr(
+      Schema.Struct({
+        branch: S,
+        changed: Schema.Number,
+        upstream: opt(
+          Schema.Struct({ ahead: Schema.Number, behind: Schema.Number }),
+        ),
+      }),
+    ),
+  ),
+});
+
+const HarnessReadiness = Schema.Struct({ isInstalled: B, isSignedIn: B });
 
 const MachineCommands = Schema.Struct({
   commands: Schema.Array(AgentCommand),
@@ -599,6 +617,12 @@ export const MachineCatalog = Schema.Struct({
     Schema.Struct({
       claude: opt(MachineCommands),
       codex: opt(MachineCommands),
+    }),
+  ),
+  harnesses: opt(
+    Schema.Struct({
+      claude: opt(HarnessReadiness),
+      codex: opt(HarnessReadiness),
     }),
   ),
 });

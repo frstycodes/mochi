@@ -8,6 +8,7 @@ import type { SearchHits } from '@mochi/domain/host/types/fs';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type {
+  CatalogProject,
   CommandResult,
   MachineCatalog,
   RemoteCommand,
@@ -31,6 +32,7 @@ import {
   type SettingSources,
   type SettingWrite,
 } from '../settings/catalog.ts';
+import { linkedAccountId } from '../settings/accounts.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { askSideChat } from '../sidechat/ask.ts';
@@ -327,10 +329,9 @@ async function catalog(state: State): Promise<MachineCatalog> {
     .catch(() => undefined);
   const nativeOff =
     getProfiles().find((p) => p.id === state.spaceId)?.nativeOff ?? [];
+  const projects = (await projectsHere(state)).filter((p) => !p.isMissing);
   return {
-    projects: (await projectsHere(state))
-      .filter((p) => !p.isMissing)
-      .map((p) => ({ ref: p.id, name: p.name })),
+    projects: await Promise.all(projects.map(catalogProject)),
     models: Object.fromEntries(models),
     defaults: {
       claude: settings.harnesses.claude.model,
@@ -344,7 +345,45 @@ async function catalog(state: State): Promise<MachineCatalog> {
         ]),
       ),
     }),
+    harnesses: await harnessReadiness(state.spaceId),
   };
+}
+
+async function catalogProject(project: Project): Promise<CatalogProject> {
+  const status = await host.git.status(project.path).catch(() => undefined);
+  return {
+    ref: project.id,
+    name: project.name,
+    origin: project.origin,
+    icon: withSmallIcon(project).icon,
+    copy: status
+      ? {
+          branch: status.branch,
+          changed: status.files.length,
+          ...(status.upstream && { upstream: status.upstream }),
+        }
+      : null,
+  };
+}
+
+/** Installed and signed in, per harness, on the profile's linked account; yes/no only, never the login itself. */
+async function harnessReadiness(spaceId: string) {
+  const { links } = await host.settings.accounts();
+  const readiness = await Promise.all(
+    HARNESS_IDS.map(async (h) => {
+      const install = await host.settings
+        .detect(linkedAccountId(links, spaceId, h))
+        .catch(() => undefined);
+      return [
+        h,
+        {
+          isInstalled: !!install?.path,
+          isSignedIn: install?.login.state !== 'logged-out',
+        },
+      ] as const;
+    }),
+  );
+  return Object.fromEntries(readiness);
 }
 
 /** Steer Take back and Send now, as the bubble under the live turn runs them here. */

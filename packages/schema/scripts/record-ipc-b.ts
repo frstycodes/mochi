@@ -97,6 +97,21 @@ await record('remote.machines', remote.machines);
 await record('remote.cachedMachines', remote.cachedMachines);
 await record('remote.answerApproval', remote.answerApproval, 'a1', true);
 await record('remote.cacheMachine', remote.cacheMachine, 'm1', '{}');
+await record('remote.cacheCatalog', remote.cacheCatalog, 'm1', {
+  projects: [
+    {
+      ref: 'p1',
+      name: 'api',
+      origin: 'github.com/acme/api',
+      icon: null,
+      copy: { branch: 'main', changed: 0, upstream: { ahead: 0, behind: 2 } },
+    },
+  ],
+  models: {},
+  defaults: { claude: '', codex: '' },
+  harnesses: { claude: { isInstalled: true, isSignedIn: true } },
+});
+await record('remote.cachedCatalog', remote.cachedCatalog, 'm1');
 await record('remote.commandResult', remote.commandResult, 'c1', {
   isOk: true,
   detail: 'a1b2c3d',
