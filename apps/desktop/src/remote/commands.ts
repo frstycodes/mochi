@@ -3,6 +3,7 @@ import { configuredCommands } from '../chat/slash.ts';
 import { sendSteerNow } from '../chat/outbox.ts';
 import { splitPath } from '../chat/imageSrc.ts';
 import { imageMime } from '../files/kinds.ts';
+import { copyStatus } from '../git/copyStatus.ts';
 import { openedPr } from '../git/prs.ts';
 import type { SearchHits } from '@mochi/domain/host/types/fs';
 import { threadCwd } from '../host/cwd.ts';
@@ -349,19 +350,12 @@ async function catalog(state: State): Promise<MachineCatalog> {
 }
 
 async function catalogProject(project: Project): Promise<CatalogProject> {
-  const status = await host.git.status(project.path).catch(() => undefined);
   return {
     ref: project.id,
     name: project.name,
     origin: project.origin,
     icon: withSmallIcon(project).icon,
-    copy: status
-      ? {
-          branch: status.branch,
-          changed: status.files.length,
-          ...(status.upstream && { upstream: status.upstream }),
-        }
-      : null,
+    copy: await copyStatus(project.path),
   };
 }
 

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useConfirm } from '../git/useConfirm';
 import { queryClient } from '../query.ts';
 import { queryKeys } from '../queryKeys.ts';
@@ -231,9 +231,45 @@ export function useFollowedMachine(machineId: string | undefined) {
 export function useMachineCatalog(machine: FollowedMachine | undefined) {
   // Optional: the shared composer asks with no machine for this computer's own threads, wherever it renders.
   const machines = useOptionalMachines();
+  const catalogQuery = useQuery(catalogQueryOptions(machines, machine));
+  const cachedQuery = useQuery(cachedCatalogQueryOptions(machine?.id));
+  const catalog =
+    machine?.status === 'online' ? (catalogQuery.data ?? null) : null;
+  return {
+    catalog,
+    lastKnown: catalog ?? cachedQuery.data ?? null,
+    reload: () => {
+      void catalogQuery.refetch();
+    },
+  };
+}
+
+/** `useMachineCatalog`'s `lastKnown` for each of these computers, in their order. */
+export function useLastKnownCatalogs(list: FollowedMachine[]) {
+  const machines = useOptionalMachines();
+  const live = useQueries({
+    queries: list.map((m) => catalogQueryOptions(machines, m)),
+  });
+  const cached = useQueries({
+    queries: list.map((m) => cachedCatalogQueryOptions(m.id)),
+  });
+  return list.map((machine, i) => ({
+    machine,
+    catalog:
+      (machine.status === 'online' ? live[i]?.data : undefined) ??
+      cached[i]?.data ??
+      null,
+  }));
+}
+
+/** Read while it's online, and kept (encrypted) for when it isn't. */
+function catalogQueryOptions(
+  machines: Machines | null,
+  machine: FollowedMachine | undefined,
+) {
   const machineId = machine?.id;
   const isOnline = machine?.status === 'online';
-  const catalogQuery = useQuery({
+  return {
     queryKey: queryKeys.remote.catalog(machineId, isOnline),
     queryFn: async () => {
       const catalog = await machines!.ask(machineId!, { type: 'catalog' });
@@ -245,22 +281,17 @@ export function useMachineCatalog(machine: FollowedMachine | undefined) {
       return catalog;
     },
     enabled: !!machineId && isOnline && !!machines,
-  });
-  const cachedQuery = useQuery({
+  };
+}
+
+function cachedCatalogQueryOptions(machineId: string | undefined) {
+  return {
     queryKey: queryKeys.remote.cachedCatalog(machineId),
     queryFn: async () => {
       const saved = await host.remote.cachedCatalog(machineId!);
       return saved === null ? null : (JSON.parse(saved) as MachineCatalog);
     },
     enabled: !!machineId,
-  });
-  const catalog = isOnline ? (catalogQuery.data ?? null) : null;
-  return {
-    catalog,
-    lastKnown: catalog ?? cachedQuery.data ?? null,
-    reload: () => {
-      void catalogQuery.refetch();
-    },
   };
 }
 

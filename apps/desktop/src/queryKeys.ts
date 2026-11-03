@@ -109,6 +109,7 @@ export const queryKeys = {
     checkpointDiff: (cwd: string | null, threadId: string, n: number) =>
       ['git-checkpoint-diff', cwd, threadId, n] as const,
     branches: (root: string) => ['git-branches', root] as const,
+    copyStatus: (path: string) => ['git-copy-status', path] as const,
     /** `source`: a `ThreadCalls` key, the folder here or another computer's thread. */
     pr: (source: string) => ['git-pr', source] as const,
     review: (source: string, pr: number) => ['git-review', source, pr] as const,

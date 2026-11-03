@@ -34,15 +34,16 @@ import {
   newComposerLayoutId,
 } from './Composer';
 import { useSplit } from './layout/SplitContext';
+import { PlaceChip, PlacePicker, placeIn } from './PlacePicker';
 import {
-  ProjectChooser,
-  ProjectPicker,
-  useProjectRows,
-  type PickerProject,
-} from './ProjectPicker';
+  projectOf,
+  useProjectsWithCopies,
+  type ProjectWithCopies,
+} from './projectCopies';
 import {
   projectName,
   repoFor,
+  type Place,
   takeRequestedProject,
   useRequestedProject,
 } from './projects';
@@ -69,7 +70,7 @@ import {
 } from './git/WorkspacePicker';
 import type { WorkspaceDraft } from './git/workspace';
 import { openStarted } from './remote/expecting';
-import { RunsOnMenu } from './remote/RunsOnMenu';
+import { startBlocker, useComputers } from './remote/computers';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
 import { HeroRows, heroTitle } from './NewThreadHero';
 
@@ -77,11 +78,11 @@ import { HeroRows, heroTitle } from './NewThreadHero';
 interface NewThreadPicks {
   provider: Provider;
   picked: ThreadControls | null;
+  /** The project's folder here, or its ref on `runsOn`. */
   project: string | null;
   mentions: Mention[];
-  /** The computer it runs on and that computer's project; absent in drafts kept before either was. */
+  /** The computer it runs on; absent in drafts kept before it was, which ran here. */
   runsOn?: string | null;
-  remoteProject?: string | null;
 }
 
 export function NewThreadView() {
@@ -113,19 +114,21 @@ function NewThread() {
   const [picked, setPicked] = useState<ThreadControls | null>(
     saved?.picked ?? null,
   );
-  const projects = useProjectRows(spaceId);
-  // Projects first, then the composer, so a thread starts without the mouse; a kept draft already has its project.
+  const projects = useProjectsWithCopies(spaceId) ?? NO_PROJECTS;
+  const computers = useComputers();
+  // Projects first, then the composer, so a thread starts without the mouse; a kept draft already has its place.
   const [step, setStep] = useState<'project' | 'compose'>(
     saved ? 'compose' : 'project',
   );
-  // Unset until you pick: the most recently used project, once the list has loaded.
-  const [chosenProject, setProject] = useState<string | null | undefined>(
-    saved?.project,
+  // Unset until you pick: the most recently used project where it runs by default, once the list has loaded.
+  const [chosenPlace, setPlace] = useState<Place | undefined>(
+    saved && { machineId: saved.runsOn ?? null, ref: saved.project },
   );
-  const project =
-    chosenProject === undefined
-      ? (projects.find((p) => !p.isMissing)?.ref ?? null)
-      : chosenProject;
+  const place =
+    chosenPlace ?? (projects[0] ? placeIn(projects[0], computers) : NOWHERE);
+  const runsOn = place.machineId;
+  // This computer's folder: what its slash commands, references, branches and starters read.
+  const project = runsOn === null ? place.ref : null;
   // /side needs a thread to ask about.
   const slashItems = useSlashItems(provider, spaceId, project).filter(
     (i) => i.source !== 'mochi',
@@ -157,26 +160,15 @@ function NewThread() {
     mode: getPrefs().workspaceMode,
   }));
   const machines = useMachines();
-  const [runsOn, setRunsOn] = useState<string | null>(saved?.runsOn ?? null);
-  const remote = machines.machines.find(
-    (m) => m.machine.id === runsOn,
-  )?.machine;
+  const computer = computers.find((c) => c.id === runsOn);
+  const remote = computer?.machine;
   const setControls = (next: ThreadControls, model?: ModelOption) => {
     if (model) setProvider(model.harness);
     setPicked(next);
     // Another computer's picks are its own; on this one they're what the next new thread starts on.
     if (!remote) keepAsDefaults(next, model);
   };
-  const { catalog, reload: reloadCatalog } = useMachineCatalog(remote);
-  const [remoteProject, setRemoteProject] = useState<string | null>(
-    saved?.remoteProject ?? null,
-  );
-  // Another computer's projects and models are its own: picks made for this one don't carry over, either way.
-  const changeRunsOn = (next: string | null) => {
-    setRunsOn(next);
-    setRemoteProject(null);
-    setPicked(null);
-  };
+  const { catalog } = useMachineCatalog(remote);
   const defaults = remote ? catalog?.defaults : localDefaults;
   const controls =
     picked ?? initialControls(provider, defaults?.[provider] ?? '');
@@ -188,10 +180,9 @@ function NewThread() {
     ? {
         provider,
         picked,
-        project,
+        project: place.ref,
         mentions: mention.mentions,
         runsOn,
-        remoteProject,
       }
     : undefined;
   // The worktree checkbox remembers your last choice for the next new thread.
@@ -206,28 +197,27 @@ function NewThread() {
     changeWorkspace,
   );
 
-  // Bases and branch names belong to one project.
-  const changeProject = (next: string | null) => {
-    setProject(next);
+  // Bases and branch names belong to one project; another computer's models are its own, so picks don't carry over.
+  const changePlace = (next: Place) => {
+    if (next.machineId !== runsOn) setPicked(null);
+    setPlace(next);
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
-  // The sidebar's Projects: a new thread here, in that project, whatever was picked before.
-  const requestedProject = useRequestedProject();
+  // The sidebar's and Projects' New thread: that place, whatever was picked before.
+  const requestedPlace = useRequestedProject();
   const openRequested = useEffectEvent(() => {
-    const ref = takeRequestedProject();
-    if (!ref) return;
-    changeRunsOn(null);
-    changeProject(ref);
+    const next = takeRequestedProject();
+    if (!next) return;
+    changePlace(next);
     setStep('compose');
   });
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- the sidebar's request is a one-shot mailbox outside React; taking it is the sync
-    if (requestedProject) openRequested();
-  }, [requestedProject]);
+    if (requestedPlace) openRequested();
+  }, [requestedPlace]);
 
-  const chooseFirst = (next: string | null) => {
-    if (remote) changeRunsOn(null);
-    changeProject(next);
+  const chooseFirst = (next: Place) => {
+    changePlace(next);
     setStep('compose');
   };
 
@@ -235,12 +225,13 @@ function NewThread() {
     const title = text.trim();
     if (!title) return;
     // Worktree or folder is that computer's default, which follows yours (`workspaceMode` is shared).
-    if (remote) {
+    if (computer && remote) {
       // A reference names a thread or file on this computer, which means nothing there.
       const problem =
-        mention.mentions.length > 0
+        startBlocker(computer) ??
+        (mention.mentions.length > 0
           ? `References can’t go to ${remote.name}`
-          : imageProblem(files);
+          : imageProblem(files));
       if (problem) {
         toast.error(problem);
         return false;
@@ -252,7 +243,7 @@ function NewThread() {
         type: 'create',
         title,
         provider,
-        project: remoteProject,
+        project: place.ref,
         ...(picked && { controls }),
         ...(images.length > 0 && { images }),
       });
@@ -295,10 +286,9 @@ function NewThread() {
     });
   };
 
-  const projectLabel = remote
-    ? (catalog?.projects.find((p) => p.ref === remoteProject)?.name ?? null)
-    : (projects.find((p) => p.ref === project)?.name ??
-      (project && projectName(project)));
+  const projectLabel =
+    projectOf(projects, runsOn, place.ref)?.name ??
+    (project && projectName(project));
 
   return (
     // The greeting row has a fixed height, so the card's top stays put whichever step it holds and however tall it grows.
@@ -319,11 +309,11 @@ function NewThread() {
           // Static: the list resizes on every keystroke while filtering.
           <ComposerCard isStatic>
             {/* Keyed so the highlight starts on the latest project once the list loads. */}
-            <ProjectChooser
-              key={project}
-              value={project}
+            <PlacePicker
+              key={`${runsOn}:${place.ref}`}
               projects={projects}
-              placeholder="Start a thread in…"
+              computers={computers}
+              place={place}
               onChoose={chooseFirst}
             />
           </ComposerCard>
@@ -380,26 +370,13 @@ function NewThread() {
               </ComposerCard>
             </div>
             <ComposerMeta>
-              <RunsOnMenu value={runsOn} onChange={changeRunsOn} />
-              {!!remote && (
-                <ProjectPicker
-                  value={remoteProject}
-                  onChange={setRemoteProject}
-                  projects={catalog?.projects ?? NO_PROJECTS}
-                  machine={remote}
-                  onAdded={reloadCatalog}
-                />
-              )}
-              {!remote && (
-                <>
-                  <ProjectPicker
-                    value={project}
-                    onChange={changeProject}
-                    projects={projects}
-                  />
-                  {!!project && <WorkspaceControls workspace={workspace} />}
-                </>
-              )}
+              <PlaceChip
+                projects={projects}
+                computers={computers}
+                place={place}
+                onChoose={changePlace}
+              />
+              {!!project && <WorkspaceControls workspace={workspace} />}
               <PermissionsMenu
                 threadId={layoutId}
                 provider={provider}
@@ -440,7 +417,8 @@ function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
 }
 
 const NO_CATALOG = { models: {}, defaults: { claude: '', codex: '' } };
-const NO_PROJECTS: PickerProject[] = [];
+const NO_PROJECTS: ProjectWithCopies[] = [];
+const NOWHERE: Place = { machineId: null, ref: null };
 
 function placeholder(
   machineName: string | undefined,

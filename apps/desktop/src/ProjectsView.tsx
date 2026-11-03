@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
@@ -7,19 +7,29 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  ArrowLeft,
   Check,
+  ChevronDown,
   Edit,
   Folder,
-  FolderPlus,
   FolderMove,
+  FolderPlus,
   Image,
   Link,
+  Monitor,
   Search,
   Star,
   Trash,
 } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,181 +57,572 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
+import type { Project } from '@mochi/domain/host/types/projects';
 import { AddProject } from './AddProject';
 import { gitError } from './git/useGit';
 import { host } from './host';
-import type { Project } from '@mochi/domain/host/types/projects';
-import type { FollowedMachine } from './host/types/remote';
 import { GithubMarkIcon } from './icons/github';
+import { CopyFactLine, placeIn, WARNING_TEXT } from './PlacePicker';
+import {
+  useProjectsWithCopies,
+  type ProjectCopy,
+  type ProjectWithCopies,
+} from './projectCopies';
 import { ProjectIcon } from './ProjectIcon';
 import { timeAgo } from './progress';
 import {
   projectUsage,
   refreshProjects,
   requestNewThreadIn,
-  useProjects,
+  type Place,
 } from './projects';
+import {
+  ComputerAvatar,
+  HereBadge,
+  useComputers,
+  type Computer,
+} from './remote/computers';
+import { useHarness, useHarnessSelector, useSpaceThreads } from './store';
 import { toggleFavorite } from './toggleFavorite';
-import { useMachines } from './remote/useMachines';
-import { useHarness, useSpaceThreads, useHarnessSelector } from './store';
 import { OverflowIcon } from './ui';
-import { SettingsCard, SettingsSection } from './settings/parts';
+import { queryClient } from './query';
 import { queryKeys } from './queryKeys';
 
 const FOOTER =
-  'Removing a project only takes it off this list; its folder stays on disk. Icons come from a favicon in the folder (public/, app/, static/ and the like) unless you upload one.';
-/** Past this many, a filter sits over the list. */
-const FILTER_FROM = 8;
+  'Folders with the same git remote are one project. Mochi never copies files between computers; git does. Removing a project only takes it off this list; its folder stays on disk.';
 
-/** Every project this profile works in, on this computer and on the others you follow, each with its icon and how it's used. */
+/**
+ * Every project this profile works in, across your computers: projects on the left, the picked one's copies on the right,
+ * one line per computer. A phone shows one pane at a time.
+ */
 export function ProjectsView() {
-  const others = useMachines()
-    .machines.map((m) => m.machine)
-    .filter((m) => m.status === 'online' && m.scopes.includes('read'));
+  const spaceId = useHarnessSelector((s) => s.spaceId);
+  const projects = useProjectsWithCopies(spaceId);
+  const computers = useComputers();
+  const isMobile = useIsMobile();
+  const [query, setQuery] = useState('');
+  const [on, setOn] = useState(ALL);
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
+  useEffect(() => refreshProjects(spaceId), [spaceId]);
+  if (!projects) return <Spinner className="mx-auto mt-16" />;
+
+  const isMulti = computers.length > 1;
+  const shown = matching(projects, query).filter(
+    (p) => on === ALL || p.copies.some((c) => computerKey(c.machineId) === on),
+  );
+  const picked =
+    shown.find((p) => p.key === pickedKey) ?? (isMobile ? undefined : shown[0]);
+  const isDetailOnly = isMobile && !!picked;
   return (
     <ScrollArea type="scroll" className="h-full">
-      <div className="mx-auto flex w-full max-w-180 flex-col gap-10 px-4 pt-6 pb-16 md:px-8 md:pt-8">
-        <ThisComputerProjects />
-        {others.map((m) => (
-          <MachineProjects key={m.id} machine={m} />
-        ))}
+      <div className="mx-auto flex w-full max-w-280 flex-col gap-5 px-4 pt-6 pb-16 md:px-8 md:pt-8">
+        <header className="flex items-center justify-between gap-3">
+          <h1 className="type-display">
+            Projects
+            {projects.length > 0 && (
+              <span className="ml-2 font-normal text-subtle-foreground tabular">
+                {projects.length}
+              </span>
+            )}
+          </h1>
+          <AddProjectButton computers={computers} />
+        </header>
+        {projects.length === 0 && <NoProjects />}
+        {projects.length > 0 && (
+          <div className="flex items-start gap-6">
+            {!isDetailOnly && (
+              <div className="flex w-full flex-col gap-2 md:w-80 md:shrink-0">
+                <div className="flex gap-2">
+                  <InputGroup className="h-8 min-w-0 flex-1">
+                    <InputGroupAddon>
+                      <Search />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Filter projects"
+                      aria-label="Filter projects"
+                    />
+                  </InputGroup>
+                  {isMulti && (
+                    <ComputerFilter
+                      computers={computers}
+                      projects={projects}
+                      value={on}
+                      onChange={setOn}
+                    />
+                  )}
+                </div>
+                <ul className="flex flex-col gap-0.5" aria-label="Projects">
+                  {shown.map((p) => (
+                    <ProjectListRow
+                      key={p.key}
+                      project={p}
+                      computers={computers}
+                      isPicked={p === picked}
+                      onPick={() => setPickedKey(p.key)}
+                    />
+                  ))}
+                </ul>
+                {shown.length === 0 && (
+                  <p className="px-2 py-8 text-center type-meta text-muted-foreground">
+                    No project matches.
+                  </p>
+                )}
+              </div>
+            )}
+            {!!picked && (
+              <ProjectDetail
+                key={picked.key}
+                spaceId={spaceId}
+                project={picked}
+                all={projects}
+                computers={computers}
+                onBack={isMobile ? () => setPickedKey(null) : undefined}
+              />
+            )}
+          </div>
+        )}
       </div>
     </ScrollArea>
   );
 }
 
-function ThisComputerProjects() {
-  const spaceId = useHarnessSelector((s) => s.spaceId);
-  const threads = useSpaceThreads();
-  const projects = useProjects(spaceId, threads);
-  const [query, setQuery] = useState('');
-  useEffect(() => refreshProjects(spaceId), [spaceId]);
-  if (!projects) return <Spinner className="mx-auto" />;
+const ALL = 'all';
+const HERE = 'here';
+const computerKey = (machineId: string | null) => machineId ?? HERE;
 
-  const usage = projectUsage(threads);
+function matching(projects: ProjectWithCopies[], query: string) {
   const q = query.trim().toLowerCase();
-  const shown = q
+  return q
     ? projects.filter((p) =>
-        `${p.name} ${p.path} ${p.origin ?? ''}`.toLowerCase().includes(q),
+        `${p.name} ${p.origin ?? ''}`.toLowerCase().includes(q),
       )
     : projects;
+}
+
+/** One computer, or all of them, from a dropdown, so the control stays one size however many computers you pair. */
+function ComputerFilter({
+  computers,
+  projects,
+  value,
+  onChange,
+}: {
+  computers: Computer[];
+  projects: ProjectWithCopies[];
+  value: string;
+  onChange: (key: string) => void;
+}) {
+  const current = computers.find((c) => computerKey(c.id) === value);
+  const countOn = (c: Computer) =>
+    projects.filter((p) => p.copies.some((k) => k.machineId === c.id)).length;
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex items-end justify-between gap-3 px-1">
-        <h1 className="type-display">
-          Projects
-          {projects.length > 0 && (
-            <span className="ml-2 font-normal text-subtle-foreground tabular">
-              {projects.length}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={`Show projects on: ${current?.name ?? 'All computers'}`}
+          className="h-8 max-w-40 min-w-0 justify-start font-normal"
+        >
+          {current ? <ComputerAvatar computer={current} /> : <Monitor />}
+          <span className="min-w-0 flex-1 truncate text-left">
+            {current?.name ?? 'All computers'}
+          </span>
+          <ChevronDown className="text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuItem
+          onSelect={() => onChange(ALL)}
+          className={cn(value === ALL && 'bg-accent')}
+        >
+          <Monitor />
+          All computers
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {computers.map((c) => (
+          <DropdownMenuItem
+            key={computerKey(c.id)}
+            onSelect={() => onChange(computerKey(c.id))}
+            className={cn(computerKey(c.id) === value && 'bg-accent')}
+          >
+            <ComputerAvatar computer={c} />
+            <span className="min-w-0 flex-1 truncate">{c.name}</span>
+            <span className="shrink-0 type-caption text-subtle-foreground tabular">
+              {countOn(c)}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Name, then the one thing it needs from you (or where it's from), then the computers holding a copy. */
+function ProjectListRow({
+  project,
+  computers,
+  isPicked,
+  onPick,
+}: {
+  project: ProjectWithCopies;
+  computers: Computer[];
+  isPicked: boolean;
+  onPick: () => void;
+}) {
+  const nudge = projectNudge(project, computers);
+  const holders = holdersOf(project, computers);
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onPick}
+        aria-current={isPicked || undefined}
+        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left outline-none hover:bg-accent/60 focus-visible:bg-accent aria-current:bg-accent"
+      >
+        <ProjectIcon
+          name={project.name}
+          icon={project.icon}
+          className="size-7 shrink-0 rounded-md"
+        />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate type-body font-medium text-foreground">
+            {project.name}
+          </span>
+          {nudge ? (
+            <span className={cn('truncate type-caption', WARNING_TEXT)}>
+              {nudge}
+            </span>
+          ) : (
+            <span className="truncate type-caption text-muted-foreground">
+              {project.origin ? remotePath(project.origin) : 'No git remote'}
             </span>
           )}
-        </h1>
-        <AddProjectButton />
-      </header>
-      {projects.length === 0 && <NoProjects />}
-      {projects.length > FILTER_FROM && (
-        <InputGroup className="h-8">
-          <InputGroupAddon>
-            <Search />
-          </InputGroupAddon>
-          <InputGroupInput
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by name, folder or remote"
-            aria-label="Filter projects"
-          />
-        </InputGroup>
+        </span>
+        {computers.length > 1 && <HolderMarks computers={holders} />}
+      </button>
+    </li>
+  );
+}
+
+const MAX_MARKS = 3;
+
+/** The computers holding a copy, side by side; past three, a count. Each names itself on hover. */
+function HolderMarks({ computers }: { computers: Computer[] }) {
+  const extra = computers.length - MAX_MARKS;
+  const shown = computers.slice(0, extra > 0 ? MAX_MARKS - 1 : MAX_MARKS);
+  return (
+    <span
+      aria-label={`On ${computers.map((c) => c.name).join(', ')}`}
+      className="flex shrink-0 items-center gap-1.5"
+    >
+      {shown.map((c) => (
+        <ComputerAvatar
+          key={computerKey(c.id)}
+          computer={c}
+          surface="background"
+        />
+      ))}
+      {extra > 0 && (
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-sm bg-muted px-1 text-[10px] leading-none text-muted-foreground tabular">
+          +{extra + 1}
+        </span>
       )}
-      {projects.length > 0 && (
-        <>
-          <SettingsCard>
-            {shown.map((p) => (
-              <ProjectRow
-                key={p.id}
-                spaceId={spaceId}
-                project={p}
-                all={projects}
-                usage={usage.get(p.path)}
-              />
-            ))}
-            {shown.length === 0 && (
-              <p className="px-4 py-6 text-center type-meta text-muted-foreground">
-                No project matches “{query.trim()}”.
-              </p>
+    </span>
+  );
+}
+
+function ProjectDetail({
+  spaceId,
+  project,
+  all,
+  computers,
+  onBack,
+}: {
+  spaceId: string;
+  project: ProjectWithCopies;
+  all: ProjectWithCopies[];
+  computers: Computer[];
+  onBack?: () => void;
+}) {
+  const { state, dispatch } = useHarness();
+  const threads = useSpaceThreads();
+  const [isRenaming, setRenaming] = useState(false);
+  const isMulti = computers.length > 1;
+  const local = project.copies.find((c) => !!c.local)?.local;
+  const usage = local && projectUsage(threads).get(local.path);
+  const newThread = (place: Place) => {
+    requestNewThreadIn(place);
+    dispatch({ type: 'go', view: { kind: 'new' } });
+  };
+  const rename = (name: string) => {
+    setRenaming(false);
+    if (local && name.trim() && name.trim() !== local.name)
+      void attempt('Renaming', () =>
+        host.projects.rename(spaceId, local.id, name),
+      );
+  };
+  const localProjects = all.flatMap((p) =>
+    p.copies.flatMap((c) => c.local ?? []),
+  );
+  return (
+    <section
+      aria-label={project.name}
+      className="flex min-w-0 flex-1 flex-col gap-5"
+    >
+      {!!onBack && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 self-start"
+          onClick={onBack}
+        >
+          <ArrowLeft />
+          Projects
+        </Button>
+      )}
+      <header className="flex items-center gap-3">
+        {local ? (
+          <IconPicker spaceId={spaceId} project={local} />
+        ) : (
+          <IconTile name={project.name} icon={project.icon} />
+        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {isRenaming ? (
+            <RenameField name={project.name} onDone={rename} />
+          ) : (
+            <h2 className="truncate type-title text-foreground">
+              {project.name}
+            </h2>
+          )}
+          <span className="flex min-w-0 items-center gap-2 type-caption text-muted-foreground">
+            <OriginLabel origin={project.origin} />
+            {!!usage && (
+              <span className="min-w-0 truncate tabular">
+                {threadCount(usage)} · {timeAgo(state.now - usage.lastAt)}
+              </span>
             )}
-          </SettingsCard>
-          <p className="px-1 type-caption text-muted-foreground">{FOOTER}</p>
-        </>
-      )}
+          </span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => newThread(placeIn(project, computers))}
+        >
+          <Edit />
+          <span className="max-sm:sr-only">New thread</span>
+        </Button>
+      </header>
+      <div className="flex flex-col gap-2">
+        <h3 className="type-meta font-medium text-foreground">
+          {isMulti
+            ? `On ${plural(project.copies.length, '1 computer', `${project.copies.length} computers`)}`
+            : 'Folder'}
+        </h3>
+        <ul className="flex flex-col rounded-xl border bg-card">
+          {project.copies.map((copy) => (
+            <CopyRow
+              key={computerKey(copy.machineId)}
+              spaceId={spaceId}
+              project={project}
+              copy={copy}
+              computer={
+                computers.find((c) => c.id === copy.machineId) ?? {
+                  id: copy.machineId,
+                  name: 'Unknown computer',
+                  kind: undefined,
+                }
+              }
+              isMulti={isMulti}
+              localProjects={localProjects}
+              onNewThread={() =>
+                newThread({ machineId: copy.machineId, ref: copy.ref })
+              }
+              onRename={() => setRenaming(true)}
+            />
+          ))}
+        </ul>
+        <p className="px-1 type-caption text-muted-foreground">{FOOTER}</p>
+      </div>
     </section>
   );
 }
 
-/** Another computer's projects, read there; Add project runs there too, in its own projects folder. */
-function MachineProjects({ machine }: { machine: FollowedMachine }) {
-  const { ask } = useMachines();
-  const projectsQuery = useQuery({
-    queryKey: queryKeys.projects.machine(machine.id),
-    queryFn: () => ask(machine.id, { type: 'projects' }),
-  });
-  const projects = projectsQuery.data ?? null;
-  const error = projectsQuery.error ? gitError(projectsQuery.error) : null;
-  const canAdd =
-    machine.status === 'online' && machine.scopes.includes('manage');
-  const add = canAdd && (
-    <AddProjectButton
-      machine={machine}
-      onAdded={() => {
-        void projectsQuery.refetch();
-      }}
-    />
-  );
-
-  if (error) return <p className="px-1 type-meta text-destructive">{error}</p>;
-  if (!projects) return <Spinner className="mx-auto" />;
+/** One computer's copy: which computer, its branch and state, where the folder is, and what you can do with it there. */
+function CopyRow({
+  spaceId,
+  project,
+  copy,
+  computer,
+  isMulti,
+  localProjects,
+  onNewThread,
+  onRename,
+}: {
+  spaceId: string;
+  project: ProjectWithCopies;
+  copy: ProjectCopy;
+  computer: Computer;
+  isMulti: boolean;
+  localProjects: Project[];
+  onNewThread: () => void;
+  onRename: () => void;
+}) {
+  const { local } = copy;
+  const actions = local
+    ? localActions(spaceId, local, localProjects, onNewThread, onRename)
+    : [{ label: NEW_THREAD, icon: <Edit />, onSelect: onNewThread }];
   return (
-    <SettingsSection
-      title={
-        <CountedTitle title={`On ${machine.name}`} count={projects.length} />
-      }
-      action={add}
-      footer={`Rename, remove, relocate and change icons on ${machine.name} itself.`}
-    >
-      <SettingsCard>
-        {projects.length === 0 && (
-          <Empty>
-            <EmptyDescription>
-              No projects yet
-              {canAdd
-                ? `; add one and it’s cloned or created on ${machine.name}`
-                : ''}
-              .
-            </EmptyDescription>
-          </Empty>
+    <WithContextMenu actions={actions}>
+      <li className="flex items-center gap-3 px-4 py-3 not-first:border-t">
+        {isMulti ? (
+          <ComputerAvatar computer={computer} size="lg" surface="card" />
+        ) : (
+          <Folder className="size-5 shrink-0 text-muted-foreground" />
         )}
-        {projects.map((p) => (
-          <ProjectLayout
-            key={p.id}
-            project={p}
-            tile={<IconTile project={p} />}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate type-body font-medium text-foreground">
+              {isMulti ? computer.name : (local?.path ?? copy.name)}
+            </span>
+            {isMulti && <HereBadge computer={computer} />}
+          </span>
+          <CopyFactLine
+            copy={copy}
+            origin={project.origin}
+            className="type-meta"
           />
-        ))}
-      </SettingsCard>
-    </SettingsSection>
+          {isMulti && !!local && (
+            <span className="truncate type-caption text-subtle-foreground">
+              {local.path}
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {!!local?.isMissing && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => void relocate(spaceId, local)}
+            >
+              Relocate…
+            </Button>
+          )}
+          <OverflowMenu
+            actions={actions}
+            label={`${project.name} on ${computer.name} actions`}
+          />
+        </div>
+      </li>
+    </WithContextMenu>
   );
 }
 
-function CountedTitle({ title, count }: { title: string; count: number }) {
-  return (
-    <>
-      {title}
-      <span className="ml-1.5 font-normal text-subtle-foreground tabular">
-        {count}
-      </span>
-    </>
+const NEW_THREAD = 'New thread here';
+
+/** What this computer's own copy offers: the registry's actions, run here. */
+function localActions(
+  spaceId: string,
+  project: Project,
+  all: Project[],
+  onNewThread: () => void,
+  onRename: () => void,
+): MenuAction[] {
+  const remove = () =>
+    attempt('Removing', async () => {
+      await host.projects.remove(spaceId, project.id);
+      toast(`Removed ${project.name} from Projects`, {
+        description: 'Its folder stays on disk.',
+        action: {
+          label: 'Undo',
+          onClick: () => void attempt('Undo', () => restore(spaceId, project)),
+        },
+      });
+    });
+  return [
+    {
+      label: NEW_THREAD,
+      icon: <Edit />,
+      onSelect: onNewThread,
+      disabled: project.isMissing,
+    },
+    {
+      label:
+        project.favoriteOrder === null
+          ? 'Add to favorites'
+          : 'Remove from favorites',
+      icon: <Star filled={project.favoriteOrder !== null} />,
+      onSelect: () => void toggleFavorite(spaceId, all, project.id),
+    },
+    {
+      label: 'Show folder',
+      icon: <Folder />,
+      disabled: project.isMissing,
+      onSelect: () =>
+        void attempt('Showing the folder', () =>
+          host.fs.reveal(project.path, ''),
+        ),
+    },
+    { label: 'Rename', icon: <Edit />, onSelect: onRename, startsGroup: true },
+    {
+      label: 'Relocate…',
+      icon: <FolderMove />,
+      onSelect: () => void relocate(spaceId, project),
+    },
+    {
+      label: 'Remove from list',
+      icon: <Trash />,
+      onSelect: () => void remove(),
+      isDestructive: true,
+      startsGroup: true,
+    },
+  ];
+}
+
+const attempt = (what: string, run: () => Promise<unknown>) =>
+  run().catch((e: unknown) =>
+    toast.error(`${what} failed`, { description: gitError(e) }),
   );
+
+const relocate = (spaceId: string, project: Project) =>
+  attempt('Relocating', async () => {
+    const path = await host.fs.pickFolder(
+      project.path.replace(/[\\/][^\\/]+[\\/]?$/, ''),
+    );
+    if (path) await host.projects.relocate(spaceId, project.id, path);
+  });
+
+/** The one thing a project needs from you, read from what's known without asking anyone. */
+function projectNudge(project: ProjectWithCopies, computers: Computer[]) {
+  const nameOf = (copy: ProjectCopy) =>
+    computers.find((c) => c.id === copy.machineId)?.name ?? 'Another computer';
+  const missing = project.copies.find((c) => c.local?.isMissing);
+  if (missing) return 'Folder not found on this computer';
+  const behind = project.copies.find(
+    (c) => (c.status?.upstream?.behind ?? 0) > 0,
+  );
+  if (behind) return `${nameOf(behind)} needs a pull`;
+  const ahead = project.copies.find(
+    (c) => (c.status?.upstream?.ahead ?? 0) > 0,
+  );
+  if (ahead) return `Unpushed commits on ${nameOf(ahead)}`;
+  return null;
+}
+
+function holdersOf(project: ProjectWithCopies, computers: Computer[]) {
+  return computers.filter((c) =>
+    project.copies.some((k) => k.machineId === c.id),
+  );
+}
+
+function remotePath(origin: string) {
+  return origin.startsWith('github.com/')
+    ? origin.slice('github.com/'.length)
+    : origin;
 }
 
 function NoProjects() {
@@ -241,217 +642,160 @@ function NoProjects() {
   );
 }
 
-function AddProjectButton({
-  machine,
-  onAdded,
-}: {
-  machine?: FollowedMachine;
-  onAdded?: () => void;
-}) {
+/**
+ * Add project, here or on another computer you can start threads on: with more than one, it asks where first, and the
+ * clone or new folder lands in that computer's own projects folder.
+ */
+function AddProjectButton({ computers }: { computers: Computer[] }) {
   const [isOpen, setOpen] = useState(false);
+  const targets = computers.filter(
+    (c) =>
+      !c.machine ||
+      (c.machine.status === 'online' && c.machine.scopes.includes('manage')),
+  );
+  const [target, setTarget] = useState<Computer | null>(null);
+  const where = targets.length === 1 ? targets[0] : target;
   return (
-    <Popover open={isOpen} onOpenChange={setOpen}>
+    <Popover
+      open={isOpen}
+      onOpenChange={(open) => {
+        setOpen(open);
+        if (!open) setTarget(null);
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button size="xs">
+        <Button size="sm">
           <FolderPlus />
           Add project
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
-        <AddProject
-          machine={machine}
-          onAdded={(p) => {
-            setOpen(false);
-            onAdded?.();
-            toast.success(`Added ${p.name}`);
-          }}
-        />
+        {where ? (
+          <AddProject
+            machine={where.machine}
+            onBack={targets.length > 1 ? () => setTarget(null) : undefined}
+            onAdded={(p) => {
+              setOpen(false);
+              setTarget(null);
+              // This computer's list follows its registry; another's is in its catalog, read again here.
+              if (where.machine)
+                void queryClient.invalidateQueries({
+                  queryKey: queryKeys.remote.catalog(where.machine.id, true),
+                });
+              toast.success(
+                where.machine
+                  ? `Added ${p.name} on ${where.name}`
+                  : `Added ${p.name}`,
+              );
+            }}
+          />
+        ) : (
+          <div className="flex flex-col gap-0.5 p-1.5">
+            <p className="px-2 pt-1 pb-1.5 type-meta font-medium">
+              Add a project on
+            </p>
+            {targets.map((c) => (
+              <button
+                key={computerKey(c.id)}
+                type="button"
+                onClick={() => setTarget(c)}
+                className="flex h-10 items-center gap-2.5 rounded-md px-2 text-left type-body hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+              >
+                <ComputerAvatar computer={c} size="md" />
+                <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                <HereBadge computer={c} />
+              </button>
+            ))}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
 }
 
-type Usage =
-  ReturnType<typeof projectUsage> extends Map<string, infer U> ? U : never;
+// {MENUS}
 
-function ProjectRow({
-  spaceId,
-  project,
-  all,
-  usage,
-}: {
-  spaceId: string;
-  project: Project;
-  all: Project[];
-  usage?: Usage;
-}) {
-  const { state, dispatch } = useHarness();
-  const now = state.now;
-  const [isRenaming, setRenaming] = useState(false);
-  const attempt = (what: string, run: () => Promise<unknown>) =>
-    run().catch((e: unknown) =>
-      toast.error(`${what} failed`, { description: gitError(e) }),
-    );
-  const rename = (name: string) => {
-    setRenaming(false);
-    if (name.trim() && name.trim() !== project.name)
-      void attempt('Renaming', () =>
-        host.projects.rename(spaceId, project.id, name),
-      );
-  };
-  const relocate = () =>
-    attempt('Relocating', async () => {
-      const path = await host.fs.pickFolder(
-        project.path.replace(/[\\/][^\\/]+[\\/]?$/, ''),
-      );
-      if (path) await host.projects.relocate(spaceId, project.id, path);
-    });
-  const remove = () =>
-    attempt('Removing', async () => {
-      await host.projects.remove(spaceId, project.id);
-      toast(`Removed ${project.name} from Projects`, {
-        description: 'Its folder stays on disk.',
-        action: {
-          label: 'Undo',
-          onClick: () => void attempt('Undo', () => restore(spaceId, project)),
-        },
-      });
-    });
-  const newThread = () => {
-    requestNewThreadIn(project.path);
-    dispatch({ type: 'go', view: { kind: 'new' } });
-  };
-
-  return (
-    <ProjectLayout
-      project={project}
-      tile={<IconPicker spaceId={spaceId} project={project} />}
-      name={
-        isRenaming ? (
-          <RenameField name={project.name} onDone={rename} />
-        ) : undefined
-      }
-      facts={
-        !!usage && (
-          <span className="shrink-0 tabular">
-            {threadCount(usage)} · {timeAgo(now - usage.lastAt)}
-          </span>
-        )
-      }
-      actions={
-        <>
-          {project.isMissing && (
-            <Button variant="outline" size="xs" onClick={relocate}>
-              Relocate…
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`${project.name} actions`}
-              >
-                <OverflowIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                disabled={project.isMissing}
-                onSelect={newThread}
-              >
-                <Edit />
-                New thread here
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => void toggleFavorite(spaceId, all, project.id)}
-              >
-                <Star filled={project.favoriteOrder !== null} />
-                {project.favoriteOrder === null
-                  ? 'Add to favorites'
-                  : 'Remove from favorites'}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={project.isMissing}
-                onSelect={() =>
-                  void attempt('Showing the folder', () =>
-                    host.fs.reveal(project.path, ''),
-                  )
-                }
-              >
-                <Folder />
-                Show folder
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setRenaming(true)}>
-                <Edit />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={relocate}>
-                <FolderMove />
-                Relocate…
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={remove}>
-                <Trash />
-                Remove from list
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </>
-      }
-    />
-  );
+interface MenuAction {
+  label: string;
+  icon: ReactNode;
+  onSelect: () => void;
+  disabled?: boolean;
+  isDestructive?: boolean;
+  startsGroup?: boolean;
 }
 
-/** One project's row: its icon tile, then name, where it comes from and how much it's used, and where it lives. */
-function ProjectLayout({
-  project,
-  tile,
-  name,
-  facts,
+/** The ⋯ button's menu; the same actions open on right-click through `WithContextMenu`. */
+function OverflowMenu({
   actions,
+  label,
 }: {
-  project: Project;
-  tile: ReactNode;
-  name?: ReactNode;
-  facts?: ReactNode;
-  actions?: ReactNode;
+  actions: MenuAction[];
+  label: string;
 }) {
   return (
-    <div className="relative flex items-center gap-3 px-4 py-3 not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border">
-      {tile}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {name ?? (
-          <span className="truncate type-body font-medium text-foreground">
-            {project.name}
-          </span>
-        )}
-        <span className="flex min-w-0 items-center gap-2 type-caption text-muted-foreground">
-          <OriginLabel origin={project.origin} />
-          {facts}
-        </span>
-        {project.isMissing && (
-          <span className="truncate type-caption text-warning">
-            Folder not found at {project.path}
-          </span>
-        )}
-        {!project.isMissing && project.path !== project.name && (
-          <span className="truncate type-caption text-subtle-foreground">
-            {project.path}
-          </span>
-        )}
-      </div>
-      {!!actions && (
-        <div className="flex shrink-0 items-center gap-1">{actions}</div>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={label}>
+          <OverflowIcon vertical />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <MenuItems actions={actions} kind="dropdown" />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
+
+function WithContextMenu({
+  actions,
+  children,
+}: {
+  actions: MenuAction[];
+  children: ReactNode;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        <MenuItems actions={actions} kind="context" />
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+const MENU_PARTS = {
+  dropdown: { Item: DropdownMenuItem, Separator: DropdownMenuSeparator },
+  context: { Item: ContextMenuItem, Separator: ContextMenuSeparator },
+} as const;
+
+function MenuItems({
+  actions,
+  kind,
+}: {
+  actions: MenuAction[];
+  kind: keyof typeof MENU_PARTS;
+}) {
+  const { Item, Separator } = MENU_PARTS[kind];
+  return actions.map((a, i) => (
+    <Fragment key={a.label}>
+      {a.startsGroup && i > 0 && <Separator />}
+      <Item
+        disabled={a.disabled}
+        variant={a.isDestructive ? 'destructive' : 'default'}
+        onSelect={a.onSelect}
+      >
+        {a.icon}
+        {a.label}
+      </Item>
+    </Fragment>
+  ));
+}
+
+// {PROJECT PARTS}
 
 /** Where it's cloned from, with GitHub's mark for GitHub; a folder without a remote says so. */
 function OriginLabel({ origin }: { origin: string | null }) {
-  if (!origin) return <span className="shrink-0">Local folder</span>;
+  if (!origin) return <span className="shrink-0">No git remote</span>;
   const isGithub = origin.startsWith('github.com/');
   return (
     <span className="flex min-w-0 items-center gap-1">
@@ -460,31 +804,36 @@ function OriginLabel({ origin }: { origin: string | null }) {
       ) : (
         <Link className="size-3 shrink-0" />
       )}
-      <span className="truncate">
-        {isGithub ? origin.slice('github.com/'.length) : origin}
-      </span>
+      <span className="truncate">{remotePath(origin)}</span>
     </span>
   );
 }
+
+type Usage =
+  ReturnType<typeof projectUsage> extends Map<string, infer U> ? U : never;
 
 function threadCount({ open, total }: Usage) {
   const all = plural(total, '1 thread', `${total} threads`);
   return open > 0 && open < total ? `${open} open of ${all}` : all;
 }
 
-function IconTile({ project }: { project: Project }) {
+function IconTile({
+  name,
+  icon,
+  isDimmed,
+}: {
+  name: string;
+  icon: Project['icon'];
+  isDimmed?: boolean;
+}) {
   return (
     <span
       className={cn(
         'flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background',
-        project.isMissing && 'opacity-50',
+        isDimmed && 'opacity-50',
       )}
     >
-      <ProjectIcon
-        name={project.name}
-        icon={project.icon}
-        className="size-6 rounded-md"
-      />
+      <ProjectIcon name={name} icon={icon} className="size-6 rounded-md" />
     </span>
   );
 }
@@ -519,7 +868,11 @@ function IconPicker({
           aria-label={`Change ${project.name}’s icon`}
           className="group/tile relative rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          <IconTile project={project} />
+          <IconTile
+            name={project.name}
+            icon={project.icon}
+            isDimmed={project.isMissing}
+          />
           <span
             aria-hidden
             className="absolute inset-0 flex items-center justify-center rounded-lg bg-foreground/50 text-background opacity-0 transition-opacity group-hover/tile:opacity-100 group-aria-expanded/tile:opacity-100"

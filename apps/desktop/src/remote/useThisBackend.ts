@@ -3,8 +3,10 @@ import { LOCAL_BACKEND, useBackend } from '../backends/registry.ts';
 import type { DeviceKind } from '../host/types/remote.ts';
 import { THIS_DEVICE } from './DeviceIcon.tsx';
 
+export const THIS_COMPUTER = 'This computer';
+
 /** What the window shows for this computer until its Core has answered, or where there is no Core. */
-const FALLBACK = { name: 'This computer', kind: THIS_DEVICE } as const;
+const FALLBACK = { name: THIS_COMPUTER, kind: THIS_DEVICE } as const;
 
 /**
  * This computer as its own Core describes it (its registry entry's `backend.watch`), the way another machine is described by
