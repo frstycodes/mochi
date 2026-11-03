@@ -92,6 +92,14 @@ export type BrowserAct =
   | { kind: 'press'; key: string }
   | { kind: 'scroll'; ref?: string; dx: number; dy: number };
 
+/** Trusted input at a point of the page, in its CSS px: a watching device's click, wheel and keys. */
+export type BrowserInput =
+  | { kind: 'click'; x: number; y: number }
+  | { kind: 'scroll'; x: number; y: number; dx: number; dy: number }
+  /** A key by its DOM `key` name: Enter, Backspace, ArrowDown. */
+  | { kind: 'key'; key: string }
+  | { kind: 'text'; text: string };
+
 /** What browser_wait_for waits on: any one of text, selector or url, or just the time. */
 export interface BrowserWait {
   text?: string;
@@ -189,6 +197,8 @@ export interface BrowserHost {
   /** Window content coordinates in CSS px. `null` hides the view without destroying it. */
   setBounds(id: string, bounds: BrowserBounds | null): Promise<void>;
   setZoom(id: string, factor: number): Promise<void>;
+  /** Clicks, scrolls or types at a point of the page, as a person would. */
+  input(id: string, input: BrowserInput): Promise<void>;
   /** Hides the view at `viewport` CSS px and streams it as `frame` events (JPEG data URLs) until called with `null`. */
   mirror(
     id: string,
@@ -262,6 +272,7 @@ export const browserMethods = {
   command: 'invoke',
   setBounds: 'invoke',
   setZoom: 'invoke',
+  input: 'invoke',
   mirror: 'invoke',
   emulate: 'invoke',
   devtools: 'invoke',

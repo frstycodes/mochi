@@ -44,7 +44,6 @@ import { mainWindow } from '../window.ts';
 type Tap = (event: AgentEvent) => void;
 
 const taps = new Set<Tap>();
-let whenClosed: Tap = () => {};
 
 setDataDir(() => app.getPath('userData'));
 useAgentConfig({
@@ -105,7 +104,6 @@ function deliver({
   if (channel === 'agent:onEvent') {
     const event = payload as AgentEvent;
     for (const tap of taps) tap(event);
-    if (!mainWindow()) whenClosed(event);
   }
   for (const win of openWindows()) win.webContents.send(channel, payload);
 }
@@ -147,11 +145,6 @@ export const noteLogin = (accountId: string, login: AgentLogin) =>
 export function onAgentEvent(tap: Tap) {
   taps.add(tap);
   return () => void taps.delete(tap);
-}
-
-/** Set once by the scheduler, which keeps events for the next window. */
-export function keepWhenClosed(keep: Tap) {
-  whenClosed = keep;
 }
 
 export const openWindows = () =>

@@ -39,6 +39,12 @@ export interface FollowOptions {
   onTerminal: (
     output: { terminalId: string } & typeof Relay.TerminalOutput.Type,
   ) => void;
+  /** A browser tab opened on the machine sent a frame; until it is closed, resubscribing after a dropped link. */
+  onBrowserFrame: (frame: {
+    threadId: string;
+    tabId: string;
+    frame: typeof Relay.BrowserFrame.Type;
+  }) => void;
   /** What it said about itself, to remember for the next launch. */
   onWelcome: (welcome: {
     addresses: string[];
@@ -94,6 +100,8 @@ export function followMachine(options: FollowOptions): MachineFollower {
         /** Open while the machine is connected: a dropped stream resubscribes as soon as it opens again. */
         online: Latch.Latch;
         terminals: Map<string, Fiber.Fiber<unknown, unknown>>;
+        /** By `threadId/tabId`. */
+        browsers: Map<string, Fiber.Fiber<unknown, unknown>>;
       }
     | undefined;
 
@@ -109,6 +117,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
       fiber: undefined as never,
       online: Latch.makeUnsafe(false),
       terminals: new Map(),
+      browsers: new Map(),
     };
     session = current;
     options.onFrame({ type: 'reset' });
@@ -174,9 +183,11 @@ export function followMachine(options: FollowOptions): MachineFollower {
   function stop(current: NonNullable<typeof session>) {
     if (session === current) session = undefined;
     void Effect.runPromise(
-      Fiber.interruptAll([current.fiber, ...current.terminals.values()]).pipe(
-        Effect.andThen(Scope.close(current.scope, Exit.void)),
-      ),
+      Fiber.interruptAll([
+        current.fiber,
+        ...current.terminals.values(),
+        ...current.browsers.values(),
+      ]).pipe(Effect.andThen(Scope.close(current.scope, Exit.void))),
     );
   }
 
@@ -220,6 +231,33 @@ export function followMachine(options: FollowOptions): MachineFollower {
     current.terminals.set(terminalId, Effect.runFork(output));
   }
 
+  /** A browser tab opened on the machine pushes its frames until it is closed. */
+  function watchBrowser(
+    current: NonNullable<typeof session>,
+    client: DeviceClient,
+    command: RemoteCommand,
+    result: CommandResult,
+  ) {
+    if (command.type !== 'browser-open' && command.type !== 'browser-close')
+      return;
+    const { threadId, tabId } = command;
+    const key = `${threadId}/${tabId}`;
+    if (command.type === 'browser-close' || !result.isOk)
+      return interrupt(current.browsers, key);
+    if (current.browsers.has(key)) return;
+    const frames = Stream.suspend(() =>
+      client['page.watch']({ threadId, tabId }),
+    ).pipe(
+      Stream.runForEach((frame) =>
+        Effect.sync(() => options.onBrowserFrame({ threadId, tabId, frame })),
+      ),
+      whileConnected(current.online),
+      Effect.ignore,
+      Effect.ensuring(Effect.sync(() => void current.browsers.delete(key))),
+    );
+    current.browsers.set(key, Effect.runFork(frames));
+  }
+
   start();
   return {
     state: () => state,
@@ -238,6 +276,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
       if (Exit.isSuccess(exit)) {
         const result = exit.value as CommandResult;
         if (session) watchTerminal(session, client, command, result);
+        if (session) watchBrowser(session, client, command, result);
         return result;
       }
       const error = Cause.squash(exit.cause);

@@ -28,6 +28,7 @@ import {
 } from '../projects.ts';
 import { rewindThread } from '../rewind/run.ts';
 import { sideChatChoice } from '../runtime/controls.ts';
+import { initialControls } from '../runtime/startOptions.ts';
 import {
   findSetting,
   settingsCatalog,
@@ -499,12 +500,19 @@ async function create(
     (await workspaceProblemHere(workspace, project.path));
   if (problem) return fail(problem);
   const threadId = nextThreadId(state);
+  // A device that sends none starts on this computer's defaults, as a thread started here does.
+  const controls =
+    command.controls ??
+    initialControls(
+      command.provider,
+      (await host.settings.get()).harnesses[command.provider].model,
+    );
   dispatch({
     type: 'create',
     title: command.title,
     provider: command.provider,
     project: project?.path ?? null,
-    ...(command.controls && { controls: command.controls }),
+    controls,
     ...(command.images && { images: command.images }),
     ...(workspace && project && { workspace }),
     isLive: host.isDesktop,

@@ -15,7 +15,6 @@ afterEach(() => {
 class FakeDebugger extends EventEmitter {
   calls: string[] = [];
   scroll = { x: 0, y: 1500 };
-  frame = 'A';
   /** The last command's reply; awaiting it lets the caller's own `.then`, registered first, run before the test goes on. */
   lastReply: Promise<unknown> = Promise.resolve();
   isAttached = () => true;
@@ -37,7 +36,6 @@ class FakeDebugger extends EventEmitter {
           clientHeight: 600,
         },
       };
-    if (method === 'Page.captureScreenshot') return { data: this.frame };
     return {};
   }
 }
@@ -45,6 +43,22 @@ class FakeDebugger extends EventEmitter {
 class FakePage extends EventEmitter {
   debugger = new FakeDebugger();
   restored: string[] = [];
+  frame = 'A';
+  captures = 0;
+  isThrottled = true;
+  setBackgroundThrottling(allowed: boolean) {
+    this.isThrottled = allowed;
+  }
+  async capturePage() {
+    this.captures++;
+    const image = {
+      isEmpty: () => false,
+      getSize: () => ({ width: 800, height: 600 }),
+      resize: () => image,
+      toJPEG: () => Buffer.from(this.frame),
+    };
+    return image;
+  }
   isDestroyed = () => false;
   getURL = () => 'http://localhost:5173/';
   loadURL = async () => {};
@@ -60,9 +74,6 @@ class FakePage extends EventEmitter {
 
 const fake = (() => {
   const win = Object.assign(new EventEmitter(), {
-    isShown: true,
-    isVisible: () => win.isShown,
-    isMinimized: () => false,
     isDestroyed: () => false,
     getBounds: () => ({ x: 0, y: 0, width: 800, height: 600 }),
     contentView: { addChildView() {}, removeChildView() {} },
@@ -81,7 +92,6 @@ async function openView() {
   vi.doMock('electron', () => ({
     app: { getPath: () => '/tmp' },
     BrowserWindow: { fromWebContents: () => fake.win },
-    screen: { getDisplayMatching: () => ({ scaleFactor: 1 }) },
     session: {
       fromPartition: () => ({
         on() {},
@@ -149,11 +159,10 @@ test('auto-reload reads the outgoing page as a navigation starts and restores it
   );
 });
 
-test('the mirror backs off while frames repeat, sends only changes, and stops while the window is hidden', async () => {
+test('the mirror backs off while frames repeat, sends only changes, and keeps its page painting while mirrored', async () => {
   const { views, id, page } = await openView();
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  const captures = () =>
-    page.debugger.calls.filter((m) => m === 'Page.captureScreenshot').length;
+  const captures = () => page.captures;
   // A capture ends by scheduling the next one, so the next setTimeout marks the capture as done.
   const fakeSetTimeout = globalThis.setTimeout;
   let onScheduled = () => {};
@@ -179,21 +188,13 @@ test('the mirror backs off while frames repeat, sends only changes, and stops wh
   assert.equal(captures(), 6, 'unchanged captures back off 100 → 800 ms');
   assert.equal(fake.owner.frames, 1, 'an unchanged frame is not sent again');
 
-  page.debugger.frame = 'B';
+  page.frame = 'B';
   await tick(800);
   await tick(100);
   assert.equal(fake.owner.frames, 2);
   assert.equal(captures(), 8, 'a change brings the rate back to 100 ms');
 
-  // A hidden window ends the capture before its first await, so these ticks are done when they return.
-  fake.win.isShown = false;
-  vi.advanceTimersByTime(200);
-  const paused = captures();
-  vi.advanceTimersByTime(10_000);
-  assert.equal(captures(), paused, 'a hidden window gets no captures');
-
-  fake.win.isShown = true;
-  await captured(() => fake.win.emit('show'));
-  assert.equal(captures(), paused + 1, "the window's show resumes it at once");
+  assert.equal(page.isThrottled, false, 'a mirrored page paints while hidden');
   await views.setViewMirror(fake.owner as never, id, null);
+  assert.equal(page.isThrottled, true);
 });

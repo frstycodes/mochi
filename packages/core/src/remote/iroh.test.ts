@@ -11,6 +11,7 @@ import { Capabilities } from '@mochi/schema';
 import { coreUrl, makeCoreClient } from '../client.ts';
 import { makeHostCaller } from '../hostClient.ts';
 import { layerCore } from '../server.ts';
+import { AgentCaller } from '../store/commands.ts';
 import { makeDeviceClient, openLan, type Route } from './device.ts';
 import {
   bindIroh,
@@ -221,6 +222,7 @@ const machineWithDevice = Effect.gen(function* () {
       port: 0,
       tokens: new Map([[TOKEN, Capabilities.allScopes]]),
       origins: [],
+      agents: AgentCaller.layerTest,
     }),
   );
   const port = (
@@ -369,6 +371,7 @@ it.live(
           port: 0,
           tokens: new Map([[TOKEN, Capabilities.allScopes]]),
           origins: [],
+          agents: AgentCaller.layerTest,
           remotePort: 0,
           userData,
           irohPreset: loopback,

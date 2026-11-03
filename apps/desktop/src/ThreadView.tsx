@@ -58,11 +58,13 @@ import { useSeen } from './notify/useSeen';
 import { toast } from '@/toast/store';
 import { DeviceIndicator, useRemoteMachine } from './remote/origin';
 import { remotePaneReason } from './remote/panes';
+import { useThreadBrowserTabs } from './browser/threadTabs';
 
 export function ThreadView({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();
   const { isWide, isFocused } = useSplit();
   useSeen({ threadId: thread.id }, 'open-and-leave');
+  useThreadBrowserTabs(thread);
   const pane = useHarnessSelector((s) =>
     s.panes.find((p) => p.threadId === thread.id),
   );

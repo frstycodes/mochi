@@ -1,6 +1,6 @@
 import { listenKeydown, isCommand } from '../keymap';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, History } from '@/icons';
+import { History } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { cn } from '@/lib/utils';
 import type {
@@ -13,6 +13,7 @@ import type {
 import type { TurnAnchor } from '../chat/turnAnchor';
 import { useDispatch } from '../store';
 import { Expand } from '../WorkLog';
+import { FoldChevron } from '../Fold';
 import { AssumptionList } from './Assumptions';
 import { changeDraft } from './ledger';
 import { TurnSpine } from './Spine';
@@ -254,13 +255,7 @@ export function FoldedDecisions({ items }: { items: string[] }) {
         className="flex w-fit cursor-default items-center gap-1 rounded-sm type-caption text-subtle-foreground transition-colors hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         {`${items.length} ${items.length === 1 ? 'decision' : 'decisions'}`}
-        <ChevronRight
-          aria-hidden
-          className={cn(
-            'size-3.5 transition-transform duration-150',
-            isOpen && 'rotate-90',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} />
       </button>
       <Expand isOpen={isOpen}>
         <ul className="flex list-disc flex-col gap-0.5 pl-4 type-meta text-muted-foreground marker:text-subtle-foreground">

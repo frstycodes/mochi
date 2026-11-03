@@ -12,6 +12,7 @@ export const browser: BrowserHost = {
   async command() {},
   async setBounds() {},
   async setZoom() {},
+  async input() {},
   async mirror() {},
   async emulate() {},
   async devtools() {},

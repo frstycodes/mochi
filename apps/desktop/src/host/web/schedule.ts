@@ -37,14 +37,8 @@ export const schedule: ScheduleHost = {
   async runNow() {
     throw new Error('Scheduled runs need the desktop app');
   },
-  async drain() {
-    return [];
-  },
   onChange(listener) {
     listeners.add(listener);
     return () => void listeners.delete(listener);
-  },
-  onEvent() {
-    return () => {};
   },
 };
