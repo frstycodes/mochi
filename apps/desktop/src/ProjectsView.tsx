@@ -75,7 +75,14 @@ import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import type { Project } from '@mochi/domain/host/types/projects';
 import { AddProject } from './AddProject';
-import { syncNeed, useCopyActions } from './copyActions';
+import {
+  copyBlocker,
+  isAway,
+  queuedClone,
+  syncNeed,
+  useCopyActions,
+  useOutbox,
+} from './copyActions';
 import type { SyncDirection } from './git/copyStatus';
 import { gitError } from './git/useGit';
 import { host } from './host';
@@ -371,6 +378,7 @@ function ProjectDetail({
   const { state, dispatch } = useHarness();
   const threads = useSpaceThreads();
   const [isRenaming, setRenaming] = useState(false);
+  const { outbox, cancel } = useOutbox();
   const isMulti = computers.length > 1;
   const local = project.copies.find((c) => !!c.local)?.local;
   const usage = local && projectUsage(threads).get(local.path);
@@ -469,6 +477,18 @@ function ProjectDetail({
               onRename={() => setRenaming(true)}
             />
           ))}
+          {computers.map((c) => {
+            const mail = queuedClone(outbox, project, c);
+            return (
+              !!mail && (
+                <QueuedCopyRow
+                  key={mail.id}
+                  computer={c}
+                  onCancel={() => void cancel(mail)}
+                />
+              )
+            );
+          })}
         </ul>
         <p className="px-1 type-caption text-muted-foreground">{FOOTER}</p>
       </div>
@@ -507,8 +527,8 @@ function CopyRow({
           {
             label: 'Make it its own project',
             icon: <Unlink />,
-            onSelect: () => void unlink(copy),
-            blocker: startBlocker(computer),
+            onSelect: () => void unlink(copy, [computer]),
+            blocker: copyBlocker(computer),
             startsGroup: true,
           },
         ]
@@ -577,6 +597,37 @@ function CopyRow({
 
 const NEW_THREAD = 'New thread here';
 
+/** A clone waiting in an offline computer's mailbox: it runs when that computer connects, until you take it back. */
+function QueuedCopyRow({
+  computer,
+  onCancel,
+}: {
+  computer: Computer;
+  onCancel: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-3 px-4 py-3 not-first:border-t">
+      <ComputerAvatar
+        computer={computer}
+        size="lg"
+        surface="card"
+        className="opacity-60"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate type-body font-medium text-foreground">
+          {computer.name}
+        </span>
+        <span className="truncate type-meta text-muted-foreground">
+          Clones when it’s back online
+        </span>
+      </div>
+      <Button variant="ghost" size="xs" onClick={onCancel}>
+        Cancel
+      </Button>
+    </li>
+  );
+}
+
 /** The one git action a copy needs, run on its computer; busy while it runs, and saying why when that computer can't. */
 function SyncButton({
   direction,
@@ -633,11 +684,15 @@ function AddCopyMenu({
   computers: Computer[];
 }) {
   const { clone, link } = useCopyActions();
+  const { outbox } = useOutbox();
   const holders = holdersOf(project, computers);
-  const missing = computers.filter((c) => !holders.includes(c));
+  const missing = computers.filter(
+    (c) => !holders.includes(c) && !queuedClone(outbox, project, c),
+  );
   if (missing.length === 0) return null;
+  // An offline computer is cloned on by mail, once it's back.
   const cloneable = project.origin
-    ? missing.filter((c) => !startBlocker(c))
+    ? missing.filter((c) => !copyBlocker(c))
     : [];
   return (
     <DropdownMenu>
@@ -660,7 +715,7 @@ function AddCopyMenu({
           </>
         )}
         {missing.map((c, i) => {
-          const blocker = startBlocker(c);
+          const blocker = copyBlocker(c);
           const candidates = all.flatMap((p) =>
             p === project ? [] : p.copies.filter((k) => k.machineId === c.id),
           );
@@ -679,6 +734,7 @@ function AddCopyMenu({
                   <DropdownMenuItem onSelect={() => void clone(project, c)}>
                     <Download />
                     Clone on {c.name}
+                    {isAway(c) && ' when it’s back'}
                   </DropdownMenuItem>
                 ))}
               {blocker || candidates.length === 0 ? (

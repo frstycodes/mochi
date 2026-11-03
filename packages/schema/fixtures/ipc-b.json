@@ -1243,6 +1243,46 @@
     ]
    }
   ],
+  "remote.queueMail": [
+   {
+    "input": [
+     "m2",
+     {
+      "type": "clone-project",
+      "source": {
+       "github": "frstycodes/mochi"
+      }
+     }
+    ],
+    "output": "6d1f2c4e-8a9b-4c3d-9e2f-1a2b3c4d5e6f"
+   }
+  ],
+  "remote.outbox": [
+   {
+    "input": [],
+    "output": [
+     {
+      "id": "6d1f2c4e-8a9b-4c3d-9e2f-1a2b3c4d5e6f",
+      "machineId": "m2",
+      "command": {
+       "type": "link-project",
+       "project": "p1",
+       "linkId": "l1"
+      },
+      "at": 1792651399796,
+      "expiresAt": 1793860999796
+     }
+    ]
+   }
+  ],
+  "remote.cancelMail": [
+   {
+    "input": [
+     "m2",
+     "6d1f2c4e-8a9b-4c3d-9e2f-1a2b3c4d5e6f"
+    ]
+   }
+  ],
   "remote.follow": [
    {
     "input": []

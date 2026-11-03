@@ -302,6 +302,27 @@ add('remote.onStatus', {
   },
 });
 add('remote.join', { input: ['m2'] });
+const MAIL_ID = '6d1f2c4e-8a9b-4c3d-9e2f-1a2b3c4d5e6f';
+add('remote.queueMail', {
+  input: [
+    'm2',
+    { type: 'clone-project', source: { github: 'frstycodes/mochi' } },
+  ],
+  output: MAIL_ID,
+});
+add('remote.outbox', {
+  input: [],
+  output: [
+    {
+      id: MAIL_ID,
+      machineId: 'm2',
+      command: { type: 'link-project', project: 'p1', linkId: 'l1' },
+      at: 1792651399796,
+      expiresAt: 1793860999796,
+    },
+  ],
+});
+add('remote.cancelMail', { input: ['m2', MAIL_ID] });
 add('remote.follow', { input: [] });
 add('remote.onApproval', {
   event: {

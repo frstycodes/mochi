@@ -7,6 +7,7 @@ import {
   Relay,
   type Attachment,
   type MachineRecord,
+  type Mail,
   type Room,
 } from './relay.ts';
 
@@ -26,6 +27,9 @@ interface Env {
  * DELETE /v1/machines/:id      forget a machine
  * GET    /v1/members           the account's signed membership records
  * POST   /v1/members           add records (JSON array); online machines hear `{ type: 'members' }`
+ * GET    /v1/mailbox/:id       what waits for that machine while it was offline: ids, expiries and ciphertext only
+ * POST   /v1/mailbox/:id       queue one message `{ id, sealed, expiresAt }` (signed, then sealed to the machine's key)
+ * DELETE /v1/mailbox/:id/:msg  the machine ran it, or its sender took it back
  * GET    /oauth/callback       public: a connector sign-in returning, sent on to Mochi at 127.0.0.1 (`oauth.ts`)
  * GET    /v1/connect           WebSocket. `role=machine&machine=<id>`, or `role=device&machine=<id>&device=<id>`
  */
@@ -88,8 +92,31 @@ export class AccountRelay extends DurableObject<Env> {
       await this.relay.addMembers(body);
       return new Response(null, { status: 204 });
     }
+    const mailbox = /^\/v1\/mailbox\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);
+    if (mailbox) return this.mailbox(request, mailbox[1], mailbox[2]);
     if (url.pathname === '/v1/connect')
       return this.upgrade(request, url.searchParams);
+    return new Response('Not found', { status: 404 });
+  }
+
+  private async mailbox(request: Request, machineId: string, id?: string) {
+    if (!isId(machineId) || (id !== undefined && !isId(id)))
+      return new Response('Bad mailbox path', { status: 400 });
+    if (request.method === 'GET' && id === undefined)
+      return Response.json(await this.relay.mail(machineId));
+    if (request.method === 'POST' && id === undefined) {
+      const refusal = await this.relay.post(
+        machineId,
+        await request.json().catch(() => null),
+      );
+      return refusal
+        ? new Response(refusal, { status: 400 })
+        : new Response(null, { status: 204 });
+    }
+    if (request.method === 'DELETE' && id !== undefined) {
+      await this.relay.ack(machineId, id);
+      return new Response(null, { status: 204 });
+    }
     return new Response('Not found', { status: 404 });
   }
 
@@ -150,6 +177,12 @@ export class AccountRelay extends DurableObject<Env> {
       records: async () =>
         (await storage.get<Record<string, StoredRecord>>('members')) ?? {},
       saveRecords: (records) => storage.put('members', records),
+      mailbox: async (machineId) =>
+        (await storage.get<Mail[]>(`mailbox:${machineId}`)) ?? [],
+      saveMailbox: (machineId, mail) =>
+        mail.length > 0
+          ? storage.put(`mailbox:${machineId}`, mail)
+          : storage.delete(`mailbox:${machineId}`).then(() => undefined),
     };
   }
 }
