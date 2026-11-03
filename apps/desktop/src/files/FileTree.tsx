@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, Folder, FolderOpen } from '@/icons';
+import { Folder, FolderOpen } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { cn } from '@/lib/utils';
 import { FileContextMenu } from './FileContextMenu';
 import { Highlighted } from './Highlighted';
@@ -62,12 +63,9 @@ export function FileTree({
                 )}
               >
                 {isDir ? (
-                  <ChevronRight
-                    aria-hidden
-                    className={cn(
-                      'size-3.5 shrink-0 text-subtle-foreground',
-                      isOpen && 'rotate-90',
-                    )}
+                  <FoldChevron
+                    isOpen={isOpen}
+                    className="text-subtle-foreground"
                   />
                 ) : (
                   <span className="size-3.5 shrink-0" />

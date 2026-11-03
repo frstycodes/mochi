@@ -1,11 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import {
-  ChevronRight,
-  DiagramTree,
-  InboxIn,
-  InboxOut,
-  Sparkles,
-} from '@/icons';
+import { DiagramTree, InboxIn, InboxOut, Sparkles } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, SubReport, ThreadRef } from '../model';
@@ -40,13 +35,7 @@ export function ReceivedMessageRow({
         />
         <ThreadMessageIcon direction="from" />
         <ThreadMessageLine direction="from" peer={from} text={entry.text} />
-        <ChevronRight
-          aria-hidden
-          className={cn(
-            'size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
-            isOpen && 'rotate-90',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
       </div>
       <Expand isOpen={isOpen}>
         <ThreadMessageBody text={entry.text} className="mx-2 mt-1">
@@ -88,13 +77,7 @@ export function AutofixEventRow({
             {event.title}
           </span>
         )}
-        <ChevronRight
-          aria-hidden
-          className={cn(
-            'size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
-            isOpen && 'rotate-90',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
       </button>
       <Expand isOpen={isOpen}>
         <ThreadMessageBody text={entry.text} className="mx-2 mt-1">
@@ -159,13 +142,7 @@ export function SubReportRow({
           )}
         </span>
         {hasBody && (
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
-              isOpen && 'rotate-90',
-            )}
-          />
+          <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         )}
       </div>
       {hasBody && (

@@ -5,14 +5,8 @@ import {
   useIsComposerCompact,
   useSharedLayout,
 } from '../Composer';
-import {
-  ChevronDown,
-  ChevronUp,
-  Edit,
-  Mention,
-  Paperclip,
-  Trash,
-} from '@/icons';
+import { Edit, Mention, Paperclip, Trash } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -62,11 +56,7 @@ export function QueueTray({
             preview={isOpen ? undefined : queued[0].draft}
           />
           <span className="ml-auto shrink-0 text-subtle-foreground">
-            {isOpen ? (
-              <ChevronDown className="size-4" />
-            ) : (
-              <ChevronUp className="size-4" />
-            )}
+            <FoldChevron isOpen={isOpen} />
           </span>
         </button>
         {!!thread.queuePause && thread.queuePause !== 'limit' && (
