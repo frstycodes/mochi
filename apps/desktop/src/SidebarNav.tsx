@@ -9,6 +9,7 @@ import {
   type IconComponent,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import {
   Dialog,
   DialogContent,
@@ -204,7 +205,9 @@ export function NavItem({
         )}
       </SidebarMenuButton>
       {badge !== undefined && (
-        <SidebarMenuBadge className="tabular">{badge}</SidebarMenuBadge>
+        <SidebarMenuBadge>
+          <AnimatedNumber value={badge} />
+        </SidebarMenuBadge>
       )}
     </SidebarMenuItem>
   );
