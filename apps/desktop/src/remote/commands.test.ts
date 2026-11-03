@@ -4,6 +4,7 @@ import { host } from '../host/index.ts';
 import type {
   MachineCatalog,
   RemoteThreadAction,
+  RemoteWorkspace,
 } from '../host/types/remote.ts';
 import type { QueueItem } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -884,6 +885,67 @@ test('sync-project fast-forwards or pushes the project it names, and refuses a p
     isOk: false,
     error: 'That project isn’t on this machine',
   });
+});
+
+test('create takes a worktree and branch by name, checked against the branches here, and branches lists them', async () => {
+  const { state } = machine();
+  const dispatched: Action[] = [];
+  const env = device(state, 'Laptop', dispatched);
+  const project = await host.projects.addFolder(state.spaceId, '/src/ws-api');
+  const list = {
+    current: 'main',
+    defaultBranch: 'main',
+    changes: { files: 0, added: 0, removed: 0 },
+    branches: [
+      {
+        name: 'main',
+        isRemote: false,
+        committedAt: 2,
+        worktree: '/src/ws-api',
+      },
+      { name: 'origin/release', isRemote: true, committedAt: 1 },
+    ],
+  };
+  vi.spyOn(host.git, 'branches').mockImplementation(async () => list);
+  vi.spyOn(host.git, 'branchNameError').mockImplementation(
+    async (_root, name) =>
+      name === 'bad.lock' ? 'That isn’t a valid branch name' : null,
+  );
+  const create = (workspace: RemoteWorkspace) =>
+    runRemoteCommand(
+      {
+        type: 'create',
+        title: 'x',
+        provider: 'claude',
+        project: project.id,
+        workspace,
+      },
+      env,
+    );
+
+  assert.deepEqual(
+    await runRemoteCommand({ type: 'branches', project: project.id }, env),
+    { isOk: true, data: list },
+  );
+  assert.deepEqual(await create({ mode: 'worktree', base: 'origin/gone' }), {
+    isOk: false,
+    error: 'There’s no branch origin/gone here',
+  });
+  assert.deepEqual(await create({ mode: 'worktree', branch: 'bad.lock' }), {
+    isOk: false,
+    error: 'That isn’t a valid branch name',
+  });
+  assert.equal(dispatched.length, 0, 'nothing starts on a refused workspace');
+
+  const workspace = {
+    mode: 'worktree',
+    base: 'origin/release',
+    branch: 'fix/login',
+  } as const;
+  assert.ok((await create(workspace)).isOk);
+  const [started] = dispatched;
+  assert.equal(started.type, 'create');
+  assert.deepEqual((started as { workspace?: unknown }).workspace, workspace);
 });
 
 test('settings a device writes stay on the machine; Devices and the demo switch can’t be changed from one', async () => {

@@ -4,6 +4,7 @@ import type { ThreadControls } from '../../runtime/controls.ts';
 import type { Quote } from '../../store/sidechat.ts';
 import type { AgentModel } from './agent.ts';
 import type {
+  BranchList,
   ChangeTarget,
   DiffFile,
   DiffScope,
@@ -144,6 +145,17 @@ export interface RemoteStatus {
   error?: string;
 }
 
+/** A new thread's workspace as a device sends it: a mode and branch names, never a path or this computer's temp branch name. */
+export interface RemoteWorkspace {
+  mode: 'worktree' | 'folder';
+  /** A new worktree's base; unset, the default branch. */
+  base?: string;
+  /** The new worktree branch's name, or the existing branch to check out or switch the folder to. */
+  branch?: string;
+  /** In a worktree: check out `branch` instead of starting a new one. */
+  isExisting?: boolean;
+}
+
 /**
  * What a device can ask this computer to do, each run through the same store action or host call the UI uses
  * (DEVICES.md › Devices and what they can do). `read` lists what a new thread can start with; `operate` steers threads;
@@ -157,6 +169,8 @@ export type RemoteCommand =
   | { type: 'settings' }
   /** This profile's projects as that computer keeps them (its Projects page). */
   | { type: 'projects' }
+  /** One project's branches there (by id), for a new thread's branch and worktree pickers. */
+  | { type: 'branches'; project: string }
   // operate
   /**
    * The composer's send, `text` as typed, its references resolved there. `queuedId`: Send now on a message in that computer's
@@ -200,6 +214,8 @@ export type RemoteCommand =
       /** Model, effort, speed and permissions as picked; unset, that computer's defaults. */
       controls?: ThreadControls;
       images?: SentImage[];
+      /** Worktree or folder and its branches, by name; unset, that computer's defaults. Checked there against its own branches. */
+      workspace?: RemoteWorkspace;
     }
   | { type: 'rename'; threadId: string; title: string }
   /** `order`: where the pin sorts among all your computers' pins (`pinAt`); unset pins it last. */
@@ -363,6 +379,7 @@ export interface CommandData {
   catalog: MachineCatalog;
   settings: Record<string, string>;
   projects: Project[];
+  branches: BranchList;
   'add-project': CatalogProject;
   'clone-project': CatalogProject;
   diff: GitDiff;

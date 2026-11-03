@@ -371,6 +371,7 @@ const COMMAND_VERBS = {
   catalog: 'read its projects',
   settings: 'read its settings',
   projects: 'read its projects',
+  branches: 'read its branches',
   'add-project': 'create the project',
   'clone-project': 'clone the project',
   'link-project': 'link the project',

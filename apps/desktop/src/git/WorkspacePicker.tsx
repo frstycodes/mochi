@@ -25,7 +25,9 @@ import type { Branch, BranchList } from '../host/types/git';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
+import type { RemoteWorkspace } from '../host/types/remote';
 import { parseRemoteThreadId } from '../remote/ids';
+import { useOptionalMachines } from '../remote/useMachines';
 import { shallowEqual, useDispatch, useHarnessSelector } from '../store';
 import { nextTempBranch } from '../store/threads';
 import { MetaChip } from '../MetaChip';
@@ -54,25 +56,29 @@ export interface Workspace {
   isDirty: boolean;
 }
 
-/** The pickers' state for a new thread in `root` (empty: none, nothing is read); a new branch has a temp name until you type one or its title names it. */
+/**
+ * The pickers' state for a new thread in `root` (empty: none, nothing is read); a new branch has a temp name until you type
+ * one or its title names it. On another computer (`remote`, its project by id) the branches are read there, and that
+ * computer names the new branch and checks every name itself.
+ */
 export function useWorkspace(
   root: string,
   draft: WorkspaceDraft,
   onChange: (draft: WorkspaceDraft) => void,
-  threadId?: string,
+  { threadId, remote }: { threadId?: string; remote?: RemoteProject } = {},
 ): Workspace {
-  const branches = useBranches(root);
+  const branches = useWorkspaceBranches(root, remote);
   const { list } = branches;
   const tempBranch = useHarnessSelector(nextTempBranch);
   const isNew = draft.mode === 'worktree' && !draft.isExisting;
   const branch = isNew
-    ? (draft.branch ?? tempBranch)
+    ? (draft.branch ?? (remote ? undefined : tempBranch))
     : draft.isExisting
       ? draft.branch
       : (list?.current ?? undefined);
   const nameError = useBranchNameError(
     root,
-    isNew && !!list ? branch : undefined,
+    isNew && !!list && !remote ? branch : undefined,
   );
   const sharers = useHarnessSelector(
     (s) =>
@@ -132,7 +138,7 @@ export function useThreadWorkspace(thread: Thread): Workspace | null {
     isOpen ? projectRef(repo)! : '',
     draft,
     change,
-    thread.id,
+    { threadId: thread.id },
   );
   return isOpen ? workspace : null;
 }
@@ -458,6 +464,51 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
       ))}
     </ul>
   );
+}
+
+/** One of another computer's projects, by the id its catalog gives. */
+export interface RemoteProject {
+  machineId: string;
+  project: string;
+}
+
+/** This checkout's branches, or another computer's project's, read there. */
+function useWorkspaceBranches(
+  root: string,
+  remote: RemoteProject | undefined,
+): Workspace['branches'] {
+  const local = useBranches(remote ? '' : root);
+  const machines = useOptionalMachines();
+  const remoteQuery = useQuery({
+    queryKey: queryKeys.remote.read(remote?.machineId ?? '', [
+      'branches',
+      remote?.project,
+    ]),
+    queryFn: () =>
+      machines!.ask(remote!.machineId, {
+        type: 'branches',
+        project: remote!.project,
+      }),
+    enabled: !!remote && !!machines,
+  });
+  if (!remote) return local;
+  return {
+    list: remoteQuery.data,
+    error: remoteQuery.error?.message,
+    refresh: () => {
+      void remoteQuery.refetch();
+    },
+  };
+}
+
+/** What a device sends for a new thread's workspace on another computer: names only, the temp branch left to it. */
+export function remoteWorkspace(draft: WorkspaceDraft): RemoteWorkspace {
+  return {
+    mode: draft.mode,
+    ...(draft.base && { base: draft.base }),
+    ...(draft.branch && { branch: draft.branch }),
+    ...(draft.isExisting && { isExisting: true }),
+  };
 }
 
 function useBranchNameError(root: string, name: string | undefined) {
