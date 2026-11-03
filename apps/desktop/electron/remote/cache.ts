@@ -9,8 +9,9 @@ import { join } from 'node:path';
 import { isWeakStorage, type KeyStorage } from '../secrets.ts';
 
 /**
- * Each followed machine's last snapshot, so its threads read offline and show at launch before it answers. Encrypted with
- * `safeStorage`: thread content is the user's, and on a computer with only weak storage nothing is written at all.
+ * Something each followed machine last sent, by machine: its snapshot (`machine-cache`), so its threads read offline and
+ * show at launch before it answers, or its catalog (`catalog-cache`), so its projects still list. Encrypted with
+ * `safeStorage`: they're the user's, and on a computer with only weak storage nothing is written at all.
  */
 export class MachineCache {
   private readonly dir: string;
@@ -20,9 +21,10 @@ export class MachineCache {
   constructor(
     userData: string,
     storage: KeyStorage,
+    folder = 'machine-cache',
     platform: NodeJS.Platform = process.platform,
   ) {
-    this.dir = join(userData, 'machine-cache');
+    this.dir = join(userData, folder);
     this.storage = storage;
     this.platform = platform;
   }

@@ -685,6 +685,18 @@ test('a new thread starts only in a project the machine listed, by its id, with 
       }) as never,
   );
   vi.spyOn(host.agent, 'models').mockImplementation(async () => []);
+  vi.spyOn(host.git, 'status').mockImplementation(async () => ({
+    branch: 'main',
+    files: [{ path: 'a.ts', status: 'modified' }],
+    upstream: { ahead: 0, behind: 4 },
+  }));
+  vi.spyOn(host.settings, 'detect').mockImplementation(
+    async (accountId) =>
+      ({
+        path: accountId.startsWith('claude') ? '/bin/claude' : null,
+        login: { state: 'logged-out' },
+      }) as never,
+  );
   const listed = await runRemoteCommand(
     { type: 'catalog' },
     device(withProject, 'Laptop', []),
@@ -699,6 +711,15 @@ test('a new thread starts only in a project the machine listed, by its id, with 
   );
   assert.notEqual(api.ref, '/src/api', 'a device gets an id, never the path');
   assert.deepEqual(catalog.defaults, { claude: 'opus', codex: '' });
+  assert.deepEqual(
+    api.copy,
+    { branch: 'main', changed: 1, upstream: { ahead: 0, behind: 4 } },
+    'its git state there, as of its last fetch',
+  );
+  assert.deepEqual(catalog.harnesses, {
+    claude: { isInstalled: true, isSignedIn: false },
+    codex: { isInstalled: false, isSignedIn: false },
+  });
 
   const dispatched: Action[] = [];
   for (const project of ['/etc', '/src/api'])

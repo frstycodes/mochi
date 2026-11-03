@@ -33,3 +33,13 @@ test('without real encryption nothing is written, and an id with a path in it is
   assert.deepEqual(readdirSync(dir), []);
   assert.throws(() => new MachineCache(dir, storage()).write('../m1', 'x'));
 });
+
+test('a catalog is kept in its own folder, beside the snapshot of the same machine', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mochi-cache-'));
+  new MachineCache(dir, storage()).write('m1', 'threads');
+  const catalogs = new MachineCache(dir, storage(), 'catalog-cache');
+  catalogs.write('m1', 'projects');
+  assert.equal(catalogs.read('m1'), 'projects');
+  assert.equal(new MachineCache(dir, storage()).read('m1'), 'threads');
+  assert.deepEqual(readdirSync(dir).sort(), ['catalog-cache', 'machine-cache']);
+});

@@ -17,6 +17,7 @@ export const GitFileStatus = Schema.Struct({
 export const GitStatus = Schema.Struct({
   branch: S,
   files: Schema.Array(GitFileStatus),
+  upstream: opt(Schema.Struct({ ahead: N, behind: N })),
 });
 export type GitStatus = typeof GitStatus.Type;
 

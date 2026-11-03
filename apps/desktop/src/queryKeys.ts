@@ -135,6 +135,8 @@ export const queryKeys = {
     status: () => ['remote-status'] as const,
     catalog: (machineId: string | undefined, isOnline: boolean) =>
       ['machine-catalog', machineId, isOnline] as const,
+    cachedCatalog: (machineId: string | undefined) =>
+      ['cached-machine-catalog', machineId] as const,
     read: (machineId: string, key: readonly unknown[]) =>
       ['machine-read', machineId, ...key] as const,
     schedules: (machineId: string) => ['machine-schedules', machineId] as const,

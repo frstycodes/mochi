@@ -67,18 +67,32 @@ function diffFile(
   };
 }
 
-/** `git status --porcelain=v1 -z`. Renames carry their old path as the next NUL field. */
+/** `git status --porcelain=v1 -z`, with or without `--branch`. Renames carry their old path as the next NUL field. */
 export function parseStatus(text: string): GitFileStatus[] {
   const fields = text.split('\0');
   const files: GitFileStatus[] = [];
   for (let i = 0; i < fields.length; i++) {
     const entry = fields[i];
-    if (entry.length < 4) continue;
+    if (entry.length < 4 || entry.startsWith('## ')) continue;
     const xy = entry.slice(0, 2);
     files.push({ path: entry.slice(3), status: statusOf(xy) });
     if (xy.includes('R') || xy.includes('C')) i++;
   }
   return files;
+}
+
+/**
+ * The `--branch` header's counts against the upstream (`## main...origin/main [ahead 2, behind 1]`); undefined with no
+ * upstream. As fresh as the last fetch.
+ */
+export function parseUpstream(
+  text: string,
+): { ahead: number; behind: number } | undefined {
+  const header = text.split('\0')[0];
+  if (!header.startsWith('## ') || !header.includes('...')) return undefined;
+  const count = (word: string) =>
+    Number(new RegExp(`${word} (\\d+)`).exec(header)?.[1] ?? 0);
+  return { ahead: count('ahead'), behind: count('behind') };
 }
 
 function statusOf(xy: string): GitFileStatus['status'] {

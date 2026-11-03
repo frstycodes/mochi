@@ -17,6 +17,7 @@ import { useLatest } from '../useLatest';
 import type {
   CommandResult,
   FollowedMachine,
+  MachineCatalog,
   RemoteCommand,
   ThreadOpCommand,
 } from '../host/types/remote';
@@ -222,8 +223,11 @@ export function useFollowedMachine(machineId: string | undefined) {
     : machines?.machines.find((m) => m.machine.id === machineId)?.machine;
 }
 
-/** What a new thread on that computer can start in and with; null while it's read, offline or when it can't be read. */
-/** That machine's catalog, read when it comes online; `reload` reads it again (after adding a project there). */
+/**
+ * What a new thread on that computer can start in and with, read when it comes online: `catalog` is null while it's read,
+ * offline or when it can't be read; `lastKnown` falls back to the one kept from last time, so its projects still list.
+ * `reload` reads it again (after adding a project there).
+ */
 export function useMachineCatalog(machine: FollowedMachine | undefined) {
   // Optional: the shared composer asks with no machine for this computer's own threads, wherever it renders.
   const machines = useOptionalMachines();
@@ -231,11 +235,29 @@ export function useMachineCatalog(machine: FollowedMachine | undefined) {
   const isOnline = machine?.status === 'online';
   const catalogQuery = useQuery({
     queryKey: queryKeys.remote.catalog(machineId, isOnline),
-    queryFn: () => machines!.ask(machineId!, { type: 'catalog' }),
+    queryFn: async () => {
+      const catalog = await machines!.ask(machineId!, { type: 'catalog' });
+      host.remote
+        .cacheCatalog(machineId!, catalog)
+        .catch((error: unknown) =>
+          console.error('Saving another computer’s projects failed', error),
+        );
+      return catalog;
+    },
     enabled: !!machineId && isOnline && !!machines,
   });
+  const cachedQuery = useQuery({
+    queryKey: queryKeys.remote.cachedCatalog(machineId),
+    queryFn: async () => {
+      const saved = await host.remote.cachedCatalog(machineId!);
+      return saved === null ? null : (JSON.parse(saved) as MachineCatalog);
+    },
+    enabled: !!machineId,
+  });
+  const catalog = isOnline ? (catalogQuery.data ?? null) : null;
   return {
-    catalog: isOnline ? (catalogQuery.data ?? null) : null,
+    catalog,
+    lastKnown: catalog ?? cachedQuery.data ?? null,
     reload: () => {
       void catalogQuery.refetch();
     },

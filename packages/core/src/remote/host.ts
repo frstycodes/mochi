@@ -9,6 +9,8 @@ export type InMain =
   | 'follow'
   | 'cacheMachine'
   | 'cachedMachines'
+  | 'cacheCatalog'
+  | 'cachedCatalog'
   | 'command';
 
 /** `host.remote`: Settings › Remote access and who this computer trusts, served by Core's `Remote`. */

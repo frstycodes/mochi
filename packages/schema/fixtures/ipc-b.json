@@ -463,6 +463,50 @@
     ]
    }
   ],
+  "remote.cacheCatalog": [
+   {
+    "input": [
+     "m1",
+     {
+      "projects": [
+       {
+        "ref": "p1",
+        "name": "api",
+        "origin": "github.com/acme/api",
+        "icon": null,
+        "copy": {
+         "branch": "main",
+         "changed": 0,
+         "upstream": {
+          "ahead": 0,
+          "behind": 2
+         }
+        }
+       }
+      ],
+      "models": {},
+      "defaults": {
+       "claude": "",
+       "codex": ""
+      },
+      "harnesses": {
+       "claude": {
+        "isInstalled": true,
+        "isSignedIn": true
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "remote.cachedCatalog": [
+   {
+    "input": [
+     "m1"
+    ],
+    "output": null
+   }
+  ],
   "remote.commandResult": [
    {
     "input": [

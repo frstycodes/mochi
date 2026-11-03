@@ -2,6 +2,8 @@ import type { InMain } from '@mochi/core/remote/host';
 import type { RemoteHost } from '../../src/host/types/remote.ts';
 import {
   answerCommand,
+  cacheCatalog,
+  cachedCatalog,
   cachedMachines,
   cacheMachine,
   commandMachine,
@@ -20,6 +22,10 @@ export const remote = {
     cacheMachine(sender, machineId, saved);
   },
   cachedMachines: async () => cachedMachines(),
+  async cacheCatalog(sender, machineId, catalog) {
+    cacheCatalog(sender, machineId, catalog);
+  },
+  cachedCatalog: async (_sender, machineId) => cachedCatalog(machineId),
   async follow(sender) {
     follow(sender);
   },

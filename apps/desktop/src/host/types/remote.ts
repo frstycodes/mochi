@@ -386,6 +386,14 @@ export interface MachineCatalog {
   defaults: Record<Provider, string>;
   /** Each harness's slash commands and skills as the profile configures them, before a thread's agent reports its own. */
   commands?: Partial<Record<Provider, MachineCommands>>;
+  /** Whether each harness can run there; absent from computers older than it. */
+  harnesses?: Partial<Record<Provider, HarnessReadiness>>;
+}
+
+export interface HarnessReadiness {
+  isInstalled: boolean;
+  /** False only when the harness reports signed out; a status it couldn't read counts as signed in. */
+  isSignedIn: boolean;
 }
 
 export interface MachineCommands {
@@ -393,10 +401,27 @@ export interface MachineCommands {
   skills: string[];
 }
 
-/** A project as a device names it: `ref` is the project's id there, sent back as is (`create`), never a path. */
+/**
+ * A project as a device names it: `ref` is the project's id there, sent back as is (`create`), never a path. The rest is
+ * absent from computers older than it, and from a project just added.
+ */
 export interface CatalogProject {
   ref: string;
   name: string;
+  /** `normalizeOrigin` of its remote, what makes it the same project on every computer; null with none. */
+  origin?: string | null;
+  /** null shows the letter, and so does an icon too big to send. */
+  icon?: Project['icon'];
+  /** Its git state there; null when the folder isn't a repo. */
+  copy?: CopyStatus | null;
+}
+
+export interface CopyStatus {
+  branch: string;
+  /** Files with uncommitted changes. */
+  changed: number;
+  /** As of that copy's last fetch; absent with no upstream. */
+  upstream?: { ahead: number; behind: number };
 }
 
 export interface TerminalOutput {
@@ -463,6 +488,10 @@ export interface RemoteHost {
   /** Keeps a followed machine's store (`toSaved` JSON) encrypted on this computer, for launch and offline reading. */
   cacheMachine(machineId: string, saved: string): Promise<void>;
   cachedMachines(): Promise<{ machineId: string; saved: string }[]>;
+  /** Keeps a followed machine's last catalog encrypted on this computer, so its projects list while it's offline. */
+  cacheCatalog(machineId: string, catalog: MachineCatalog): Promise<void>;
+  /** The last kept catalog as JSON, checked against the schema; null with none. */
+  cachedCatalog(machineId: string): Promise<string | null>;
   /** Runs on that machine; rejects only for a bad argument, every other failure is the result's `error`. */
   command(machineId: string, command: RemoteCommand): Promise<CommandResult>;
 }
@@ -487,5 +516,7 @@ export const remoteMethods = {
   onTerminalOutput: 'event',
   cacheMachine: 'invoke',
   cachedMachines: 'invoke',
+  cacheCatalog: 'invoke',
+  cachedCatalog: 'invoke',
   command: 'invoke',
 } satisfies Manifest<RemoteHost>;

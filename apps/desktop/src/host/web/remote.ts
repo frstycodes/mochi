@@ -56,6 +56,10 @@ export const remote: RemoteHost = {
   async cachedMachines() {
     return [];
   },
+  async cacheCatalog() {},
+  async cachedCatalog() {
+    return null;
+  },
   async command() {
     return { isOk: false, error: 'Other computers need the desktop app' };
   },

@@ -10,6 +10,7 @@ import type {
 import {
   parseDiff,
   parseStatus,
+  parseUpstream,
 } from '../../../../apps/desktop/src/git/parse.ts';
 import {
   applyFiles,
@@ -77,9 +78,14 @@ export const git = {
     const top = await topLevel(cwd);
     const [branch, porcelain] = await Promise.all([
       currentBranch(top),
-      runGit(top, ['status', '--porcelain=v1', '-z']),
+      runGit(top, ['status', '--porcelain=v1', '--branch', '-z']),
     ]);
-    return { branch, files: parseStatus(porcelain) };
+    const upstream = parseUpstream(porcelain);
+    return {
+      branch,
+      files: parseStatus(porcelain),
+      ...(upstream && { upstream }),
+    };
   },
 
   async diff(_caller, cwd, scope, chosenBase) {

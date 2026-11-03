@@ -3,6 +3,7 @@ import { event, invoke, Str } from '../checks.ts';
 import {
   CommandResult,
   DeviceKind,
+  MachineCatalog,
   MirrorFrame,
   RemoteCommand,
   RemoteCommandRequest,
@@ -146,6 +147,8 @@ export const remoteRpc = {
     T([]),
     Schema.Array(Schema.Struct({ machineId: S, saved: S })),
   ),
+  cacheCatalog: invoke(T([MachineId, MachineCatalog]), Void),
+  cachedCatalog: invoke(T([MachineId]), Schema.NullOr(S)),
   command: invoke(T([MachineId, RemoteCommand]), CommandResult),
 };
 
