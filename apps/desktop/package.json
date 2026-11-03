@@ -56,6 +56,7 @@
     "@modelcontextprotocol/node": "2.1.2",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@modelcontextprotocol/server": "2.4.0",
+    "@number-flow/react": "^0.6.2",
     "@parcel/watcher": "2.5.1",
     "@pierre/diffs": "^1.5.2",
     "@radix-ui/react-use-controllable-state": "^1.2.6",

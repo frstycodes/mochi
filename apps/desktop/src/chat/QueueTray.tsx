@@ -14,6 +14,7 @@ import {
   Trash,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { QueuedMessage, Thread } from '../model';
@@ -232,7 +233,7 @@ function ExtraCount({
       className="flex shrink-0 items-center gap-0.5 type-caption text-subtle-foreground tabular"
     >
       <Icon aria-hidden className="size-3.5" />
-      {count}
+      <AnimatedNumber value={count} />
     </span>
   );
 }

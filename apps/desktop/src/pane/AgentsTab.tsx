@@ -10,6 +10,7 @@ import {
 } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 import {
   Empty,
   EmptyDescription,
@@ -19,7 +20,8 @@ import {
 } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { plural, TOKENS } from '@mochi/domain/lib/format';
+import { plural, TOKEN_FORMAT } from '@mochi/domain/lib/format';
+import type { Format } from '@number-flow/react';
 import { formatElapsed } from '../progress';
 import {
   SubagentAvatar,
@@ -243,11 +245,11 @@ function AgentCard({
           <SubagentModel provider={subagent.provider} model={subagent.model} />
         )}
         {subagent.tokens > 0 && (
-          <Count value={TOKENS.format(subagent.tokens)} unit="tokens" />
+          <Count value={subagent.tokens} format={TOKEN_FORMAT} unit="tokens" />
         )}
         {subagent.steps.length > 0 && (
           <Count
-            value={String(subagent.steps.length)}
+            value={subagent.steps.length}
             unit={plural(subagent.steps.length, 'tool use', 'tool uses')}
           />
         )}
@@ -303,10 +305,23 @@ const TASK_KINDS = {
   monitor: 'Monitor',
 } satisfies Record<TaskRow['kind'], string>;
 
-function Count({ value, unit }: { value: string; unit: string }) {
+function Count({
+  value,
+  format,
+  unit,
+}: {
+  value: number;
+  format?: Format;
+  unit: string;
+}) {
   return (
     <span className="shrink-0">
-      <span className="tabular text-muted-foreground">{value}</span> {unit}
+      <AnimatedNumber
+        value={value}
+        format={format}
+        className="text-muted-foreground"
+      />{' '}
+      {unit}
     </span>
   );
 }
