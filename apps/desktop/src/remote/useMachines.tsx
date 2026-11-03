@@ -362,6 +362,7 @@ const COMMAND_VERBS = {
   projects: 'read its projects',
   'add-project': 'create the project',
   'clone-project': 'clone the project',
+  'link-project': 'link the project',
   send: 'send the message',
   'thread-action': 'change the thread',
   unsteer: 'take the message back',

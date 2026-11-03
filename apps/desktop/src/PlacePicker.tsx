@@ -11,6 +11,7 @@ import {
   Chat,
   Check,
   ChevronDown,
+  Download,
   FolderPlus,
   GitBranch,
   Search,
@@ -22,12 +23,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { AddProject } from './AddProject';
+import { useCopyActions } from './copyActions';
 import { isMod } from './keys';
 import { MetaChip } from './MetaChip';
 import {
   copyFact,
+  isOtherRepo,
   projectOf,
   useCopyStatus,
   type ProjectCopy,
@@ -35,7 +43,12 @@ import {
 } from './projectCopies';
 import { ProjectIcon } from './ProjectIcon';
 import { refreshProjects, type Place } from './projects';
-import { ComputerAvatar, HereBadge, type Computer } from './remote/computers';
+import {
+  ComputerAvatar,
+  HereBadge,
+  startBlocker,
+  type Computer,
+} from './remote/computers';
 import { ScrollDock } from './ScrollDock';
 import { useHarnessSelector } from './store';
 
@@ -268,7 +281,13 @@ export function PlacePicker({
             {computers.map((c) => {
               const copy = active.copies.find((k) => k.machineId === c.id);
               if (!copy)
-                return <MissingCopyOption key={c.id ?? HERE} computer={c} />;
+                return (
+                  <MissingCopyOption
+                    key={c.id ?? HERE}
+                    project={active}
+                    computer={c}
+                  />
+                );
               return (
                 <CopyOption
                   key={c.id ?? HERE}
@@ -393,7 +412,7 @@ function CopyOption({
             No folder, branch or files
           </span>
         ) : (
-          <CopyFactLine copy={copy} origin={project.origin} />
+          <CopyFactLine copy={copy} project={project} />
         )}
       </span>
       {isActive && <Check className="size-4 shrink-0 text-foreground" />}
@@ -401,8 +420,21 @@ function CopyOption({
   );
 }
 
-/** A computer without a copy: listed so the column always reads the same, never picked. */
-function MissingCopyOption({ computer }: { computer: Computer }) {
+/**
+ * A computer without a copy: listed so the column always reads the same, never picked. A project with a remote offers
+ * Clone here, which clones into that computer's projects folder; it then lists as a copy.
+ */
+function MissingCopyOption({
+  project,
+  computer,
+}: {
+  project: ProjectWithCopies;
+  computer: Computer;
+}) {
+  const { clone } = useCopyActions();
+  const [isCloning, setCloning] = useState(false);
+  const blocker = startBlocker(computer);
+  const canClone = !!project.origin && project.key !== NO_PROJECT;
   return (
     <li className="flex min-h-12 shrink-0 items-center gap-2.5 rounded-md px-2 py-1.5">
       <ComputerAvatar computer={computer} size="md" className="opacity-40" />
@@ -411,9 +443,36 @@ function MissingCopyOption({ computer }: { computer: Computer }) {
           {computer.name}
         </span>
         <span className="truncate type-caption text-subtle-foreground">
-          Not on this computer
+          {isCloning ? 'Cloning…' : 'Not on this computer'}
         </span>
       </span>
+      {canClone && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* A span keeps the tooltip when the button is disabled. */}
+            <span className="shrink-0">
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={!!blocker || isCloning}
+                onClick={() => {
+                  setCloning(true);
+                  void clone(project, computer).finally(() =>
+                    setCloning(false),
+                  );
+                }}
+              >
+                <Download />
+                Clone here
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            {blocker ??
+              `Clones ${project.origin} into ${computer.name}’s projects folder`}
+          </TooltipContent>
+        </Tooltip>
+      )}
     </li>
   );
 }
@@ -421,18 +480,25 @@ function MissingCopyOption({ computer }: { computer: Computer }) {
 /** A copy's state with its branch as a branch, not as the words "On main"; nothing while it's read. */
 export function CopyFactLine({
   copy,
-  origin,
+  project,
   className = 'type-caption',
 }: {
   copy: ProjectCopy;
-  origin: string | null;
+  project: ProjectWithCopies;
   className?: string;
 }) {
   const status = useCopyStatus(copy);
+  const { origin } = project;
   if (copy.local?.isMissing)
     return (
       <span className={cn('truncate', WARNING_TEXT, className)}>
         Folder not found; relocate it in Projects
+      </span>
+    );
+  if (isOtherRepo(copy, project))
+    return (
+      <span className={cn('truncate', WARNING_TEXT, className)}>
+        Different repo: {copy.origin}
       </span>
     );
   if (status === undefined)
@@ -529,7 +595,13 @@ function noProjectRow(computers: Computer[]): ProjectWithCopies {
     name: 'No project',
     origin: null,
     icon: null,
-    copies: computers.map((c) => ({ machineId: c.id, ref: '', name: '' })),
+    copies: computers.map((c) => ({
+      machineId: c.id,
+      ref: '',
+      name: '',
+      origin: null,
+      icon: null,
+    })),
   };
 }
 

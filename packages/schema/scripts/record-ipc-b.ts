@@ -71,6 +71,14 @@ await record('projects.setFavorites', projects.setFavorites, 'personal', [
   added.id,
 ]);
 await record(
+  'projects.link',
+  projects.link,
+  'personal',
+  added.id,
+  '0b6c4a52-1f0e-4d7a-9a51-3c2f8e7d9b10',
+);
+await record('projects.link', projects.link, 'personal', added.id, null);
+await record(
   'projects.setIcon',
   projects.setIcon,
   'personal',

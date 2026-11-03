@@ -31,6 +31,8 @@
     { "type": "add-project", "name": "fresh", "publish": "private" },
     { "type": "clone-project", "source": { "url": "git@gitlab.com:me/repo.git" } },
     { "type": "clone-project", "source": { "github": "frstycodes/mochi" } },
+    { "type": "link-project", "project": "p1", "linkId": "l1" },
+    { "type": "link-project", "project": "p1", "linkId": null },
     { "type": "setting", "key": "shell", "value": "zsh" },
     { "type": "diff", "threadId": "t", "scope": "branch" },
     { "type": "checkpoint-diff", "threadId": "t", "n": 0 },

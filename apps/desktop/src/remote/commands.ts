@@ -84,6 +84,7 @@ export async function runRemoteCommand(
     return { isOk: true, data: (await projectsHere(state)).map(withSmallIcon) };
   if (command.type === 'add-project' || command.type === 'clone-project')
     return addProject(command, state);
+  if (command.type === 'link-project') return linkProject(command, state);
   if (command.type === 'create') return create(command, env);
   if (isThreadOp(command))
     return runThreadOp(command, state, dispatch, () => projectsHere(state));
@@ -355,6 +356,7 @@ async function catalogProject(project: Project): Promise<CatalogProject> {
     ref: project.id,
     name: project.name,
     origin: project.origin,
+    ...(project.linkId && { linkId: project.linkId }),
     icon: withSmallIcon(project).icon,
     copy: await copyStatus(project.path),
   };
@@ -426,6 +428,17 @@ async function addProject(
   } catch (error) {
     return fail((error as Error).message);
   }
+}
+
+/** A hand link on one of this computer's projects, named by id as `catalog` lists it. */
+async function linkProject(
+  { project, linkId }: Extract<RemoteCommand, { type: 'link-project' }>,
+  state: State,
+): Promise<CommandResult> {
+  return host.projects.link(state.spaceId, project, linkId).then(
+    () => ok,
+    (error: unknown) => fail((error as Error).message),
+  );
 }
 
 /** The new-thread page's start, in the background. A project has to be one `catalog` listed, by id: a device never names a folder. */

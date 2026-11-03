@@ -33,7 +33,7 @@ export function useProjectsWithCopies(
 
 /** A project across your computers, its copies in the order they joined: this computer's first. */
 export interface ProjectWithCopies {
-  /** Stable while its first copy stays: that copy's computer and ref. */
+  /** Stable as copies come and go: its remote, else its link, else its first copy (`withStableKeys`). */
   key: string;
   name: string;
   origin: string | null;
@@ -46,6 +46,10 @@ export interface ProjectCopy {
   machineId: string | null;
   ref: string;
   name: string;
+  origin: string | null;
+  /** Set when it was linked to the others by hand. */
+  linkId?: string;
+  icon: Project['icon'];
   /** This computer's registry entry; its git state is read here (`useCopyStatus`). */
   local?: Project;
   /** Another computer's git state as its catalog last reported it; null when the folder isn't a repo. */
@@ -53,8 +57,9 @@ export interface ProjectCopy {
 }
 
 /**
- * Folders with the same normalised remote are one project, at most one copy per computer: a second clone on the same
- * computer stays its own project. Folders without a remote are never joined.
+ * Folders linked by hand, or with the same normalised remote, are one project, at most one copy per computer: a second
+ * clone on the same computer stays its own project. A copy that matches two projects joins them, unless both have a copy
+ * on one computer. Folders without a remote join only by hand.
  */
 export function joinCopies(
   local: readonly Project[],
@@ -64,41 +69,91 @@ export function joinCopies(
   }[],
 ): ProjectWithCopies[] {
   const joined: ProjectWithCopies[] = [];
-  const byOrigin = new Map<string, ProjectWithCopies>();
-  const add = (
-    copy: ProjectCopy,
-    origin: string | null,
-    icon: Project['icon'],
-  ) => {
-    const same = origin === null ? undefined : byOrigin.get(origin);
-    if (same && !same.copies.some((c) => c.machineId === copy.machineId)) {
-      same.copies.push(copy);
-      return;
+  const byKey = new Map<string, ProjectWithCopies>();
+  const add = (copy: ProjectCopy) => {
+    const keys = joinKeys(copy);
+    // Earliest first, so a merge keeps this computer's copy and the list's order.
+    const matches = [...new Set(keys.flatMap((k) => byKey.get(k) ?? []))]
+      .filter((p) => !holds(p, copy.machineId))
+      .sort((a, b) => joined.indexOf(a) - joined.indexOf(b));
+    const [project = newProject(copy), ...rest] = matches;
+    if (matches.length === 0) joined.push(project);
+    for (const other of rest) {
+      if (other.copies.some((c) => holds(project, c.machineId))) continue;
+      project.copies.push(...other.copies);
+      joined.splice(joined.indexOf(other), 1);
+      for (const [k, p] of byKey) if (p === other) byKey.set(k, project);
     }
-    const project = {
-      key: `${copy.machineId ?? HERE}:${copy.ref}`,
-      name: copy.name,
-      origin,
-      icon,
-      copies: [copy],
-    };
-    joined.push(project);
-    if (origin !== null && !same) byOrigin.set(origin, project);
+    if (project.copies[0] !== copy) project.copies.push(copy);
+    project.origin ??= copy.origin;
+    for (const k of keys) if (!byKey.has(k)) byKey.set(k, project);
   };
   for (const p of local)
-    add(
-      { machineId: null, ref: p.path, name: p.name, local: p },
-      p.origin,
-      p.icon,
-    );
+    add({
+      machineId: null,
+      ref: p.path,
+      name: p.name,
+      origin: p.origin,
+      ...(p.linkId && { linkId: p.linkId }),
+      icon: p.icon,
+      local: p,
+    });
   for (const { machineId, projects } of others)
     for (const p of projects)
-      add(
-        { machineId, ref: p.ref, name: p.name, status: p.copy ?? null },
-        p.origin ?? null,
-        p.icon ?? null,
-      );
-  return joined;
+      add({
+        machineId,
+        ref: p.ref,
+        name: p.name,
+        origin: p.origin ?? null,
+        ...(p.linkId && { linkId: p.linkId }),
+        icon: p.icon ?? null,
+        status: p.copy ?? null,
+      });
+  return withStableKeys(joined);
+}
+
+/**
+ * Keyed by what joins it (its remote, else its link), so the key survives a copy joining ahead of the first (a clone
+ * here). A second project with the same remote, or one with neither, keeps its first copy's key.
+ */
+function withStableKeys(projects: ProjectWithCopies[]) {
+  const taken = new Set<string>();
+  for (const project of projects) {
+    const linkId = project.copies.find((c) => c.linkId)?.linkId;
+    const joinedBy = project.origin
+      ? `origin:${project.origin}`
+      : linkId && `link:${linkId}`;
+    if (joinedBy && !taken.has(joinedBy)) project.key = joinedBy;
+    taken.add(project.key);
+  }
+  return projects;
+}
+
+const joinKeys = ({ linkId, origin }: ProjectCopy) => [
+  ...(linkId ? [`link:${linkId}`] : []),
+  ...(origin ? [`origin:${origin}`] : []),
+];
+
+const holds = (project: ProjectWithCopies, machineId: string | null) =>
+  project.copies.some((c) => c.machineId === machineId);
+
+function newProject(copy: ProjectCopy): ProjectWithCopies {
+  return {
+    key: `${copy.machineId ?? HERE}:${copy.ref}`,
+    name: copy.name,
+    origin: copy.origin,
+    icon: copy.icon,
+    copies: [copy],
+  };
+}
+
+/** Linked by hand, but its remote isn't the project's: worth a warning wherever it shows, never a block. */
+export function isOtherRepo(copy: ProjectCopy, project: ProjectWithCopies) {
+  return (
+    copy.origin !== null &&
+    project.origin !== null &&
+    copy.origin !== project.origin
+  );
 }
 
 const HERE = 'here';
