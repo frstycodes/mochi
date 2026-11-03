@@ -6,7 +6,7 @@ import type {
   RemoteMessage,
   RemoteThreadAction,
 } from '../host/types/remote.ts';
-import type { Thread } from '../model.ts';
+import type { Thread, ToolDecision, ToolWidget } from '../model.ts';
 import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
 import type { Action, State } from '../store/types.ts';
 import { answeredBy, markAnswered } from '@mochi/domain/remote/answers';
@@ -124,13 +124,31 @@ function resolve(
     return fail('Only approvals and questions can be answered from a device');
   if (item.kind === 'question' && !command.answers?.length)
     return fail('A question needs answers');
+  const tool = item.tool && toolDecision(item.tool, command.answers);
+  if (tool === null) return fail('Pick one of its options');
   // Before applying: a second answer can arrive before the first folds.
   markAnswered(command.queueId, deviceName);
+  if (tool) return done({ type: 'tool-decision', queueId: item.id, ...tool });
   return done({
     type: 'answer',
     queueId: command.queueId,
     answers: command.answers,
   });
+}
+
+/**
+ * A Mochi widget answered from a device: an approval, with the option it picked by label or id. Null when it must pick one
+ * and didn't; a device can't deny one (`resolve` only approves).
+ */
+function toolDecision(
+  tool: ToolWidget,
+  answers: string[][] | undefined,
+): ToolDecision | null {
+  const options = (answers?.[0] ?? []).flatMap(
+    (a) => tool.options?.find((o) => o.id === a || o.label === a)?.id ?? [],
+  );
+  if (tool.pick === 'one' && options.length !== 1) return null;
+  return { isApproved: true, ...(options.length && { options }) };
 }
 
 /**

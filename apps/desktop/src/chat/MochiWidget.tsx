@@ -38,7 +38,6 @@ import { Favicon } from '../WebLinks';
 import { host } from '../host';
 import { useProfiles } from '../profiles';
 import { clock } from '../progress';
-import { decideTool } from '../runtime/tools';
 import { AgentSettingsProvider } from '../settings/AgentSettings';
 import { findSetting, settingsCatalog, valueLabel } from '../settings/catalog';
 import {
@@ -174,10 +173,14 @@ export function MochiWidget({ item }: { item: QueueItem }) {
         ? 'handoff'
         : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
+  const dispatch = useDispatch();
   const decide = (isApproved: boolean, chosen?: string[]) =>
-    item.tool
-      ? decideTool(item.tool.callId, { isApproved, options: chosen })
-      : undefined;
+    dispatch({
+      type: 'tool-decision',
+      queueId: item.id,
+      isApproved,
+      ...(chosen && { options: chosen }),
+    });
   const toggle = (id: string, on: boolean) =>
     setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
   return (

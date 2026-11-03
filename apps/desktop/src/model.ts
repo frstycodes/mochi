@@ -764,6 +764,13 @@ export interface ToolWidget {
   edits?: FileEdit[];
   /** Mochi's own facts under the title, like which other profiles share the account. */
   notes?: string[];
+  /** Answered from some view (`tool-decision`); the card closes once the call that asked records what it did. */
+  decision?: ToolDecision;
+}
+
+export interface ToolDecision {
+  isApproved: boolean;
+  options?: string[];
 }
 
 /**

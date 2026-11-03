@@ -776,6 +776,43 @@ test.describe('views.ts relayed to Core', () => {
       .toBeGreaterThan(frames);
 
     await rpc('views.mirror', [KEY, null]);
+  });
+
+  test('m. a device watching gets frames while this computer’s window is hidden or minimized', async () => {
+    await rpc('views.mirror', [KEY, { width: 900, height: 700 }]);
+    await expect
+      .poll(async () => (await relayed('frame')).length)
+      .toBeGreaterThan(0);
+    const at = await dom(
+      "JSON.stringify((({ x, y, width, height }) => ({ x: x + width / 2, y: y + height / 2 }))(document.getElementById('counter').getBoundingClientRect()))",
+    );
+    const clickChangesFrame = async () => {
+      const frames = (await relayed('frame')).length;
+      await rpc('views.input', [KEY, { kind: 'click', ...JSON.parse(at) }]);
+      await expect
+        .poll(async () => (await relayed('frame')).length)
+        .toBeGreaterThan(frames);
+      // The 900 px viewport, at most MIRROR_MAX_WIDTH (960) on a 2x display: a real capture, not an empty one.
+      const { width } = await rpc<{ width: number }>('views.lastFrameSize', [
+        KEY,
+      ]);
+      expect(width).toBeGreaterThanOrEqual(900);
+    };
+
+    await rpc('views.setHidden', [KEY, true]);
+    await expect.poll(() => rpc('views.isVisible', [KEY])).toBe(false);
+    await clickChangesFrame();
+    await rpc('views.setHidden', [KEY, false]);
+
+    // CI's Linux runs under Xvfb with no window manager, which never minimizes a window.
+    if (process.platform !== 'linux') {
+      await rpc('views.setMinimized', [KEY, true]);
+      await expect.poll(() => rpc('views.isMinimized', [KEY])).toBe(true);
+      await clickChangesFrame();
+      await rpc('views.setMinimized', [KEY, false]);
+    }
+
+    await rpc('views.mirror', [KEY, null]);
     await rpc('views.close', [KEY]);
     expect(await relayed('closed')).toHaveLength(1);
   });

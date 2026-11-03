@@ -7,6 +7,18 @@ import { serveRelay } from './relay.ts';
 export interface Automated {
   view: WebContentsView;
   automation: Automation | null;
+  /** A device or the floating window watches its frames (`setViewMirror`), which also needs it painting while hidden. */
+  mirror: object | null;
+}
+
+/**
+ * Throttled again only once neither Playwright nor a mirror needs it: on Linux a throttled page in a hidden window stops
+ * painting, so a click waits out its timeout and a watching device gets no frames.
+ */
+export function syncThrottling(entry: Automated) {
+  entry.view.webContents.setBackgroundThrottling(
+    !entry.automation && !entry.mirror,
+  );
 }
 
 interface Automation {
@@ -62,7 +74,7 @@ export function dropPage(entry: Automated) {
   // A view whose page closed itself has no webContents left.
   const wc = entry.view.webContents as WebContents | undefined;
   if (!wc || wc.isDestroyed()) return;
-  wc.setBackgroundThrottling(true);
+  syncThrottling(entry);
   if (!wc.debugger.isAttached()) return;
   for (const [method, params] of RESETS)
     wc.debugger.sendCommand(method, params).catch(() => {});
