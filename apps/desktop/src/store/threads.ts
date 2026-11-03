@@ -23,6 +23,7 @@ import {
   type ThreadProposal,
   type ThreadRef,
   type TurnReport,
+  type ThreadBrowserTab,
 } from '../model.ts';
 import { changedBySend, withAssumptions } from '../goals/ledger.ts';
 import {
@@ -131,6 +132,9 @@ export type ThreadsAction =
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
   | { type: 'rename'; threadId: string; title: string }
+  /** A browser tab Core opened or that navigated (`ThreadPages`): added, or its url and title replaced. */
+  | { type: 'browser-tab'; threadId: string; tab: ThreadBrowserTab }
+  | { type: 'browser-tab-close'; threadId: string; tabId: string }
   /** A model's name for the thread; dropped when you renamed it meanwhile. */
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
@@ -480,6 +484,24 @@ function reduce(state: State, action: Action): State {
         threads: mapThread(state.threads, action.threadId, (t) => ({
           ...t,
           status: 'running',
+        })),
+      };
+    case 'browser-tab':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          browserTabs: upsertTab(t.browserTabs ?? [], action.tab),
+        })),
+      };
+    case 'browser-tab-close':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          browserTabs: (t.browserTabs ?? []).filter(
+            (tab) => tab.id !== action.tabId,
+          ),
         })),
       };
     case 'rename':
@@ -1839,3 +1861,8 @@ function resumeText(
     return `Resumed after the ${window ? `${window.toLowerCase()} ` : ''}limit reset`;
   return 'Resumed on the same account';
 }
+
+const upsertTab = (tabs: ThreadBrowserTab[], tab: ThreadBrowserTab) =>
+  tabs.some((t) => t.id === tab.id)
+    ? tabs.map((t) => (t.id === tab.id ? tab : t))
+    : [...tabs, tab];

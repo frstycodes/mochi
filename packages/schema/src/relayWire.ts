@@ -53,7 +53,7 @@ export const Sealed = Schema.Record(RelayId, Str(4096)).check(
       `at most ${MAX_SEALED_MEMBERS} members`,
   ),
 );
-const PublicKey = Schema.String.check(
+export const PublicKey = Schema.String.check(
   Schema.makeFilter(
     (s: string) =>
       base64Length(s) === ED25519_PUBLIC_KEY_BYTES ||

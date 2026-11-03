@@ -37,6 +37,7 @@ import {
   SettingsRow,
   settingControlId,
 } from '../parts';
+import { AnimatedText } from '../../ui';
 
 /** Turning on remote access, how far it reaches, what this computer is called, your computers, and joining them. */
 export function RemoteSection() {
@@ -187,10 +188,14 @@ function RelayState({ status }: { status: RemoteStatus }) {
   const { relay } = status;
   if (relay.status === 'error')
     return <span className="text-warning">{relay.error}</span>;
-  if (relay.status === 'connected') return 'Connected to Mochi’s relay';
-  if (relay.status === 'connecting') return 'Connecting to Mochi’s relay…';
-  return 'Off';
+  return <AnimatedText>{RELAY_LABELS[relay.status]}</AnimatedText>;
 }
+
+const RELAY_LABELS = {
+  connected: 'Connected to Mochi’s relay',
+  connecting: 'Connecting to Mochi’s relay…',
+  off: 'Off',
+} satisfies Record<Exclude<RemoteStatus['relay']['status'], 'error'>, string>;
 
 function Members({ status }: { status: RemoteStatus }) {
   const { confirm, dialog } = useConfirm();
@@ -382,7 +387,7 @@ function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
         <SettingsRow
           key={machine.id}
           label={<DeviceName kind={undefined} name={machine.name} />}
-          description={machine.isOnline ? 'Online' : 'Offline'}
+          description={otherMachineStatus(machine)}
           control={
             <Button
               size="sm"
@@ -397,6 +402,12 @@ function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
       <JoiningDialog joining={joining} onClose={closeJoining} />
     </SettingsGroup>
   );
+}
+
+/** Heard on this network beats the relay's word: it answered just now, and joins without the relay's channel. */
+function otherMachineStatus(machine: OtherMachine) {
+  if (machine.isNearby) return 'On this network';
+  return machine.isOnline ? 'Online' : 'Offline';
 }
 
 /** While joining: the code to compare with the other computer's screen, until it answers. */

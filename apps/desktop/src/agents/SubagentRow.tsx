@@ -1,9 +1,9 @@
-import { ChevronRight } from '@/icons';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { FoldChevron } from '../Fold';
 import type { ActivityEntry, Subagent, Thread } from '../model';
 import { useDispatch } from '../store';
 import {
@@ -32,7 +32,7 @@ export function SubagentGroup({
     );
   return (
     <Collapsible className="flex flex-col">
-      <CollapsibleTrigger className="group -mx-2 flex h-7 w-[calc(100%+1rem)] min-w-0 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta text-muted-foreground hover:bg-accent/60 focus-visible:outline-2">
+      <CollapsibleTrigger className="group group/fold -mx-2 flex h-7 w-[calc(100%+1rem)] min-w-0 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta text-muted-foreground hover:bg-accent/60 focus-visible:outline-2">
         <span className="flex shrink-0 -space-x-2.5">
           {subagents.slice(0, MAX_AVATARS).map((s) => (
             <SubagentAvatar
@@ -47,10 +47,7 @@ export function SubagentGroup({
         <span className="min-w-0 flex-1 truncate text-subtle-foreground">
           {groupStatus(subagents)}
         </span>
-        <ChevronRight
-          aria-hidden
-          className="size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150 group-data-[state=open]:rotate-90 motion-reduce:transition-none"
-        />
+        <FoldChevron className="text-subtle-foreground" />
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down motion-reduce:animate-none">
         <div className="flex flex-col pl-4">

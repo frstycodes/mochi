@@ -33,6 +33,7 @@ import { ipcMessage } from './AgentSettings';
 import { FileDiffs } from './FileDiffs';
 import { HARNESSES } from './harnesses';
 import { SettingsRow } from './parts';
+import { AnimatedText } from '../ui';
 
 export type Review = (
   title: string,
@@ -342,7 +343,9 @@ function ReviewDialog({
             </Button>
             {!isEmpty && (
               <Button onClick={onWrite} disabled={isWriting}>
-                {isWriting ? 'Writing…' : writeLabel(preview)}
+                <AnimatedText>
+                  {isWriting ? 'Writing…' : writeLabel(preview)}
+                </AnimatedText>
               </Button>
             )}
           </DialogFooter>

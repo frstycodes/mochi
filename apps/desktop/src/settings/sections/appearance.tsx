@@ -39,7 +39,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { FoldChevron } from '@/Fold';
 import { plural } from '@mochi/domain/lib/format';
 import { host } from '../../host';
 import {
@@ -156,13 +156,7 @@ function AnimationAreaCard({ area }: { area: AnimationArea }) {
             type="button"
             className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
           >
-            <ChevronDown
-              aria-hidden
-              className={cn(
-                'size-3.5 transition-transform duration-200',
-                !isOpen && '-rotate-90',
-              )}
-            />
+            <FoldChevron isOpen={isOpen} />
             Choose each animation
           </button>
         </CollapsibleTrigger>
@@ -631,12 +625,7 @@ function PackageShell({
                     isExpanded ? `Hide ${name} themes` : `Show ${name} themes`
                   }
                 >
-                  <ChevronDown
-                    className={cn(
-                      'transition-transform duration-200',
-                      isExpanded && 'rotate-180',
-                    )}
-                  />
+                  <FoldChevron isOpen={isExpanded} />
                 </Button>
               </CollapsibleTrigger>
             )}

@@ -123,6 +123,7 @@ export const HOST_SCOPES = {
     setBounds: L,
     setZoom: L,
     mirror: L,
+    input: L,
     emulate: L,
     devtools: L,
     capture: L,
@@ -344,6 +345,5 @@ export const HOST_SCOPES = {
     remove: 'manage',
     setPaused: 'manage',
     runNow: 'manage',
-    drain: L,
   },
 } as const satisfies HostScopes;

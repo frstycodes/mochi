@@ -10,6 +10,7 @@ import { Schema } from 'effect';
 import { definitionOf } from '@mochi/schema';
 import type {
   BrowserAct,
+  BrowserInput,
   BrowserCommand,
   BrowserEmulation,
   BrowserEvent,
@@ -413,6 +414,12 @@ export function headlessBrowser(launch: Launcher): LocalCapability {
       if (view.dialog) throw new Error(dialogNote(dialogOf(view.dialog)));
       const { snapshotPage } = await drive();
       return snapshotPage(view.page, () => ++view.generation);
+    },
+    input: async ([id, input]: [string, BrowserInput]) => {
+      const view = get(id);
+      const { runInput } = await drive();
+      await runInput(view.page, input);
+      kickMirror(id, view);
     },
     act: async ([id, act]: [string, BrowserAct]) => {
       const view = get(id);

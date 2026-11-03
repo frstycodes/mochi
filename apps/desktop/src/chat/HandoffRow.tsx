@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ArrowRight, ChevronRight, Transfer } from '@/icons';
+import { ArrowRight, Transfer } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
@@ -57,13 +58,7 @@ export function HandoffRow({
           </>
         )}
         {hasBody && (
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
-              isOpen && 'rotate-90',
-            )}
-          />
+          <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         )}
       </div>
       {hasBody && (

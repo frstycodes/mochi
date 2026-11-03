@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronRight, Minimize } from '@/icons';
+import { Minimize } from '@/icons';
+import { FoldChevron } from '@/Fold';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
@@ -44,13 +45,7 @@ export function CompactionRow({
         <Minimize aria-hidden className="size-4 shrink-0" />
         <CompactionLine compaction={compaction} kept={kept} />
         {hasBody && (
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'size-3 shrink-0 text-subtle-foreground transition-transform duration-150 motion-reduce:transition-none',
-              isOpen && 'rotate-90',
-            )}
-          />
+          <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         )}
       </div>
       {hasBody && (

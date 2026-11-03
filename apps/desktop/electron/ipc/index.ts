@@ -1,6 +1,9 @@
 import { webContents } from 'electron';
 import { canStore, open, seal } from '../secrets';
-import { Schema } from 'effect';
+import { Effect, Schema } from 'effect';
+import { mainCoreClient } from '@mochi/core/host';
+import type { BrowserEvent } from '@mochi/domain/host/types/browser';
+import { relayView } from '../browser/views.ts';
 import { Capabilities, definitionOf, Relay } from '@mochi/schema';
 import type { CapabilityHandler } from '@mochi/core/hostClient';
 import type { HostBridge, Namespace } from '../../src/host/types/index.ts';
@@ -142,9 +145,17 @@ export const mainCapabilities = {
     const result = await (handlers[namespace] as Record<string, Handler>)[
       name
     ]!(sender, ...Schema.decodeUnknownSync(Schema.toCodecJson(input))(args));
+    // No window asked: Core opened a thread's tab (`ThreadPages`), and follows it itself.
+    if (method === 'browser.create' && windowId === undefined)
+      relayView((result as { id: string }).id, toCore);
     return Schema.encodeUnknownSync(Schema.toCodecJson(output))(result);
   },
 } satisfies {
   names: ReadonlyArray<Capabilities.CapabilityName>;
   handle: CapabilityHandler;
 };
+
+const toCore = (event: BrowserEvent) =>
+  void mainCoreClient()
+    .then((client) => Effect.runPromise(client['page.event']({ event })))
+    .catch(() => {});

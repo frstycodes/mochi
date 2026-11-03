@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, FileText } from '@/icons';
+import { FileText } from '@/icons';
+import { FoldChevron } from '@/Fold';
+import { Expand } from '../WorkLog';
 import { MessageResponse } from '@/components/ai-elements/message';
 import {
   Empty,
@@ -213,27 +215,23 @@ function JsonNode({
         aria-expanded={isOpen}
         className="flex items-center rounded-sm hover:bg-accent"
       >
-        <ChevronRight
-          aria-hidden
-          className={cn(
-            'size-3.5 text-subtle-foreground',
-            isOpen && 'rotate-90',
-          )}
-        />
+        <FoldChevron isOpen={isOpen} className="text-subtle-foreground" />
         {label}
         <span className="text-subtle-foreground">
           {open}
           {!isOpen && `… ${entries.length} ${close}`}
         </span>
       </button>
-      {isOpen && (
+      <Expand isOpen={isOpen}>
         <div className="ml-1.5 border-l pl-1.5">
           {entries.map(([key, child]) => (
             <JsonNode key={key} name={key} value={child} depth={depth + 1} />
           ))}
         </div>
-      )}
-      {isOpen && <div className="pl-4 text-subtle-foreground">{close}</div>}
+      </Expand>
+      <Expand isOpen={isOpen}>
+        <div className="pl-4 text-subtle-foreground">{close}</div>
+      </Expand>
     </div>
   );
 }
