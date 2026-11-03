@@ -1,6 +1,6 @@
 # Core owns agents
 
-Status: steps 1–7 shipped (#509–#512 and the hidden-window fix); step 8 rejected; step 5's GAP open. Claims marked **verified** were read in the repo on 2026-11-02; **believed** ones were not checked.
+Status: steps 1–7 shipped (#509–#512 and the hidden-window fix); step 8 rejected; step 5 finished (see below). Claims marked **verified** were read in the repo on 2026-11-02; **believed** ones were not checked.
 
 ## The model
 
@@ -106,7 +106,7 @@ Each step ships alone and leaves the app working.
    agent-control level and per-tool policies joined the context Core keeps; until a window has sent them Core refuses.
    A call that would ask expires at once: approvals resolve in the window's process (`decideTool`), so nobody can answer
    one raised in Core. GAP: route every thread tool to Core once a window can show the toast and Undo from the folded
-   command. Planned below, under "Step 5, finished".
+   command. Done: see "Step 5, finished" below.
    6–7. **Browser tabs on the thread, page on the owner (done, uncommitted).** A thread's browser tabs (id, url, title) fold on
    the thread (`browser-tab`, `browser-tab-close`). Core's `Browsers` (`packages/core/src/remote/browsers.ts`) opens a tab's
    page through `browserView` (`page.open`) and logs its url and title as it navigates. Main sends the events of a view Core
@@ -130,67 +130,64 @@ Each step ships alone and leaves the app working.
    Letting another computer append arbitrary actions to this Core's `Commands.submit` would widen that trust boundary.
    The existing route already ends in `Commands`, so it gains steps 2–3's lifecycle without the change.
 
-## Step 5, finished: every thread tool runs in Core (proposed)
+## Step 5, finished: every thread tool runs in Core (done)
 
-Status: proposed, not started. Claims marked **verified** were read in the repo on 2026-11-03; none was run.
+Status: shipped in two PRs (#525, then step 3's). Claims marked **verified** were read in the repo on 2026-11-03.
 
 ### The problem
 
-Today a thread tool runs in two places with two behaviours (verified, `packages/core/src/agents/layer.ts`,
-`coreTools.ts`):
+A thread tool ran in two places with two behaviours:
 
-- **A window is open:** the window runs the tool. Approvals work, and you get a toast with Undo.
-- **No window is open:** Core runs it. Any call that would ask expires at once, and nothing toasts.
+- **A window was open:** the window ran the tool, and approvals worked.
+- **No window was open:** Core ran it, and any call that would ask expired at once.
 
-How it's built causes the second case (verified):
+`ask` waited on an in-process promise that only `decideTool` in the same window could resolve. Next to it was a bug:
+a paired device approving a tool card dispatched `answer`, which closed the card while the call waited out its timeout.
 
-- `ask` waits on an in-process promise, so only `decideTool`, called from `MochiWidget` in the same window, can answer it
-  (`runtime/tools.ts`).
-- Undo is a closure that `env.toast` hands to that window.
+### What shipped
 
-Next to it there's a likely bug (verified by reading, not run): a paired device that approves a tool card dispatches
-`answer` (`storeCommand` → `resolve`). That removes the card, but `decideTool` never fires, so the call waits until
-`APPROVAL_TIMEOUT_MS` and tells the agent it expired.
+1. **Tool decisions as a command (#525).** Answering a card logs `tool-decision` (`queueId`, `isApproved`, `options`).
+   - It folds onto the card as `tool.decision`, and the first answer holds.
+   - `hearToolDecision` resolves the waiting call where it runs. A window feeds it from the replica's `listen` and its own
+     dispatch; Core feeds it from `projection.folded` (`hearDecisions`).
+   - `MochiWidget` logs the action, and a device's `resolve` on a tool card maps to it, with the option picked by label or id.
+2. **Thread tools always in Core.** `layer.ts` sends a `CORE_TOOLS` call to `coreToolRunner` whether or not main has a
+   window. Core's calls get the normal approval deadline instead of expiring at once. The `NO_WINDOW` fallback for thread
+   tools is gone.
 
-### The model
+`watch_thread` left `CORE_TOOLS`: it toggles `watched`, a window slice Core doesn't hold. In Core,
+`state().watched` was undefined (verified by reading; not run).
 
-A tool card's answer and a tool's outcome are both logged commands, like everything else in the plan, so the runner no
-longer has to sit in the window. Core runs all 18 `CORE_TOOLS`, always:
+### Dropped: tool outcomes as a command
 
-- **Approvals:** a view answers a card by logging `tool-decision` (`queueId`, `isApproved`, `options`). The runner
-  waiting on that `queueId` resolves when it folds the command.
-- **Outcomes:** the runner logs `tool-outcome` (`threadId`, `text`, an optional `undo`). Each of this computer's windows
-  shows the toast when it folds the command live, and its Undo logs the `undo` back as a command.
+The plan had a step 2 that logged each tool's toast and Undo (`tool-outcome`) so a window could show them for a call
+Core ran. It isn't needed (verified, `toolTable.ts`):
 
-The 46 window tools keep running in the window, but take the same path, so the toast code isn't split in two.
+- 15 of the 17 Core tools are `quiet`: they log a line in the thread and never toast.
+- `list_threads` and `get_thread` are read-tier, and `update_plan` returns no change, so none of the three records an
+  outcome.
 
-### What moves
+The window tools keep their toast and Undo in the window that runs them.
 
-| Area                        | Change                                                                                                                                                                                                                                                                                                    | Deleted                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `store/types.ts`, schema    | Two command actions: `tool-decision` and `tool-outcome`. Both fold to no state change (the card closes through the existing `card-record`).                                                                                                                                                               | —                                                                       |
-| `runtime/tools.ts` `ask`    | Done in step 1: the card records the first `tool-decision` (`tool.decision`), and `hearToolDecision` resolves the waiting call when one folds, in a window from both the replica's `listen` and its own dispatch. In Core (step 3) it is fed from the projection. The deadline stays.                     | — (`decideTool` stays as the in-process resolve the fold feeds)         |
-| `MochiWidget`               | Logs `tool-decision` instead of calling `decideTool`.                                                                                                                                                                                                                                                     | —                                                                       |
-| `remote/storeCommands.ts`   | `resolve` on a tool card (an item with `tool`) maps to `tool-decision`, not `answer`, which fixes the device bug.                                                                                                                                                                                         | —                                                                       |
-| `runtime/tools.ts` `record` | Logs `tool-outcome` in place of `env.toast`. `undo` is data: an action to log, either `tool-undo` with a trimmed `ToolUndo` or an outcome's own action. `create_thread`'s closure becomes `{ type: 'delete', threadIds: [id] }`, the only custom undo among the 64 tools (verified).                      | `Outcome.undo` as a closure, `snapshotUndo`.                            |
-| `runtime/undo.ts`           | `captureUndo` keeps only the threads and queue items the call changed, by id and without `activity`, which `applyUndo` never rolls back. Today it holds every thread twice (verified), which is too big to log per call. `panes`, `layouts` and `watched` stay window slices, which no Core tool changes. | —                                                                       |
-| Window store                | A `listen` hook toasts each live `tool-outcome` for this computer's threads. Undo logs its `undo`; a snapshot undo first computes `kept` against the window's state for the "except what changed since" toast. Outcomes replayed after a reload don't toast.                                              | `env.toast` for tool outcomes (`toolEnv.ts` keeps it for other toasts). |
-| `agents/layer.ts`           | A `CORE_TOOLS` call goes to `coreToolRunner` first and never to main.                                                                                                                                                                                                                                     | The `NO_WINDOW` fallback for thread tools, and `coreEnv.toast`.         |
-| `coreTools.ts`              | `ask` waits, as in a window, instead of expiring at once.                                                                                                                                                                                                                                                 | The "expires at once" note and its doc comment.                         |
-
-### Order
-
-Each step ships alone and leaves the app working.
-
-1. **Tool decisions as a command (done).** `tool-decision`, `ask` heard from the fold, `MochiWidget`, and the device's
-   `resolve`. The window still runs every tool. On its own this fixes a device approving a tool card.
-2. **Tool outcomes as a command.** `tool-outcome`, trimmed `ToolUndo`, `create_thread`'s undo as data, and the window
-   toast taken from the fold. The window still runs every tool, so this step changes how the toast travels, not who
-   shows it.
-3. **Thread tools always in Core.** Routing in `layer.ts`, and `ask` waits in Core. A window or a device answers its
-   cards, and every window on this computer toasts the outcome.
+Next to it, believed and not run: `applyUndo` compares by reference, so a `tool-undo` folded from JSON (Core, other
+windows, the origin's own confirmation) can't put back object-valued fields or remove a thread the call created. No
+toasting tool that relies on the snapshot undo creates threads today.
 
 ### Checks
+
+| Step | Proof                                                                                                                                                                                |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | `tools.test.ts`: an answer folded from any view resolves the call; the first answer holds; a device's approval picks by label and is refused without one.                            |
+| 2    | `coreTools.test.ts`: a thread tool set to Ask waits in Core and goes on when another client logs `tool-decision` (fails without `hearDecisions`). Not run: the app, a paired device. |
+
+### Open questions
+
+1. **Which windows toast.** Moot for the Core tools, since none of them toasts. A window tool still toasts in the window
+   that ran it.
+2. **Can a paired device undo a tool's change?** Not added: undo isn't a `RemoteCommand`, and step 8 kept the relay
+   schema narrow on purpose. A device can approve a tool card (`operate`).
+
+## Checks
 
 | Step | Proof                                                                                                                                                                                                                                                                                     |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
