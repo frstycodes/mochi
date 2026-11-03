@@ -33,6 +33,8 @@
     { "type": "clone-project", "source": { "github": "frstycodes/mochi" } },
     { "type": "link-project", "project": "p1", "linkId": "l1" },
     { "type": "link-project", "project": "p1", "linkId": null },
+    { "type": "sync-project", "project": "p1", "direction": "pull" },
+    { "type": "sync-project", "project": "p1", "direction": "push" },
     { "type": "setting", "key": "shell", "value": "zsh" },
     { "type": "diff", "threadId": "t", "scope": "branch" },
     { "type": "checkpoint-diff", "threadId": "t", "n": 0 },

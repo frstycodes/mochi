@@ -888,6 +888,39 @@ test('link-project sets or clears the link on the project it names, and says whe
   });
 });
 
+test('sync-project fast-forwards or pushes the project it names, and refuses a pull that would merge', async () => {
+  const { state } = machine();
+  const env = device(state, 'Laptop', []);
+  const project = await host.projects.addFolder(state.spaceId, '/src/sync-api');
+  let upstream = { ahead: 0, behind: 4 };
+  vi.spyOn(host.git, 'status').mockImplementation(async () => ({
+    branch: 'main',
+    files: [],
+    upstream,
+  }));
+  const sync = vi
+    .spyOn(host.git, 'sync')
+    .mockImplementation(async (_cwd, base) => ({ base: base!, conflicts: [] }));
+  const push = vi.spyOn(host.git, 'push').mockImplementation(async () => {});
+  const run = (direction: 'pull' | 'push', id = project.id) =>
+    runRemoteCommand({ type: 'sync-project', project: id, direction }, env);
+
+  assert.deepEqual(await run('pull'), {
+    isOk: true,
+    detail: 'Pulled 4 commits into main',
+  });
+  assert.deepEqual(sync.mock.calls, [['/src/sync-api', 'origin/main']]);
+  upstream = { ahead: 1, behind: 4 };
+  assert.equal((await run('pull')).isOk, false);
+  assert.equal(sync.mock.calls.length, 1, 'a diverged copy is never merged');
+  assert.deepEqual(await run('push'), { isOk: true, detail: 'Pushed main' });
+  assert.equal(push.mock.calls[0][0], '/src/sync-api');
+  assert.deepEqual(await run('push', 'nope'), {
+    isOk: false,
+    error: 'That project isn’t on this machine',
+  });
+});
+
 test('settings a device writes stay on the machine; Devices and the demo switch can’t be changed from one', async () => {
   const { state } = machine();
   vi.spyOn(host.settings, 'get').mockImplementation(

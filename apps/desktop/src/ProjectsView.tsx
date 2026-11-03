@@ -7,7 +7,9 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Check,
   ChevronDown,
   Download,
@@ -63,12 +65,18 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
 import type { Project } from '@mochi/domain/host/types/projects';
 import { AddProject } from './AddProject';
-import { useCopyActions } from './copyActions';
+import { syncNeed, useCopyActions } from './copyActions';
+import type { SyncDirection } from './git/copyStatus';
 import { gitError } from './git/useGit';
 import { host } from './host';
 import { GithubMarkIcon } from './icons/github';
@@ -76,6 +84,7 @@ import { CopyFactLine, placeIn, WARNING_TEXT } from './PlacePicker';
 import { SkippedItem } from './menus/ActionItems';
 import {
   isOtherRepo,
+  useCopyStatus,
   useProjectsWithCopies,
   type ProjectCopy,
   type ProjectWithCopies,
@@ -488,7 +497,9 @@ function CopyRow({
   onRename: () => void;
 }) {
   const { local } = copy;
-  const { unlink } = useCopyActions();
+  const { unlink, sync } = useCopyActions();
+  const status = useCopyStatus(copy);
+  const need = isOtherRepo(copy, project) ? null : syncNeed(status);
   // Only a hand link can be undone: copies joined by their remote stay one project.
   const unlinkAction: MenuAction[] =
     copy.linkId && project.copies.length > 1
@@ -547,6 +558,13 @@ function CopyRow({
               Relocate…
             </Button>
           )}
+          {!!need && (
+            <SyncButton
+              direction={need}
+              blocker={startBlocker(computer)}
+              onSync={() => sync(copy, need)}
+            />
+          )}
           <OverflowMenu
             actions={actions}
             label={`${project.name} on ${computer.name} actions`}
@@ -558,6 +576,48 @@ function CopyRow({
 }
 
 const NEW_THREAD = 'New thread here';
+
+/** The one git action a copy needs, run on its computer; busy while it runs, and saying why when that computer can't. */
+function SyncButton({
+  direction,
+  blocker,
+  onSync,
+}: {
+  direction: SyncDirection;
+  blocker: string | undefined;
+  onSync: () => Promise<void>;
+}) {
+  const [isSyncing, setSyncing] = useState(false);
+  const button = (
+    <Button
+      size="xs"
+      variant="outline"
+      disabled={!!blocker || isSyncing}
+      onClick={() => {
+        setSyncing(true);
+        void onSync().finally(() => setSyncing(false));
+      }}
+    >
+      {isSyncing ? (
+        <Spinner />
+      ) : direction === 'pull' ? (
+        <ArrowDown />
+      ) : (
+        <ArrowUp />
+      )}
+      {direction === 'pull' ? 'Pull' : 'Push'}
+    </Button>
+  );
+  if (!blocker) return button;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span>{button}</span>
+      </TooltipTrigger>
+      <TooltipContent>{blocker}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 /**
  * Puts the project on a computer that doesn't have it: Clone there from its remote, or Link one of the projects already

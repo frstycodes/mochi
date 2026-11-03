@@ -65,6 +65,7 @@ import { imageProblem, sentImages } from './chat/images';
 import {
   WorkspaceControls,
   WorkspaceNotes,
+  startBranch,
   useWorkspace,
   type Workspace,
 } from './git/WorkspacePicker';
@@ -73,6 +74,7 @@ import { openStarted } from './remote/expecting';
 import { startBlocker, useComputers } from './remote/computers';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
 import { HeroRows, heroTitle } from './NewThreadHero';
+import { PlaceNotes, usePlaceNotes } from './PlaceNotes';
 
 /** The new-thread page's picks, kept with its draft. */
 interface NewThreadPicks {
@@ -196,6 +198,14 @@ function NewThread() {
     workspaceDraft,
     changeWorkspace,
   );
+  const placeProject = projectOf(projects, runsOn, place.ref);
+  const notes = usePlaceNotes({
+    project: placeProject,
+    picked: placeProject?.copies.find((c) => c.machineId === runsOn),
+    mode: workspaceDraft.mode,
+    startBranch: project ? startBranch(workspace) : undefined,
+    computers,
+  });
 
   // Bases and branch names belong to one project; another computer's models are its own, so picks don't carry over.
   const changePlace = (next: Place) => {
@@ -286,9 +296,7 @@ function NewThread() {
     });
   };
 
-  const projectLabel =
-    projectOf(projects, runsOn, place.ref)?.name ??
-    (project && projectName(project));
+  const projectLabel = placeProject?.name ?? (project && projectName(project));
 
   return (
     // The greeting row has a fixed height, so the card's top stays put whichever step it holds and however tall it grows.
@@ -390,6 +398,7 @@ function NewThread() {
 
       {/* In the bottom row, so a note coming or going never re-centres the composer. */}
       <div className="flex flex-col gap-5 pt-4 pb-16">
+        {step === 'compose' && <PlaceNotes notes={notes} />}
         {step === 'compose' && !remote && !!project && (
           <WorkspaceNotes workspace={workspace} />
         )}

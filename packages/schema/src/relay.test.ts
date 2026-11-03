@@ -216,6 +216,8 @@ test('malformed commands are refused, never half-read', () => {
       { url: 'https://a.com/b/c', github: 'b/c' },
       'https://github.com/a/b',
     ].map((source) => ({ type: 'clone-project', source })),
+    { type: 'sync-project', project: 'p1', direction: 'rebase' },
+    { type: 'sync-project', project: '', direction: 'pull' },
   ])
     assert.ok(isRefused(bad), JSON.stringify(bad));
 });
