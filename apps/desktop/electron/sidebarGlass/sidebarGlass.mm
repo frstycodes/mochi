@@ -20,9 +20,20 @@ napi_status napi_set_named_property(napi_env, napi_value, const char *, napi_val
 
 static const void *kSplitKey = &kSplitKey;
 
-// attach(BrowserWindow.getNativeWindowHandle()): true once fresh glass is in place, false before macOS 26. Called again,
-// it swaps in a new glass where the old one was: in Electron's window the glass sometimes stops sampling the wallpaper
-// after an appearance change or a Space switch and stays flat grey, which a bare AppKit window doesn't do.
+// The NSVisualEffectView behind Electron's `vibrancy`: in the content view or beside it, depending on the Electron version.
+static NSView *effectViewOf(NSView *root) {
+  NSMutableArray<NSView *> *parents = [NSMutableArray arrayWithObject:root];
+  if (root.superview) [parents addObject:root.superview];
+  for (NSView *parent in parents)
+    for (NSView *view in parent.subviews)
+      if ([view isKindOfClass:NSVisualEffectView.class]) return view;
+  return nil;
+}
+
+// attach(BrowserWindow.getNativeWindowHandle()): true once fresh glass is in place, false before macOS 26 or in a window
+// without `vibrancy`. Called again, it swaps in a new glass where the old one was: in Electron's window the glass
+// sometimes stops sampling the wallpaper after an appearance change or a Space switch and stays flat grey, which a bare
+// AppKit window doesn't do.
 static napi_value attach(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value handle;
@@ -33,21 +44,19 @@ static napi_value attach(napi_env env, napi_callback_info info) {
   bool isAttached = false;
   if (@available(macOS 26, *)) {
     NSView *root = length == sizeof(void *) ? *reinterpret_cast<NSView *__unsafe_unretained *>(data) : nil;
-    if (root && root.superview) {
+    NSView *effect = root ? effectViewOf(root) : nil;
+    if (effect) {
       NSSplitViewController *old = objc_getAssociatedObject(root, kSplitKey);
       NSViewController *sidebar = [NSViewController new];
       sidebar.view = [NSView new];
       NSSplitViewController *split = [NSSplitViewController new];
       [split addSplitViewItem:[NSSplitViewItem sidebarWithViewController:sidebar]];
-      split.view.frame = root.frame;
+      split.view.frame = effect.bounds;
       split.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-      // A sibling under the content view, not inside it: Chromium re-sorts the content view's subviews whenever a child
-      // WebContentsView (the browser pane) comes or goes, and puts views it doesn't own on top, over the whole page.
-      // A replacement takes the old one's place, so the sidebar tint (electron/sidebarTint) stays above it.
-      if (old.view.superview == root.superview)
-        [root.superview addSubview:split.view positioned:NSWindowAbove relativeTo:old.view];
-      else
-        [root.superview addSubview:split.view positioned:NSWindowBelow relativeTo:root];
+      // Inside the effect view of the window's `vibrancy`, which Electron hosts at the bottom of its own view tree, as it
+      // does for vibrancy itself. As a sibling under the content view instead, a visible browser view (WebContentsView)
+      // made Chromium leave stale patches in the see-through chat and sidebar.
+      [effect addSubview:split.view];
       [old.view removeFromSuperview];
       objc_setAssociatedObject(root, kSplitKey, split, OBJC_ASSOCIATION_RETAIN);
       isAttached = true;

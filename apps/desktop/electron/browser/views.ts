@@ -183,6 +183,10 @@ function register(
     relay: null,
   };
   views.set(id, entry);
+  // A WebContentsView's page base is transparent by default (Electron's WebContents::SetBackgroundColor), so whatever the page
+  // hasn't painted (a resize before the next frame, a load, a page without a background) showed through to the see-through
+  // window as black. White is every browser's page base.
+  view.setBackgroundColor('#ffffff');
   view.setVisible(false);
   win.contentView.addChildView(view);
   wire(id, entry);

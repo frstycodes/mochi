@@ -101,6 +101,7 @@ async function openView() {
     },
     WebContentsView: class {
       webContents = fake.page;
+      setBackgroundColor() {}
       setVisible() {}
       setBounds() {}
       setBorderRadius() {}

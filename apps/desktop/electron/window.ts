@@ -142,7 +142,10 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     ...titleBar(),
     backgroundColor: background(),
     ...(isMica && { backgroundMaterial: 'mica' }),
-    ...(material === 'vibrancy' && { vibrancy: 'sidebar' }),
+    // 'appkit' too: the sidebar glass goes inside the effect view Electron hosts in its own view tree (electron/sidebarGlass).
+    ...((material === 'vibrancy' || material === 'appkit') && {
+      vibrancy: 'sidebar',
+    }),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
