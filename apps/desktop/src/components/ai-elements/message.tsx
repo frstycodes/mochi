@@ -49,7 +49,7 @@ export const Message = ({ className, from, ...props }: MessageProps) => (
   />
 );
 
-export type MessageContentProps = HTMLAttributes<HTMLDivElement>;
+export type MessageContentProps = ComponentProps<"div">;
 
 export const MessageContent = ({
   children,

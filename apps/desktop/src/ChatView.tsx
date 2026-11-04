@@ -145,6 +145,8 @@ import { MessageImages } from './chat/MessageImages';
 import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { PendingSteers } from './chat/SteerBubble';
+import { newestYoursKey } from './chat/sendFlight';
+import { launchSend, useSendLanding } from './chat/useSendFlight';
 import { usePrefs, type Prefs } from './settings/prefs';
 import {
   MentionChips,
@@ -432,6 +434,10 @@ const ChatRowView = memo(function ChatRowView({
   hasActions,
   action,
 }: ChatRowProps) {
+  const landingRef = useSendLanding(
+    thread.id,
+    newestYoursKey(thread.activity, row),
+  );
   if (row.kind === 'work')
     return (
       <WorkLog
@@ -551,7 +557,10 @@ const ChatRowView = memo(function ChatRowView({
         from={isYou ? 'user' : 'assistant'}
         title={`${authorName(entry.who)} · ${clock(entry.at)}`}
       >
-        <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
+        <MessageContent
+          ref={landingRef}
+          className={cn('type-prose', isAgent && 'w-full')}
+        >
           {isAgent && row.showAuthor && (
             <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
               <ProviderMark provider={entry.who as Provider} size={14} />
@@ -1037,7 +1046,10 @@ const Composer = memo(function Composer({
                   isCommand: !!resolveToken(trimmed, slashItems),
                   typedSkills: typedSkills(trimmed, slashItems),
                 });
-                if (!isQueueing) return submit(message);
+                if (!isQueueing) {
+                  launchSend(thread.id, editor.current);
+                  return submit(message);
+                }
                 dispatch({ type: 'queued-add', threadId: thread.id, message });
                 mention.clear();
               }}
