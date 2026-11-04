@@ -42,6 +42,7 @@ function machine() {
         type: 'thread',
         threadId,
         saved: JSON.parse(json),
+        sequence: 0,
       }),
     );
   const act = (action: Action) => {
@@ -94,8 +95,12 @@ test('a deleted thread leaves the mirror, and a reset empties it', () => {
   const threadId = m.threadId();
   const mirror = apply(undefined, m.files());
   assert.equal(
-    applyFrame('mac', mirror, { type: 'thread', threadId, saved: null }).state
-      .threads.length,
+    applyFrame('mac', mirror, {
+      type: 'thread',
+      threadId,
+      saved: null,
+      sequence: 0,
+    }).state.threads.length,
     0,
   );
   assert.deepEqual(applyFrame('mac', mirror, { type: 'reset' }).threads, {});

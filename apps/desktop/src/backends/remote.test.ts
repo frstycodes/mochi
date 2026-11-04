@@ -67,6 +67,7 @@ function machine() {
         type: 'thread',
         threadId,
         saved: JSON.parse(json),
+        sequence: 0,
       }),
     );
   return { act, log, frames, state: () => state };

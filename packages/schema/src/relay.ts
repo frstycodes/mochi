@@ -704,6 +704,7 @@ const okFields = {
   isOk: Schema.Literal(true),
   detail: opt(S),
   data: opt(CommandData),
+  sequence: opt(Schema.Number),
 };
 const failedFields = { isOk: Schema.Literal(false), error: S };
 
@@ -854,7 +855,8 @@ export const DeviceLinkFrame = Schema.Union([
 
 /**
  * A followed machine's threads as main hands them to the window, one thread file (`persist.ts` `SavedThread`) at a time
- * from that machine's `thread` streams. `null` deletes the thread; `reset` drops them all before a fresh start.
+ * from that machine's `thread` streams, with the sequence it holds. `null` deletes the thread; `reset` drops them all
+ * before a fresh start; `logged` is where the machine logged one of this computer's commands.
  */
 export const MirrorFrame = Schema.Union([
   Schema.Struct({ type: Schema.Literal('reset') }),
@@ -862,6 +864,12 @@ export const MirrorFrame = Schema.Union([
     type: Schema.Literal('thread'),
     threadId: S,
     saved: Schema.NullOr(Schema.Unknown),
+    sequence: Schema.Number,
+  }),
+  Schema.Struct({
+    type: Schema.Literal('logged'),
+    commandId: S,
+    sequence: Schema.Number,
   }),
 ]);
 export type MirrorFrame = typeof MirrorFrame.Type;

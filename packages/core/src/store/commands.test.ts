@@ -274,6 +274,7 @@ it.effect(
         type: 'thread',
         threadId,
         saved: file!.saved,
+        sequence: file!.sequence,
       }).state.threads[0]!;
       assert.equal(mirrored.live?.starting, undefined);
       assert.equal(mirrored.activity.at(-1)?.text, 'On it');

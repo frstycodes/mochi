@@ -345,12 +345,10 @@ it.live(
       ]);
       // An interrupt is a store action: Core applies it, no window hears of it.
       yield* seed(full.window, 'Fix login');
-      assert.deepEqual(
-        yield* full.client['device.command']({
-          command: { type: 'interrupt', threadId: 'new-1' },
-        }),
-        { isOk: true },
-      );
+      const interrupted = yield* full.client['device.command']({
+        command: { type: 'interrupt', threadId: 'new-1' },
+      });
+      assert.ok(interrupted.isOk && interrupted.sequence! > 0);
       assert.equal(runs.length, 1);
       assert.deepEqual(
         yield* full.client['device.command']({
@@ -616,6 +614,7 @@ it.live(
       yield* seed(window, 'Fix login');
       // Follows the thread the way a followed machine's mirror does: after a drop, from the last sequence, once welcomed again.
       const sequences: number[] = [];
+      const items: string[] = [];
       const titles: string[] = [];
       const resumedOn: string[] = [];
       const first = yield* Deferred.make<void>();
@@ -629,6 +628,7 @@ it.live(
             const sequence =
               item._tag === 'snapshot' ? item.sequence : item.event.sequence;
             sequences.push(sequence);
+            items.push(`${item._tag} ${sequence}`);
             after = sequence;
             if (item._tag !== 'snapshot') return;
             const { title } = (item.saved as { thread: { title: string } })
@@ -655,11 +655,13 @@ it.live(
       yield* rename('B');
       yield* rename('C');
       yield* Deferred.await(last);
+      // A save's snapshot holds the sequence of the event before it.
       assert.deepEqual(
         sequences,
-        [...new Set(sequences)].sort((a, b) => a - b),
-        'every sequence once, in order',
+        sequences.toSorted((a, b) => a - b),
+        'in order',
       );
+      assert.deepEqual(items, [...new Set(items)], 'every item once');
       // Core may fold saves together; what it streamed last is the last rename.
       assert.equal(titles.at(-1), 'C');
       assert.deepEqual(

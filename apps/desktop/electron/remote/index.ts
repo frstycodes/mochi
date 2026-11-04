@@ -250,10 +250,11 @@ export function follow(sender: WebContents) {
 export function commandMachine(
   machineId: string,
   command: RemoteCommand,
+  commandId?: string,
 ): Promise<CommandResult> {
   const follower = followers.get(machineId);
   return follower
-    ? follower.command(command)
+    ? follower.command(command, commandId)
     : Promise.resolve({
         isOk: false,
         error: 'This computer isn’t paired with that one',

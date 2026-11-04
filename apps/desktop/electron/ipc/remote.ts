@@ -30,6 +30,6 @@ export const remote = {
     follow(sender);
   },
   // Core decoded `command` with the same schema the machine's Core decodes it with, so nothing malformed leaves here.
-  command: async (_sender, machineId, command) =>
-    commandMachine(machineId, command),
+  command: async (_sender, machineId, command, commandId) =>
+    commandMachine(machineId, command, commandId),
 } satisfies Handlers<Pick<RemoteHost, InMain>>;

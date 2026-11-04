@@ -25,10 +25,22 @@ import { StoreScope, type Action, type State } from '../store';
 import { commandFor } from './actions';
 import { applyFrame, cachedMirror, type Mirror } from './mirror';
 import { toWire } from './ids';
-import { askMachine, type DataOf } from './threadIo';
+import {
+  NO_PENDING,
+  pendingAdded,
+  pendingAfter,
+  pendingAnswered,
+  pendingRun,
+  withPending,
+  type Pending,
+} from './pending';
+import { dataOf, type DataOf } from './threadIo';
 import { openRemoteThread } from '../routes/nav';
 
-/** A computer this one follows, with its store as far as the stream has brought it; no state before its first snapshot. */
+/**
+ * A computer this one follows, with its store as far as the stream has brought it and what this one ran there since;
+ * no state before its first snapshot.
+ */
 export interface FollowedView {
   machine: FollowedMachine;
   state: State | undefined;
@@ -63,6 +75,17 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
   const [mirrors, setMirrors] = useState<Record<string, Mirror | undefined>>(
     {},
   );
+  const [pending, setPending] = useState<Record<string, Pending | undefined>>(
+    {},
+  );
+  const changePending = (
+    machineId: string,
+    change: (pending: Pending) => Pending,
+  ) =>
+    setPending((all) => ({
+      ...all,
+      [machineId]: change(all[machineId] ?? NO_PENDING),
+    }));
   const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
@@ -71,12 +94,16 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
         queryKey: queryKeys.remote.machines(),
       });
     });
-    const offFrames = host.remote.onMachineFrame(({ machineId, frame }) =>
+    const offFrames = host.remote.onMachineFrame(({ machineId, frame }) => {
+      setPending((all) => ({
+        ...all,
+        [machineId]: pendingAfter(all[machineId] ?? NO_PENDING, frame),
+      }));
       setMirrors((all) => ({
         ...all,
         [machineId]: applyFrame(machineId, all[machineId], frame),
-      })),
-    );
+      }));
+    });
     // Before this, frames went nowhere: every machine starts over, each thread from its snapshot.
     void host.remote.follow();
     return () => {
@@ -104,11 +131,34 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     );
   }
   useMirrorCache(mirrors);
-  const machines = followed.map((machine) => ({
-    machine,
-    state: mirrors[machine.id]?.state,
-  }));
+  const machines = followed.map((machine) => {
+    const mirror = mirrors[machine.id];
+    return {
+      machine,
+      state:
+        mirror && withPending(mirror.state, pending[machine.id] ?? NO_PENDING),
+    };
+  });
   const latest = useLatest(machines);
+
+  /** Shown on that machine's copy at once when it's store actions there (`pendingRun`), until a snapshot has it. */
+  const send = async (machineId: string, command: RemoteCommand) => {
+    const state = latest.current.find((m) => m.machine.id === machineId)?.state;
+    const run =
+      state && pendingRun(command, state, crypto.randomUUID(), Date.now());
+    if (run) changePending(machineId, (p) => pendingAdded(p, run));
+    const result = await host.remote
+      .command(machineId, toWire(command), run?.commandId)
+      .catch((error: unknown): CommandResult => ({
+        isOk: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    if (run)
+      changePending(machineId, (p) =>
+        pendingAnswered(p, run.commandId, result),
+      );
+    return result;
+  };
 
   const run = async (machineId: string, command: RemoteCommand) => {
     const machineName =
@@ -116,12 +166,7 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       'That computer';
     const question = askFirst(command, machineName);
     if (question && !(await confirm(question))) return NOT_SENT;
-    const result = await host.remote
-      .command(machineId, toWire(command))
-      .catch((error: unknown): CommandResult => ({
-        isOk: false,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+    const result = await send(machineId, command);
     if (!result.isOk)
       toast.error(`Couldn’t ${COMMAND_VERBS[command.type]} on ${machineName}`, {
         description: result.error,
@@ -133,8 +178,13 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
+  const ask = async <T extends RemoteCommand['type']>(
+    machineId: string,
+    command: Extract<RemoteCommand, { type: T }>,
+  ) => dataOf<T>(await send(machineId, command));
+
   return (
-    <MachinesContext.Provider value={{ machines, run, ask: askMachine }}>
+    <MachinesContext.Provider value={{ machines, run, ask }}>
       {children}
       {dialog}
     </MachinesContext.Provider>

@@ -33,7 +33,19 @@ export function storeCommand(
   state: State,
   deviceName: string,
 ): StoreCommand | undefined {
-  if (command.type === 'resolve') return resolve(command, state, deviceName);
+  const stored = storeActions(command, state);
+  // Before applying: a second answer can arrive before the first folds.
+  if (command.type === 'resolve' && stored?.result.isOk)
+    markAnswered(command.queueId, deviceName);
+  return stored;
+}
+
+/** `storeCommand` without marking an answer as given: what a device shows on its copy before the machine applies it. */
+export function storeActions(
+  command: RemoteCommand,
+  state: State,
+): StoreCommand | undefined {
+  if (command.type === 'resolve') return resolve(command, state);
   if (command.type === 'seen') {
     if (
       command.threadId &&
@@ -113,7 +125,6 @@ const STORE_TYPES = new Set<RemoteCommand['type']>([
 function resolve(
   command: Extract<RemoteCommand, { type: 'resolve' }>,
   state: State,
-  deviceName: string,
 ): StoreCommand {
   const by = answeredBy(command.queueId);
   if (by !== undefined) return fail(`Already answered on ${by}`);
@@ -126,8 +137,6 @@ function resolve(
     return fail('A question needs answers');
   const tool = item.tool && toolDecision(item.tool, command.answers);
   if (tool === null) return fail('Pick one of its options');
-  // Before applying: a second answer can arrive before the first folds.
-  markAnswered(command.queueId, deviceName);
   if (tool) return done({ type: 'tool-decision', queueId: item.id, ...tool });
   return done({
     type: 'answer',
