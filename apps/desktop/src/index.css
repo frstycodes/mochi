@@ -668,18 +668,20 @@
     background: var(--glass);
     backdrop-filter: blur(20px) saturate(1.6);
   }
-  /* Over a see-through window (`data-material`) this blur flickers black in the thread and left stale patches in the
-     sidebar after repaints, and glass without it shows the transcript sharp: the composer keeps its solid fill. */
-  :root[data-material] &:focus-within {
-    background: var(--card);
-    backdrop-filter: none;
-  }
   @media (prefers-reduced-transparency: reduce) {
     &:focus-within {
       background: var(--card);
       backdrop-filter: none;
     }
   }
+}
+
+/* ComposerBase (ChatView): only a see-through page needs it. */
+.composer-base {
+  display: none;
+}
+:root[data-material] .composer-base {
+  display: block;
 }
 
 /* Floating windows (expanded goal, PiP satellites). Glass is allowed here because content scrolls underneath. */

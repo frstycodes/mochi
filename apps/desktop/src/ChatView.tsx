@@ -251,6 +251,7 @@ export function ChatView({
             : undefined
         }
       >
+        {!isReadOnly && <ComposerBase />}
         {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
         <Conversation
           data-photo-scope
@@ -377,7 +378,23 @@ function useWithoutStreamedText(thread: Thread) {
 }
 
 /**
+ * The page's own colour under the transcript where the composer card sits, shown only over a window material (index.css): there the
+ * composer's backdrop blur let text on see-through pixels through sharp, and on this base it blurs like the rest.
+ */
+function ComposerBase() {
+  return (
+    <div
+      aria-hidden
+      className="composer-base pointer-events-none absolute inset-x-0 bottom-(--composer-card-bottom) mx-auto w-full max-w-[720px] px-4 md:px-6"
+    >
+      <div className="h-(--composer-card-h) rounded-2xl bg-background" />
+    </div>
+  );
+}
+
+/**
  * Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
+ * Also the card's own height and its distance from the bottom (--composer-card-h, --composer-card-bottom), for ComposerBase.
  * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
  * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
  */
@@ -404,6 +421,15 @@ function useComposerHeightVar() {
     const ro = new ResizeObserver(([e]) => {
       const height = e.borderBoxSize[0].blockSize;
       parent.style.setProperty('--composer-h', `${height}px`);
+      const card = el.querySelector('[data-composer]');
+      if (card) {
+        const { top, bottom } = card.getBoundingClientRect();
+        parent.style.setProperty('--composer-card-h', `${bottom - top}px`);
+        parent.style.setProperty(
+          '--composer-card-bottom',
+          `${el.getBoundingClientRect().bottom - bottom}px`,
+        );
+      }
       releaseBelow(height);
     });
     ro.observe(el);
