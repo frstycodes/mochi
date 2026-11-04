@@ -13,6 +13,11 @@ import type {
 import { DEVICES, RESPONSIVE } from './devices';
 import { notifyDownload } from './downloads';
 import { pushHistory } from './url';
+import {
+  settleNavigation,
+  startNavigation,
+  type PendingNavigation,
+} from './pending';
 
 export interface ConsoleEntry {
   level: 'error' | 'warning';
@@ -44,6 +49,8 @@ export interface Page {
   /** The page's own icon, from main; null until it names one. */
   favicon: string | null;
   isLoading: boolean;
+  /** What the address bar navigated to, shown as `url` until the page commits it or the load ends without it. */
+  pending: PendingNavigation | null;
   canGoBack: boolean;
   canGoForward: boolean;
   error: string | null;
@@ -156,7 +163,28 @@ export function reloadPage(key: string, hard = false) {
   if (!page) return;
   if (page.hostId)
     void host.browser.command(page.hostId, hard ? 'hard-reload' : 'reload');
-  else updatePage(key, { reloads: page.reloads + 1 });
+  else
+    updatePage(key, {
+      reloads: page.reloads + 1,
+      isLoading: loadsInFrame(page.url),
+    });
+}
+
+/** On the web the page is an iframe, whose `load` ends the loading state; the demo page has none. */
+const loadsInFrame = (url: string) => /^https?:/i.test(url);
+
+/** The address bar's navigation: the bar shows `url` from now on, not the old page's state while the new one loads. */
+export function navigatePage(key: string, url: string) {
+  const page = pages.get(key);
+  if (!page) return;
+  if (!page.hostId)
+    return updatePage(key, {
+      url,
+      error: null,
+      isLoading: url !== page.url && loadsInFrame(url),
+    });
+  updatePage(key, { url, error: null, pending: startNavigation(url, page) });
+  void host.browser.navigate(page.hostId, url);
 }
 
 /** Native view for the page, created on first use. Desktop only. */
@@ -252,8 +280,14 @@ if (host.isDesktop)
       const { url, title, favicon, isLoading, canGoBack, canGoForward, error } =
         event;
       // The first load reports an empty URL until it commits.
+      const settled = settleNavigation(pages.get(key)?.pending ?? null, {
+        url,
+        isLoading,
+        error,
+      });
       updatePage(key, {
-        ...(url && { url }),
+        ...(settled.url && { url: settled.url }),
+        pending: settled.pending,
         title,
         favicon,
         isLoading,
@@ -331,6 +365,7 @@ function seed(key: string, url: string): Page {
     title: '',
     favicon: null,
     isLoading: false,
+    pending: null,
     canGoBack: false,
     canGoForward: false,
     error: null,

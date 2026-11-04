@@ -26,7 +26,13 @@ import { pickDemoElement } from './actions';
 import { DemoPage } from './DemoPage';
 import { PageMenu } from './PageMenu';
 import { DEVICES, fitDevice } from './devices';
-import { emulationOf, ensureView, rememberViewport, type Page } from './pages';
+import {
+  emulationOf,
+  ensureView,
+  rememberViewport,
+  updatePage,
+  type Page,
+} from './pages';
 
 // Open overlays the native view would paint over. Tooltips are left out: they'd swap the page for its snapshot on every hover.
 const OVERLAYS = [
@@ -154,6 +160,7 @@ export function PageSurface({
               src={page.url}
               // No allow-top-navigation / allow-popups: the page can't replace the app or open windows.
               sandbox="allow-scripts allow-forms allow-same-origin allow-modals"
+              onLoad={() => updatePage(pageId, { isLoading: false })}
               className="size-full border-0 bg-white"
             />
           )}
