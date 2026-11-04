@@ -1,6 +1,12 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useDebounced } from '../hooks/useDebounced';
 import {
+  AnimatePresence,
+  motion,
+  useReducedMotionConfig,
+  type TargetAndTransition,
+} from 'motion/react';
+import {
   useLayoutEffect,
   useRef,
   useState,
@@ -20,8 +26,8 @@ import { usePorts } from '../terminal/ports';
 import { TooltipIconButton } from '../ui';
 import {
   historyTitle,
+  navigatePage,
   pageKey,
-  updatePage,
   useAddressHistory,
   type Page,
 } from './pages';
@@ -100,10 +106,7 @@ export function AddressBar({
         threadId: thread.id,
         tabId: row.tabId,
       });
-    else {
-      updatePage(pageId, { url: row.url, error: null });
-      if (page.hostId) void host.browser.navigate(page.hostId, row.url);
-    }
+    else navigatePage(pageId, row.url);
     finish();
   };
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -181,6 +184,7 @@ export function AddressBar({
             onKeyDown={onKeyDown}
             className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
           />
+          <LoadingBar isLoading={page.isLoading || !!page.pending} />
           {typed === null && /^https?:/i.test(page.url) && (
             <OpenExternalButton url={page.url} />
           )}
@@ -379,5 +383,53 @@ function originOf(url: string) {
 function isLocal(url: string) {
   return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|[\w.-]+\.(localhost|test))(:\d+)?(\/|$)/i.test(
     url,
+  );
+}
+
+// Electron reports no load progress, so the bar trickles toward 90% and finishes when the load ends.
+const TRICKLE = {
+  transform: [
+    'scaleX(0)',
+    'scaleX(0.3)',
+    'scaleX(0.6)',
+    'scaleX(0.8)',
+    'scaleX(0.9)',
+  ],
+  transition: { duration: 12, times: [0, 0.03, 0.15, 0.4, 1], ease: 'easeOut' },
+} satisfies TargetAndTransition;
+const FINISH = {
+  transform: 'scaleX(1)',
+  opacity: 0,
+  transition: {
+    transform: { duration: 0.2, ease: [0.23, 1, 0.32, 1] },
+    opacity: { duration: 0.2, delay: 0.15 },
+  },
+} satisfies TargetAndTransition;
+const STILL = {
+  transform: 'scaleX(1)',
+  opacity: 1,
+} satisfies TargetAndTransition;
+
+/** A line along the field's bottom edge, clipped to its pill, fading out at the leading edge. */
+function LoadingBar({ isLoading }: { isLoading: boolean }) {
+  const isStill = useReducedMotionConfig();
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+      <AnimatePresence>
+        {isLoading && (
+          <motion.div
+            aria-hidden
+            initial={
+              isStill
+                ? { ...STILL, opacity: 0 }
+                : { transform: 'scaleX(0)', opacity: 1 }
+            }
+            animate={isStill ? STILL : TRICKLE}
+            exit={isStill ? { opacity: 0 } : FINISH}
+            className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-linear-to-r from-primary/50 via-primary/50 via-70% to-transparent"
+          />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

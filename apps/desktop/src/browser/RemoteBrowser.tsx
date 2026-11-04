@@ -17,6 +17,11 @@ import { useDispatch } from '../store';
 import { TooltipIconButton } from '../ui';
 import { useSize } from './PageSurface';
 import { normalizeUrl } from './url';
+import {
+  settleNavigation,
+  startNavigation,
+  type PendingNavigation,
+} from './pending';
 
 /**
  * Another computer's thread's browser tab: the page runs on that computer, where the thread's agent and its localhost are, and
@@ -33,7 +38,12 @@ export function RemoteBrowser({
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const size = useSize(surfaceRef);
-  const { frame, error, send } = useRemotePage(machine, thread, tab, size);
+  const { frame, error, pending, send, goTo } = useRemotePage(
+    machine,
+    thread,
+    tab,
+    size,
+  );
   const [draft, setDraft] = useState<string | null>(null);
   const url = frame?.url || tab.url || '';
 
@@ -73,13 +83,13 @@ export function RemoteBrowser({
           className="mx-1 min-w-0 flex-1"
           onSubmit={(e) => {
             e.preventDefault();
-            if (draft) navigate(send, { url: normalizeUrl(draft) });
+            if (draft) goTo(normalizeUrl(draft));
             setDraft(null);
           }}
         >
           <Input
             aria-label={`Address on ${machine.name}`}
-            value={draft ?? url}
+            value={draft ?? pending?.url ?? url}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => setDraft(null)}
             className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
@@ -154,6 +164,7 @@ function useRemotePage(
     title: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingNavigation | null>(null);
   const threadId = wireId(thread.id);
   const width = Math.round(size.w);
   const height = Math.round(size.h);
@@ -161,7 +172,10 @@ function useRemotePage(
 
   const run = (command: RemoteCommand) =>
     host.remote.command(machine.id, toWire(command)).then((result) => {
-      if (!result.isOk) setError(result.error);
+      if (!result.isOk) {
+        setError(result.error);
+        setPending(null);
+      }
     });
 
   useEffect(
@@ -175,6 +189,15 @@ function useRemotePage(
           return;
         setError(null);
         setFrame(message.frame);
+        // Frames carry no loading state: only a new URL (or a failed command) settles the navigation.
+        setPending(
+          (p) =>
+            settleNavigation(p, {
+              url: message.frame.url,
+              isLoading: true,
+              error: null,
+            }).pending,
+        );
       }),
     [machine.id, threadId, tab.id],
   );
@@ -214,5 +237,11 @@ function useRemotePage(
         : { type: 'browser-input', ...key, input },
     );
   };
-  return { frame, error, send };
+  const goTo = (to: string) => {
+    setPending((p) =>
+      startNavigation(to, { url: frame?.url || tab.url || '', pending: p }),
+    );
+    send({ navigate: { url: to } });
+  };
+  return { frame, error, pending, send, goTo };
 }
