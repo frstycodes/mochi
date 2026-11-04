@@ -760,6 +760,8 @@ test.describe('views.ts relayed to Core', () => {
     await expect
       .poll(async () => (await relayed('frame')).length)
       .toBeGreaterThan(0);
+    // A device watching doesn't take the page off this computer's own window.
+    expect(await rpc('views.isViewVisible', [KEY])).toBe(true);
 
     const at = await dom(
       "JSON.stringify((({ x, y, width, height }) => ({ x: x + width / 2, y: y + height / 2 }))(document.getElementById('counter').getBoundingClientRect()))",

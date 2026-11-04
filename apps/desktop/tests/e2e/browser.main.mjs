@@ -500,6 +500,10 @@ const viewsApi = {
     minimized ? tab(key).win.minimize() : tab(key).win.restore(),
   isMinimized: ([key]) => tab(key).win.isMinimized(),
   isVisible: ([key]) => tab(key).win.isVisible(),
+  isViewVisible: ([key]) =>
+    tab(key)
+      .win.contentView.children.find((v) => v.webContents === tab(key).wc)
+      ?.getVisible(),
   webContentsCount: () => webContents.getAllWebContents().length,
   popupHardening() {
     const wc = webContents
