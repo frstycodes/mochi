@@ -20,7 +20,9 @@ napi_status napi_set_named_property(napi_env, napi_value, const char *, napi_val
 
 static const void *kSplitKey = &kSplitKey;
 
-// attach(BrowserWindow.getNativeWindowHandle()): true once the glass is in place, false before macOS 26.
+// attach(BrowserWindow.getNativeWindowHandle()): true once fresh glass is in place, false before macOS 26. Called again,
+// it swaps in a new glass where the old one was: in Electron's window the glass sometimes stops sampling the wallpaper
+// after an appearance change or a Space switch and stays flat grey, which a bare AppKit window doesn't do.
 static napi_value attach(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value handle;
@@ -31,8 +33,8 @@ static napi_value attach(napi_env env, napi_callback_info info) {
   bool isAttached = false;
   if (@available(macOS 26, *)) {
     NSView *root = length == sizeof(void *) ? *reinterpret_cast<NSView *__unsafe_unretained *>(data) : nil;
-    isAttached = root && objc_getAssociatedObject(root, kSplitKey);
-    if (root && !isAttached) {
+    if (root && root.superview) {
+      NSSplitViewController *old = objc_getAssociatedObject(root, kSplitKey);
       NSViewController *sidebar = [NSViewController new];
       sidebar.view = [NSView new];
       NSSplitViewController *split = [NSSplitViewController new];
@@ -41,7 +43,12 @@ static napi_value attach(napi_env env, napi_callback_info info) {
       split.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
       // A sibling under the content view, not inside it: Chromium re-sorts the content view's subviews whenever a child
       // WebContentsView (the browser pane) comes or goes, and puts views it doesn't own on top, over the whole page.
-      [root.superview addSubview:split.view positioned:NSWindowBelow relativeTo:root];
+      // A replacement takes the old one's place, so the sidebar tint (electron/sidebarTint) stays above it.
+      if (old.view.superview == root.superview)
+        [root.superview addSubview:split.view positioned:NSWindowAbove relativeTo:old.view];
+      else
+        [root.superview addSubview:split.view positioned:NSWindowBelow relativeTo:root];
+      [old.view removeFromSuperview];
       objc_setAssociatedObject(root, kSplitKey, split, OBJC_ASSOCIATION_RETAIN);
       isAttached = true;
     }

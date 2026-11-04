@@ -155,10 +155,10 @@ export function SummaryPanel({
   );
 }
 
-// Docked, cards sit on the chat's own surface, a hairline the only edge; floating over the chat they need the popover's fill; flat, they drop their chrome.
+// Docked, cards have no fill, a hairline the only edge; floating over the chat they need the popover's fill; flat, they drop their chrome.
 // 22px squircle corners need a 44px-tall box: any shorter and the browser shrinks both corners to fit, so a folded card would round tighter than an open one.
 const CARD =
-  'min-h-11 gap-0 rounded-lg py-0 bg-background group-data-[variant=floating]/summary:bg-popover group-data-[variant=floating]/summary:shadow-float group-data-[variant=flat]/summary:rounded-none group-data-[variant=flat]/summary:border-0 group-data-[variant=flat]/summary:bg-transparent';
+  'min-h-11 gap-0 rounded-lg py-0 bg-transparent group-data-[variant=floating]/summary:bg-popover group-data-[variant=floating]/summary:shadow-float group-data-[variant=flat]/summary:rounded-none group-data-[variant=flat]/summary:border-0 group-data-[variant=flat]/summary:bg-transparent';
 
 /** What needs you first, then what runs, what it made, what it's tied to and what it used, each only once it has something; where it runs closes the column. */
 function SummaryBody({

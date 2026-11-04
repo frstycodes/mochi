@@ -56,7 +56,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { MetaChip } from './MetaChip';
+import { Button } from '@/components/ui/button';
+import { ScrollDock } from './ScrollDock';
+import { useConfirm } from './git/useConfirm';
 import type { Provider, Repo } from './model';
 import {
   EffortPicker,
@@ -214,6 +216,8 @@ type ComposerInputProps = Omit<
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
+  /** On the right, before the context ring: the permissions mode (`PermissionsMenu`). */
+  permissions?: ReactNode;
   /** Beside send: the context ring. */
   meter?: ReactNode;
   /** Mentions sit outside the text and attachments, but still make a message worth sending. */
@@ -234,6 +238,7 @@ export function ComposerInput({
   onSend,
   onStop,
   submitLabel = 'Send',
+  permissions,
   meter,
   hasMentions,
   draftKey,
@@ -316,7 +321,11 @@ export function ComposerInput({
           )}
         </PromptInputTools>
         <PromptInputTools>
-          <span inert={isCompact} className={cn('flex', FOLD_FADE)}>
+          <span
+            inert={isCompact}
+            className={cn('flex items-center gap-1', FOLD_FADE)}
+          >
+            {permissions}
             {meter}
           </span>
           {onStop ? (
@@ -505,12 +514,12 @@ const toViewerFile = (f: {
   mediaType: f.mediaType,
 });
 
-/** One line under the card for where and how the agent runs, wrapping on a phone. The gradient fades the transcript scrolling under it. */
+/** One line under the card for where and how the agent runs, wrapping on a phone. */
 export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'relative flex min-h-8 flex-wrap items-center gap-1.5 px-1 pt-2 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-65% before:to-transparent',
+        'relative flex min-h-8 flex-wrap items-center gap-1.5 px-1 pt-2 type-caption text-subtle-foreground',
         className,
       )}
       {...props}
@@ -527,86 +536,112 @@ export function PermissionsMenu({
   provider,
   value,
   onChange,
-  className,
 }: {
   threadId: string;
   provider: Provider;
   value: Access;
   onChange: (access: Access) => void;
-  className?: string;
 }) {
-  const [isArmed, setIsArmed] = useState(false);
+  const [isOpen, setOpen] = useState(false);
+  const { confirm, dialog } = useConfirm();
   const access = accessFor(provider, value);
   const modes = Object.entries(PERMISSIONS[provider]) as [
     Access,
     { hint: string },
   ][];
-  const needsConfirm = (mode: Access) =>
-    mode === 'Full access' &&
-    access !== mode &&
-    !fullAccessConfirmed.has(threadId) &&
-    !isArmed;
-  const choose = (mode: Access) => {
-    if (needsConfirm(mode)) return setIsArmed(true);
+  // From the menu or the dock alike, Full access turns on only through the alert, once per thread.
+  const choose = async (mode: Access) => {
+    const needsConfirm =
+      mode === 'Full access' &&
+      access !== mode &&
+      !fullAccessConfirmed.has(threadId);
+    if (
+      needsConfirm &&
+      !(await confirm({
+        title: 'Turn on Full access?',
+        description: `${PERMISSIONS[provider][mode]?.hint}. This applies to this thread only.`,
+        confirm: 'Turn on Full access',
+        cancel: 'Cancel',
+        isDestructive: true,
+      }))
+    )
+      return;
     if (mode === 'Full access') fullAccessConfirmed.add(threadId);
     onChange(mode);
   };
   return (
-    <DropdownMenu onOpenChange={(open) => !open && setIsArmed(false)}>
-      <DropdownMenuTrigger asChild>
-        <MetaChip
-          className={cn(
-            className,
-            access === 'Full access' &&
-              'text-warning hover:text-warning aria-expanded:text-warning',
-          )}
-          aria-label={`Permissions: ${access}`}
+    <>
+      {/* Controlled: the dock keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click. */}
+      <DropdownMenu open={isOpen} onOpenChange={setOpen}>
+        <ScrollDock
+          label="Permissions"
+          value={access}
+          onChange={choose}
+          onTap={() => setOpen(true)}
+          items={modes.map(([mode]) => ({
+            value: mode,
+            label: mode,
+            icon: (
+              <AccessIcon
+                access={mode}
+                className={cn(
+                  'size-[18px]',
+                  mode === 'Full access' && 'text-warning',
+                )}
+              />
+            ),
+          }))}
         >
-          <AccessIcon access={access} />
-          {access}
-        </MetaChip>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-76">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Permissions</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={access}
-            onValueChange={(v) => choose(v as Access)}
-          >
-            {modes.map(([mode, { hint }]) => {
-              const isFull = mode === 'Full access';
-              return (
-                // Radix changes the value whether or not onSelect is prevented; preventing only keeps the menu open for the confirm.
-                <DropdownMenuRadioItem
-                  key={mode}
-                  value={mode}
-                  onSelect={(e) => needsConfirm(mode) && e.preventDefault()}
-                  className={cn(
-                    'items-start py-1.5',
-                    isFull && 'text-warning focus:**:text-warning',
-                  )}
-                >
-                  <AccessIcon access={mode} className="mt-0.5" />
-                  <span className="flex min-w-0 flex-col">
-                    {mode}
-                    <span
-                      className={cn(
-                        'type-caption text-muted-foreground',
-                        isFull && isArmed && 'text-warning',
-                      )}
-                    >
-                      {isFull && isArmed
-                        ? 'Choose again to turn on: nothing will ask before it runs'
-                        : hint}
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'gap-1.5 px-2 text-muted-foreground',
+                access === 'Full access' &&
+                  'text-warning hover:text-warning aria-expanded:text-warning',
+              )}
+              aria-label={`Permissions: ${access}`}
+            >
+              <AccessIcon access={access} />
+              {access}
+            </Button>
+          </DropdownMenuTrigger>
+        </ScrollDock>
+        <DropdownMenuContent align="end" className="w-76">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Permissions</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={access}
+              onValueChange={(v) => choose(v as Access)}
+            >
+              {modes.map(([mode, { hint }]) => {
+                const isFull = mode === 'Full access';
+                return (
+                  <DropdownMenuRadioItem
+                    key={mode}
+                    value={mode}
+                    className={cn(
+                      'items-start py-1.5',
+                      isFull && 'text-warning focus:**:text-warning',
+                    )}
+                  >
+                    <AccessIcon access={mode} className="mt-0.5" />
+                    <span className="flex min-w-0 flex-col">
+                      {mode}
+                      <span className="type-caption text-muted-foreground">
+                        {hint}
+                      </span>
                     </span>
-                  </span>
-                </DropdownMenuRadioItem>
-              );
-            })}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+                  </DropdownMenuRadioItem>
+                );
+              })}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {dialog}
+    </>
   );
 }
 

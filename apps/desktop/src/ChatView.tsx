@@ -57,14 +57,8 @@ import {
   useHarnessSelector,
 } from './store';
 import { ProviderMark } from './ui';
+import { WorkspaceNotes, useThreadWorkspace } from './git/WorkspacePicker';
 import {
-  WorkspaceControls,
-  WorkspaceNotes,
-  useThreadWorkspace,
-} from './git/WorkspacePicker';
-import {
-  BranchLabel,
-  MetaGroup,
   ComposerCard,
   ComposerInput,
   ComposerMeta,
@@ -152,7 +146,6 @@ import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { PendingSteers } from './chat/SteerBubble';
 import { usePrefs, type Prefs } from './settings/prefs';
-import type { Access } from './runtime/access';
 import {
   MentionChips,
   MentionMenu,
@@ -265,7 +258,6 @@ export function ChatView({
         >
           <VizThreadProvider value={thread.id}>
             <ConversationContent
-              scrollClassName="scroll-fade-y"
               className={cn(
                 'mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6',
                 handoff.isHandoff && 'animate-in duration-300 fade-in',
@@ -994,6 +986,16 @@ const Composer = memo(function Composer({
               }
               submitLabel={isQueueing ? 'Queue message' : 'Send'}
               hasMentions={mention.mentions.length > 0}
+              permissions={
+                !thread.isSettingsChat && (
+                  <PermissionsMenu
+                    threadId={thread.id}
+                    provider={provider}
+                    value={controls.access}
+                    onChange={(access) => setControls({ ...controls, access })}
+                  />
+                )
+              }
               meter={
                 <ThreadContextRing
                   thread={thread}
@@ -1077,9 +1079,6 @@ const Composer = memo(function Composer({
         </div>
         <ThreadComposerMeta
           thread={thread}
-          workspace={workspace}
-          access={controls.access}
-          onAccessChange={(access) => setControls({ ...controls, access })}
           isFolded={isCompact}
           isHeld={isHeld}
           whileWorking={whileWorking}
@@ -1102,26 +1101,27 @@ const suggestionOf = (thread: Thread, isAsking: boolean) =>
   isWorking(thread) || isAsking ? undefined : suggestedReply(thread);
 
 /** What holding mod does to this send: the setting's other choice. */
-/** Under the card: permissions and branch, plus the limit or hold-to hint. Folds away with the composer while you read back. */
+/** Under the card: the limit or hold-to hint. Folds away with the composer while you read back. */
 function ThreadComposerMeta({
   thread,
-  workspace,
-  access,
-  onAccessChange,
   isFolded,
   isHeld,
   whileWorking,
 }: {
   thread: Thread;
-  workspace: ReturnType<typeof useThreadWorkspace>;
-  access: Access;
-  onAccessChange: (access: Access) => void;
   isFolded: boolean;
   isHeld: boolean;
   whileWorking: Prefs['whileWorking'];
 }) {
-  const provider = thread.providers[0];
-  // Folds by its row height, so the card settles down instead of jumping, and blurs out as it goes; clipped only while folded, or the meta row's fade would be cut off.
+  const hint = thread.live?.limit ? (
+    <LimitHint limit={thread.live.limit} />
+  ) : (
+    isWorking(thread) && (
+      <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />
+    )
+  );
+  if (!hint) return null;
+  // Folds by its row height, so the card settles down instead of jumping, and blurs out as it goes.
   return (
     <div
       inert={isFolded}
@@ -1133,41 +1133,7 @@ function ThreadComposerMeta({
     >
       {/* ComposerMeta's top padding would keep the folded row open, so a bare box takes the min-height. */}
       <div className="min-h-0">
-        <ComposerMeta>
-          {!thread.isSettingsChat && workspace && (
-            <PermissionsMenu
-              threadId={thread.id}
-              provider={provider}
-              value={access}
-              onChange={onAccessChange}
-            />
-          )}
-          {workspace ? (
-            <WorkspaceControls workspace={workspace} />
-          ) : (
-            (!thread.isSettingsChat || !!thread.repo) && (
-              <MetaGroup aria-label="Permissions and branch">
-                {!thread.isSettingsChat && (
-                  <PermissionsMenu
-                    threadId={thread.id}
-                    provider={provider}
-                    value={access}
-                    onChange={onAccessChange}
-                    className="bg-transparent dark:bg-transparent"
-                  />
-                )}
-                {!!thread.repo && <BranchLabel repo={thread.repo} />}
-              </MetaGroup>
-            )
-          )}
-          {thread.live?.limit ? (
-            <LimitHint limit={thread.live.limit} />
-          ) : (
-            isWorking(thread) && (
-              <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />
-            )
-          )}
-        </ComposerMeta>
+        <ComposerMeta>{hint}</ComposerMeta>
       </div>
     </div>
   );

@@ -52,7 +52,7 @@ import {
   type ModelOption,
 } from './runtime/models';
 import { setPrefs, toggleStar, usePrefs } from './settings/prefs';
-import { ScrollDock, WheelStepper } from './ScrollDock';
+import { ScrollDock } from './ScrollDock';
 import { host } from './host';
 import type { AgentInstall } from './host/types/settings';
 import { linkedAccountId } from './settings/accounts';
@@ -768,13 +768,24 @@ export function EffortPicker({
   const effort = effortFor(model, value);
   const label = effort ? effortName(effort) : 'Default';
   return (
-    // Controlled: the stepper keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click.
+    // Controlled: the dock keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click.
     <DropdownMenu open={isOpen} onOpenChange={setOpen}>
-      <WheelStepper
-        values={efforts}
+      <ScrollDock
+        label="Reasoning effort"
         value={effort ?? ''}
         onChange={setEffort}
         onTap={() => setOpen(true)}
+        items={efforts.map((e, i) => ({
+          value: e,
+          label: effortName(e),
+          icon: (
+            <EffortMeter
+              levels={efforts.length}
+              level={i + 1}
+              className="h-4.5 gap-0.5 *:w-1"
+            />
+          ),
+        }))}
       >
         <DropdownMenuTrigger asChild>
           <Button
@@ -783,10 +794,6 @@ export function EffortPicker({
             className="gap-1.5 px-2 text-muted-foreground"
             aria-label={`Reasoning effort: ${label}`}
           >
-            <EffortMeter
-              levels={efforts.length}
-              level={effort ? efforts.indexOf(effort) + 1 : 0}
-            />
             <AnimatedText>{label}</AnimatedText>
             <ChevronDown
               data-icon="inline-end"
@@ -794,7 +801,7 @@ export function EffortPicker({
             />
           </Button>
         </DropdownMenuTrigger>
-      </WheelStepper>
+      </ScrollDock>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Reasoning effort</DropdownMenuLabel>
@@ -924,9 +931,17 @@ function SpeedIcon({ level }: { level: number }) {
   );
 }
 
-function EffortMeter({ levels, level }: { levels: number; level: number }) {
+function EffortMeter({
+  levels,
+  level,
+  className,
+}: {
+  levels: number;
+  level: number;
+  className?: string;
+}) {
   return (
-    <span aria-hidden className="flex h-3 items-end gap-px">
+    <span aria-hidden className={cn('flex h-3 items-end gap-px', className)}>
       {Array.from({ length: levels }, (_, i) => (
         <span
           key={i}
