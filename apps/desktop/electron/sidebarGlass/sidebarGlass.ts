@@ -8,7 +8,7 @@ interface SidebarGlassAddon {
 
 let addon: Promise<SidebarGlassAddon | null> | undefined;
 
-/** Puts AppKit's sidebar glass behind `win`'s page. False where there's none: before macOS 26, or no Xcode to build it in dev. */
+/** Puts fresh AppKit sidebar glass behind `win`'s page, replacing any already there. False where there's none: before macOS 26, or no Xcode to build it in dev. */
 export async function attachSidebarGlass(win: BrowserWindow) {
   addon ??= load();
   const glass = await addon;

@@ -11,13 +11,7 @@ import { useLatest } from './useLatest';
 import { createPortal } from 'react-dom';
 import { haptic } from './haptic';
 import { tick } from './tick';
-import {
-  DOCK_WHEEL_RATIO,
-  dockDragOffset,
-  dragSteps,
-  wheelPx,
-  wheelStep,
-} from './scrub';
+import { DOCK_WHEEL_RATIO, dockDragOffset, wheelPx } from './scrub';
 import {
   AnimatePresence,
   motion,
@@ -366,91 +360,6 @@ function DockTile({
     >
       {children}
     </motion.span>
-  );
-}
-
-/**
- * Hover the trigger and scroll, or press it and drag, to step through `values` in place, for controls whose trigger already shows
- * where you are (the effort meter): one level per `EFFORT_STEP_PX`, with a haptic and audible tick each. A press without a drag
- * calls `onTap`.
- */
-export function WheelStepper<T extends string>({
-  values,
-  value,
-  onChange,
-  onTap,
-  children,
-}: {
-  values: readonly T[];
-  value: T;
-  onChange: (v: T) => void;
-  onTap: () => void;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const live = useLatest({ values, value, onChange, onTap });
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let axis: 'x' | 'y' = 'y';
-    let lastT = -Infinity;
-    let acc = 0;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (e.timeStamp - lastT > GESTURE_GAP_MS) {
-        axis = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? 'x' : 'y';
-        acc = 0;
-      }
-      lastT = e.timeStamp;
-      const { values: list, value: current, onChange: change } = live.current;
-      // Horizontal is inverted vs the model dock (swiping right raises effort); vertical is not (scrolling down raises it).
-      const delta = wheelPx(
-        axis === 'x' ? -e.deltaX : e.deltaY,
-        e.deltaMode,
-        window.innerHeight,
-      );
-      const from = list.indexOf(current);
-      const { acc: carried, step } = wheelStep(acc, delta, from, list.length);
-      acc = carried;
-      if (!step) return;
-      const next = list[from + step];
-      live.current.value = next;
-      change(next);
-      detent();
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    let dragFrom = 0;
-    const stopDrag = listenDrag(el, {
-      onStart: () =>
-        (dragFrom = live.current.values.indexOf(live.current.value)),
-      onMove: (distance) => {
-        const { values: list, value: current, onChange: change } = live.current;
-        const next =
-          list[
-            Math.min(
-              list.length - 1,
-              Math.max(0, dragFrom + dragSteps(distance)),
-            )
-          ];
-        if (next === current) return;
-        live.current.value = next;
-        change(next);
-        detent();
-      },
-      onEnd: () => {},
-      onTap: () => live.current.onTap(),
-    });
-    return () => {
-      el.removeEventListener('wheel', onWheel);
-      stopDrag();
-    };
-  }, [live]);
-
-  return (
-    <span ref={ref} className="relative inline-flex *:cursor-ew-resize">
-      {children}
-    </span>
   );
 }
 
