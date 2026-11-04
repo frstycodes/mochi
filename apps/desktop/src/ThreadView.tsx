@@ -123,11 +123,9 @@ export function ThreadView({ thread }: { thread: Thread }) {
         isHeaderAbove ? '[--chat-top:0px]' : '[--chat-top:2.75rem]',
       )}
     >
-      {/* Opaque; the transcript starts below it and fades in through scroll-fade-y. */}
+      {/* The transcript starts below it. */}
       {!isHeaderAbove && (
-        <div className="absolute inset-x-0 top-0 z-20 bg-background">
-          {header}
-        </div>
+        <div className="absolute inset-x-0 top-0 z-20 bg-page">{header}</div>
       )}
       <div
         className={cn(
@@ -165,7 +163,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
-      {isHeaderAbove && <div className="z-20 bg-background">{header}</div>}
+      {isHeaderAbove && <div className="z-20 bg-page">{header}</div>}
       <div className="min-h-0 flex-1">
         {isWide || isChatHidden ? (
           <SidePane

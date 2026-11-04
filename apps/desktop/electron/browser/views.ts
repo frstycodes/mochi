@@ -261,11 +261,17 @@ export function setViewBounds(
   // A popup that closed itself is gone before its tab unmounts and hides it.
   if (!views.has(id)) return;
   const entry = get(owner, id);
+  const isPlaced = !!entry.bounds;
   entry.bounds = bounds;
   layout(entry);
+  if (entry.mirror && isPlaced !== !!bounds) void syncEmulation(entry);
 }
 
-/** The page hidden at `viewport` and sent as frames: the floating window draws it in the DOM, scaled down, with controls over it. */
+/**
+ * The page sent as frames: the floating window draws it in the DOM, scaled down, with controls over it, and a paired device
+ * streams it. While nothing places the view it's hidden and laid out at `viewport`; while this window shows it, it stays on
+ * screen at the window's size and the frames are that.
+ */
 export async function setViewMirror(
   owner: WebContents,
   id: string,
@@ -281,20 +287,25 @@ export async function setViewMirror(
   };
   syncThrottling(entry);
   layout(entry);
-  const e = entry.emulation;
+  await syncEmulation(entry);
+  if (entry.mirror) void sendFrame(id, entry);
+}
+
+/** The window's own emulation while it shows the view; the mirror's viewport only while the view is hidden. */
+async function syncEmulation(entry: Entry) {
+  const { mirror, bounds, emulation: e } = entry;
   const dbg = await debuggerFor(entry.view.webContents);
-  if (!entry.mirror)
+  if (!mirror || bounds)
     return e
       ? applyEmulation(entry, e)
       : void (await dbg.sendCommand('Emulation.clearDeviceMetricsOverride'));
   // A hidden view lays out at 0 × 0, so the viewport is emulated; the page's own pixel ratio and mobile mode carry over.
   await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
-    width: Math.round(viewport!.width),
-    height: Math.round(viewport!.height),
+    width: Math.round(mirror.width),
+    height: Math.round(mirror.height),
     deviceScaleFactor: e?.dpr ?? 0,
     mobile: !!e?.mobile,
   });
-  void sendFrame(id, entry);
 }
 
 async function sendFrame(id: string, entry: Entry) {
@@ -442,7 +453,7 @@ export async function emulateView(
 ) {
   const entry = get(owner, id);
   entry.emulation = e;
-  if (!entry.mirror) await applyEmulation(entry, e);
+  if (!entry.mirror || entry.bounds) await applyEmulation(entry, e);
 }
 
 async function applyEmulation(entry: Entry, e: BrowserEmulation) {
@@ -1081,16 +1092,18 @@ function watchDialogs(
 }
 
 function layout({ view, devtools, bounds, mirror, owner }: Entry) {
-  view.setVisible(!!bounds && !mirror);
-  devtools?.setVisible(!!bounds && !mirror);
-  if (mirror)
-    return view.setBounds({
-      x: 0,
-      y: 0,
-      width: Math.round(mirror.width),
-      height: Math.round(mirror.height),
-    });
-  if (!bounds) return;
+  view.setVisible(!!bounds);
+  devtools?.setVisible(!!bounds);
+  if (!bounds)
+    return (
+      mirror &&
+      view.setBounds({
+        x: 0,
+        y: 0,
+        width: Math.round(mirror.width),
+        height: Math.round(mirror.height),
+      })
+    );
   // The renderer measures in CSS px; child views are placed in window DIPs, which differ by the app's ⌘+ / ⌘− zoom.
   const zoom = owner.isDestroyed() ? 1 : owner.getZoomFactor();
   view.setBorderRadius(Math.round(bounds.radius * zoom));

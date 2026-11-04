@@ -378,6 +378,16 @@ function NewThread() {
                     submitLabel={
                       remote ? `Start on ${remote.name}` : 'Start thread'
                     }
+                    permissions={
+                      <PermissionsMenu
+                        threadId={layoutId}
+                        provider={provider}
+                        value={controls.access}
+                        onChange={(access) =>
+                          setControls({ ...controls, access })
+                        }
+                      />
+                    }
                     meter={
                       !remote && (
                         <ContextRing
@@ -400,12 +410,6 @@ function NewThread() {
                 onChoose={changePlace}
               />
               {hasWorkspace && <WorkspaceControls workspace={workspace} />}
-              <PermissionsMenu
-                threadId={layoutId}
-                provider={provider}
-                value={controls.access}
-                onChange={(access) => setControls({ ...controls, access })}
-              />
             </ComposerMeta>
           </>
         )}

@@ -34,6 +34,8 @@ function macMaterial(): Material | undefined {
 }
 type Material = 'appkit' | 'glass' | 'vibrancy' | 'mica';
 const materialWindows = new WeakSet<BrowserWindow>();
+/** Windows showing AppKit's sidebar glass (`attachSidebarGlass`). */
+const glassWindows = new WeakSet<BrowserWindow>();
 /** Windows whose native material failed: they keep the solid sidebar until they close. */
 const solidWindows = new WeakSet<BrowserWindow>();
 
@@ -199,9 +201,17 @@ function showMacMaterial(win: BrowserWindow, material: Material) {
   // `showMaterial`, the opaque page covers the tint.
   trackSidebarTint(win, material === 'glass', () => dropMaterial(win));
   if (material !== 'appkit') return showMaterial(win, material);
-  void attachSidebarGlass(win).then(
-    (isAttached) => isAttached && showMaterial(win, 'appkit'),
-  );
+  void attachSidebarGlass(win).then((isAttached) => {
+    if (!isAttached) return;
+    glassWindows.add(win);
+    showMaterial(win, 'appkit');
+  });
+  win.on('focus', () => refreshGlass(win));
+}
+
+/** Electron's window sometimes leaves AppKit's glass flat grey after a theme change or a Space switch; a fresh one samples the wallpaper again. */
+function refreshGlass(win: BrowserWindow) {
+  if (glassWindows.has(win) && !win.isDestroyed()) void attachSidebarGlass(win);
 }
 
 /**
@@ -244,6 +254,7 @@ function dropMaterial(win: BrowserWindow) {
 nativeTheme.on('updated', () =>
   BrowserWindow.getAllWindows().forEach((win) => {
     if (!materialWindows.has(win)) win.setBackgroundColor(background());
+    refreshGlass(win);
     fitWindowButtons(win);
     void tintSidebar(win);
   }),

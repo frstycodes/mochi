@@ -196,7 +196,7 @@ export function LeafView({
         onPointerDownCapture={(e) => e.button === 0 && focus()}
         onFocusCapture={() => isTabbing() && focus()}
         className={cn(
-          'relative h-full min-h-0 min-w-0 bg-background outline-none',
+          'relative h-full min-h-0 min-w-0 bg-page outline-none',
           isMulti && 'overflow-hidden rounded-xl border border-transparent',
           isMulti && isFocused && 'border-foreground/20',
         )}
