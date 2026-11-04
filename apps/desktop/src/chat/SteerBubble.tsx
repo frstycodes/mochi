@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { ArrowUp, Check, CheckRead, X } from '@/icons';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import {
@@ -13,6 +14,7 @@ import { useRemoteMachine } from '../remote/origin';
 import { useOptionalMachines } from '../remote/useMachines';
 import { useDispatch } from '../store';
 import { sendSteerNow } from './outbox';
+import { useSendLanding } from './useSendFlight';
 import { MessageImages } from './MessageImages';
 
 /** Your messages the agent hasn't read yet, under the live turn. Taking one back returns it to the composer, unless the agent already has it. */
@@ -26,6 +28,8 @@ export function PendingSteers({
   const dispatch = useDispatch();
   const agent = authorName(thread.providers[0]);
   const remote = useRemoteUnsteer(thread.id);
+  const newest = thread.steering?.at(-1)?.message.id;
+  const landingRef = useSendLanding(thread.id, newest);
   const takeBack = async (message: QueuedMessage) => {
     if (remote) {
       if (await remote(message.id, false)) onTakeBack(message);
@@ -48,6 +52,7 @@ export function PendingSteers({
   return thread.steering?.map(({ message, entry, sendNow: sending }) => (
     <SteerBubble
       key={message.id}
+      bubbleRef={message.id === newest ? landingRef : undefined}
       text={message.draft}
       images={entry.images}
       agent={agent}
@@ -79,6 +84,7 @@ function useRemoteUnsteer(threadId: string) {
  * corner, and it or the bubble takes the message back. Send now in its bar stops the turn and sends it first; both are off while it goes.
  */
 export function SteerBubble({
+  bubbleRef,
   text,
   images,
   agent,
@@ -86,6 +92,7 @@ export function SteerBubble({
   onTakeBack,
   onSendNow,
 }: {
+  bubbleRef?: Ref<HTMLDivElement>;
   text: string;
   images?: string[];
   agent: string;
@@ -105,7 +112,10 @@ export function SteerBubble({
       <Message from="user">
         {/* The bubble takes a click too; the X is the button keyboards and screen readers get. */}
         <div onClick={takeBack} className="group/bubble relative self-end">
-          <MessageContent className="type-prose whitespace-pre-wrap transition-colors group-[.is-user]:bg-secondary/50 group-[.is-user]:text-muted-foreground group-hover/bubble:group-[.is-user]:bg-secondary group-hover/bubble:group-[.is-user]:text-foreground">
+          <MessageContent
+            ref={bubbleRef}
+            className="type-prose whitespace-pre-wrap transition-colors group-[.is-user]:bg-secondary/50 group-[.is-user]:text-muted-foreground group-hover/bubble:group-[.is-user]:bg-secondary group-hover/bubble:group-[.is-user]:text-foreground"
+          >
             {text}
           </MessageContent>
           {!!takeBack && (

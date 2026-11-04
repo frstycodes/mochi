@@ -50,7 +50,7 @@ export function MessageImages({
     });
   };
   return (
-    <div className={cn('flex flex-wrap gap-2', className)}>
+    <div data-message-images className={cn('flex flex-wrap gap-2', className)}>
       {shown.map((photo, i) => (
         <ImageTile
           key={`${i}:${photo.src}`}
