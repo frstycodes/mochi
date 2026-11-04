@@ -24,8 +24,8 @@ import { usePorts } from '../terminal/ports';
 import { TooltipIconButton } from '../ui';
 import {
   historyTitle,
+  navigatePage,
   pageKey,
-  updatePage,
   useAddressHistory,
   type Page,
 } from './pages';
@@ -104,10 +104,7 @@ export function AddressBar({
         threadId: thread.id,
         tabId: row.tabId,
       });
-    else {
-      updatePage(pageId, { url: row.url, error: null });
-      if (page.hostId) void host.browser.navigate(page.hostId, row.url);
-    }
+    else navigatePage(pageId, row.url);
     finish();
   };
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
