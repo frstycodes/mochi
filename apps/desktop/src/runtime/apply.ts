@@ -157,13 +157,6 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return event.files?.length && event.patch
         ? noteCollisions(state, thread.id)
         : state;
-    case 'tool-description':
-      return update((t) => ({
-        ...t,
-        activity: t.activity.map((e) =>
-          e.toolId === event.id ? { ...e, description: event.description } : e,
-        ),
-      }));
     case 'tool-files':
       return update((t) => ({
         ...t,

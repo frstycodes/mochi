@@ -62,7 +62,6 @@ import type { HistoryArgs } from '../switch/history.ts';
 import { launchSession, preparedRun } from '../switch/launch.ts';
 import { PRIORITY } from '../utility/queue.ts';
 import {
-  commandPrompt,
   parseTitle,
   type UtilityTask,
 } from '../../../../apps/desktop/src/utility/prompts.ts';
@@ -171,39 +170,12 @@ const ADAPTERS = { claude, codex } satisfies Record<Provider, HarnessAdapter>;
 const adapters: HarnessAdapter[] = Object.values(ADAPTERS);
 /** The harness holding the thread's live session, if any. */
 const adapterOf = (threadId: string) => adapters.find((a) => a.has(threadId));
-// One model call per distinct command per launch: agents rerun the same `pnpm test` all day.
-const commandTitles = new Map<string, Promise<string>>();
-const MAX_COMMAND_TITLES = 500;
-
-// Every thread's events pass here, Claude's and Codex's; a review thread's never do, and its calls stay undescribed.
-onAgentEvent((event) => {
-  if (event.type === 'tool' && event.command)
-    void describeCommand(event.threadId, event.id, event.command);
-});
 onAgentEvent(
   trackCommandFiles(
     (threadId) => adapterOf(threadId)?.runOptions(threadId)?.cwd,
     broadcast,
   ),
 );
-
-/** A command its agent sent without a description (always on Codex, sometimes on Claude) gets one from the background model, for its row and the sidebar. */
-async function describeCommand(threadId: string, id: string, command: string) {
-  const spaceId = adapterOf(threadId)?.runOptions(threadId)?.spaceId;
-  if (!spaceId) return;
-  if (commandTitles.size >= MAX_COMMAND_TITLES) commandTitles.clear();
-  let title = commandTitles.get(command);
-  if (!title) {
-    title = runUtility('command', spaceId, commandPrompt(command)).then(
-      (text) => (text && parseTitle(text)) || '',
-      () => '',
-    );
-    commandTitles.set(command, title);
-  }
-  const description = await title;
-  if (description)
-    broadcast({ threadId, type: 'tool-description', id, description });
-}
 
 /** The profile's turned-off Codex items as thread config, read from the account's config (the thread's project included). */
 async function codexNativeOff(

@@ -163,15 +163,13 @@ function waitingLabel(call: ToolCall) {
   return `Waiting for your approval to ${action}`;
 }
 
-/** One line: a multi-line command keeps its first line and an ellipsis; the width is left to CSS truncation. */
 export function toolLabel(call: ToolCall) {
   const name = call.target.split('/').pop();
-  const [command, ...more] = call.target.split('\n');
   return {
     Read: `Reading ${name}`,
     Edit: `Editing ${name}`,
     Write: `Writing ${name}`,
-    Run: `Running ${command}${more.length ? '…' : ''}`,
+    Run: `Running ${shortCommand(call.target)}`,
     Browser: 'Using the browser',
     Search: `Searching ${call.target}`,
     Fetch: `Reading ${hostname(call.target)}`,
@@ -180,6 +178,27 @@ export function toolLabel(call: ToolCall) {
       ? 'Messaging another thread'
       : (mochiCall(call)?.[0] ?? `Calling ${mcpLabel(call.target)}`),
   }[call.verb];
+}
+
+const SHORT_COMMAND_CHARS = 32;
+
+/**
+ * A command cut like Claude's work log: whole when short, else its program, an ellipsis and its last argument's
+ * basename (`cat … index.d.ts`). Codex's `/bin/zsh -lc '…'` wrapper is dropped first.
+ */
+export function shortCommand(command: string) {
+  const line = unwrapShell(command.trim()).split('\n')[0].trim();
+  const words = line.split(/\s+/);
+  if (line.length <= SHORT_COMMAND_CHARS || words.length < 2) return line;
+  const last = words.at(-1)!.replace(/^['"]|['"]$/g, '');
+  return `${words[0]} … ${last.split('/').filter(Boolean).pop() ?? last}`;
+}
+
+function unwrapShell(command: string) {
+  const match = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+(['"])([\s\S]*)\1$/.exec(
+    command,
+  );
+  return match ? match[2] : command;
 }
 
 /** `linear: get_issue` → `get issue on Linear`. */

@@ -10,7 +10,6 @@ export const UTILITY_TASKS = [
   'commit',
   'pr',
   'handoff',
-  'command',
 ] as const;
 
 export type UtilityTask = (typeof UTILITY_TASKS)[number];
@@ -21,7 +20,6 @@ export const UTILITY_TASK_LABELS = {
   commit: 'Commit messages',
   pr: 'Pull requests',
   handoff: 'Handoff summaries',
-  command: 'Command titles',
 } satisfies Record<UtilityTask, string>;
 
 /** Each provider's cheapest model: every task's default, and the fallback when the chosen one can't answer. */
@@ -43,8 +41,6 @@ export const UTILITY_INSTRUCTIONS = {
   pr: 'Write a GitHub pull request for the branch. First line: the title, under 72 characters, no prefix. Then a blank line and the description in Markdown: what changed and why, then how it was tested when the diff shows it. Reply with those only, no code fences.',
   handoff:
     "Summarize a coding thread for the agent taking it over: the goal, what's done, what's open, decisions the user made, and anything risky. Markdown, under 200 words. Reply with the summary only.",
-  command:
-    "Say what a shell command a coding agent is running does, for a status line. Reply with the line only: 3 to 8 words, an imperative verb first, sentence case, no quotes, no trailing period, like Watch PR 260's CI checks.",
 } satisfies Record<UtilityTask, string>;
 
 /** What a task tries, in order: your choice, then each provider's cheapest model, Claude first. */
@@ -65,8 +61,6 @@ export function utilityCandidates(choice: ModelChoice): ModelChoice[] {
 
 export const titlePrompt = (message: string, reply?: string) =>
   cap(reply ? `User: ${message}\n\nAgent: ${reply}` : `User: ${message}`);
-
-export const commandPrompt = (command: string) => cap(command);
 
 export const commitPrompt = (files: DiffFile[]) =>
   cap(files.map(fileDiff).join('\n\n'));
