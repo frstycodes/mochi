@@ -119,16 +119,12 @@ function AddToProjectChip({
       }}
     >
       <Tooltip>
-        <TooltipTrigger asChild>
-          {/* A disabled button gets no pointer events, so the tooltip hangs on its wrapper. */}
-          <span className="inline-flex">
-            <PopoverTrigger asChild>
-              <MetaChip disabled={!isIdle}>
-                <FolderPlus />
-                <span className="truncate">Add to project</span>
-              </MetaChip>
-            </PopoverTrigger>
-          </span>
+        {/* A disabled button gets no pointer events, so the tooltip hangs on its wrapper. */}
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <PopoverTrigger render={<MetaChip disabled={!isIdle} />}>
+            <FolderPlus />
+            <span className="truncate">Add to project</span>
+          </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent>
           {isIdle

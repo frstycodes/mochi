@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ReactElement,
   type ReactNode,
 } from 'react';
 import {
@@ -148,7 +149,7 @@ export function ProjectsView() {
     shown.find((p) => p.key === pickedKey) ?? (isMobile ? undefined : shown[0]);
   const isDetailOnly = isMobile && !!picked;
   return (
-    <ScrollArea type="scroll" className="h-full">
+    <ScrollArea className="h-full">
       <div className="mx-auto flex w-full max-w-280 flex-col gap-5 px-4 pt-6 pb-16 md:px-8 md:pt-8">
         <header className="flex items-center justify-between gap-3">
           <h1 className="type-display">
@@ -252,23 +253,25 @@ function ComputerFilter({
     projects.filter((p) => p.copies.some((k) => k.machineId === c.id)).length;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={`Show projects on: ${current?.name ?? 'All computers'}`}
-          className="h-8 max-w-40 min-w-0 justify-start font-normal"
-        >
-          {current ? <ComputerAvatar computer={current} /> : <Monitor />}
-          <span className="min-w-0 flex-1 truncate text-left">
-            {current?.name ?? 'All computers'}
-          </span>
-          <ChevronDown className="text-muted-foreground" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`Show projects on: ${current?.name ?? 'All computers'}`}
+            className="h-8 max-w-40 min-w-0 justify-start font-normal"
+          />
+        }
+      >
+        {current ? <ComputerAvatar computer={current} /> : <Monitor />}
+        <span className="min-w-0 flex-1 truncate text-left">
+          {current?.name ?? 'All computers'}
+        </span>
+        <ChevronDown className="text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuItem
-          onSelect={() => onChange(ALL)}
+          onClick={() => onChange(ALL)}
           className={cn(value === ALL && 'bg-accent')}
         >
           <Monitor />
@@ -278,7 +281,7 @@ function ComputerFilter({
         {computers.map((c) => (
           <DropdownMenuItem
             key={computerKey(c.id)}
-            onSelect={() => onChange(computerKey(c.id))}
+            onClick={() => onChange(computerKey(c.id))}
             className={cn(computerKey(c.id) === value && 'bg-accent')}
           >
             <ComputerAvatar computer={c} />
@@ -687,11 +690,11 @@ function PublishButton({
   };
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="xs" disabled={!!blocker}>
-          <GithubMarkIcon className="size-3" />
-          Put on GitHub
-        </Button>
+      <PopoverTrigger
+        render={<Button variant="outline" size="xs" disabled={!!blocker} />}
+      >
+        <GithubMarkIcon className="size-3" />
+        Put on GitHub
       </PopoverTrigger>
       <PopoverContent align="end" className="flex w-80 flex-col gap-3 p-3">
         <div className="flex flex-col gap-1.5">
@@ -783,9 +786,7 @@ function SyncButton({
   if (!blocker) return button;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span>{button}</span>
-      </TooltipTrigger>
+      <TooltipTrigger render={<span />}>{button}</TooltipTrigger>
       <TooltipContent>{blocker}</TooltipContent>
     </Tooltip>
   );
@@ -817,17 +818,15 @@ function AddCopyMenu({
     : [];
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="xs">
-          <Plus />
-          Add a copy
-        </Button>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="xs" />}>
+        <Plus />
+        Add a copy
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         {cloneable.length > 1 && (
           <>
             <DropdownMenuItem
-              onSelect={() => cloneable.forEach((c) => void clone(project, c))}
+              onClick={() => cloneable.forEach((c) => void clone(project, c))}
             >
               <Download />
               Clone on every computer
@@ -852,7 +851,7 @@ function AddCopyMenu({
                     reason={blocker}
                   />
                 ) : (
-                  <DropdownMenuItem onSelect={() => void clone(project, c)}>
+                  <DropdownMenuItem onClick={() => void clone(project, c)}>
                     <Download />
                     Clone on {c.name}
                     {isAway(c) && ' when it’s back'}
@@ -875,7 +874,7 @@ function AddCopyMenu({
                     {candidates.map((k) => (
                       <DropdownMenuItem
                         key={k.ref}
-                        onSelect={() => void link(project, k, computers)}
+                        onClick={() => void link(project, k, computers)}
                       >
                         <ProjectIcon name={k.name} icon={k.icon} />
                         <span className="min-w-0 flex-1 truncate">
@@ -1038,11 +1037,9 @@ function AddProjectButton({ computers }: { computers: Computer[] }) {
         if (!open) setTarget(null);
       }}
     >
-      <PopoverTrigger asChild>
-        <Button size="sm">
-          <FolderPlus />
-          Add project
-        </Button>
+      <PopoverTrigger render={<Button size="sm" />}>
+        <FolderPlus />
+        Add project
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         {where ? (
@@ -1111,10 +1108,10 @@ function OverflowMenu({
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label}>
-          <OverflowIcon vertical />
-        </Button>
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" size="icon-sm" aria-label={label} />}
+      >
+        <OverflowIcon vertical />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <MenuItems actions={actions} kind="dropdown" />
@@ -1128,11 +1125,11 @@ function WithContextMenu({
   children,
 }: {
   actions: MenuAction[];
-  children: ReactNode;
+  children: ReactElement;
 }) {
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-52">
         <MenuItems actions={actions} kind="context" />
       </ContextMenuContent>
@@ -1167,7 +1164,7 @@ function MenuItems({
         <Item
           disabled={a.disabled}
           variant={a.isDestructive ? 'destructive' : 'default'}
-          onSelect={a.onSelect}
+          onClick={a.onSelect}
         >
           {a.icon}
           {a.label}
@@ -1248,24 +1245,26 @@ function IconPicker({
 
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Change ${project.name}’s icon`}
-          className="group/tile relative rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          <IconTile
-            name={project.name}
-            icon={project.icon}
-            isDimmed={project.isMissing}
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`Change ${project.name}’s icon`}
+            className="group/tile relative rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
           />
-          <span
-            aria-hidden
-            className="absolute inset-0 flex items-center justify-center rounded-lg bg-foreground/50 text-background opacity-0 transition-opacity group-hover/tile:opacity-100 group-aria-expanded/tile:opacity-100"
-          >
-            <Image className="size-4" />
-          </span>
-        </button>
+        }
+      >
+        <IconTile
+          name={project.name}
+          icon={project.icon}
+          isDimmed={project.isMissing}
+        />
+        <span
+          aria-hidden
+          className="absolute inset-0 flex items-center justify-center rounded-lg bg-foreground/50 text-background opacity-0 transition-opacity group-hover/tile:opacity-100 group-aria-expanded/tile:opacity-100"
+        >
+          <Image className="size-4" />
+        </span>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-1">
         <p className="px-2 pt-1 pb-1.5 type-meta font-medium">Icon</p>

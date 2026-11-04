@@ -40,10 +40,25 @@ export function SettingsComputerPicker({
     .machines.map((m) => m.machine)
     .filter((m) => m.scopes.includes('read'));
   if (machines.length === 0) return null;
+  const items = [
+    { value: THIS_COMPUTER, label: 'This computer' },
+    ...machines.map((m) => ({
+      value: m.id,
+      label: (
+        <>
+          <DeviceIcon kind={m.kind} />
+          {m.name}
+        </>
+      ),
+    })),
+  ];
   return (
     <Select
       value={value ?? THIS_COMPUTER}
-      onValueChange={(v) => onChange(v === THIS_COMPUTER ? null : v)}
+      items={items}
+      onValueChange={(v) =>
+        v !== null && onChange(v === THIS_COMPUTER ? null : v)
+      }
     >
       <SelectTrigger size="sm" aria-label="Settings of" className="w-auto">
         <SelectValue />

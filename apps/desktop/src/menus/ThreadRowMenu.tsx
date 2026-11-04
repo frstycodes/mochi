@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactElement } from 'react';
 import { DiagramTree } from '@/icons';
 import {
   ContextMenu,
@@ -23,17 +23,17 @@ export function ThreadRowMenu({
   selectedIds,
   children,
   ...props
-}: { threadId: string; selectedIds: string[] } & ComponentProps<
-  typeof ContextMenuTrigger
->) {
+}: {
+  threadId: string;
+  selectedIds: string[];
+  children: ReactElement;
+} & Omit<ComponentProps<typeof ContextMenuTrigger>, 'children'>) {
   const isBulk = selectedIds.length > 1 && selectedIds.includes(threadId);
   const isRemote = (id: string) => !!parseRemoteThreadId(id);
   const groups = isRemote(threadId) ? REMOTE_THREAD_MENU : THREAD_MENU;
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild {...props}>
-        {children}
-      </ContextMenuTrigger>
+      <ContextMenuTrigger render={children} {...props} />
       <ContextMenuContent className="w-60">
         {isBulk ? (
           <BulkActionItems
@@ -67,7 +67,7 @@ function SubThreadItems({ threadId }: { threadId: string }) {
     <>
       <ContextMenuSeparator />
       <ContextMenuItem
-        onSelect={() => unnestWithUndo(dispatch, state.threads, thread)}
+        onClick={() => unnestWithUndo(dispatch, state.threads, thread)}
       >
         <DiagramTree />
         <span className="min-w-0 truncate">{`Move out of “${parent.title}”`}</span>

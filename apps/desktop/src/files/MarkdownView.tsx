@@ -28,11 +28,10 @@ export function MarkdownView({
   return (
     <div className={cn('group/markdown relative h-full min-h-0', className)}>
       <ToggleGroup
-        type="single"
         size="sm"
         variant="outline"
-        value={mode}
-        onValueChange={(v) => v && setMode(v as Mode)}
+        value={[mode]}
+        onValueChange={([v]) => v && setMode(v as Mode)}
         aria-label="Show as"
         className="absolute top-2 right-3 z-10 bg-popover opacity-0 shadow-sm transition-opacity duration-150 group-hover/markdown:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
       >

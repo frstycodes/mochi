@@ -169,19 +169,21 @@ function ProfileHeader({ profile }: { profile: Space }) {
           </Button>
         )}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`${profile.name} actions`}
-            >
-              <OverflowIcon />
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`${profile.name} actions`}
+              />
+            }
+          >
+            <OverflowIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuItem
               disabled={profiles.length >= MAX_PROFILES}
-              onSelect={() => setCopying(true)}
+              onClick={() => setCopying(true)}
             >
               <Copy />
               Duplicate…

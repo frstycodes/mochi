@@ -75,10 +75,10 @@ type Placement = Pick<
   'side' | 'align'
 >;
 
-type OpenControl = Pick<
-  ComponentProps<typeof HoverCard>,
-  'open' | 'onOpenChange'
->;
+interface OpenControl {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
 
 /** Wraps a PR or issue trigger; hovering it (300ms) or focusing it opens the preview. The caller already holds the state, from `useRefState`. With `open` set the caller opens it (a click on the trigger toggles), and it's a popover: it closes on an outside click or Esc, not when the pointer leaves. */
 export function RefHoverCard({
@@ -102,7 +102,7 @@ export function RefHoverCard({
   if (open !== undefined) {
     return (
       <Popover open={open} onOpenChange={onOpenChange}>
-        <PopoverTrigger asChild>{children}</PopoverTrigger>
+        <PopoverTrigger render={children} />
         <PopoverContent
           side={side}
           align={align}
@@ -116,13 +116,12 @@ export function RefHoverCard({
     );
   }
   return (
-    <HoverCard
-      open={open}
-      onOpenChange={onOpenChange}
-      openDelay={OPEN_DELAY}
-      closeDelay={CLOSE_DELAY}
-    >
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+    <HoverCard open={open} onOpenChange={onOpenChange}>
+      <HoverCardTrigger
+        delay={OPEN_DELAY}
+        closeDelay={CLOSE_DELAY}
+        render={children}
+      />
       <HoverCardContent
         side={side}
         align={align}
@@ -243,8 +242,12 @@ export function RefListHoverCard({
   children: ReactElement;
 }) {
   return (
-    <HoverCard openDelay={OPEN_DELAY} closeDelay={CLOSE_DELAY}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+    <HoverCard>
+      <HoverCardTrigger
+        delay={OPEN_DELAY}
+        closeDelay={CLOSE_DELAY}
+        render={children}
+      />
       <HoverCardContent
         side={side}
         align={align}
@@ -257,10 +260,7 @@ export function RefListHoverCard({
           </p>
         )}
         {/* Every PR at once; a long list scrolls inside the card instead of growing past the screen. */}
-        <ScrollArea
-          type="scroll"
-          className="[&>[data-slot=scroll-area-viewport]]:max-h-72"
-        >
+        <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-72">
           <ul className="flex flex-col gap-0.5">
             {items.map((item) => (
               <li key={item.label}>
@@ -308,15 +308,20 @@ function RefPreview({ item, threadId }: { item: RefItem; threadId: string }) {
       {!!state && <RefFacts state={state} />}
       {!!url && (
         <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <a
-              href={url}
-              onClick={(e) => openLink(e, url)}
-              onAuxClick={(e) => openLink(e, url)}
-            >
-              Open on GitHub
-              <ArrowUpRight data-icon="inline-end" />
-            </a>
+          <Button
+            nativeButton={false}
+            render={
+              <a
+                href={url}
+                onClick={(e) => openLink(e, url)}
+                onAuxClick={(e) => openLink(e, url)}
+              />
+            }
+            variant="outline"
+            size="sm"
+          >
+            Open on GitHub
+            <ArrowUpRight data-icon="inline-end" />
           </Button>
           <Button
             variant="outline"

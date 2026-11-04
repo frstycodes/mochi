@@ -102,7 +102,7 @@ function TaskList({ thread, tasks }: { thread: Thread; tasks: TaskRow[] }) {
   const finished = tasks.filter((t) => !isActive(t)).toReversed();
   const [isFinishedOpen, setFinishedOpen] = useState(!running.length);
   return (
-    <ScrollArea type="scroll" className="h-full min-h-0">
+    <ScrollArea className="h-full min-h-0">
       <div className="flex flex-col gap-3 px-2 pb-3">
         {running.length > 0 && (
           <section aria-label="Running" className="flex flex-col gap-1.5">
@@ -397,7 +397,7 @@ function AgentTranscript({
           <StopButton thread={thread} task={task} name={name} />
         </PaneActions>
       )}
-      <ScrollArea type="scroll" className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-4 px-3 pt-1 pb-4">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 type-meta text-subtle-foreground">
@@ -471,7 +471,7 @@ function CommandOutput({ thread, task }: { thread: Thread; task: TaskRow }) {
           <StopButton thread={thread} task={task} name={`“${task.title}”`} />
         </PaneActions>
       )}
-      <ScrollArea type="scroll" className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 px-3 pt-1 pb-4">
           <RunOutput command={task.command ?? task.title} run={run} isFull />
           {!task.outputFile && (

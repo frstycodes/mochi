@@ -228,21 +228,25 @@ function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
   });
   return (
     <RefHoverCard item={item} threadId={thread.id}>
-      <Button variant="ghost" size="sm" asChild className="min-w-0">
-        <a href={pr.url} target="_blank" rel="noreferrer">
-          <PrStateIcon
-            state={PR_STATUS[pr.state] ?? 'unknown'}
-            hasConflicts={item.state?.hasConflicts}
-          />
-          <span className="tabular">#{pr.number}</span>
-          <span className="truncate text-muted-foreground lowercase">
-            {pr.state}
-          </span>
-          <ArrowUpRight
-            data-icon="inline-end"
-            className="text-subtle-foreground"
-          />
-        </a>
+      <Button
+        variant="ghost"
+        size="sm"
+        nativeButton={false}
+        render={<a href={pr.url} target="_blank" rel="noreferrer" />}
+        className="min-w-0"
+      >
+        <PrStateIcon
+          state={PR_STATUS[pr.state] ?? 'unknown'}
+          hasConflicts={item.state?.hasConflicts}
+        />
+        <span className="tabular">#{pr.number}</span>
+        <span className="truncate text-muted-foreground lowercase">
+          {pr.state}
+        </span>
+        <ArrowUpRight
+          data-icon="inline-end"
+          className="text-subtle-foreground"
+        />
       </Button>
     </RefHoverCard>
   );

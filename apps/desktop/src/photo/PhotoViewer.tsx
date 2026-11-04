@@ -8,7 +8,7 @@ import {
   type RefObject,
   type WheelEvent as ReactWheelEvent,
 } from 'react';
-import { Dialog as DialogPrimitive } from 'radix-ui';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import {
   ChevronLeft,
   ChevronRight,
@@ -52,6 +52,7 @@ export function PhotoViewer() {
     photos.length > 1 &&
     setIndex((i) => (i + step + photos.length) % photos.length);
   const img = useRef<HTMLImageElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
   const press = useRef({ x: 0, y: 0 });
 
   return (
@@ -60,14 +61,11 @@ export function PhotoViewer() {
       onOpenChange={(open) => !open && openPhotos(null)}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/50 backdrop-blur-sm duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          // Radix would focus the first toolbar button, opening its tooltip, which then takes the first Escape.
-          onOpenAutoFocus={(e) => (
-            e.preventDefault(),
-            (e.currentTarget as HTMLElement).focus()
-          )}
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-background/50 backdrop-blur-sm duration-200 ease-(--ease-out) data-closed:duration-150 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+        <DialogPrimitive.Popup
+          ref={popup}
+          // The default would focus the first toolbar button, opening its tooltip, which then takes the first Escape.
+          initialFocus={popup}
           onKeyDown={(e) => {
             if (e.key === 'ArrowLeft') go(-1);
             if (e.key === 'ArrowRight') go(1);
@@ -85,7 +83,7 @@ export function PhotoViewer() {
             ) &&
             openPhotos(null)
           }
-          className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none"
+          className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-closed:duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none"
         >
           {!!photo && (
             <Stage
@@ -103,7 +101,7 @@ export function PhotoViewer() {
           {photos.length > 1 && (
             <Filmstrip photos={photos} index={index} onSelect={setIndex} />
           )}
-        </DialogPrimitive.Content>
+        </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
@@ -252,10 +250,10 @@ function Stage({
             <FolderOpen />
           </TooltipIconButton>
         )}
-        <DialogPrimitive.Close asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Close">
-            <X />
-          </Button>
+        <DialogPrimitive.Close
+          render={<Button variant="ghost" size="icon-sm" aria-label="Close" />}
+        >
+          <X />
         </DialogPrimitive.Close>
       </header>
       <div

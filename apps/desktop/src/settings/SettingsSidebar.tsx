@@ -91,13 +91,15 @@ export function SettingsSidebar({
                       <SidebarMenuSub>
                         {settings.map((s) => (
                           <SidebarMenuSubItem key={s.id}>
-                            <SidebarMenuSubButton asChild>
-                              <button
-                                type="button"
-                                onClick={() => go(section.id, s.id)}
-                              >
-                                {s.label}
-                              </button>
+                            <SidebarMenuSubButton
+                              render={
+                                <button
+                                  type="button"
+                                  onClick={() => go(section.id, s.id)}
+                                />
+                              }
+                            >
+                              {s.label}
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         ))}

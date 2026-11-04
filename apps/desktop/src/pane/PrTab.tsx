@@ -174,22 +174,17 @@ function PrView({ thread, calls, io, number }: PrSource & { number: number }) {
           />
         )}
         <Button
-          asChild
+          nativeButton={false}
+          render={<a href={review.url} target="_blank" rel="noreferrer" />}
           size="xs"
           variant="ghost"
           className="text-muted-foreground"
         >
-          <a href={review.url} target="_blank" rel="noreferrer">
-            GitHub
-            <ArrowUpRight data-icon="inline-end" />
-          </a>
+          GitHub
+          <ArrowUpRight data-icon="inline-end" />
         </Button>
       </PaneActions>
-      {/* Radix lays the viewport content out as `display: table`, which grows to the widest diff line instead of scrolling it. */}
-      <ScrollArea
-        type="scroll"
-        className="min-h-0 flex-1 border-t [&_[data-slot=scroll-area-viewport]>div]:block!"
-      >
+      <ScrollArea className="min-h-0 flex-1 border-t">
         <div className="flex flex-col gap-4 px-3 py-3">
           <PrHeader review={review} />
           {!!review.body.trim() && <Markdown text={review.body} />}

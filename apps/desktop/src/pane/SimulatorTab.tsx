@@ -228,18 +228,16 @@ export function SimulatorTab({ thread }: PaneTabProps) {
           </IconSwap>
         </TooltipIconButton>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!isBooted || !cwd || build?.isBuilding}
-                onClick={() => cwd && run(cwd)}
-              >
-                {build?.isBuilding ? <Spinner /> : <Play />}
-                {build?.isBuilding ? 'Building…' : 'Build & run'}
-              </Button>
-            </span>
+          <TooltipTrigger render={<span />}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!isBooted || !cwd || build?.isBuilding}
+              onClick={() => cwd && run(cwd)}
+            >
+              {build?.isBuilding ? <Spinner /> : <Play />}
+              {build?.isBuilding ? 'Building…' : 'Build & run'}
+            </Button>
           </TooltipTrigger>
           <TooltipContent>
             {cwd
@@ -259,6 +257,17 @@ const FAMILIES = [
   { family: 'ipad', label: 'iPad', icon: Tablet },
 ] as const;
 
+function SimulatorLabel({ simulator }: { simulator?: Simulator }) {
+  if (!simulator) return null;
+  const Icon = FAMILIES.find((f) => f.family === simulator.family)?.icon;
+  return (
+    <>
+      {!!Icon && <Icon aria-hidden />}
+      <span className="truncate">{simulator.name}</span>
+    </>
+  );
+}
+
 function DevicePicker({
   simulators,
   value,
@@ -269,15 +278,21 @@ function DevicePicker({
   onChange: (udid: string) => void;
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={(v) => v !== null && onChange(v)}>
       <SelectTrigger
         size="sm"
         aria-label="Simulator"
         className="-ml-2.5 max-w-56 min-w-0 border-transparent bg-transparent shadow-none dark:bg-transparent"
       >
-        <SelectValue />
+        <SelectValue>
+          {(udid: string) => (
+            <SimulatorLabel
+              simulator={simulators.find((s) => s.udid === udid)}
+            />
+          )}
+        </SelectValue>
       </SelectTrigger>
-      <SelectContent position="popper" align="start">
+      <SelectContent>
         {FAMILIES.map(({ family, label, icon: Icon }) => {
           const devices = simulators.filter((s) => s.family === family);
           return (
@@ -336,28 +351,32 @@ function ContentSizeMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Dynamic Type size"
-              disabled={disabled}
-            >
-              <Text />
-            </Button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Dynamic Type size"
+                  disabled={disabled}
+                />
+              }
+            />
+          }
+        >
+          <Text />
         </TooltipTrigger>
         <TooltipContent>Dynamic Type size</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Dynamic Type</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={value ?? ''}
           onValueChange={(v) =>
             onChange(CONTENT_SIZES.find((s) => s === v) ?? 'large')
           }
         >
+          <DropdownMenuLabel>Dynamic Type</DropdownMenuLabel>
           {CONTENT_SIZES.map((size) => (
             <DropdownMenuRadioItem key={size} value={size}>
               {CONTENT_SIZE_LABELS[size]}
@@ -392,17 +411,21 @@ function DeepLinkPopover({
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Open a URL or deep link"
-              disabled={disabled}
-            >
-              <Link />
-            </Button>
-          </PopoverTrigger>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Open a URL or deep link"
+                  disabled={disabled}
+                />
+              }
+            />
+          }
+        >
+          <Link />
         </TooltipTrigger>
         <TooltipContent>Open a URL or deep link</TooltipContent>
       </Tooltip>

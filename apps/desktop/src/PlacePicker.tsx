@@ -93,34 +93,36 @@ export function PlaceChip(props: PickerProps) {
         }}
         items={dockStops(projects, project)}
       >
-        <PopoverTrigger asChild>
-          <MetaChip
-            className="max-w-80 gap-1.5"
-            aria-label={`Where: ${name}${isMulti && computer ? ` on ${computer.name}` : ''}`}
-          >
-            {project ? (
-              <ProjectIcon name={project.name} icon={project.icon} />
-            ) : (
-              <Chat />
-            )}
-            <span className="max-w-32 shrink-0 truncate">{name}</span>
-            {isMulti && !!computer && (
-              <>
-                <span className="text-subtle-foreground">on</span>
-                <ComputerAvatar computer={computer} />
-                <span className="min-w-0 truncate max-sm:hidden">
-                  {computer.name}
-                </span>
-              </>
-            )}
-            <ChevronDown data-icon="inline-end" />
-          </MetaChip>
+        <PopoverTrigger
+          render={
+            <MetaChip
+              className="max-w-80 gap-1.5"
+              aria-label={`Where: ${name}${isMulti && computer ? ` on ${computer.name}` : ''}`}
+            />
+          }
+        >
+          {project ? (
+            <ProjectIcon name={project.name} icon={project.icon} />
+          ) : (
+            <Chat />
+          )}
+          <span className="max-w-32 shrink-0 truncate">{name}</span>
+          {isMulti && !!computer && (
+            <>
+              <span className="text-subtle-foreground">on</span>
+              <ComputerAvatar computer={computer} />
+              <span className="min-w-0 truncate max-sm:hidden">
+                {computer.name}
+              </span>
+            </>
+          )}
+          <ChevronDown data-icon="inline-end" />
         </PopoverTrigger>
       </ScrollDock>
       <PopoverContent
         align="start"
         className={cn(
-          'max-h-(--radix-popover-content-available-height) overflow-y-auto p-0',
+          'max-h-(--available-height) overflow-y-auto p-0',
           isMulti ? 'w-[min(38rem,calc(100vw-2rem))]' : 'w-80',
         )}
       >
@@ -451,24 +453,20 @@ function MissingCopyOption({
       </span>
       {canClone && (
         <Tooltip>
-          <TooltipTrigger asChild>
-            {/* A span keeps the tooltip when the button is disabled. */}
-            <span className="shrink-0">
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={!!blocker || isCloning}
-                onClick={() => {
-                  setCloning(true);
-                  void clone(project, computer).finally(() =>
-                    setCloning(false),
-                  );
-                }}
-              >
-                <Download />
-                Clone here
-              </Button>
-            </span>
+          {/* A span keeps the tooltip when the button is disabled. */}
+          <TooltipTrigger render={<span className="shrink-0" />}>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={!!blocker || isCloning}
+              onClick={() => {
+                setCloning(true);
+                void clone(project, computer).finally(() => setCloning(false));
+              }}
+            >
+              <Download />
+              Clone here
+            </Button>
           </TooltipTrigger>
           <TooltipContent>
             {blocker ??

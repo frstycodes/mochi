@@ -120,24 +120,22 @@ function LevelPicker() {
         {AGENT_CONTROLS.map((level) => (
           <Card
             key={level}
-            asChild
+            render={<label htmlFor={`level-${level}`} />}
             className="cursor-pointer flex-row gap-3 p-3.5 transition-colors hover:bg-accent/60 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50"
           >
-            <label htmlFor={`level-${level}`}>
-              <RadioGroupItem
-                id={`level-${level}`}
-                value={level}
-                className="mt-0.5"
-              />
-              <span className="flex flex-col gap-0.5">
-                <span className="type-body font-medium">
-                  {LEVELS[level].title}
-                </span>
-                <span className="type-meta text-muted-foreground text-pretty">
-                  {LEVELS[level].body}
-                </span>
+            <RadioGroupItem
+              id={`level-${level}`}
+              value={level}
+              className="mt-0.5"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="type-body font-medium">
+                {LEVELS[level].title}
               </span>
-            </label>
+              <span className="type-meta text-muted-foreground text-pretty">
+                {LEVELS[level].body}
+              </span>
+            </span>
           </Card>
         ))}
       </div>
@@ -248,24 +246,26 @@ export const toolRowId = (name: ToolName) => `tool-${name}`;
 function SetAllMenu({ group, tools }: { group: ToolGroup; tools: ToolName[] }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={`Set every tool in ${group}`}
-        >
-          Set all
-          <ChevronDown data-icon="inline-end" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Set every tool in ${group}`}
+          />
+        }
+      >
+        Set all
+        <ChevronDown data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {(['allow', 'ask', 'off'] as const).map((policy) => (
-          <DropdownMenuItem key={policy} onSelect={() => choose(tools, policy)}>
+          <DropdownMenuItem key={policy} onClick={() => choose(tools, policy)}>
             {ALL_LABELS[policy]}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => choose(tools, null)}>
+        <DropdownMenuItem onClick={() => choose(tools, null)}>
           Follow the level
         </DropdownMenuItem>
       </DropdownMenuContent>

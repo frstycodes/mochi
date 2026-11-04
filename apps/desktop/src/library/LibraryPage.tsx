@@ -128,25 +128,27 @@ export function ScopePicker({ hasAll = true }: { hasAll?: boolean }) {
   const spaceId = useHarnessSelector((s) => s.spaceId);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="xs"
-          aria-label={`Showing ${scope.profile?.name ?? 'all profiles'}`}
-        >
-          {scope.profile ? <SpaceIcon space={scope.profile} /> : <Users />}
-          <span className="max-w-32 truncate">
-            {scope.profile?.name ?? 'All profiles'}
-          </span>
-          <ChevronDown />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="xs"
+            aria-label={`Showing ${scope.profile?.name ?? 'all profiles'}`}
+          />
+        }
+      >
+        {scope.profile ? <SpaceIcon space={scope.profile} /> : <Users />}
+        <span className="max-w-32 truncate">
+          {scope.profile?.name ?? 'All profiles'}
+        </span>
+        <ChevronDown />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Show and add to</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={scope.id}
           onValueChange={setLibraryScope}
         >
+          <DropdownMenuLabel>Show and add to</DropdownMenuLabel>
           {profiles.map((p) => (
             <DropdownMenuRadioItem key={p.id} value={p.id}>
               <SpaceIcon space={p} className="size-3.5" />

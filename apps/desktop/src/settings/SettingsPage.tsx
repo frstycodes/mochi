@@ -45,7 +45,7 @@ export function SettingsPage() {
           onChange={setMachineId}
         />
       </TitleBar>
-      <ScrollArea type="scroll" className="min-h-0">
+      <ScrollArea className="min-h-0">
         <div className="mx-auto flex w-full max-w-180 flex-col gap-8 px-4 pt-6 pb-16 md:px-8">
           {!Subpage && <h1 className="px-1 type-display">{section.title}</h1>}
           {machine ? (

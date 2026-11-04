@@ -412,22 +412,24 @@ function ThreadHeader({
         ))}
         <span className="flex-1" />
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Thread summary"
-              aria-pressed={isSummaryOpen}
-              onClick={onToggleSummary}
-              // The header's icon-button corner (index.css), not the text-button capsule: it sits among them and is often icon-only.
-              data-header-chip
-              className={cn(
-                'gap-1.5 px-2 text-muted-foreground',
-                isSummaryOpen && 'bg-accent text-foreground',
-              )}
-            >
-              <TextAlignLeft className="size-4" aria-hidden />
-            </Button>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Thread summary"
+                aria-pressed={isSummaryOpen}
+                onClick={onToggleSummary}
+                // The header's icon-button corner (index.css), not the text-button capsule: it sits among them and is often icon-only.
+                data-header-chip
+                className={cn(
+                  'gap-1.5 px-2 text-muted-foreground',
+                  isSummaryOpen && 'bg-accent text-foreground',
+                )}
+              />
+            }
+          >
+            <TextAlignLeft className="size-4" aria-hidden />
           </TooltipTrigger>
           <TooltipContent>
             {isSummaryOpen ? 'Hide the summary' : 'Show the summary'}
@@ -466,17 +468,19 @@ function ThreadMenu({ thread }: { thread: Thread }) {
   return (
     <DropdownMenu>
       <h1 className="flex min-w-0">
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-w-0 shrink gap-1 px-1.5"
-          >
-            <span className="truncate type-title font-normal">
-              {thread.title}
-            </span>
-            <ChevronDown aria-hidden className="text-muted-foreground" />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-w-0 shrink gap-1 px-1.5"
+            />
+          }
+        >
+          <span className="truncate type-title font-normal">
+            {thread.title}
+          </span>
+          <ChevronDown aria-hidden className="text-muted-foreground" />
         </DropdownMenuTrigger>
       </h1>
       <DropdownMenuContent align="start" className="w-60">
@@ -610,17 +614,21 @@ function PanesMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Panes"
-              className="text-muted-foreground"
-            >
-              <OverflowIcon vertical />
-            </Button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Panes"
+                  className="text-muted-foreground"
+                />
+              }
+            />
+          }
+        >
+          <OverflowIcon vertical />
         </TooltipTrigger>
         <TooltipContent>Panes</TooltipContent>
       </Tooltip>
@@ -636,7 +644,7 @@ function PanesMenu({
                 checked={openKinds.includes(kind)}
                 disabled={!!reasonOf(kind) && !openKinds.includes(kind)}
                 onCheckedChange={() => onToggle(kind)}
-                className="pr-1.5 text-muted-foreground data-[state=checked]:text-foreground *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden"
+                className="pr-1.5 text-muted-foreground data-checked:text-foreground *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden"
               >
                 <Icon />
                 {title}
@@ -663,10 +671,10 @@ function PanesMenu({
               const { title, icon: Icon } = PANE_TABS[kind];
               return (
                 <DropdownMenuCheckboxItem
+                  closeOnClick={false}
                   key={kind}
                   checked={pins.includes(kind)}
                   onCheckedChange={(checked) => setPinned(kind, checked)}
-                  onSelect={(e) => e.preventDefault()}
                 >
                   <Icon />
                   {title}

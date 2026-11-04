@@ -48,14 +48,16 @@ export function DeviceIndicator({
   const label = `Runs on ${machine.name}`;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label={label}
-          className="-mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground"
-        >
-          <DeviceIcon kind={machine.kind} className="size-4" />
-        </span>
+      <TooltipTrigger
+        render={
+          <span
+            tabIndex={0}
+            aria-label={label}
+            className="-mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground"
+          />
+        }
+      >
+        <DeviceIcon kind={machine.kind} className="size-4" />
       </TooltipTrigger>
       <TooltipContent className="flex-col items-start gap-0.5">
         <span className="block font-medium">{label}</span>

@@ -410,8 +410,8 @@ export function DisabledTooltip({
   if (!reason) return children;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">{children}</span>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        {children}
       </TooltipTrigger>
       <TooltipContent>{reason}</TooltipContent>
     </Tooltip>

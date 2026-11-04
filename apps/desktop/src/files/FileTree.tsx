@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Folder, FolderOpen } from '@/icons';
 import { FoldChevron } from '@/Fold';
@@ -103,7 +103,7 @@ function RowMenu({
   root?: string;
   path: string;
   onOpen?: () => void;
-  children: ReactNode;
+  children: ReactElement;
 }) {
   if (!root) return children;
   return (

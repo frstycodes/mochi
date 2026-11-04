@@ -51,12 +51,11 @@ export function ComparePane({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-2 px-2 type-caption text-muted-foreground">
         <ToggleGroup
-          type="single"
           size="sm"
           variant="outline"
-          value={compare.mode}
+          value={[compare.mode]}
           disabled={compare.status !== 'ready'}
-          onValueChange={(v) =>
+          onValueChange={([v]) =>
             v &&
             updatePage(pageId, {
               compare: { ...compare, mode: v as CompareState['mode'] },

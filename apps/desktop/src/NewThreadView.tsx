@@ -90,7 +90,7 @@ interface NewThreadPicks {
 
 export function NewThreadView() {
   return (
-    <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:h-full">
+    <ScrollArea className="h-full">
       {/* One draft per profile: switching profiles swaps it. */}
       <PromptInputProvider key={useSpace().id}>
         <NewThread />

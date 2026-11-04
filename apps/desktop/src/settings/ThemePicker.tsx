@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactElement } from 'react';
 import { ChevronDown } from '@/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,7 +37,7 @@ export function ThemePicker({
   children,
 }: {
   slot: ThemeSlot;
-  children?: ReactNode;
+  children?: ReactElement;
 }) {
   const [isOpen, setOpen] = useState(false);
   const chosen = useChosenTheme(slot);
@@ -47,22 +47,24 @@ export function ThemePicker({
   };
   return (
     <Popover open={isOpen} onOpenChange={toggle}>
-      <PopoverTrigger asChild>
-        {children ?? (
-          <Button
-            id={settingControlId(`${slot}Theme`)}
-            variant="outline"
-            size="sm"
-            className="w-56 justify-start"
-          >
-            <ThemeSwatch theme={chosen} slot={slot} />
-            <span className="min-w-0 flex-1 truncate text-left">
-              {chosen?.label ?? 'Mochi'}
-            </span>
-            <ChevronDown data-icon="inline-end" />
-          </Button>
-        )}
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          children ?? (
+            <Button
+              id={settingControlId(`${slot}Theme`)}
+              variant="outline"
+              size="sm"
+              className="w-56 justify-start"
+            >
+              <ThemeSwatch theme={chosen} slot={slot} />
+              <span className="min-w-0 flex-1 truncate text-left">
+                {chosen?.label ?? 'Mochi'}
+              </span>
+              <ChevronDown data-icon="inline-end" />
+            </Button>
+          )
+        }
+      />
       <PopoverContent align="end" className="w-72 p-0">
         <ThemeList slot={slot} onPicked={() => toggle(false)} />
       </PopoverContent>

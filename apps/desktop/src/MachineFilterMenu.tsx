@@ -3,6 +3,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -33,51 +34,54 @@ export function MachineFilterMenu({
   const isFiltered = selected.length > 0;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <TooltipIconButton
-          label="Filter by computer"
-          hint={isFiltered ? shownNames(options, selected) : null}
-          size="icon-xs"
-          className={cn(
-            'text-sidebar-foreground/50 hover:text-sidebar-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-foreground',
-            isFiltered && 'bg-sidebar-accent text-sidebar-foreground',
-          )}
-        >
-          {only ? (
-            <DeviceIcon kind={only.kind} className="size-3.5" />
-          ) : (
-            <Devices />
-          )}
-        </TooltipIconButton>
+      <DropdownMenuTrigger
+        render={
+          <TooltipIconButton
+            label="Filter by computer"
+            hint={isFiltered ? shownNames(options, selected) : null}
+            size="icon-xs"
+            className={cn(
+              'text-sidebar-foreground/50 hover:text-sidebar-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-foreground',
+              isFiltered && 'bg-sidebar-accent text-sidebar-foreground',
+            )}
+          />
+        }
+      >
+        {only ? (
+          <DeviceIcon kind={only.kind} className="size-3.5" />
+        ) : (
+          <Devices />
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel>Show threads from</DropdownMenuLabel>
-        {options.map((o) => (
-          <DropdownMenuCheckboxItem
-            key={o.id}
-            checked={isShown(selected, o.id)}
-            disabled={selected.length === 1 && selected[0] === o.id}
-            // Stays open: several computers are picked in one go.
-            onSelect={(e) => e.preventDefault()}
-            onCheckedChange={() => toggle(o.id)}
-          >
-            <DeviceIcon kind={o.kind} className="size-3.5" />
-            <span className="truncate">{o.name}</span>
-            {o.status === 'offline' && (
-              <span className="ml-auto type-caption text-subtle-foreground">
-                Offline
-              </span>
-            )}
-          </DropdownMenuCheckboxItem>
-        ))}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Show threads from</DropdownMenuLabel>
+          {options.map((o) => (
+            <DropdownMenuCheckboxItem
+              closeOnClick={false}
+              key={o.id}
+              checked={isShown(selected, o.id)}
+              disabled={selected.length === 1 && selected[0] === o.id}
+              onCheckedChange={() => toggle(o.id)}
+            >
+              <DeviceIcon kind={o.kind} className="size-3.5" />
+              <span className="truncate">{o.name}</span>
+              {o.status === 'offline' && (
+                <span className="ml-auto type-caption text-subtle-foreground">
+                  Offline
+                </span>
+              )}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuGroup>
         {isFiltered && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={clear}>
+            <DropdownMenuItem onClick={clear}>
               Show all computers
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() =>
+              onClick={() =>
                 void host.windows.open(filteredWindowRoute(selected))
               }
             >

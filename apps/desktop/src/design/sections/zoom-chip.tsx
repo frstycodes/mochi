@@ -13,11 +13,10 @@ export function ZoomChipBlock() {
       use="Top centre on each app zoom change (⌘+ / ⌘−), hiding after 2s unless hovered or focused. Pick a level to see it enter and leave."
     >
       <ToggleGroup
-        type="single"
         variant="outline"
         size="sm"
-        value={String(zoom)}
-        onValueChange={(v) => v && setZoom(Number(v))}
+        value={[String(zoom)]}
+        onValueChange={([v]) => v && setZoom(Number(v))}
         aria-label="Zoom level"
       >
         {LEVELS.map((level) => (

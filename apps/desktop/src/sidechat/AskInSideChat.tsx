@@ -51,17 +51,21 @@ export function AskAboutHunk({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Ask in side chat about a hunk"
-              className="text-muted-foreground"
-            >
-              <MessageQuestion />
-            </Button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Ask in side chat about a hunk"
+                  className="text-muted-foreground"
+                />
+              }
+            />
+          }
+        >
+          <MessageQuestion />
         </TooltipTrigger>
         <TooltipContent>Ask in side chat</TooltipContent>
       </Tooltip>
@@ -74,7 +78,7 @@ export function AskAboutHunk({
             {file.hunks.map((hunk, i) => (
               <DropdownMenuItem
                 key={hunk.header + i}
-                onSelect={() => ask(hunkQuote(file, hunk))}
+                onClick={() => ask(hunkQuote(file, hunk))}
               >
                 <span className="min-w-0 flex-1 truncate font-mono text-xs">
                   {hunk.header}
@@ -118,15 +122,17 @@ export function AskAboutFileRange({
   };
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Ask in side chat about the selected lines"
-          onClick={(e) => void onClick(e)}
-        >
-          <MessageQuestion />
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Ask in side chat about the selected lines"
+            onClick={(e) => void onClick(e)}
+          />
+        }
+      >
+        <MessageQuestion />
       </TooltipTrigger>
       <TooltipContent>Ask in side chat</TooltipContent>
     </Tooltip>

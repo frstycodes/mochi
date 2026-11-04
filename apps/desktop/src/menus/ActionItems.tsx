@@ -141,7 +141,9 @@ export function BulkActionItems({
   const shown = groups.map(items).filter((g) => g.length > 0);
   return (
     <>
-      <ContextMenuLabel>{threads.length} threads selected</ContextMenuLabel>
+      <ContextMenuGroup>
+        <ContextMenuLabel>{threads.length} threads selected</ContextMenuLabel>
+      </ContextMenuGroup>
       {shown.map((group) => (
         <Fragment key={group[0].action.id}>
           <ContextMenuSeparator />
@@ -158,7 +160,7 @@ export function BulkActionItems({
               ) : (
                 <ContextMenuItem
                   key={action.id}
-                  onSelect={() =>
+                  onClick={() =>
                     many.run(threads, { ...base, scope: scopes[0] })
                   }
                 >
@@ -190,15 +192,17 @@ export function SkippedItem({
   const { Item, tooltipSide } = MENU_PARTS[menu];
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Item
-          aria-disabled
-          onSelect={(e) => e.preventDefault()}
-          className="opacity-50 focus:bg-transparent"
-        >
-          {icon}
-          {title}
-        </Item>
+      <TooltipTrigger
+        render={
+          <Item
+            aria-disabled
+            closeOnClick={false}
+            className="opacity-50 focus:bg-transparent"
+          />
+        }
+      >
+        {icon}
+        {title}
       </TooltipTrigger>
       <TooltipContent side={tooltipSide} className="max-w-64">
         {reason}
@@ -223,7 +227,7 @@ function ActionItem({
   const { Item, Shortcut: ItemShortcut } = MENU_PARTS[menu];
   const keys = useBinding(action.command);
   return (
-    <Item onSelect={onSelect}>
+    <Item onClick={onSelect}>
       {icon}
       {title}
       {!!keys && (

@@ -47,7 +47,7 @@ function LimitBar({ window: w, now }: { window: LimitWindow; now: number }) {
       </div>
       <Progress
         value={pct}
-        className="bg-muted-foreground/20"
+        className="*:data-[slot=progress-track]:bg-muted-foreground/20"
         aria-label={`${w.label} limit: ${pct}% used`}
         style={{ '--progress-color': TONE_COLORS[tone] } as CSSProperties}
       />

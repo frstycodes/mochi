@@ -441,14 +441,16 @@ function SetupButton({
       </Button>
       <ButtonGroupSeparator />
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            size="icon"
-            aria-label="Choose how to set up the app"
-            disabled={isBusy}
-          >
-            <ChevronDown />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              size="icon"
+              aria-label="Choose how to set up the app"
+              disabled={isBusy}
+            />
+          }
+        >
+          <ChevronDown />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuRadioGroup

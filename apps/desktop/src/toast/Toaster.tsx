@@ -507,7 +507,7 @@ function useMeasure(
 }
 
 /** Popovers a widget opens portal out of the stack, so a click in one isn't a click outside. */
-const PORTALED = '[data-radix-popper-content-wrapper], [data-slot$="-content"]';
+const PORTALED = '[data-slot$="-positioner"], [data-slot$="-content"]';
 
 function useCloseOnOutsidePointer(
   listRef: RefObject<HTMLElement | null>,

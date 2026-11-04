@@ -227,11 +227,10 @@ function AddServerForm({
       }}
     >
       <ToggleGroup
-        type="single"
         size="sm"
         variant="outline"
-        value={mode}
-        onValueChange={(v) => v && setMode(v as typeof mode)}
+        value={[mode]}
+        onValueChange={([v]) => v && setMode(v as typeof mode)}
       >
         <ToggleGroupItem value="command">Command</ToggleGroupItem>
         <ToggleGroupItem value="json">JSON</ToggleGroupItem>

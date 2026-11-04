@@ -53,15 +53,15 @@ export function DeviceApprovalLayer() {
             <AlertDialogTitle>
               Let “{request.name}” join your computers?
             </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="flex flex-col gap-3">
-                <p>
-                  It will reach every computer of yours, and they it, to follow
-                  and steer their threads. Allow it only if “{request.name}”
-                  shows this code:
-                </p>
-                <PairingCode code={request.pairingCode} />
-              </div>
+            <AlertDialogDescription
+              render={<div className="flex flex-col gap-3" />}
+            >
+              <p>
+                It will reach every computer of yours, and they it, to follow
+                and steer their threads. Allow it only if “{request.name}” shows
+                this code:
+              </p>
+              <PairingCode code={request.pairingCode} />
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

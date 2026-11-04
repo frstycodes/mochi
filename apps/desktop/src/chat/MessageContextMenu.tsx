@@ -1,4 +1,4 @@
-import type { PointerEvent, ReactNode } from 'react';
+import type { PointerEvent, ReactElement } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,18 +17,16 @@ export function MessageContextMenu({
 }: {
   thread: Thread;
   index: number;
-  children: ReactNode;
+  children: ReactElement;
 }) {
   const actions = useMessageActions(thread, index);
   return (
     <ContextMenu>
       <ContextMenuTrigger
-        asChild
+        render={children}
         className="select-text"
         onPointerDown={leaveLongPressToOrbit}
-      >
-        {children}
-      </ContextMenuTrigger>
+      />
       <ContextMenuContent className="w-52">
         {actions.map((a) =>
           a.disabledReason ? (
@@ -40,7 +38,7 @@ export function MessageContextMenu({
               reason={a.disabledReason}
             />
           ) : (
-            <ContextMenuItem key={a.id} onSelect={a.run}>
+            <ContextMenuItem key={a.id} onClick={a.run}>
               <a.icon />
               {a.label}
             </ContextMenuItem>

@@ -175,32 +175,32 @@ function ConnectorHeader({
         </div>
         {!isOff && (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`List ${connector.name}’s tools again`}
-                disabled={isListing}
-                onClick={onList}
-              >
-                {isListing ? <Spinner /> : <Refresh />}
-              </Button>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`List ${connector.name}’s tools again`}
+                  disabled={isListing}
+                  onClick={onList}
+                />
+              }
+            >
+              {isListing ? <Spinner /> : <Refresh />}
             </TooltipTrigger>
             <TooltipContent>List its tools again</TooltipContent>
           </Tooltip>
         )}
         <Tooltip>
           {/* Tooltip's data-state would replace the switch's own, so it hangs on a wrapper. */}
-          <TooltipTrigger asChild>
-            <span className="flex">
-              <Switch
-                checked={!isOff}
-                onCheckedChange={(isOn) =>
-                  onChange((s) => ({ ...s, isOff: !isOn }))
-                }
-                aria-label={`Threads load ${connector.name}`}
-              />
-            </span>
+          <TooltipTrigger render={<span className="flex" />}>
+            <Switch
+              checked={!isOff}
+              onCheckedChange={(isOn) =>
+                onChange((s) => ({ ...s, isOff: !isOn }))
+              }
+              aria-label={`Threads load ${connector.name}`}
+            />
           </TooltipTrigger>
           <TooltipContent>
             {isOff
@@ -226,17 +226,19 @@ function ConnectorMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`${connector.name} actions`}
-          >
-            <OverflowIcon />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${connector.name} actions`}
+            />
+          }
+        >
+          <OverflowIcon />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuItem onSelect={() => setRenaming(true)}>
+          <DropdownMenuItem onClick={() => setRenaming(true)}>
             <Edit />
             Rename…
           </DropdownMenuItem>
@@ -472,7 +474,7 @@ function ToolRows({
     );
   const groups = toolGroups(tools).filter((group) => group.tools.length > 0);
   return (
-    <Accordion type="multiple" defaultValue={groups.map((g) => g.id)}>
+    <Accordion multiple defaultValue={groups.map((g) => g.id)}>
       {groups.map((group) => (
         <ToolGroup
           key={group.id}
@@ -571,16 +573,18 @@ function GroupMenu({
   const current = permission && choiceOf(permission);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={`${title}: ${current?.label ?? 'Mixed'}`}
-        >
-          {current && <current.icon data-icon="inline-start" />}
-          {current?.label ?? 'Mixed'}
-          <ChevronDown data-icon="inline-end" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`${title}: ${current?.label ?? 'Mixed'}`}
+          />
+        }
+      >
+        {current && <current.icon data-icon="inline-start" />}
+        {current?.label ?? 'Mixed'}
+        <ChevronDown data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuRadioGroup
@@ -619,10 +623,12 @@ function ToolRow({
       className="relative flex min-h-12 items-center gap-3 py-1.5 pr-4 pl-10 before:absolute before:top-0 before:right-4 before:left-10 before:h-px before:bg-border"
     >
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="min-w-0 flex-1 truncate type-body text-muted-foreground">
-            {label}
-          </span>
+        <TooltipTrigger
+          render={
+            <span className="min-w-0 flex-1 truncate type-body text-muted-foreground" />
+          }
+        >
+          {label}
         </TooltipTrigger>
         <TooltipContent
           side="top"
@@ -637,10 +643,9 @@ function ToolRow({
       </Tooltip>
       {/* Tooltip's data-state replaces the item's, so the chosen one is styled by aria-checked. */}
       <ToggleGroup
-        type="single"
         spacing={0}
-        value={permission}
-        onValueChange={(v) =>
+        value={[permission]}
+        onValueChange={([v]) =>
           v &&
           onChange((s) => ({
             ...s,
@@ -652,15 +657,17 @@ function ToolRow({
       >
         {CHOICES.map((choice) => (
           <Tooltip key={choice.value}>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value={choice.value}
-                aria-label={choice.label}
-                size="sm"
-                className="size-8 rounded-md! px-0! text-muted-foreground aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-xs aria-checked:ring-1 aria-checked:ring-input dark:aria-checked:bg-accent"
-              >
-                <choice.icon />
-              </ToggleGroupItem>
+            <TooltipTrigger
+              render={
+                <ToggleGroupItem
+                  value={choice.value}
+                  aria-label={choice.label}
+                  size="sm"
+                  className="size-8 rounded-md! px-0! text-muted-foreground aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-xs aria-checked:ring-1 aria-checked:ring-input dark:aria-checked:bg-accent"
+                />
+              }
+            >
+              <choice.icon />
             </TooltipTrigger>
             <TooltipContent>{choice.label}</TooltipContent>
           </Tooltip>

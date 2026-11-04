@@ -53,36 +53,34 @@ export function UserMenu({ isCompact = false }: { isCompact?: boolean }) {
   const name = firstName(user?.name ?? null);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={`${name ?? 'Account'}: account, settings and theme`}
-          className="h-7 max-w-36 min-w-0 gap-1.5 rounded-lg px-1.5 font-normal text-muted-foreground hover:text-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-foreground"
-        >
-          <Avatar className="size-5">
-            {!!user?.imageUrl && <AvatarImage src={user.imageUrl} alt="" />}
-            <AvatarFallback className="text-[0.625rem] font-semibold">
-              {name ? (
-                name[0].toUpperCase()
-              ) : (
-                <UserCircle className="size-3.5" />
-              )}
-            </AvatarFallback>
-          </Avatar>
-          {!isCompact && <span className="truncate">{name ?? 'Account'}</span>}
-          <ChevronDown data-icon="inline-end" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`${name ?? 'Account'}: account, settings and theme`}
+            className="h-7 max-w-36 min-w-0 gap-1.5 rounded-lg px-1.5 font-normal text-muted-foreground hover:text-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-foreground"
+          />
+        }
+      >
+        <Avatar className="size-5">
+          {!!user?.imageUrl && <AvatarImage src={user.imageUrl} alt="" />}
+          <AvatarFallback className="text-[0.625rem] font-semibold">
+            {name ? name[0].toUpperCase() : <UserCircle className="size-3.5" />}
+          </AvatarFallback>
+        </Avatar>
+        {!isCompact && <span className="truncate">{name ?? 'Account'}</span>}
+        <ChevronDown data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
         <AccountItems {...mochiAccount} />
         <DropdownMenuItem
-          onSelect={() => dispatch({ type: 'go', view: { kind: 'usage' } })}
+          onClick={() => dispatch({ type: 'go', view: { kind: 'usage' } })}
         >
           <Chart />
           Usage
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openSettings()}>
+        <DropdownMenuItem onClick={() => openSettings()}>
           <Settings />
           Settings
           <BoundShortcut command="go-settings" className="ml-auto" />
@@ -95,13 +93,13 @@ export function UserMenu({ isCompact = false }: { isCompact?: boolean }) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel>Prototype</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
+              <DropdownMenuItem onClick={() => dispatch({ type: 'pause' })}>
                 <IconSwap id={isPaused ? 'play' : 'pause'}>
                   {isPaused ? <Play /> : <Pause />}
                 </IconSwap>
                 {isPaused ? 'Resume simulation' : 'Pause simulation'}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
+              <DropdownMenuItem onClick={() => dispatch({ type: 'reset' })}>
                 <Refresh />
                 Reset demo
               </DropdownMenuItem>
@@ -109,9 +107,11 @@ export function UserMenu({ isCompact = false }: { isCompact?: boolean }) {
           </>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="font-normal text-subtle-foreground">
-          Hold Option, or long-press, for Orbit
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal text-subtle-foreground">
+            Hold Option, or long-press, for Orbit
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -124,16 +124,18 @@ function UpdateItems() {
   return (
     <>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
-        <span className="tabular">Mochi {state.version}</span>
-        <span className="text-subtle-foreground">{summary}</span>
-      </DropdownMenuLabel>
-      {!!action && (
-        <DropdownMenuItem onSelect={() => void action.run()}>
-          {action.kind === 'install' ? <Rotation /> : <Refresh />}
-          {action.label}
-        </DropdownMenuItem>
-      )}
+      <DropdownMenuGroup>
+        <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
+          <span className="tabular">Mochi {state.version}</span>
+          <span className="text-subtle-foreground">{summary}</span>
+        </DropdownMenuLabel>
+        {!!action && (
+          <DropdownMenuItem onClick={() => void action.run()}>
+            {action.kind === 'install' ? <Rotation /> : <Refresh />}
+            {action.label}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuGroup>
     </>
   );
 }
@@ -150,38 +152,38 @@ function AccountItems({
   return (
     <>
       {account.status === 'signed-out' && (
-        <DropdownMenuItem onSelect={() => void signIn()}>
+        <DropdownMenuItem onClick={() => void signIn()}>
           <Login />
           Sign in
           <span className="ml-auto text-subtle-foreground">Opens browser</span>
         </DropdownMenuItem>
       )}
       {account.status === 'signing-in' && (
-        <>
+        <DropdownMenuGroup>
           <DropdownMenuLabel className="flex items-center gap-2 font-normal">
             <Spinner className="size-3.5" />
             Finish signing in in your browser
           </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => void cancelSignIn()}>
+          <DropdownMenuItem onClick={() => void cancelSignIn()}>
             Cancel sign-in
           </DropdownMenuItem>
-        </>
+        </DropdownMenuGroup>
       )}
       {account.status === 'signed-in' && !!account.user && (
-        <>
+        <DropdownMenuGroup>
           <SignedInLabel
             user={account.user}
             isPersistent={account.isPersistent}
           />
-          <DropdownMenuItem onSelect={() => void openAccountPortal()}>
+          <DropdownMenuItem onClick={() => void openAccountPortal()}>
             <RaisedHand />
             Manage account
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void signOut()}>
+          <DropdownMenuItem onClick={() => void signOut()}>
             <Logout />
             Sign out
           </DropdownMenuItem>
-        </>
+        </DropdownMenuGroup>
       )}
       <DropdownMenuSeparator />
     </>
@@ -247,7 +249,7 @@ function ThemeSubmenu() {
             <DropdownMenuRadioItem
               key={value}
               value={value}
-              onSelect={(e) => e.preventDefault()}
+              closeOnClick={false}
             >
               <Icon />
               {label}
@@ -300,7 +302,7 @@ function FontSubmenu() {
             <DropdownMenuRadioItem
               key={label}
               value={value}
-              onSelect={(e) => e.preventDefault()}
+              closeOnClick={false}
             >
               {label}
             </DropdownMenuRadioItem>

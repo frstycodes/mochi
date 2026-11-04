@@ -275,7 +275,7 @@ const MEMBERS_FOOTER =
 function ScopeToggles({ member }: { member: MemberInfo }) {
   return (
     <ToggleGroup
-      type="multiple"
+      multiple
       size="sm"
       variant="outline"
       value={member.scopes}

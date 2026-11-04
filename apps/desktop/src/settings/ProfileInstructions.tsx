@@ -106,15 +106,17 @@ export function ProfileInstructions({ profile }: { profile: Space }) {
                   {editor ? `Open in ${EDITOR_NAMES[editor]}` : 'Open'}
                 </Button>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Show ${file.name} in ${REVEAL_IN}`}
-                      onClick={() => revealPath(folder!.dir, file.name)}
-                    >
-                      <FolderOpen />
-                    </Button>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Show ${file.name} in ${REVEAL_IN}`}
+                        onClick={() => revealPath(folder!.dir, file.name)}
+                      />
+                    }
+                  >
+                    <FolderOpen />
                   </TooltipTrigger>
                   <TooltipContent>Show in {REVEAL_IN}</TooltipContent>
                 </Tooltip>

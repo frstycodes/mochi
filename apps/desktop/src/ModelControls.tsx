@@ -117,23 +117,25 @@ export function ModelPicker({
           icon: <ProviderMark provider={m.harness} size={18} />,
         }))}
       >
-        <DropdownMenuTrigger asChild>
-          <Button
-            id={id}
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 px-2 text-muted-foreground"
-          >
-            <ProviderMark provider={model.harness} size={14} />
-            {model.name}
-            {model.isUnavailable && (
-              <span className="type-caption text-warning">Unavailable</span>
-            )}
-            <ChevronDown
-              data-icon="inline-end"
-              className="text-subtle-foreground"
+        <DropdownMenuTrigger
+          render={
+            <Button
+              id={id}
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 px-2 text-muted-foreground"
             />
-          </Button>
+          }
+        >
+          <ProviderMark provider={model.harness} size={14} />
+          {model.name}
+          {model.isUnavailable && (
+            <span className="type-caption text-warning">Unavailable</span>
+          )}
+          <ChevronDown
+            data-icon="inline-end"
+            className="text-subtle-foreground"
+          />
         </DropdownMenuTrigger>
       </ScrollDock>
       <ModelMenu
@@ -289,14 +291,15 @@ export function ModelMenu({
       align={align}
       collisionPadding={8}
       className={cn(
-        'flex max-h-[min(26rem,var(--radix-dropdown-menu-content-available-height))] gap-2 overflow-hidden rounded-xl p-2',
+        'flex max-h-[min(26rem,var(--available-height))] gap-2 overflow-hidden rounded-xl p-2',
         hasRail ? 'w-96' : 'w-80',
       )}
       // Radix focuses the content on open and whenever the pointer leaves an item; the search takes it, so typing always filters.
       onFocus={(e) => e.target === e.currentTarget && inputRef.current?.focus()}
-      onCloseAutoFocus={() => {
+      finalFocus={() => {
         setSearch('');
         setTab(null);
+        return true;
       }}
       onKeyDown={onMenuKeyDown}
     >
@@ -410,22 +413,24 @@ function RailTab({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          role="tab"
-          data-tab={value}
-          aria-label={label}
-          aria-selected={isSelected}
-          tabIndex={-1}
-          onClick={onSelect}
-          className={cn(
-            'flex size-8 shrink-0 cursor-default items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-            isSelected && 'bg-accent text-foreground',
-          )}
-        >
-          {children}
-        </button>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            role="tab"
+            data-tab={value}
+            aria-label={label}
+            aria-selected={isSelected}
+            tabIndex={-1}
+            onClick={onSelect}
+            className={cn(
+              'flex size-8 shrink-0 cursor-default items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+              isSelected && 'bg-accent text-foreground',
+            )}
+          />
+        }
+      >
+        {children}
       </TooltipTrigger>
       <TooltipContent side="left">{label}</TooltipContent>
     </Tooltip>
@@ -505,7 +510,7 @@ function MenuNote({ children }: { children: ReactNode }) {
 
 // The checkbox item's check is hidden: the picked model takes the menu's highlight fill instead.
 const HIDDEN_CHECK =
-  'px-2 *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden data-[state=checked]:bg-accent';
+  'px-2 *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden data-checked:bg-accent';
 
 /** One model row: name and description, then its ⌘N and star in columns that line up on every row. */
 function ModelItem({
@@ -535,10 +540,8 @@ function ModelItem({
       checked={isChecked}
       disabled={isDisabled}
       data-model-number={number}
-      onSelect={(e) => {
-        if (keepsOpen) e.preventDefault();
-        onPick(model);
-      }}
+      closeOnClick={!keepsOpen}
+      onClick={() => onPick(model)}
       // A 2px gap, so the picked row and a highlighted neighbour never merge into one block.
       className={cn('group/item gap-2 py-1.5 not-last:mb-0.5', HIDDEN_CHECK)}
     >
@@ -776,23 +779,25 @@ export function EffortPicker({
         onChange={setEffort}
         onTap={() => setOpen(true)}
       >
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 px-2 text-muted-foreground"
-            aria-label={`Reasoning effort: ${label}`}
-          >
-            <EffortMeter
-              levels={efforts.length}
-              level={effort ? efforts.indexOf(effort) + 1 : 0}
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 px-2 text-muted-foreground"
+              aria-label={`Reasoning effort: ${label}`}
             />
-            <AnimatedText>{label}</AnimatedText>
-            <ChevronDown
-              data-icon="inline-end"
-              className="text-subtle-foreground"
-            />
-          </Button>
+          }
+        >
+          <EffortMeter
+            levels={efforts.length}
+            level={effort ? efforts.indexOf(effort) + 1 : 0}
+          />
+          <AnimatedText>{label}</AnimatedText>
+          <ChevronDown
+            data-icon="inline-end"
+            className="text-subtle-foreground"
+          />
         </DropdownMenuTrigger>
       </WheelStepper>
       <DropdownMenuContent align="start" className="w-56">
@@ -838,17 +843,23 @@ export function SpeedPicker({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className={speed ? 'text-foreground' : 'text-muted-foreground'}
-              aria-label={label}
-            >
-              <SpeedIcon level={speed ? speeds.indexOf(speed) + 1 : 0} />
-            </Button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className={
+                    speed ? 'text-foreground' : 'text-muted-foreground'
+                  }
+                  aria-label={label}
+                />
+              }
+            />
+          }
+        >
+          <SpeedIcon level={speed ? speeds.indexOf(speed) + 1 : 0} />
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>

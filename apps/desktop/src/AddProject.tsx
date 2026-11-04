@@ -512,12 +512,11 @@ function NewForm({
             On GitHub
           </span>
           <ToggleGroup
-            type="single"
             size="sm"
             variant="outline"
             spacing={0}
-            value={publish}
-            onValueChange={(v) => v && setPublish(v as typeof publish)}
+            value={[publish]}
+            onValueChange={([v]) => v && setPublish(v as typeof publish)}
             aria-labelledby="publish-label"
           >
             <ToggleGroupItem value="none">Not yet</ToggleGroupItem>

@@ -2,6 +2,7 @@ import { BackgroundTask, Chat, Snooze } from '@/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -94,14 +95,16 @@ export function ThreadProjectMark({ thread }: { thread: Thread }) {
   const project = useProjectAt(thread.spaceId, thread.repo?.path);
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]">
-          {thread.repo ? (
-            <ProjectIcon name={thread.repo.project} icon={project?.icon} />
-          ) : (
-            <Chat aria-label="No project" className="size-4 shrink-0" />
-          )}
-        </span>
+      <TooltipTrigger
+        render={
+          <span className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]" />
+        }
+      >
+        {thread.repo ? (
+          <ProjectIcon name={thread.repo.project} icon={project?.icon} />
+        ) : (
+          <Chat aria-label="No project" className="size-4 shrink-0" />
+        )}
       </TooltipTrigger>
       <TooltipContent>{thread.repo?.project ?? 'No project'}</TooltipContent>
     </Tooltip>
@@ -146,14 +149,16 @@ export function AgentsBadge({ thread }: { thread: Thread }) {
   );
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          aria-label={label}
-          className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground"
-        >
-          <BackgroundTask aria-hidden className="size-3" />
-          {running}
-        </span>
+      <TooltipTrigger
+        render={
+          <span
+            aria-label={label}
+            className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground"
+          />
+        }
+      >
+        <BackgroundTask aria-hidden className="size-3" />
+        {running}
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
@@ -172,28 +177,32 @@ export function SnoozeAction({
 }) {
   return (
     <DropdownMenu>
-      <SidebarMenuAction showOnHover asChild className={className}>
-        <DropdownMenuTrigger aria-label="Snooze">
-          <Snooze aria-hidden />
-        </DropdownMenuTrigger>
+      <SidebarMenuAction
+        showOnHover
+        className={className}
+        render={<DropdownMenuTrigger aria-label="Snooze" />}
+      >
+        <Snooze aria-hidden />
       </SidebarMenuAction>
       <DropdownMenuContent side="right" align="start" className="w-56">
-        <DropdownMenuLabel>Snooze until</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => onSnooze('needs-you')}>
-          It needs you
-        </DropdownMenuItem>
-        {snoozeTimes().map(({ label, at }) => (
-          <DropdownMenuItem key={label} onSelect={() => onSnooze(at)}>
-            {label}
-            <span className="ml-auto text-muted-foreground">
-              {wakeLabel(at)}
-            </span>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Snooze until</DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => onSnooze('needs-you')}>
+            It needs you
           </DropdownMenuItem>
-        ))}
+          {snoozeTimes().map(({ label, at }) => (
+            <DropdownMenuItem key={label} onClick={() => onSnooze(at)}>
+              {label}
+              <span className="ml-auto text-muted-foreground">
+                {wakeLabel(at)}
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
         {snoozedUntil !== undefined && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => onSnooze(undefined)}>
+            <DropdownMenuItem onClick={() => onSnooze(undefined)}>
               Unsnooze
             </DropdownMenuItem>
           </>

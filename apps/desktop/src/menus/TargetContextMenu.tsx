@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -15,11 +15,11 @@ export function TargetContextMenu({
 }: {
   target: ScopeTarget;
   groups: readonly (readonly string[])[];
-  children: ReactNode;
+  children: ReactElement;
 }) {
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-60">
         <ActionItems target={target} groups={groups} />
       </ContextMenuContent>

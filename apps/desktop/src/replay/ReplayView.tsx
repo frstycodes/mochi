@@ -241,16 +241,17 @@ function ReplayPlayer({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!!thread && <ReplayTranscript state={scratch} thread={thread} />}
         </div>
-        <Card asChild className="mb-3 hidden min-h-0 gap-0 py-0 md:flex">
-          <aside aria-label="Files at this point">
-            {!!thread && (
-              <ReplayFiles
-                source={checkpoints}
-                thread={thread}
-                now={scratch.now}
-              />
-            )}
-          </aside>
+        <Card
+          render={<aside aria-label="Files at this point" />}
+          className="mb-3 hidden min-h-0 gap-0 py-0 md:flex"
+        >
+          {!!thread && (
+            <ReplayFiles
+              source={checkpoints}
+              thread={thread}
+              now={scratch.now}
+            />
+          )}
         </Card>
       </div>
       <Transport
@@ -485,12 +486,11 @@ function Transport({
         </span>
         <span className="flex-1" />
         <ToggleGroup
-          type="single"
           size="sm"
           variant="outline"
           aria-label="Playback speed"
-          value={String(speed)}
-          onValueChange={(v) => v && setSpeed(Number(v) as Speed)}
+          value={[String(speed)]}
+          onValueChange={([v]) => v && setSpeed(Number(v) as Speed)}
         >
           {SPEEDS.map((s) => (
             <ToggleGroupItem key={s} value={String(s)} className="tabular">
@@ -660,11 +660,17 @@ function Timeline({ playback }: { playback: Playback }) {
 function FilesSheet({ children }: { children: ReactNode }) {
   return (
     <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-full md:hidden">
-          <FileText data-icon="inline-start" />
-          Files
-        </Button>
+      <SheetTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full md:hidden"
+          />
+        }
+      >
+        <FileText data-icon="inline-start" />
+        Files
       </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[70svh]">
         <SheetHeader>
@@ -707,10 +713,7 @@ function ReplayFiles({
       <p className="px-3.5 pb-2 type-caption text-muted-foreground md:hidden">
         {caption}
       </p>
-      <ScrollArea
-        type="scroll"
-        className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block"
-      >
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-0.5 px-1.5 pb-2">
           {files === undefined && checkpoint ? (
             <SkeletonRows shape="file" count={3} label="Loading files" />

@@ -85,29 +85,29 @@ export function ShortcutRecorder({
           setState(isOpen ? { kind: 'recording' } : { kind: 'idle' })
         }
       >
-        <PopoverTrigger asChild>
-          <Button
-            id={id}
-            variant="outline"
-            size="sm"
-            aria-label={`Change the shortcut for ${COMMANDS[command].title}`}
-            className="min-w-24 justify-center"
-          >
-            {state.kind === 'recording' ? (
-              <span className="text-muted-foreground">Press keys…</span>
-            ) : keys ? (
-              <Shortcut keys={keys} />
-            ) : (
-              <span className="text-muted-foreground">None</span>
-            )}
-          </Button>
+        <PopoverTrigger
+          render={
+            <Button
+              id={id}
+              variant="outline"
+              size="sm"
+              aria-label={`Change the shortcut for ${COMMANDS[command].title}`}
+              className="min-w-24 justify-center"
+            />
+          }
+        >
+          {state.kind === 'recording' ? (
+            <span className="text-muted-foreground">Press keys…</span>
+          ) : keys ? (
+            <Shortcut keys={keys} />
+          ) : (
+            <span className="text-muted-foreground">None</span>
+          )}
         </PopoverTrigger>
         <PopoverContent
           align="end"
           className="w-72 gap-3 p-3"
-          onOpenAutoFocus={(e) =>
-            state.kind === 'recording' && e.preventDefault()
-          }
+          initialFocus={state.kind !== 'recording'}
         >
           {state.kind === 'conflict' ? (
             <Conflict

@@ -151,14 +151,9 @@ function AnimationAreaCard({ area }: { area: AnimationArea }) {
         onOpenChange={(open) => setDisclosure(open ? 'open' : 'closed')}
         className="relative before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border"
       >
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
-          >
-            <FoldChevron isOpen={isOpen} />
-            Choose each animation
-          </button>
+        <CollapsibleTrigger className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground">
+          <FoldChevron isOpen={isOpen} />
+          Choose each animation
         </CollapsibleTrigger>
         <CollapsibleContent>
           {items.map((item) => (
@@ -181,35 +176,35 @@ function SlotCard({ slot }: { slot: ThemeSlot }) {
   return (
     <ThemePicker slot={slot}>
       <Card
-        asChild
-        className="gap-3 p-3 text-left transition-colors duration-700 hover:bg-accent/60 hover:duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 data-flash:bg-accent data-[state=open]:border-foreground/20"
+        render={
+          <button
+            type="button"
+            id={settingControlId(`${slot}Theme`)}
+            data-setting-id={`${slot}Theme`}
+          />
+        }
+        className="gap-3 p-3 text-left transition-colors duration-700 hover:bg-accent/60 hover:duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 data-flash:bg-accent data-popup-open:border-foreground/20"
       >
-        <button
-          type="button"
-          id={settingControlId(`${slot}Theme`)}
-          data-setting-id={`${slot}Theme`}
-        >
-          <ThemeMock theme={colorTheme[slot]} slot={slot} />
-          <span className="flex items-center gap-2 px-1">
-            <span className="min-w-0 flex-1">
-              <span className="block type-body font-medium">
-                {slot === 'light' ? 'Light' : 'Dark'}
-              </span>
-              <span className="block truncate type-meta text-muted-foreground">
-                {chosen?.label ?? 'Mochi'}
-              </span>
+        <ThemeMock theme={colorTheme[slot]} slot={slot} />
+        <span className="flex items-center gap-2 px-1">
+          <span className="min-w-0 flex-1">
+            <span className="block type-body font-medium">
+              {slot === 'light' ? 'Light' : 'Dark'}
             </span>
-            {isOnScreen && (
-              <span className="shrink-0 type-caption text-muted-foreground">
-                On screen
-              </span>
-            )}
-            <ChevronDown
-              aria-hidden
-              className="size-4 shrink-0 text-muted-foreground"
-            />
+            <span className="block truncate type-meta text-muted-foreground">
+              {chosen?.label ?? 'Mochi'}
+            </span>
           </span>
-        </button>
+          {isOnScreen && (
+            <span className="shrink-0 type-caption text-muted-foreground">
+              On screen
+            </span>
+          )}
+          <ChevronDown
+            aria-hidden
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+        </span>
       </Card>
     </ThemePicker>
   );
@@ -436,18 +431,20 @@ function PackageRow({
       isOpen={isOpen}
       menu={
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`More for ${group.displayName}`}
-              disabled={isRemoving}
-            >
-              {isRemoving ? <Spinner /> : <OverflowIcon />}
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`More for ${group.displayName}`}
+                disabled={isRemoving}
+              />
+            }
+          >
+            {isRemoving ? <Spinner /> : <OverflowIcon />}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem variant="destructive" onSelect={remove}>
+            <DropdownMenuItem variant="destructive" onClick={remove}>
               <Trash />
               Remove {consequence}
             </DropdownMenuItem>
@@ -508,18 +505,16 @@ function CustomPackage({
       isOpen={isFiltered || !!draft || undefined}
       menu={
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              Add theme
-              <ChevronDown data-icon="inline-end" />
-            </Button>
+          <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+            Add theme
+            <ChevronDown data-icon="inline-end" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => void importFile()}>
+            <DropdownMenuItem onClick={() => void importFile()}>
               <Import />
               Import file
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setDraft({ text: '' })}>
+            <DropdownMenuItem onClick={() => setDraft({ text: '' })}>
               <ClipboardText />
               Paste JSON
             </DropdownMenuItem>
@@ -617,16 +612,18 @@ function PackageShell({
           <div className="flex items-center gap-1">
             {menu}
             {isExpandable && (
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={
-                    isExpanded ? `Hide ${name} themes` : `Show ${name} themes`
-                  }
-                >
-                  <FoldChevron isOpen={isExpanded} />
-                </Button>
+              <CollapsibleTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={
+                      isExpanded ? `Hide ${name} themes` : `Show ${name} themes`
+                    }
+                  />
+                }
+              >
+                <FoldChevron isOpen={isExpanded} />
               </CollapsibleTrigger>
             )}
           </div>
@@ -1076,18 +1073,20 @@ function Swatches({
     >
       {inspected.themes.slice(0, MAX_SWATCHES).map((theme) => (
         <Tooltip key={theme.id}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={`Use ${theme.label}`}
-              onPointerEnter={() => onPreview(theme)}
-              onFocus={() => onPreview(theme)}
-              onBlur={() => onPreview(null)}
-              onClick={() => onUse(theme)}
-              className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              <ThemeSwatch theme={theme} slot={slotOf(theme.kind)} />
-            </button>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`Use ${theme.label}`}
+                onPointerEnter={() => onPreview(theme)}
+                onFocus={() => onPreview(theme)}
+                onBlur={() => onPreview(null)}
+                onClick={() => onUse(theme)}
+                className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              />
+            }
+          >
+            <ThemeSwatch theme={theme} slot={slotOf(theme.kind)} />
           </TooltipTrigger>
           <TooltipContent className="max-w-60 flex-col items-start gap-0.5">
             <span className="block font-medium">{theme.label}</span>

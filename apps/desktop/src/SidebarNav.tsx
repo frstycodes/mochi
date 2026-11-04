@@ -71,11 +71,11 @@ export function SidebarNav({
       ))}
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="h-8 text-sm">
-              <OverflowIcon />
-              <span>More</span>
-            </SidebarMenuButton>
+          <DropdownMenuTrigger
+            render={<SidebarMenuButton className="h-8 text-sm" />}
+          >
+            <OverflowIcon />
+            <span>More</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             side="right"
@@ -84,13 +84,13 @@ export function SidebarNav({
             className="w-52"
           >
             {hidden.map((item) => (
-              <DropdownMenuItem key={item.id} onSelect={() => open(item)}>
+              <DropdownMenuItem key={item.id} onClick={() => open(item)}>
                 <item.icon />
                 {item.label}
               </DropdownMenuItem>
             ))}
             {hidden.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem onSelect={() => setEditing(true)}>
+            <DropdownMenuItem onClick={() => setEditing(true)}>
               Edit sidebar…
             </DropdownMenuItem>
           </DropdownMenuContent>

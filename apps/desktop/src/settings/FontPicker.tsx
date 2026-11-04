@@ -55,23 +55,25 @@ export function FontPicker({
   };
   return (
     <Popover open={isOpen} onOpenChange={toggle}>
-      <PopoverTrigger asChild>
-        <Button
-          id={settingControlId(id)}
-          variant="outline"
-          size="sm"
-          className="w-56 justify-start"
+      <PopoverTrigger
+        render={
+          <Button
+            id={settingControlId(id)}
+            variant="outline"
+            size="sm"
+            className="w-56 justify-start"
+          />
+        }
+      >
+        <span
+          className="min-w-0 flex-1 truncate text-left"
+          style={{ fontFamily: fontStack(kind, value) }}
         >
-          <span
-            className="min-w-0 flex-1 truncate text-left"
-            style={{ fontFamily: fontStack(kind, value) }}
-          >
-            {value === SYSTEM_FONT[kind]
-              ? SYSTEM_FONT_LABEL[kind]
-              : value || DEFAULT_FONT_LABEL[kind]}
-          </span>
-          <ChevronDown data-icon="inline-end" />
-        </Button>
+          {value === SYSTEM_FONT[kind]
+            ? SYSTEM_FONT_LABEL[kind]
+            : value || DEFAULT_FONT_LABEL[kind]}
+        </span>
+        <ChevronDown data-icon="inline-end" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
         <FontList kind={kind} value={value} onPick={pick} />

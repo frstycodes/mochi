@@ -84,39 +84,41 @@ export function ComputerAvatar({
       : undefined;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          role="img"
-          aria-label={`${computer.name}, ${label}`}
-          className={cn('relative inline-flex shrink-0', className)}
-        >
-          {icon}
-          {age ? (
-            <span
-              aria-hidden
-              className={cn(
-                'absolute -right-2 -bottom-1.5 rounded-full bg-muted px-1 text-[10px] leading-3.5 font-bold text-muted-foreground tabular-nums ring-2',
-                HAIRLINE,
-                SURFACES[surface].ring,
-              )}
-            >
-              {age}
-            </span>
-          ) : (
-            <span
-              aria-hidden
-              className={cn(
-                'absolute -right-0.5 -bottom-0.5 rounded-full ring-2',
-                HAIRLINE,
-                AVATAR_SIZES[size].dot,
-                SURFACES[surface].ring,
-                // The hollow offline dot is filled with the surface, so the device doesn't show through it.
-                machine.status === 'offline' && SURFACES[surface].bg,
-                PRESENCE_DOT[machine.status],
-              )}
-            />
-          )}
-        </span>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={`${computer.name}, ${label}`}
+            className={cn('relative inline-flex shrink-0', className)}
+          />
+        }
+      >
+        {icon}
+        {age ? (
+          <span
+            aria-hidden
+            className={cn(
+              'absolute -right-2 -bottom-1.5 rounded-full bg-muted px-1 text-[10px] leading-3.5 font-bold text-muted-foreground tabular-nums ring-2',
+              HAIRLINE,
+              SURFACES[surface].ring,
+            )}
+          >
+            {age}
+          </span>
+        ) : (
+          <span
+            aria-hidden
+            className={cn(
+              'absolute -right-0.5 -bottom-0.5 rounded-full ring-2',
+              HAIRLINE,
+              AVATAR_SIZES[size].dot,
+              SURFACES[surface].ring,
+              // The hollow offline dot is filled with the surface, so the device doesn't show through it.
+              machine.status === 'offline' && SURFACES[surface].bg,
+              PRESENCE_DOT[machine.status],
+            )}
+          />
+        )}
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

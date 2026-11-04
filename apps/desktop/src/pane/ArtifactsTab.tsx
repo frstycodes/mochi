@@ -63,7 +63,7 @@ export function ArtifactsTab({ thread }: PaneTabProps) {
   if (openPath)
     return <ArtifactFile path={openPath} onBack={() => setOpenPath(null)} />;
   return (
-    <ScrollArea type="scroll" className="h-full">
+    <ScrollArea className="h-full">
       <div className="flex flex-col gap-5 p-3">
         {isEmpty && <NoArtifacts />}
         {!!files.length && (

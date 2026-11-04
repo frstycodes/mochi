@@ -15,7 +15,7 @@ import { ChevronRight } from '@/icons';
 import { cn } from '@/lib/utils';
 
 /**
- * Every disclosure in the app: Radix Collapsible for state and aria, and one height-and-fade motion that a second click
+ * Every disclosure in the app: Base UI Collapsible for state and aria, and one height-and-fade motion that a second click
  * mid-fold reverses from where it is. Style the trigger for its surface; the chevron and the motion are the same everywhere.
  */
 export function Fold({
@@ -30,9 +30,9 @@ export function Fold({
     <FoldContext value={isOpen}>
       <Collapsible
         open={isOpen}
-        onOpenChange={(next) => {
+        onOpenChange={(next, eventDetails) => {
           setOpenState(next);
-          onOpenChange?.(next);
+          onOpenChange?.(next, eventDetails);
         }}
         {...props}
       />
@@ -72,7 +72,7 @@ export function FoldChevron({
       className={cn(
         'size-[1em]! shrink-0 [--solar-size:0.85em] transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
         isOpen === undefined
-          ? 'group-data-[state=open]/fold:rotate-90'
+          ? 'group-data-panel-open/fold:rotate-90'
           : isOpen && 'rotate-90',
         className,
       )}
@@ -90,15 +90,20 @@ export function FoldContent({
 }) {
   const isOpen = useFoldOpen();
   return (
-    <CollapsibleContent forceMount asChild>
-      <FoldBox
-        initial={false}
-        animate={isOpen ? 'open' : 'closed'}
-        inert={!isOpen || undefined}
-        className={className}
-      >
-        {children}
-      </FoldBox>
+    <CollapsibleContent
+      keepMounted
+      render={
+        <FoldBox
+          initial={false}
+          animate={isOpen ? 'open' : 'closed'}
+          inert={!isOpen || undefined}
+          // Base UI sees no CSS transition on the panel, so it sets `hidden` the moment the fold closes and cuts the motion.
+          hidden={false}
+          className={className}
+        />
+      }
+    >
+      {children}
     </CollapsibleContent>
   );
 }

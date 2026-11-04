@@ -130,34 +130,33 @@ export function RefChip({
   return (
     <ContextMenu>
       <RefHoverCard item={{ githubRef, label, state }} threadId={threadId}>
-        <ContextMenuTrigger asChild>
-          <a
-            href={url}
-            onClick={(e) => openLink(e, url)}
-            onAuxClick={(e) => openLink(e, url)}
-            aria-label={`${children ? textOf(children) : label}: ${state?.title ? `${state.title}, ` : ''}${description}`}
-            className={cn(
-              'inline-flex max-w-full items-center gap-[0.3em] rounded-md px-[0.4em] align-baseline text-[0.9em] leading-snug font-medium no-underline transition-colors',
-              REF_CHIP_CLASS[refTone(state)],
-            )}
-          >
-            <RefIcon
-              item={{ githubRef, label, state }}
-              className="size-[1em]"
+        <ContextMenuTrigger
+          render={
+            <a
+              href={url}
+              onClick={(e) => openLink(e, url)}
+              onAuxClick={(e) => openLink(e, url)}
+              aria-label={`${children ? textOf(children) : label}: ${state?.title ? `${state.title}, ` : ''}${description}`}
+              className={cn(
+                'inline-flex max-w-full items-center gap-[0.3em] rounded-md px-[0.4em] align-baseline text-[0.9em] leading-snug font-medium no-underline transition-colors',
+                REF_CHIP_CLASS[refTone(state)],
+              )}
             />
-            <span className="truncate tabular">{children ?? label}</span>
-            {state?.checks === 'fail' && (
-              <span
-                aria-hidden
-                className="size-1.5 shrink-0 rounded-full bg-destructive"
-              />
-            )}
-          </a>
+          }
+        >
+          <RefIcon item={{ githubRef, label, state }} className="size-[1em]" />
+          <span className="truncate tabular">{children ?? label}</span>
+          {state?.checks === 'fail' && (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-destructive"
+            />
+          )}
         </ContextMenuTrigger>
       </RefHoverCard>
       <ContextMenuContent>
         <ContextMenuItem
-          onSelect={() =>
+          onClick={() =>
             dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url })
           }
         >
@@ -165,11 +164,11 @@ export function RefChip({
         </ContextMenuItem>
         {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
         <ContextMenuItem
-          onSelect={() => window.open(url, '_blank', 'noreferrer')}
+          onClick={() => window.open(url, '_blank', 'noreferrer')}
         >
           Open in your browser
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => copyText(url, 'Link copied')}>
+        <ContextMenuItem onClick={() => copyText(url, 'Link copied')}>
           Copy link
         </ContextMenuItem>
       </ContextMenuContent>

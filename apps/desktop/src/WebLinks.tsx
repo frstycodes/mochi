@@ -58,39 +58,41 @@ export function LinkRow({
   const host = hostname(link.url);
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <button
-          type="button"
-          title={link.url}
-          onClick={(e) => openLink(e, link.url)}
-          onAuxClick={(e) => openLink(e, link.url)}
-          className={cn(
-            'flex h-6 w-full min-w-0 cursor-default items-center gap-2 rounded-md px-2 text-left type-caption hover:bg-accent/60',
-            className,
-          )}
-        >
-          <Favicon host={host} />
-          <span className="min-w-0 truncate text-foreground">
-            {link.title ?? host}
-          </span>
-          <span className="max-w-[45%] shrink-0 truncate text-subtle-foreground">
-            {link.title ? host : pathOf(link.url)}
-          </span>
-        </button>
+      <ContextMenuTrigger
+        render={
+          <button
+            type="button"
+            title={link.url}
+            onClick={(e) => openLink(e, link.url)}
+            onAuxClick={(e) => openLink(e, link.url)}
+            className={cn(
+              'flex h-6 w-full min-w-0 cursor-default items-center gap-2 rounded-md px-2 text-left type-caption hover:bg-accent/60',
+              className,
+            )}
+          />
+        }
+      >
+        <Favicon host={host} />
+        <span className="min-w-0 truncate text-foreground">
+          {link.title ?? host}
+        </span>
+        <span className="max-w-[45%] shrink-0 truncate text-subtle-foreground">
+          {link.title ? host : pathOf(link.url)}
+        </span>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
-        <ContextMenuItem onSelect={() => openUrl(link.url)}>
+        <ContextMenuItem onClick={() => openUrl(link.url)}>
           <Globe />
           Open in browser tab
         </ContextMenuItem>
         <ContextMenuItem
-          onSelect={() => window.open(link.url, '_blank', 'noopener')}
+          onClick={() => window.open(link.url, '_blank', 'noopener')}
         >
           <ArrowUpRight />
           Open in system browser
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => copyText(link.url, 'Link copied')}>
+        <ContextMenuItem onClick={() => copyText(link.url, 'Link copied')}>
           <Copy />
           Copy link
         </ContextMenuItem>

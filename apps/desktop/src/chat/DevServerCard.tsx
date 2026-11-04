@@ -76,22 +76,22 @@ export function DevServerCard({
           <AnimatedText>{isStopped ? 'Start' : 'Open'}</AnimatedText>
         </Button>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <TooltipIconButton label="More actions">
-              <OverflowIcon vertical />
-            </TooltipIconButton>
+          <DropdownMenuTrigger
+            render={<TooltipIconButton label="More actions" />}
+          >
+            <OverflowIcon vertical />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               disabled={!!elsewhere}
-              onSelect={() => window.open(url, '_blank', 'noopener')}
+              onClick={() => window.open(url, '_blank', 'noopener')}
             >
               <ArrowUpRight aria-hidden />
               Open in your browser
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={!!elsewhere}
-              onSelect={() =>
+              onClick={() =>
                 void navigator.clipboard
                   .writeText(url)
                   .then(() => toast('Copied URL'))
@@ -101,7 +101,7 @@ export function DevServerCard({
               Copy URL
             </DropdownMenuItem>
             {!!listener && (
-              <DropdownMenuItem onSelect={() => stop(listener.pid)}>
+              <DropdownMenuItem onClick={() => stop(listener.pid)}>
                 <Stop aria-hidden />
                 Stop server
               </DropdownMenuItem>

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { Copy, File, Share, FolderOpen } from '@/icons';
 import {
   ContextMenu,
@@ -28,19 +28,19 @@ export function FileContextMenu({
   root: string;
   path: string;
   onOpen?: () => void;
-  children: ReactNode;
+  children: ReactElement;
 }) {
   const editors = useInstalledEditors();
   const hasOpenGroup = !!onOpen || editors.length > 0;
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-60">
         {hasOpenGroup && (
           <>
             <ContextMenuGroup>
               {!!onOpen && (
-                <ContextMenuItem onSelect={onOpen}>
+                <ContextMenuItem onClick={onOpen}>
                   <File />
                   Open
                 </ContextMenuItem>
@@ -48,7 +48,7 @@ export function FileContextMenu({
               {editors.map((editor) => (
                 <ContextMenuItem
                   key={editor}
-                  onSelect={() => openInEditor(editor, root, path)}
+                  onClick={() => openInEditor(editor, root, path)}
                 >
                   <Share />
                   Open in {EDITOR_NAMES[editor]}
@@ -59,12 +59,12 @@ export function FileContextMenu({
           </>
         )}
         <ContextMenuGroup>
-          <ContextMenuItem onSelect={() => copyText(path, 'Copied path')}>
+          <ContextMenuItem onClick={() => copyText(path, 'Copied path')}>
             <Copy />
             Copy path
           </ContextMenuItem>
           {host.isDesktop && (
-            <ContextMenuItem onSelect={() => revealPath(root, path)}>
+            <ContextMenuItem onClick={() => revealPath(root, path)}>
               <FolderOpen />
               Reveal in {REVEAL_IN}
             </ContextMenuItem>

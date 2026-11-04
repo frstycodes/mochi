@@ -183,29 +183,32 @@ function RewindModeMenu({ actions }: { actions: MessageAction[] }) {
   return (
     <span className={cn('inline-flex', BAR_REVEAL)}>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild disabled={!!reason}>
-          <TooltipIconButton
-            label="Rewind to here"
-            hint={
-              reason ??
-              'Back to just before this message, which returns to the composer. Undo brings everything back.'
-            }
-            disabled={!!reason}
-            className="size-6 text-subtle-foreground hover:text-foreground [&_svg]:size-3.5"
-          >
-            <Undo />
-          </TooltipIconButton>
+        <DropdownMenuTrigger
+          disabled={!!reason}
+          render={
+            <TooltipIconButton
+              label="Rewind to here"
+              hint={
+                reason ??
+                'Back to just before this message, which returns to the composer. Undo brings everything back.'
+              }
+              disabled={!!reason}
+              className="size-6 text-subtle-foreground hover:text-foreground [&_svg]:size-3.5"
+            />
+          }
+        >
+          <Undo />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel className="type-caption text-subtle-foreground">
-            Rewind to before this message
-          </DropdownMenuLabel>
           <DropdownMenuRadioGroup value={rewindMode}>
+            <DropdownMenuLabel className="type-caption text-subtle-foreground">
+              Rewind to before this message
+            </DropdownMenuLabel>
             {actions.map((a) => (
               <DropdownMenuRadioItem
                 key={a.id}
                 value={a.id.slice('rewind-'.length)}
-                onSelect={a.run}
+                onClick={a.run}
                 className="items-start"
               >
                 <a.icon className="mt-0.5" />

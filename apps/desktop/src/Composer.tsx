@@ -553,18 +553,20 @@ export function PermissionsMenu({
   };
   return (
     <DropdownMenu onOpenChange={(open) => !open && setIsArmed(false)}>
-      <DropdownMenuTrigger asChild>
-        <MetaChip
-          className={cn(
-            className,
-            access === 'Full access' &&
-              'text-warning hover:text-warning aria-expanded:text-warning',
-          )}
-          aria-label={`Permissions: ${access}`}
-        >
-          <AccessIcon access={access} />
-          {access}
-        </MetaChip>
+      <DropdownMenuTrigger
+        render={
+          <MetaChip
+            className={cn(
+              className,
+              access === 'Full access' &&
+                'text-warning hover:text-warning aria-expanded:text-warning',
+            )}
+            aria-label={`Permissions: ${access}`}
+          />
+        }
+      >
+        <AccessIcon access={access} />
+        {access}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-76">
         <DropdownMenuGroup>
@@ -576,11 +578,11 @@ export function PermissionsMenu({
             {modes.map(([mode, { hint }]) => {
               const isFull = mode === 'Full access';
               return (
-                // Radix changes the value whether or not onSelect is prevented; preventing only keeps the menu open for the confirm.
+                // The value changes either way; staying open only keeps the menu up for the confirm.
                 <DropdownMenuRadioItem
                   key={mode}
                   value={mode}
-                  onSelect={(e) => needsConfirm(mode) && e.preventDefault()}
+                  closeOnClick={!needsConfirm(mode)}
                   className={cn(
                     'items-start py-1.5',
                     isFull && 'text-warning focus:**:text-warning',

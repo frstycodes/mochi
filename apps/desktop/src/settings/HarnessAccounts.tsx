@@ -99,24 +99,26 @@ function AccountRow({ account }: { account: Account }) {
             <Refresh />
           </TooltipIconButton>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`${account.name} actions`}
-              >
-                <OverflowIcon vertical />
-              </Button>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`${account.name} actions`}
+                />
+              }
+            >
+              <OverflowIcon vertical />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuItem onSelect={() => setRenaming(true)}>
+              <DropdownMenuItem onClick={() => setRenaming(true)}>
                 <Edit />
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
                 disabled={!!removeBlock}
-                onSelect={() => void removeAccount(account.id)}
+                onClick={() => void removeAccount(account.id)}
                 className="flex-wrap"
               >
                 <Trash />

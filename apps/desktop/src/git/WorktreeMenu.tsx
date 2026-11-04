@@ -112,39 +112,43 @@ export function WorktreeMenu({
 
   return (
     <DropdownMenu onOpenChange={(open) => open && bytes.refresh()}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="More Changes actions"
-          className="text-muted-foreground"
-        >
-          <OverflowIcon />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="More Changes actions"
+            className="text-muted-foreground"
+          />
+        }
+      >
+        <OverflowIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="truncate font-mono text-xs text-foreground">
-            {diff ? `${diff.branch} → ${diff.base}` : 'Worktree'}
-          </span>
-          <span
-            className="truncate font-mono type-caption font-normal text-subtle-foreground"
-            title={cwd}
-          >
-            {cwd}
-          </span>
-          <span className="type-caption font-normal text-subtle-foreground tabular">
-            {diskLabel(bytes.value)}
-          </span>
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="flex flex-col gap-0.5">
+            <span className="truncate font-mono text-xs text-foreground">
+              {diff ? `${diff.branch} → ${diff.base}` : 'Worktree'}
+            </span>
+            <span
+              className="truncate font-mono type-caption font-normal text-subtle-foreground"
+              title={cwd}
+            >
+              {cwd}
+            </span>
+            <span className="type-caption font-normal text-subtle-foreground tabular">
+              {diskLabel(bytes.value)}
+            </span>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem disabled={!calls} onSelect={sync}>
+          <DropdownMenuItem disabled={!calls} onClick={sync}>
             <ArrowDown />
             Sync with {base}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() =>
+            onClick={() =>
               navigator.clipboard?.writeText(cwd).catch(() => undefined)
             }
           >
@@ -155,10 +159,7 @@ export function WorktreeMenu({
         {isHere && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              disabled={settled.length === 0}
-              onSelect={cleanUp}
-            >
+            <DropdownMenuItem disabled={settled.length === 0} onClick={cleanUp}>
               <Broom />
               {settled.length
                 ? `Clean up settled worktrees (${settled.length})`

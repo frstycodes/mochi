@@ -43,7 +43,7 @@ export function EmbedFrame({
         <span className="min-w-0 flex-1 truncate">{title}</span>
         {/* Instant on focus: keyboard-initiated, so no fade. */}
         {!!actions && (
-          <span className="flex shrink-0 items-center transition-opacity duration-150 group-focus-within/embed:duration-0 pointer-fine:opacity-0 pointer-fine:has-data-[state=open]:opacity-100 pointer-fine:group-focus-within/embed:opacity-100 pointer-fine:group-hover/embed:opacity-100 [&_svg]:size-3.5">
+          <span className="flex shrink-0 items-center transition-opacity duration-150 group-focus-within/embed:duration-0 pointer-fine:opacity-0 pointer-fine:has-data-[state=open]:opacity-100 pointer-fine:has-data-popup-open:opacity-100 pointer-fine:group-focus-within/embed:opacity-100 pointer-fine:group-hover/embed:opacity-100 [&_svg]:size-3.5">
             {actions}
           </span>
         )}

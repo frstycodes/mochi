@@ -25,11 +25,10 @@ export function MergeButtonBlock() {
       wide
     >
       <ToggleGroup
-        type="single"
         variant="outline"
         size="sm"
-        value={scenario}
-        onValueChange={(v) => v && setScenario(v as Scenario)}
+        value={[scenario]}
+        onValueChange={([v]) => v && setScenario(v as Scenario)}
         aria-label="Checks"
       >
         {(Object.keys(SCENARIOS) as Scenario[]).map((s) => (

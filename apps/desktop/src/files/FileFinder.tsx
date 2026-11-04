@@ -151,7 +151,7 @@ export function FileFinder({
           )}
         </InputGroup>
       </div>
-      <ScrollArea ref={scroller} type="scroll" className="min-h-0 flex-1">
+      <ScrollArea ref={scroller} className="min-h-0 flex-1">
         {isContentSearch ? (
           <ContentResults
             search={search}
@@ -193,16 +193,18 @@ function OptionToggle({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Toggle
-          size="sm"
-          aria-label={label}
-          pressed={pressed}
-          onPressedChange={onPressedChange}
-          className="h-5 min-w-5 px-1 font-mono type-caption text-muted-foreground aria-pressed:bg-input aria-pressed:text-foreground"
-        >
-          {text}
-        </Toggle>
+      <TooltipTrigger
+        render={
+          <Toggle
+            size="sm"
+            aria-label={label}
+            pressed={pressed}
+            onPressedChange={onPressedChange}
+            className="h-5 min-w-5 px-1 font-mono type-caption text-muted-foreground aria-pressed:bg-input aria-pressed:text-foreground"
+          />
+        }
+      >
+        {text}
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

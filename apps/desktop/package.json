@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.296",
+    "@base-ui/react": "^1.9.0",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-go": "^6.0.1",
@@ -59,7 +60,6 @@
     "@number-flow/react": "^0.6.2",
     "@parcel/watcher": "2.5.1",
     "@pierre/diffs": "^1.5.2",
-    "@radix-ui/react-use-controllable-state": "^1.2.6",
     "@react-symbols/icons": "^1.4.1",
     "@shadcn/react": "^0.3.1",
     "@solar-icons/react": "^2.3.2",
@@ -90,7 +90,6 @@
     "next-themes": "^0.4.6",
     "node-pty": "^1.1.0",
     "playwright-core": "1.60.0",
-    "radix-ui": "^1.7.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-error-boundary": "^6.1.6",

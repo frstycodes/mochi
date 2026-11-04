@@ -34,7 +34,7 @@ export function RewindMenuItems({ thread }: { thread: Thread }) {
               reason={blockedReason}
             />
           ) : (
-            <DropdownMenuItem onSelect={() => void undo()}>
+            <DropdownMenuItem onClick={() => void undo()}>
               <Undo />
               Undo rewind
             </DropdownMenuItem>
@@ -42,7 +42,7 @@ export function RewindMenuItems({ thread }: { thread: Thread }) {
         {relatives.map((r) => (
           <DropdownMenuItem
             key={r.id}
-            onSelect={() =>
+            onClick={() =>
               openRewind({
                 kind: 'compare',
                 threadId: thread.id,

@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -258,49 +259,53 @@ function NativeProfilesMenu({
         : `Off in ${off.length} profiles`;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn('max-w-44', !!off.length && 'text-muted-foreground')}
-          aria-label={`Profiles that load ${item.name}: ${label}`}
-        >
-          {!!off.length && (
-            <span className="flex -space-x-0.5">
-              {off.slice(0, 3).map((p) => (
-                <SpaceIcon key={p.id} space={p} className="size-3.5" />
-              ))}
-            </span>
-          )}
-          <span className="truncate">{label}</span>
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn('max-w-44', !!off.length && 'text-muted-foreground')}
+            aria-label={`Profiles that load ${item.name}: ${label}`}
+          />
+        }
+      >
+        {!!off.length && (
+          <span className="flex -space-x-0.5">
+            {off.slice(0, 3).map((p) => (
+              <SpaceIcon key={p.id} space={p} className="size-3.5" />
+            ))}
+          </span>
+        )}
+        <span className="truncate">{label}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Load in these Mochi profiles</DropdownMenuLabel>
-        {profiles.map((p) => {
-          const canLoad = eligible.includes(p);
-          return (
-            <DropdownMenuCheckboxItem
-              key={p.id}
-              disabled={!canLoad}
-              checked={canLoad && !p.nativeOff?.includes(item.id)}
-              onSelect={(e) => e.preventDefault()}
-              onCheckedChange={(isOn) =>
-                updateProfile(p.id, {
-                  nativeOff: withOff(p.nativeOff, [item.id], !isOn),
-                })
-              }
-            >
-              <SpaceIcon space={p} className="size-3.5" />
-              <span className="flex-1 truncate">{p.name}</span>
-              {!canLoad && (
-                <span className="type-caption text-subtle-foreground">
-                  other account
-                </span>
-              )}
-            </DropdownMenuCheckboxItem>
-          );
-        })}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Load in these Mochi profiles</DropdownMenuLabel>
+          {profiles.map((p) => {
+            const canLoad = eligible.includes(p);
+            return (
+              <DropdownMenuCheckboxItem
+                closeOnClick={false}
+                key={p.id}
+                disabled={!canLoad}
+                checked={canLoad && !p.nativeOff?.includes(item.id)}
+                onCheckedChange={(isOn) =>
+                  updateProfile(p.id, {
+                    nativeOff: withOff(p.nativeOff, [item.id], !isOn),
+                  })
+                }
+              >
+                <SpaceIcon space={p} className="size-3.5" />
+                <span className="flex-1 truncate">{p.name}</span>
+                {!canLoad && (
+                  <span className="type-caption text-subtle-foreground">
+                    other account
+                  </span>
+                )}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <p className="px-2 py-1.5 type-caption text-muted-foreground">
           Off in Mochi only. Still on in {harness}. Applies to new threads.
@@ -322,19 +327,21 @@ function NativeItemMenu({
   if (!file) return null;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`${item.name} actions`}
-        >
-          <OverflowIcon />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`${item.name} actions`}
+          />
+        }
+      >
+        <OverflowIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <OpenFileItems file={file} />
         <DropdownMenuItem
-          onSelect={() => copyText(`${file.root}/${file.path}`, 'Path copied')}
+          onClick={() => copyText(`${file.root}/${file.path}`, 'Path copied')}
         >
           <Copy />
           Copy path
@@ -342,7 +349,7 @@ function NativeItemMenu({
         {!!onCopy && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => onCopy(item)}>
+            <DropdownMenuItem onClick={() => onCopy(item)}>
               <Import />
               Copy to Mochi library
             </DropdownMenuItem>

@@ -1,7 +1,7 @@
 import type { FileContent } from '@mochi/domain/host/types/fs';
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useState, type KeyboardEvent } from 'react';
-import { Dialog as DialogPrimitive } from 'radix-ui';
+import { lazy, Suspense, useRef, useState, type KeyboardEvent } from 'react';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { FileIcon } from '@react-symbols/icons/utils';
 import {
   ChevronLeft,
@@ -67,6 +67,7 @@ export function FileViewer() {
     if (e.key === 'ArrowLeft') step(-1);
     if (e.key === 'ArrowRight') step(1);
   };
+  const popup = useRef<HTMLDivElement>(null);
 
   return (
     <DialogPrimitive.Root
@@ -74,16 +75,13 @@ export function FileViewer() {
       onOpenChange={(open) => !open && openFiles(null)}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-background duration-200 ease-(--ease-out) data-closed:duration-150 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+        <DialogPrimitive.Popup
+          ref={popup}
           onKeyDown={onKeyDown}
           // Focusing the first header button would pop its tooltip on open; the dialog itself still takes Esc and the arrows.
-          onOpenAutoFocus={(e) => (
-            e.preventDefault(),
-            (e.currentTarget as HTMLElement).focus()
-          )}
-          className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none"
+          initialFocus={popup}
+          className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-closed:duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none"
         >
           {!!file && (
             <FilePane
@@ -100,7 +98,7 @@ export function FileViewer() {
               onSelect={(i) => setPicked({ request, index: i })}
             />
           )}
-        </DialogPrimitive.Content>
+        </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
@@ -173,10 +171,9 @@ function FilePane({
         <span className="flex-1" />
         {hasSourceToggle && (
           <ToggleGroup
-            type="single"
             size="sm"
-            value={mode}
-            onValueChange={(v) => v && setMode(v as typeof mode)}
+            value={[mode]}
+            onValueChange={([v]) => v && setMode(v as typeof mode)}
             aria-label="View"
           >
             <ToggleGroupItem value="preview" aria-label="Preview">
@@ -188,10 +185,10 @@ function FilePane({
           </ToggleGroup>
         )}
         <FileActions file={file} content={content} />
-        <DialogPrimitive.Close asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Close">
-            <X />
-          </Button>
+        <DialogPrimitive.Close
+          render={<Button variant="ghost" size="icon-sm" aria-label="Close" />}
+        >
+          <X />
         </DialogPrimitive.Close>
       </header>
       <div className="min-h-0 flex-1">

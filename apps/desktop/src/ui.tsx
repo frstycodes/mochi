@@ -330,13 +330,15 @@ export function TooltipIconButton({
   );
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        {props.disabled ? (
-          <span className="inline-flex">{button}</span>
-        ) : (
-          button
-        )}
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          props.disabled ? (
+            <span className="inline-flex">{button}</span>
+          ) : (
+            button
+          )
+        }
+      />
       <TooltipContent className="max-w-60 flex-col items-start gap-0.5">
         <span className="block font-medium">{label}</span>
         {!!hint && <span className="block opacity-80">{hint}</span>}

@@ -292,7 +292,8 @@ function SkillList({
         // The CLI's "select all"; a repo has no way to say which of its skills it recommends.
         <label className="flex cursor-pointer items-center gap-2.5 px-4 pt-3 pb-1.5 type-caption text-muted-foreground">
           <Checkbox
-            checked={isAllPicked || (!!picked.length && 'indeterminate')}
+            checked={isAllPicked}
+            indeterminate={!isAllPicked && !!picked.length}
             onCheckedChange={() => onToggleAll(!isAllPicked)}
             aria-label="Pick every skill"
           />
@@ -525,14 +526,16 @@ function InstallButton({
       </Button>
       <ButtonGroupSeparator />
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            size="icon"
-            aria-label="Choose where to install"
-            disabled={isBusy}
-          >
-            <ChevronDown />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              size="icon"
+              aria-label="Choose where to install"
+              disabled={isBusy}
+            />
+          }
+        >
+          <ChevronDown />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80">
           <DropdownMenuRadioGroup

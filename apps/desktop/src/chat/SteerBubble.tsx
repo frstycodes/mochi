@@ -155,15 +155,17 @@ export function ReadMark({
   const Icon = isRead ? CheckRead : Check;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          role="img"
-          aria-label={label}
-          tabIndex={0}
-          className="inline-flex size-6 items-center justify-center rounded-sm text-subtle-foreground opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          <Icon aria-hidden className="size-3.5" />
-        </span>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={label}
+            tabIndex={0}
+            className="inline-flex size-6 items-center justify-center rounded-sm text-subtle-foreground opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2"
+          />
+        }
+      >
+        <Icon aria-hidden className="size-3.5" />
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

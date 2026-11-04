@@ -182,27 +182,35 @@ function VisualActions({
       <CopyButton text={source.text} />
       <DropdownMenu>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Download">
-                <Download />
-              </Button>
-            </DropdownMenuTrigger>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Download"
+                  />
+                }
+              />
+            }
+          >
+            <Download />
           </TooltipTrigger>
           <TooltipContent>Download</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" className="w-40">
           {canPicture && (
-            <DropdownMenuItem onSelect={exportAs('png')}>
+            <DropdownMenuItem onClick={exportAs('png')}>
               PNG image
             </DropdownMenuItem>
           )}
           {canPicture && (
-            <DropdownMenuItem onSelect={exportAs('svg')}>
+            <DropdownMenuItem onClick={exportAs('svg')}>
               SVG image
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={exportAs('source')}>
+          <DropdownMenuItem onClick={exportAs('source')}>
             Source (.{source.ext})
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -265,15 +273,17 @@ export function CopyButton({
   const { isCopied, copy } = useCopy();
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          onClick={() => copy(text)}
-        >
-          <CopyIcon isCopied={isCopied} />
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            onClick={() => copy(text)}
+          />
+        }
+      >
+        <CopyIcon isCopied={isCopied} />
       </TooltipTrigger>
       <TooltipContent>{isCopied ? 'Copied' : label}</TooltipContent>
     </Tooltip>

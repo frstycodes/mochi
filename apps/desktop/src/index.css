@@ -537,7 +537,7 @@
     ),
   :root[data-window-drag]
     :is(
-      [data-radix-popper-content-wrapper],
+      [data-slot$='-positioner'],
       [role='dialog'],
       [role='alertdialog'],
       [role='menu']
@@ -1058,16 +1058,16 @@
   }
 }
 
-/* Tooltips resolve softly into focus, including Radix's instant-open state. */
+/* Tooltips resolve softly into focus, including Base UI's skip-delay open (`data-instant`). */
 @utility animate-tooltip {
   animation: tooltip-in 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  &[data-state='closed'] {
+  &[data-closed] {
     animation: tooltip-out 180ms ease-in-out both;
     pointer-events: none;
   }
   @variant motion-reduce {
     animation: pop-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-    &[data-state='closed'] {
+    &[data-closed] {
       animation: pop-fade-out 180ms ease-in-out both;
     }
   }

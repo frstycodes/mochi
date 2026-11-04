@@ -95,7 +95,7 @@ export function useEscapeBack() {
       if (!isCommand(e, 'dismiss') || e.defaultPrevented) return;
       if (
         document.querySelector(
-          '[data-radix-popper-content-wrapper], [role=dialog], [role=alertdialog]',
+          '[data-slot$="-positioner"], [role=dialog], [role=alertdialog]',
         )
       )
         return;

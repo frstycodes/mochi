@@ -192,10 +192,7 @@ function Changes({
       {files.length > 0 && (
         <div className="flex min-h-0 flex-1 border-t">
           {isTreeOpen && (
-            <ScrollArea
-              type="scroll"
-              className="w-60 max-w-[40%] shrink-0 border-r"
-            >
+            <ScrollArea className="w-60 max-w-[40%] shrink-0 border-r">
               <ChangeTree
                 sections={sections}
                 selected={selected}
@@ -203,12 +200,7 @@ function Changes({
               />
             </ScrollArea>
           )}
-          {/* Radix lays the viewport content out as `display: table`, which grows to the widest diff line instead of scrolling it. */}
-          <ScrollArea
-            ref={diffColumn}
-            type="scroll"
-            className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!"
-          >
+          <ScrollArea ref={diffColumn} className="min-h-0 min-w-0 flex-1">
             <ChangeList
               key={`${compare.scope}:${compare.base}:${compare.checkpoint}`}
               sections={sections}

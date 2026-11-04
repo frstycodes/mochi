@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -158,14 +159,16 @@ export function EntryActions({
           />
         ))}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`${entry.title} actions`}
-          >
-            <OverflowIcon />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${entry.title} actions`}
+            />
+          }
+        >
+          <OverflowIcon />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {/* Written to the agents' folders, it's files you can open; a library-only skill lives inside library.json. */}
@@ -177,7 +180,7 @@ export function EntryActions({
           )}
           {entry.autoUpdate !== null && (
             <>
-              <DropdownMenuItem onSelect={() => void library.update(entry)}>
+              <DropdownMenuItem onClick={() => void library.update(entry)}>
                 <Refresh />
                 Update now
               </DropdownMenuItem>
@@ -194,7 +197,7 @@ export function EntryActions({
           )}
           <DropdownMenuItem
             variant="destructive"
-            onSelect={() => void library.remove(entry)}
+            onClick={() => void library.remove(entry)}
           >
             <Trash />
             {entry.kind === 'connector'
@@ -461,12 +464,11 @@ export function CategoryChips({
 }) {
   return (
     <ToggleGroup
-      type="single"
       size="sm"
       variant="outline"
       spacing={1}
-      value={value}
-      onValueChange={(v) => onChange(v || ALL)}
+      value={[value]}
+      onValueChange={([v]) => onChange(v || ALL)}
       className="flex-wrap"
       aria-label="Category"
     >
@@ -574,53 +576,55 @@ export function ProfilesMenu({
   };
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn(
-            'max-w-40',
-            !members.length && !isMixed && 'text-muted-foreground',
-          )}
-          aria-label={`Profiles that get ${name}: ${label}`}
-        >
-          {!isMixed &&
-            members.length > 0 &&
-            members.length < profiles.length && (
-              <span className="flex -space-x-0.5">
-                {members.slice(0, 3).map((p) => (
-                  <SpaceIcon key={p.id} space={p} className="size-3.5" />
-                ))}
-              </span>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              'max-w-40',
+              !members.length && !isMixed && 'text-muted-foreground',
             )}
-          <span className="truncate">{label}</span>
-        </Button>
+            aria-label={`Profiles that get ${name}: ${label}`}
+          />
+        }
+      >
+        {!isMixed && members.length > 0 && members.length < profiles.length && (
+          <span className="flex -space-x-0.5">
+            {members.slice(0, 3).map((p) => (
+              <SpaceIcon key={p.id} space={p} className="size-3.5" />
+            ))}
+          </span>
+        )}
+        <span className="truncate">{label}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel>
-          {entries.length > 1
-            ? `Profiles that get all ${entries.length}`
-            : 'Profiles that get it'}
-        </DropdownMenuLabel>
-        {profiles.map((p) => {
-          const count = countIn(p.id);
-          return (
-            <DropdownMenuCheckboxItem
-              key={p.id}
-              checked={count === entries.length}
-              onSelect={(e) => e.preventDefault()}
-              onCheckedChange={(isIn) => void setIn(p.id, isIn)}
-            >
-              <SpaceIcon space={p} className="size-3.5" />
-              <span className="flex-1 truncate">{p.name}</span>
-              {count > 0 && count < entries.length && (
-                <span className="type-caption text-subtle-foreground tabular">
-                  {count} of {entries.length}
-                </span>
-              )}
-            </DropdownMenuCheckboxItem>
-          );
-        })}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            {entries.length > 1
+              ? `Profiles that get all ${entries.length}`
+              : 'Profiles that get it'}
+          </DropdownMenuLabel>
+          {profiles.map((p) => {
+            const count = countIn(p.id);
+            return (
+              <DropdownMenuCheckboxItem
+                closeOnClick={false}
+                key={p.id}
+                checked={count === entries.length}
+                onCheckedChange={(isIn) => void setIn(p.id, isIn)}
+              >
+                <SpaceIcon space={p} className="size-3.5" />
+                <span className="flex-1 truncate">{p.name}</span>
+                {count > 0 && count < entries.length && (
+                  <span className="type-caption text-subtle-foreground tabular">
+                    {count} of {entries.length}
+                  </span>
+                )}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -19,11 +19,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 import {
   Sidebar,
   SidebarContent,
@@ -178,30 +174,28 @@ export function AppSidebar({
       )}
       <ContextMenu>
         {/* `contents`: the header, list and footer stay the sidebar's own flex children. */}
-        <ContextMenuTrigger asChild>
-          <div ref={list} className="contents">
-            <SpaceHeader />
-            {/* Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility. */}
-            <SidebarContent
-              ref={pager}
-              style={{ scrollbarWidth: 'none' }}
-              className="relative snap-x snap-mandatory flex-row gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain"
-            >
-              {/* Every space stays mounted so neighbours show mid-swipe; window to index ± 1 if the space count grows. */}
-              <MergedScope>
-                {profiles.map((s, i) => (
-                  <SpacePanel key={s.id} isCurrent={i === index}>
-                    <SpaceNav spaceId={s.id} onSearch={onSearch} />
-                  </SpacePanel>
-                ))}
-              </MergedScope>
-            </SidebarContent>
-            <SpaceFooter
-              isEditing={isEditing}
-              onEditingChange={setEditing}
-              onAdd={addProfile}
-            />
-          </div>
+        <ContextMenuTrigger render={<div ref={list} className="contents" />}>
+          <SpaceHeader />
+          {/* Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility. */}
+          <SidebarContent
+            ref={pager}
+            style={{ scrollbarWidth: 'none' }}
+            className="relative snap-x snap-mandatory flex-row gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain"
+          >
+            {/* Every space stays mounted so neighbours show mid-swipe; window to index ± 1 if the space count grows. */}
+            <MergedScope>
+              {profiles.map((s, i) => (
+                <SpacePanel key={s.id} isCurrent={i === index}>
+                  <SpaceNav spaceId={s.id} onSearch={onSearch} />
+                </SpacePanel>
+              ))}
+            </MergedScope>
+          </SidebarContent>
+          <SpaceFooter
+            isEditing={isEditing}
+            onEditingChange={setEditing}
+            onAdd={addProfile}
+          />
         </ContextMenuTrigger>
         <SidebarContextMenu
           space={space}
@@ -719,7 +713,14 @@ function ThreadList({
     >
       <ThreadRowMenu threadId={t.id} selectedIds={selectedIds}>
         <SidebarMenuItem
-          asChild
+          render={
+            <motion.li
+              {...glide}
+              layoutId={rowLayoutId(t.id)}
+              variants={ROW_EXIT}
+              exit="exit"
+            />
+          }
           {...rowProps}
           data-thread-row={t.id}
           data-sub-of={sub?.parentId}
@@ -736,17 +737,10 @@ function ThreadList({
           aria-keyshortcuts={sub ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
           className={cn(sub && 'pl-[27px]')}
         >
-          <motion.li
-            {...glide}
-            layoutId={rowLayoutId(t.id)}
-            variants={ROW_EXIT}
-            exit="exit"
-          >
-            {!!sub && (
-              <SubThreadGuide isLast={sub.isLast} className="left-[15px]" />
-            )}
-            {row(t, !!sub)}
-          </motion.li>
+          {!!sub && (
+            <SubThreadGuide isLast={sub.isLast} className="left-[15px]" />
+          )}
+          {row(t, !!sub)}
         </SidebarMenuItem>
       </ThreadRowMenu>
     </ThreadPeek>
@@ -830,48 +824,49 @@ function ThreadList({
             {showPinned && (
               <Fold
                 key="pinned"
-                asChild
+                render={<motion.li {...glide} className="mt-2" />}
                 open={isPinnedOpen || !!drag.state}
                 onOpenChange={setPinnedOpen}
               >
-                <motion.li {...glide} className="mt-2">
-                  <SectionToggle label="Pinned" />
-                  <FoldContent>
-                    <SidebarMenu>
-                      <AnimatePresence initial={false} custom={!!drag.state}>
-                        {section(pins, true)}
-                        {!!drag.state && isPinnedEmpty && (
-                          <motion.li
-                            key="pin-drop"
-                            {...glide}
-                            aria-hidden
-                            className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground"
-                          >
-                            Drop here to pin
-                          </motion.li>
-                        )}
-                      </AnimatePresence>
-                    </SidebarMenu>
-                  </FoldContent>
-                </motion.li>
+                <SectionToggle label="Pinned" />
+                <FoldContent>
+                  <SidebarMenu>
+                    <AnimatePresence initial={false} custom={!!drag.state}>
+                      {section(pins, true)}
+                      {!!drag.state && isPinnedEmpty && (
+                        <motion.li
+                          key="pin-drop"
+                          {...glide}
+                          aria-hidden
+                          className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground"
+                        >
+                          Drop here to pin
+                        </motion.li>
+                      )}
+                    </AnimatePresence>
+                  </SidebarMenu>
+                </FoldContent>
               </Fold>
             )}
             <Fold
               key="threads"
-              asChild
+              render={
+                <motion.li
+                  {...glide}
+                  className={showPinned ? 'mt-3.5' : 'mt-2'}
+                />
+              }
               open={isThreadsOpen || !!drag.state}
               onOpenChange={setThreadsOpen}
             >
-              <motion.li {...glide} className={showPinned ? 'mt-3.5' : 'mt-2'}>
-                <SectionToggle label="Threads" data-threads-label />
-                <FoldContent>
-                  <SidebarMenu>
-                    <AnimatePresence initial={false} custom={!!drag.state}>
-                      {section(active.map(localRow), false)}
-                    </AnimatePresence>
-                  </SidebarMenu>
-                </FoldContent>
-              </motion.li>
+              <SectionToggle label="Threads" data-threads-label />
+              <FoldContent>
+                <SidebarMenu>
+                  <AnimatePresence initial={false} custom={!!drag.state}>
+                    {section(active.map(localRow), false)}
+                  </AnimatePresence>
+                </SidebarMenu>
+              </FoldContent>
             </Fold>
           </AnimatePresence>
         </SidebarMenu>
@@ -1191,7 +1186,7 @@ export function ThreadItem({
   const button = (
     // Renaming, the row is a div: a field inside a button would click and key through to it.
     <SidebarMenuButton
-      asChild={isRenaming}
+      render={isRenaming ? <div /> : undefined}
       isActive={isActive}
       data-selected={isSelected || undefined}
       aria-description={isSelected ? 'Selected' : undefined}
@@ -1203,7 +1198,7 @@ export function ThreadItem({
         isSub && 'gap-0.5 px-1 py-1.5',
       )}
     >
-      {isRenaming ? <div>{body}</div> : body}
+      {body}
     </SidebarMenuButton>
   );
   if (isRenaming) return button;
@@ -1226,18 +1221,22 @@ function RowActions({
   const { isSettled, toggle: settle } = useSettle(thread);
   return (
     <>
-      <SidebarMenuAction showOnHover asChild className={INLINE_ACTION}>
-        <TooltipIconButton
-          label={isSettled ? 'Reactivate' : 'Settle'}
-          hint={
-            isSettled
-              ? 'Moves it back to the active list.'
-              : 'Stops its agent, terminals and dev servers, and files it under Settled.'
-          }
-          onClick={settle}
-        >
-          {isSettled ? <Unarchive /> : <Archive />}
-        </TooltipIconButton>
+      <SidebarMenuAction
+        showOnHover
+        className={INLINE_ACTION}
+        render={
+          <TooltipIconButton
+            label={isSettled ? 'Reactivate' : 'Settle'}
+            hint={
+              isSettled
+                ? 'Moves it back to the active list.'
+                : 'Stops its agent, terminals and dev servers, and files it under Settled.'
+            }
+            onClick={settle}
+          />
+        }
+      >
+        {isSettled ? <Unarchive /> : <Archive />}
       </SidebarMenuAction>
       {!!onSnooze && (
         <SnoozeAction
@@ -1368,30 +1367,30 @@ function SidebarContextMenu({
   onEdit: () => void;
   onAdd?: () => void;
 }) {
-  // The editor and dialog open only once the menu has closed and let go of focus; opened from onSelect, the editor
+  // The editor and dialog open only once the menu has closed and let go of focus; opened from onClick, the editor
   // closed again as the menu tore down around it.
   const afterClose = useRef<() => void>(undefined);
   return (
     <ContextMenuContent
-      onCloseAutoFocus={(e) => {
-        e.preventDefault();
+      finalFocus={() => {
         afterClose.current?.();
         afterClose.current = undefined;
+        return false;
       }}
     >
-      <ContextMenuItem onSelect={() => (afterClose.current = onEdit)}>
+      <ContextMenuItem onClick={() => (afterClose.current = onEdit)}>
         <SpaceIcon space={space} />
         Edit {space.name}…
       </ContextMenuItem>
       <ContextMenuItem
         disabled={!onAdd}
-        onSelect={() => (afterClose.current = onAdd)}
+        onClick={() => (afterClose.current = onAdd)}
       >
         <Plus />
         New profile…
       </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => openSubpage('profiles', space.id)}>
+      <ContextMenuItem onClick={() => openSubpage('profiles', space.id)}>
         <Settings />
         Profile settings
       </ContextMenuItem>
@@ -1412,23 +1411,25 @@ function SpaceFooter({
   const spaceId = useHarnessSelector((s) => s.spaceId);
   const space = useSpace();
   const profiles = useProfiles();
+  const switcherRef = useRef<HTMLDivElement>(null);
   return (
     <SidebarFooter className="relative flex-row items-center gap-1 px-2 py-2">
       {/* Past three profiles the switcher and its + leave the chip too little room for a name. */}
       <UserMenu isCompact={profiles.length > 3} />
       <span className="flex-1" />
       <Popover open={isEditing} onOpenChange={onEditingChange}>
-        <PopoverAnchor asChild>
-          <div
-            role="radiogroup"
-            aria-label="Profile"
-            className="flex items-center gap-0.5"
-          >
-            {profiles.map((s, i) => {
-              const isCurrent = s.id === spaceId;
-              return (
-                <Tooltip key={s.id}>
-                  <TooltipTrigger asChild>
+        <div
+          ref={switcherRef}
+          role="radiogroup"
+          aria-label="Profile"
+          className="flex items-center gap-0.5"
+        >
+          {profiles.map((s, i) => {
+            const isCurrent = s.id === spaceId;
+            return (
+              <Tooltip key={s.id}>
+                <TooltipTrigger
+                  render={
                     <button
                       type="button"
                       role="radio"
@@ -1439,23 +1440,28 @@ function SpaceFooter({
                         'flex size-7 cursor-default items-center justify-center rounded-md text-subtle-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
                         isCurrent && 'bg-sidebar-accent text-foreground',
                       )}
-                    >
-                      <SpaceIcon space={s} className="size-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {s.name}{' '}
-                    <BoundShortcut
-                      command={spaceCommand(i + 1)}
-                      className="ml-1"
                     />
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
-          </div>
-        </PopoverAnchor>
-        <PopoverContent side="top" align="end" className="w-auto">
+                  }
+                >
+                  <SpaceIcon space={s} className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {s.name}{' '}
+                  <BoundShortcut
+                    command={spaceCommand(i + 1)}
+                    className="ml-1"
+                  />
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+        <PopoverContent
+          anchor={switcherRef}
+          side="top"
+          align="end"
+          className="w-auto"
+        >
           <SpaceEditor key={space.id} space={space} />
         </PopoverContent>
       </Popover>

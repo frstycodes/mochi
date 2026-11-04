@@ -31,7 +31,7 @@ export function NoPanes({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();
   const cwd = threadCwd(thread);
   return (
-    <ScrollArea type="scroll" className="h-full">
+    <ScrollArea className="h-full">
       <Empty className="justify-start gap-6 p-4">
         <EmptyHeader>
           <EmptyTitle>Every pane is closed</EmptyTitle>
@@ -80,28 +80,28 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
         {ports.map((p) => (
           <Item
             key={`${p.pid}:${p.port}`}
-            asChild
+            render={
+              <button
+                type="button"
+                aria-label={`Preview localhost:${p.port}`}
+                onClick={() => openPort(p.port)}
+              />
+            }
             variant="muted"
             size="sm"
             className="rounded-xl"
           >
-            <button
-              type="button"
-              aria-label={`Preview localhost:${p.port}`}
-              onClick={() => openPort(p.port)}
-            >
-              <ItemMedia>
-                <PortIcon />
-              </ItemMedia>
-              <ItemContent className="min-w-0">
-                <ItemTitle className="font-normal tabular-nums">
-                  localhost:{p.port}
-                </ItemTitle>
-                <ItemDescription className="truncate font-mono">
-                  {p.command}
-                </ItemDescription>
-              </ItemContent>
-            </button>
+            <ItemMedia>
+              <PortIcon />
+            </ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle className="font-normal tabular-nums">
+                localhost:{p.port}
+              </ItemTitle>
+              <ItemDescription className="truncate font-mono">
+                {p.command}
+              </ItemDescription>
+            </ItemContent>
           </Item>
         ))}
       </div>
@@ -122,40 +122,40 @@ function RecentFiles({ thread, cwd }: { thread: Thread; cwd: string }) {
         return (
           <Item
             key={path}
-            asChild
+            render={
+              <button
+                type="button"
+                onClick={() =>
+                  dispatch({
+                    type: 'pane-open-tab',
+                    threadId: thread.id,
+                    kind: 'files',
+                    file: { path },
+                  })
+                }
+              />
+            }
             size="sm"
             className="px-2 hover:bg-accent/60"
           >
-            <button
-              type="button"
-              onClick={() =>
-                dispatch({
-                  type: 'pane-open-tab',
-                  threadId: thread.id,
-                  kind: 'files',
-                  file: { path },
-                })
-              }
-            >
-              <ItemMedia>
-                <FileIcon
-                  fileName={path.slice(slash + 1)}
-                  autoAssign
-                  aria-hidden
-                  className="size-4"
-                />
-              </ItemMedia>
-              <ItemContent className="min-w-0">
-                <ItemTitle className="w-full min-w-0 font-normal">
-                  <span className="truncate">
-                    <span className="text-subtle-foreground">
-                      {path.slice(0, slash + 1)}
-                    </span>
-                    {path.slice(slash + 1)}
+            <ItemMedia>
+              <FileIcon
+                fileName={path.slice(slash + 1)}
+                autoAssign
+                aria-hidden
+                className="size-4"
+              />
+            </ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle className="w-full min-w-0 font-normal">
+                <span className="truncate">
+                  <span className="text-subtle-foreground">
+                    {path.slice(0, slash + 1)}
                   </span>
-                </ItemTitle>
-              </ItemContent>
-            </button>
+                  {path.slice(slash + 1)}
+                </span>
+              </ItemTitle>
+            </ItemContent>
           </Item>
         );
       })}
