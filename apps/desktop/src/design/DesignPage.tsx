@@ -338,11 +338,16 @@ const TYPE_ROWS = [
 
 const RADII = [
   ['sm', '8px', 'Badges, kbd, checkboxes', 'rounded-sm'],
-  ['md', '10px', 'Rows, menu items, small icon buttons', 'rounded-md'],
-  ['lg', '12px', 'Inputs, selects, icon buttons', 'rounded-lg'],
+  ['md', '10px', 'Rows, menu items, small buttons', 'rounded-md'],
+  ['lg', '12px', 'Inputs, selects, buttons', 'rounded-lg'],
   ['xl', '18px', 'Cards, panels, the summary card', 'rounded-xl'],
   ['2xl', '24px', 'Composer, side pane, sheets', 'rounded-2xl'],
-  ['full', 'capsule', 'Text buttons, chips, dots, radios', 'rounded-full'],
+  [
+    'full',
+    'capsule',
+    'Composer send and stop, chips, dots, radios',
+    'rounded-full',
+  ],
 ] as const;
 
 function Foundations() {

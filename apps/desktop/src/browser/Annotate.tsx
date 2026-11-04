@@ -239,20 +239,10 @@ export function Annotator({
           <Redo />
         </TooltipIconButton>
         <div className="ml-auto flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="rounded-full"
-            onClick={cancel}
-          >
+          <Button variant="ghost" size="sm" onClick={cancel}>
             Cancel
           </Button>
-          <Button
-            size="sm"
-            className="rounded-full"
-            disabled={!natural || isSending}
-            onClick={send}
-          >
+          <Button size="sm" disabled={!natural || isSending} onClick={send}>
             Add to composer
           </Button>
         </div>

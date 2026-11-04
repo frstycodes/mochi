@@ -63,7 +63,6 @@ export function ZoomChip({
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="rounded-full"
                     disabled={percent === 100}
                     onClick={() => {
                       hide();

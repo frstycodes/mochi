@@ -428,7 +428,7 @@ function AgentTranscript({
               <Button
                 size="sm"
                 variant="secondary"
-                className="w-fit rounded-full"
+                className="w-fit"
                 onClick={() =>
                   dispatch({
                     type: 'send',
