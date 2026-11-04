@@ -17,6 +17,8 @@ interface Page extends Key {
   url: string;
   title: string;
   latest: Frame | null;
+  /** A device streams it (`browser-open` until `browser-close`); its open again is a resize. */
+  isWatched: boolean;
   /** `null` once the tab closes: its streams end. */
   changed: PubSub.PubSub<Frame | null>;
 }
@@ -63,6 +65,9 @@ export class Browsers extends Context.Service<Browsers>()(
             : Effect.fail(new PageUnknown(key));
         });
 
+      /** The device that last opened, touched or navigated a page drives it: the page lays out at that device's viewport. */
+      const drive = (page: Page) => call('browser.drive', [page.view]);
+
       const open = (
         key: Key & {
           url: string;
@@ -72,8 +77,10 @@ export class Browsers extends Context.Service<Browsers>()(
         Effect.gen(function* () {
           const existing = pages.get(keyOf(key));
           const found = existing ?? (yield* create(key));
-          if (key.viewport)
-            yield* call('browser.mirror', [found.view, key.viewport]);
+          if (!key.viewport) return found.view;
+          yield* call('browser.mirror', [found.view, key.viewport]);
+          if (!found.isWatched) yield* drive(found);
+          found.isWatched = true;
           return found.view;
         });
 
@@ -93,6 +100,7 @@ export class Browsers extends Context.Service<Browsers>()(
             url,
             title: folded?.title ?? '',
             latest: null,
+            isWatched: false,
             changed: yield* PubSub.sliding<Frame | null>(1),
           };
           pages.set(keyOf(key), page);
@@ -138,17 +146,19 @@ export class Browsers extends Context.Service<Browsers>()(
 
       const input = (key: Key & { input: unknown }) =>
         page(key).pipe(
-          Effect.flatMap((p) => call('browser.input', [p.view, key.input])),
+          Effect.tap((p) => call('browser.input', [p.view, key.input])),
+          Effect.flatMap(drive),
           Effect.asVoid,
         );
 
       const navigate = (key: Key & { to: Navigation }) =>
         page(key).pipe(
-          Effect.flatMap((p) =>
+          Effect.tap((p) =>
             typeof key.to === 'object'
               ? call('browser.navigate', [p.view, key.to.url])
               : call('browser.command', [p.view, key.to]),
           ),
+          Effect.flatMap(drive),
           Effect.asVoid,
         );
 
@@ -156,9 +166,9 @@ export class Browsers extends Context.Service<Browsers>()(
       const unwatch = (key: Key) =>
         Effect.suspend(() => {
           const found = pages.get(keyOf(key));
-          return found
-            ? call('browser.mirror', [found.view, null])
-            : Effect.void;
+          if (!found) return Effect.void;
+          found.isWatched = false;
+          return call('browser.mirror', [found.view, null]);
         }).pipe(Effect.asVoid);
 
       /** Keyed by the thread a device was shown, so a made-up tab id of another thread's gets nothing. */

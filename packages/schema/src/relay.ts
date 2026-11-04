@@ -31,7 +31,7 @@ const S = Schema.String;
 const B = Schema.Boolean;
 
 /** Bumped on any link frame change; a device on another version is refused rather than misread. */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 const MAX_ID = 128;
 const MAX_TEXT = 256 * 1024;

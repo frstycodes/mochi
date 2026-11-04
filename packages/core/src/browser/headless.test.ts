@@ -158,13 +158,13 @@ it.live(
       );
       yield* Effect.promise(() => call('browser.mirror', [id, null]));
 
-      // A watching device clicks at a point and types, as a person at the page would.
+      // A watching device clicks at a point (a fraction of the viewport) and types, as a person at the page would.
       const at = JSON.parse(
         (
           (yield* Effect.promise(() =>
             call('browser.eval', [
               id,
-              `(() => { const r = document.querySelector('button').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`,
+              `(() => { const r = document.querySelector('button').getBoundingClientRect(); return { x: (r.x + r.width / 2) / innerWidth, y: (r.y + r.height / 2) / innerHeight }; })()`,
             ]),
           )) as { value: string }
         ).value,

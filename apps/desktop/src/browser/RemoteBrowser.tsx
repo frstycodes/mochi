@@ -15,6 +15,7 @@ import type { PaneTab, Thread } from '../model';
 import { toWire, wireId } from '../remote/ids';
 import { useDispatch } from '../store';
 import { TooltipIconButton } from '../ui';
+import { containedPoint } from './devices';
 import { useSize } from './PageSurface';
 import { normalizeUrl } from './url';
 import {
@@ -25,7 +26,7 @@ import {
 
 /**
  * Another computer's thread's browser tab: the page runs on that computer, where the thread's agent and its localhost are, and
- * shows here as its frames. Clicks, wheel and keys go back to it (`browser-input`).
+ * shows here as its frames, letterboxed at the size of whoever drives it. Clicks, wheel and keys go back to it (`browser-input`).
  */
 export function RemoteBrowser({
   machine,
@@ -47,9 +48,13 @@ export function RemoteBrowser({
   const [draft, setDraft] = useState<string | null>(null);
   const url = frame?.url || tab.url || '';
 
-  const pointAt = (e: MouseEvent<HTMLElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const onClick = (e: MouseEvent<HTMLImageElement>) => {
+    const at = pointAt(e);
+    if (at) send({ kind: 'click', ...at });
+  };
+  const onWheel = (e: WheelEvent<HTMLImageElement>) => {
+    const at = pointAt(e);
+    if (at) send({ kind: 'scroll', ...at, dx: e.deltaX, dy: e.deltaY });
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.metaKey || e.ctrlKey) return;
@@ -102,23 +107,16 @@ export function RemoteBrowser({
         aria-label={`${frame?.title || 'Page'} on ${machine.name}`}
         tabIndex={0}
         onKeyDown={onKeyDown}
-        className="relative min-h-0 flex-1 overflow-hidden bg-white outline-none"
+        className="relative min-h-0 flex-1 overflow-hidden bg-muted/40 outline-none"
       >
         {!!frame && (
           <img
             alt=""
             src={frame.data}
             draggable={false}
-            onClick={(e) => send({ kind: 'click', ...pointAt(e) })}
-            onWheel={(e: WheelEvent<HTMLImageElement>) =>
-              send({
-                kind: 'scroll',
-                ...pointAt(e),
-                dx: e.deltaX,
-                dy: e.deltaY,
-              })
-            }
-            className="block size-full object-cover object-top"
+            onClick={onClick}
+            onWheel={onWheel}
+            className="block size-full object-contain"
           />
         )}
         {!frame && (
@@ -128,6 +126,17 @@ export function RemoteBrowser({
         )}
       </div>
     </div>
+  );
+}
+
+/** The pointer on the page, as a fraction of it; null on the letterbox bars. */
+function pointAt(e: MouseEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  const box = img.getBoundingClientRect();
+  return containedPoint(
+    box,
+    { width: img.naturalWidth, height: img.naturalHeight },
+    { x: e.clientX - box.left, y: e.clientY - box.top },
   );
 }
 
@@ -148,7 +157,7 @@ const navigate = (send: Send, to: Navigate['navigate']) =>
   send({ navigate: to });
 
 /**
- * Opens the tab on the thread's computer at this surface's size (again when it resizes) and follows its frames; the tab's URL
+ * Opens the tab on the thread's computer at this surface's size (resized with it) and follows its frames; the tab's URL
  * and title follow the page. Closing the surface stops the stream, the tab stays open there.
  */
 function useRemotePage(
@@ -202,19 +211,25 @@ function useRemotePage(
     [machine.id, threadId, tab.id],
   );
 
+  // Closed only for a new tab, not on resize: an open after a close takes the page over, while an open that resizes doesn't.
+  const isSized = width > 0 && height > 0;
   useEffect(() => {
-    if (!width || !height) return;
-    const key = { threadId: thread.id, tabId: tab.id };
+    if (!isSized) return;
+    return () =>
+      void run({ type: 'browser-close', threadId: thread.id, tabId: tab.id });
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `run` is a fresh closure each render
+  }, [machine.id, thread.id, tab.id, isSized]);
+  useEffect(() => {
+    if (!isSized) return;
     void run({
       type: 'browser-open',
-      ...key,
+      threadId: thread.id,
+      tabId: tab.id,
       url: startUrl.current,
       width,
       height,
     });
-    return () => void run({ type: 'browser-close', ...key });
-    // `run` is a fresh closure each render; the tab opens again only for a new tab or size.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `run` is a fresh closure each render
   }, [machine.id, thread.id, tab.id, width, height]);
 
   const url = frame?.url;

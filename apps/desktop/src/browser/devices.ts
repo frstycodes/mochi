@@ -97,3 +97,21 @@ export function fitDevice(
     cssHeight: h,
   };
 }
+
+/** Where `point` falls on an image of `natural` size drawn contained (letterboxed) in `box`, as a fraction of the image; null on the bars. */
+export function containedPoint(
+  box: { width: number; height: number },
+  natural: { width: number; height: number },
+  point: { x: number; y: number },
+) {
+  const scale = Math.min(
+    box.width / natural.width,
+    box.height / natural.height,
+  );
+  const width = natural.width * scale;
+  const height = natural.height * scale;
+  const x = (point.x - (box.width - width) / 2) / width;
+  const y = (point.y - (box.height - height) / 2) / height;
+  if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return null;
+  return { x, y };
+}

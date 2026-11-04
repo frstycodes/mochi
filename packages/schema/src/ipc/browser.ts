@@ -231,7 +231,7 @@ const SaveUrl = Str(1_000_000).check(
 
 /** `BrowserHost` (`src/host/types/browser.ts`). Main still checks `autoReload`'s root and `compareStart`'s cwd are folders and a download still exists. */
 
-/** Trusted input at a point of the page, in its CSS px: a watching device's click, wheel and keys (`browser-input`). */
+/** Trusted input at a point of the page, as a fraction (0–1) of its viewport: a watching device's click, wheel and keys (`browser-input`). */
 export const BrowserInput = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('click'),
@@ -276,6 +276,7 @@ export const browserRpc = {
     ]),
     Schema.Void,
   ),
+  drive: invoke(T([ViewId]), Schema.Void),
   emulate: invoke(T([ViewId, BrowserEmulation]), Schema.Void),
   devtools: invoke(T([ViewId, BrowserDevtools]), Schema.Void),
   capture: invoke(T([ViewId, Schema.Struct({ fullPage: B })]), S),

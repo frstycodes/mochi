@@ -744,6 +744,14 @@ test.describe('views.ts relayed to Core', () => {
     rpc<{ type: string; url?: string }[]>('views.relayed', [KEY, type]);
   const dom = (expression: string) =>
     rpc<string>('views.dom', [KEY, expression]);
+  // A device's point: a fraction of the page's viewport, which may not be the size the device sees it at.
+  const counterAt = async () =>
+    JSON.parse(
+      await dom(
+        "JSON.stringify((({ x, y, width, height }) => ({ x: (x + width / 2) / innerWidth, y: (y + height / 2) / innerHeight }))(document.getElementById('counter').getBoundingClientRect()))",
+      ),
+    ) as { x: number; y: number };
+  const layoutWidth = () => dom('innerWidth').then(Number);
 
   test.beforeAll(async () => {
     await rpc('views.open', [KEY]);
@@ -763,14 +771,12 @@ test.describe('views.ts relayed to Core', () => {
     // A device watching doesn't take the page off this computer's own window.
     expect(await rpc('views.isViewVisible', [KEY])).toBe(true);
 
-    const at = await dom(
-      "JSON.stringify((({ x, y, width, height }) => ({ x: x + width / 2, y: y + height / 2 }))(document.getElementById('counter').getBoundingClientRect()))",
-    );
+    const at = await counterAt();
     const count = () =>
       dom("document.getElementById('count').textContent").then(Number);
     const before = await count();
     const frames = (await relayed('frame')).length;
-    await rpc('views.input', [KEY, { kind: 'click', ...JSON.parse(at) }]);
+    await rpc('views.input', [KEY, { kind: 'click', ...at }]);
     expect(await count()).toBe(before + 1);
     // The click changed the page, so the device gets a new frame.
     await expect
@@ -780,17 +786,74 @@ test.describe('views.ts relayed to Core', () => {
     await rpc('views.mirror', [KEY, null]);
   });
 
+  test('l. whoever touched the page last drives its layout; the other screen letterboxes it, and a device’s click lands', async () => {
+    const count = () =>
+      dom("document.getElementById('count').textContent").then(Number);
+    await rpc('views.mirror', [KEY, { width: 400, height: 700 }]);
+    // Watching alone doesn't take the page: this window's 900 × 700 still lays it out, and the device letterboxes that.
+    expect(await layoutWidth()).toBe(900);
+    let before = await count();
+    await rpc('views.input', [KEY, { kind: 'click', ...(await counterAt()) }]);
+    expect(await count()).toBe(before + 1);
+
+    await rpc('views.drive', [KEY]);
+    await expect.poll(layoutWidth).toBe(400);
+    // Shown here at the device's ratio, centred in the window's 900 × 700, not cropped or stretched.
+    expect(await rpc('views.viewBounds', [KEY])).toEqual({
+      x: 250,
+      y: 0,
+      width: 400,
+      height: 700,
+    });
+    expect(await rpc('views.isViewVisible', [KEY])).toBe(true);
+    // Its frames come at its own ratio.
+    await expect
+      .poll(async () => {
+        const { width, height } = await rpc<{ width: number; height: number }>(
+          'views.lastFrameSize',
+          [KEY],
+        );
+        return Math.round((width / height) * 100) / 100;
+      })
+      .toBe(0.57);
+    // The device's own input goes over CDP and doesn't count as this window's user.
+    before = await count();
+    await rpc('views.input', [KEY, { kind: 'click', ...(await counterAt()) }]);
+    expect(await count()).toBe(before + 1);
+    expect(await layoutWidth()).toBe(400);
+
+    // Resizing the window that doesn't drive only rescales the page.
+    await rpc('views.place', [KEY, { width: 450, height: 350 }]);
+    await expect
+      .poll(() => rpc('views.viewBounds', [KEY]))
+      .toEqual({ x: 125, y: 0, width: 200, height: 350 });
+    expect(await layoutWidth()).toBe(400);
+    await rpc('views.place', [KEY, {}]);
+
+    await rpc('views.userScrolls', [KEY]);
+    await expect.poll(layoutWidth).toBe(900);
+    expect(await rpc('views.viewBounds', [KEY])).toEqual({
+      x: 0,
+      y: 0,
+      width: 900,
+      height: 700,
+    });
+    // Resizing the device that doesn't drive leaves the layout alone.
+    await rpc('views.mirror', [KEY, { width: 500, height: 700 }]);
+    expect(await layoutWidth()).toBe(900);
+
+    await rpc('views.mirror', [KEY, null]);
+  });
+
   test('m. a device watching gets frames while this computer’s window is hidden or minimized', async () => {
     await rpc('views.mirror', [KEY, { width: 900, height: 700 }]);
     await expect
       .poll(async () => (await relayed('frame')).length)
       .toBeGreaterThan(0);
-    const at = await dom(
-      "JSON.stringify((({ x, y, width, height }) => ({ x: x + width / 2, y: y + height / 2 }))(document.getElementById('counter').getBoundingClientRect()))",
-    );
+    const at = await counterAt();
     const clickChangesFrame = async () => {
       const frames = (await relayed('frame')).length;
-      await rpc('views.input', [KEY, { kind: 'click', ...JSON.parse(at) }]);
+      await rpc('views.input', [KEY, { kind: 'click', ...at }]);
       await expect
         .poll(async () => (await relayed('frame')).length)
         .toBeGreaterThan(frames);
