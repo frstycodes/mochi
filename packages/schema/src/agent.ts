@@ -109,7 +109,6 @@ const UnversionedAgentEvent = Schema.Union([
     generated: opt(GeneratedImage),
     widget: opt(McpWidget),
   }),
-  member('tool-description', { id: S, description: S }),
   member('tool-files', { id: S, files: Schema.Array(S) }),
   member('plan', { items: Schema.Array(AgentPlanItem), isFresh: opt(B) }),
   AgentSubagentEvent,
@@ -365,7 +364,6 @@ export const UtilityTask = Schema.Literals([
   'commit',
   'pr',
   'handoff',
-  'command',
 ]);
 
 const T = Schema.Tuple;

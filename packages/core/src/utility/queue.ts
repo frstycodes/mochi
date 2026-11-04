@@ -3,7 +3,6 @@ import { Context, Deferred, Effect, Layer, Semaphore } from 'effect';
 /** Lower runs first: titles are on screen, the rest can wait. */
 export const PRIORITY = {
   title: 1,
-  command: 1,
   simplify: 3,
   commit: 3,
   pr: 3,

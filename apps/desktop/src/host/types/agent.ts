@@ -144,13 +144,6 @@ export type AgentEvent =
       /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage;
       /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget;
     }
-  /** A plain-language line for a call that started without one, from the background model. */
-  | {
-      threadId: string;
-      type: 'tool-description';
-      id: string;
-      description: string;
-    }
   /** The files a shell command changed, from worktree snapshots at its start and end; sent after its end, only when it changed any. */
   | {
       threadId: string;

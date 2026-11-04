@@ -45,10 +45,6 @@
    "handoff": {
     "provider": "claude",
     "model": "claude-haiku-5-5"
-   },
-   "command": {
-    "provider": "claude",
-    "model": "claude-haiku-5-5"
    }
   },
   "imageGen": "codex"
@@ -97,10 +93,6 @@
     "model": "claude-haiku-5-5"
    },
    "handoff": {
-    "provider": "claude",
-    "model": "claude-haiku-5-5"
-   },
-   "command": {
     "provider": "claude",
     "model": "claude-haiku-5-5"
    }

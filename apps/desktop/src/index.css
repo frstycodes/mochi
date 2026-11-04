@@ -632,13 +632,37 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-reduce-motion='off']) .pulse::after,
-  :root:not([data-reduce-motion='off']) .station-pulse {
+  :root:not([data-reduce-motion='off']) .station-pulse,
+  :root:not([data-reduce-motion='off']) .mask-shimmer {
     animation: none;
   }
 }
 :root[data-reduce-motion='on'] .pulse::after,
-:root[data-reduce-motion='on'] .station-pulse {
+:root[data-reduce-motion='on'] .station-pulse,
+:root[data-reduce-motion='on'] .mask-shimmer {
   animation: none;
+}
+
+/* Shimmer for text whose glyphs sit on their own layers (torph's morph): `bg-clip-text` doesn't paint through them, a mask does. Same rhythm as the Shimmer component: a 1.1s sweep, then 1.2s rest. */
+@keyframes mask-shimmer {
+  0% {
+    mask-position: 100% center;
+  }
+  48%,
+  100% {
+    mask-position: 0% center;
+  }
+}
+
+@utility mask-shimmer {
+  mask-image: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 0.55) 40%,
+    #000 50%,
+    rgb(0 0 0 / 0.55) 60%
+  );
+  mask-size: 250% 100%;
+  animation: mask-shimmer 2.3s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
 /* A layer that fills the page: the theme's background, or see-through over the window material so the page's wash isn't painted twice. */

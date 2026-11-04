@@ -1,13 +1,12 @@
 import {
   useEffect,
   useEffectEvent,
-  useLayoutEffect,
   useRef,
   useState,
   type ComponentProps,
   type ReactNode,
 } from 'react';
-import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { File, PatchDiff } from './files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
@@ -54,12 +53,11 @@ import {
   ThreadMessageIcon,
   ThreadMessageLine,
 } from './chat/ThreadMessage';
-import { ICON_SWAP } from './ui';
+import { AnimatedText, ICON_SWAP } from './ui';
 import { MessageImages } from './chat/MessageImages';
 import { isFilePath, revealFile, useImageUrls } from './chat/imageSrc';
 import { openPhotos } from './photo/photos';
 import { Expand, FoldChevron } from './Fold';
-import { EASE_OUT } from './lib/ease';
 
 /**
  * One work group (the calls between two messages), folded to a line like Claude's: while live the line names the current
@@ -622,94 +620,51 @@ type Title = { key: string; value: CurrentAction | string };
 
 // A title stays up at least this long, so a burst of fast calls still reads; changes inside it coalesce to the latest.
 const DWELL_MS = 400;
-const ROLL = { duration: 0.28, ease: EASE_OUT } as const;
-const ROLL_OUT = { duration: 0.2, ease: EASE_OUT } as const;
 
-/** The title as a vertical text roll: the old line slides up and blurs out while the new one rises from below; the width follows. */
+/** The title morphing in place (torph): shared letters slide to their new spot, the rest fade, and the width follows. */
 function RollingTitle({ title }: { title: Title }) {
-  const reduce = useReducedMotionConfig();
-  const shown = useDwell(title, DWELL_MS);
-  const measure = useRef<HTMLSpanElement>(null);
-  const [width, setWidth] = useState<number>();
-  useLayoutEffect(() => {
-    const el = measure.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) =>
-      setWidth(Math.ceil(e.borderBoxSize[0].inlineSize)),
-    );
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const roll = reduce
-    ? {
-        initial: { opacity: 0 },
-        animate: { opacity: 1, transition: ROLL },
-        exit: { opacity: 0, transition: ROLL_OUT },
-      }
-    : {
-        initial: {
-          opacity: 0,
-          transform: 'translateY(100%)',
-          filter: 'blur(3px)',
-        },
-        animate: {
-          opacity: 1,
-          transform: 'translateY(0%)',
-          filter: 'blur(0px)',
-          transition: ROLL,
-        },
-        exit: {
-          opacity: 0,
-          transform: 'translateY(-100%)',
-          filter: 'blur(3px)',
-          transition: ROLL_OUT,
-        },
-      };
-
+  const { value } = useDwell(title, DWELL_MS);
+  const action = typeof value === 'string' ? undefined : value;
+  const label = action?.label ?? (value as string);
+  const isShimmering = !!action && !action.isWaiting;
   return (
-    <motion.span
+    <span
       data-work-title
       aria-live="polite"
-      initial={false}
-      animate={width === undefined ? undefined : { width }}
-      transition={reduce ? { duration: 0 } : ROLL}
-      className="relative flex h-5 min-w-0 shrink items-center overflow-hidden"
+      className="flex h-5 min-w-0 shrink items-center gap-1.5 overflow-hidden whitespace-nowrap"
     >
-      <span
-        ref={measure}
-        aria-hidden
-        className="invisible absolute top-0 left-0 flex items-center gap-1.5 whitespace-nowrap"
-      >
-        <TitleContent value={shown.value} />
-      </span>
       <AnimatePresence initial={false} mode="popLayout">
-        <motion.span
-          key={shown.key}
-          {...roll}
-          className="flex h-5 max-w-full min-w-0 items-center gap-1.5 whitespace-nowrap"
-        >
-          <TitleContent value={shown.value} />
-        </motion.span>
+        {!!action?.call && (
+          <motion.span
+            key={iconKey(action)}
+            {...ICON_SWAP}
+            className="flex shrink-0 items-center empty:hidden"
+          >
+            <ActionIcon action={action} />
+          </motion.span>
+        )}
       </AnimatePresence>
-    </motion.span>
+      <span
+        className={cn(
+          'min-w-0',
+          !!action && 'text-foreground',
+          isShimmering && 'mask-shimmer',
+        )}
+      >
+        <AnimatedText>{label}</AnimatedText>
+      </span>
+    </span>
   );
 }
 
-function TitleContent({ value }: { value: CurrentAction | string }) {
-  if (typeof value === 'string')
-    return <span className="min-w-0 truncate">{value}</span>;
-  return (
-    <>
-      <ActionIcon action={value} />
-      {value.isWaiting ? (
-        <span className="min-w-0 truncate text-foreground">{value.label}</span>
-      ) : (
-        <Shimmer as="span" className="min-w-0 truncate">
-          {value.label}
-        </Shimmer>
-      )}
-    </>
-  );
+// Same icon, same key: consecutive commands or favicon searches don't blink their glyph.
+function iconKey({ call }: CurrentAction) {
+  if (!call) return 'none';
+  if (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write')
+    return `file:${call.target.split('.').pop()}`;
+  if (call.verb === 'Skill' || call.verb === 'Mcp')
+    return `${call.verb}:${call.target.split(':')[0]}`;
+  return call.verb;
 }
 
 const FAVICONS_SHOWN = 4;
