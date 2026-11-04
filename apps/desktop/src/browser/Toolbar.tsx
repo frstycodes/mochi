@@ -1,11 +1,5 @@
 import { useState } from 'react';
 import {
-  AnimatePresence,
-  motion,
-  useReducedMotionConfig,
-  type TargetAndTransition,
-} from 'motion/react';
-import {
   ArrowLeft,
   ArrowRight,
   Bug,
@@ -99,8 +93,7 @@ export function BrowserToolbar({
   };
 
   return (
-    <div className="relative flex h-11 shrink-0 items-center gap-1 px-2">
-      <LoadingBar isLoading={page.isLoading || !!page.pending} />
+    <div className="flex h-11 shrink-0 items-center gap-1 px-2">
       <TooltipIconButton
         label="Back"
         hint={page.canGoBack ? undefined : 'No earlier page in this tab'}
@@ -594,50 +587,4 @@ export function DriveBar({
 
 export function agentName(thread: Thread) {
   return thread.providers[0] === 'codex' ? 'Codex' : 'Claude';
-}
-
-// Electron reports no load progress, so the bar trickles toward 90% and finishes when the load ends.
-const TRICKLE = {
-  transform: [
-    'scaleX(0)',
-    'scaleX(0.3)',
-    'scaleX(0.6)',
-    'scaleX(0.8)',
-    'scaleX(0.9)',
-  ],
-  transition: { duration: 12, times: [0, 0.03, 0.15, 0.4, 1], ease: 'easeOut' },
-} satisfies TargetAndTransition;
-const FINISH = {
-  transform: 'scaleX(1)',
-  opacity: 0,
-  transition: {
-    transform: { duration: 0.2, ease: [0.23, 1, 0.32, 1] },
-    opacity: { duration: 0.2, delay: 0.15 },
-  },
-} satisfies TargetAndTransition;
-const STILL = {
-  transform: 'scaleX(1)',
-  opacity: 1,
-} satisfies TargetAndTransition;
-
-/** Under the toolbar, not over the page: the native view covers everything below it. */
-function LoadingBar({ isLoading }: { isLoading: boolean }) {
-  const isStill = useReducedMotionConfig();
-  return (
-    <AnimatePresence>
-      {isLoading && (
-        <motion.div
-          aria-hidden
-          initial={
-            isStill
-              ? { ...STILL, opacity: 0 }
-              : { transform: 'scaleX(0)', opacity: 1 }
-          }
-          animate={isStill ? STILL : TRICKLE}
-          exit={isStill ? { opacity: 0 } : FINISH}
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 origin-left bg-primary"
-        />
-      )}
-    </AnimatePresence>
-  );
 }
