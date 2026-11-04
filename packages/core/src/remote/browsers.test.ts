@@ -95,9 +95,10 @@ it.live(
         yield* client['page.open']({ ...TAB, url: 'http://elsewhere/' }),
         view,
       );
+      // The device that opened it drives it.
       assert.deepEqual(
         calls.map((c) => c.method),
-        ['browser.create', 'browser.mirror'],
+        ['browser.create', 'browser.mirror', 'browser.drive'],
       );
       assert.deepEqual(calls[0]!.args, [
         { url: 'http://localhost:5173/', spaceId: 's' },
@@ -133,12 +134,23 @@ it.live(
         input: { kind: 'click', x: 10, y: 20 },
       });
       yield* client['page.navigate']({ ...TAB, to: 'back' });
-      assert.deepEqual(calls.slice(2), [
+      // A device resizing only resizes; one that opens again after closing drives again.
+      const viewport = { width: 400, height: 700 };
+      yield* client['page.open']({ ...TAB, url: '', viewport });
+      yield* client['page.unwatch'](TAB);
+      yield* client['page.open']({ ...TAB, url: '', viewport });
+      assert.deepEqual(calls.slice(3), [
         {
           method: 'browser.input',
           args: [view, { kind: 'click', x: 10, y: 20 }],
         },
+        { method: 'browser.drive', args: [view] },
         { method: 'browser.command', args: [view, 'back'] },
+        { method: 'browser.drive', args: [view] },
+        { method: 'browser.mirror', args: [view, viewport] },
+        { method: 'browser.mirror', args: [view, null] },
+        { method: 'browser.mirror', args: [view, viewport] },
+        { method: 'browser.drive', args: [view] },
       ]);
 
       yield* event({ type: 'closed' });

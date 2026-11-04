@@ -62,17 +62,15 @@ const FLAGS_TIMEOUT_MS = 2000;
 
 /** A watching device's input at a point of the page, as trusted mouse and keyboard events. */
 export async function runInput(page: Page, input: BrowserInput) {
-  switch (input.kind) {
-    case 'click':
-      return page.mouse.click(input.x, input.y);
-    case 'scroll':
-      await page.mouse.move(input.x, input.y);
-      return page.mouse.wheel(input.dx, input.dy);
-    case 'key':
-      return page.keyboard.press(input.key);
-    case 'text':
-      return page.keyboard.insertText(input.text);
-  }
+  if (input.kind === 'key') return page.keyboard.press(input.key);
+  if (input.kind === 'text') return page.keyboard.insertText(input.text);
+  // The device saw the page at another size; its point is a fraction of the viewport the page has now.
+  const [width, height] = await page.evaluate(() => [innerWidth, innerHeight]);
+  const x = input.x * width;
+  const y = input.y * height;
+  if (input.kind === 'click') return page.mouse.click(x, y);
+  await page.mouse.move(x, y);
+  return page.mouse.wheel(input.dx, input.dy);
 }
 
 export async function runAct(

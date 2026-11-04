@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
-import { DEVICES, fitDevice } from './devices.ts';
+import { containedPoint, DEVICES, fitDevice } from './devices.ts';
 import {
   EMPTY_HISTORY,
   history,
@@ -59,6 +59,34 @@ test('fitDevice centres, scales down only, and rotates', () => {
   assert.ok(tight.scale < 1 && tight.height <= 400 - 32 + 1e-9);
   const turned = fitDevice({ width: 1000, height: 1000 }, phone, true);
   assert.deepEqual([turned.cssWidth, turned.cssHeight], [667, 375]);
+});
+
+test('containedPoint maps a point on a letterboxed frame onto the page, and nothing on the bars', () => {
+  // A 400 × 700 page in an 800 × 700 box: 200 px bars left and right.
+  const box = { width: 800, height: 700 };
+  const page = { width: 400, height: 700 };
+  assert.deepEqual(containedPoint(box, page, { x: 300, y: 175 }), {
+    x: 0.25,
+    y: 0.25,
+  });
+  assert.equal(containedPoint(box, page, { x: 100, y: 350 }), null);
+  assert.equal(containedPoint(box, page, { x: 700, y: 350 }), null);
+  // Wider than the box: bars above and below.
+  assert.deepEqual(
+    containedPoint(
+      { width: 400, height: 400 },
+      { width: 800, height: 400 },
+      {
+        x: 200,
+        y: 200,
+      },
+    ),
+    { x: 0.5, y: 0.5 },
+  );
+  assert.equal(
+    containedPoint(box, { width: 0, height: 0 }, { x: 1, y: 1 }),
+    null,
+  );
 });
 
 test('annotation history adds, undoes and redoes, and a new shape drops the redo stack', () => {

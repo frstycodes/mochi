@@ -22,6 +22,7 @@ import type {
   FindOptions,
   PickedElement,
 } from '@mochi/domain/host/types/browser';
+import { fitDevice } from '../../src/browser/devices.ts';
 import { dialogNote } from '../../src/browser/dialog.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
 import {
@@ -63,6 +64,10 @@ interface Entry extends Automated {
   owner: WebContents;
   bounds: BrowserBounds | null;
   mirror: Mirror | null;
+  /** The mirror's viewer drives (`driveView`): the page lays out at its viewport, letterboxed here, until this window's user touches it. */
+  isMirrorDriving: boolean;
+  /** Device and agent input in flight: CDP's events reach `input-event` too, and aren't this window's user. */
+  injecting: number;
   emulation: BrowserEmulation | null;
   zoom: number;
   devtools: WebContentsView | null;
@@ -111,6 +116,13 @@ const MIRROR_MAX_WIDTH = 960;
 const MIRROR_INTERVAL_MS = 100;
 const MIRROR_IDLE_MS = 800;
 const MIRROR_QUALITY = 70;
+// What counts as this window's user touching the page, so they drive it again; hovering doesn't.
+const TAKEOVER_INPUTS = new Set([
+  'mouseDown',
+  'mouseWheel',
+  'rawKeyDown',
+  'touchStart',
+]);
 
 const views = new Map<string, Entry>();
 const hardenedSessions = new Set<string>();
@@ -152,6 +164,8 @@ function register(
     owner,
     bounds: null,
     mirror: null,
+    isMirrorDriving: false,
+    injecting: 0,
     emulation: null,
     zoom: 1,
     devtools: null,
@@ -261,16 +275,16 @@ export function setViewBounds(
   // A popup that closed itself is gone before its tab unmounts and hides it.
   if (!views.has(id)) return;
   const entry = get(owner, id);
-  const isPlaced = !!entry.bounds;
+  const wasMirrorLayout = isMirrorLayout(entry);
   entry.bounds = bounds;
   layout(entry);
-  if (entry.mirror && isPlaced !== !!bounds) void syncEmulation(entry);
+  if (wasMirrorLayout || isMirrorLayout(entry)) void syncEmulation(entry);
 }
 
 /**
  * The page sent as frames: the floating window draws it in the DOM, scaled down, with controls over it, and a paired device
- * streams it. While nothing places the view it's hidden and laid out at `viewport`; while this window shows it, it stays on
- * screen at the window's size and the frames are that.
+ * streams it. While nothing places the view it's hidden and laid out at `viewport`. While this window shows it, the page
+ * lays out at the size of whoever drives it (`driveView`), and the frames are that.
  */
 export async function setViewMirror(
   owner: WebContents,
@@ -285,26 +299,48 @@ export async function setViewMirror(
     delay: MIRROR_INTERVAL_MS,
     last: null,
   };
+  if (!viewport) entry.isMirrorDriving = false;
   syncThrottling(entry);
   layout(entry);
   await syncEmulation(entry);
   if (entry.mirror) void sendFrame(id, entry);
 }
 
-/** The window's own emulation while it shows the view; the mirror's viewport only while the view is hidden. */
+/** The mirror's viewer (a paired device) drives the page; this window's user touching the page takes it back (`wire`). */
+export async function driveView(owner: WebContents, id: string) {
+  await setDriver(get(owner, id), true);
+}
+
+async function setDriver(entry: Entry, isMirrorDriving: boolean) {
+  if (entry.isMirrorDriving === isMirrorDriving) return;
+  const wasMirrorLayout = isMirrorLayout(entry);
+  entry.isMirrorDriving = isMirrorDriving;
+  if (wasMirrorLayout === isMirrorLayout(entry)) return;
+  layout(entry);
+  await syncEmulation(entry);
+}
+
+/** The page lays out at the mirror's viewport: nothing places it, or its viewer drives. */
+function isMirrorLayout({ mirror, bounds, isMirrorDriving }: Entry) {
+  return !!mirror && (!bounds || isMirrorDriving);
+}
+
+/** The window's own emulation while it drives; otherwise the mirror's viewport, scaled to fit this window while it shows the view. */
 async function syncEmulation(entry: Entry) {
-  const { mirror, bounds, emulation: e } = entry;
+  const { mirror, emulation: e } = entry;
   const dbg = await debuggerFor(entry.view.webContents);
-  if (!mirror || bounds)
+  if (!mirror || !isMirrorLayout(entry))
     return e
       ? applyEmulation(entry, e)
       : void (await dbg.sendCommand('Emulation.clearDeviceMetricsOverride'));
+  const fit = letterbox(entry);
   // A hidden view lays out at 0 × 0, so the viewport is emulated; the page's own pixel ratio and mobile mode carry over.
   await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
     width: Math.round(mirror.width),
     height: Math.round(mirror.height),
     deviceScaleFactor: e?.dpr ?? 0,
     mobile: !!e?.mobile,
+    ...(fit && { scale: fit.scale, dontSetVisibleSize: true }),
   });
 }
 
@@ -453,7 +489,7 @@ export async function emulateView(
 ) {
   const entry = get(owner, id);
   entry.emulation = e;
-  if (!entry.mirror || entry.bounds) await applyEmulation(entry, e);
+  if (!isMirrorLayout(entry)) await applyEmulation(entry, e);
 }
 
 async function applyEmulation(entry: Entry, e: BrowserEmulation) {
@@ -783,8 +819,18 @@ export async function inputToView(
   input: BrowserInput,
 ) {
   const entry = get(owner, id);
-  await runInput(await pageFor(entry), input);
+  const page = await pageFor(entry);
+  await injected(entry, () => runInput(page, input));
   kickMirror(id, entry);
+}
+
+async function injected<T>(entry: Entry, run: () => Promise<T>) {
+  entry.injecting++;
+  try {
+    return await run();
+  } finally {
+    entry.injecting--;
+  }
 }
 
 export async function actOnView(
@@ -798,7 +844,7 @@ export async function actOnView(
   const startedAt = Date.now();
   const done = new AbortController();
   const result = await Promise.race([
-    runAct(page, entry.snapshotGeneration, act),
+    injected(entry, () => runAct(page, entry.snapshotGeneration, act)),
     dialogOpened(entry, done.signal),
   ])
     .catch(rethrowForAgent)
@@ -982,6 +1028,10 @@ function wire(id: string, entry: Entry) {
       matches: r.matches,
     }),
   );
+  wc.on('input-event', (_event, input) => {
+    if (TAKEOVER_INPUTS.has(input.type) && entry.bounds && !entry.injecting)
+      void setDriver(entry, false);
+  });
   wc.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const isMod =
@@ -1091,7 +1141,8 @@ function watchDialogs(
   };
 }
 
-function layout({ view, devtools, bounds, mirror, owner }: Entry) {
+function layout(entry: Entry) {
+  const { view, devtools, bounds, mirror } = entry;
   view.setVisible(!!bounds);
   devtools?.setVisible(!!bounds);
   if (!bounds)
@@ -1104,14 +1155,47 @@ function layout({ view, devtools, bounds, mirror, owner }: Entry) {
         height: Math.round(mirror.height),
       })
     );
-  // The renderer measures in CSS px; child views are placed in window DIPs, which differ by the app's ⌘+ / ⌘− zoom.
-  const zoom = owner.isDestroyed() ? 1 : owner.getZoomFactor();
-  view.setBorderRadius(Math.round(bounds.radius * zoom));
-  const r = round(bounds, zoom);
-  if (!devtools) return view.setBounds(r);
-  const tools = Math.round(r.height * DEVTOOLS_SHARE);
-  view.setBounds({ ...r, height: r.height - tools });
-  devtools.setBounds({ ...r, y: r.y + r.height - tools, height: tools });
+  const fit = letterbox(entry);
+  view.setBorderRadius(fit ? 0 : Math.round(bounds.radius * zoomOf(entry)));
+  const r = pageArea(entry, bounds);
+  view.setBounds(
+    fit
+      ? {
+          x: Math.round(r.x + fit.x),
+          y: Math.round(r.y + fit.y),
+          width: Math.round(fit.width),
+          height: Math.round(fit.height),
+        }
+      : r,
+  );
+  if (devtools) {
+    const all = round(bounds, zoomOf(entry));
+    devtools.setBounds({
+      ...all,
+      y: r.y + r.height,
+      height: all.height - r.height,
+    });
+  }
+}
+
+/** Where the page sits in window DIPs, above docked DevTools. */
+function pageArea(entry: Entry, bounds: BrowserBounds) {
+  const r = round(bounds, zoomOf(entry));
+  if (!entry.devtools) return r;
+  return { ...r, height: r.height - Math.round(r.height * DEVTOOLS_SHARE) };
+}
+
+/** The driving viewer's viewport fitted into this window's page area, while the window shows a page it doesn't drive. */
+function letterbox(entry: Entry) {
+  const { mirror, bounds } = entry;
+  if (!mirror || !bounds || !entry.isMirrorDriving) return null;
+  const r = pageArea(entry, bounds);
+  return fitDevice(r, mirror, false, 0);
+}
+
+// The renderer measures in CSS px; child views are placed in window DIPs, which differ by the app's ⌘+ / ⌘− zoom.
+function zoomOf({ owner }: Entry) {
+  return owner.isDestroyed() ? 1 : owner.getZoomFactor();
 }
 
 function closeDevtools(entry: Entry) {

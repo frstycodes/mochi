@@ -92,7 +92,7 @@ export type BrowserAct =
   | { kind: 'press'; key: string }
   | { kind: 'scroll'; ref?: string; dx: number; dy: number };
 
-/** Trusted input at a point of the page, in its CSS px: a watching device's click, wheel and keys. */
+/** Trusted input at a point of the page, as a fraction (0–1) of its viewport: a watching device's click, wheel and keys. */
 export type BrowserInput =
   | { kind: 'click'; x: number; y: number }
   | { kind: 'scroll'; x: number; y: number; dx: number; dy: number }
@@ -199,11 +199,13 @@ export interface BrowserHost {
   setZoom(id: string, factor: number): Promise<void>;
   /** Clicks, scrolls or types at a point of the page, as a person would. */
   input(id: string, input: BrowserInput): Promise<void>;
-  /** Hides the view at `viewport` CSS px and streams it as `frame` events (JPEG data URLs) until called with `null`. */
+  /** Streams the view as `frame` events (JPEG data URLs) until called with `null`; while hidden it lays out at `viewport` CSS px. */
   mirror(
     id: string,
     viewport: { width: number; height: number } | null,
   ): Promise<void>;
+  /** The mirror's viewer drives: the page lays out at its viewport, letterboxed in the window, until the window's user touches it. */
+  drive(id: string): Promise<void>;
   emulate(id: string, emulation: BrowserEmulation): Promise<void>;
   devtools(id: string, mode: BrowserDevtools): Promise<void>;
   /** PNG data URL of the viewport, or of the whole scrollable page. */
@@ -274,6 +276,7 @@ export const browserMethods = {
   setZoom: 'invoke',
   input: 'invoke',
   mirror: 'invoke',
+  drive: 'invoke',
   emulate: 'invoke',
   devtools: 'invoke',
   capture: 'invoke',

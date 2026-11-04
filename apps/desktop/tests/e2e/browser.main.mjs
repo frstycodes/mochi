@@ -488,6 +488,31 @@ const viewsApi = {
     const { views } = await ready;
     await views.inputToView(tab(key).owner, tab(key).id, input);
   },
+  async drive([key]) {
+    const { views } = await ready;
+    await views.driveView(tab(key).owner, tab(key).id);
+  },
+  async place([key, bounds]) {
+    const { views } = await ready;
+    views.setViewBounds(tab(key).owner, tab(key).id, {
+      ...BOUNDS,
+      radius: 0,
+      ...bounds,
+    });
+  },
+  viewBounds: ([key]) =>
+    tab(key)
+      .win.contentView.children.find((v) => v.webContents === tab(key).wc)
+      ?.getBounds(),
+  // The user's own wheel in the native view, as the OS delivers it, not CDP's.
+  userScrolls: ([key]) =>
+    tab(key).wc.sendInputEvent({
+      type: 'mouseWheel',
+      x: 450,
+      y: 350,
+      deltaX: 0,
+      deltaY: -1,
+    }),
   // The user clicking in the page, not an agent action.
   userClicks: ([key, selector]) =>
     void tab(key)

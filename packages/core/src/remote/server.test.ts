@@ -489,7 +489,7 @@ it.live('malformed frames from a device are refused and logged', () =>
       open('{"type":"hello","version":7}'),
     );
     yield* Effect.promise(() => badHello.closed);
-    assert.match(badHello.replies[0] ?? '', /"refused".*protocol 8/);
+    assert.match(badHello.replies[0] ?? '', /"refused".*protocol 9/);
 
     // The old protocol's command frame, after a good hello: no longer anything Core speaks.
     const old: {
@@ -498,7 +498,7 @@ it.live('malformed frames from a device are refused and logged', () =>
       replies: string[];
       welcomed: Promise<void>;
     } = yield* Effect.promise(() =>
-      open(JSON.stringify({ type: 'hello', version: 8 })),
+      open(JSON.stringify({ type: 'hello', version: 9 })),
     );
     yield* Effect.promise(() => old.welcomed);
     old.link.send(
@@ -510,7 +510,7 @@ it.live('malformed frames from a device are refused and logged', () =>
     );
     yield* Effect.promise(() => old.closed);
     assert.equal(rejected.length, 2);
-    assert.match(rejected[0]!, /protocol 8/);
+    assert.match(rejected[0]!, /protocol 9/);
     assert.match(rejected[1]!, /Malformed frame: \{"type":"command"/);
   }),
 );

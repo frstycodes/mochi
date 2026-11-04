@@ -31,6 +31,7 @@ import {
   setDevtools,
   setViewBounds,
   setViewMirror,
+  driveView,
   inputToView,
   setViewZoom,
   snapshotView,
@@ -61,6 +62,9 @@ export const browser = {
   },
   async mirror(sender, id, viewport) {
     await setViewMirror(sender, id, viewport);
+  },
+  async drive(sender, id) {
+    await driveView(sender, id);
   },
   async setZoom(sender, id, factor) {
     setViewZoom(sender, id, factor);

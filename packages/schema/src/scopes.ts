@@ -123,6 +123,7 @@ export const HOST_SCOPES = {
     setBounds: L,
     setZoom: L,
     mirror: L,
+    drive: L,
     input: L,
     emulate: L,
     devtools: L,

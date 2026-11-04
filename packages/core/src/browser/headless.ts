@@ -404,6 +404,8 @@ export function headlessBrowser(launch: Launcher): LocalCapability {
         })
         .then(() => sendFrame(id, view));
     },
+    // Its one viewer is the mirror, which always lays the page out.
+    drive: () => {},
     emulate: ([id, e]: [string, BrowserEmulation]) => emulate(get(id), e),
     capture: async ([id, { fullPage }]: [string, { fullPage: boolean }]) =>
       `data:image/png;base64,${(await get(id).page.screenshot({ fullPage })).toString('base64')}`,
