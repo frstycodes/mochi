@@ -96,17 +96,20 @@ export class Store extends Context.Service<Store>()('mochi/core/Store', {
 
     const insertEvent = (input: AppendInput) => {
       const at = now();
+      // Published as it reads back from the log: an unset optional (`undefined`) inside a payload Core logged itself would
+      // fail every RPC stream that sends it (`replica`, `thread`), and a device's mirror would stop at that event.
+      const json = JSON.stringify(input.payload ?? null);
       return Effect.map(
         sql<{
           sequence: number;
         }>`INSERT INTO events (event_id, command_id, thread_id, event_type, version, occurred_at, payload_json)
-          VALUES (${input.eventId ?? randomUUID()}, ${input.commandId ?? null}, ${input.threadId ?? null}, ${input.type}, ${input.version ?? 1}, ${at}, ${JSON.stringify(input.payload ?? null)})
+          VALUES (${input.eventId ?? randomUUID()}, ${input.commandId ?? null}, ${input.threadId ?? null}, ${input.type}, ${input.version ?? 1}, ${at}, ${json})
           RETURNING sequence`,
         (rows): LoggedEvent => ({
           sequence: rows[0]!.sequence,
           type: input.type,
           threadId: input.threadId ?? null,
-          payload: input.payload ?? null,
+          payload: JSON.parse(json) as unknown,
           at: Date.parse(at),
           commandId: input.commandId ?? null,
         }),

@@ -343,10 +343,22 @@ const mirror = (
         Effect.ignore,
       );
 
+    // A stream that ended for good (a refusal, not a dropped link) lets go of the thread: its next save follows it again.
     const follow = (threadId: string) =>
       Effect.gen(function* () {
-        if (!following.has(threadId))
-          following.set(threadId, yield* Effect.forkChild(thread(threadId)));
+        if (following.has(threadId)) return;
+        const fiber: Fiber.Fiber<unknown, unknown> = yield* Effect.forkChild(
+          thread(threadId).pipe(
+            Effect.ensuring(
+              Effect.sync(
+                () =>
+                  following.get(threadId) === fiber &&
+                  following.delete(threadId),
+              ),
+            ),
+          ),
+        );
+        following.set(threadId, fiber);
       });
     const unfollow = (threadId: string) =>
       Effect.gen(function* () {

@@ -9,7 +9,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Layer, PubSub, Stream } from 'effect';
 import type { SqlClient } from 'effect/sql';
 import {
   emptyShell,
@@ -126,6 +126,30 @@ it.effect(
         'the original stays',
       );
     }),
+);
+
+it.effect('a logged payload goes live as JSON, an unset optional dropped', () =>
+  Effect.gen(function* () {
+    const event = yield* run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const store = yield* Store;
+          const live = yield* store.subscribe;
+          yield* store.append({
+            type: 'command',
+            threadId: 't',
+            payload: {
+              type: 'browser-tab',
+              title: undefined,
+              tab: { id: 'a' },
+            },
+          });
+          return yield* PubSub.take(live);
+        }),
+      ),
+    );
+    assert.deepEqual(event.payload, { type: 'browser-tab', tab: { id: 'a' } });
+  }),
 );
 
 it.effect('a command appended twice is applied once', () =>
