@@ -39,8 +39,8 @@ export function useConfirm() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{request.title}</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="w-full min-w-0">{request.description}</div>
+            <AlertDialogDescription render={<div className="w-full min-w-0" />}>
+              {request.description}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

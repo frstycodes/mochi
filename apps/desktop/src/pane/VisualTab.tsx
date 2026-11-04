@@ -8,7 +8,7 @@ import type { PaneTabProps } from './tabs';
 export function VisualTab({ thread, tab }: PaneTabProps) {
   if (!tab.visual) return null;
   return (
-    <ScrollArea type="scroll" className="h-full">
+    <ScrollArea className="h-full">
       <div className="px-3 pb-3">
         <VizThreadProvider value={thread.id}>
           <VisualInPane>

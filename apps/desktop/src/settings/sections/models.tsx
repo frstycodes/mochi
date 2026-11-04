@@ -143,15 +143,12 @@ function BackgroundModels() {
         onOpenChange={(open) => setDisclosure(open ? 'open' : 'closed')}
         className="relative before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border"
       >
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            disabled={differing.length > 0}
-            className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground disabled:hover:text-muted-foreground"
-          >
-            <FoldChevron isOpen={isOpen} />
-            Choose per task
-          </button>
+        <CollapsibleTrigger
+          disabled={differing.length > 0}
+          className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground disabled:hover:text-muted-foreground"
+        >
+          <FoldChevron isOpen={isOpen} />
+          Choose per task
         </CollapsibleTrigger>
         <CollapsibleContent>
           {UTILITY_TASKS.map((task) => (
@@ -189,11 +186,17 @@ export function StarredModelsRow({
       description={starred.map((m) => m.name).join(', ') || 'None starred yet'}
       control={
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button id={settingControlId(rowId)} variant="outline" size="sm">
-              Choose models
-              <ChevronDown data-icon="inline-end" />
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                id={settingControlId(rowId)}
+                variant="outline"
+                size="sm"
+              />
+            }
+          >
+            Choose models
+            <ChevronDown data-icon="inline-end" />
           </DropdownMenuTrigger>
           <ModelMenu
             models={models}

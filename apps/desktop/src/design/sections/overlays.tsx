@@ -94,16 +94,16 @@ export function OverlaysSection() {
         >
           <div className="flex flex-wrap items-center gap-3">
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline">Tooltip</Button>
+              <TooltipTrigger render={<Button variant="outline" />}>
+                Tooltip
               </TooltipTrigger>
               <TooltipContent>
                 Send the latest diff to Codex <Kbd>S</Kbd>
               </TooltipContent>
             </Tooltip>
             <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline">Popover</Button>
+              <PopoverTrigger render={<Button variant="outline" />}>
+                Popover
               </PopoverTrigger>
               <PopoverContent>
                 <PopoverHeader>
@@ -114,9 +114,13 @@ export function OverlaysSection() {
                 </PopoverHeader>
               </PopoverContent>
             </Popover>
-            <HoverCard openDelay={160} closeDelay={240}>
-              <HoverCardTrigger asChild>
-                <Button variant="outline">Hover card</Button>
+            <HoverCard>
+              <HoverCardTrigger
+                delay={160}
+                closeDelay={240}
+                render={<Button variant="outline" />}
+              >
+                Hover card
               </HoverCardTrigger>
               <HoverCardContent className="surface-float w-80 rounded-xl bg-float p-4 shadow-float">
                 <div className="flex flex-col gap-1">
@@ -137,14 +141,16 @@ export function OverlaysSection() {
         >
           <div className="flex flex-wrap items-center gap-3">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Thread options"
-                >
-                  <OverflowIcon />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Thread options"
+                  />
+                }
+              >
+                <OverflowIcon />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 <DropdownMenuGroup>
@@ -185,8 +191,8 @@ export function OverlaysSection() {
         >
           <div className="flex flex-wrap items-center gap-3">
             <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline">Rename thread</Button>
+              <DialogTrigger render={<Button variant="outline" />}>
+                Rename thread
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -202,8 +208,8 @@ export function OverlaysSection() {
               </DialogContent>
             </Dialog>
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">Delete worktree</Button>
+              <AlertDialogTrigger render={<Button variant="destructive" />}>
+                Delete worktree
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -232,8 +238,8 @@ export function OverlaysSection() {
         >
           <div className="flex flex-wrap items-center gap-3">
             <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline">Open sheet</Button>
+              <SheetTrigger render={<Button variant="outline" />}>
+                Open sheet
               </SheetTrigger>
               <SheetContent>
                 <SheetHeader>

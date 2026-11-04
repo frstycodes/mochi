@@ -13,11 +13,10 @@ export function AppIconPicker({
   return (
     <ToggleGroup
       id={id}
-      type="single"
       variant="outline"
       spacing={2}
-      value={value}
-      onValueChange={(icon) => icon && onChange(icon)}
+      value={[value]}
+      onValueChange={([icon]) => icon && onChange(icon)}
       className="grid w-full grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))]"
     >
       {APP_ICONS.map((icon) => (

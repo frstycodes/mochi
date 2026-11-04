@@ -149,19 +149,21 @@ function PluginCatalog({ library, query }: Parameters<PagePart>[0]) {
           />
           {!isFeatured && (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`${name} actions`}
-                >
-                  <OverflowIcon />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`${name} actions`}
+                  />
+                }
+              >
+                <OverflowIcon />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem
                   variant="destructive"
-                  onSelect={() =>
+                  onClick={() =>
                     void remove(name).then(() =>
                       pickMarketplace(FEATURED_MARKETPLACES[0].name),
                     )
@@ -307,19 +309,17 @@ function AddPluginMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="xs">
-            <Plus />
-            Add plugin
-            <ChevronDown data-icon="inline-end" />
-          </Button>
+        <DropdownMenuTrigger render={<Button size="xs" />}>
+          <Plus />
+          Add plugin
+          <ChevronDown data-icon="inline-end" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
           {ADD_SOURCES.map(({ id, icon: Icon, title, description }) => (
             <DropdownMenuItem
               key={id}
               className="items-start"
-              onSelect={() =>
+              onClick={() =>
                 id === 'file'
                   ? fileInput.current?.click()
                   : setMarketplaceOpen(true)

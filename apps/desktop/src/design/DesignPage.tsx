@@ -200,28 +200,33 @@ function DesignHeader() {
           aria-label="Sections"
         >
           {SECTIONS.map(([id, label]) => (
-            <Button key={id} variant="ghost" size="xs" asChild>
-              <a
-                href={`#design-${id}`}
-                onClick={(e) => (
-                  e.preventDefault(),
-                  document
-                    .getElementById(`design-${id}`)
-                    ?.scrollIntoView({ behavior: 'smooth' })
-                )}
-              >
-                {label}
-              </a>
+            <Button
+              key={id}
+              variant="ghost"
+              size="xs"
+              nativeButton={false}
+              render={
+                <a
+                  href={`#design-${id}`}
+                  onClick={(e) => (
+                    e.preventDefault(),
+                    document
+                      .getElementById(`design-${id}`)
+                      ?.scrollIntoView({ behavior: 'smooth' })
+                  )}
+                />
+              }
+            >
+              {label}
             </Button>
           ))}
         </nav>
         <span className="flex-1 xl:hidden" />
         <ToggleGroup
-          type="single"
           variant="outline"
           size="sm"
-          value={theme}
-          onValueChange={(v) => v && setTheme(v)}
+          value={[theme]}
+          onValueChange={([v]) => v && setTheme(v)}
           aria-label="Theme"
         >
           <ToggleGroupItem value="system" aria-label="System theme">
@@ -234,8 +239,13 @@ function DesignHeader() {
             <Moon />
           </ToggleGroupItem>
         </ToggleGroup>
-        <Button size="sm" asChild className="hidden sm:inline-flex">
-          <a href="#">Open app</a>
+        <Button
+          size="sm"
+          nativeButton={false}
+          render={<a href="#" />}
+          className="hidden sm:inline-flex"
+        >
+          Open app
         </Button>
       </div>
     </header>
@@ -679,10 +689,9 @@ function Actions() {
         >
           <div className="flex flex-wrap items-center gap-3">
             <ToggleGroup
-              type="single"
               variant="outline"
               size="sm"
-              defaultValue="claude"
+              defaultValue={['claude']}
               aria-label="Agent"
             >
               <ToggleGroupItem value="claude">
@@ -838,10 +847,10 @@ function Display() {
           use="Show more on demand: settled threads, long tool output."
         >
           <Collapsible className="flex flex-col gap-1">
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="self-start">
-                Settled · 1
-              </Button>
+            <CollapsibleTrigger
+              render={<Button variant="ghost" className="self-start" />}
+            >
+              Settled · 1
             </CollapsibleTrigger>
             <CollapsibleContent className="px-3 type-meta text-muted-foreground">
               Onboarding emails

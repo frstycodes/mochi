@@ -129,7 +129,7 @@ export function ContextRing({
             ) : (
               <Progress
                 value={pct}
-                className="bg-muted-foreground/20"
+                className="*:data-[slot=progress-track]:bg-muted-foreground/20"
                 aria-label={`Context: ${pct}% used`}
                 style={
                   { '--progress-color': TONE_COLORS[tone] } as CSSProperties

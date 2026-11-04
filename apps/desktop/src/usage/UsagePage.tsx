@@ -186,10 +186,17 @@ function TargetPicker({
       : value.kind === 'everywhere'
         ? EVERYWHERE
         : ALL_PROJECTS;
+  const items = [
+    { value: ALL_PROJECTS, label: 'All projects' },
+    { value: EVERYWHERE, label: 'Everywhere on this computer' },
+    ...projects.map((p) => ({ value: p.id, label: p.name })),
+  ];
   return (
     <Select
       value={selected}
+      items={items}
       onValueChange={(v) =>
+        v !== null &&
         onChange(
           v === ALL_PROJECTS
             ? { kind: 'projects' }

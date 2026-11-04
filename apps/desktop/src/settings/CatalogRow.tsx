@@ -297,7 +297,7 @@ function SettingRow({
 }
 
 const WARNING_TOGGLE =
-  'text-warning hover:text-warning data-[state=on]:border-warning/60 data-[state=on]:bg-warning/12 data-[state=on]:text-warning dark:data-[state=on]:bg-warning/12';
+  'text-warning hover:text-warning data-pressed:border-warning/60 data-pressed:bg-warning/12 data-pressed:text-warning dark:data-pressed:bg-warning/12';
 
 function Unavailable() {
   return (

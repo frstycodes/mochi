@@ -283,19 +283,21 @@ export function OpenInMenu({
   if (editors.length === 0) return null;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <TooltipIconButton
-          label="Open in editor"
-          hint={editors.map((e) => EDITOR_NAMES[e]).join(', ')}
-        >
-          <Share />
-        </TooltipIconButton>
+      <DropdownMenuTrigger
+        render={
+          <TooltipIconButton
+            label="Open in editor"
+            hint={editors.map((e) => EDITOR_NAMES[e]).join(', ')}
+          />
+        }
+      >
+        <Share />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {editors.map((editor) => (
           <DropdownMenuItem
             key={editor}
-            onSelect={() => openInEditor(editor, root, path, line)}
+            onClick={() => openInEditor(editor, root, path, line)}
           >
             Open in {EDITOR_NAMES[editor]}
           </DropdownMenuItem>

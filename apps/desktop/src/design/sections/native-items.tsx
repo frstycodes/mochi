@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -164,11 +165,10 @@ function ProfilePicker({
 }) {
   return (
     <ToggleGroup
-      type="single"
       variant="outline"
       size="sm"
-      value={value}
-      onValueChange={(v) => v && onChange(v)}
+      value={[value]}
+      onValueChange={([v]) => v && onChange(v)}
       aria-label="Profile you’re in"
     >
       {PROFILES.map((p) => (
@@ -228,11 +228,10 @@ function LibraryPagesMock({
       </Tabs>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ToggleGroup
-          type="single"
           variant="outline"
           size="sm"
-          value={filter}
-          onValueChange={(v) => setFilter((v || 'all') as Filter)}
+          value={[filter]}
+          onValueChange={([v]) => setFilter((v || 'all') as Filter)}
           aria-label="Show"
         >
           <ToggleGroupItem value="all">All</ToggleGroupItem>
@@ -571,19 +570,17 @@ function ProfilesButton({
   if (item.lockedReason)
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          {/* A disabled button gets no pointer events, so the tooltip hangs on a wrapper. */}
-          <span tabIndex={0} className="rounded-md">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled
-              className="pointer-events-none"
-            >
-              <Lock data-icon="inline-start" />
-              Always on
-            </Button>
-          </span>
+        {/* A disabled button gets no pointer events, so the tooltip hangs on a wrapper. */}
+        <TooltipTrigger render={<span tabIndex={0} className="rounded-md" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled
+            className="pointer-events-none"
+          >
+            <Lock data-icon="inline-start" />
+            Always on
+          </Button>
         </TooltipTrigger>
         <TooltipContent className="max-w-64">
           {item.lockedReason}
@@ -610,57 +607,60 @@ function ProfilesButton({
     );
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn(
-            'max-w-44',
-            (isNative ? marked.length > 0 : !marked.length) &&
-              'text-muted-foreground',
-          )}
-          aria-label={`Profiles that load ${item.name}: ${label}`}
-        >
-          {marked.length > 0 &&
-            (isNative || marked.length < PROFILES.length) && (
-              <span className="flex -space-x-0.5">
-                {marked.slice(0, 3).map((p) => (
-                  <SpaceIcon key={p.id} space={p} className="size-3.5" />
-                ))}
-              </span>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              'max-w-44',
+              (isNative ? marked.length > 0 : !marked.length) &&
+                'text-muted-foreground',
             )}
-          <span className="truncate">{label}</span>
-        </Button>
+            aria-label={`Profiles that load ${item.name}: ${label}`}
+          />
+        }
+      >
+        {marked.length > 0 && (isNative || marked.length < PROFILES.length) && (
+          <span className="flex -space-x-0.5">
+            {marked.slice(0, 3).map((p) => (
+              <SpaceIcon key={p.id} space={p} className="size-3.5" />
+            ))}
+          </span>
+        )}
+        <span className="truncate">{label}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>
-          {isNative ? 'Load in these Mochi profiles' : 'Profiles that get it'}
-        </DropdownMenuLabel>
-        {PROFILES.map((p) => {
-          const canLoad = eligible.includes(p);
-          return (
-            <DropdownMenuCheckboxItem
-              key={p.id}
-              disabled={!canLoad}
-              checked={
-                canLoad &&
-                (isNative
-                  ? !item.profileIds.includes(p.id)
-                  : item.profileIds.includes(p.id))
-              }
-              onSelect={(e) => e.preventDefault()}
-              onCheckedChange={(isOn) => toggle(p.id, isOn)}
-            >
-              <SpaceIcon space={p} className="size-3.5" />
-              <span className="flex-1 truncate">{p.name}</span>
-              {!canLoad && (
-                <span className="type-caption text-subtle-foreground">
-                  other account
-                </span>
-              )}
-            </DropdownMenuCheckboxItem>
-          );
-        })}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            {isNative ? 'Load in these Mochi profiles' : 'Profiles that get it'}
+          </DropdownMenuLabel>
+          {PROFILES.map((p) => {
+            const canLoad = eligible.includes(p);
+            return (
+              <DropdownMenuCheckboxItem
+                closeOnClick={false}
+                key={p.id}
+                disabled={!canLoad}
+                checked={
+                  canLoad &&
+                  (isNative
+                    ? !item.profileIds.includes(p.id)
+                    : item.profileIds.includes(p.id))
+                }
+                onCheckedChange={(isOn) => toggle(p.id, isOn)}
+              >
+                <SpaceIcon space={p} className="size-3.5" />
+                <span className="flex-1 truncate">{p.name}</span>
+                {!canLoad && (
+                  <span className="type-caption text-subtle-foreground">
+                    other account
+                  </span>
+                )}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuGroup>
         {!!harness && (
           <>
             <DropdownMenuSeparator />
@@ -694,26 +694,28 @@ function ItemMenu({ item }: { item: ProfileItem }) {
     toast(what, { description: 'Mockup: does nothing here.' });
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`${item.name} actions`}
-        >
-          <OverflowIcon />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`${item.name} actions`}
+          />
+        }
+      >
+        <OverflowIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         {item.source === 'mochi' ? (
           <>
-            <DropdownMenuItem onSelect={say('Update now')}>
+            <DropdownMenuItem onClick={say('Update now')}>
               <Refresh />
               Update now
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
-              onSelect={say('Remove from library')}
+              onClick={say('Remove from library')}
             >
               <Trash />
               Remove from library
@@ -721,22 +723,22 @@ function ItemMenu({ item }: { item: ProfileItem }) {
           </>
         ) : item.kind === 'connector' ? (
           <DropdownMenuItem
-            onSelect={say('Opens claude.ai › Settings › Connectors')}
+            onClick={say('Opens claude.ai › Settings › Connectors')}
           >
             <ArrowUpRight />
             Manage on claude.ai
           </DropdownMenuItem>
         ) : (
           <>
-            <DropdownMenuItem onSelect={say('Show in Finder')}>
+            <DropdownMenuItem onClick={say('Show in Finder')}>
               <FolderOpen />
               Show in Finder
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={say('View source')}>
+            <DropdownMenuItem onClick={say('View source')}>
               <FileCode />
               View source
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={say('Path copied')}>
+            <DropdownMenuItem onClick={say('Path copied')}>
               <Copy />
               Copy path
             </DropdownMenuItem>
@@ -954,30 +956,32 @@ function ThreadLoadedMock({
         />
         <EnvRow icon={<ProviderMark provider={provider} />} label="Opus 5.5" />
         <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="flex min-h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left hover:bg-accent/60 focus-visible:outline-2 focus-visible:-outline-offset-2"
-            >
-              <SpaceIcon
-                space={profile}
-                className="size-4 text-muted-foreground"
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                className="flex min-h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left hover:bg-accent/60 focus-visible:outline-2 focus-visible:-outline-offset-2"
               />
-              <span className="min-w-0 flex-1 truncate type-meta">
-                {profile.name}
-                <span className="text-subtle-foreground">
-                  {' '}
-                  · {loaded.length} loaded
-                  {off.length ? `, ${off.length} off` : ''}
-                </span>
+            }
+          >
+            <SpaceIcon
+              space={profile}
+              className="size-4 text-muted-foreground"
+            />
+            <span className="min-w-0 flex-1 truncate type-meta">
+              {profile.name}
+              <span className="text-subtle-foreground">
+                {' '}
+                · {loaded.length} loaded
+                {off.length ? `, ${off.length} off` : ''}
               </span>
-              {isChanged && (
-                <span
-                  aria-label="Changed since this thread started"
-                  className="size-1.5 shrink-0 rounded-full bg-warning"
-                />
-              )}
-            </button>
+            </span>
+            {isChanged && (
+              <span
+                aria-label="Changed since this thread started"
+                className="size-1.5 shrink-0 rounded-full bg-warning"
+              />
+            )}
           </PopoverTrigger>
           <PopoverContent align="start" className="w-80 p-0">
             <LoadedList
@@ -1196,14 +1200,16 @@ function ProfileListMock({
                   control={
                     item.lockedReason ? (
                       <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            tabIndex={0}
-                            className="flex items-center gap-1.5 type-meta text-muted-foreground"
-                          >
-                            <Lock className="size-3.5" aria-hidden />
-                            Always on
-                          </span>
+                        <TooltipTrigger
+                          render={
+                            <span
+                              tabIndex={0}
+                              className="flex items-center gap-1.5 type-meta text-muted-foreground"
+                            />
+                          }
+                        >
+                          <Lock className="size-3.5" aria-hidden />
+                          Always on
                         </TooltipTrigger>
                         <TooltipContent className="max-w-64">
                           {item.lockedReason}

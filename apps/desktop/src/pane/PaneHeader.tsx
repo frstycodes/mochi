@@ -107,17 +107,21 @@ export function PaneHeader({
       {!!tabId && !hasOwnMenu && (
         <DropdownMenu>
           <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`More ${title} actions`}
-                  className="text-muted-foreground"
-                >
-                  <OverflowIcon />
-                </Button>
-              </DropdownMenuTrigger>
+            <TooltipTrigger
+              render={
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`More ${title} actions`}
+                      className="text-muted-foreground"
+                    />
+                  }
+                />
+              }
+            >
+              <OverflowIcon />
             </TooltipTrigger>
             <TooltipContent>More actions</TooltipContent>
           </Tooltip>

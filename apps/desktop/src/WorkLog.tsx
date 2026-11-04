@@ -59,6 +59,7 @@ import { MessageImages } from './chat/MessageImages';
 import { isFilePath, revealFile, useImageUrls } from './chat/imageSrc';
 import { openPhotos } from './photo/photos';
 import { Expand, FoldChevron } from './Fold';
+import { EASE_OUT } from './lib/ease';
 
 /**
  * One work group (the calls between two messages), folded to a line like Claude's: while live the line names the current
@@ -298,7 +299,7 @@ export function CallRow({
         {changed.length > 0 && (
           <span
             title={changed.join('\n')}
-            className="shrink-0 text-xs tabular text-muted-foreground"
+            className="shrink-0 type-meta tabular text-muted-foreground"
           >
             changed {fileCount(changed.length)}
           </span>
@@ -621,8 +622,8 @@ type Title = { key: string; value: CurrentAction | string };
 
 // A title stays up at least this long, so a burst of fast calls still reads; changes inside it coalesce to the latest.
 const DWELL_MS = 400;
-const ROLL = { duration: 0.28, ease: [0.23, 1, 0.32, 1] } as const;
-const ROLL_OUT = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
+const ROLL = { duration: 0.28, ease: EASE_OUT } as const;
+const ROLL_OUT = { duration: 0.2, ease: EASE_OUT } as const;
 
 /** The title as a vertical text roll: the old line slides up and blurs out while the new one rises from below; the width follows. */
 function RollingTitle({ title }: { title: Title }) {
@@ -733,7 +734,7 @@ function ActionIcon({ action }: { action: CurrentAction }) {
           {hosts.map((host, i) => (
             <motion.span
               key={host}
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2, delay: i * 0.05 }}
               className={cn(

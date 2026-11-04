@@ -74,7 +74,7 @@ function AppContent() {
     >
       <ColorThemeController />
       <ReducedMotion>
-        <TooltipProvider delayDuration={400}>
+        <TooltipProvider delay={400}>
           <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[route]}>
             {embeddedReplay ? (
               <ReplayPage payload={embeddedReplay} />

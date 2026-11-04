@@ -80,29 +80,33 @@ function FilesBrowser({
   const toolbar = (
     <>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Toggle file tree"
-            aria-pressed={isTreeOpen}
-            onClick={() => setIsTreeOpen(!isTreeOpen)}
-          >
-            <SidebarLeft />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Toggle file tree"
+              aria-pressed={isTreeOpen}
+              onClick={() => setIsTreeOpen(!isTreeOpen)}
+            />
+          }
+        >
+          <SidebarLeft />
         </TooltipTrigger>
         <TooltipContent>Toggle file tree</TooltipContent>
       </Tooltip>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Go to file"
-            onClick={() => focusFinder('name')}
-          >
-            <Search />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Go to file"
+              onClick={() => focusFinder('name')}
+            />
+          }
+        >
+          <Search />
         </TooltipTrigger>
         <TooltipContent>
           Go to file <BoundShortcut command="files-go-to" />

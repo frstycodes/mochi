@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
 import {
   isValidElement,
+  useRef,
   useState,
   type KeyboardEvent,
   type FormEvent,
@@ -45,11 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 import {
   Item,
   ItemActions,
@@ -122,6 +119,7 @@ import {
 import { splitPath } from './chat/imageSrc';
 import type { VizLanguage } from '@mochi/domain/viz/fence';
 import type { ListeningPort } from '@mochi/domain/host/types/ports';
+import { EASE_DRAWER } from './lib/ease';
 
 const LIST_LIMIT = 3;
 // Sources starts folded: it's reference, not something you check mid-run.
@@ -148,7 +146,7 @@ export function SummaryPanel({
       data-variant={variant}
       className={cn('group/summary flex min-h-0 flex-col', className)}
     >
-      <ScrollArea type="scroll" className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <SummaryBody thread={thread} onPaneOpened={onPaneOpened} />
       </ScrollArea>
     </aside>
@@ -197,33 +195,33 @@ function SummaryBody({
     <div className="flex flex-col gap-2">
       <NeedsYou thread={thread} />
       <Accordion
-        type="multiple"
+        multiple
         value={[
           ...openCards,
           ...(isChangesOpen ? ['changes'] : []),
           ...(isRunningOpen ? ['running'] : []),
         ]}
         onValueChange={onOpenChange}
-        asChild
+        render={
+          <Reorder.Group
+            axis="y"
+            values={order}
+            onReorder={reorder}
+            className="flex flex-col gap-2"
+          />
+        }
       >
-        <Reorder.Group
-          axis="y"
-          values={order}
-          onReorder={reorder}
-          className="flex flex-col gap-2"
-        >
-          {order.map((id) => (
-            <DraggableCard
-              key={id}
-              id={id}
-              onMove={(step) => reorder(moveCard(order, id, step))}
-            >
-              <AccordionItem value={id} asChild>
-                <Card className={CARD}>{BODIES[id]}</Card>
-              </AccordionItem>
-            </DraggableCard>
-          ))}
-        </Reorder.Group>
+        {order.map((id) => (
+          <DraggableCard
+            key={id}
+            id={id}
+            onMove={(step) => reorder(moveCard(order, id, step))}
+          >
+            <AccordionItem value={id} render={<Card className={CARD} />}>
+              {BODIES[id]}
+            </AccordionItem>
+          </DraggableCard>
+        ))}
       </Accordion>
       <EnvironmentLine thread={thread} />
     </div>
@@ -274,7 +272,7 @@ const moveCard = (order: SummaryCardId[], id: SummaryCardId, step: -1 | 1) => {
 
 // The panes' drawer curve and duration, so cards settle like the column they sit in; no bounce.
 const CARD_MOVE = {
-  layout: { duration: 0.26, ease: [0.32, 0.72, 0, 1] },
+  layout: { duration: 0.26, ease: EASE_DRAWER },
 } as const;
 
 /** A card that moves only from its handle, so text in it stays selectable and its rows clickable. Alt+↑/↓ on the handle moves it too. */
@@ -928,22 +926,22 @@ function FinishedTasks({
   openTask: (task: TaskRow) => () => void;
 }) {
   const [isOpen, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const pick = (task: TaskRow) => () => {
     setOpen(false);
     openTask(task)();
   };
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <div>
-          <SummaryRow
-            icon={BackgroundTask}
-            label={`${tasks.length} finished`}
-            onClick={() => setOpen((o) => !o)}
-          />
-        </div>
-      </PopoverAnchor>
+      <div ref={anchorRef}>
+        <SummaryRow
+          icon={BackgroundTask}
+          label={`${tasks.length} finished`}
+          onClick={() => setOpen((o) => !o)}
+        />
+      </div>
       <PopoverContent
+        anchor={anchorRef}
         side="left"
         align="end"
         sideOffset={12}
@@ -1019,17 +1017,19 @@ function FolderMenu({ thread }: { thread: Thread }) {
   if (!root || editors.length === 0) return null;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label="Folder options">
-          <OverflowIcon />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" size="icon-xs" aria-label="Folder options" />
+        }
+      >
+        <OverflowIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>
           {editors.map((editor) => (
             <DropdownMenuItem
               key={editor}
-              onSelect={() => openInEditor(editor, root, '')}
+              onClick={() => openInEditor(editor, root, '')}
             >
               Open in {EDITOR_NAMES[editor]}
             </DropdownMenuItem>
@@ -1201,6 +1201,7 @@ function CheckCount({
 function AddSourceRow({ thread }: { thread: Thread }) {
   const dispatch = useDispatch();
   const [isOpen, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
   const source = sourceFrom(text);
   const submit = (e: FormEvent) => {
@@ -1212,16 +1213,19 @@ function AddSourceRow({ thread }: { thread: Thread }) {
   };
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <div>
-          <SummaryRow
-            icon={Plus}
-            label={<span className="text-muted-foreground">Add a source</span>}
-            onClick={() => setOpen(true)}
-          />
-        </div>
-      </PopoverAnchor>
-      <PopoverContent align="end" side="left" className="w-72">
+      <div ref={anchorRef}>
+        <SummaryRow
+          icon={Plus}
+          label={<span className="text-muted-foreground">Add a source</span>}
+          onClick={() => setOpen(true)}
+        />
+      </div>
+      <PopoverContent
+        anchor={anchorRef}
+        align="end"
+        side="left"
+        className="w-72"
+      >
         <form onSubmit={submit} className="flex flex-col gap-2">
           <label
             htmlFor={`add-source-${thread.id}`}

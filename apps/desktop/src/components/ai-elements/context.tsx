@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { LanguageModelUsage } from "ai";
 import type { ComponentProps } from "react";
-import { createContext, useContext, useMemo } from "react";
+import { createContext, isValidElement, useContext, useMemo } from "react";
 import { getUsage } from "tokenlens";
 
 const PERCENT_MAX = 100;
@@ -26,6 +26,8 @@ interface ContextSchema {
   maxTokens: number;
   usage?: LanguageModelUsage;
   modelId?: ModelId;
+  openDelay?: number;
+  closeDelay?: number;
 }
 
 const ContextContext = createContext<ContextSchema | null>(null);
@@ -47,16 +49,18 @@ export const Context = ({
   maxTokens,
   usage,
   modelId,
+  openDelay = 0,
+  closeDelay = 0,
   ...props
 }: ContextProps) => {
   const contextValue = useMemo(
-    () => ({ maxTokens, modelId, usage, usedTokens }),
-    [maxTokens, modelId, usage, usedTokens]
+    () => ({ closeDelay, maxTokens, modelId, openDelay, usage, usedTokens }),
+    [closeDelay, maxTokens, modelId, openDelay, usage, usedTokens]
   );
 
   return (
     <ContextContext.Provider value={contextValue}>
-      <HoverCard closeDelay={0} openDelay={0} {...props} />
+      <HoverCard {...props} />
     </ContextContext.Provider>
   );
 };
@@ -105,7 +109,7 @@ const ContextIcon = () => {
 export type ContextTriggerProps = ComponentProps<typeof Button>;
 
 export const ContextTrigger = ({ children, ...props }: ContextTriggerProps) => {
-  const { usedTokens, maxTokens } = useContextValue();
+  const { usedTokens, maxTokens, openDelay, closeDelay } = useContextValue();
   const usedPercent = usedTokens / maxTokens;
   const renderedPercent = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 1,
@@ -113,16 +117,22 @@ export const ContextTrigger = ({ children, ...props }: ContextTriggerProps) => {
   }).format(usedPercent);
 
   return (
-    <HoverCardTrigger asChild>
-      {children ?? (
-        <Button type="button" variant="ghost" {...props}>
-          <span className="font-medium text-muted-foreground">
-            {renderedPercent}
-          </span>
-          <ContextIcon />
-        </Button>
-      )}
-    </HoverCardTrigger>
+    <HoverCardTrigger
+      closeDelay={closeDelay}
+      delay={openDelay}
+      render={
+        isValidElement(children) ? (
+          children
+        ) : (
+          <Button type="button" variant="ghost" {...props}>
+            <span className="font-medium text-muted-foreground">
+              {renderedPercent}
+            </span>
+            <ContextIcon />
+          </Button>
+        )
+      }
+    />
   );
 };
 
@@ -169,7 +179,7 @@ export const ContextContentHeader = ({
             </p>
           </div>
           <div className="space-y-2">
-            <Progress className="bg-muted" value={usedPercent * PERCENT_MAX} />
+            <Progress value={usedPercent * PERCENT_MAX} />
           </div>
         </>
       )}

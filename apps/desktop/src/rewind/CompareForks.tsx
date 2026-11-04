@@ -107,40 +107,41 @@ function ForkSide({
   const open = thread.steps.filter((s) => s.status !== 'dropped').length;
 
   return (
-    <Card asChild className="min-w-0 gap-3 p-3">
-      <section aria-label={thread.title}>
-        <header className="flex min-w-0 flex-col gap-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              aria-hidden
-              className="size-2 shrink-0 rounded-full"
-              style={{ background: lineColor(thread.line) }}
-            />
-            <h3 className="min-w-0 truncate type-title">{thread.title}</h3>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 type-meta text-muted-foreground">
-            {!!thread.repo && (
-              <span className="min-w-0 truncate font-mono type-caption">
-                {thread.repo.branch}
-              </span>
-            )}
-            <span className="flex items-center gap-1.5 tabular">
-              <ProgressRing slot={thread.line} size={12} />
-              {done} of {open} steps
+    <Card
+      render={<section aria-label={thread.title} />}
+      className="min-w-0 gap-3 p-3"
+    >
+      <header className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full"
+            style={{ background: lineColor(thread.line) }}
+          />
+          <h3 className="min-w-0 truncate type-title">{thread.title}</h3>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 type-meta text-muted-foreground">
+          {!!thread.repo && (
+            <span className="min-w-0 truncate font-mono type-caption">
+              {thread.repo.branch}
             </span>
-            {files.length > 0 && <DiffStat added={added} removed={removed} />}
-          </div>
-        </header>
-        <SideFiles
-          thread={thread}
-          diff={diff}
-          files={files}
-          otherFiles={otherFiles}
-        />
-        <Button variant="outline" className="self-start" onClick={onKeep}>
-          Keep this one
-        </Button>
-      </section>
+          )}
+          <span className="flex items-center gap-1.5 tabular">
+            <ProgressRing slot={thread.line} size={12} />
+            {done} of {open} steps
+          </span>
+          {files.length > 0 && <DiffStat added={added} removed={removed} />}
+        </div>
+      </header>
+      <SideFiles
+        thread={thread}
+        diff={diff}
+        files={files}
+        otherFiles={otherFiles}
+      />
+      <Button variant="outline" className="self-start" onClick={onKeep}>
+        Keep this one
+      </Button>
     </Card>
   );
 }

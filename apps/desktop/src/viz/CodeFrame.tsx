@@ -100,16 +100,18 @@ function CodeActions({ code, language }: { code: string; language: string }) {
     <>
       <CopyButton text={code} label="Copy code" />
       <Tooltip>
-        <TooltipTrigger asChild>
-          {/* Streamdown's button: it knows each language's file extension. */}
-          <CodeBlockDownloadButton
-            code={code}
-            language={language}
-            title={undefined}
-            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-          >
-            <Download />
-          </CodeBlockDownloadButton>
+        {/* Streamdown's button: it knows each language's file extension. */}
+        <TooltipTrigger
+          render={
+            <CodeBlockDownloadButton
+              code={code}
+              language={language}
+              title={undefined}
+              className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+            />
+          }
+        >
+          <Download />
         </TooltipTrigger>
         <TooltipContent>Download</TooltipContent>
       </Tooltip>

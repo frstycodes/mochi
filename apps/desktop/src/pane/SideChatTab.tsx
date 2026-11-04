@@ -178,16 +178,18 @@ function HeaderAction({
 >) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          className="text-muted-foreground"
-          {...props}
-        >
-          <Icon />
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            className="text-muted-foreground"
+            {...props}
+          />
+        }
+      >
+        <Icon />
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

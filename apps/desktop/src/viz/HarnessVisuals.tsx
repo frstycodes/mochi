@@ -41,7 +41,7 @@ export function MetroVisual({ threads }: { threads: Thread[] }) {
               <text
                 x={0}
                 y={y(row) + 4}
-                className="fill-foreground text-xs font-medium"
+                className="fill-foreground type-meta font-medium"
               >
                 {truncate(thread.title, 18)}
               </text>

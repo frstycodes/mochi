@@ -173,23 +173,24 @@ export function Annotator({
         className="flex shrink-0 flex-wrap items-center gap-1 px-2 py-1.5"
       >
         <ToggleGroup
-          type="single"
           size="sm"
-          value={tool}
-          onValueChange={(v) => v && setTool(v as AnnotationTool)}
+          value={[tool]}
+          onValueChange={([v]) => v && setTool(v as AnnotationTool)}
           aria-label="Tool"
         >
           {TOOLS.map(({ id, label, icon: Icon }) => (
             <Tooltip key={id}>
-              <TooltipTrigger asChild>
-                {/* The tooltip trigger takes over data-state, so the pressed look keys off aria-checked. */}
-                <ToggleGroupItem
-                  value={id}
-                  aria-label={label}
-                  className="size-7 text-muted-foreground aria-checked:bg-accent aria-checked:text-foreground"
-                >
-                  <Icon className="size-4" />
-                </ToggleGroupItem>
+              {/* The tooltip trigger takes over data-state, so the pressed look keys off aria-checked. */}
+              <TooltipTrigger
+                render={
+                  <ToggleGroupItem
+                    value={id}
+                    aria-label={label}
+                    className="size-7 text-muted-foreground aria-checked:bg-accent aria-checked:text-foreground"
+                  />
+                }
+              >
+                <Icon className="size-4" />
               </TooltipTrigger>
               <TooltipContent>{label}</TooltipContent>
             </Tooltip>

@@ -408,7 +408,7 @@ function NoteCard({
         }}
         placeholder={`Note for ${actions.agentName} on line ${note.line}`}
         aria-label={`Review note on ${note.path} line ${note.line}`}
-        className="min-h-14 resize-none text-sm"
+        className="min-h-14 resize-none type-prose"
       />
       <div className="flex justify-end gap-1.5">
         <Button

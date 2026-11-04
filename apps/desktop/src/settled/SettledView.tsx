@@ -53,7 +53,7 @@ export function SettledView() {
   const isFilteredEmpty = page.total > 0 && page.matchCount === 0;
 
   return (
-    <ScrollArea type="scroll" className="h-full">
+    <ScrollArea className="h-full">
       <div className="mx-auto flex w-full max-w-180 flex-col gap-6 px-4 pt-6 pb-16 md:px-8 md:pt-8">
         <header className="flex items-end justify-between gap-3 px-1">
           <h1 className="type-display">
@@ -93,7 +93,8 @@ export function SettledView() {
             </InputGroup>
             <div className="flex min-h-7 items-center gap-3 px-4">
               <Checkbox
-                checked={page.allState}
+                checked={page.allState === true}
+                indeterminate={page.allState === 'indeterminate'}
                 onCheckedChange={page.toggleAll}
                 disabled={page.matchCount === 0}
                 aria-label="Select every thread shown"
@@ -306,25 +307,27 @@ function SettledRow({
         </span>
       </button>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`${thread.title} actions`}
-          >
-            <OverflowIcon />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${thread.title} actions`}
+            />
+          }
+        >
+          <OverflowIcon />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onSelect={open}>Open thread</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => toggleSettle([thread], dispatch)}>
+          <DropdownMenuItem onClick={open}>Open thread</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => toggleSettle([thread], dispatch)}>
             <Refresh />
             Reactivate
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
-            onSelect={() => requestDelete([thread.id])}
+            onClick={() => requestDelete([thread.id])}
           >
             <Trash />
             Delete…

@@ -98,19 +98,21 @@ export function ModelPickersBlock() {
     >
       <div className="flex flex-wrap items-center gap-1">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 px-2 text-muted-foreground"
-            >
-              <ProviderMark provider={model.harness} size={14} />
-              {model.name}
-              <ChevronDown
-                data-icon="inline-end"
-                className="text-subtle-foreground"
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 px-2 text-muted-foreground"
               />
-            </Button>
+            }
+          >
+            <ProviderMark provider={model.harness} size={14} />
+            {model.name}
+            <ChevronDown
+              data-icon="inline-end"
+              className="text-subtle-foreground"
+            />
           </DropdownMenuTrigger>
           <ModelMenu
             models={models}

@@ -77,12 +77,10 @@ export function SubagentLine({ subagent }: { subagent: Subagent }) {
       (subagent.message || subagent.steps.length ? 'Thinking' : 'Starting');
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="flex min-w-0 flex-1">
-            <Shimmer as="span" className="min-w-0 truncate">
-              {text}
-            </Shimmer>
-          </span>
+        <TooltipTrigger render={<span className="flex min-w-0 flex-1" />}>
+          <Shimmer as="span" className="min-w-0 truncate">
+            {text}
+          </Shimmer>
         </TooltipTrigger>
         <TooltipContent>{text}</TooltipContent>
       </Tooltip>

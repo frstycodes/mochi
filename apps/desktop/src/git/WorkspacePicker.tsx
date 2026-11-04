@@ -217,17 +217,19 @@ function BranchPicker({ workspace }: { workspace: Workspace }) {
         if (open) branches.refresh();
       }}
     >
-      <PopoverTrigger asChild>
-        <MetaChip
-          className="bg-transparent"
-          aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}
-        >
-          <GitBranch />
-          <span className="truncate">
-            {isNew ? `from ${label ?? '…'}` : (label ?? 'Pick a branch')}
-          </span>
-          <ChevronDown data-icon="inline-end" />
-        </MetaChip>
+      <PopoverTrigger
+        render={
+          <MetaChip
+            className="bg-transparent"
+            aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}
+          />
+        }
+      >
+        <GitBranch />
+        <span className="truncate">
+          {isNew ? `from ${label ?? '…'}` : (label ?? 'Pick a branch')}
+        </span>
+        <ChevronDown data-icon="inline-end" />
       </PopoverTrigger>
       <PopoverContent
         align="start"

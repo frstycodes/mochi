@@ -82,7 +82,7 @@ function Ports({
   const { confirm, dialog } = useConfirm();
 
   return (
-    <ScrollArea type="scroll" className="h-full">
+    <ScrollArea className="h-full">
       <div className="flex flex-col gap-5 p-3">
         <PaneSection>
           <PaneSectionHeader>

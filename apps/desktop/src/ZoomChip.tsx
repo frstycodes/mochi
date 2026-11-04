@@ -55,22 +55,24 @@ export function ZoomChip({
               value={percent}
               suffix="%"
               aria-label={`Zoom ${percent}%`}
-              className="min-w-[4ch] text-center text-sm"
+              className="min-w-[4ch] text-center type-prose"
             />
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="rounded-full"
-                  disabled={percent === 100}
-                  onClick={() => {
-                    hide();
-                    onReset();
-                  }}
-                >
-                  Reset
-                </Button>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="rounded-full"
+                    disabled={percent === 100}
+                    onClick={() => {
+                      hide();
+                      onReset();
+                    }}
+                  />
+                }
+              >
+                Reset
               </TooltipTrigger>
               <TooltipContent>
                 <span className="flex items-center gap-1.5 font-medium">

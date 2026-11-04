@@ -18,13 +18,13 @@ export function OpenFileItems({ file }: { file: DiskFile }) {
     <>
       {!!editor && (
         <DropdownMenuItem
-          onSelect={() => openInEditor(editor, file.root, file.path)}
+          onClick={() => openInEditor(editor, file.root, file.path)}
         >
           <Code />
           Open in {EDITOR_NAMES[editor]}
         </DropdownMenuItem>
       )}
-      <DropdownMenuItem onSelect={() => revealPath(file.root, file.path)}>
+      <DropdownMenuItem onClick={() => revealPath(file.root, file.path)}>
         <FolderOpen />
         Show in {REVEAL_IN}
       </DropdownMenuItem>

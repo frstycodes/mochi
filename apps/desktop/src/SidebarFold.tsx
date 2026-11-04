@@ -20,15 +20,16 @@ export function FoldGroup({
   children: ReactNode;
 }) {
   return (
-    <Fold asChild defaultOpen={isInitiallyOpen}>
-      <SidebarGroup className="mt-1 pt-0">
-        <SectionToggle label={label} count={count} />
-        <FoldContent>
-          <SidebarGroupContent>
-            <SidebarMenu>{children}</SidebarMenu>
-          </SidebarGroupContent>
-        </FoldContent>
-      </SidebarGroup>
+    <Fold
+      render={<SidebarGroup className="mt-1 pt-0" />}
+      defaultOpen={isInitiallyOpen}
+    >
+      <SectionToggle label={label} count={count} />
+      <FoldContent>
+        <SidebarGroupContent>
+          <SidebarMenu>{children}</SidebarMenu>
+        </SidebarGroupContent>
+      </FoldContent>
     </Fold>
   );
 }

@@ -32,26 +32,25 @@ export function MachinePresence({
       : undefined;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label={label}
-          className={cn('inline-flex shrink-0 items-center', className)}
-        >
-          {age ? (
-            <span className="tabular type-caption font-normal text-subtle-foreground">
-              {age}
-            </span>
-          ) : (
-            <span
-              aria-hidden
-              className={cn(
-                'size-2 rounded-full',
-                PRESENCE_DOT[machine.status],
-              )}
-            />
-          )}
-        </span>
+      <TooltipTrigger
+        render={
+          <span
+            tabIndex={0}
+            aria-label={label}
+            className={cn('inline-flex shrink-0 items-center', className)}
+          />
+        }
+      >
+        {age ? (
+          <span className="tabular type-caption font-normal text-subtle-foreground">
+            {age}
+          </span>
+        ) : (
+          <span
+            aria-hidden
+            className={cn('size-2 rounded-full', PRESENCE_DOT[machine.status])}
+          />
+        )}
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

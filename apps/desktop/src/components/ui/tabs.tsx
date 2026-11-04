@@ -3,11 +3,10 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { motion, useReducedMotionConfig } from "motion/react"
-import { useControllableState } from "@radix-ui/react-use-controllable-state"
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cn } from "@/lib/utils"
-import { Tabs as TabsPrimitive } from "radix-ui"
 
-const TabsContext = React.createContext<{ value: string | undefined; id: string } | null>(null)
+const TabsContext = React.createContext<{ value: TabsPrimitive.Tab.Value; id: string } | null>(null)
 const TabsListContext = React.createContext<"default" | "line">("default")
 
 function useTabs() {
@@ -23,13 +22,14 @@ function Tabs({
   defaultValue,
   onValueChange,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Root>) {
+}: TabsPrimitive.Root.Props) {
   const id = React.useId()
-  const [value, setValue] = useControllableState({
-    prop: valueProp,
-    defaultProp: defaultValue ?? "",
-    onChange: onValueChange,
-  })
+  const [uncontrolledValue, setUncontrolledValue] = React.useState<TabsPrimitive.Tab.Value>(defaultValue ?? "")
+  const value = valueProp !== undefined ? valueProp : uncontrolledValue
+  const setValue: TabsPrimitive.Root.Props["onValueChange"] = (next, eventDetails) => {
+    if (valueProp === undefined) setUncontrolledValue(next)
+    onValueChange?.(next, eventDetails)
+  }
   return (
     <TabsContext.Provider value={{ value, id }}>
       <TabsPrimitive.Root
@@ -65,7 +65,7 @@ function TabsList({
   className,
   variant = "default",
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.List> &
+}: TabsPrimitive.List.Props &
   VariantProps<typeof tabsListVariants>) {
   return (
     <TabsListContext.Provider value={variant ?? "default"}>
@@ -86,7 +86,7 @@ function TabsTrigger({
   children,
   value,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+}: TabsPrimitive.Tab.Props) {
   const tabs = useTabs()
   const variant = React.useContext(TabsListContext)
   const isActive = tabs.value === value
@@ -94,11 +94,11 @@ function TabsTrigger({
   const transition = reduceMotion ? { duration: 0 } : SLIDE
 
   return (
-    <TabsPrimitive.Trigger
+    <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       value={value}
       className={cn(
-        "relative isolate inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 data-active:text-foreground dark:text-muted-foreground dark:hover:text-foreground dark:data-active:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative isolate inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-active:text-foreground dark:text-muted-foreground dark:hover:text-foreground dark:data-active:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         "group-data-[variant=line]/tabs-list:h-8 group-data-[variant=line]/tabs-list:rounded-none",
         className
       )}
@@ -114,7 +114,7 @@ function TabsTrigger({
         />
       )}
       {children}
-    </TabsPrimitive.Trigger>
+    </TabsPrimitive.Tab>
   )
 }
 
@@ -139,9 +139,9 @@ function SegmentChip({ layoutId, transition }: { layoutId: string; transition: o
 function TabsContent({
   className,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Content>) {
+}: TabsPrimitive.Panel.Props) {
   return (
-    <TabsPrimitive.Content
+    <TabsPrimitive.Panel
       data-slot="tabs-content"
       className={cn("flex-1 text-sm outline-none", className)}
       {...props}

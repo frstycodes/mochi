@@ -156,11 +156,14 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
     <SettingsSection
       title={isSearch ? 'On skills.sh' : 'Popular on skills.sh'}
       action={
-        <Button variant="ghost" size="xs" asChild>
-          <a href={SKILLS_SH} target="_blank" rel="noreferrer">
-            <ArrowUpRight data-icon="inline-start" />
-            skills.sh
-          </a>
+        <Button
+          variant="ghost"
+          size="xs"
+          nativeButton={false}
+          render={<a href={SKILLS_SH} target="_blank" rel="noreferrer" />}
+        >
+          <ArrowUpRight data-icon="inline-start" />
+          skills.sh
         </Button>
       }
       footer={
@@ -202,15 +205,20 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
               status={!!similar.length && <SimilarNote similar={similar} />}
               actions={
                 <>
-                  <Button variant="ghost" size="icon-sm" asChild>
-                    <a
-                      href={skill.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={`${skill.name} on skills.sh`}
-                    >
-                      <ArrowUpRight />
-                    </a>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={skill.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`${skill.name} on skills.sh`}
+                      />
+                    }
+                  >
+                    <ArrowUpRight />
                   </Button>
                   <AddControl
                     isInstalled={isInstalled}
@@ -282,27 +290,25 @@ function AddSkillMenu({ library }: { library: Library }) {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="xs">
-            <Plus />
-            Add skill
-          </Button>
+        <DropdownMenuTrigger render={<Button size="xs" />}>
+          <Plus />
+          Add skill
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onSelect={() => setAdding('')}>
+          <DropdownMenuItem onClick={() => setAdding('')}>
             <GithubMarkIcon />
             From GitHub
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setWriting(true)}>
+          <DropdownMenuItem onClick={() => setWriting(true)}>
             <Edit />
             Write a skill
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => upload.pick('file')}>
+          <DropdownMenuItem onClick={() => upload.pick('file')}>
             <FileText />
             Upload a SKILL.md
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => upload.pick('folder')}>
+          <DropdownMenuItem onClick={() => upload.pick('folder')}>
             <Folder />
             Upload a skill folder
           </DropdownMenuItem>
@@ -351,18 +357,15 @@ function ImportMenu({ library }: { library: Library }) {
   };
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="xs" disabled={!!busy}>
-          {busy ? <Spinner /> : <Import />}
-          Import
-        </Button>
+      <DropdownMenuTrigger
+        render={<Button variant="outline" size="xs" disabled={!!busy} />}
+      >
+        {busy ? <Spinner /> : <Import />}
+        Import
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         {HARNESS_IDS.map((provider) => (
-          <DropdownMenuItem
-            key={provider}
-            onSelect={() => importFrom(provider)}
-          >
+          <DropdownMenuItem key={provider} onClick={() => importFrom(provider)}>
             <ProviderMark provider={provider} size={14} />
             Skills and servers from {HARNESSES[provider].name}
           </DropdownMenuItem>

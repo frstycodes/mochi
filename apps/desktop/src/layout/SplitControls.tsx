@@ -64,23 +64,27 @@ export function SplitControls() {
     <>
       <DropdownMenu>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Split layout"
-                className="text-muted-foreground"
-              >
-                <Layout />
-              </Button>
-            </DropdownMenuTrigger>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Split layout"
+                    className="text-muted-foreground"
+                  />
+                }
+              />
+            }
+          >
+            <Layout />
           </TooltipTrigger>
           <TooltipContent>Split layout</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuGroup>
-            <DropdownMenuItem onSelect={() => run({ type: 'layout-zoom' })}>
+            <DropdownMenuItem onClick={() => run({ type: 'layout-zoom' })}>
               {isZoomed ? <ExitFullscreen /> : <Fullscreen />}
               {isZoomed ? 'Show all splits' : 'Zoom this split'}
               <DropdownMenuShortcut>
@@ -89,21 +93,21 @@ export function SplitControls() {
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={isZoomed}
-              onSelect={() => run({ type: 'layout-swap', leafId })}
+              onClick={() => run({ type: 'layout-swap', leafId })}
             >
               <ArrowLeftRight />
               Swap with next split
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={isZoomed}
-              onSelect={() => run({ type: 'layout-rotate' })}
+              onClick={() => run({ type: 'layout-rotate' })}
             >
               <Rotation />
               Rotate this split
             </DropdownMenuItem>
             <PresetSubmenu />
             {!!tearOff && (
-              <DropdownMenuItem onSelect={tearOff}>
+              <DropdownMenuItem onClick={tearOff}>
                 <Share />
                 Move to a new window
               </DropdownMenuItem>
@@ -113,7 +117,7 @@ export function SplitControls() {
                 <Share />
                 <span className="flex flex-col">
                   Move to a new window
-                  <span className="text-xs text-muted-foreground">
+                  <span className="type-meta text-muted-foreground">
                     It runs on another computer, so it stays in this window.
                   </span>
                 </span>
@@ -122,7 +126,7 @@ export function SplitControls() {
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onSelect={() => dispatch({ type: 'layout-close', leafId })}
+            onClick={() => dispatch({ type: 'layout-close', leafId })}
           >
             <X />
             Close split
@@ -130,16 +134,18 @@ export function SplitControls() {
         </DropdownMenuContent>
       </DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Close split"
-            onClick={() => dispatch({ type: 'layout-close', leafId })}
-            className="text-muted-foreground"
-          >
-            <X />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close split"
+              onClick={() => dispatch({ type: 'layout-close', leafId })}
+              className="text-muted-foreground"
+            />
+          }
+        >
+          <X />
         </TooltipTrigger>
         <TooltipContent>Close split</TooltipContent>
       </Tooltip>
@@ -159,7 +165,7 @@ function PresetSubmenu() {
         {PRESETS.map((p) => (
           <DropdownMenuItem
             key={p}
-            onSelect={() => dispatch({ type: 'layout-preset', preset: p })}
+            onClick={() => dispatch({ type: 'layout-preset', preset: p })}
           >
             {PRESET_LABELS[p]}
           </DropdownMenuItem>

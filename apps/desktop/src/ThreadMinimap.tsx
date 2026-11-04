@@ -35,24 +35,27 @@ export function ThreadMinimap({
       className={cn('flex flex-col justify-center', className)}
     >
       {items.map(({ rowIndex, text, time, pins }) => (
-        <HoverCard key={rowIndex} openDelay={150} closeDelay={80}>
-          <HoverCardTrigger asChild>
-            <button
-              type="button"
-              aria-label={text}
-              aria-current={inView.has(rowIndex) || undefined}
-              onClick={() => onJump(rowIndex)}
-              className="group flex max-h-2.5 min-h-[3px] flex-1 cursor-default items-center justify-start px-1"
-            >
-              <span
-                className={cn(
-                  'h-0.5 w-2 rounded-full bg-subtle-foreground/50 transition-[width,background-color] duration-150 group-hover:w-3.5 group-hover:bg-foreground',
-                  inView.has(rowIndex) && 'bg-foreground/80',
-                  pins.length > 0 &&
-                    'h-[3px] w-3 bg-foreground group-hover:w-4',
-                )}
+        <HoverCard key={rowIndex}>
+          <HoverCardTrigger
+            delay={150}
+            closeDelay={80}
+            render={
+              <button
+                type="button"
+                aria-label={text}
+                aria-current={inView.has(rowIndex) || undefined}
+                onClick={() => onJump(rowIndex)}
+                className="group flex max-h-2.5 min-h-[3px] flex-1 cursor-default items-center justify-start px-1"
               />
-            </button>
+            }
+          >
+            <span
+              className={cn(
+                'h-0.5 w-2 rounded-full bg-subtle-foreground/50 transition-[width,background-color] duration-150 group-hover:w-3.5 group-hover:bg-foreground',
+                inView.has(rowIndex) && 'bg-foreground/80',
+                pins.length > 0 && 'h-[3px] w-3 bg-foreground group-hover:w-4',
+              )}
+            />
           </HoverCardTrigger>
           <HoverCardContent
             side="right"

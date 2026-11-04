@@ -197,7 +197,15 @@ function SelectBlock() {
         rows={['select'] as const}
         states={['default', 'hover', 'focus', 'disabled', 'invalid']}
         render={(_, state) => (
-          <Select defaultValue="medium" disabled={state === 'disabled'}>
+          <Select
+            defaultValue="medium"
+            items={{
+              low: 'Low effort',
+              medium: 'Medium effort',
+              high: 'High effort',
+            }}
+            disabled={state === 'disabled'}
+          >
             <SelectTrigger
               aria-label="Reasoning effort"
               aria-invalid={state === 'invalid' || undefined}
@@ -232,23 +240,25 @@ function ComboboxBlock() {
       use="Pick from a long, searchable list: projects, branches, skills. A Popover around a Command."
     >
       <Popover open={isOpen} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="Project"
-            className="w-56 justify-start"
+        <PopoverTrigger
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label="Project"
+              className="w-56 justify-start"
+            />
+          }
+        >
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-left',
+              !project && 'text-muted-foreground',
+            )}
           >
-            <span
-              className={cn(
-                'min-w-0 flex-1 truncate text-left',
-                !project && 'text-muted-foreground',
-              )}
-            >
-              {project ?? 'Pick a project'}
-            </span>
-            <ChevronDown data-icon="inline-end" />
-          </Button>
+            {project ?? 'Pick a project'}
+          </span>
+          <ChevronDown data-icon="inline-end" />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-56 p-0">
           <Command defaultValue={project ?? undefined}>

@@ -208,7 +208,7 @@ export function DataSection() {
           title="Accordion"
           use="Settings and FAQs where only one part matters at a time."
         >
-          <Accordion type="single" collapsible defaultValue="settle">
+          <Accordion defaultValue={['settle']}>
             <AccordionItem value="settle">
               <AccordionTrigger>When does a thread settle?</AccordionTrigger>
               <AccordionContent className="text-muted-foreground">

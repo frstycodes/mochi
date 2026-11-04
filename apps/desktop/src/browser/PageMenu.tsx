@@ -79,19 +79,22 @@ export function PageMenu({
       open
       onOpenChange={(open) => !open && updatePage(pageId, { menu: null })}
     >
-      <DropdownMenuTrigger asChild>
-        <span
-          aria-hidden
-          className="pointer-events-none absolute size-0"
-          style={{ left: at.x, top: at.y }}
-        />
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <span
+            aria-hidden
+            className="pointer-events-none absolute size-0"
+            style={{ left: at.x, top: at.y }}
+          />
+        }
+        nativeButton={false}
+      />
       <DropdownMenuContent
         align="start"
         side="bottom"
         sideOffset={2}
         className="w-60"
-        onCloseAutoFocus={(e) => e.preventDefault()}
+        finalFocus={false}
       >
         {!!menu.linkUrl && (
           <Section>
@@ -253,7 +256,7 @@ function Item({
   children: ReactNode;
 }) {
   return (
-    <DropdownMenuItem disabled={disabled} onSelect={onSelect}>
+    <DropdownMenuItem disabled={disabled} onClick={onSelect}>
       {icon}
       {children}
       {!!keys && (

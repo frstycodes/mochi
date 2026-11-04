@@ -16,11 +16,7 @@ import {
 import { ArrowUpRight, Globe, Monitor, Search } from '@/icons';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import type { Thread } from '@/model';
@@ -145,7 +141,17 @@ export function AddressBar({
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={(next) => !next && finish()}>
+    <Popover
+      open={isOpen}
+      onOpenChange={(next, details) => {
+        if (
+          details.reason === 'outside-press' &&
+          anchorRef.current?.contains(details.event.target as Node)
+        )
+          return details.cancel();
+        if (!next) finish();
+      }}
+    >
       <Command
         shouldFilter={false}
         loop
@@ -154,47 +160,43 @@ export function AddressBar({
         onValueChange={setSelected}
         className="mx-1 size-auto min-w-0 flex-1 overflow-visible rounded-none! bg-transparent p-0"
       >
-        <PopoverAnchor asChild>
-          <form
-            ref={anchorRef}
-            onSubmit={(e) => e.preventDefault()}
-            className="group/address relative"
-          >
-            <Input
-              ref={inputRef}
-              aria-label="Address"
-              aria-autocomplete="both"
-              aria-expanded={isOpen}
-              role="combobox"
-              spellCheck={false}
-              autoCapitalize="off"
-              autoComplete="off"
-              value={typed === null ? displayUrl(page.url) : typed + completion}
-              onFocus={(e) => {
-                setTyped(page.url);
-                requestAnimationFrame(() => e.target.select());
-              }}
-              onBlur={finish}
-              onChange={onChange}
-              onKeyDown={onKeyDown}
-              className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
-            />
-            <LoadingBar isLoading={page.isLoading || !!page.pending} />
-            {typed === null && /^https?:/i.test(page.url) && (
-              <OpenExternalButton url={page.url} />
-            )}
-          </form>
-        </PopoverAnchor>
+        <form
+          ref={anchorRef}
+          onSubmit={(e) => e.preventDefault()}
+          className="group/address relative"
+        >
+          <Input
+            ref={inputRef}
+            aria-label="Address"
+            aria-autocomplete="both"
+            aria-expanded={isOpen}
+            role="combobox"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoComplete="off"
+            value={typed === null ? displayUrl(page.url) : typed + completion}
+            onFocus={(e) => {
+              setTyped(page.url);
+              requestAnimationFrame(() => e.target.select());
+            }}
+            onBlur={finish}
+            onChange={onChange}
+            onKeyDown={onKeyDown}
+            className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
+          />
+          <LoadingBar isLoading={page.isLoading || !!page.pending} />
+          {typed === null && /^https?:/i.test(page.url) && (
+            <OpenExternalButton url={page.url} />
+          )}
+        </form>
         <PopoverContent
+          anchor={anchorRef}
           align="start"
           sideOffset={6}
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          onInteractOutside={(e) =>
-            anchorRef.current?.contains(e.target as Node) && e.preventDefault()
-          }
+          initialFocus={false}
           // Keeps focus in the field, so a click on a row lands before the field's blur closes the list.
           onMouseDown={(e) => e.preventDefault()}
-          className="w-(--radix-popover-trigger-width) min-w-72 p-1"
+          className="w-(--anchor-width) min-w-72 p-1"
         >
           <CommandList>
             {rows.map((row) => (

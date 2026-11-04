@@ -108,7 +108,13 @@ function DragList({ threads }: { threads: Thread[] }) {
   const item = (row: Row) => (
     <SidebarMenuItem
       key={row.id}
-      asChild
+      render={
+        <motion.li
+          layout="position"
+          layoutId={`tilted-row-${row.id}`}
+          transition={SLIDE}
+        />
+      }
       data-row-id={row.id}
       data-sub-of={row.parentId}
       onPointerDown={(e: ReactPointerEvent<HTMLLIElement>) =>
@@ -116,18 +122,12 @@ function DragList({ threads }: { threads: Thread[] }) {
       }
       className={cn('select-none', row.parentId && 'pl-[27px]')}
     >
-      <motion.li
-        layout="position"
-        layoutId={`tilted-row-${row.id}`}
-        transition={SLIDE}
-      >
-        <ThreadItem
-          thread={byId.get(row.id)!}
-          isSub={!!row.parentId}
-          isActive={false}
-          onSelect={() => undefined}
-        />
-      </motion.li>
+      <ThreadItem
+        thread={byId.get(row.id)!}
+        isSub={!!row.parentId}
+        isActive={false}
+        onSelect={() => undefined}
+      />
     </SidebarMenuItem>
   );
   const items = tops.map((top) => (

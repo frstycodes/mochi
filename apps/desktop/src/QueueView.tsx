@@ -88,6 +88,7 @@ import { Seen, useSeen } from './notify/useSeen';
 import { isQueueUnread } from './store/seen';
 import { StatusMark } from './ui';
 import { isCommand, listenKeydown } from './keymap';
+import { EASE_OUT } from './lib/ease';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
@@ -146,7 +147,7 @@ export function QueueView() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: 24, transition: { duration: 0.15 } }}
-                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                transition={{ duration: 0.2, ease: EASE_OUT }}
                 onPointerDown={() => setSelected(i)}
               >
                 <QueueDecision
@@ -592,6 +593,8 @@ function QuestionChoices({ item }: { item: QueueItem }) {
         choices: q.options.map((value) => ({ value })),
       }))}
       shortcuts="numbers"
+      // The number keys only work with focus inside, so their hints only show then.
+      className="[&:not(:focus-within)_[data-slot=questionnaire-choice-shortcut]]:hidden"
       onSubmit={submit}
     >
       {isWizard && <QuestionnaireProgress />}
@@ -604,7 +607,7 @@ function QuestionChoices({ item }: { item: QueueItem }) {
           className="gap-3"
         >
           {isWizard && (
-            <QuestionnaireTitle className="mb-1 text-sm [&:not(:has(~[data-slot=questionnaire-description]))]:mb-3">
+            <QuestionnaireTitle className="mb-1 type-prose [&:not(:has(~[data-slot=questionnaire-description]))]:mb-3">
               {q.text}
             </QuestionnaireTitle>
           )}

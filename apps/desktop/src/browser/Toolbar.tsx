@@ -73,6 +73,14 @@ import { OverflowIcon, TooltipIconButton } from '../ui';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const DPRS = [0, 1, 2, 3];
+const DPR_ITEMS = DPRS.map((dpr) => ({
+  value: String(dpr),
+  label: dpr ? `DPR ${dpr}` : 'DPR auto',
+}));
+const DEVICE_ITEMS = [
+  ...DEVICES.map((d) => ({ value: d.id, label: d.label })),
+  { value: 'custom', label: 'Custom' },
+];
 const DESKTOP_ONLY = 'Needs the desktop app';
 
 export function BrowserToolbar({
@@ -177,21 +185,25 @@ function ConsoleButton({
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`${page.console.length} console messages`}
-              className={cn(
-                'h-7 gap-1 rounded-full px-2 tabular-nums',
-                errorCount ? 'text-destructive' : 'text-warning',
-              )}
-            >
-              <Bug className="size-4" />
-              <AnimatedNumber value={page.console.length} />
-            </Button>
-          </PopoverTrigger>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${page.console.length} console messages`}
+                  className={cn(
+                    'h-7 gap-1 rounded-full px-2 tabular-nums',
+                    errorCount ? 'text-destructive' : 'text-warning',
+                  )}
+                />
+              }
+            />
+          }
+        >
+          <Bug className="size-4" />
+          <AnimatedNumber value={page.console.length} />
         </TooltipTrigger>
         <TooltipContent>Console errors and warnings</TooltipContent>
       </Tooltip>
@@ -206,7 +218,7 @@ function ConsoleButton({
             Clear
           </Button>
         </div>
-        <ScrollArea type="scroll" className="max-h-72">
+        <ScrollArea className="max-h-72">
           <ul className="flex flex-col gap-0.5 px-1.5">
             {page.console.map((c, i) => (
               <li key={i} className="flex gap-2 rounded-md px-1.5 py-1">
@@ -251,17 +263,21 @@ function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Screenshot"
-              disabled={!isNative}
-            >
-              <Camera />
-            </Button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Screenshot"
+                  disabled={!isNative}
+                />
+              }
+            />
+          }
+        >
+          <Camera />
         </TooltipTrigger>
         <TooltipContent>
           {isNative
@@ -270,10 +286,10 @@ function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => screenshot(pageId, page, false)}>
+        <DropdownMenuItem onClick={() => screenshot(pageId, page, false)}>
           Visible area
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => screenshot(pageId, page, true)}>
+        <DropdownMenuItem onClick={() => screenshot(pageId, page, true)}>
           Full page
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -310,12 +326,16 @@ function MoreMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="More">
-              <OverflowIcon vertical />
-            </Button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="icon-sm" aria-label="More" />
+              }
+            />
+          }
+        >
+          <OverflowIcon vertical />
         </TooltipTrigger>
         <TooltipContent>More</TooltipContent>
       </Tooltip>
@@ -343,29 +363,31 @@ function MoreMenu({
           )}
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onHardReload}>Hard reload</DropdownMenuItem>
+        <DropdownMenuItem onClick={onHardReload}>Hard reload</DropdownMenuItem>
         <DropdownMenuItem
           disabled={!canCompare}
-          onSelect={() => openCompare(pageId, thread)}
+          onClick={() => openCompare(pageId, thread)}
         >
           Compare with {thread.repo?.base ?? 'the base branch'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={!isNative}
-          onSelect={(e) => (e.preventDefault(), zoomBy(1))}
+          closeOnClick={false}
+          onClick={() => zoomBy(1)}
         >
           Zoom in
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!isNative}
-          onSelect={(e) => (e.preventDefault(), zoomBy(-1))}
+          closeOnClick={false}
+          onClick={() => zoomBy(-1)}
         >
           Zoom out
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!isNative || page.zoom === 1}
-          onSelect={() => updatePage(pageId, { zoom: 1 })}
+          onClick={() => updatePage(pageId, { zoom: 1 })}
         >
           Actual size
           <DropdownMenuShortcut className="tabular-nums">
@@ -445,7 +467,10 @@ export function DeviceBar({ pageId, page }: { pageId: string; page: Page }) {
     >
       <Select
         value={page.device}
-        onValueChange={(device) => updatePage(pageId, { device })}
+        items={DEVICE_ITEMS}
+        onValueChange={(device) =>
+          device !== null && updatePage(pageId, { device })
+        }
       >
         <SelectTrigger size="sm" aria-label="Device" className="shrink-0">
           <SelectValue />
@@ -480,7 +505,10 @@ export function DeviceBar({ pageId, page }: { pageId: string; page: Page }) {
       </TooltipIconButton>
       <Select
         value={String(page.dpr)}
-        onValueChange={(dpr) => updatePage(pageId, { dpr: Number(dpr) })}
+        items={DPR_ITEMS}
+        onValueChange={(dpr) =>
+          dpr !== null && updatePage(pageId, { dpr: Number(dpr) })
+        }
       >
         <SelectTrigger
           size="sm"

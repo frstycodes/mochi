@@ -91,11 +91,10 @@ export function AgentLoaderBlock() {
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <ToggleGroup
-            type="single"
             variant="outline"
             size="sm"
-            value={phase}
-            onValueChange={pick}
+            value={[phase]}
+            onValueChange={([v]) => v && pick(v)}
             aria-label="Agent phase"
           >
             {PHASES.map((p) => (

@@ -406,12 +406,11 @@ export function IconPicker({
   return (
     <ToggleGroup
       id={id}
-      type="single"
       size="sm"
       variant="outline"
       spacing={1}
-      value={value}
-      onValueChange={(icon) => icon && onChange(icon)}
+      value={[value]}
+      onValueChange={([icon]) => icon && onChange(icon)}
       className="flex-wrap"
     >
       {SPACE_ICON_NAMES.map((name) => {
@@ -419,16 +418,14 @@ export function IconPicker({
         return (
           <Tooltip key={name}>
             {/* On a wrapper: as the trigger itself, the tooltip's data-state="closed" would overwrite the toggle's data-state="on". */}
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <ToggleGroupItem
-                  value={name}
-                  aria-label={ICON_LABELS[name]}
-                  className="size-7 px-0"
-                >
-                  <Icon aria-hidden />
-                </ToggleGroupItem>
-              </span>
+            <TooltipTrigger render={<span className="inline-flex" />}>
+              <ToggleGroupItem
+                value={name}
+                aria-label={ICON_LABELS[name]}
+                className="size-7 px-0"
+              >
+                <Icon aria-hidden />
+              </ToggleGroupItem>
             </TooltipTrigger>
             <TooltipContent>{ICON_LABELS[name]}</TooltipContent>
           </Tooltip>
@@ -465,35 +462,32 @@ export function SpaceColorPicker({
   return (
     <ToggleGroup
       id={id}
-      type="single"
       size="sm"
       variant="outline"
       spacing={1}
-      value={value}
-      onValueChange={(color) => color && onChange(color)}
+      value={[value]}
+      onValueChange={([color]) => color && onChange(color)}
       className="flex-wrap"
     >
       {SPACE_COLORS.map((color) => (
         <Tooltip key={color}>
           {/* On a wrapper, as in IconPicker: the tooltip's data-state would overwrite the toggle's. */}
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <ToggleGroupItem
-                value={color}
-                aria-label={COLOR_LABELS[color]}
-                className="size-7 px-0"
-              >
-                <span
-                  aria-hidden
-                  className={cn(
-                    'size-3.5 rounded-full',
-                    color === 'none' &&
-                      'border border-dashed border-muted-foreground',
-                  )}
-                  style={{ background: spaceColorCss(color) }}
-                />
-              </ToggleGroupItem>
-            </span>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <ToggleGroupItem
+              value={color}
+              aria-label={COLOR_LABELS[color]}
+              className="size-7 px-0"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  'size-3.5 rounded-full',
+                  color === 'none' &&
+                    'border border-dashed border-muted-foreground',
+                )}
+                style={{ background: spaceColorCss(color) }}
+              />
+            </ToggleGroupItem>
           </TooltipTrigger>
           <TooltipContent>{COLOR_LABELS[color]}</TooltipContent>
         </Tooltip>

@@ -228,18 +228,22 @@ function FormatMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={label}>
-              {icon}
-            </Button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="icon-sm" aria-label={label} />
+              }
+            />
+          }
+        >
+          {icon}
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-40">
         {formats.map((f) => (
-          <DropdownMenuItem key={f} onSelect={onPick(f)}>
+          <DropdownMenuItem key={f} onClick={onPick(f)}>
             {FORMATS[f].label}
           </DropdownMenuItem>
         ))}

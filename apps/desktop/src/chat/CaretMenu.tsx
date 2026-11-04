@@ -1,10 +1,6 @@
-import type { ReactNode, RefObject } from 'react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 import { Command, CommandList } from '@/components/ui/command';
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 
 type CaretMenuProps = {
   isOpen: boolean;
@@ -34,21 +30,32 @@ export function CaretMenu({
   onDismiss,
   children,
 }: CaretMenuProps) {
+  const anchorRef = useRef<HTMLDivElement>(null);
   return (
-    <Popover open={isOpen} onOpenChange={(open) => !open && onDismiss()}>
-      <PopoverAnchor asChild>
-        <div aria-hidden className="pointer-events-none absolute inset-0" />
-      </PopoverAnchor>
+    <Popover
+      open={isOpen}
+      onOpenChange={(open, { reason }) =>
+        !open &&
+        reason !== 'outside-press' &&
+        reason !== 'focus-out' &&
+        onDismiss()
+      }
+    >
+      <div
+        ref={anchorRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+      />
       <PopoverContent
+        anchor={anchorRef}
         side="top"
         align="start"
         sideOffset={8}
         collisionPadding={8}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}
+        initialFocus={false}
+        finalFocus={false}
         onPointerDown={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-        className="w-(--radix-popover-trigger-width) max-w-(--radix-popover-content-available-width) gap-0 p-0"
+        className="w-(--anchor-width) max-w-(--available-width) gap-0 p-0"
       >
         <Command
           ref={listRef}

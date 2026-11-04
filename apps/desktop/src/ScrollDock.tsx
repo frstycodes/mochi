@@ -21,6 +21,7 @@ import {
   useTransform,
   type MotionValue,
 } from 'motion/react';
+import { EASE_MOVE, EASE_OUT } from './lib/ease';
 
 export interface DockItem<T> {
   value: T;
@@ -41,8 +42,8 @@ const DOCK_IN = {
   default: { type: 'spring', visualDuration: 0.3, bounce: 0.12 },
 } as const;
 const DOCK_OUT = {
-  opacity: { duration: 0.18, ease: [0.4, 0, 0.2, 1] },
-  default: { duration: 0.18, ease: [0.77, 0, 0.175, 1] },
+  opacity: { duration: 0.18, ease: EASE_OUT },
+  default: { duration: 0.18, ease: EASE_MOVE },
 } as const;
 
 /**

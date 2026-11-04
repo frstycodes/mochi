@@ -11,6 +11,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -57,32 +58,34 @@ export function ComparePicker({
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={
-            compare.checkpoint !== undefined
-              ? `Changes at ${from}`
-              : `Comparing ${from} to the working tree`
-          }
-          className="-ml-1 min-w-0 gap-1 px-1.5 font-normal text-muted-foreground"
-        >
-          <span className="truncate text-foreground">{from}</span>
-          <ArrowRight aria-hidden className="size-3 text-subtle-foreground" />
-          <span className="shrink-0">{to}</span>
-          <ChevronDown
-            data-icon="inline-end"
-            className="text-subtle-foreground"
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={
+              compare.checkpoint !== undefined
+                ? `Changes at ${from}`
+                : `Comparing ${from} to the working tree`
+            }
+            className="-ml-1 min-w-0 gap-1 px-1.5 font-normal text-muted-foreground"
           />
-        </Button>
+        }
+      >
+        <span className="truncate text-foreground">{from}</span>
+        <ArrowRight aria-hidden className="size-3 text-subtle-foreground" />
+        <span className="shrink-0">{to}</span>
+        <ChevronDown
+          data-icon="inline-end"
+          className="text-subtle-foreground"
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60">
-        <DropdownMenuItem onSelect={() => onChange({ scope: 'branch' })}>
+        <DropdownMenuItem onClick={() => onChange({ scope: 'branch' })}>
           All changes
           <MenuMeta isChecked={isAll}>{`vs ${defaultBase}`}</MenuMeta>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onChange({ scope: 'uncommitted' })}>
+        <DropdownMenuItem onClick={() => onChange({ scope: 'uncommitted' })}>
           Uncommitted changes
           <MenuMeta isChecked={compare.scope === 'uncommitted'} />
         </DropdownMenuItem>
@@ -111,16 +114,18 @@ export function ComparePicker({
         {checkpoints.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>At a checkpoint</DropdownMenuLabel>
-            {checkpoints.map((c) => (
-              <DropdownMenuItem
-                key={c.n}
-                onSelect={() => onChange({ checkpoint: c.n })}
-              >
-                <span className="truncate">{c.label}</span>
-                <MenuMeta isChecked={compare.checkpoint === c.n} />
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>At a checkpoint</DropdownMenuLabel>
+              {checkpoints.map((c) => (
+                <DropdownMenuItem
+                  key={c.n}
+                  onClick={() => onChange({ checkpoint: c.n })}
+                >
+                  <span className="truncate">{c.label}</span>
+                  <MenuMeta isChecked={compare.checkpoint === c.n} />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
           </>
         )}
       </DropdownMenuContent>

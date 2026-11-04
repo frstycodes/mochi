@@ -30,7 +30,7 @@ export function SkillGroups({
       was.includes(repo) ? was.filter((r) => r !== repo) : [...was, repo],
     );
   return (
-    <Accordion type="multiple" value={open} onValueChange={setOpen}>
+    <Accordion multiple value={open} onValueChange={setOpen}>
       {groups.map((group) =>
         group.entries.length === 1 ? (
           <Fragment key={group.entries[0].id}>{row(group.entries[0])}</Fragment>

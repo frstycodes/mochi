@@ -170,14 +170,16 @@ export function MergeSplitButton({
       </Button>
       <ButtonGroupSeparator />
       <DropdownMenu onOpenChange={onMenuOpenChange}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            size="icon-xs"
-            disabled={isBusy}
-            aria-label="Choose how to merge"
-          >
-            <ChevronDown />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              size="icon-xs"
+              disabled={isBusy}
+              aria-label="Choose how to merge"
+            />
+          }
+        >
+          <ChevronDown />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuRadioGroup

@@ -36,30 +36,32 @@ export function ProjectFilterMenu({
   const current = options.find((o) => o.ref === selected);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <TooltipIconButton
-          label="Filter by project"
-          hint={
-            current?.name ?? (selected === NO_PROJECT ? 'No project' : null)
-          }
-          size="icon-xs"
-          className={cn(
-            'text-sidebar-foreground/50 hover:text-sidebar-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-foreground',
-            selected !== null && 'bg-sidebar-accent text-sidebar-foreground',
-            className,
-          )}
-        >
-          {!!current && <OptionIcon spaceId={spaceId} option={current} />}
-          {selected === NO_PROJECT && <Chat />}
-          {selected === null && <Filter />}
-        </TooltipIconButton>
+      <DropdownMenuTrigger
+        render={
+          <TooltipIconButton
+            label="Filter by project"
+            hint={
+              current?.name ?? (selected === NO_PROJECT ? 'No project' : null)
+            }
+            size="icon-xs"
+            className={cn(
+              'text-sidebar-foreground/50 hover:text-sidebar-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-foreground',
+              selected !== null && 'bg-sidebar-accent text-sidebar-foreground',
+              className,
+            )}
+          />
+        }
+      >
+        {!!current && <OptionIcon spaceId={spaceId} option={current} />}
+        {selected === NO_PROJECT && <Chat />}
+        {selected === null && <Filter />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Show threads in</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={selected ?? ALL}
           onValueChange={(value) => select(value === ALL ? null : value)}
         >
+          <DropdownMenuLabel>Show threads in</DropdownMenuLabel>
           <DropdownMenuRadioItem value={ALL}>
             All projects
           </DropdownMenuRadioItem>

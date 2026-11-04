@@ -105,7 +105,7 @@ export function ShipBar({
                   : 'Stage changes to commit them'
             }
             aria-label="Commit message"
-            className="min-h-14 resize-none text-sm"
+            className="min-h-14 resize-none type-prose"
           />
           <div className="flex items-center gap-2">
             <span className="flex-1 type-caption text-subtle-foreground tabular">
@@ -228,21 +228,25 @@ function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
   });
   return (
     <RefHoverCard item={item} threadId={thread.id}>
-      <Button variant="ghost" size="sm" asChild className="min-w-0">
-        <a href={pr.url} target="_blank" rel="noreferrer">
-          <PrStateIcon
-            state={PR_STATUS[pr.state] ?? 'unknown'}
-            hasConflicts={item.state?.hasConflicts}
-          />
-          <span className="tabular">#{pr.number}</span>
-          <span className="truncate text-muted-foreground lowercase">
-            {pr.state}
-          </span>
-          <ArrowUpRight
-            data-icon="inline-end"
-            className="text-subtle-foreground"
-          />
-        </a>
+      <Button
+        variant="ghost"
+        size="sm"
+        nativeButton={false}
+        render={<a href={pr.url} target="_blank" rel="noreferrer" />}
+        className="min-w-0"
+      >
+        <PrStateIcon
+          state={PR_STATUS[pr.state] ?? 'unknown'}
+          hasConflicts={item.state?.hasConflicts}
+        />
+        <span className="tabular">#{pr.number}</span>
+        <span className="truncate text-muted-foreground lowercase">
+          {pr.state}
+        </span>
+        <ArrowUpRight
+          data-icon="inline-end"
+          className="text-subtle-foreground"
+        />
       </Button>
     </RefHoverCard>
   );

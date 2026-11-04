@@ -144,10 +144,8 @@ function SwitchBranchContent({
         </p>
       )}
       <DialogFooter className="sm:justify-between">
-        <DialogClose asChild>
-          <Button variant="outline" disabled={isPending}>
-            Cancel
-          </Button>
+        <DialogClose render={<Button variant="outline" disabled={isPending} />}>
+          Cancel
         </DialogClose>
         <ButtonGroup>
           <Button disabled={isPending} onClick={() => run('stash')}>
@@ -155,26 +153,28 @@ function SwitchBranchContent({
           </Button>
           <ButtonGroupSeparator className="bg-primary-foreground/20" />
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="icon"
-                disabled={isPending}
-                aria-label="Other ways to handle the changes"
-              >
-                <ChevronDown />
-              </Button>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon"
+                  disabled={isPending}
+                  aria-label="Other ways to handle the changes"
+                />
+              }
+            >
+              <ChevronDown />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-auto">
-              <DropdownMenuItem onSelect={() => run('commit')}>
+              <DropdownMenuItem onClick={() => run('commit')}>
                 Commit to <BranchName name={current} /> as work in progress
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => run('bring')}>
+              <DropdownMenuItem onClick={() => run('bring')}>
                 Bring changes to <BranchName name={localBranch(target)} />
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
-                onSelect={() => setConfirmingDiscard(true)}
+                onClick={() => setConfirmingDiscard(true)}
               >
                 Discard changes
               </DropdownMenuItem>

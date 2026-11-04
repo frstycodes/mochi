@@ -74,7 +74,7 @@ import type { WorkspaceDraft } from './git/workspace';
 import { openStarted } from './remote/expecting';
 import { startBlocker, useComputers } from './remote/computers';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
-import { HeroRows, heroTitle } from './NewThreadHero';
+import { FirstRun, HeroRows, heroTitle } from './NewThreadHero';
 import { PlaceNotes, usePlaceNotes } from './PlaceNotes';
 
 /** The new-thread page's picks, kept with its draft. */
@@ -90,7 +90,7 @@ interface NewThreadPicks {
 
 export function NewThreadView() {
   return (
-    <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:h-full">
+    <ScrollArea className="h-full">
       {/* One draft per profile: switching profiles swaps it. */}
       <PromptInputProvider key={useSpace().id}>
         <NewThread />
@@ -119,10 +119,8 @@ function NewThread() {
   );
   const projects = useProjectsWithCopies(spaceId) ?? NO_PROJECTS;
   const computers = useComputers();
-  // Projects first, then the composer, so a thread starts without the mouse; a kept draft already has its place.
-  const [step, setStep] = useState<'project' | 'compose'>(
-    saved ? 'compose' : 'project',
-  );
+  // Composer first on the latest project: typing starts the thread. Esc on an empty draft (or the project chip) picks another place.
+  const [step, setStep] = useState<'project' | 'compose'>('compose');
   // Unset until you pick: the most recently used project where it runs by default, once the list has loaded.
   const [chosenPlace, setPlace] = useState<Place | undefined>(
     saved && { machineId: saved.runsOn ?? null, ref: saved.project },
@@ -313,6 +311,7 @@ function NewThread() {
   };
 
   const projectLabel = placeProject?.name ?? (project && projectName(project));
+  const isFirstRun = !state.threads.some((t) => t.spaceId === spaceId);
 
   return (
     // The greeting row has a fixed height, so the card's top stays put whichever step it holds and however tall it grows.
@@ -422,6 +421,12 @@ function NewThread() {
         {step === 'compose' && !remote && !!project && (
           <WorkspaceNotes workspace={workspace} />
         )}
+        {step === 'compose' && isFirstRun && (
+          <FirstRun
+            hasProject={projects.length > 0}
+            onAddProject={() => setStep('project')}
+          />
+        )}
         {step === 'compose' && (
           <HeroRows
             projectKey={placeProject?.key ?? null}
@@ -454,7 +459,7 @@ function placeholder(
   projectLabel: string | null,
 ) {
   if (projectLabel)
-    return `What should this thread get done in ${projectLabel}?${machineName ? ` Runs on ${machineName}` : ''}`;
+    return `Describe the task${machineName ? `, runs on ${machineName}` : ''}. Esc to change project`;
   return machineName
     ? `Ask anything; runs on ${machineName}, no folder attached`
     : 'Ask anything, no folder attached';

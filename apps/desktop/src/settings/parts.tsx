@@ -315,7 +315,7 @@ export function DesktopOnlyNotice({ what }: { what: ReactNode }) {
   );
 }
 
-/** A choice from a list too long for toggles. Radix Select, never a native one; `value` can't be empty (Radix reserves '' for "nothing chosen"). */
+/** A choice from a list too long for toggles. Base UI Select, never a native one; `items` lets the trigger show the label, not the raw value. */
 export function SettingsSelect<T extends string>({
   id,
   value,
@@ -335,7 +335,8 @@ export function SettingsSelect<T extends string>({
   return (
     <Select
       value={value}
-      onValueChange={(v) => onChange(v as T)}
+      items={options}
+      onValueChange={(v) => v !== null && onChange(v)}
       disabled={props.disabled}
     >
       <SelectTrigger
@@ -380,11 +381,10 @@ export function SettingsChoice<T extends string>({
     <ToggleGroup
       id={settingControlId(id)}
       aria-label={props['aria-label']}
-      type="single"
       size="sm"
       variant="outline"
-      value={value}
-      onValueChange={(v) => v && onChange(v as T)}
+      value={[value]}
+      onValueChange={([v]) => v && onChange(v as T)}
     >
       {options.map((o) => (
         <ToggleGroupItem key={o.value} value={o.value} className={o.className}>

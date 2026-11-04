@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Dialog as DialogPrimitive } from 'radix-ui';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import {
   ClipboardCheck,
   Clock,
@@ -37,6 +37,7 @@ import { ThreadMachineMark } from './remote/MachineMark';
 import { cn } from '@/lib/utils';
 import { ProviderMark, ProgressRing, lineColor } from './ui';
 import { isWorking } from './agentPhase';
+import { EASE_OUT } from './lib/ease';
 
 const R_IN = 92;
 const R_OUT = 188;
@@ -165,71 +166,69 @@ export function Orbit() {
     >
       <AnimatePresence>
         {center && (
-          <DialogPrimitive.Portal forceMount>
-            <DialogPrimitive.Content
-              asChild
-              forceMount
-              aria-describedby={undefined}
+          <DialogPrimitive.Portal keepMounted>
+            <DialogPrimitive.Popup
+              render={
+                <motion.div
+                  key="orbit"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.1 }}
+                  className="fixed inset-0 z-[400] touch-none outline-none select-none"
+                  style={{ background: 'var(--scrim)' }}
+                />
+              }
             >
-              <motion.div
-                key="orbit"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }}
-                className="fixed inset-0 z-[400] touch-none outline-none select-none"
-                style={{ background: 'var(--scrim)' }}
+              <DialogPrimitive.Title className="sr-only">
+                Orbit: move toward a destination and release
+              </DialogPrimitive.Title>
+              <svg className="pointer-events-none absolute inset-0 h-full w-full">
+                <circle
+                  cx={center.x}
+                  cy={center.y}
+                  r={R_IN * center.k}
+                  fill="none"
+                  stroke="var(--border)"
+                  strokeDasharray="2 6"
+                />
+                <circle
+                  cx={center.x}
+                  cy={center.y}
+                  r={R_OUT * center.k}
+                  fill="none"
+                  stroke="var(--border)"
+                  strokeDasharray="2 6"
+                />
+                <line
+                  x1={center.x}
+                  y1={center.y}
+                  x2={pointer.x}
+                  y2={pointer.y}
+                  stroke="var(--foreground)"
+                  strokeOpacity={selected ? 0.5 : 0.2}
+                  strokeWidth={1.5}
+                />
+              </svg>
+              <div
+                className="absolute flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-center text-xs leading-tight text-subtle-foreground shadow-[var(--elev-popover)]"
+                style={{ left: center.x, top: center.y }}
               >
-                <DialogPrimitive.Title className="sr-only">
-                  Orbit: move toward a destination and release
-                </DialogPrimitive.Title>
-                <svg className="pointer-events-none absolute inset-0 h-full w-full">
-                  <circle
-                    cx={center.x}
-                    cy={center.y}
-                    r={R_IN * center.k}
-                    fill="none"
-                    stroke="var(--border)"
-                    strokeDasharray="2 6"
-                  />
-                  <circle
-                    cx={center.x}
-                    cy={center.y}
-                    r={R_OUT * center.k}
-                    fill="none"
-                    stroke="var(--border)"
-                    strokeDasharray="2 6"
-                  />
-                  <line
-                    x1={center.x}
-                    y1={center.y}
-                    x2={pointer.x}
-                    y2={pointer.y}
-                    stroke="var(--foreground)"
-                    strokeOpacity={selected ? 0.5 : 0.2}
-                    strokeWidth={1.5}
-                  />
-                </svg>
-                <div
-                  className="absolute flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-center text-xs leading-tight text-subtle-foreground shadow-[var(--elev-popover)]"
-                  style={{ left: center.x, top: center.y }}
-                >
-                  {selected ? 'Go' : 'Cancel'}
-                </div>
-                {items.map((it, i) => (
-                  <OrbitNode
-                    key={it.key}
-                    item={it}
-                    center={center}
-                    isSelected={selected?.key === it.key}
-                    index={i}
-                  />
-                ))}
-                {selected && peekKey === selected.key && (
-                  <Peek item={selected} center={center} />
-                )}
-              </motion.div>
-            </DialogPrimitive.Content>
+                {selected ? 'Go' : 'Cancel'}
+              </div>
+              {items.map((it, i) => (
+                <OrbitNode
+                  key={it.key}
+                  item={it}
+                  center={center}
+                  isSelected={selected?.key === it.key}
+                  index={i}
+                />
+              ))}
+              {selected && peekKey === selected.key && (
+                <Peek item={selected} center={center} />
+              )}
+            </DialogPrimitive.Popup>
           </DialogPrimitive.Portal>
         )}
       </AnimatePresence>
@@ -323,7 +322,7 @@ function OrbitNode({
       transition={{
         duration: 0.12,
         delay: index * 0.012,
-        ease: [0.23, 1, 0.32, 1],
+        ease: EASE_OUT,
       }}
       className="absolute -translate-x-1/2 -translate-y-1/2"
       style={{ left: x, top: y }}
@@ -427,7 +426,7 @@ function Peek({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.12 }}
-      className="absolute flex flex-col gap-2 rounded-xl border border-border bg-background p-3 text-sm shadow-[var(--elev-popover)]"
+      className="absolute flex flex-col gap-2 rounded-xl border border-border bg-background p-3 type-prose shadow-[var(--elev-popover)]"
       style={{ left, top, width: W }}
     >
       {item.ring === 'inner' ? (
@@ -464,7 +463,7 @@ function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
           </li>
         ))}
       </ul>
-      <div className="text-xs text-subtle-foreground">
+      <div className="type-meta text-subtle-foreground">
         {choices.length
           ? 'Press a number to answer without leaving this screen'
           : 'Open the queue to answer'}
@@ -490,7 +489,7 @@ function ThreadPeek({ thread }: { thread: Thread }) {
         </span>
       </div>
       {last && (
-        <div className="line-clamp-2 text-xs text-subtle-foreground">
+        <div className="line-clamp-2 type-meta text-subtle-foreground">
           {last.text}
         </div>
       )}
@@ -500,7 +499,7 @@ function ThreadPeek({ thread }: { thread: Thread }) {
 
 function PeekHeader({ thread }: { thread: Thread }): ReactNode {
   return (
-    <div className="flex items-center gap-1.5 text-xs text-subtle-foreground">
+    <div className="flex items-center gap-1.5 type-meta text-subtle-foreground">
       <span
         aria-hidden
         className="size-2 rounded-full"
