@@ -300,7 +300,7 @@ function SliderCompare({
       <Button
         size="xs"
         variant="outline"
-        className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border-transparent bg-popover text-foreground shadow-popover dark:bg-popover"
+        className="absolute bottom-2 left-1/2 -translate-x-1/2 border-transparent bg-popover text-foreground shadow-popover dark:bg-popover"
         onClick={() => setShots(null)}
       >
         Capture again

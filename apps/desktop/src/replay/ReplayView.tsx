@@ -168,12 +168,7 @@ function ReplayHeader({
       </span>
       <span className="flex-1" />
       {!!onExport && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-full"
-          onClick={onExport}
-        >
+        <Button variant="outline" size="sm" onClick={onExport}>
           <Share data-icon="inline-start" />
           <span className="max-sm:sr-only">Export replay</span>
         </Button>
@@ -441,7 +436,6 @@ function Transport({
           </TooltipIconButton>
           <Button
             size="icon"
-            className="rounded-full"
             aria-label={isPlaying ? 'Pause' : 'Play'}
             onClick={toggle}
           >
@@ -661,13 +655,7 @@ function FilesSheet({ children }: { children: ReactNode }) {
   return (
     <Sheet>
       <SheetTrigger
-        render={
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full md:hidden"
-          />
-        }
+        render={<Button variant="outline" size="sm" className="md:hidden" />}
       >
         <FileText data-icon="inline-start" />
         Files

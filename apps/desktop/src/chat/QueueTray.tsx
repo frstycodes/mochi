@@ -64,7 +64,6 @@ export function QueueTray({
           <Button
             variant="outline"
             size="xs"
-            className="rounded-full"
             onClick={() =>
               dispatch({ type: 'queued-resume', threadId: thread.id })
             }
@@ -179,12 +178,7 @@ function QueueRow({
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 pointer-coarse:opacity-100">
         {/* A compaction can't cut into the turn: it waits for the end. */}
         {compactFocus(message.draft) === null && (
-          <Button
-            variant="ghost"
-            size="xs"
-            className="rounded-full"
-            onClick={() => onSendNow(message)}
-          >
+          <Button variant="ghost" size="xs" onClick={() => onSendNow(message)}>
             Send now
           </Button>
         )}

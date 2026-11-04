@@ -194,7 +194,7 @@ function ConsoleButton({
                   size="sm"
                   aria-label={`${page.console.length} console messages`}
                   className={cn(
-                    'h-7 gap-1 rounded-full px-2 tabular-nums',
+                    'h-7 gap-1 px-2 tabular-nums',
                     errorCount ? 'text-destructive' : 'text-warning',
                   )}
                 />
@@ -248,7 +248,7 @@ function ConsoleButton({
           </ul>
         </ScrollArea>
         <div className="flex justify-end p-2">
-          <Button size="sm" onClick={send} className="gap-1.5 rounded-full">
+          <Button size="sm" onClick={send} className="gap-1.5">
             <ProviderMark provider={thread.providers[0]} size={14} />
             Send to {agent}
           </Button>
@@ -531,7 +531,7 @@ export function DeviceBar({ pageId, page }: { pageId: string; page: Page }) {
         aria-pressed={page.touch}
         onClick={() => updatePage(pageId, { touch: !page.touch })}
         className={cn(
-          'h-7 shrink-0 rounded-full',
+          'h-7 shrink-0',
           page.touch && 'bg-accent text-foreground',
         )}
       >
@@ -600,7 +600,6 @@ export function DriveBar({
       <Button
         size="xs"
         variant={hasTakenOver ? 'default' : 'outline'}
-        className="rounded-full"
         onClick={() => updatePage(pageId, { hasTakenOver: !hasTakenOver })}
       >
         {handoff
