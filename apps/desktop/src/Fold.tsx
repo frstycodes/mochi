@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ChevronRight } from '@/icons';
 import { cn } from '@/lib/utils';
+import { EASE_OUT } from './lib/ease';
 
 /**
  * Every disclosure in the app: Base UI Collapsible for state and aria, and one height-and-fade motion that a second click
@@ -144,7 +145,7 @@ function FoldBox({ className, ...props }: ComponentProps<typeof motion.div>) {
   );
 }
 
-const FOLD_EASE = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
+const FOLD_EASE = { duration: 0.2, ease: EASE_OUT } as const;
 
 const FoldContext = createContext<boolean | null>(null);
 

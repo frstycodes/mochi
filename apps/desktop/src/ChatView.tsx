@@ -1236,13 +1236,14 @@ function QuestionTray({
         </span>
       </motion.button>
       <ComposerTrayBody isOpen={isOpen}>
-        <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-[min(40vh,22rem)]">
-          <div className="flex flex-col gap-2 px-1 pb-1">
+        <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-[min(52vh,28rem)]">
+          {/* Sticky actions: a long question scrolls, but Next / Send stays in reach. Needs the card's overflow-visible below. */}
+          <div className="flex flex-col gap-2 px-1 pb-1 [&_[data-slot=questionnaire-actions]]:sticky [&_[data-slot=questionnaire-actions]]:bottom-0 [&_[data-slot=questionnaire-actions]]:z-10 [&_[data-slot=questionnaire-actions]]:bg-card [&_[data-slot=questionnaire-actions]]:py-2">
             {decisions.map((item) => (
               <QueueDecision
                 key={item.id}
                 item={item}
-                className="border-0 bg-transparent shadow-none ring-0*:data-[slot=card-footer]:border-t-0 *:data-[slot=card-footer]:bg-transparent *:data-[slot=card-footer]:pt-0"
+                className="overflow-visible border-0 bg-transparent shadow-none ring-0 *:data-[slot=card-footer]:border-t-0 *:data-[slot=card-footer]:bg-transparent *:data-[slot=card-footer]:pt-0"
               />
             ))}
           </div>

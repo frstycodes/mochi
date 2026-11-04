@@ -55,7 +55,7 @@ export function ZoomChip({
               value={percent}
               suffix="%"
               aria-label={`Zoom ${percent}%`}
-              className="min-w-[4ch] text-center text-sm"
+              className="min-w-[4ch] text-center type-prose"
             />
             <Tooltip>
               <TooltipTrigger

@@ -267,7 +267,7 @@ function ToastItem({
 
   const motionClass = cn(
     // No transform-origin: Sonner scales the toasts behind about their centre, which sets both the peek and the path they take.
-    'absolute inset-x-0 top-0 rounded-xl transition-[transform,opacity,filter,left,right,height,border-radius] motion-reduce:transition-none',
+    'absolute inset-x-0 top-0 rounded-xl transition-[transform,opacity,filter,left,right,height,border-radius] motion-reduce:transition-opacity',
     (!isMounted || toast.isLeaving || isHidden) && 'opacity-0',
     // Ours on top of Sonner's slide and fade: toasts blur in and out.
     (!isMounted || toast.isLeaving) && 'blur-[6px]',

@@ -162,11 +162,11 @@ test('every app setting sits in a titled group on its page; profile settings gro
   }
 });
 
-test('animations start off; an area switch sets all of its animations, each switch only its own', () => {
+test('animations start on; an area switch sets all of its animations, each switch only its own', () => {
   const catalog = settingsCatalog({ profile: DEFAULT_SPACES[0], config });
   const find = (key: string) => catalog.find((s) => s.key === key)!;
-  assert.equal(find('animations.sidebar').read(sources), 'false');
-  assert.equal(find('animation.pane-slide').read(sources), 'false');
+  assert.equal(find('animations.sidebar').read(sources), 'true');
+  assert.equal(find('animation.pane-slide').read(sources), 'true');
   const someOn = {
     ...sources,
     prefs: { ...DEFAULT_PREFS, animations: ['sidebar-peek', 'pane-slide'] },

@@ -49,6 +49,7 @@ import { isCommand } from './keymap';
 import { PreviewContext } from './layout/SplitContext';
 import { RemoteBrowser } from './browser/RemoteBrowser';
 import { useThreadOrigin } from './remote/origin';
+import { EASE_OUT } from './lib/ease';
 
 type Corner = 'tl' | 'tr' | 'bl' | 'br';
 type Viewport = { width: number; height: number };
@@ -416,7 +417,7 @@ function PipWindow({
       animate={{ opacity: 1, scale: 1 }}
       whileDrag={{ scale: 1.03 }}
       transition={{
-        opacity: { duration: 0.18, ease: [0.23, 1, 0.32, 1] },
+        opacity: { duration: 0.18, ease: EASE_OUT },
         scale: { type: 'spring', visualDuration: 0.3, bounce: 0.15 },
       }}
       style={{ left: anchor.x, top: anchor.y, width: w, height: h, x, y }}

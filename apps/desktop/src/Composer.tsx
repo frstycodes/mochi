@@ -77,6 +77,7 @@ import {
   MAX_IMAGE_BYTES,
   MAX_IMAGES,
 } from './chat/images';
+import { EASE_DRAWER } from './lib/ease';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
 // Each new thread page takes a fresh id, so nothing mounted later animates from a composer that already docked.
@@ -84,7 +85,7 @@ const handoffs = new Map<string, string>();
 let nextHandoff = 0;
 export const HANDOFF_TRANSITION = {
   duration: 0.35,
-  ease: [0.32, 0.72, 0, 1],
+  ease: EASE_DRAWER,
 } as const;
 
 export function newComposerLayoutId(leafId: string) {

@@ -37,6 +37,7 @@ import { ThreadMachineMark } from './remote/MachineMark';
 import { cn } from '@/lib/utils';
 import { ProviderMark, ProgressRing, lineColor } from './ui';
 import { isWorking } from './agentPhase';
+import { EASE_OUT } from './lib/ease';
 
 const R_IN = 92;
 const R_OUT = 188;
@@ -321,7 +322,7 @@ function OrbitNode({
       transition={{
         duration: 0.12,
         delay: index * 0.012,
-        ease: [0.23, 1, 0.32, 1],
+        ease: EASE_OUT,
       }}
       className="absolute -translate-x-1/2 -translate-y-1/2"
       style={{ left: x, top: y }}
@@ -425,7 +426,7 @@ function Peek({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.12 }}
-      className="absolute flex flex-col gap-2 rounded-xl border border-border bg-background p-3 text-sm shadow-[var(--elev-popover)]"
+      className="absolute flex flex-col gap-2 rounded-xl border border-border bg-background p-3 type-prose shadow-[var(--elev-popover)]"
       style={{ left, top, width: W }}
     >
       {item.ring === 'inner' ? (
@@ -462,7 +463,7 @@ function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
           </li>
         ))}
       </ul>
-      <div className="text-xs text-subtle-foreground">
+      <div className="type-meta text-subtle-foreground">
         {choices.length
           ? 'Press a number to answer without leaving this screen'
           : 'Open the queue to answer'}
@@ -488,7 +489,7 @@ function ThreadPeek({ thread }: { thread: Thread }) {
         </span>
       </div>
       {last && (
-        <div className="line-clamp-2 text-xs text-subtle-foreground">
+        <div className="line-clamp-2 type-meta text-subtle-foreground">
           {last.text}
         </div>
       )}
@@ -498,7 +499,7 @@ function ThreadPeek({ thread }: { thread: Thread }) {
 
 function PeekHeader({ thread }: { thread: Thread }): ReactNode {
   return (
-    <div className="flex items-center gap-1.5 text-xs text-subtle-foreground">
+    <div className="flex items-center gap-1.5 type-meta text-subtle-foreground">
       <span
         aria-hidden
         className="size-2 rounded-full"

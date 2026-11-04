@@ -92,7 +92,7 @@ function ChartTip({ tip, width }: { tip: Tip; width: number }) {
   return (
     <div
       ref={ref}
-      className="pointer-events-none absolute z-10 flex w-max min-w-36 -translate-x-1/2 -translate-y-full flex-col gap-1 rounded-md bg-foreground px-3 py-2 text-xs whitespace-nowrap text-background shadow-popover"
+      className="pointer-events-none absolute z-10 flex w-max min-w-36 -translate-x-1/2 -translate-y-full flex-col gap-1 rounded-md bg-foreground px-3 py-2 type-meta whitespace-nowrap text-background shadow-popover"
       style={{ left, top: tip.y - 8 }}
     >
       <span className="font-medium">{tip.title}</span>

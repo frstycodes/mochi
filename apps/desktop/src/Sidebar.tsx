@@ -1343,7 +1343,8 @@ function RowDetail({
 }) {
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
   return (
-    <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-meta text-subtle-foreground">
+    // Subtle text drops under 4.5:1 on the selected row's tint; muted holds AA there in both themes.
+    <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-meta text-subtle-foreground group-data-active/menu-button:text-muted-foreground">
       <ThreadMachineMark threadId={thread.id} />
       {!isProjectHidden && <ThreadProjectMark thread={thread} />}
       <ThreadDetailText row={row} />

@@ -381,7 +381,7 @@ function CommentRow({ comment }: { comment: PrComment }) {
 function Markdown({ text }: { text: string }) {
   return (
     // PR bodies open with `## Summary`-style headings; capped so none outranks the PR's own title.
-    <div className="min-w-0 text-sm text-foreground [&_:is(h1,h2,h3,h4)]:type-title">
+    <div className="min-w-0 type-prose text-foreground [&_:is(h1,h2,h3,h4)]:type-title">
       <MessageResponse isAnimating={false}>{text}</MessageResponse>
     </div>
   );
@@ -416,7 +416,7 @@ function Composer({
         }
         placeholder="Leave a comment"
         aria-label="Comment on the pull request"
-        className="min-h-16 resize-none text-sm"
+        className="min-h-16 resize-none type-prose"
       />
       <div className="flex flex-wrap justify-end gap-1.5">
         {/* GitHub refuses a review of your own PR. */}
@@ -521,7 +521,7 @@ function ThreadCard({
               }}
               placeholder="Reply on GitHub"
               aria-label={`Reply to the thread on ${thread.path}`}
-              className="min-h-14 resize-none text-sm"
+              className="min-h-14 resize-none type-prose"
             />
           )}
           <div className="flex flex-wrap justify-end gap-1.5">

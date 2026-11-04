@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
-import { Bug, Eye, Pencil } from '@/icons';
+import { Bug, CheckCircle, Cpu, Eye, FolderPlus, Pencil } from '@/icons';
 import type { IconComponent } from '@/icons';
+import { Button } from '@/components/ui/button';
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { openSettings } from './routes/nav';
 import type { Thread } from './model';
 import { useThreadProjectKey } from './projectCopies';
 import { ThreadItem } from './Sidebar';
@@ -59,6 +61,97 @@ export function HeroRows({
         </ul>
       </RowGroup>
     </div>
+  );
+}
+
+/** A space with no threads yet: the three things that make the first one work, each done in place. */
+export function FirstRun({
+  hasProject,
+  onAddProject,
+}: {
+  hasProject: boolean;
+  onAddProject: () => void;
+}) {
+  return (
+    <RowGroup label="Getting started">
+      <ol className="flex flex-col">
+        <FirstRunStep
+          icon={FolderPlus}
+          isDone={hasProject}
+          title="Add a project"
+          detail="A folder or a GitHub repo. Threads run in their own worktree, so your checkout stays untouched."
+          action={
+            hasProject ? undefined : { label: 'Add project', run: onAddProject }
+          }
+        />
+        <FirstRunStep
+          icon={Cpu}
+          title="Check your agents"
+          detail="Mochi drives Claude Code and Codex with your own logins. Install and sign in to at least one."
+          action={{
+            label: 'Open Harnesses',
+            run: () => openSettings('harnesses'),
+          }}
+        />
+        <FirstRunStep
+          icon={Pencil}
+          title="Start your first thread"
+          detail="Type above. When the agent needs you, it waits in Queue instead of guessing."
+        />
+      </ol>
+    </RowGroup>
+  );
+}
+
+function FirstRunStep({
+  icon: Icon,
+  isDone = false,
+  title,
+  detail,
+  action,
+}: {
+  icon: IconComponent;
+  isDone?: boolean;
+  title: string;
+  detail: string;
+  action?: { label: string; run: () => void };
+}) {
+  const Mark = isDone ? CheckCircle : Icon;
+  return (
+    <li className="flex items-start gap-3 rounded-md px-2 py-2.5">
+      <Mark
+        aria-hidden
+        className={cn(
+          'mt-0.5 size-4 shrink-0',
+          isDone ? 'text-success' : 'text-muted-foreground',
+        )}
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span
+          className={cn(
+            'type-body',
+            isDone &&
+              'text-muted-foreground line-through decoration-foreground/30',
+          )}
+        >
+          {title}
+          {isDone && <span className="sr-only"> (done)</span>}
+        </span>
+        <span className="type-meta text-pretty text-muted-foreground">
+          {detail}
+        </span>
+      </div>
+      {!!action && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          onClick={action.run}
+        >
+          {action.label}
+        </Button>
+      )}
+    </li>
   );
 }
 

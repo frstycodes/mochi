@@ -166,7 +166,7 @@ function SwitcherRow({
     >
       <ThreadProjectMark thread={thread} />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium">{thread.title}</span>
+        <span className="truncate type-prose font-medium">{thread.title}</span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
           <ThreadMachineMark threadId={thread.id} />
           <ThreadDetailText row={row} />

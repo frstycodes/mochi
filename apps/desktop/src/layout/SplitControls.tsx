@@ -117,7 +117,7 @@ export function SplitControls() {
                 <Share />
                 <span className="flex flex-col">
                   Move to a new window
-                  <span className="text-xs text-muted-foreground">
+                  <span className="type-meta text-muted-foreground">
                     It runs on another computer, so it stays in this window.
                   </span>
                 </span>

@@ -105,7 +105,7 @@ export function ShipBar({
                   : 'Stage changes to commit them'
             }
             aria-label="Commit message"
-            className="min-h-14 resize-none text-sm"
+            className="min-h-14 resize-none type-prose"
           />
           <div className="flex items-center gap-2">
             <span className="flex-1 type-caption text-subtle-foreground tabular">

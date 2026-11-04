@@ -119,6 +119,7 @@ import {
 import { splitPath } from './chat/imageSrc';
 import type { VizLanguage } from '@mochi/domain/viz/fence';
 import type { ListeningPort } from '@mochi/domain/host/types/ports';
+import { EASE_DRAWER } from './lib/ease';
 
 const LIST_LIMIT = 3;
 // Sources starts folded: it's reference, not something you check mid-run.
@@ -271,7 +272,7 @@ const moveCard = (order: SummaryCardId[], id: SummaryCardId, step: -1 | 1) => {
 
 // The panes' drawer curve and duration, so cards settle like the column they sit in; no bounce.
 const CARD_MOVE = {
-  layout: { duration: 0.26, ease: [0.32, 0.72, 0, 1] },
+  layout: { duration: 0.26, ease: EASE_DRAWER },
 } as const;
 
 /** A card that moves only from its handle, so text in it stays selectable and its rows clickable. Alt+↑/↓ on the handle moves it too. */

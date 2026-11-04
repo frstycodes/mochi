@@ -19,6 +19,7 @@ import { useActions } from './useActions';
 import { ActionIcon } from '../menus/ActionItems';
 import { Shortcut, useBinding } from '../Shortcut';
 import { useReviewerChecks } from '../secondOpinion/reviewer';
+import { rankShorterFirst } from './rank';
 
 export function CommandPalette({
   open,
@@ -48,7 +49,7 @@ export function CommandPalette({
       title="Command palette"
       description="Run an action or jump to a thread, step or view"
     >
-      <Command>
+      <Command filter={rankShorterFirst}>
         <CommandInput placeholder="Run an action or jump to a thread" />
         <CommandList>
           <CommandEmpty>
@@ -125,7 +126,8 @@ function ActionItem({
   const keys = useBinding(action.command);
   return (
     <CommandItem
-      value={`${title} ${action.keywords ?? ''}`}
+      value={title}
+      keywords={action.keywords?.split(' ')}
       disabled={!!reason}
       onSelect={onSelect}
     >
