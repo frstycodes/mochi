@@ -4,7 +4,7 @@ import type { ReplicaItem } from '../store/rpc.ts';
 
 type Snapshot = Extract<typeof ReplicaItem.Type, { _tag: 'snapshot' }>;
 
-/** Events a connection without `code` still gets: none of these carry a diff. */
+/** Events a connection without `code` gets whole: none of these carry a diff. */
 const PLAIN_EVENTS = new Set(['thread.saved', 'thread.deleted']);
 
 type Activity = { activity?: { patch?: unknown }[] };
@@ -31,9 +31,12 @@ export function visibleItem(
   scopes: ReadonlyArray<Capabilities.AuthScope>,
 ): ThreadItem | undefined {
   if (scopes.includes('code')) return item;
-  // GAP: agent events, once they are logged, are held back whole; strip their patches instead when they arrive.
+  // Without its payload, an event still tells a device where its own command was logged (`commandId`, `sequence`).
+  // GAP: agent events, once they are logged, lose their payload whole; strip only their patches when they arrive.
   if (item._tag === 'event')
-    return PLAIN_EVENTS.has(item.event.type) ? item : undefined;
+    return PLAIN_EVENTS.has(item.event.type)
+      ? item
+      : { ...item, event: { ...item.event, payload: null } };
   const saved = item.saved as SavedThread | null;
   if (!saved?.thread) return item;
   const { checkpoints: _checkpoints, sideChat: _sideChat, ...rest } = saved;

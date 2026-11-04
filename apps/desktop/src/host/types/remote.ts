@@ -108,10 +108,14 @@ export interface FollowedMachine {
   lastSeenAt?: number;
 }
 
-/** A followed machine's threads, one thread file (`SavedThread`, src/store/saved.ts) at a time; `null` deletes it. */
+/**
+ * A followed machine's threads, one thread file (`SavedThread`, src/store/saved.ts) at a time with the sequence it holds;
+ * `null` deletes it. `logged`: where the machine logged one of this computer's commands.
+ */
 export type MirrorFrame =
   | { type: 'reset' }
-  | { type: 'thread'; threadId: string; saved: unknown };
+  | { type: 'thread'; threadId: string; saved: unknown; sequence: number }
+  | { type: 'logged'; commandId: string; sequence: number };
 
 /** "Allow <name>?" on this computer's screen. */
 export interface ApprovalRequest {
@@ -528,6 +532,8 @@ export type CommandResult =
       isOk: true;
       /** A short outcome a device can show: a commit's sha, a PR's URL. */ detail?: string;
       data?: CommandData[keyof CommandData];
+      /** Where the machine logged a command that is store actions. */
+      sequence?: number;
     }
   | { isOk: false; error: string };
 
@@ -587,8 +593,15 @@ export interface RemoteHost {
   cacheCatalog(machineId: string, catalog: MachineCatalog): Promise<void>;
   /** The last kept catalog as JSON, checked against the schema; null with none. */
   cachedCatalog(machineId: string): Promise<string | null>;
-  /** Runs on that machine; rejects only for a bad argument, every other failure is the result's `error`. */
-  command(machineId: string, command: RemoteCommand): Promise<CommandResult>;
+  /**
+   * Runs on that machine; rejects only for a bad argument, every other failure is the result's `error`. With `commandId`
+   * its store actions come back as `logged` frames.
+   */
+  command(
+    machineId: string,
+    command: RemoteCommand,
+    commandId?: string,
+  ): Promise<CommandResult>;
 }
 
 export const remoteMethods = {

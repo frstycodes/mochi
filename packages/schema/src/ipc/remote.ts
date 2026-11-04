@@ -164,7 +164,7 @@ export const remoteRpc = {
   ),
   cacheCatalog: invoke(T([MachineId, MachineCatalog]), Void),
   cachedCatalog: invoke(T([MachineId]), Schema.NullOr(S)),
-  command: invoke(T([MachineId, RemoteCommand]), CommandResult),
+  command: invoke(T([MachineId, RemoteCommand, opt(S)]), CommandResult),
 };
 
 export {

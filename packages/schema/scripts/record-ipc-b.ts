@@ -238,13 +238,24 @@ add('remote.onMachineFrame', {
 add('remote.onMachineFrame', {
   event: {
     machineId: 'm1',
-    frame: { type: 'thread', threadId: 't1', saved: { thread: { id: 't1' } } },
+    frame: {
+      type: 'thread',
+      threadId: 't1',
+      saved: { thread: { id: 't1' } },
+      sequence: 4,
+    },
   },
 });
 add('remote.onMachineFrame', {
   event: {
     machineId: 'm1',
-    frame: { type: 'thread', threadId: 't1', saved: null },
+    frame: { type: 'thread', threadId: 't1', saved: null, sequence: 9 },
+  },
+});
+add('remote.onMachineFrame', {
+  event: {
+    machineId: 'm1',
+    frame: { type: 'logged', commandId: 'c1', sequence: 7 },
   },
 });
 add('remote.onTerminalOutput', {

@@ -27,6 +27,7 @@ export function applyFrame(
   frame: MirrorFrame,
 ): Mirror {
   if (frame.type === 'reset') return mirrorOf(machineId, {});
+  if (frame.type === 'logged') return mirror ?? mirrorOf(machineId, {});
   const { [frame.threadId]: _replaced, ...rest } = mirror?.threads ?? {};
   if (frame.saved === null) return mirrorOf(machineId, rest);
   const saved = savedThreadFrom(frame.saved);

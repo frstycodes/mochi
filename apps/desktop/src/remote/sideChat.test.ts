@@ -69,6 +69,7 @@ function owner() {
         type: 'thread',
         threadId: id,
         saved: JSON.parse(json),
+        sequence: 0,
       }),
     );
   return {

@@ -42,6 +42,7 @@ function machine() {
     type: 'thread',
     threadId,
     saved: JSON.parse(splitSaved(toSaved(state)).threads[threadId]),
+    sequence: 0,
   });
   const act = (action: Action): MirrorFrame => {
     state = reducer(state, action);

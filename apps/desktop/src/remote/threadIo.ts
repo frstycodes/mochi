@@ -4,6 +4,7 @@ import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type {
   CommandData,
+  CommandResult,
   FollowedMachine,
   RemoteCommand,
   Scope,
@@ -82,7 +83,11 @@ export async function askMachine<T extends RemoteCommand['type']>(
   machineId: string,
   command: Extract<RemoteCommand, { type: T }>,
 ): Promise<DataOf<T>> {
-  const result = await host.remote.command(machineId, toWire(command));
+  return dataOf<T>(await host.remote.command(machineId, toWire(command)));
+}
+
+/** A command's answer as `askMachine` resolves it: its data, or the machine's reason thrown. */
+export function dataOf<T extends RemoteCommand['type']>(result: CommandResult) {
   if (!result.isOk) throw new Error(result.error);
   return result.data as DataOf<T>;
 }

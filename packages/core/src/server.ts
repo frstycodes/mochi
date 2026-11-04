@@ -645,13 +645,20 @@ const layerHandlers = (windowId: number | undefined, identity: Identity) =>
             Stream.map((item) => visibleItem(item, identity.scopes)),
             Stream.filter((item) => item !== undefined),
           ),
-        'device.command': ({ command }: { command: Relay.RemoteCommand }) =>
+        'device.command': ({
+          command,
+          commandId,
+        }: {
+          command: Relay.RemoteCommand;
+          commandId?: string;
+        }) =>
           deviceCommand(
             capabilities,
             commands,
             projection,
             identity.device,
             command,
+            commandId,
             ({ tag, payload }) =>
               (
                 handlers[tag] as (
@@ -735,6 +742,7 @@ const deviceCommand = (
   projection: Projection['Service'],
   device: DeviceGrant | undefined,
   command: Relay.RemoteCommand,
+  commandId: string | undefined,
   call: (direct: DirectCall) => Effect.Effect<unknown, unknown>,
 ) =>
   Effect.gen(function* () {
@@ -770,8 +778,18 @@ const deviceCommand = (
       device.name,
     );
     if (!stored) return yield* inWindow(capabilities, device, command);
-    for (const action of stored.actions) yield* commands.apply(action);
-    return stored.result as Relay.CommandResult;
+    // The last action carries the device's `commandId`: its event tells the device where all of them were logged.
+    let sequence: number | undefined;
+    for (const [i, action] of stored.actions.entries())
+      ({ sequence } = yield* commands.apply(
+        action,
+        i === stored.actions.length - 1 ? commandId : undefined,
+      ));
+    return (
+      stored.result.isOk && sequence !== undefined
+        ? { ...stored.result, sequence }
+        : stored.result
+    ) as Relay.CommandResult;
   }).pipe(
     Effect.catch((error) =>
       Effect.succeed<Relay.CommandResult>({

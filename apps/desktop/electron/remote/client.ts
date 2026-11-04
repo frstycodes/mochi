@@ -63,7 +63,8 @@ export interface MachineFollower {
   state(): FollowedMachine;
   /** Its Core as an RPC client while it's online, for the windows' channels (`channels.ts`). */
   client(): DeviceClient | undefined;
-  command(command: RemoteCommand): Promise<CommandResult>;
+  /** With `commandId`, where the machine logs its store actions comes back as a `logged` frame. */
+  command(command: RemoteCommand, commandId?: string): Promise<CommandResult>;
   /** Starts over: the window drops what it has and every thread comes again from its snapshot. */
   resync(): void;
   close(): void;
@@ -92,6 +93,8 @@ export function followMachine(options: FollowOptions): MachineFollower {
     scopes: [],
     lastSeenAt: machine.lastSeenAt,
   };
+  /** The commands sent that haven't answered yet, by `commandId`. */
+  const issued = new Set<string>();
   let session:
     | {
         scope: Scope.Closeable;
@@ -175,7 +178,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
       });
       // A welcome that came while the client was still being built: the windows' channels need the client too.
       if (state.status === 'online') options.onChange(state);
-      yield* mirror(current.client, current.online, options);
+      yield* mirror(current.client, current.online, options, issued);
     }).pipe(Scope.provide(scope));
     current.fiber = Effect.runFork(program);
   }
@@ -262,7 +265,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
   return {
     state: () => state,
     client: () => (state.status === 'online' ? session?.client : undefined),
-    async command(command) {
+    async command(command, commandId) {
       const client = session?.client;
       if (!client || state.status !== 'online')
         return { isOk: false, error: `${state.name} is offline` };
@@ -270,8 +273,14 @@ export function followMachine(options: FollowOptions): MachineFollower {
         LONG_COMMAND_TIMEOUT_MS[
           command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS
         ] ?? COMMAND_TIMEOUT_MS;
+      if (commandId) issued.add(commandId);
       const exit = await Effect.runPromiseExit(
-        client['device.command']({ command }).pipe(Effect.timeout(timeout)),
+        client['device.command']({ command, commandId }).pipe(
+          Effect.timeout(timeout),
+          Effect.ensuring(
+            Effect.sync(() => commandId && issued.delete(commandId)),
+          ),
+        ),
       );
       if (Exit.isSuccess(exit)) {
         const result = exit.value as CommandResult;
@@ -300,25 +309,35 @@ export function followMachine(options: FollowOptions): MachineFollower {
   };
 }
 
-/** The machine's threads, kept in step with its `shell` and `thread` streams; each resumes after the last sequence it saw. */
+/**
+ * The machine's threads, kept in step with its `shell` and `thread` streams; each resumes after the last sequence it saw.
+ * An `issued` command's event on them is where the machine logged it.
+ */
 const mirror = (
   client: DeviceClient,
   online: Latch.Latch,
   options: FollowOptions,
+  issued: ReadonlySet<string>,
 ) =>
   Effect.gen(function* () {
     const following = new Map<string, Fiber.Fiber<unknown, unknown>>();
     const after = new Map<string, number>();
 
-    const send = (threadId: string, saved: unknown) => {
+    const send = (threadId: string, saved: unknown, sequence: number) => {
       if (saved === null)
-        return options.onFrame({ type: 'thread', threadId, saved: null });
+        return options.onFrame({
+          type: 'thread',
+          threadId,
+          saved: null,
+          sequence,
+        });
       const decoded = decodeThread(saved);
       if (Exit.isSuccess(decoded))
         return options.onFrame({
           type: 'thread',
           threadId,
           saved: decoded.value,
+          sequence,
         });
       options.onRejected(
         `Thread ${threadId} didn’t decode: ${Cause.pretty(decoded.cause).slice(0, 500)}`,
@@ -333,10 +352,13 @@ const mirror = (
           Effect.sync(() => {
             if (item._tag === 'snapshot') {
               after.set(threadId, item.sequence);
-              return send(threadId, item.saved);
+              return send(threadId, item.saved, item.sequence);
             }
-            after.set(threadId, item.event.sequence);
-            if (item.event.type === 'thread.deleted') send(threadId, null);
+            const { sequence, commandId, type } = item.event;
+            after.set(threadId, sequence);
+            if (commandId && issued.has(commandId))
+              options.onFrame({ type: 'logged', commandId, sequence });
+            if (type === 'thread.deleted') send(threadId, null, sequence);
           }),
         ),
         whileConnected(online),
@@ -365,9 +387,10 @@ const mirror = (
         const fiber = following.get(threadId);
         if (!fiber) return;
         following.delete(threadId);
+        const sequence = after.get(threadId) ?? 0;
         after.delete(threadId);
         yield* Fiber.interrupt(fiber);
-        send(threadId, null);
+        send(threadId, null, sequence);
       });
 
     yield* client.shell().pipe(
