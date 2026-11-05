@@ -325,11 +325,6 @@ test('a thread action is one of the whitelisted store actions, read field by fie
     {
       type: 'thread-action',
       threadId: 't',
-      action: { type: 'grant-answer', grantId: 'g', answer: 'always' },
-    },
-    {
-      type: 'thread-action',
-      threadId: 't',
       action: { type: 'queued-add', message: { draft: '  ' } },
     },
     {
@@ -349,7 +344,6 @@ test('each thread action needs its own scope, and one Core doesn’t know needs 
   });
   assert.equal(commandScope(action('controls')), 'operate');
   assert.equal(commandScope(action('queued-add')), 'operate');
-  assert.equal(commandScope(action('grant-answer')), 'operate');
   assert.equal(commandScope(action('autofix-set')), 'manage');
   assert.equal(commandScope(action('proposal-start')), 'manage');
   for (const unknown of ['delete', 'toString', '__proto__', 'constructor'])

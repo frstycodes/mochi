@@ -595,23 +595,6 @@ export const ThreadProposal = Schema.Struct({
   }),
 });
 
-export const OrchestrationGrant = Schema.Struct({
-  id: Schema.String,
-  maxThreads: Schema.Number,
-  models: Schema.Array(Schema.String),
-  minutes: Schema.Number,
-  reason: Schema.String,
-  state: Schema.Literals([
-    'pending',
-    'active',
-    'denied',
-    'revoked',
-    'replaced',
-  ]),
-  expiresAt: opt(Schema.Number),
-  started: Schema.Array(ThreadRef),
-});
-
 export const Handoff = Schema.Struct({
   from: Provider,
   to: Provider,
@@ -732,7 +715,6 @@ export const ActivityEntry = Schema.Struct({
   compaction: opt(Compaction),
   handoff: opt(Handoff),
   proposals: opt(Schema.Array(ThreadProposal)),
-  grant: opt(OrchestrationGrant),
 });
 export type ActivityEntry = typeof ActivityEntry.Type;
 
@@ -873,6 +855,7 @@ export const Thread = Schema.Struct({
     Schema.Struct({
       start: Schema.Number,
       isAgentDriven: opt(Schema.Literal(true)),
+      followsUser: opt(Schema.Literal(true)),
     }),
   ),
   providers: Schema.Array(Provider),

@@ -98,7 +98,6 @@ import { NextMoveRecord, ThreadPlan, nextMoveOf } from './goals/NextMove';
 import { PlanRecordRow } from './goals/PlanRecordRow';
 import { SubThreadResultRow, ThreadLinkRow } from './goals/SubThreads';
 import { ProposalEntry } from './chat/ThreadProposals';
-import { GrantEntry } from './chat/GrantCard';
 import { moveRecord, showsVerdictCard, suggestedReply } from './goals/report';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import {
@@ -526,8 +525,6 @@ const ChatRowView = memo(function ChatRowView({
     return <DevServerCard thread={thread} server={row.entry.devServer} />;
   if (row.kind === 'event' && row.entry.proposals)
     return <ProposalEntry thread={thread} entry={row.entry} />;
-  if (row.kind === 'event' && row.entry.grant)
-    return <GrantEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.handoff)
     return (
       <HandoffRow
