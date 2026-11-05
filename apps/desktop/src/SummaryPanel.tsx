@@ -14,6 +14,7 @@ import { FileIcon } from '@react-symbols/icons/utils';
 import { Reorder, useDragControls } from 'motion/react';
 import {
   Plus,
+  Folder,
   BackgroundTask,
   Code,
   Chart,
@@ -58,6 +59,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
 import { useRemoteMachine } from './remote/origin';
+import { useWorktreePath } from './git/worktrees';
+import { copyText } from './clipboard';
+import { BranchIcon, BranchName } from './git/BranchLabel';
 import { useGitDiff } from './git/useGit';
 import { cn } from '@/lib/utils';
 import {
@@ -124,7 +128,10 @@ import { EASE_DRAWER } from './lib/ease';
 
 const LIST_LIMIT = 3;
 // Sources starts folded: it's reference, not something you check mid-run.
-const OPEN_BY_DEFAULT: string[] = ['threads'] satisfies SummaryCardId[];
+const OPEN_BY_DEFAULT: string[] = [
+  'threads',
+  'environment',
+] satisfies SummaryCardId[];
 
 /**
  * `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow drawer) can step aside.
@@ -190,6 +197,7 @@ function SummaryBody({
     changes: <ChangesCard {...props} outputs={outputs} />,
     threads: <ThreadsCard {...links} />,
     sources: <SourcesCard {...props} />,
+    environment: <EnvironmentCard {...props} />,
   } satisfies Record<SummaryCardId, ReactNode>;
 
   return (
@@ -224,7 +232,6 @@ function SummaryBody({
           </DraggableCard>
         ))}
       </Accordion>
-      <EnvironmentLine thread={thread} />
     </div>
   );
 }
@@ -457,36 +464,86 @@ function NeedsYou({ thread }: { thread: Thread }) {
   );
 }
 
-/** Where it runs, closing the column: device and project folder, its editor menu, and full access in warning. Branch and model live under the composer. */
-function EnvironmentLine({ thread }: { thread: Thread }) {
+/** Where it runs: device, project folder with its editor menu, branch and worktree, and full access in warning. Model and permissions live under the composer. */
+function EnvironmentCard({ thread }: CardProps) {
   const { repo, agent } = thread;
+  const worktree = useWorktreePath(thread.id);
   const fullAccess = isFullAccess(agent?.permissionMode);
   const machine = useRemoteMachine();
   const here = useThisBackend();
   return (
-    // Floating over the chat it needs the cards' fill, or it reads as chat text.
-    <div className="flex min-h-7 min-w-0 items-center gap-1.5 pr-1 pl-3 type-caption text-subtle-foreground group-data-[variant=floating]/summary:min-h-11 group-data-[variant=floating]/summary:rounded-lg group-data-[variant=floating]/summary:bg-popover group-data-[variant=floating]/summary:shadow-float">
-      {fullAccess && (
-        <span className="flex shrink-0 items-center gap-1.5 text-warning">
-          <ShieldAlert className="size-3.5" aria-hidden />
-          {permissionLabel(agent!.permissionMode!)} ·
-        </span>
-      )}
-      <DeviceIcon
-        kind={machine ? machine.kind : here.kind}
-        className="size-3.5 shrink-0"
-      />
-      <span className="min-w-0 truncate" title={repo?.path}>
-        {machine?.name ?? here.name}
-        {' · '}
-        {repo ? repo.project : 'No project folder'}
-      </span>
-      <span className="ml-auto">
-        <FolderMenu thread={thread} />
-      </span>
-    </div>
+    <>
+      <CardHeader title="Environment" />
+      <CardBody>
+        <SummaryRow
+          icon={
+            <DeviceIcon
+              kind={machine ? machine.kind : here.kind}
+              className="size-4"
+            />
+          }
+          label={machine?.name ?? here.name}
+        />
+        <SummaryRow
+          icon={Folder}
+          label={
+            repo ? (
+              <span title={repo.path}>
+                {repo.project}
+                {!!repo.path && (
+                  <span className="text-subtle-foreground">
+                    {' '}
+                    · {homeShort(dirOf(repo.path))}
+                  </span>
+                )}
+              </span>
+            ) : (
+              'No project folder'
+            )
+          }
+        >
+          <FolderMenu thread={thread} />
+        </SummaryRow>
+        {!!repo && (
+          <SummaryRow
+            icon={
+              <BranchIcon
+                repo={repo}
+                className="size-4 text-muted-foreground"
+              />
+            }
+            label={<BranchName repo={repo} title="Copy branch name" />}
+            onClick={
+              repo.isDetached
+                ? undefined
+                : () => copyText(repo.branch, 'Branch name copied')
+            }
+          >
+            {!!worktree && (
+              <span className="pointer-events-none max-w-24 truncate type-meta text-subtle-foreground">
+                {basenameOf(worktree)}
+              </span>
+            )}
+          </SummaryRow>
+        )}
+        {fullAccess && (
+          <SummaryRow
+            icon={<ShieldAlert className="size-4 text-warning" />}
+            label={
+              <span className="text-warning">
+                {permissionLabel(agent!.permissionMode!)}
+              </span>
+            }
+          />
+        )}
+      </CardBody>
+    </>
   );
 }
+
+const basenameOf = (path: string) => path.replace(/\/+$/, '').split('/').pop()!;
+const dirOf = (path: string) => path.replace(/\/[^/]+\/?$/, '') || '/';
+const homeShort = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
 
 /** What the agent was handed or reached for: links, files and MCP items you added, the skills it used, then the connectors it called. */
 function SourcesCard({ thread, summary, open }: CardProps) {

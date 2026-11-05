@@ -973,6 +973,15 @@ const Composer = memo(function Composer({
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
       <motion.div {...handoff.layout}>
         <div className="relative">
+          {/* Over the card, out of flow: showing it while it works never moves the composer. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-full *:pointer-events-auto">
+            <ThreadComposerMeta
+              thread={thread}
+              isFolded={isCompact}
+              isHeld={isHeld}
+              whileWorking={whileWorking}
+            />
+          </div>
           <SlashMenu menu={slash} />
           <MentionMenu menu={mention} />
           <ComposerCard
@@ -1114,12 +1123,6 @@ const Composer = memo(function Composer({
             />
           </ComposerCard>
         </div>
-        <ThreadComposerMeta
-          thread={thread}
-          isFolded={isCompact}
-          isHeld={isHeld}
-          whileWorking={whileWorking}
-        />
         {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
     </div>
@@ -1138,7 +1141,7 @@ const suggestionOf = (thread: Thread, isAsking: boolean) =>
   isWorking(thread) || isAsking ? undefined : suggestedReply(thread);
 
 /** What holding mod does to this send: the setting's other choice. */
-/** Under the card: the limit or hold-to hint. Folds away with the composer while you read back. */
+/** Over the card: the limit or hold-to hint. Folds away with the composer while you read back. */
 function ThreadComposerMeta({
   thread,
   isFolded,
@@ -1170,7 +1173,7 @@ function ThreadComposerMeta({
     >
       {/* ComposerMeta's top padding would keep the folded row open, so a bare box takes the min-height. */}
       <div className="min-h-0">
-        <ComposerMeta>{hint}</ComposerMeta>
+        <ComposerMeta className="min-h-0 pt-0 pb-1.5">{hint}</ComposerMeta>
       </div>
     </div>
   );

@@ -3,9 +3,14 @@ import type { ThreadSummary } from './summary.ts';
 import { activeTasks } from './runtime/tasks.ts';
 import { plural } from '@mochi/domain/lib/format';
 
-export type SummaryCardId = 'running' | 'changes' | 'threads' | 'sources';
+export type SummaryCardId =
+  | 'running'
+  | 'changes'
+  | 'threads'
+  | 'sources'
+  | 'environment';
 
-/** The cards with something to show, most glanced-at first: what runs now, what it made, what it's tied to, then what it used. */
+/** The cards with something to show, most glanced-at first: what runs now, what it made, what it's tied to, what it used, then where it runs. */
 export function summaryCards({
   thread,
   summary,
@@ -28,6 +33,7 @@ export function summaryCards({
       'changes',
     linkedThreadCount > 0 && 'threads',
     'sources',
+    'environment',
   ];
   return cards.filter((c) => c !== false);
 }
