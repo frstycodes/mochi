@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import type { DiffFile } from '../host/types/git.ts';
-import { changeSections, hunkCovers } from './files.ts';
+import { changeSections, hunkCovers, hunkGap } from './files.ts';
 
 const file = (path: string, oldPath?: string): DiffFile => ({
   path,
@@ -44,4 +44,14 @@ test('hunkCovers checks the hunk range on the given side', () => {
   assert.equal(hunkCovers('@@ -20,8 +22,10 @@ fn', 'deletions', 21), true);
   assert.equal(hunkCovers('@@ -1 +1 @@', 'additions', 1), true);
   assert.equal(hunkCovers('@@ -0,0 +1,14 @@', 'deletions', 0), false);
+});
+
+test('hunkGap counts the unchanged lines before a hunk', () => {
+  assert.equal(hunkGap('@@ -1,4 +1,5 @@'), 0);
+  assert.equal(hunkGap('@@ -640,6 +641,10 @@ fn', '@@ -1,4 +1,5 @@'), 635);
+  assert.equal(hunkGap('@@ -678,6 +681,8 @@'), 680);
+  assert.equal(hunkGap('@@ -10,3 +10,3 @@', '@@ -5,5 +5,5 @@'), 0);
+  assert.equal(hunkGap('@@ -20,3 +20,0 @@', '@@ -5,5 +5,5 @@'), 11);
+  assert.equal(hunkGap('@@ -0,0 +1,14 @@'), 0);
+  assert.equal(hunkGap('nonsense'), 0);
 });

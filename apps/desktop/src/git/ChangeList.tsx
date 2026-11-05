@@ -14,7 +14,7 @@ import type {
   ReviewThread,
 } from '../host/types/git';
 import { DiffStat, Expand } from '../WorkLog';
-import { fileKey, hunkCovers, type ChangeSection } from './files';
+import { fileKey, hunkCovers, hunkGap, type ChangeSection } from './files';
 import { isMod } from '../keys';
 import { SectionLabel, TooltipIconButton } from '../ui';
 
@@ -227,6 +227,7 @@ function FileBody({
       key={hunk.header + i}
       file={file}
       hunk={hunk}
+      hiddenLines={hunkGap(hunk.header, file.hunks[i - 1]?.header)}
       actions={actions}
     />
   ));
@@ -235,10 +236,12 @@ function FileBody({
 function HunkBlock({
   file,
   hunk,
+  hiddenLines,
   actions,
 }: {
   file: DiffFile;
   hunk: DiffHunk;
+  hiddenLines: number;
   actions: ChangeActions;
 }) {
   const target = {
@@ -270,14 +273,14 @@ function HunkBlock({
       metadata: { thread },
     })),
   ];
-  const showHeader = file.hunks.length > 1;
-  const showToolbar = showHeader || actions.canStage;
+  const showToolbar = hiddenLines > 0 || actions.canStage;
   return (
     <div className="group/hunk">
       {showToolbar && (
         <div className="flex h-6 items-center gap-2 pr-1.5 pl-3">
-          <span className="min-w-0 flex-1 truncate font-mono text-xs text-subtle-foreground">
-            {showHeader && hunk.header}
+          <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">
+            {hiddenLines > 0 &&
+              `${hiddenLines.toLocaleString()} unmodified ${hiddenLines === 1 ? 'line' : 'lines'}`}
           </span>
           {actions.canStage && (
             <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/hunk:opacity-100 focus-within:opacity-100">

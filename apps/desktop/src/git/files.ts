@@ -51,6 +51,23 @@ export function hunkCovers(
   return line >= Number(start) && line < Number(start) + Number(count);
 }
 
+/** Unchanged lines between the previous hunk's end (or the file start) and this hunk, from the headers' new-side ranges; 0 when they touch or the header doesn't parse. */
+export function hunkGap(header: string, previousHeader?: string) {
+  const range = (text: string) => {
+    const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(text);
+    return m && { start: Number(m[1]), count: Number(m[2] ?? '1') };
+  };
+  const current = range(header);
+  if (!current) return 0;
+  const previous = previousHeader ? range(previousHeader) : undefined;
+  // A zero-length range names the line before it, so its first line is start + 1.
+  const first = current.count === 0 ? current.start + 1 : current.start;
+  const after = previous
+    ? previous.start + previous.count + (previous.count === 0 ? 1 : 0)
+    : 1;
+  return Math.max(0, first - after);
+}
+
 /** A line comment from the Changes tab as the thread reads it. */
 export function reviewNote(
   path: string,
