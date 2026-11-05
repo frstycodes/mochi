@@ -32,22 +32,28 @@ const live = (s: State, id: string): State => ({
   ),
 });
 
-test('a plan matches steps by title, starts and completes them', () => {
+test('a plan keeps a step only by its exact title; a close one is a new step', () => {
   let s = base();
   const items = titles(s, 'rl')
     .filter((_, i) => i !== 2)
     .map((title): AgentPlanItem => ({ title, status: 'pending' }));
   items[3] = { title: 'add a redis client', status: 'done' };
-  items[4] = { title: 'Token bucket middleware', status: 'running' };
+  items[4] = { ...items[4], status: 'running' };
   s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items });
   const rl = thread(s, 'rl');
   assert.equal(
-    rl.steps.find((x) => x.id === 'rl5')!.status,
-    'done',
-    'fuzzy title still matches',
+    rl.steps.find((x) => x.id === 'rl5'),
+    undefined,
+    'no fuzzy match',
   );
-  assert.equal(rl.steps.find((x) => x.id === 'rl6')!.status, 'running');
-  assert.equal(rl.steps.length, 9, 'no scope added');
+  assert.equal(rl.steps[3].title, 'add a redis client');
+  assert.equal(rl.steps[3].status, 'done');
+  assert.equal(rl.steps[4].status, 'running');
+  assert.deepEqual(
+    rl.steps.map((x) => x.title),
+    items.map((i) => i.title),
+    'exactly the plan sent',
+  );
 });
 
 test("a turn's end stops a running step's clock without finishing it; the agent picking it up again restarts it", () => {
@@ -102,23 +108,30 @@ test('an unknown plan item lands as a plan step, after the item it follows', () 
   );
 });
 
-test("the steps mirror the agent's plan: one it no longer lists is dropped, whoever added it", () => {
+test("the steps are the agent's plan: one it no longer lists leaves, whoever added it, with no row saying so", () => {
   let s = base();
-  const items = titles(s, 'rl')
+  const items = thread(s, 'rl')
+    .steps.filter((x) => x.status !== 'dropped')
+    .map((x) => x.title)
     .filter(
       (title) =>
         title !== 'Load test at 2k req/s' && title !== 'Per-key overrides',
     )
     .map((title) => ({ title, status: 'pending' as const }));
+  const logged = thread(s, 'rl').activity.length;
   s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items });
   const rl = thread(s, 'rl');
-  const rl8 = rl.steps.find((x) => x.id === 'rl8')!;
-  assert.equal(rl8.status, 'dropped');
-  assert.equal(rl8.note, 'Dropped by Claude');
   assert.equal(
-    rl.steps.find((x) => x.id === 'rl7')!.status,
-    'dropped',
-    'a step added by hand before steps became a mirror goes too',
+    rl.steps.find((x) => x.id === 'rl8'),
+    undefined,
+  );
+  assert.equal(
+    rl.steps.find((x) => x.id === 'rl7'),
+    undefined,
+  );
+  assert.deepEqual(
+    rl.activity.slice(logged).map((e) => e.text),
+    [],
   );
 });
 
@@ -146,9 +159,8 @@ test('a shorter plan leaves no stale step, done or not', () => {
   }
 });
 
-test('a revised step keeps its id and start but shows the new title', () => {
+test('a retitled step is a new step with its own clock', () => {
   let s = base();
-  const step = thread(s, 'rl').steps.find((x) => x.id === 'rl5')!;
   const items = thread(s, 'rl')
     .steps.filter((x) => x.status !== 'dropped')
     .map((x): AgentPlanItem => ({
@@ -156,12 +168,13 @@ test('a revised step keeps its id and start but shows the new title', () => {
       status: 'pending',
     }));
   s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items });
-  const revised = thread(s, 'rl').steps.find((x) => x.id === 'rl5')!;
-  assert.notEqual(step.title, 'add a redis client');
-  assert.deepEqual(
-    [revised.title, revised.startedAt],
-    ['add a redis client', step.startedAt],
+  const steps = thread(s, 'rl').steps;
+  assert.equal(
+    steps.find((x) => x.id === 'rl5'),
+    undefined,
   );
+  const renamed = steps.find((x) => x.title === 'add a redis client')!;
+  assert.equal(renamed.startedAt, undefined);
 });
 
 test('a first_task plan starts a fresh list', () => {
@@ -563,4 +576,70 @@ test("the agent's gh pr create records its PR on the thread at once; a known one
     s,
     'nothing new: the same state',
   );
+});
+
+test("a turn's end keeps its plan as one record row, with its wrap_up's decisions and assumptions; a turn with neither leaves none", () => {
+  let s = threadsReducer(base(), {
+    type: 'create',
+    title: 'fix the cookie',
+    provider: 'claude',
+    project: '/Users/me/dev/app',
+    isLive: true,
+  });
+  const id = s.threads.at(-1)!.id;
+  const agent = (event: object) =>
+    (s = threadsReducer(s, {
+      type: 'agent',
+      event: { threadId: id, ...event },
+      ms: 1_000,
+    } as never));
+  agent({
+    type: 'plan',
+    isFresh: true,
+    items: [
+      { title: 'Read', status: 'done' },
+      { title: 'Fix', status: 'running' },
+    ],
+  });
+  s = threadsReducer(s, {
+    type: 'report',
+    threadId: id,
+    report: {
+      by: 'claude',
+      recap: 'Fixed.',
+      decisions: [{ text: 'Kept the name', step: 2 }],
+      assumptions: [{ text: 'Assumed UTC', step: 1 }],
+    },
+  });
+  agent({ type: 'turn-end', status: 'done' });
+  const record = thread(s, id).activity.at(-1)!.planRecord!;
+  assert.deepEqual(
+    record.steps.map((x) => x.title),
+    ['Read', 'Fix'],
+  );
+  assert.deepEqual(record.decisions, [{ text: 'Kept the name', step: 2 }]);
+  assert.deepEqual(record.assumptionIds, ['a1']);
+  assert.equal(thread(s, id).assumptions?.[0].stepTitle, 'Read');
+
+  s = threadsReducer(s, { type: 'idle-start', threadId: id });
+  const logged = thread(s, id).activity.length;
+  agent({ type: 'turn-end', status: 'done' });
+  assert.ok(
+    !thread(s, id)
+      .activity.slice(logged)
+      .some((e) => e.planRecord),
+    "last turn's plan is not this turn's",
+  );
+});
+
+test("Codex's own plan updates replace the plan: repeats keep their clocks within a turn, the next turn starts fresh", () => {
+  let s = base();
+  const items: AgentPlanItem[] = [{ title: 'Index usage', status: 'running' }];
+  s = applyAgentEvent(s, { threadId: 'adm', type: 'plan', items });
+  const first = thread(s, 'adm').steps[0];
+  s = applyAgentEvent(s, { threadId: 'adm', type: 'plan', items });
+  assert.equal(thread(s, 'adm').steps[0].id, first.id);
+  s = threadsReducer(s, { type: 'idle-start', threadId: 'adm' });
+  s = applyAgentEvent(s, { threadId: 'adm', type: 'plan', items });
+  assert.notEqual(thread(s, 'adm').steps[0].id, first.id);
 });

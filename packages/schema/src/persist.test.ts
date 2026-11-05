@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'vite-plus/test';
 import { Schema } from 'effect';
-import { Mention } from './model.ts';
+import { Mention, TurnReport } from './model.ts';
 import { Checkpoint, Saved, SavedIndex, SavedThread } from './persist.ts';
 
 const recorded = JSON.parse(
@@ -117,4 +117,23 @@ const slim = ({
   activityCount: activity.length,
   subagentCount: subagents?.length ?? 0,
   thread,
+});
+
+test('a report saved before wrap_up still loads: no recap reads as empty, its old fields drop, and a step title stays as it was', () => {
+  const report = Schema.decodeUnknownSync(TurnReport)({
+    at: 910,
+    by: 'claude',
+    decisions: ['kept the API', { text: 'Used X', step: 'Parse' }],
+    left: ['tests'],
+    question: 'Ship it?',
+    summary: 'Added retries',
+    next: 'Commit?',
+    options: [{ label: 'Commit', reply: 'Commit it' }],
+  });
+  assert.deepEqual(report, {
+    at: 910,
+    by: 'claude',
+    recap: '',
+    decisions: ['kept the API', { text: 'Used X', step: 'Parse' }],
+  });
 });

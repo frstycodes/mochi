@@ -3,19 +3,20 @@ import { ArrowUp, ChevronRight } from '@/icons';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { authorName, type NextOption, type Thread } from '../../model';
-import { ComposerCard } from '../../Composer';
 import {
-  NextMoveActions,
-  NextMoveAsk,
-  NextMoveCard,
-  NextMoveContent,
-  NextMoveHeader,
-  NextMoveRecord,
-  NextMoveSummary,
-  PlanList,
-  nextMoveOf,
-} from '../../goals/NextMove';
+  authorName,
+  type NextAction,
+  type Step,
+  type Thread,
+  type TurnReport,
+} from '../../model';
+import { ComposerCard } from '../../Composer';
+import { NextMoveRecord, PlanList, nextMoveOf } from '../../goals/NextMove';
+import { WrapUpBox } from '../../goals/ReportCard';
+import { PlanRecordRow } from '../../goals/PlanRecordRow';
+import { moveRecord } from '../../goals/report';
+import { useDispatch, useHarnessSelector } from '../../store';
+import { yourText } from '../../store/threads';
 import { isPlanComplete, type PlanItem } from '../../goals/plan';
 import { VizThreadProvider } from '../../viz/WidgetVisual';
 import { Block } from '../layout';
@@ -26,13 +27,14 @@ export function NextMoveBlock({ rl }: { rl: Thread }) {
   return (
     <Block
       title="Next move"
-      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat until every item is done: no header, no dividers, each step with how long it took on Mochi's clock. When it stops: Mochi's verdict when something needs you, the agent's summary, then the agent's question with its own answers as buttons; each sends the agent's written reply, or fills the message box. Answer it and the card stays as a record of what you chose."
+      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat: no header, no dividers, each step with how long it took. When the turn ends it folds into one plan record row, and the wrap-up box follows: Mochi's verdict when the agent is blocked, the recap, this turn's assumptions, then the agent's question with its answers as buttons; each sends its label, or fills the message box. Answer it and the box stays as a muted record."
       wide
     >
       <VizThreadProvider value={rl.id}>
         <div className="flex flex-col gap-12">
           <PlanMock rl={rl} />
           <PlanStatesMock rl={rl} />
+          <AssumedMock rl={rl} />
           {nextMoveFixtures(rl).map((f) => (
             <TurnEndMock key={f.label} fixture={f} />
           ))}
@@ -47,7 +49,7 @@ function PlanMock({ rl }: { rl: Thread }) {
   const isDone = isPlanComplete(items);
   return (
     <MockFrame
-      label="Working · the plan stays last until it's done, then hides"
+      label="Working · the plan stays last while the agent works; at the turn's end it folds into a record row"
       control={
         isDone ? (
           <Button size="xs" variant="outline" onClick={() => setItems(PLAN)}>
@@ -146,26 +148,32 @@ function TurnEndCard({
 }) {
   const next = nextMoveOf(fixture.thread);
   if (!next) return null;
-  const { verdict } = next;
-  const pick = (o: NextOption) =>
-    onAnswer(
-      o.isDraft
-        ? { label: o.label, draft: o.reply }
-        : { label: o.label, reply: o.reply, isMove: true },
-    );
+  // A turn no assumption is from: these boxes show none.
+  const report: TurnReport = {
+    at: 0,
+    turn: -1,
+    by: fixture.thread.providers[0],
+    recap: fixture.summary,
+    decisions: [],
+    ask: fixture.question,
+    actions: fixture.actions,
+  };
   return (
-    <NextMoveCard>
-      {verdict.kind !== 'idle' && <NextMoveHeader verdict={verdict} />}
-      <NextMoveContent>
-        <NextMoveSummary>{fixture.summary}</NextMoveSummary>
-        <NextMoveAsk question={fixture.question}>
-          <NextMoveActions
-            labels={fixture.options.map((o) => o.label)}
-            onPick={(i) => pick(fixture.options[i])}
-          />
-        </NextMoveAsk>
-      </NextMoveContent>
-    </NextMoveCard>
+    <WrapUpBox
+      thread={fixture.thread}
+      verdict={next.verdict}
+      report={report}
+      question={fixture.question}
+      actions={fixture.actions}
+      onPick={(a) =>
+        onAnswer(
+          a.isDraft
+            ? { label: a.label, draft: a.label }
+            : { label: a.label, reply: a.label, isMove: true },
+        )
+      }
+      onDismiss={() => onAnswer({ label: '' })}
+    />
   );
 }
 
@@ -186,6 +194,149 @@ function TurnEndRecord({
     />
   );
 }
+
+/**
+ * The box on the demo thread itself, so its assumptions are the store's: Change edits in place, and picking an answer or sending
+ * a message sends it with the corrections on top, accepting the rest. Then the turn's plan record, its answers folded in.
+ */
+function AssumedMock({ rl }: { rl: Thread }) {
+  const dispatch = useDispatch();
+  const thread = useHarnessSelector((s) =>
+    s.threads.find((t) => t.id === rl.id),
+  );
+  const [record, setRecord] = useState<ReturnType<typeof moveRecord>>();
+  const [sent, setSent] = useState<string>();
+  const [typed, setTyped] = useState('');
+  const load = () => {
+    setRecord(undefined);
+    setSent(undefined);
+    dispatch({
+      type: 'agent',
+      event: {
+        threadId: rl.id,
+        type: 'plan',
+        items: RECORD_STEPS.map((s) => ({ title: s.title, status: 'done' })),
+        isFresh: true,
+      },
+      ms: Date.now(),
+    });
+    dispatch({ type: 'report', threadId: rl.id, report: ASSUMED_REPORT });
+  };
+  const isLoaded = thread?.report?.ask === ASSUMED_REPORT.ask;
+  if (!thread?.report || !isLoaded)
+    return (
+      <MockFrame label="Assumed · the box on the demo thread, with its plan record">
+        <Button size="sm" variant="secondary" className="w-fit" onClick={load}>
+          Load the demo turn
+        </Button>
+      </MockFrame>
+    );
+  const { report } = thread;
+  const send = (text: string, label?: string) => {
+    setRecord(moveRecord(thread, report.ask!, label));
+    setSent(yourText(thread, { type: 'send', threadId: rl.id, text }));
+    dispatch({ type: 'send', threadId: rl.id, text });
+  };
+  const turnIds = (thread.assumptions ?? [])
+    .filter((a) => a.turn === report.turn)
+    .map((a) => a.id);
+  return (
+    <MockFrame
+      label="Assumed · Change or click a sentence to edit it in place; your next message carries the corrections"
+      control={
+        <Button size="xs" variant="outline" onClick={load}>
+          Reset
+        </Button>
+      }
+    >
+      <WorkLine>Edited rate-limit.ts and rate-limit.test.ts</WorkLine>
+      <PlanRecordRow
+        thread={thread}
+        record={{
+          steps: RECORD_STEPS,
+          decisions: report.decisions.flatMap((d) =>
+            typeof d === 'string' ? [] : [d],
+          ),
+          assumptionIds: turnIds,
+        }}
+      />
+      {record ? (
+        <NextMoveRecord record={record} />
+      ) : (
+        <WrapUpBox
+          thread={thread}
+          verdict={{ kind: 'idle', chip: 'Idle', tone: 'muted', reason: '' }}
+          report={report}
+          question={report.ask ?? null}
+          actions={report.actions ?? []}
+          onPick={(a) => send(a.label, a.label)}
+          onDismiss={() => setRecord(moveRecord(thread, report.ask!))}
+        />
+      )}
+      {!!sent && <YourMessage>{sent}</YourMessage>}
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!typed.trim() || record) return;
+          send(typed.trim());
+          setTyped('');
+        }}
+      >
+        <input
+          aria-label="Message"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder="Or write a message instead"
+          className="min-w-0 flex-1 rounded-md border bg-transparent px-3 py-1.5 type-body outline-none focus-visible:border-ring"
+        />
+        <Button size="sm" variant="secondary" type="submit">
+          Send
+        </Button>
+      </form>
+    </MockFrame>
+  );
+}
+
+const RECORD_STEPS: Step[] = [
+  'Read the rate limiter and its tests',
+  'Find every route that returns 429',
+  'Add a shared retryAfter helper',
+  'Add Retry-After to every 429',
+  'Cover the burst case in rate-limit.test.ts',
+  'Typecheck and run the tests',
+].map((title, k) => ({
+  id: `record-${k}`,
+  title,
+  status: k < 5 ? 'done' : 'ready',
+  addedAt: 0,
+  addedBy: 'claude',
+  ...(k < 5 && {
+    startedAt: 0,
+    startedMs: 0,
+    doneAt: 0,
+    doneMs: (k + 2) * 47_000,
+  }),
+}));
+
+const ASSUMED_REPORT = {
+  by: 'claude',
+  recap:
+    'Every 429 now carries Retry-After, and the burst case has its own test. The full test run is not done yet.',
+  ask: 'Commit the Retry-After change and its test?',
+  actions: [{ label: 'Commit' }, { label: 'Show the diff first' }],
+  decisions: [
+    {
+      text: 'Retry-After in seconds, not an HTTP date: every client we ship parses seconds',
+      step: 4,
+    },
+    { text: 'Kept the limiter in memory instead of moving it to Redis' },
+  ],
+  assumptions: [
+    { text: 'The window resets on the minute, not rolling', step: 4 },
+    { text: 'Bursts above 20 a second count as abuse', step: 5 },
+  ],
+} satisfies Omit<TurnReport, 'at'>;
 
 export function MockFrame({
   label,
@@ -293,10 +444,10 @@ const PLAN_STATES: PlanItem[] = [
 interface NextMoveFixture {
   label: string;
   thread: Thread;
-  /** What the agent would write in report_turn. */
+  /** What the agent would write in wrap_up. */
   summary: string;
   question: string;
-  options: NextOption[];
+  actions: NextAction[];
   /** The chat's row before the card, and after it when you take the move. */
   before: string;
   after: string;
@@ -316,13 +467,7 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       summary:
         'The session cookie keeps its name through the Better Auth migration, so signed-in people stay signed in. The old cookie is read once and rewritten on the next response.',
       question: 'Commit the cookie fix and its test?',
-      options: [
-        { label: 'Commit', reply: 'Commit the cookie fix and its test.' },
-        {
-          label: 'Show the diff first',
-          reply: 'Show me the diff before you commit.',
-        },
-      ],
+      actions: [{ label: 'Commit' }, { label: 'Show the diff first' }],
       before: 'Edited 2 files, ran pnpm test',
       after: 'Committed 2 files as fix(auth): keep the session cookie name',
     },
@@ -332,16 +477,7 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       summary:
         'Committed as fix(auth): keep the session cookie name. Every criterion passes on the branch.',
       question: 'Open a pull request for the cookie fix?',
-      options: [
-        {
-          label: 'Open pull request',
-          reply: 'Open the pull request for the cookie fix.',
-        },
-        {
-          label: 'Not yet',
-          reply: "Hold the pull request, I'll review the branch first.",
-        },
-      ],
+      actions: [{ label: 'Open pull request' }, { label: 'Not yet' }],
       before: 'Committed 2 files',
       after: 'Opened #136 fix(auth): keep the session cookie name',
     },
@@ -351,13 +487,7 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       summary:
         'The checkout test fails about 1 in 20 runs, only on CI. It times out waiting for the payment iframe, which loads slower on the CI runners.',
       question: 'Retry it, or quarantine it and open an issue?',
-      options: [
-        { label: 'Quarantine it', reply: 'Quarantine it and open an issue.' },
-        {
-          label: 'Retry it',
-          reply: 'Wait longer for the payment iframe and retry it.',
-        },
-      ],
+      actions: [{ label: 'Quarantine it' }, { label: 'Retry it' }],
       before: 'Ran the e2e suite 20 times',
       after: '',
       reply: 'Quarantine it and open an issue.',
@@ -368,16 +498,9 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       summary:
         "The Devices list reads the registry and shows each computer's icon. Offline ages and the theme check aren't done yet.",
       question: 'Pick up where it stopped: offline ages, then both themes?',
-      options: [
-        {
-          label: 'Continue',
-          reply: 'Continue: offline ages, then check both themes.',
-        },
-        {
-          label: 'Change the plan',
-          reply: 'Before you continue, I want to change the plan:',
-          isDraft: true,
-        },
+      actions: [
+        { label: 'Continue' },
+        { label: 'Change the plan', isDraft: true },
       ],
       before: 'Edited 4 files',
       after: 'Continuing with offline ages',
@@ -387,10 +510,7 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       thread: thread('Idle · merged'),
       summary: '#133 merged into main. Nothing is left open.',
       question: 'Settle this thread?',
-      options: [
-        { label: 'Settle', reply: 'Settle this thread.' },
-        { label: 'Keep it open', reply: 'Keep this thread open for now.' },
-      ],
+      actions: [{ label: 'Settle' }, { label: 'Keep it open' }],
       before: 'Merged #133',
       after: 'Settled',
     },
@@ -401,18 +521,10 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
         'I rewrote the checkout flow so the payment step no longer blocks on the address lookup, moved the retry logic into one helper used by every provider, and split the 1,400 line CheckoutPage into five components with their own tests. Two of the provider sandboxes were down, so their paths are only covered by mocks.',
       question:
         'Fix the 5 failing checks, then run the two provider sandboxes again once they are back up before opening the pull request?',
-      options: [
-        {
-          label: 'Fix checks, rerun sandboxes',
-          reply:
-            'Fix the 5 failing checks, then rerun both provider sandboxes once they are back up, then open the pull request.',
-        },
-        {
-          label: 'Open it with gaps',
-          reply:
-            'Open the pull request now and list the gaps in its description.',
-        },
-        { label: 'Only the checks', reply: 'Fix the 5 failing checks only.' },
+      actions: [
+        { label: 'Fix checks, rerun sandboxes' },
+        { label: 'Open it with gaps' },
+        { label: 'Only the checks' },
       ],
       before: 'Edited 23 files, ran 14 commands',
       after: 'Working on the 12 gaps',

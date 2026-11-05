@@ -95,10 +95,11 @@ import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
 import { EarlierTurnCard, ReportCard } from './goals/ReportCard';
 import { NextMoveRecord, ThreadPlan, nextMoveOf } from './goals/NextMove';
+import { PlanRecordRow } from './goals/PlanRecordRow';
 import { SubThreadResultRow, ThreadLinkRow } from './goals/SubThreads';
 import { ProposalEntry } from './chat/ThreadProposals';
 import { GrantEntry } from './chat/GrantCard';
-import { showsVerdictCard, suggestedReply } from './goals/report';
+import { moveRecord, showsVerdictCard, suggestedReply } from './goals/report';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import {
   AutofixEventRow,
@@ -511,6 +512,8 @@ const ChatRowView = memo(function ChatRowView({
     return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.nextMove)
     return <NextMoveRecord record={row.entry.nextMove} />;
+  if (row.kind === 'event' && row.entry.planRecord)
+    return <PlanRecordRow thread={thread} record={row.entry.planRecord} />;
   if (row.kind === 'event' && row.entry.threadLink)
     return <ThreadLinkRow thread={thread} link={row.entry.threadLink} />;
   if (row.kind === 'event' && row.entry.subThread)
@@ -1303,10 +1306,7 @@ function useRecordUnanswered(thread: Thread) {
     dispatch({
       type: 'next-move-record',
       threadId: thread.id,
-      record: {
-        ...(next.report?.summary && { summary: next.report.summary }),
-        question: next.question,
-      },
+      record: moveRecord(thread, next.question),
     });
   };
 }

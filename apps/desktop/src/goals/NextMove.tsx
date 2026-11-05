@@ -1,16 +1,14 @@
-import type { ComponentProps, ReactNode } from 'react';
+import type { ComponentProps } from 'react';
 import { useNow } from '../useNow';
 import { Warning, CheckCircle, PauseCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, LineSlot, Thread } from '../model';
-import { IS_MAC } from '../keys';
-import { Shortcut } from '../Shortcut';
 import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
 import { useHarnessSelector } from '../store';
+import { turnOf } from '../store/threads';
 import { planDuration } from '../progress';
 import { isPlanComplete, isTicking, planItems, type PlanItem } from './plan';
 import { VerdictIcon } from './VerdictChip';
@@ -30,7 +28,7 @@ export function NextMoveCard({
       size="sm"
       role="group"
       aria-label="Next move"
-      className={className}
+      className={cn('bg-transparent', className)}
       {...props}
     />
   );
@@ -76,30 +74,25 @@ export function NextMoveContent({
   );
 }
 
-/** The agent's own words for what changed, from its report. */
+/** The agent's recap of what changed, from its wrap_up. */
 export function NextMoveSummary({ className, ...props }: ComponentProps<'p'>) {
   return (
     <p
-      className={cn('type-prose text-pretty text-muted-foreground', className)}
+      className={cn('type-body text-pretty text-muted-foreground', className)}
       {...props}
     />
   );
 }
 
 export function NextMoveQuestion({ className, ...props }: ComponentProps<'p'>) {
-  return (
-    <p
-      className={cn('type-prose font-medium text-pretty', className)}
-      {...props}
-    />
-  );
+  return <p className={cn('type-body text-pretty', className)} {...props} />;
 }
 
 /** What you chose, under the question once the card is a record. */
 export function NextMoveAnswer({ className, ...props }: ComponentProps<'p'>) {
   return (
     <p
-      className={cn('-mt-2 type-prose text-muted-foreground', className)}
+      className={cn('-mt-2 type-body text-subtle-foreground', className)}
       {...props}
     />
   );
@@ -117,74 +110,19 @@ export function NextMoveRecord({
         {!!record.summary && (
           <NextMoveSummary>{record.summary}</NextMoveSummary>
         )}
-        <NextMoveQuestion>{record.question}</NextMoveQuestion>
+        <NextMoveQuestion className="text-muted-foreground">
+          {record.question}
+        </NextMoveQuestion>
         {!!record.answer && <NextMoveAnswer>{record.answer}</NextMoveAnswer>}
       </NextMoveContent>
     </NextMoveCard>
   );
 }
 
-/** The question and its answers on one line; the answers wrap under it when the chat is narrow. */
-export function NextMoveAsk({
-  question,
-  children,
-}: {
-  question: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <NextMoveQuestion className="min-w-0 flex-1 basis-56">
-        {question}
-      </NextMoveQuestion>
-      {!!children && (
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The answers, the first as the primary with its shortcut, the others quieter before it. */
-export function NextMoveActions({
-  labels,
-  onPick,
-}: {
-  labels: string[];
-  onPick: (index: number) => void;
-}) {
-  const [primary, ...others] = labels;
-  return (
-    <>
-      {others.map((label, i) => (
-        <Button
-          key={label}
-          size="sm"
-          variant="ghost"
-          onClick={() => onPick(i + 1)}
-        >
-          {label}
-        </Button>
-      ))}
-      <Button
-        size="sm"
-        onClick={() => onPick(0)}
-        aria-keyshortcuts={IS_MAC ? 'Meta+Enter' : 'Control+Enter'}
-      >
-        {primary}
-        <span aria-hidden className="contents">
-          <Shortcut
-            keys={['mod', 'Enter']}
-            className="ml-0.5 opacity-70 [&_[data-slot=kbd]]:bg-primary-foreground/15 [&_[data-slot=kbd]]:text-primary-foreground"
-          />
-        </span>
-      </Button>
-    </>
-  );
-}
-
-/** The thread's plan in the chat; a running step's time ticks every second while the window is visible. */
+/**
+ * The turn's plan, pinned last in the chat while the agent works on it; a running step's time ticks every second while the window
+ * is visible. When the turn ends it goes, and its record (`PlanRecordRow`) stays in the transcript.
+ */
 export function ThreadPlan({
   thread,
   isWorking,
@@ -194,6 +132,7 @@ export function ThreadPlan({
 }) {
   const now = useHarnessSelector((s) => s.now);
   const nowMs = useNow(isWorking && thread.steps.some(isTicking) ? 1000 : null);
+  if (!isWorking || thread.planTurn !== turnOf(thread)) return null;
   return (
     <PlanList
       items={planItems(thread.steps, now, nowMs, isWorking)}
@@ -256,7 +195,7 @@ function PlanRow({ item, slot }: { item: PlanItem; slot: LineSlot }) {
   );
 }
 
-function PlanIcon({
+export function PlanIcon({
   status,
   slot,
 }: {

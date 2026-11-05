@@ -1206,9 +1206,12 @@ test('thread changes log in the caller without a toast', async () => {
 
 test('quiet tools log but never toast', async () => {
   const t = setup();
-  await t.ok('report_turn', { decisions: ['Kept the cookie name'], left: [] });
+  await t.ok('wrap_up', {
+    recap: 'Kept the cookie name.',
+    decisions: [],
+  });
   assert.equal(t.toasts.length, 0);
-  assert.equal(lastLog(t.thread('rl')), 'Claude reported');
+  assert.equal(lastLog(t.thread('rl')), 'Claude wrapped up the turn');
 });
 
 test('another profile is out of reach and bad args are errors, not throws', async () => {
@@ -2847,120 +2850,170 @@ test('Read only and Changes block every settings suggestion and delete with no w
   }
 });
 
-test("update_plan is the thread's plan, even read-only: resent lists move steps on and drop what's left out", async () => {
+test('update_plan replaces the plan: a step resent by its exact title in the same turn keeps its clock, others start fresh, and nothing is logged as dropped', async () => {
   const t = setup({ control: 'read' });
-  const plan = () =>
-    t
-      .thread('rl')
-      .steps.filter((s) => s.status !== 'dropped')
-      .map((s) => [s.title, s.status]);
+  const steps = () =>
+    t.thread('rl').steps.map((s) => [s.title, s.status, s.startedAt]);
+  t.env.dispatch({ type: 'tick' });
   await t.ok('update_plan', {
-    scope: 'continuation',
+    scope: 'first_task',
     items: [
       { title: 'Read the limiter', status: 'in_progress' },
       { title: 'Add Retry-After', status: 'pending' },
       { title: 'Run the tests', status: 'pending' },
     ],
   });
-  assert.deepEqual(plan().slice(0, 3), [
-    ['Read the limiter', 'running'],
-    ['Add Retry-After', 'ready'],
-    ['Run the tests', 'ready'],
-  ]);
+  const started = t.thread('rl').steps[0];
+  const logged = t.thread('rl').activity.length;
+  t.env.dispatch({ type: 'tick' });
   await t.ok('update_plan', {
     scope: 'continuation',
     items: [
       { title: 'Read the limiter', status: 'completed' },
-      { title: 'Add Retry-After', status: 'in_progress' },
+      { title: 'Add the Retry-After header', status: 'in_progress' },
     ],
   });
-  assert.deepEqual(plan().slice(0, 2), [
-    ['Read the limiter', 'done'],
-    ['Add Retry-After', 'running'],
+  const now = t.state().now;
+  assert.deepEqual(steps(), [
+    ['Read the limiter', 'done', started.startedAt],
+    ['Add the Retry-After header', 'running', now],
   ]);
-  assert.equal(
-    t.thread('rl').steps.find((s) => s.title === 'Run the tests')?.status,
-    'dropped',
-  );
-  await t.ok('update_plan', {
-    scope: 'continuation',
-    items: [
-      { title: 'Add Retry-After', status: 'in_progress' },
-      { title: 'Run the tests', status: 'pending' },
-    ],
-  });
-  const status = (title: string) =>
-    t
+  assert.equal(t.thread('rl').steps[0].id, started.id, 'kept its step');
+  assert.notEqual(t.thread('rl').steps[1].id, started.id);
+  assert.ok(
+    !t
       .thread('rl')
-      .steps.find((s) => s.title === title && s.status !== 'dropped')?.status;
-  await t.ok('update_plan', { advance: true });
-  assert.deepEqual(
-    [status('Add Retry-After'), status('Run the tests')],
-    ['done', 'running'],
+      .activity.slice(logged)
+      .some((e) => /dropped/.test(e.text)),
+    'no dropped rows',
   );
-  await t.ok('update_plan', { advance: true });
-  assert.deepEqual(
-    [status('Add Retry-After'), status('Run the tests')],
-    ['done', 'done'],
-    'advance after the last step finishes the plan',
-  );
-  assert.match(await t.err('update_plan', {}), /advance/);
 });
 
-test('update_plan scope defaults to continuation, and new_task is gone: unrelated work is a create_thread offer', async () => {
+test('update_plan in a later turn starts every clock over, even for a title it repeats', async () => {
   const t = setup({ control: 'read' });
-  await t.ok('update_plan', {
-    scope: 'first_task',
-    items: [{ title: 'Read the limiter', status: 'in_progress' }],
-  });
-  await t.ok('update_plan', {
-    items: [
-      { title: 'Read the limiter', status: 'completed' },
-      { title: 'Add Retry-After', status: 'in_progress' },
-    ],
-  });
-  assert.equal(
-    t.thread('rl').steps.find((s) => s.title === 'Read the limiter')?.status,
-    'done',
-    'no scope keeps the step it matches, as continuation does',
-  );
-  assert.match(
-    await t.err('update_plan', {
-      scope: 'new_task',
-      items: [{ title: 'Write the billing page', status: 'in_progress' }],
-    }),
-    /scope/,
-  );
+  const items = [{ title: 'Read the limiter', status: 'in_progress' }];
+  await t.ok('update_plan', { scope: 'first_task', items });
+  const first = t.thread('rl').steps[0];
+  t.env.dispatch({ type: 'idle-start', threadId: 'rl' });
+  t.env.dispatch({ type: 'tick' });
+  await t.ok('update_plan', { scope: 'continuation', items });
+  const second = t.thread('rl').steps[0];
+  assert.notEqual(second.id, first.id);
+  assert.equal(second.startedAt, t.state().now);
+  assert.equal(t.thread('rl').planTurn, (t.thread('rl').idle?.turn ?? 0) + 1);
 });
 
-test('update_plan answers with the step now in progress, so the agent never counts its advances', async () => {
+test('update_plan advance, done and start move through the plan and answer with the step in progress', async () => {
   const t = setup({ control: 'read' });
   const plan = async (args: Record<string, unknown>) =>
-    JSON.parse((await t.call('update_plan', args)).text);
+    JSON.parse((await t.call('update_plan', args)).text) as string;
+  const statuses = () => t.thread('rl').steps.map((s) => s.status);
   assert.equal(
     await plan({
       scope: 'first_task',
       items: [
-        { title: 'Read the limiter', status: 'in_progress' },
-        { title: 'Add Retry-After', status: 'pending' },
+        { title: 'A', status: 'in_progress' },
+        { title: 'B', status: 'pending' },
+        { title: 'C', status: 'pending' },
+        { title: 'D', status: 'pending' },
       ],
     }),
-    'Step 1/2 in progress: "Read the limiter". Next: "Add Retry-After".',
+    'Plan updated: step 1 of 4 is in progress: "A".',
+  );
+  assert.equal(
+    await plan({ done: [2], start: 4 }),
+    'Plan updated: step 4 of 4 is in progress: "D".',
+  );
+  assert.deepEqual(statuses(), ['ready', 'done', 'ready', 'running']);
+  await plan({ advance: true });
+  assert.deepEqual(
+    statuses(),
+    ['running', 'done', 'ready', 'done'],
+    'past the last step, advance wraps to the first pending one',
+  );
+  await plan({ advance: true });
+  assert.deepEqual(
+    statuses(),
+    ['done', 'done', 'running', 'done'],
+    'skips done steps',
   );
   assert.equal(
     await plan({ advance: true }),
-    'Step 2/2 in progress: "Add Retry-After". Last step: advance once more when it is done.',
+    'Plan updated: every step is done.',
   );
-  assert.equal(await plan({ advance: true }), 'Plan done (2/2).');
   assert.equal(
-    await plan({
-      scope: 'first_task',
+    await plan({ advance: true }),
+    'Plan updated: every step is done.',
+  );
+});
+
+test('update_plan refuses what it cannot apply, changing nothing and saying how to fix it', async () => {
+  const t = setup({ control: 'read' });
+  const nothing = (args: Record<string, unknown>) => t.err('update_plan', args);
+  Object.assign(t.thread('rl'), { steps: [] });
+  assert.match(
+    await nothing({ advance: true }),
+    /^Nothing changed: there is no plan yet/,
+  );
+  await t.ok('update_plan', {
+    scope: 'first_task',
+    items: [
+      { title: 'A', status: 'in_progress' },
+      { title: 'B', status: 'pending' },
+    ],
+  });
+  const before = t.thread('rl').steps;
+  assert.match(await nothing({}), /^Nothing changed: pass \{"scope"/);
+  assert.match(
+    await nothing({ items: [{ title: 'C', status: 'pending' }] }),
+    /^Nothing changed: "scope" is required with items/,
+  );
+  assert.match(
+    await nothing({ done: [3] }),
+    /^Nothing changed: there is no step 3; the plan has 2 steps \(1-2\)\./,
+  );
+  assert.match(await nothing({ start: 0 }), /no step 0/);
+  assert.match(
+    await nothing({
+      scope: 'continuation',
+      items: Array.from({ length: 13 }, (_, k) => ({
+        title: `Step ${k}`,
+        status: 'pending',
+      })),
+    }),
+    /^Nothing changed: the plan has 13 steps; the limit is 12\./,
+  );
+  assert.match(
+    await nothing({
+      scope: 'continuation',
       items: [
-        { title: 'Read the limiter', status: 'completed' },
-        { title: 'Add Retry-After', status: 'pending' },
+        { title: 'A', status: 'completed' },
+        { title: '  ', status: 'pending' },
       ],
     }),
-    'Nothing in progress; 1/2 done. Next: "Add Retry-After".',
+    /^Nothing changed: step 2 has no text\./,
+  );
+  assert.equal(t.thread('rl').steps, before, 'the plan is untouched');
+});
+
+test('update_plan takes two steps in progress, or items with advance, but warns', async () => {
+  const t = setup({ control: 'read' });
+  const plan = async (args: Record<string, unknown>) =>
+    JSON.parse((await t.call('update_plan', args)).text) as string;
+  assert.match(
+    await plan({
+      scope: 'first_task',
+      advance: true,
+      items: [
+        { title: 'A', status: 'in_progress' },
+        { title: 'B', status: 'in_progress' },
+      ],
+    }),
+    /Warning: advance, done and start are ignored with items.*Warning: 2 steps are in progress/,
+  );
+  assert.deepEqual(
+    t.thread('rl').steps.map((s) => s.status),
+    ['running', 'running'],
   );
 });
 
@@ -3034,156 +3087,119 @@ test('dev MCP starts tasks from an empty build and exposes paginated evidence an
   assert.equal((await call('delete_thread', {})).isError, true);
 });
 
-test('report_turn records the report on the caller', async () => {
-  const t = setup();
-  await t.ok('report_turn', {
-    summary: 'Built the wheel',
-    decisions: [],
-    left: [],
-  });
-  assert.equal(t.thread('rl').report?.summary, 'Built the wheel');
-});
-
-test('report_turn reminds the agent of a step left in progress, and says nothing once the plan is done', async () => {
+test('wrap_up records the box on the caller and closes only the running step', async () => {
   const t = setup();
   await t.ok('update_plan', {
     scope: 'first_task',
-    items: [{ title: 'Open the PR', status: 'in_progress' }],
+    items: [
+      { title: 'A', status: 'completed' },
+      { title: 'B', status: 'in_progress' },
+      { title: 'C', status: 'pending' },
+    ],
   });
-  assert.match(
-    (await t.ok('report_turn', { decisions: [], left: [] })).note,
-    /"Open the PR" in progress/,
+  await t.ok('wrap_up', {
+    recap: 'Built the wheel. C is not done.',
+    ask: 'Commit the wheel?',
+    blocked: true,
+    actions: [
+      { label: 'Commit' },
+      { label: 'Change the plan:', isDraft: true },
+    ],
+    decisions: [],
+    assumptions: [],
+  });
+  const rl = t.thread('rl');
+  assert.equal(rl.report?.recap, 'Built the wheel. C is not done.');
+  assert.equal(rl.report?.ask, 'Commit the wheel?');
+  assert.equal(rl.report?.isBlocked, true);
+  assert.deepEqual(rl.report?.actions, [
+    { label: 'Commit' },
+    { label: 'Change the plan:', isDraft: true },
+  ]);
+  assert.deepEqual(
+    rl.steps.map((s) => s.status),
+    ['done', 'done', 'ready'],
+    'the step that never ran stays not done',
   );
-  await t.ok('update_plan', { advance: true });
-  assert.equal(
-    (await t.ok('report_turn', { decisions: [], left: [] })).note,
-    undefined,
+});
+
+test('wrap_up wants an ask and its actions together', async () => {
+  const t = setup();
+  assert.match(
+    await t.err('wrap_up', { recap: 'Done.', ask: 'Commit?', decisions: [] }),
+    /^Nothing changed: an ask needs its answers/,
+  );
+  assert.match(
+    await t.err('wrap_up', {
+      recap: 'Done.',
+      actions: [{ label: 'Commit' }],
+      decisions: [],
+    }),
+    /^Nothing changed: actions answer an ask/,
+  );
+  assert.match(
+    await t.err('wrap_up', { recap: 'x'.repeat(301), decisions: [] }),
+    /recap/,
   );
 });
 
 // {TURN SPINE}
 
-/** A thread whose open turn has `edits`: your message, then the agent's Edit rows the turn's changes read. */
-function spineSetup(edits: string[] = []) {
+test('wrap_up puts each assumption on its numbered step of this turn, or on none, and adds it to the ledger once', async () => {
   const t = setup();
-  const rl = t.thread('rl');
-  Object.assign(rl, {
-    steps: [],
-    activity: [
-      ...rl.activity,
-      { at: 0, who: 'you', kind: 'message', text: 'Import the CSV' },
-      ...edits.map((text) => ({ at: 0, who: 'claude', kind: 'tool', text })),
+  await t.ok('update_plan', {
+    scope: 'first_task',
+    items: [
+      { title: 'Parse', status: 'completed' },
+      { title: 'Import', status: 'in_progress' },
     ],
   });
-  return t;
-}
-
-test('report_turn keeps decisions and assumptions on their step and adds assumptions to the ledger once', async () => {
-  const t = spineSetup();
-  await t.ok('report_turn', {
-    decisions: [
-      'Kept the parser',
-      { text: 'Used the csv helper', step: 'Parse' },
-    ],
+  await t.ok('wrap_up', {
+    recap: 'Imported.',
+    decisions: [{ text: 'Used the csv helper', step: 1 }],
     assumptions: [
-      { text: 'Assumed timestamps are UTC', step: 'Parse' },
-      { text: 'Assumed amounts are cents' },
+      { text: 'Assumed timestamps are UTC', step: 2 },
+      { text: 'Assumed amounts are cents', step: 7 },
+      { text: 'Assumed no header row' },
     ],
-    left: [],
   });
   const rl = t.thread('rl');
   assert.deepEqual(rl.report?.decisions, [
-    { text: 'Kept the parser' },
-    { text: 'Used the csv helper', step: 'Parse' },
+    { text: 'Used the csv helper', step: 1 },
   ]);
   assert.deepEqual(
-    rl.assumptions?.map((a) => [a.text, a.state, a.turn]),
+    rl.assumptions?.map((a) => [a.text, a.state, a.step, a.stepTitle]),
     [
-      ['Assumed timestamps are UTC', 'open', rl.report?.turn],
-      ['Assumed amounts are cents', 'open', rl.report?.turn],
+      ['Assumed timestamps are UTC', 'open', 2, 'Import'],
+      ['Assumed amounts are cents', 'open', undefined, undefined],
+      ['Assumed no header row', 'open', undefined, undefined],
     ],
   );
-  await t.ok('report_turn', {
+  await t.ok('wrap_up', {
+    recap: 'Again.',
     decisions: [],
     assumptions: [{ text: 'Assumed timestamps are UTC' }],
-    left: [],
   });
   assert.equal(
     t.thread('rl').assumptions?.length,
-    2,
+    3,
     'an open repeat is not added again',
   );
 });
 
-test('update_plan records a pivot for dropped steps with its why, and asks for a why it lacks', async () => {
-  const t = spineSetup();
-  const plan = async (args: Record<string, unknown>) =>
-    JSON.parse((await t.call('update_plan', args)).text) as string;
-  await plan({
-    scope: 'first_task',
-    items: [
-      { title: 'Reproduce the crash', status: 'completed' },
-      { title: 'Patch the CSV parser', status: 'in_progress' },
-    ],
-  });
-  const asked = await plan({
-    scope: 'continuation',
-    items: [
-      { title: 'Reproduce the crash', status: 'completed' },
-      { title: 'Fix quoted fields in the tokenizer', status: 'in_progress' },
-    ],
-  });
-  assert.match(
-    asked,
-    /You dropped "Patch the CSV parser", added "Fix quoted fields in the tokenizer"\./,
-  );
-  assert.match(asked, /"why"/);
-  assert.deepEqual(
-    t.thread('rl').pivots?.map((p) => [p.dropped, p.at, p.why]),
-    [[['Patch the CSV parser'], 1, undefined]],
-  );
-  assert.equal(
-    await plan({ why: 'The crash is in the tokenizer' }),
-    'Noted why the plan changed.',
-  );
-  assert.equal(t.thread('rl').pivots?.[0].why, 'The crash is in the tokenizer');
-
-  const given = await plan({
-    scope: 'continuation',
-    why: 'Tests cover it already',
-    items: [
-      { title: 'Fix quoted fields in the tokenizer', status: 'in_progress' },
-    ],
-  });
-  assert.doesNotMatch(
-    given,
-    /"why"/,
-    'a why given with the plan is not asked for',
-  );
-  assert.equal(t.thread('rl').pivots?.at(-1)?.why, 'Tests cover it already');
-});
-
-test('with the turn spine off, reports take no assumptions, give no nudge, and update_plan records no pivot', async () => {
-  const t = spineSetup(['Edit src/import.ts  +3 −1']);
+test('with the turn spine off, wrap_up keeps no assumptions', async () => {
+  const t = setup();
   t.env.prefs.set({ turnSpine: false });
-  const r = await t.ok('report_turn', {
-    decisions: [{ text: 'Kept the parser', step: 'Parse' }],
+  await t.ok('wrap_up', {
+    recap: 'Done.',
+    decisions: [{ text: 'Kept the parser' }],
     assumptions: [{ text: 'Assumed UTC' }],
-    left: [],
   });
-  assert.equal(r.note, undefined);
-  assert.deepEqual(t.thread('rl').report?.decisions, ['Kept the parser']);
+  assert.deepEqual(t.thread('rl').report?.decisions, [
+    { text: 'Kept the parser' },
+  ]);
   assert.equal(t.thread('rl').report?.assumptions, undefined);
   assert.equal(t.thread('rl').assumptions, undefined);
-  await t.ok('update_plan', {
-    scope: 'first_task',
-    items: [{ title: 'A', status: 'in_progress' }],
-  });
-  await t.ok('update_plan', {
-    scope: 'continuation',
-    items: [{ title: 'B', status: 'in_progress' }],
-  });
-  assert.equal(t.thread('rl').pivots, undefined);
 });
 
 // {THREAD PROPOSALS}

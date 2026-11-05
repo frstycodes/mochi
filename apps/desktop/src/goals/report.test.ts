@@ -95,10 +95,10 @@ test("a quick turn without its own report doesn't bring back the last turn's que
     }) as unknown as State;
   const report = {
     by: 'claude' as const,
+    recap: '',
     decisions: [],
-    left: [],
-    next: 'Wait for it?',
-    options: [{ label: 'Wait', reply: 'Wait.' }],
+    ask: 'Wait for it?',
+    actions: [{ label: 'Wait' }],
   };
   const [reported] = threadsReducer(at(5, t), {
     type: 'report',
@@ -109,7 +109,7 @@ test("a quick turn without its own report doesn't bring back the last turn's que
     type: 'idle-start',
     threadId: 't',
   }).threads;
-  assert.equal(turnReport(first)?.next, 'Wait for it?');
+  assert.equal(turnReport(first)?.ask, 'Wait for it?');
   const [second] = threadsReducer(at(5, first), {
     type: 'idle-start',
     threadId: 't',
@@ -118,7 +118,7 @@ test("a quick turn without its own report doesn't bring back the last turn's que
   assert.equal(currentReport(second), null, 'the sidebar drops it too');
 });
 
-test("the composer suggests the agent's first answer to its next move, never its question, and nothing without answers", () => {
+test("the composer suggests the agent's pick, never its question, and nothing without answers", () => {
   const at = (now: number, s: Thread) =>
     ({
       now,
@@ -137,34 +137,24 @@ test("the composer suggests the agent's first answer to its next move, never its
     const [reported] = threadsReducer(at(5, t), {
       type: 'report',
       threadId: 't',
-      report: { by: 'claude', decisions: [], left: [], ...report } as never,
+      report: { by: 'claude', recap: '', decisions: [], ...report } as never,
     }).threads;
     return threadsReducer(at(5, reported), {
       type: 'idle-start',
       threadId: 't',
     }).threads[0];
   };
-  const next = 'Should it commit both fixes and open a PR into `main`?';
-  const options = [
-    {
-      label: 'Commit and PR',
-      reply: 'Commit both fixes and open a PR into main.',
-    },
-    { label: 'Only commit', reply: 'Just commit.' },
-  ];
+  const ask = 'Commit both fixes and open a PR into `main`?';
+  const actions = [{ label: 'Commit and open a PR' }, { label: 'Only commit' }];
+  assert.equal(suggestedReply(ended({ ask, actions })), 'Commit and open a PR');
+  assert.equal(suggestedReply(ended({ ask })), undefined);
   assert.equal(
-    suggestedReply(ended({ next, options })),
-    'Commit both fixes and open a PR into main.',
-  );
-  assert.equal(suggestedReply(ended({ next, question: next })), undefined);
-  assert.equal(suggestedReply(ended({ next, options: [] })), undefined);
-  assert.equal(
-    suggestedReply(ended({ next, options, isSuperseded: true })),
+    suggestedReply(ended({ ask, actions, isSuperseded: true })),
     undefined,
   );
   assert.equal(
     suggestedReply({
-      ...ended({ next, options }),
+      ...ended({ ask, actions }),
       live: { isWorking: true },
     } as unknown as Thread),
     undefined,

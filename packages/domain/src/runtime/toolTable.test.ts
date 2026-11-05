@@ -4,6 +4,7 @@ import {
   decodeArgs,
   DEV_TOOL_TABLE,
   jsonSchemaOf,
+  servedTools,
   shapeFor,
   TOOL_TABLE,
 } from './toolTable.ts';
@@ -14,10 +15,10 @@ test('every tool lists its input as a JSON Schema object, descriptions kept, no 
     ...Object.values(DEV_TOOL_TABLE),
   ])
     assert.equal(jsonSchemaOf(shape).type, 'object');
-  const properties = jsonSchemaOf(TOOL_TABLE.report_turn.shape)
+  const properties = jsonSchemaOf(TOOL_TABLE.wrap_up.shape)
     .properties as Record<string, { type?: string; description?: string }>;
-  assert.equal(properties.question.type, 'string');
-  assert.match(properties.left.description ?? '', /still not done/);
+  assert.equal(properties.ask.type, 'string');
+  assert.match(properties.recap.description ?? '', /not done or not verified/);
 });
 
 test('bad args come back as one path: message line per field, for the agent', () => {
@@ -28,12 +29,12 @@ test('bad args come back as one path: message line per field, for the agent', ()
     }),
     { args: { title: 'Fix the cookie bug' } },
   );
-  const decoded = decodeArgs(TOOL_TABLE.report_turn.shape, {
+  const decoded = decodeArgs(TOOL_TABLE.wrap_up.shape, {
+    recap: 'a'.repeat(301),
     decisions: 'x',
-    left: ['a'.repeat(161)],
   });
   assert.ok('error' in decoded);
-  assert.match(decoded.error, /^decisions: .*; left\.0: /);
+  assert.match(decoded.error, /^recap: .*; decisions: /);
   assert.deepEqual(
     decodeArgs(DEV_TOOL_TABLE.continue_task.shape, {
       threadId: 't',
@@ -50,31 +51,23 @@ test('bad args come back as one path: message line per field, for the agent', ()
   );
 });
 
-test('the turn spine serves report_turn with required assumptions and update_plan with why; off, neither, and plain decisions', () => {
-  const on = jsonSchemaOf(shapeFor('report_turn', {}));
-  assert.ok((on.required as string[]).includes('assumptions'));
-  assert.ok(
-    'why' in (jsonSchemaOf(shapeFor('update_plan', {})).properties as object),
-  );
-  const off = jsonSchemaOf(shapeFor('report_turn', { isSpineOff: true }));
+test('wrap_up asks for assumptions only with the turn spine on, each on a step by number', () => {
+  const on = jsonSchemaOf(shapeFor('wrap_up', {}));
+  assert.ok('assumptions' in (on.properties as object));
+  const off = jsonSchemaOf(shapeFor('wrap_up', { isSpineOff: true }));
   assert.ok(!('assumptions' in (off.properties as object)));
-  assert.deepEqual(
-    (off.properties as Record<string, { items?: unknown }>).decisions.items,
-    { type: 'string', maxLength: 160 },
-  );
   assert.ok(
-    !(
-      'why' in
-      (jsonSchemaOf(shapeFor('update_plan', { isSpineOff: true }))
-        .properties as object)
-    ),
-  );
-  // Decoding takes either: plain strings, and no assumptions from a session started with the spine off.
-  assert.ok(
-    'args' in
-      decodeArgs(TOOL_TABLE.report_turn.shape, {
-        decisions: ['Kept it', { text: 'Used X', step: 'Parse' }],
-        left: [],
+    'error' in
+      decodeArgs(TOOL_TABLE.wrap_up.shape, {
+        recap: 'Done.',
+        decisions: [{ text: 'Kept it', step: 'Parse' }],
       }),
+    'a step is a number, not a title',
   );
+});
+
+test('Codex is served no update_plan: it keeps its plan with its own', () => {
+  assert.ok(servedTools({}).includes('update_plan'));
+  assert.ok(!servedTools({ isCodex: true }).includes('update_plan'));
+  assert.ok(servedTools({ isCodex: true }).includes('wrap_up'));
 });

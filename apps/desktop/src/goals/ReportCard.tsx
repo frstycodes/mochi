@@ -1,28 +1,18 @@
 import { listenKeydown, isCommand } from '../keymap';
-import { useEffect, useRef, useState } from 'react';
-import { History } from '@/icons';
+import { useEffect, useRef, type Ref } from 'react';
+import { History, X } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type {
-  ActivityEntry,
-  Assumption,
-  NextOption,
-  Thread,
-  TurnReport,
-} from '../model';
+import type { ActivityEntry, NextAction, Thread, TurnReport } from '../model';
+import type { Verdict } from './verdict';
 import type { TurnAnchor } from '../chat/turnAnchor';
 import { useDispatch } from '../store';
-import { Expand } from '../WorkLog';
-import { FoldChevron } from '../Fold';
-import { AssumptionList } from './Assumptions';
-import { changeDraft } from './ledger';
-import { TurnSpine } from './Spine';
-import { turnSection } from './spineNodes';
-import { usePrefs } from '../settings/prefs';
+import { IS_MAC } from '../keys';
+import { Shortcut } from '../Shortcut';
+import { AssumedSection } from './Assumptions';
 import {
-  NextMoveActions,
   NextMoveAnswer,
-  NextMoveAsk,
   NextMoveCard,
   NextMoveContent,
   NextMoveHeader,
@@ -30,12 +20,14 @@ import {
   NextMoveSummary,
   nextMoveOf,
 } from './NextMove';
-import { showsVerdictCard } from './report';
+import { boxAssumptions, moveRecord, showsVerdictCard } from './report';
 
 /**
- * The end of a turn, in the chat: Mochi's verdict, the agent's summary, then the agent's question with its own answers as buttons.
- * Answering it, or writing instead, keeps it in the chat as a record (`next-move-record`); ⌘↵ takes the first answer while the message box is empty. Read-only (a replay, another computer's thread) shows the
- * question without answers: they would act on this computer's store. Only on the latest turn: while a newer one runs, or after one stopped without widgets of its own, `EarlierTurnCard` keeps them on `anchor`.
+ * The end of a turn, in the chat: Mochi's verdict when it needs you, the agent's recap, this turn's open assumptions, then the
+ * agent's one question with its answers as buttons. Answering it, or writing instead, keeps it in the chat as a muted record
+ * (`next-move-record`); ⌘↵ takes the pick while the message box is empty. Read-only (a replay, another computer's thread) shows
+ * the question without answers: they would act on this computer's store. Only on the latest turn: while a newer one runs, or
+ * after one stopped without widgets of its own, `EarlierTurnCard` keeps them on `anchor`.
  */
 export function ReportCard({
   thread,
@@ -46,94 +38,162 @@ export function ReportCard({
   anchor: TurnAnchor | undefined;
   isReadOnly?: boolean;
 }) {
+  const dispatch = useDispatch();
   const next = nextMoveOf(thread);
-  const answers = useMoveAnswers(thread);
+  const pick = usePick(thread);
   const { textInput } = usePromptInputController();
   const isShown = !!next && !!anchor?.isLatest && showsVerdictCard(thread);
   // The agent wrote it before reading your message, so its answers may already be moot.
   const isSuperseded = !!next?.report?.isSuperseded;
-  const choices =
-    isShown && !isReadOnly && !isSuperseded ? choicesFor(next, answers) : [];
+  const actions =
+    isShown && !isReadOnly && !isSuperseded ? (next.ask?.actions ?? []) : [];
   const card = useMoveShortcut(
-    choices.length > 0 && !textInput.value.trim(),
-    () => choices[0].run(),
+    actions.length > 0 && !textInput.value.trim(),
+    () => pick(actions[0]),
   );
   if (!isShown) return null;
-  const { verdict, question, report } = next;
   return (
-    // An idle turn with no summary, changes or question leaves every section below empty; the children decide that, so CSS hides the shell.
-    <NextMoveCard
+    <WrapUpBox
       ref={card}
+      thread={thread}
+      verdict={next.verdict}
+      report={next.report}
+      question={next.question}
+      actions={actions}
+      isReadOnly={isReadOnly}
+      onPick={pick}
+      onDismiss={() =>
+        dispatch({ type: 'next-move-dismiss', threadId: thread.id })
+      }
+    />
+  );
+}
+
+/**
+ * The box itself, read top to bottom: the verdict when it needs you, the recap, the turn's open assumptions under Assumed, then
+ * the one question with its answers from the pick. Transparent with a hairline, a dismiss in the corner. Null when it has
+ * nothing to say (an idle turn with no report).
+ */
+export function WrapUpBox({
+  ref,
+  thread,
+  verdict,
+  report,
+  question,
+  actions,
+  isReadOnly,
+  onPick,
+  onDismiss,
+}: {
+  ref?: Ref<HTMLDivElement>;
+  thread: Thread;
+  verdict: Verdict;
+  report: TurnReport | undefined;
+  question: string | null;
+  actions: NextAction[];
+  isReadOnly?: boolean;
+  onPick: (action: NextAction) => void;
+  onDismiss: () => void;
+}) {
+  const isSuperseded = !!report?.isSuperseded;
+  const assumptions = report ? boxAssumptions(thread, report.turn) : [];
+  const hasVerdict = verdict.kind !== 'idle';
+  if (!hasVerdict && !report?.recap && !assumptions.length && !question)
+    return null;
+  return (
+    <NextMoveCard
+      ref={ref}
       data-next-move={thread.id}
-      className={cn(
-        'has-[>[data-slot=card-content]:only-child:empty]:hidden',
-        isSuperseded && 'opacity-60',
-      )}
+      className={cn('relative', isSuperseded && 'opacity-60')}
     >
-      {verdict.kind !== 'idle' && <NextMoveHeader verdict={verdict} />}
-      <NextMoveContent>
-        {isSuperseded && <SupersededNote />}
-        {!!report?.summary && (
-          <NextMoveSummary>{report.summary}</NextMoveSummary>
+      {hasVerdict && <NextMoveHeader verdict={verdict} />}
+      <NextMoveContent className="gap-4">
+        {!isReadOnly && (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Dismiss"
+            onClick={onDismiss}
+            className={cn(
+              'absolute right-2 text-muted-foreground',
+              hasVerdict ? 'top-1.5' : 'top-2',
+            )}
+          >
+            <X />
+          </Button>
         )}
-        {!isReadOnly && <TurnSection thread={thread} report={report} />}
+        {isSuperseded && <SupersededNote />}
+        {!!report?.recap && (
+          <NextMoveSummary className={cn(!hasVerdict && 'pr-8')}>
+            {report.recap}
+          </NextMoveSummary>
+        )}
+        <AssumedSection
+          thread={thread}
+          assumptions={assumptions}
+          isReadOnly={isReadOnly || isSuperseded}
+        />
         {!!question && (
-          <NextMoveAsk question={question}>
-            {choices.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            <NextMoveQuestion>{question}</NextMoveQuestion>
+            {actions.length > 0 && (
               <NextMoveActions
-                labels={choices.map((c) => c.label)}
-                onPick={(i) => choices[i].run()}
+                labels={actions.map((a) => a.label)}
+                onPick={(i) => onPick(actions[i])}
               />
             )}
-          </NextMoveAsk>
+          </div>
         )}
       </NextMoveContent>
     </NextMoveCard>
   );
 }
 
-/**
- * What the turn decided and assumed: on its plan as a spine when it had one, with older open assumptions under Still open;
- * else as rows. Change drafts a message about the assumption; sending it marks it changed (`changedBySend`).
- */
-function TurnSection({
-  thread,
-  report,
+/** The answers, left-aligned from the pick: primary with its shortcut, the others secondary. */
+export function NextMoveActions({
+  labels,
+  onPick,
 }: {
-  thread: Thread;
-  report: TurnReport | undefined;
+  labels: string[];
+  onPick: (index: number) => void;
 }) {
-  const dispatch = useDispatch();
-  const { textInput } = usePromptInputController();
-  const { turnSpine } = usePrefs();
-  const section = turnSection(thread, report, turnSpine);
-  if (!section) return null;
-  const onSet = (a: Assumption, state: Assumption['state']) =>
-    dispatch({ type: 'assumption-set', threadId: thread.id, id: a.id, state });
-  const onChange = (a: Assumption) => textInput.setInput(changeDraft(a));
+  const [primary, ...others] = labels;
   return (
-    <>
-      {section.kind === 'spine' && (
-        <TurnSpine
-          assumptions={thread.assumptions ?? []}
-          nodes={section.nodes}
-          onSet={onSet}
-          onChange={onChange}
-        />
-      )}
-      <AssumptionList
-        current={section.kind === 'rows' ? section.current : []}
-        earlier={section.earlier}
-        onSet={onSet}
-        onChange={onChange}
-      />
-      {section.kind === 'rows' && <FoldedDecisions items={section.decisions} />}
-    </>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        size="sm"
+        className={ANSWER_TEXT}
+        aria-keyshortcuts={IS_MAC ? 'Meta+Enter' : 'Control+Enter'}
+        onClick={() => onPick(0)}
+      >
+        {primary}
+        <span aria-hidden className="contents">
+          <Shortcut
+            keys={['mod', 'Enter']}
+            className="ml-0.5 opacity-70 [&_[data-slot=kbd]]:bg-primary-foreground/15 [&_[data-slot=kbd]]:text-primary-foreground"
+          />
+        </span>
+      </Button>
+      {others.map((label, i) => (
+        <Button
+          key={label}
+          size="sm"
+          variant="secondary"
+          className={ANSWER_TEXT}
+          onClick={() => onPick(i + 1)}
+        >
+          {label}
+        </Button>
+      ))}
+    </div>
   );
 }
 
+/** `sm` buttons at the meta size: `sm`'s 12px reads smaller than the answers it holds. */
+const ANSWER_TEXT = 'text-[0.8125rem]';
+
 /**
- * The widgets of the last turn that produced them, kept under it while a newer turn runs: its summary and the question you answered; its file changes are a card of their own just above. No verdict and no answers: those describe the thread now, and the newer turn ends with its own.
+ * The widgets of the last turn that produced them, kept under it while a newer turn runs: its recap and the question you answered; its file changes are a card of their own just above. No verdict and no answers: those describe the thread now, and the newer turn ends with its own.
  */
 export function EarlierTurnCard({
   anchor,
@@ -142,7 +202,7 @@ export function EarlierTurnCard({
   anchor: TurnAnchor;
   record?: ActivityEntry['nextMove'];
 }) {
-  const summary = record?.summary ?? anchor.report?.summary;
+  const summary = record?.summary ?? anchor.report?.recap;
   return (
     <NextMoveCard
       data-earlier-turn={anchor.start}
@@ -150,7 +210,11 @@ export function EarlierTurnCard({
     >
       <NextMoveContent>
         {!!summary && <NextMoveSummary>{summary}</NextMoveSummary>}
-        {!!record && <NextMoveQuestion>{record.question}</NextMoveQuestion>}
+        {!!record && (
+          <NextMoveQuestion className="text-muted-foreground">
+            {record.question}
+          </NextMoveQuestion>
+        )}
         {!!record?.answer && <NextMoveAnswer>{record.answer}</NextMoveAnswer>}
       </NextMoveContent>
     </NextMoveCard>
@@ -167,47 +231,21 @@ export function SupersededNote() {
   );
 }
 
-/** The card's buttons: the agent's own answers. */
-function choicesFor(
-  next: NonNullable<ReturnType<typeof nextMoveOf>>,
-  answers: ReturnType<typeof useMoveAnswers>,
-) {
-  const { ask, report } = next;
-  if (!ask) return [];
-  return ask.options.map((o) => ({
-    label: o.label,
-    run: () => answers.option(o, ask.question, report),
-  }));
-}
-
-/** What each answer does. The record goes first so it sits above the message an answer sends. */
-function useMoveAnswers(thread: Thread) {
+/** What a button does: the record goes first so it sits above the message it sends; a draft goes to the message box instead. */
+function usePick(thread: Thread) {
   const dispatch = useDispatch();
   const { textInput } = usePromptInputController();
-  const record = (
-    question: string,
-    report: TurnReport | undefined,
-    answer: string,
-  ) =>
-    dispatch({
-      type: 'next-move-record',
-      threadId: thread.id,
-      record: {
-        ...(report?.summary && { summary: report.summary }),
-        question,
-        answer,
-      },
-    });
-  const option = (
-    o: NextOption,
-    question: string,
-    report: TurnReport | undefined,
-  ) => {
-    record(question, report, o.label);
-    if (o.isDraft) return textInput.setInput(o.reply);
-    dispatch({ type: 'send', threadId: thread.id, text: o.reply });
+  return (action: NextAction) => {
+    const question = thread.report?.ask;
+    if (question)
+      dispatch({
+        type: 'next-move-record',
+        threadId: thread.id,
+        record: moveRecord(thread, question, action.label),
+      });
+    if (action.isDraft) return textInput.setInput(action.label);
+    dispatch({ type: 'send', threadId: thread.id, text: action.label });
   };
-  return { option };
 }
 
 /** ⌘↵ (Ctrl+Enter elsewhere) takes the move while the card shows and the message box is empty. */
@@ -239,33 +277,5 @@ function isFromChat(card: HTMLElement | null, target: EventTarget | null) {
   return (
     !target.closest('input, textarea, [contenteditable="true"]') ||
     !!target.closest('[data-composer]')
-  );
-}
-
-/** The no-plan card's decisions, folded to their count like the spine's steps: rarely worth reading, there when you want them. */
-export function FoldedDecisions({ items }: { items: string[] }) {
-  const [isOpen, setOpen] = useState(false);
-  if (!items.length) return null;
-  return (
-    <section aria-label="Decided" className="flex flex-col gap-1">
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        onClick={() => setOpen((was) => !was)}
-        className="flex w-fit cursor-default items-center gap-1 rounded-sm type-caption text-subtle-foreground transition-colors hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
-      >
-        {`${items.length} ${items.length === 1 ? 'decision' : 'decisions'}`}
-        <FoldChevron isOpen={isOpen} />
-      </button>
-      <Expand isOpen={isOpen}>
-        <ul className="flex list-disc flex-col gap-0.5 pl-4 type-meta text-muted-foreground marker:text-subtle-foreground">
-          {items.map((item) => (
-            <li key={item} className="text-pretty">
-              {item}
-            </li>
-          ))}
-        </ul>
-      </Expand>
-    </section>
   );
 }
