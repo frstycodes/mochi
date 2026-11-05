@@ -333,6 +333,7 @@ const TRANSCRIPT: ActivityEntry[] = [
     text: 'Make the hero feel like these, then draw me a mascot',
     images: [dunes.src, fern.src, coast.src],
   },
+  { at: NOW0, who: 'you', kind: 'message', text: '', images: [coast.src] },
   {
     at: NOW0,
     who: 'claude',

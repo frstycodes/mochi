@@ -562,6 +562,7 @@ const ChatRowView = memo(function ChatRowView({
   const Bar = isReadOnly ? messageBar : MessageActions;
   const isYou = entry.who === 'you';
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
+  const isImageOnly = isYou && !!entry.images?.length && !entry.text.trim();
   const message = (
     <div
       data-activity-index={row.index}
@@ -583,37 +584,39 @@ const ChatRowView = memo(function ChatRowView({
           className="justify-end"
         />
       )}
-      <Message
-        from={isYou ? 'user' : 'assistant'}
-        title={`${authorName(entry.who)} · ${clock(entry.at)}`}
-      >
-        <MessageContent
-          ref={landingRef}
-          className={cn('type-prose', isAgent && 'w-full')}
+      {!isImageOnly && (
+        <Message
+          from={isYou ? 'user' : 'assistant'}
+          title={`${authorName(entry.who)} · ${clock(entry.at)}`}
         >
-          {isAgent && row.showAuthor && (
-            <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
-              <ProviderMark provider={entry.who as Provider} size={14} />
-              {authorName(entry.who)}
-              <span className="tabular">{clock(entry.at)}</span>
-            </span>
-          )}
-          {isYou ? (
-            <YourMessage text={entry.text} slashItems={slashItems} />
-          ) : isAgent ? (
-            <AgentReply thread={thread} index={row.index} isLive={isLive} />
-          ) : (
-            <MessageResponse
-              plugins={VIZ_PLUGINS}
-              components={VIZ_COMPONENTS}
-              rehypePlugins={VIZ_REHYPE_PLUGINS}
-              isAnimating={false}
-            >
-              {entry.text}
-            </MessageResponse>
-          )}
-        </MessageContent>
-      </Message>
+          <MessageContent
+            ref={landingRef}
+            className={cn('type-prose', isAgent && 'w-full')}
+          >
+            {isAgent && row.showAuthor && (
+              <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
+                <ProviderMark provider={entry.who as Provider} size={14} />
+                {authorName(entry.who)}
+                <span className="tabular">{clock(entry.at)}</span>
+              </span>
+            )}
+            {isYou ? (
+              <YourMessage text={entry.text} slashItems={slashItems} />
+            ) : isAgent ? (
+              <AgentReply thread={thread} index={row.index} isLive={isLive} />
+            ) : (
+              <MessageResponse
+                plugins={VIZ_PLUGINS}
+                components={VIZ_COMPONENTS}
+                rehypePlugins={VIZ_REHYPE_PLUGINS}
+                isAnimating={false}
+              >
+                {entry.text}
+              </MessageResponse>
+            )}
+          </MessageContent>
+        </Message>
+      )}
       {!!Bar && (isYou || hasActions) && (
         <Bar
           thread={thread}
