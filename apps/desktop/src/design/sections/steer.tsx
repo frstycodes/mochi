@@ -17,7 +17,7 @@ export function SteerBlock() {
   return (
     <Block
       title="Message while working"
-      use="Sent while the agent works, your message waits under the live turn, dimmed, until the agent's next step takes it. Hovering floats an X over its corner; it, or a click on the bubble, takes it back into the message box, unsent. Send now in its bar stops the turn and sends it first, the other waiting messages after it. Once read it moves to where the agent read it, after that step, and its bar shows two checks. On hover, one check means not read yet and two mean read. A report the agent wrote before reading it is kept, muted, without its answers."
+      use="Sent while the agent works, your message waits under the live turn, dimmed, until the agent's next step takes it. Hovering shows “Click to edit” above it and an × on its corner; either takes it back into the message box, unsent. Send now in its bar stops the turn and sends it first, the other waiting messages after it. Once read it moves to where the agent read it, after that step, and its bar shows two checks. On hover, one check means not read yet and two mean read. A report the agent wrote before reading it is kept, muted, without its answers."
       wide
     >
       <div className="flex flex-col gap-12">
