@@ -19,6 +19,15 @@ export function GeneralSection() {
         <CatalogRow settingKey="permissions" />
         <CatalogRow settingKey="whileWorking" />
       </SettingsGroup>
+      <SettingsGroup
+        title="Side threads"
+        footer="Threads the agent starts or proposes beside this one. Started ones nest under the thread that asked; cards expire after 7 days."
+      >
+        <CatalogRow settingKey="unrelatedTask" />
+        <CatalogRow settingKey="agentSuggestions" />
+        <CatalogRow settingKey="askedThreads" />
+        <CatalogRow settingKey="subThreadStarts" />
+      </SettingsGroup>
       <SettingsGroup title="Composer">
         <CatalogRow settingKey="promptSuggestions" />
       </SettingsGroup>

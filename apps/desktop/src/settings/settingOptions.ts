@@ -106,6 +106,29 @@ export const SETTLED_CLEANUP = [
   { value: '180', label: 'After 180 days' },
 ] as const;
 
+export const UNRELATED_TASK = [
+  { value: 'ask', label: 'Ask me' },
+  { value: 'new', label: 'Start a new thread' },
+  { value: 'here', label: 'Do it here' },
+] as const;
+
+export const AGENT_SUGGESTIONS = [
+  { value: 'card', label: 'Show a card' },
+  { value: 'start', label: 'Start it' },
+  { value: 'off', label: 'Don’t suggest' },
+] as const;
+
+export const ASKED_THREADS = [
+  { value: 'start', label: 'Start right away' },
+  { value: 'card', label: 'Show a card first' },
+] as const;
+
+export const SUB_THREAD_STARTS = [
+  { value: 'start', label: 'Start right away' },
+  { value: 'card', label: 'Show a card first' },
+  { value: 'off', label: 'Don’t allow' },
+] as const;
+
 export const WHILE_WORKING = [
   { value: 'queue', label: 'Queue until it finishes' },
   { value: 'steer', label: 'Send right away (steer)' },

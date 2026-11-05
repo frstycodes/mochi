@@ -3195,6 +3195,109 @@ const brief = (title: string) => ({
   prompt: `${title}: in src/limits, done when its test passes`,
 });
 
+test("by default a sub-thread's asked-for thread starts at once, nested under it; Don't allow refuses", async () => {
+  const t = setup();
+  const sub = await t.ok('create_thread', {
+    initiation: 'user_asked',
+    prompt: 'Piece of the work',
+  });
+  t.env.dispatch({
+    type: 'send',
+    threadId: sub.id,
+    text: 'Split this further',
+  });
+  const started = await t.ok(
+    'create_thread',
+    { initiation: 'user_asked', ...brief('Audit the bundle') },
+    sub.id,
+  );
+  assert.deepEqual(t.thread(started.id).parent, { threadId: sub.id });
+  assert.deepEqual(cardsOf(t.thread(sub.id)), [], 'no card');
+  t.env.prefs.set({ subThreadStarts: 'off' });
+  assert.match(
+    await t.err(
+      'create_thread',
+      { initiation: 'user_asked', ...brief('Audit the renders') },
+      sub.id,
+    ),
+    /don't let this thread start threads/,
+  );
+});
+
+test('When you ask for a thread › Show a card first puts a user_asked thread on a card', async () => {
+  const t = setup();
+  t.env.prefs.set({ askedThreads: 'card' });
+  const threads = t.state().threads.length;
+  const card = await t.ok('create_thread', {
+    initiation: 'user_asked',
+    ...brief('Asked'),
+  });
+  assert.equal(t.state().threads.length, threads, 'nothing started');
+  assert.deepEqual(
+    cardsOf(t.thread('rl')).map((p) => [p.id, p.initiation, p.state]),
+    [[card.taskId, 'user_asked', 'pending']],
+  );
+});
+
+test('the unrelated-task setting answers an offer: Do it here leaves no card, Start a new thread starts it', async () => {
+  const t = setup();
+  t.env.prefs.set({ unrelatedTask: 'here' });
+  const kept = await t.ok('create_thread', {
+    initiation: 'offer',
+    ...brief('Kept'),
+  });
+  assert.equal(kept.state, 'here');
+  assert.match(kept.note, /do the task in this thread now/);
+  assert.deepEqual(cardsOf(t.thread('rl')), []);
+
+  t.env.prefs.set({ unrelatedTask: 'new' });
+  const started = await t.ok('create_thread', {
+    initiation: 'offer',
+    ...brief('Split off'),
+  });
+  assert.match(started.note, /Don't do the task here/);
+  assert.deepEqual(
+    cardsOf(t.thread('rl')).map((p) => [p.title, p.state, p.threadId]),
+    [['Split off', 'started', started.id]],
+  );
+});
+
+test('the agent-suggestions setting starts a suggestion at once, or refuses it', async () => {
+  const t = setup();
+  t.env.prefs.set({ agentSuggestions: 'start' });
+  const started = await t.ok('create_thread', {
+    initiation: 'own_initiative',
+    ...brief('Noticed'),
+  });
+  assert.match(started.note, /starts your suggestions right away/);
+  assert.equal(cardsOf(t.thread('rl'))[0].state, 'started');
+  t.env.prefs.set({ agentSuggestions: 'off' });
+  assert.match(
+    await t.err('create_thread', {
+      initiation: 'own_initiative',
+      ...brief('Also noticed'),
+    }),
+    /turned off thread suggestions/,
+  );
+});
+
+test("Start with the card's changed Options creates that thread, not the agent's", async () => {
+  const t = setup();
+  const card = await t.ok('create_thread', {
+    initiation: 'own_initiative',
+    ...brief('Changed'),
+  });
+  const proposal = cardsOf(t.thread('rl'))[0];
+  t.env.dispatch({
+    type: 'proposal-start',
+    threadId: 'rl',
+    proposalId: card.taskId,
+    create: { ...proposal.create, provider: 'codex', project: null },
+  });
+  const started = t.thread(cardsOf(t.thread('rl'))[0].threadId!);
+  assert.deepEqual([started.providers[0], started.repo], ['codex', null]);
+});
+
 test('create_thread user_asked starts the thread now, nested under yours, with no card', async () => {
   const t = setup();
   const created = await t.ok('create_thread', {
@@ -3329,8 +3432,9 @@ test('a started card is a sub-thread like user_asked, from either Start or the a
   ]);
 });
 
-test("a sub-thread's asked-for threads go on one card with no approval; Start and Start all nest each under it", async () => {
+test("Show a card first: a sub-thread's asked-for threads go on one card with no approval; Start and Start all nest each under it", async () => {
   const t = setup();
+  t.env.prefs.set({ subThreadStarts: 'card' });
   const sub = await t.ok('create_thread', {
     initiation: 'user_asked',
     prompt: 'Piece of the work',

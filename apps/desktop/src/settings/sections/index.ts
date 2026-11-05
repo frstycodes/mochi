@@ -108,6 +108,26 @@ export const SETTINGS_SECTIONS = [
         keywords: 'queue steer send message interrupt busy',
       },
       {
+        id: 'unrelatedTask',
+        label: 'When you ask for an unrelated task',
+        keywords: 'offer new thread do it here side task split ask',
+      },
+      {
+        id: 'agentSuggestions',
+        label: 'When the agent suggests a thread',
+        keywords: 'own initiative proposal suggestion card start automatic',
+      },
+      {
+        id: 'askedThreads',
+        label: 'When you ask for a thread',
+        keywords: 'user asked start thread parallel card approval',
+      },
+      {
+        id: 'subThreadStarts',
+        label: 'When a sub-thread starts a thread',
+        keywords: 'sub-thread nested start thread allow card',
+      },
+      {
         id: 'promptSuggestions',
         label: 'Suggest your next message',
         keywords:

@@ -44,6 +44,14 @@ export interface Prefs {
   sidebarItems: string[];
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
   whileWorking: 'queue' | 'steer';
+  /** A `create_thread` offer (a task you named that may not belong here): ask on a card, or answer it for you. */
+  unrelatedTask: 'ask' | 'new' | 'here';
+  /** A `create_thread` own_initiative (work the agent noticed): a card, started for you, or refused so it only mentions it. */
+  agentSuggestions: 'card' | 'start' | 'off';
+  /** A `create_thread` user_asked from a turn you started: started now, or a card you start. */
+  askedThreads: 'start' | 'card';
+  /** A user_asked thread from a sub-thread's turn: started (nested under it), a card, or refused. */
+  subThreadStarts: 'start' | 'card' | 'off';
   /** After a turn, the report's first next-move answer in the empty composer (`suggestedReply`). */
   promptSuggestions: boolean;
   /** The end-of-turn card's turn spine: agents report assumptions and why their plan changed, the card shows them on the plan. Read at session start by agents. */
@@ -135,6 +143,10 @@ export const DEFAULT_PREFS: Prefs = {
   headerPins: ['browser', 'terminal'],
   sidebarItems: ['queue', 'projects'],
   whileWorking: 'steer',
+  unrelatedTask: 'ask',
+  agentSuggestions: 'card',
+  askedThreads: 'start',
+  subThreadStarts: 'start',
   promptSuggestions: true,
   turnSpine: true,
   simplifyLength: 'short',

@@ -51,6 +51,10 @@ import {
   MOTION,
   SPEEDS,
   UI_TEXT_SIZES,
+  UNRELATED_TASK,
+  AGENT_SUGGESTIONS,
+  ASKED_THREADS,
+  SUB_THREAD_STARTS,
   WHILE_WORKING,
   WORKSPACE_MODES,
   WORKTREE_CLEANUP,
@@ -169,6 +173,10 @@ export const isSharedSetting = (key: string) =>
 const SHARED_KEYS = new Set([
   'agent',
   'whileWorking',
+  'unrelatedTask',
+  'agentSuggestions',
+  'askedThreads',
+  'subThreadStarts',
   'promptSuggestions',
   'turnSpine',
   'watchedToasts',
@@ -645,6 +653,48 @@ const APP_SETTINGS: Setting[] = [
       group: 'Image generation',
       description:
         'Claude makes images through this harness, on this profile’s account',
+    },
+  ),
+  pref(
+    'unrelatedTask',
+    'When you ask for an unrelated task',
+    'general',
+    select(UNRELATED_TASK),
+    {
+      group: 'Side threads',
+      description:
+        'A task you named that may not belong in this thread. Don’t ask again on that card sets this too',
+    },
+  ),
+  pref(
+    'agentSuggestions',
+    'When the agent suggests a thread',
+    'general',
+    select(AGENT_SUGGESTIONS),
+    {
+      group: 'Side threads',
+      description:
+        'Work it noticed that you didn’t ask for, at most 3 a turn. Started ones nest under the thread',
+    },
+  ),
+  pref(
+    'askedThreads',
+    'When you ask for a thread',
+    'general',
+    select(ASKED_THREADS),
+    {
+      group: 'Side threads',
+      description: 'You asked in words for separate or parallel work',
+    },
+  ),
+  pref(
+    'subThreadStarts',
+    'When a sub-thread starts a thread',
+    'general',
+    select(SUB_THREAD_STARTS),
+    {
+      group: 'Side threads',
+      description: 'The new thread nests under the sub-thread that asked',
     },
   ),
   pref('promptSuggestions', 'Suggest your next message', 'general', SWITCH, {
