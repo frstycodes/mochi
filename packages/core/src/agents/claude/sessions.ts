@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Effect } from 'effect';
 import { planNudge } from './planNudge.ts';
 import { killGuard } from './killGuard.ts';
 import { killDecision } from '../processKill.ts';
@@ -640,6 +641,10 @@ async function launch(session: Session) {
       if (!session.isBusy && waiting.length) release(session);
     }
   } catch (error) {
+    // The turn shows only the message; the log keeps the stack.
+    Effect.runSync(
+      Effect.logError(`Claude Code session ${threadId} ended`, error),
+    );
     const ended = exitEvent(threadId, session.isBusy, error);
     if (!abort.signal.aborted && ended) emit(ended);
   } finally {

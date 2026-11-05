@@ -678,6 +678,8 @@ export async function startAgent(
       })
       .catch((error: unknown) => {
         markIdle(id);
+        // The turn shows only the message; the log keeps the stack, the one way to find where a start broke.
+        Effect.runSync(Effect.logError(`Start of ${id} failed`, error));
         broadcast({
           threadId: id,
           type: 'turn-end',
