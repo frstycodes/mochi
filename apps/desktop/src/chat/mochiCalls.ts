@@ -28,7 +28,7 @@ export const MOCHI_CALLS = {
   ],
   send_to_thread: ['Messaging a thread', 'Messaged a thread'],
   delete_thread: ['Asking to delete a thread', 'Asked to delete a thread'],
-  report_turn: ['Reporting progress', 'Reported progress'],
+  wrap_up: ['Wrapping up', 'Wrapped up'],
   report_to_parent: [
     'Reporting to the parent thread',
     'Reported to the parent thread',

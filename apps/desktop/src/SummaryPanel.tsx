@@ -77,6 +77,7 @@ import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { openProfileConfig } from './routes/nav';
 import { SubThreadRow } from './goals/SubThreadRow';
+import { earlierAssumptions } from './goals/report';
 import { useOpenThread } from './goals/SubThreads';
 import { clock, shortElapsed } from './progress';
 import { parentOf, subThreadsOf } from './reorder';
@@ -388,13 +389,15 @@ function CardBody({ children }: { children: ReactNode }) {
   );
 }
 
-/** What waits on you: a pending approval or question, then each connector that needs you to sign in again. */
+/** What waits on you: a pending approval or question, assumptions from earlier turns you never answered, then each connector that needs you to sign in again. */
 function NeedsYou({ thread }: { thread: Thread }) {
   const names = useLibraryNames();
+  const dispatch = useDispatch();
   // A held limit says so in the chat; the summary doesn't repeat it.
   const isWaiting = thread.status === 'needs-you' && !thread.live?.limit;
   const broken = brokenConnectors(thread.agent?.mcpServers ?? []);
-  if (!isWaiting && broken.length === 0) return null;
+  const assumed = earlierAssumptions(thread);
+  if (!isWaiting && broken.length === 0 && !assumed.length) return null;
   return (
     <div
       role="status"
@@ -409,6 +412,33 @@ function NeedsYou({ thread }: { thread: Thread }) {
           {currentAction(thread)?.label ?? PHASE_LABELS.wait}
         </p>
       )}
+      {assumed.map((a) => (
+        <p key={a.id} className="flex min-w-0 items-start gap-2.5">
+          <span
+            className="mt-1.5 size-1.5 shrink-0 rounded-full bg-warning"
+            aria-hidden
+          />
+          <span className="min-w-0 flex-1 text-pretty text-foreground/85 [overflow-wrap:anywhere]">
+            <span className="sr-only">Assumed: </span>
+            {a.text}
+          </span>
+          <Button
+            size="xs"
+            variant="ghost"
+            className="-my-0.5 shrink-0 text-muted-foreground"
+            onClick={() =>
+              dispatch({
+                type: 'assumption-set',
+                threadId: thread.id,
+                id: a.id,
+                state: 'accepted',
+              })
+            }
+          >
+            Accept
+          </Button>
+        </p>
+      ))}
       {broken.map((server) => (
         <button
           key={server.name}

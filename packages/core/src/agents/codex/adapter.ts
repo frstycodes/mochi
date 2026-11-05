@@ -703,7 +703,10 @@ export class CodexAdapter implements HarnessAdapter {
     this.forget(threadId);
     const tools = this.toolsUrl && {
       ...MOCHI_APPROVALS,
-      'mcp_servers.mochi.url': await this.toolsUrl(threadId, options),
+      'mcp_servers.mochi.url': await this.toolsUrl(threadId, {
+        ...options,
+        isCodex: true,
+      }),
     };
     // A settings chat gets Mochi's settings tools and nothing else: none of the profile's servers, nothing that writes or asks.
     const library = options.isSettingsChat
@@ -722,7 +725,7 @@ export class CodexAdapter implements HarnessAdapter {
       model: options.model ?? null,
       serviceTier: options.speed ?? null,
       developerInstructions: [
-        mochiInstructions(options),
+        mochiInstructions({ ...options, isCodex: true }),
         profileText,
         options.context,
       ]

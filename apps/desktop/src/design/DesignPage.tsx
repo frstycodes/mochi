@@ -94,7 +94,6 @@ import { SidePane } from '../SidePane';
 import { AppSidebar, ThreadItem } from '../Sidebar';
 import { verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
-import { AssumptionsBlock } from './sections/assumptions';
 import { SteerBlock } from './sections/steer';
 import { SubReportsBlock } from './sections/sub-reports';
 import { SubThreadsBlock } from './sections/sub-threads';
@@ -1119,7 +1118,6 @@ function Recipes() {
           </div>
         </Block>
         <NextMoveBlock rl={rl} />
-        <AssumptionsBlock rl={rl} />
         <SteerBlock />
         <SubThreadsBlock rl={rl} />
         <SubReportsBlock rl={rl} />
@@ -1393,11 +1391,14 @@ function reportFixture(rl: Thread): Thread {
     report: {
       at,
       by: 'claude',
+      recap:
+        'Every 429 now carries Retry-After. Per-key overrides in the admin UI are not done.',
       decisions: [
         'Kept the plain-text 429 body so existing clients keep parsing it',
       ],
-      left: ['Per-key overrides in the admin UI'],
-      question: 'Switch the 429 body to JSON now, or in a follow-up?',
+      ask: 'Switch the 429 body to JSON now, or in a follow-up?',
+      isBlocked: true,
+      actions: [{ label: 'Now' }, { label: 'In a follow-up' }],
     },
   };
 }

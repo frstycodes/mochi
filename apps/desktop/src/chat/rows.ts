@@ -125,6 +125,7 @@ export function chatRows(
         !!entry.compaction ||
         !!entry.handoff ||
         !!entry.nextMove ||
+        !!entry.planRecord ||
         !!entry.threadLink ||
         !!entry.subThread ||
         !!entry.subReport ||

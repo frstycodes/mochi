@@ -502,10 +502,9 @@ export const Step = Schema.Struct({
 });
 export type Step = typeof Step.Type;
 
-export const NextOption = Schema.Struct({
+export const NextAction = Schema.Struct({
   label: Schema.String,
-  reply: Schema.String,
-  isDraft: opt(Schema.Boolean),
+  isDraft: opt(Schema.Literal(true)),
 });
 
 export const Assumption = Schema.Struct({
@@ -513,31 +512,28 @@ export const Assumption = Schema.Struct({
   text: Schema.String,
   turn: Schema.Number,
   state: Schema.Literals(['open', 'accepted', 'changed']),
+  step: opt(Schema.Number),
+  stepTitle: opt(Schema.String),
+  correction: opt(Schema.String),
+  isSent: opt(Schema.Literal(true)),
 });
 
 export const ReportItem = Schema.Struct({
   text: Schema.String,
-  step: opt(Schema.String),
-});
-
-export const Pivot = Schema.Struct({
-  why: opt(Schema.String),
-  dropped: Schema.Array(Schema.String),
-  at: Schema.Number,
-  turn: Schema.Number,
+  step: opt(Schema.Union([Schema.Number, Schema.String])),
 });
 
 export const TurnReport = Schema.Struct({
   at: Schema.Number,
   turn: opt(Schema.Number),
   by: Provider,
+  // Reports saved before wrap_up have no recap.
+  recap: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(''))),
+  ask: opt(Schema.String),
+  isBlocked: opt(Schema.Literal(true)),
+  actions: opt(Schema.Array(NextAction)),
   decisions: Schema.Array(Schema.Union([Schema.String, ReportItem])),
   assumptions: opt(Schema.Array(ReportItem)),
-  left: Schema.Array(Schema.String),
-  question: opt(Schema.String),
-  summary: opt(Schema.String),
-  next: opt(Schema.String),
-  options: opt(Schema.Array(NextOption)),
   isSuperseded: opt(Schema.Literal(true)),
   index: opt(Schema.Number),
 });
@@ -671,6 +667,13 @@ export const ActivityEntry = Schema.Struct({
       summary: opt(Schema.String),
       question: Schema.String,
       answer: opt(Schema.String),
+    }),
+  ),
+  planRecord: opt(
+    Schema.Struct({
+      steps: Schema.Array(Step),
+      decisions: Schema.Array(ReportItem),
+      assumptionIds: Schema.Array(Schema.String),
     }),
   ),
   from: opt(ThreadRef),
@@ -846,7 +849,7 @@ export const Thread = Schema.Struct({
     ),
   ),
   assumptions: opt(Schema.Array(Assumption)),
-  pivots: opt(Schema.Array(Pivot)),
+  planTurn: opt(Schema.Number),
   idle: opt(IdleCheck),
   turn: opt(
     Schema.Struct({

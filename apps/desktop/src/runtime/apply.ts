@@ -20,15 +20,14 @@ import {
 } from '../chat/compaction.ts';
 import { pinsOf } from '../store/context.ts';
 import { pauseQueue } from '../chat/queued.ts';
-import { similarity } from '../progress.ts';
+import { reportItems } from '../goals/ledger.ts';
 import type { Action, State } from '../store/types.ts';
 import {
-  completeStep,
   log,
-  mapStep,
   mapThread,
   readSteer,
   seePrs,
+  turnOf,
   withGeneratedTitle,
 } from '../store/threads.ts';
 import { createdPr } from '../git/prs.ts';
@@ -241,8 +240,11 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
             closeCompaction(
               {
                 ...endSendNow(
-                  stopRunningSteps(
-                    event.status === 'failed' ? undeliverSent(t) : t,
+                  withPlanRecord(
+                    stopRunningSteps(
+                      event.status === 'failed' ? undeliverSent(t) : t,
+                      now,
+                    ),
                     now,
                   ),
                 ),
@@ -493,12 +495,9 @@ export function undelivered(
   };
 }
 
-const MATCH = 0.6;
-
 /**
- * The agent's to-do list, mirrored the way Claude Code shows its todos: `items` is the whole plan, shown as sent (order, titles,
- * statuses). An item keeps its step (and when it started) by title or a close one; a step it no longer lists is dropped, done
- * or not. A fresh plan matches nothing, so the previous plan's steps all drop.
+ * The agent's to-do list, as sent: `items` replace the plan (order, titles, statuses). A step resent with the same title in the
+ * same turn keeps its clock; a later turn's plan, or a fresh one (`first_task`, `new_task`), starts every clock over.
  */
 function applyPlan(
   state: State,
@@ -507,147 +506,123 @@ function applyPlan(
   isFresh = false,
 ): State {
   const now = state.now;
-  const provider = actor(thread);
+  const turn = turnOf(thread);
+  // GAP: a plan saved before plans had a turn (and the demo's) counts as this turn's, so its first resend keeps its clocks.
+  const isOtherTurn = thread.planTurn !== undefined && thread.planTurn !== turn;
+  const kept =
+    isFresh || isOtherTurn
+      ? []
+      : thread.steps.filter((s) => s.status !== 'dropped');
   const claimed = new Set<string>();
-  const matches = items.map((item) => {
-    if (isFresh) return undefined;
-    const open = thread.steps.filter(
-      (s) => s.status !== 'dropped' && !claimed.has(s.id),
-    );
-    const step =
-      open.find((s) => s.title === item.title) ?? bestMatch(open, item.title);
+  let n = nextStepNumber(thread.steps);
+  const steps = items.map((item) => {
+    const step = kept.find((s) => s.title === item.title && !claimed.has(s.id));
     if (step) claimed.add(step.id);
-    return step;
-  });
-
-  let threads = state.threads;
-  items.forEach((item, i) => {
-    const step = matches[i];
-    if (!step) return;
-    if (step.title !== item.title)
-      threads = mapThread(threads, thread.id, (t) =>
-        mapStep(t, step.id, (s) => ({ ...s, title: item.title })),
-      );
-    if (item.status === 'done') {
-      if (step.status !== 'done')
-        threads = completeStep(threads, thread.id, step.id, now);
-      return;
-    }
-    // A blocked step waits on you; the harness, not the plan, unblocks it.
-    if (step.status === 'blocked') return;
-    if (item.status === 'pending') {
-      threads = mapThread(threads, thread.id, (t) =>
-        mapStep(t, step.id, (s) => ({
-          ...s,
-          status: 'ready',
-          doneAt: undefined,
-          doneMs: undefined,
-          stoppedAt: undefined,
-          stoppedMs: undefined,
-        })),
-      );
-      return;
-    }
-    threads = mapThread(threads, thread.id, (t) => ({
-      ...mapStep(t, step.id, (s) => ({
-        ...s,
-        status: 'running',
-        startedAt: s.startedAt ?? now,
-        doneAt: undefined,
-        doneMs: undefined,
-        stoppedAt: undefined,
-        stoppedMs: undefined,
-      })),
-      status: t.status === 'needs-you' ? t.status : 'running',
-    }));
-  });
-
-  const dropped = thread.steps.filter(
-    (s) => !claimed.has(s.id) && s.status !== 'dropped',
-  );
-  for (const step of dropped) {
-    const drop = (t: Thread) =>
-      mapStep(t, step.id, (s) => ({
-        ...s,
-        status: 'dropped',
-        droppedAt: now,
-        note: isFresh ? 'Earlier plan' : `Dropped by ${NAMES[provider]}`,
-      }));
-    threads = mapThread(threads, thread.id, (t) =>
-      isFresh
-        ? drop(t)
-        : log(drop(t), {
-            at: now,
-            who: 'harness',
-            kind: 'event',
-            text: `${NAMES[provider]} dropped "${step.title}"`,
-          }),
+    return withItemStatus(
+      step ?? {
+        id: `${thread.id}-s${n++}`,
+        title: item.title,
+        status: 'ready',
+        addedAt: now,
+        addedBy: actor(thread),
+      },
+      item.status,
+      now,
     );
-  }
-
-  const added = items.filter((_, i) => !matches[i]);
-  if (added.length)
-    threads = addSteps(threads, thread.id, provider, added, now);
-  let k = thread.steps.length;
-  const order = matches.map((m) => m?.id ?? `${thread.id}-s${k++}`);
+  });
+  const added = steps.filter((s) => !claimed.has(s.id));
+  // Only a revision says what it added: a new plan is all new.
+  const isRevision = kept.length > 0 && added.length > 0;
   return {
     ...state,
-    threads: mapThread(threads, thread.id, (t) => ({
-      ...t,
-      steps: inPlanOrder(t.steps, order),
+    threads: mapThread(state.threads, thread.id, (t) => ({
+      ...(isRevision ? log(t, addedEntry(actor(thread), added, now)) : t),
+      steps,
+      planTurn: turn,
+      status:
+        t.status !== 'needs-you' && steps.some((s) => s.status === 'running')
+          ? 'running'
+          : t.status,
     })),
   };
 }
 
-function bestMatch(steps: Step[], title: string) {
-  let best: Step | undefined;
-  let score = MATCH;
-  for (const s of steps) {
-    const value = similarity(title, s.title);
-    if (value < score) continue;
-    best = s;
-    score = value;
-  }
-  return best;
-}
-
-/** Items the agent planned that the mirror doesn't have yet, appended and logged as plan changes. */
-function addSteps(
-  threads: Thread[],
-  threadId: string,
+/** The log row for steps a revised plan added. */
+function addedEntry(
   provider: Provider,
-  added: AgentPlanItem[],
+  added: Step[],
   now: number,
-): Thread[] {
-  return mapThread(threads, threadId, (t) => {
-    const created = added.map((item, k): Step => ({
-      id: `${t.id}-s${t.steps.length + k}`,
-      title: item.title,
-      status: item.status === 'pending' ? 'ready' : item.status,
-      addedAt: now,
-      addedBy: provider,
-      ...(item.status !== 'pending' && { startedAt: now }),
-      ...(item.status === 'done' && { doneAt: now }),
-    }));
-    const label =
-      created.length === 1
-        ? `${NAMES[provider]} added "${created[0].title}"`
-        : `${NAMES[provider]} found ${created.length} more steps`;
-    return log(
-      { ...t, steps: [...t.steps, ...created] },
-      { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` },
-    );
-  });
+): ActivityEntry {
+  const label =
+    added.length === 1
+      ? `${NAMES[provider]} added "${added[0].title}"`
+      : `${NAMES[provider]} found ${added.length} more steps`;
+  return { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` };
 }
 
-/** The plan's steps in the order the agent listed them, then the dropped ones as they were. */
-function inPlanOrder(steps: Step[], order: string[]): Step[] {
-  const byId = new Map(steps.map((s) => [s.id, s]));
-  const planned = new Set(order);
-  return [
-    ...order.map((id) => byId.get(id)!),
-    ...steps.filter((s) => !planned.has(s.id)),
-  ];
+const NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<
+  Provider,
+  string
+>;
+
+/** A step at the status the plan gives it. A blocked step waits on you: the harness, not the plan, unblocks it. */
+function withItemStatus(
+  s: Step,
+  status: AgentPlanItem['status'],
+  now: number,
+): Step {
+  if (s.status === 'blocked' && status !== 'done') return s;
+  if (status === 'done')
+    return s.status === 'done'
+      ? s
+      : {
+          ...s,
+          ...UNSTOPPED,
+          status: 'done',
+          startedAt: s.startedAt ?? now,
+          doneAt: now,
+        };
+  if (status === 'pending')
+    return { ...s, ...UNSTOPPED, ...UNDONE, status: 'ready' };
+  return {
+    ...s,
+    ...UNSTOPPED,
+    ...UNDONE,
+    status: 'running',
+    startedAt: s.startedAt ?? now,
+  };
+}
+
+const UNDONE = { doneAt: undefined, doneMs: undefined };
+const UNSTOPPED = { stoppedAt: undefined, stoppedMs: undefined };
+
+/** Past every step id the thread has, so a new step never takes the id of one it replaces in the same update (`stampNew`). */
+function nextStepNumber(steps: Step[]) {
+  const used = steps.map((s) => Number(/-s(\d+)$/.exec(s.id)?.[1] ?? -1));
+  return Math.max(steps.length - 1, ...used) + 1;
+}
+
+/**
+ * The turn's plan, kept where the turn ended as one folded row: its steps as they stood, and the decisions and assumptions its
+ * wrap_up placed on them. Nothing when the turn neither planned nor reported any.
+ */
+function withPlanRecord(t: Thread, now: number): Thread {
+  const turn = turnOf(t);
+  const steps =
+    t.planTurn === turn ? t.steps.filter((s) => s.status !== 'dropped') : [];
+  const report = t.report?.turn === turn ? t.report : undefined;
+  const decisions = reportItems(report?.decisions);
+  const assumptionIds = (t.assumptions ?? [])
+    .filter((a) => a.turn === turn)
+    .map((a) => a.id);
+  if (!steps.length && !decisions.length && !assumptionIds.length) return t;
+  return log(t, {
+    at: now,
+    who: 'harness',
+    kind: 'event',
+    text: 'Plan',
+    planRecord: { steps, decisions, assumptionIds },
+  });
 }
 
 function waitOnYou(
@@ -805,11 +780,6 @@ function mergeInfo(info: AgentInfo = {}, update: AgentInfo): AgentInfo {
     servers.set(s.name, { ...servers.get(s.name), ...s });
   return { ...info, ...update, mcpServers: [...servers.values()] };
 }
-
-const NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<
-  Provider,
-  string
->;
 
 function addUsage(
   usage:

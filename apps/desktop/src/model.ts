@@ -47,26 +47,25 @@ export interface Step {
   note?: string;
 }
 
-/** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
+/** What the agent said at the end of a turn of work (`wrap_up`): the judgment the transcript buries. */
 export interface TurnReport {
   at: number;
   /** The turn it was made in: one past the last idle record's `turn`. Unset on reports saved before turns were counted. */
   turn?: number;
   by: Provider;
+  /** What is now true and where it stands: the box's opening lines. Empty on reports saved before wrap_up. */
+  recap: string;
+  /** The one question the next move waits on, answered by `actions`. */
+  ask?: string;
+  /** The agent's work stops until you answer: the box and the sidebar say it needs you. */
+  isBlocked?: true;
+  /** The answers to `ask`, the agent's pick first: the box's buttons. */
+  actions?: NextAction[];
   /** Plain strings on reports from before decisions named their step; `reportItems` reads both. */
   decisions: (string | ReportItem)[];
-  /** Gaps in your request it filled for you; unset on reports from before assumptions, or with the turn spine off. */
+  /** Gaps in your request it filled for you; unset with the turn spine off. */
   assumptions?: ReportItem[];
-  left: string[];
-  /** The one thing that needs you, if anything. */
-  question?: string;
-  /** What changed, in your terms: the next-move card's opening lines. */
-  summary?: string;
-  /** The next move as one question naming the exact thing ("Commit the cookie fix and its test?"). */
-  next?: string;
-  /** The agent's answers to `next`, its pick first: the next-move card's buttons. */
-  options?: NextOption[];
-  /** Written before the agent read a message you sent into its turn: the card keeps it, muted, without its answers. */
+  /** Written before the agent read a message you sent into its turn: the box keeps it, muted, without its answers. */
   isSuperseded?: true;
   /** The activity's length when it was made, which places it in its turn. Unset on reports saved before it was recorded. */
   index?: number;
@@ -110,36 +109,42 @@ export interface SubReport {
   report?: ParentReport;
 }
 
-/** A decision or assumption from `report_turn`, on the plan step it was made on: `step` is that step's title, as in update_plan. */
+/**
+ * A decision or assumption from `wrap_up`, on the plan step it was made on: `step` is that step's 1-based number in the turn's plan.
+ * GAP: a string `step` is a step title, from reports saved before steps were numbered; it places the item on no step.
+ */
 export interface ReportItem {
   text: string;
-  step?: string;
+  step?: number | string;
 }
 
-/** Where the agent changed its plan in a turn (update_plan dropped or retitled steps): what it dropped, why, and `at`, the plan position of the steps that replaced them. */
-export interface Pivot {
-  /** Unset until the agent says; update_plan asks once. */
-  why?: string;
-  dropped: string[];
-  at: number;
-  /** The turn it was made in, counted like `TurnReport.turn`: a thread keeps only the latest turn's. */
-  turn: number;
-}
-
-/** A gap in your request the agent filled without asking ("Assumed timestamps are UTC"), from a `report_turn`. */
+/** A gap in your request the agent filled without asking ("Assumed timestamps are UTC"), from a `wrap_up`. */
 export interface Assumption {
   id: string;
   text: string;
-  /** The report's turn it came from: the card shows this turn's under Assumptions, older open ones under Still open. */
+  /** The report's turn it came from: the box shows this turn's, older open ones wait in the summary's Needs you. */
   turn: number;
   state: 'open' | 'accepted' | 'changed';
+  /** The step it was made on, by number and title, for its tooltip. */
+  step?: number;
+  stepTitle?: string;
+  /** Your rewording, once you changed it: it goes to the agent at the top of your next message. */
+  correction?: string;
+  /** The correction went out with a message. */
+  isSent?: true;
 }
 
-/** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
-export interface NextOption {
+/** One button in the wrap-up box: its label goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
+export interface NextAction {
   label: string;
-  reply: string;
-  isDraft?: boolean;
+  isDraft?: true;
+}
+
+/** The plan a turn kept, logged where the turn ended: its steps as they stood, the decisions on them and its assumptions by ledger id. */
+export interface PlanRecord {
+  steps: Step[];
+  decisions: ReportItem[];
+  assumptionIds: string[];
 }
 
 export interface IdleCheck {
@@ -207,6 +212,8 @@ export interface ActivityEntry {
   turnEnd?: 'interrupted' | 'failed';
   /** Events only: a next-move card you answered, kept where it was: its summary, its question and what you picked (none when you wrote instead). */
   nextMove?: { summary?: string; question: string; answer?: string };
+  /** Events only: the plan of the turn that ended here, folded into one row (`PlanRecordRow`). */
+  planRecord?: PlanRecord;
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
   from?: ThreadRef;
   /** Messages: an Auto-fix event Mochi sent the agent about one of the thread's PRs; `text` is the event, the row shows `title`. */
@@ -492,8 +499,8 @@ export interface Thread {
   replyTo?: { threadId: string; title: string }[];
   /** What the agent filled in that you didn't specify, from every report, kept until you accept or change each one. */
   assumptions?: Assumption[];
-  /** The latest turn's plan changes, for its spine on the end-of-turn card. */
-  pivots?: Pivot[];
+  /** The turn `steps` were planned in: a plan resent in the same turn keeps the clocks of the steps it repeats, a later one starts fresh. */
+  planTurn?: number;
   /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
   idle?: IdleCheck;
   /**

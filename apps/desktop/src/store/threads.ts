@@ -10,7 +10,6 @@ import {
   type LineSlot,
   type ParentReport,
   type PendingSteer,
-  type Pivot,
   type Provider,
   type PullRequest,
   type QueuedMessage,
@@ -24,7 +23,12 @@ import {
   type TurnReport,
   type ThreadBrowserTab,
 } from '../model.ts';
-import { changedBySend, withAssumptions } from '../goals/ledger.ts';
+import {
+  answeredBySend,
+  corrected,
+  withAssumptions,
+  withCorrections,
+} from '../goals/ledger.ts';
 import {
   addProposal,
   findProposal,
@@ -228,9 +232,6 @@ export type ThreadsAction =
       threadId: string;
       report: Omit<ParentReport, 'at' | 'index'>;
     }
-  /** update_plan dropped or renamed steps; `why` alone (`pivot-why`) gives the reason for the turn's last pivot that has none. */
-  | { type: 'pivot'; threadId: string; pivot: Omit<Pivot, 'turn'> }
-  | { type: 'pivot-why'; threadId: string; why: string }
   /** The agent went idle: a fresh record replaces the last turn's. */
   | { type: 'idle-start'; threadId: string }
   | {
@@ -245,6 +246,15 @@ export type ThreadsAction =
       id: string;
       state: Assumption['state'];
     }
+  /** You reworded an assumption in place; no `correction` (Undo) puts it back to open. Your next message carries it. */
+  | {
+      type: 'assumption-correct';
+      threadId: string;
+      id: string;
+      correction?: string;
+    }
+  /** You closed the turn's box without answering it. */
+  | { type: 'next-move-dismiss'; threadId: string }
   /** You answered the turn's next-move card, or wrote instead: it's kept in the chat as a record and the card goes. */
   | {
       type: 'next-move-record';
@@ -753,34 +763,6 @@ function reduce(state: State, action: Action): State {
           t.idle ? { ...t, idle: { ...t.idle, ...action.patch } } : t,
         ),
       };
-    case 'pivot':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({
-          ...t,
-          pivots: [
-            ...(t.pivots ?? []).filter((p) => p.turn === turnOf(t)),
-            { ...action.pivot, turn: turnOf(t) },
-          ],
-        })),
-      };
-    case 'pivot-why':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => {
-          const k = (t.pivots ?? []).findLastIndex(
-            (p) => p.turn === turnOf(t) && !p.why,
-          );
-          return k < 0
-            ? t
-            : {
-                ...t,
-                pivots: t.pivots!.map((p, i) =>
-                  i === k ? { ...p, why: action.why } : p,
-                ),
-              };
-        }),
-      };
     case 'assumption-set':
       return {
         ...state,
@@ -789,6 +771,22 @@ function reduce(state: State, action: Action): State {
           assumptions: t.assumptions?.map((a) =>
             a.id === action.id ? { ...a, state: action.state } : a,
           ),
+        })),
+      };
+    case 'assumption-correct':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          assumptions: corrected(t.assumptions, action.id, action.correction),
+        })),
+      };
+    case 'next-move-dismiss':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          idle: { ...(t.idle ?? { at: state.now }), isMoveAnswered: true },
         })),
       };
     case 'report':
@@ -807,6 +805,7 @@ function reduce(state: State, action: Action): State {
               t.assumptions,
               action.report.assumptions,
               turnOf(t),
+              t.planTurn === turnOf(t) ? t.steps : [],
             ),
           }),
           steering: t.steering?.map((s) => ({
@@ -1595,7 +1594,7 @@ export function send(
       };
       // Its undelivered reports went with this message (`withReports`), as the notes did.
       const delivered = live ? markReportsDelivered(t) : t;
-      const isYours = !from && !action.autofix && !action.secondOpinion;
+      const isYours = isYourSend(action);
       const sent = withQueue(
         {
           ...delivered,
@@ -1603,7 +1602,7 @@ export function send(
           ...replyTo(t, action),
           ...(isYours &&
             t.assumptions && {
-              assumptions: changedBySend(t.assumptions, action.text),
+              assumptions: answeredBySend(t.assumptions, t.report?.turn),
             }),
         },
         (t.queued ?? []).filter((m) => m.id !== action.queuedId),
@@ -1612,7 +1611,7 @@ export function send(
         at: now,
         who: 'you',
         kind: 'message',
-        text: action.text,
+        text: yourText(t, action),
         ...(action.queuedId && !action.typed?.isSentNow && { wasQueued: true }),
         ...(action.shownImages?.length && { images: action.shownImages }),
         ...(from && { from }),
@@ -1652,7 +1651,20 @@ export function send(
 }
 
 /** The turn the thread's agent is in: one past its last idle record's, as a report counts it. */
-const turnOf = (t: Thread) => (t.idle?.turn ?? 0) + 1;
+/** What your message says once it carries your corrections to the agent's assumptions; another thread's or Auto-fix's carries none. */
+export function yourText(
+  t: Thread,
+  action: Extract<Action, { type: 'send' }>,
+  text = action.text,
+) {
+  return isYourSend(action) ? withCorrections(t.assumptions, text) : text;
+}
+
+const isYourSend = (action: Extract<Action, { type: 'send' }>) =>
+  !action.from && !action.autofix && !action.secondOpinion;
+
+/** The turn a thread is in, or last ended: one past its idle record's count. */
+export const turnOf = (t: Thread) => (t.idle?.turn ?? 0) + 1;
 
 /** A message sent with `expectReply` adds its sender to `replyTo`, once per sender (`reportReplies`). */
 function replyTo(t: Thread, action: Extract<Action, { type: 'send' }>) {

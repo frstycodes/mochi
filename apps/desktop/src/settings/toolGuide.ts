@@ -106,11 +106,11 @@ export const TOOL_GUIDE = {
       'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.',
   },
 
-  report_turn: {
+  wrap_up: {
     group: 'Progress',
-    label: 'Report turns',
+    label: 'Wrap up turns',
     description:
-      'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.',
+      'End a turn with a short recap, the assumptions it made and, when the next move is yours, one question with the answers it offers as buttons.',
   },
   report_to_parent: {
     group: 'Progress',

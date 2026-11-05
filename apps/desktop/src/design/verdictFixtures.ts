@@ -41,10 +41,11 @@ export function verdictFixtures(
         report: {
           at,
           by: 'claude',
+          recap: '',
           decisions: [],
-          left: [],
-          question:
-            'The test fails 1 in 20 runs on CI only. Retry it, or quarantine it and open an issue?',
+          isBlocked: true,
+          actions: [{ label: 'Answer' }],
+          ask: 'The test fails 1 in 20 runs on CI only. Retry it, or quarantine it and open an issue?',
         },
       },
     },
@@ -111,10 +112,11 @@ export function verdictFixtures(
         report: {
           at,
           by: 'claude',
+          recap: '',
           decisions: [],
-          left: [],
-          question:
-            'Two of the provider sandboxes were down, so their paths are only covered by mocks: rerun them once they are back up before opening the pull request, or open it now and list them in its description?',
+          isBlocked: true,
+          actions: [{ label: 'Answer' }],
+          ask: 'Two of the provider sandboxes were down, so their paths are only covered by mocks: rerun them once they are back up before opening the pull request, or open it now and list them in its description?',
         },
       },
     },

@@ -61,8 +61,9 @@ function asked(thread: Thread) {
     };
   }
   const report = turnReport(thread);
-  // A question written before the agent read your message isn't asked: your message may have answered it.
-  const question = report?.isSuperseded ? undefined : report?.question;
+  // A question written before the agent read your message isn't asked: your message may have answered it. One that can wait isn't blocking.
+  const question =
+    report?.isBlocked && !report.isSuperseded ? report.ask : undefined;
   return question ? { chip: 'Question', text: question } : null;
 }
 

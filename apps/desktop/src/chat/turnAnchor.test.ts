@@ -22,9 +22,8 @@ const report = (index: number): TurnReport => ({
   at: 0,
   turn: 1,
   by: 'claude',
+  recap: `report at ${index}`,
   decisions: [],
-  left: [],
-  summary: `report at ${index}`,
   index,
 });
 
@@ -50,7 +49,7 @@ test('the first turn anchors nothing while it runs, then itself once it ends', (
   assert.equal(anchor?.start, 0);
   assert.equal(anchor?.end, 2);
   assert.equal(anchor?.isLatest, true);
-  assert.equal(anchor?.report?.summary, 'report at 3');
+  assert.equal(anchor?.report?.recap, 'report at 3');
   assert.deepEqual(
     anchor?.changes?.files.map((f) => f.path),
     ['src/a.ts'],
@@ -66,7 +65,7 @@ test('a running turn leaves the widgets on the completed turn before it, with it
   assert.equal(anchor?.start, 0);
   assert.equal(anchor?.end, 2);
   assert.equal(anchor?.isLatest, false);
-  assert.equal(anchor?.report?.summary, 'report at 3');
+  assert.equal(anchor?.report?.recap, 'report at 3');
   assert.deepEqual(
     anchor?.changes?.files.map((f) => f.path),
     ['src/a.ts'],
@@ -88,7 +87,7 @@ test('a completed turn takes the widgets over, even with no report or changes', 
   const anchor = turnAnchor(thread(activity, false, { report: report(5) }));
   assert.equal(anchor?.start, 3);
   assert.equal(anchor?.isLatest, true);
-  assert.equal(anchor?.report?.summary, 'report at 5');
+  assert.equal(anchor?.report?.recap, 'report at 5');
   assert.equal(anchor?.changes, undefined);
   const unreported = turnAnchor(thread(activity, false, { report: report(3) }));
   assert.equal(unreported?.start, 3);
@@ -104,7 +103,7 @@ test('a stopped or failed turn with nothing of its own leaves the widgets on the
     );
     assert.equal(anchor?.start, 0);
     assert.equal(anchor?.isLatest, false);
-    assert.equal(anchor?.report?.summary, 'report at 3');
+    assert.equal(anchor?.report?.recap, 'report at 3');
   }
 });
 

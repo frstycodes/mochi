@@ -275,7 +275,7 @@ test('plan and turn-report calls have their own surfaces, so they get no work-lo
       e('tool', 'claude', 'Read src/a.ts'),
       mochi('update_plan'),
       e('message', 'claude', 'Done.'),
-      mochi('report_turn'),
+      mochi('wrap_up'),
     ]),
     ['work(Read src/a.ts)', 'Done.'],
   );
