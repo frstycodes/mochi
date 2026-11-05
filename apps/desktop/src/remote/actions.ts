@@ -160,13 +160,6 @@ function threadActionFor(action: Action): RemoteThreadAction | null {
       return action.onApiKey || action.atReset ? null : { type: 'resume' };
     case 'limit-auto-resume':
       return { type: 'limit-auto-resume', isOn: action.isOn };
-    case 'grant-answer':
-      return {
-        type: 'grant-answer',
-        grantId: action.grantId,
-        answer: action.answer,
-        ...(action.models && { models: action.models }),
-      };
     case 'proposal-answer':
       return {
         type: 'proposal-answer',

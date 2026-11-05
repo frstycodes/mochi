@@ -1998,18 +1998,20 @@
      "at": 910,
      "turn": 2,
      "by": "claude",
-     "decisions": [
-      "kept the API"
-     ],
-     "left": [],
-     "question": "Ship it?",
-     "summary": "Added retries",
-     "next": "Commit?",
-     "options": [
+     "recap": "Added retries",
+     "ask": "Commit?",
+     "isBlocked": true,
+     "actions": [
       {
-       "label": "Commit",
-       "reply": "Commit it",
+       "label": "Commit it",
        "isDraft": true
+      }
+     ],
+     "decisions": [
+      "kept the API",
+      {
+       "text": "Retried twice",
+       "step": 1
       }
      ],
      "isSuperseded": true

@@ -212,11 +212,6 @@ export const ThreadAction = Schema.Union([
   action('queued-resume', {}),
   action('resume', {}),
   action('limit-auto-resume', { isOn: B }),
-  action('grant-answer', {
-    grantId: Id,
-    answer: Schema.Literals(['allow', 'deny', 'revoke']),
-    models: opt(Schema.Array(Id).check(Schema.isMaxLength(MAX_MENTIONS))),
-  }),
   action('proposal-answer', {
     proposalId: Id,
     state: Schema.Literals(['dismissed', 'here']),
@@ -238,7 +233,6 @@ export const THREAD_ACTION_SCOPES = {
   'queued-resume': 'operate',
   resume: 'operate',
   'limit-auto-resume': 'operate',
-  'grant-answer': 'operate',
   'proposal-answer': 'operate',
   'proposal-start': 'manage',
   'autofix-set': 'manage',

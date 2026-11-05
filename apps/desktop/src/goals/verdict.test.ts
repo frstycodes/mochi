@@ -78,9 +78,11 @@ test('a limit or a failed turn reads stalled before anything else', () => {
 test("a question from an earlier turn's report is answered: once you replied and the agent went idle again, it no longer reads Needs you", () => {
   const report = {
     by: 'claude' as const,
+    recap: '',
     decisions: [],
-    left: [],
-    question: 'Commit it as fix(sum)?',
+    ask: 'Commit it as fix(sum)?',
+    actions: [{ label: 'Commit' }],
+    isBlocked: true as const,
     at: 862,
   };
   assert.deepEqual(

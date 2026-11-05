@@ -5,13 +5,13 @@ import type {
 import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 
 const PLAN_CALL = `mcp__${MOCHI_SERVER}__update_plan`;
-const REPORT_CALL = `mcp__${MOCHI_SERVER}__report_turn`;
+const WRAP_UP_CALL = `mcp__${MOCHI_SERVER}__wrap_up`;
 
 /** Tool calls without an update_plan before the reminder, and again after each further run of this many. */
 export const NUDGE_AFTER = 6;
 
 export const NUDGE =
-  'Mochi: your plan has not been updated for a while. If a step finished or the next one just began, call mcp__mochi__update_plan with {"advance": true} (or {"items": [...]} to resend the whole plan) in your next message. Ignore this if the plan is current or this request needs none.';
+  'Mochi: your plan has not been updated for a while. If a step finished or the next one just began, call mcp__mochi__update_plan with {"advance": true} (or {"scope": "...", "items": [...]} to resend the whole plan) in your next message. Ignore this if the plan is current or this request needs none.';
 
 /** Per thread: calls since the plan was last touched, and whether it reported done. In memory: a Mochi restart starts the count over. */
 const threads = new Map<string, { calls: number; isDone: boolean }>();
@@ -29,14 +29,16 @@ export function nudgeAfter(threadId: string, input: HookInput) {
   if (input.hook_event_name !== 'PostToolUse' || input.agent_id) return {};
   const state = threads.get(threadId) ?? { calls: 0, isDone: false };
   threads.set(threadId, state);
-  if (input.tool_name === REPORT_CALL) {
+  if (input.tool_name === WRAP_UP_CALL) {
     state.calls = 0;
     state.isDone = false;
     return {};
   }
   if (input.tool_name === PLAN_CALL) {
     state.calls = 0;
-    state.isDone = JSON.stringify(input.tool_response).includes('Plan done');
+    state.isDone = JSON.stringify(input.tool_response).includes(
+      'every step is done',
+    );
     return {};
   }
   if (state.isDone || ++state.calls < NUDGE_AFTER) return {};

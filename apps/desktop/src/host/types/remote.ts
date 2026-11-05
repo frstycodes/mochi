@@ -411,12 +411,6 @@ export type RemoteThreadAction =
   /** After a usage limit, on the same account: a device never switches that computer to its API key. */
   | { type: 'resume' }
   | { type: 'limit-auto-resume'; isOn: boolean }
-  | {
-      type: 'grant-answer';
-      grantId: string;
-      answer: 'allow' | 'deny' | 'revoke';
-      models?: string[];
-    }
   | { type: 'proposal-answer'; proposalId: string; state: 'dismissed' | 'here' }
   // manage
   | { type: 'proposal-start'; proposalId: string }

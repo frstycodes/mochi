@@ -1,7 +1,6 @@
 import type { Page } from '../browser/pages.ts';
 import type {
   AgentModel,
-  AgentPlanItem,
   AgentToolCall,
   AgentToolResult,
 } from '../host/types/agent.ts';
@@ -20,17 +19,9 @@ import {
   turnOf,
   turnProposalCount,
 } from '../chat/proposals.ts';
-import {
-  durationText,
-  grantStatus,
-  hadGrant,
-  nextGrantId,
-  pendingGrant,
-  threadsLeft,
-  usableGrant,
-} from '../chat/grants.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { reportItems } from '../goals/ledger.ts';
+import { closedRunning, planResult, planUpdate } from './planTool.ts';
 import {
   authorName,
   isListed,
@@ -40,7 +31,6 @@ import {
   type Provider,
   type QueueItem,
   type Space,
-  type Step,
   type Thread,
   type ThreadProposal,
 } from '../model.ts';
@@ -837,8 +827,8 @@ const THREAD_SPECS = {
     },
   },
   create_thread: {
-    // A top-level thread waits on the user: an agent can't take work out from under the thread that coordinates it. A sub-thread's
-    // other user_asked threads become cards (`isCardFromSubThread`). A card asks nothing: nothing runs until the user starts it.
+    // A top-level thread waits on the user: an agent can't take work out from under the thread that coordinates it. The Side threads
+    // settings may put a user_asked thread on a card instead (`bySetting`). A card asks nothing: nothing runs until the user starts it.
     // Nor does a turn `run` refuses (`AGENT_DRIVEN`). Any model or effort the account offers needs no approval.
     ask: ({ caller, args }) => {
       if (!args.proposalId && args.initiation !== 'user_asked')
@@ -873,8 +863,8 @@ const THREAD_SPECS = {
         throw new Error(
           'Pass initiation: "user_asked", "offer" or "own_initiative"',
         );
-      if (turnOf(caller).isAgentDriven && args.initiation === 'user_asked')
-        return startOnGrant({ ...ctx, args }, prompt);
+      if (args.initiation === 'user_asked')
+        agentDrivenStartBlocker(caller, args);
       if (args.initiation === 'offer' && turnOf(caller).isAgentDriven)
         throw new Error(AGENT_DRIVEN);
       const create = await proposalCreate({ ...ctx, args });
@@ -896,57 +886,6 @@ const THREAD_SPECS = {
         changed: `started "${created.title}"`,
         result: summary(created),
         undo: () => dispatch({ type: 'delete', threadIds: [created.id] }),
-      };
-    },
-  },
-  request_orchestration_grant: {
-    run: async ({ env, state, caller, args, dispatch }) => {
-      if (turnOf(caller).isAgentDriven)
-        throw new Error(
-          "Ask for a grant in a turn the user started, while they're here to answer it; this one began with another thread's message or an automated event",
-        );
-      const thread = target(state(), caller, caller.id);
-      const pending = pendingGrant(thread);
-      if (pending)
-        throw new Error(
-          `Grant ${pending.id} still waits on the user's answer; ask again once they've answered it`,
-        );
-      const models = [...new Set(args.models.map((m) => m.trim()))];
-      const offered = (
-        await Promise.all(
-          (['claude', 'codex'] as const).map((p) =>
-            env.models(p, caller.spaceId),
-          ),
-        )
-      ).flat();
-      const unknown = models.filter(
-        (m) => offered.length && !offered.some((o) => o.id === m),
-      );
-      if (unknown.length)
-        throw new Error(
-          `${unknown.join(', ')} isn't offered; use model ids from ${offered.map((m) => m.id).join(', ')}`,
-        );
-      const grant = {
-        id: nextGrantId(thread),
-        maxThreads: args.maxThreads,
-        models,
-        minutes: Math.round(args.hours * 60),
-        reason: args.reason.trim(),
-        state: 'pending' as const,
-        started: [],
-      };
-      dispatch({
-        type: 'grant-add',
-        threadId: caller.id,
-        grant,
-        by: caller.providers[0],
-      });
-      return {
-        result: {
-          grantId: grant.id,
-          state: 'pending',
-          note: "The user sees the grant card with Allow / Don't allow and can switch models off. Don't wait on it: carry on. Once allowed, create_thread with initiation user_asked starts nested threads from turns sub-thread reports or Auto-fix begin, and says how much budget is left.",
-        },
       };
     },
   },
@@ -1046,41 +985,42 @@ const THREAD_SPECS = {
 } satisfies Partial<Specs>;
 
 const REPORT_SPECS = {
-  report_turn: {
+  wrap_up: {
     run: ({ env, state, caller, args, dispatch }) => {
-      const { summary, next, options } = args;
+      const ask = args.ask?.trim();
+      const actions = args.actions?.map((a) => ({
+        label: a.label.trim(),
+        ...(a.isDraft && { isDraft: true as const }),
+      }));
+      if (!!ask !== !!actions?.length)
+        throw new Error(
+          ask
+            ? 'Nothing changed: an ask needs its answers. Add "actions": 1 to 3 of {"label": "..."}, your pick first.'
+            : 'Nothing changed: actions answer an ask. Add "ask": the one question, or leave actions out.',
+        );
+      const closed = closedRunning(caller.steps);
+      if (closed)
+        dispatch({
+          type: 'agent',
+          event: { threadId: caller.id, type: 'plan', items: closed },
+          ms: Date.now(),
+        });
       const isSpineOn = env.prefs.get().turnSpine;
-      const decisions = reportItems(args.decisions);
-      const assumptions = reportItems(args.assumptions);
       dispatch({
         type: 'report',
         threadId: caller.id,
         report: {
           by: caller.providers[0],
-          decisions: isSpineOn ? decisions : decisions.map((d) => d.text),
-          ...(isSpineOn && { assumptions }),
-          left: args.left,
-          ...(args.question?.trim() && { question: args.question.trim() }),
-          ...(summary?.trim() && { summary: summary.trim() }),
-          ...(next?.trim() && { next: next.trim() }),
-          ...(options && {
-            options: options.map((o) => ({
-              label: o.label.trim(),
-              reply: o.reply.trim(),
-              ...(o.isDraft && { isDraft: true }),
-            })),
-          }),
+          recap: args.recap.trim(),
+          decisions: reportItems(args.decisions),
+          ...(isSpineOn && { assumptions: reportItems(args.assumptions) }),
+          ...(ask && { ask, actions }),
+          ...(args.blocked && { isBlocked: true }),
         },
       });
-      const running = caller.steps.find((s) => s.status === 'running');
       return {
-        changed: 'reported',
-        result: {
-          ...reportOf(target(state(), caller, caller.id)),
-          ...(running && {
-            note: `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`,
-          }),
-        },
+        changed: 'wrapped up the turn',
+        result: reportOf(target(state(), caller, caller.id)),
       };
     },
   },
@@ -1088,7 +1028,7 @@ const REPORT_SPECS = {
     run: ({ caller, args, dispatch }) => {
       if (!caller.parent)
         throw new Error(
-          'This thread has no parent thread; report_turn reports to the user',
+          'This thread has no parent thread; wrap_up reports to the user',
         );
       const { status, branch, pr, changedFiles, checks } = args;
       dispatch({
@@ -1246,30 +1186,23 @@ const USER_SPECS = {
 
 const AGENT_SPECS = {
   update_plan: {
-    run: ({ state, caller, args, dispatch }) => {
-      if (!args.items && !args.advance)
-        throw new Error(
-          'Pass {"items": [...]} (the whole plan) or {"advance": true}',
-        );
-      const items = args.items
-        ? args.items.map((i) => ({
-            title: i.title.trim(),
-            status: PLAN_STATUS[i.status],
-          }))
-        : advanced(caller.steps);
+    run: ({ caller, args, dispatch }) => {
+      const update = planUpdate(caller.steps, args);
+      if ('error' in update) throw new Error(update.error);
       dispatch({
         type: 'agent',
         event: {
           threadId: caller.id,
           type: 'plan',
-          items,
-          ...(args.scope === 'first_task' && { isFresh: true }),
+          items: update.items,
+          ...(args.items &&
+            (args.scope === 'first_task' || args.scope === 'new_task') && {
+              isFresh: true,
+            }),
         },
         ms: Date.now(),
       });
-      return {
-        result: planStatus(target(state(), caller, caller.id).steps),
-      };
+      return { result: planResult(update.items, update.warnings) };
     },
   },
   start_subagent: {
@@ -1326,113 +1259,11 @@ const SPECS = {
   ...LAYOUT_SPECS,
   ...USER_SPECS,
   ...AGENT_SPECS,
-  update_plan: withPivots(AGENT_SPECS.update_plan),
   ...BROWSER_TOOLS,
   ...DEV_SERVER_TOOLS,
   browser_batch: { run: runBatch },
   ...SETTINGS_TOOLS,
 } satisfies Specs;
-
-/**
- * update_plan with the turn spine's pivots: a resent plan that drops or renames steps is recorded with its `why` where the
- * spine places it, and the reply names what changed. Dropping steps without a why asks for one, once: a `{"why"}` alone
- * answers it and drops nothing. Wraps the plan spec so the plan itself stays as it is.
- */
-function withPivots(spec: ToolSpec<'update_plan'>): ToolSpec<'update_plan'> {
-  return {
-    run: async (ctx, options) => {
-      const { env, state, caller, args, dispatch } = ctx;
-      const why = env.prefs.get().turnSpine ? args.why?.trim() : undefined;
-      if (why && !args.items && !args.advance) {
-        dispatch({ type: 'pivot-why', threadId: caller.id, why });
-        return { result: 'Noted why the plan changed.' };
-      }
-      const outcome = await spec.run(ctx, options);
-      if (
-        !env.prefs.get().turnSpine ||
-        !args.items ||
-        args.scope === 'first_task'
-      )
-        return outcome;
-      const change = planChange(
-        caller.steps,
-        target(state(), caller, caller.id).steps,
-      );
-      if (!change.dropped.length && !change.renamed.length) return outcome;
-      if (change.dropped.length || why)
-        dispatch({
-          type: 'pivot',
-          threadId: caller.id,
-          pivot: {
-            ...(why && { why }),
-            dropped: [...change.dropped, ...change.renamed.map((r) => r.from)],
-            at: change.at,
-          },
-        });
-      const asks =
-        change.dropped.length && !why
-          ? ' Say why in one line: update_plan with {"why": "..."}.'
-          : '';
-      return {
-        ...outcome,
-        result: `${String(outcome.result)} ${describeChange(change)}${asks}`,
-      };
-    },
-  };
-}
-
-interface PlanChange {
-  dropped: string[];
-  renamed: { from: string; to: string }[];
-  added: string[];
-  /** Where the spine puts the pivot among the plan's steps: before the first step that replaced what was dropped. */
-  at: number;
-}
-
-/** What a resent plan changed, from the thread's steps before and after it. */
-export function planChange(before: Step[], after: Step[]): PlanChange {
-  const was = new Map(before.map((s) => [s.id, s]));
-  const kept = after.filter((s) => s.status !== 'dropped');
-  const dropped = after.filter(
-    (s) =>
-      s.status === 'dropped' &&
-      was.get(s.id)?.status !== 'dropped' &&
-      was.has(s.id),
-  );
-  const renamed = kept.flatMap((s) => {
-    const from = was.get(s.id)?.title;
-    return from !== undefined && from !== s.title
-      ? [{ from, to: s.title }]
-      : [];
-  });
-  const added = kept.filter((s) => !was.has(s.id));
-  const firstNew = kept.findIndex(
-    (s) => !was.has(s.id) || was.get(s.id)!.title !== s.title,
-  );
-  const open = before.filter((s) => s.status !== 'dropped');
-  const firstDropped = open.findIndex((s) =>
-    dropped.some((d) => d.id === s.id),
-  );
-  const keptBefore = open
-    .slice(0, Math.max(firstDropped, 0))
-    .filter((s) => kept.some((k) => k.id === s.id)).length;
-  return {
-    dropped: dropped.map((s) => s.title),
-    renamed,
-    added: added.map((s) => s.title),
-    at: firstNew >= 0 ? firstNew : keptBefore,
-  };
-}
-
-function describeChange({ dropped, renamed, added }: PlanChange) {
-  const quote = (titles: string[]) => titles.map((t) => `"${t}"`).join(', ');
-  const parts = [
-    dropped.length && `dropped ${quote(dropped)}`,
-    ...renamed.map((r) => `renamed "${r.from}" to "${r.to}"`),
-    added.length && `added ${quote(added)}`,
-  ].filter(Boolean);
-  return `You ${parts.join(', ')}.`;
-}
 
 /** Each step runs as its own call: its policy, its approvals and its line in the thread, until one fails. */
 async function runBatch(
@@ -1536,7 +1367,7 @@ const PLACEMENTS = [
 ];
 
 const AGENT_DRIVEN =
-  'This turn began with another thread\'s message or an automated event (Auto-fix, sub-thread notes), not the user, so it can\'t start threads or ask where work runs: propose it with initiation "own_initiative" and the user decides.';
+  'This turn began with another thread\'s message or an automated event (Auto-fix, or sub-thread notes after one), not the user, so it can\'t start threads or ask where work runs: propose it with initiation "own_initiative" and the user decides.';
 
 const NOT_FOLDERLESS =
   'This thread already has a project; only a folderless chat moves into one';
@@ -1635,9 +1466,7 @@ function bySetting(
     if (prefs.agentSuggestions === 'card') return proposed;
     return startNow(ctx, proposed.taskId, AUTO_STARTED_NOTE);
   }
-  const how = isCardFromSubThread(ctx)
-    ? prefs.subThreadStarts
-    : prefs.askedThreads;
+  const how = isFromSubThread(ctx) ? prefs.subThreadStarts : prefs.askedThreads;
   if (how === 'off') throw new Error(SUB_THREAD_STARTS_OFF);
   if (how === 'card') return propose(ctx, 'user_asked', prompt, create);
   return undefined;
@@ -1700,79 +1529,27 @@ const PROPOSAL_NOTES = {
     "Proposed and waiting: the user's settings put the threads you start on a card (Start, Do it here, Dismiss). Don't retry or wait on it; carry on, or end your turn. Each one they start nests under this thread and its notes come back to you.",
 } satisfies Record<ThreadProposal['initiation'], string>;
 
-/** A sub-thread's user_asked thread that asks nothing else (placement) goes on its turn's card instead of starting. */
-function isCardFromSubThread({
-  caller,
-  args,
-}: ToolContext<Args<'create_thread'>>) {
+/** A sub-thread's nested user_asked thread: the "When a sub-thread starts a thread" setting decides it, not "When you ask for a thread". */
+function isFromSubThread({ caller, args }: ToolContext<Args<'create_thread'>>) {
   return !!caller.parent && !args.isTopLevel;
 }
 
 /**
- * A user_asked thread from an agent-driven turn: starts at once on the thread's orchestration grant, goes on a card once
- * the grant is spent, expired or revoked, and is refused when the user never allowed one.
+ * A user_asked thread from an agent-driven turn starts only in a report turn that follows the user's own (`followsUser`), and
+ * only nested: the user asked for that work in their turn. Any other agent-driven turn can only propose.
  */
-async function startOnGrant(
-  ctx: ToolContext<Args<'create_thread'>>,
-  prompt: string,
-): Promise<Outcome> {
-  const { state, caller, args, dispatch } = ctx;
-  const thread = target(state(), caller, caller.id);
-  const grant = usableGrant(thread, state().now);
-  if (!grant && !hadGrant(thread)) throw new Error(AGENT_DRIVEN);
+function agentDrivenStartBlocker(
+  caller: Thread,
+  args: Pick<Args<'create_thread'>, 'isTopLevel'>,
+) {
+  const turn = turnOf(caller);
+  if (!turn.isAgentDriven) return;
+  if (!turn.followsUser) throw new Error(AGENT_DRIVEN);
   if (args.isTopLevel)
     throw new Error(
-      'An orchestration grant starts nested threads only; leave out isTopLevel, or propose it with initiation "own_initiative"',
+      'A turn sub-thread reports started can start nested threads only; leave out isTopLevel, or propose it with initiation "own_initiative"',
     );
-  const create = await proposalCreate(ctx);
-  if (!grant) {
-    const { result } = propose(ctx, 'user_asked', prompt, create);
-    return { result: { ...(result as object), note: GRANT_ENDED_NOTE } };
-  }
-  const model = create.controls?.model ?? '';
-  if (!grant.models.includes(model))
-    throw new Error(
-      `The orchestration grant allows ${grant.models.join(', ')}, not ${model || "this thread's model"}; pass one of them as model`,
-    );
-  const before = state();
-  const name = args.title?.trim();
-  dispatch({
-    type: 'create',
-    title: prompt,
-    ...(name && { name }),
-    ...create,
-    isBackground: true,
-  });
-  const created = state().threads.find(
-    (t) => !before.threads.some((s) => s.id === t.id),
-  )!;
-  dispatch({
-    type: 'grant-use',
-    threadId: caller.id,
-    grantId: grant.id,
-    started: { threadId: created.id, title: created.title },
-  });
-  const left = threadsLeft(grant) - 1;
-  const minutes = grant.expiresAt! - state().now;
-  return {
-    changed: `started "${created.title}" on the orchestration grant (${plural(left, '1 thread left', `${left} threads left`)})`,
-    result: {
-      ...summary(created),
-      grant: {
-        threadsLeft: left,
-        expiresIn: durationText(minutes),
-        status: grantStatus(
-          { ...grant, started: [...grant.started, { title: created.title }] },
-          state().now,
-        ),
-      },
-    },
-    undo: () => dispatch({ type: 'delete', threadIds: [created.id] }),
-  };
 }
-
-const GRANT_ENDED_NOTE =
-  "The orchestration grant is spent, expired or revoked, so this went on a Start / Dismiss card for the user instead of starting. Don't retry it; carry on, or end your turn. Ask for a new grant in a turn the user starts.";
 
 /** The user told the agent to start a card it proposed. */
 function startProposal(
@@ -1845,47 +1622,6 @@ const asObject = (v: unknown) =>
   v && typeof v === 'object' && !Array.isArray(v) ? v : { result: v };
 
 const fail = (text: string): AgentToolResult => ({ text, isError: true });
-
-const PLAN_STATUS = {
-  pending: 'pending',
-  in_progress: 'running',
-  completed: 'done',
-} as const;
-
-/** The thread's plan one step on: the running step done, the next open one running. */
-function advanced(steps: Step[]): AgentPlanItem[] {
-  const items = steps.flatMap((s): AgentPlanItem[] =>
-    s.status === 'dropped'
-      ? []
-      : [
-          {
-            title: s.title,
-            status:
-              s.status === 'done' || s.status === 'running'
-                ? s.status
-                : 'pending',
-          },
-        ],
-  );
-  const running = items.findIndex((i) => i.status === 'running');
-  if (running >= 0) items[running].status = 'done';
-  const next = items.findIndex((i, k) => k > running && i.status === 'pending');
-  if (next >= 0) items[next].status = 'running';
-  return items;
-}
-
-/** The plan as the agent left it, so it never has to count its own advances to know which step is running. */
-function planStatus(steps: Step[]) {
-  const open = steps.filter((s) => s.status !== 'dropped');
-  const done = open.filter((s) => s.status === 'done').length;
-  const at = open.findIndex((s) => s.status === 'running');
-  const next = open.find((s, k) => k > at && s.status === 'ready');
-  const upNext = next ? ` Next: "${next.title}".` : '';
-  if (at >= 0)
-    return `Step ${at + 1}/${open.length} in progress: "${open[at].title}".${upNext || ' Last step: advance once more when it is done.'}`;
-  if (done === open.length) return `Plan done (${done}/${open.length}).`;
-  return `Nothing in progress; ${done}/${open.length} done.${upNext}`;
-}
 
 export function summary(thread: Thread) {
   return {

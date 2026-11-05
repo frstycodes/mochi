@@ -159,9 +159,9 @@ test('taking a message back removes it without a transcript entry or another age
 
 test("a report written while a message waited is superseded once the agent reads it, and isn't once you take it back", () => {
   const report = {
+    recap: '',
     decisions: [],
-    left: [],
-    question: 'Open a pull request?',
+    ask: 'Open a pull request?',
     by: 'claude' as const,
   };
   let { s, id, thread } = working();

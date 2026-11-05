@@ -87,12 +87,6 @@ export const TOOL_GUIDE = {
     description:
       'Start a thread you asked for, or suggest one as a card you start or dismiss. You stay where you are and can undo a start.',
   },
-  request_orchestration_grant: {
-    group: 'Threads',
-    label: 'Ask to start threads on its own',
-    description:
-      'Ask on a card for a budget (threads, models, hours) to start nested threads while you are away. You allow or revoke it on the card.',
-  },
   dismiss_thread_proposal: {
     group: 'Threads',
     label: 'Withdraw thread suggestions',
@@ -112,11 +106,11 @@ export const TOOL_GUIDE = {
       'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.',
   },
 
-  report_turn: {
+  wrap_up: {
     group: 'Progress',
-    label: 'Report turns',
+    label: 'Wrap up turns',
     description:
-      'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.',
+      'End a turn with a short recap, the assumptions it made and, when the next move is yours, one question with the answers it offers as buttons.',
   },
   report_to_parent: {
     group: 'Progress',

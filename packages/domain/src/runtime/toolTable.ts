@@ -64,8 +64,11 @@ const reason = Schema.String.check(
 /** The MCP server Mochi's tools are on: agents see them as `mcp__mochi__<tool>`. */
 export const MOCHI_SERVER = 'mochi';
 
-/** `update_plan`'s scope: this thread's first task, or more of the same work. Unrelated work is a `create_thread` offer. */
-export const PLAN_SCOPES = ['first_task', 'continuation'] as const;
+/** `update_plan`'s scope, required with items: this thread's first task, more of the same work, or unrelated work (better offered with `create_thread`). */
+export const PLAN_SCOPES = ['first_task', 'continuation', 'new_task'] as const;
+
+/** Past this many steps a plan is refused, not cut: a cut plan hides the steps the agent meant to do last. */
+export const MAX_PLAN_STEPS = 12;
 
 /** `report_to_parent`'s status. Done waits for every sub-thread to be idle, no_change never reaches the parent, the rest wake it at once (`dueWakes`). */
 export const SUB_THREAD_STATUSES = [
@@ -90,31 +93,29 @@ export const THREAD_INITIATIONS = [
   'own_initiative',
 ] as const;
 
-/** Up to 5 short lines on report_turn, each on the plan step it belongs to; a plain string (older callers) counts as one with no step. */
+/** Up to 5 short lines on wrap_up, each on the plan step it belongs to, by its 1-based number in the current plan. */
 const reportItems = (description: string) =>
   Schema.Array(
-    Schema.Union([
-      Schema.String.check(Schema.isMaxLength(160)),
-      Schema.Struct({
-        text: Schema.String.check(
-          Schema.isMinLength(1),
-          Schema.isMaxLength(160),
-        ),
-        step: Schema.optionalKey(
-          Schema.String.annotate({
-            description:
-              'The title of the plan step it was made on, as in update_plan',
-          }),
-        ),
-      }),
-    ]),
+    Schema.Struct({
+      text: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(160)),
+      step: Schema.optionalKey(
+        Schema.Number.check(
+          Schema.isInt(),
+          Schema.isGreaterThanOrEqualTo(1),
+        ).annotate({
+          description:
+            'The 1-based number of the step in your current plan it was made on; leave it out when it was on no step',
+        }),
+      ),
+    }),
   )
     .check(Schema.isMaxLength(5))
     .annotate({ description });
 
 /** Kept to choices worth reversing: routine calls the agent logged anyway buried the few that mattered. */
-const DECISIONS =
-  'Only choices the user could reasonably have made differently: a tradeoff, a scope cut, one approach over a real alternative. Never routine execution (which model or subagent ran it, how the work was split, the order of steps). Usually empty';
+const DECISIONS = reportItems(
+  'Only choices the user could reasonably have made differently: a tradeoff, a scope cut, one approach over a real alternative. Never routine execution (which model or subagent ran it, how the work was split, the order of steps). Usually empty',
+);
 
 const ASSUMPTIONS = reportItems(
   'Only where the request left a real gap and a wrong guess would change what the user gets, each stated as what you assumed ("Assumed timestamps are UTC"). Never the plain reading of their words. Usually empty',
@@ -250,7 +251,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). Their settings may answer at once: the result then says it started or that you do it here. "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with Start, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message); their settings may start it at once or refuse suggestions, and the result says so. At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix, sub-thread reports) can only use own_initiative, unless the user allowed an orchestration grant (request_orchestration_grant): then a nested user_asked thread on a model the grant allows starts at once while its budget lasts, and once it runs out the call puts the thread on a card instead. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a report in your transcript, and you are started with the reports once all your sub-threads are idle, or at once for a blocked, needs_input or failed one. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. The user\'s settings decide whether a user_asked thread starts at once or goes on a card they start (Start, or Start all), from a sub-thread too, or is refused there; the result says which, so don\'t retry or wait on a card.',
+      'Start side work in a new thread, with its own agent working on `prompt`, the brief: self-contained, naming the files or area and what done looks like. Not for a subagent: when the user asks for one, use your native subagent tool, or start_subagent for a model it doesn\'t offer. `initiation` says whose idea it is. "user_asked": the user asked in words, in their latest message, for separate or parallel work, or told you to start it; it starts now and the user stays where they are. "offer": a task the user named in their latest message where it isn\'t clear whether it belongs here; the user sees New thread / Do it here, so don\'t start the work: end your turn with one short line and wait ("Do it here." comes back as their message). Their settings may answer at once: the result then says it started or that you do it here. "own_initiative": work you noticed or recommend that the user didn\'t ask for (a follow-up your answer named, a fix spotted in passing); the user sees a card with Start, Do it here and Dismiss, and nothing runs until they choose ("Do it here: <title>" and the brief come back as their message); their settings may start it at once or refuse suggestions, and the result says so. At most 3 per turn, one per independent piece, never something you are about to do anyway; when your reply calls something a follow-up or a separate PR, propose it here instead of only saying so. A card expires after 7 days. To start a card the user told you to start ("start the second one"), pass just its `proposalId`. A turn begun by another thread\'s message or an automated event (Auto-fix) can only use own_initiative. A turn begun by sub-thread reports right after the user\'s own turn (or after another such turn) may also start a nested user_asked thread, for work the user asked for in that turn; anything else from it is own_initiative. The thread nests under this one as a sub-thread, however unrelated its work: this thread coordinates it, each turn it ends comes back to you as a report in your transcript, and you are started with the reports once all your sub-threads are idle, or at once for a blocked, needs_input or failed one. A card the user starts nests the same way. It branches from your branch; pass `isFromDefaultBranch` when its work doesn\'t build on your branch, and it branches from the default branch instead, still nested. Either way it opens its own PR with `gh pr create`, choosing `--base` itself (usually the default branch, or the branch it was cut from). Pass `isTopLevel` only when the user asked for a thread outside this one, or the new task is big enough to coordinate a chain of its own sub-threads; unrelated work is not a reason, and never for a follow-up or fix you noticed. A top-level one waits on the user\'s approval. Any model or effort the account offers starts without approval: honor any the user named, and pick a stronger or cheaper one when the work warrants it; otherwise leave them out and it inherits yours. The user\'s settings decide whether a user_asked thread starts at once or goes on a card they start (Start, or Start all), from a sub-thread too, or is refused there; the result says which, so don\'t retry or wait on a card.',
     shape: {
       initiation: Schema.optionalKey(
         Schema.Literals(THREAD_INITIATIONS).annotate({
@@ -309,39 +310,6 @@ export const TOOL_TABLE = {
       ),
     },
   },
-  request_orchestration_grant: {
-    tier: 'change',
-    quiet: true,
-    description:
-      "Ask the user, once, for a budget to start nested threads from turns they didn't start (sub-thread reports, Auto-fix, another thread's message), so a multi-phase plan keeps going when they're away: phase 2's threads start when phase 1's reports come back. Only in a turn the user started, only when you will run later phases yourself. The user sees a card with your reason, the thread count, each model (they can switch some off) and how long it lasts, then Allow or Don't allow; this returns at once, so carry on. Allowed, create_thread with initiation user_asked starts nested threads directly in agent-driven turns while threads and time remain, each logged in this thread; never top-level, permissions stay yours, and the user can revoke it on the card. One pending grant at a time; allowing a new one replaces the old.",
-    shape: {
-      maxThreads: Schema.Number.check(
-        Schema.isInt(),
-        Schema.isBetween({ minimum: 1, maximum: 10 }),
-      ).annotate({
-        description:
-          'Most threads it may start in all, across every later phase',
-      }),
-      models: Schema.Array(Schema.String)
-        .check(Schema.isMinLength(1))
-        .annotate({
-          description:
-            'Model ids the started threads may run on, like ["claude-sonnet-5-5"]; each must be one the account offers',
-        }),
-      hours: Schema.Number.check(
-        Schema.isBetween({ minimum: 1, maximum: 24 }),
-      ).annotate({
-        description: 'How long it lasts once allowed',
-      }),
-      reason: Schema.String.check(
-        Schema.isMinLength(1),
-        Schema.isMaxLength(200),
-      ).annotate({
-        description:
-          'One line the user reads on the card: the phases and why they need to start without them, like "Phase 2: 3 migrations once the schema PRs land"',
-      }),
-    },
-  },
   dismiss_thread_proposal: {
     tier: 'change',
     quiet: true,
@@ -382,56 +350,48 @@ export const TOOL_TABLE = {
     shape: { threadIds },
   },
   // {REPORTS}
-  report_turn: {
+  wrap_up: {
     tier: 'change',
     quiet: true,
     description:
-      'At the end of a turn where you changed anything, report once so the user can skip reading your reply: what changed, decisions worth reversing, what is left, at most one question that needs them, and, when the user has a real choice to make, the next move as a question with the answers you offer as buttons. Short lines, no prose.',
+      'Fill the box Mochi shows at the end of your turn: a recap and, when the turn leaves the user a decision to make or a step to take, one question with buttons that answer it; a turn with nothing pending ends with the recap alone. Call it once in every turn in which you kept a plan, changed files or ran commands, when the work is done and before your closing message, which follows it in full. It also completes the step still in progress; steps that never started show as not done.',
     shape: {
-      summary: Schema.optionalKey(
-        Schema.String.check(Schema.isMaxLength(360)).annotate({
-          description: "What changed, in the user's terms, 1 to 3 sentences",
-        }),
-      ),
-      decisions: reportItems(
-        `${DECISIONS}, each on the plan step it was made on`,
-      ),
-      // Required as served (`shapeFor`); optional here, so a session started before the turn spine was turned on still reports.
-      assumptions: Schema.optionalKey(ASSUMPTIONS),
-      left: Schema.Array(Schema.String.check(Schema.isMaxLength(160)))
-        .check(Schema.isMaxLength(5))
-        .annotate({ description: 'What is still not done' }),
-      question: Schema.optionalKey(
-        Schema.String.check(Schema.isMaxLength(240)).annotate({
-          description: 'The one thing you need from the user, if anything',
-        }),
-      ),
-      next: Schema.optionalKey(
-        Schema.String.check(Schema.isMaxLength(160)).annotate({
+      recap: Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(300),
+      ).annotate({
+        description:
+          'What is now true or changed, then where it stands, including what is not done or not verified. Two or three short sentences, in the second person',
+      }),
+      ask: Schema.optionalKey(
+        Schema.String.check(
+          Schema.isMinLength(1),
+          Schema.isMaxLength(100),
+        ).annotate({
           description:
-            'The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi\'s own UI. Leave it out when nothing waits on them, like a running sub-thread: its reports come back without a message',
+            'The one question when the next move is the user\'s call, like "Commit the cookie fix and its test?": the decision alone, with no reason or recommendation and without listing the options the buttons give. Leave it out when nothing waits on the user, like a running sub-thread',
         }),
       ),
-      options: Schema.optionalKey(
+      blocked: Schema.optionalKey(
+        Schema.Boolean.annotate({
+          description:
+            'True when your work stops here until the user answers: the thread then shows as needing them. Leave it out when the answer can wait',
+        }),
+      ),
+      actions: Schema.optionalKey(
         Schema.Array(
           Schema.Struct({
             label: Schema.String.check(
               Schema.isMinLength(1),
-              Schema.isMaxLength(32),
-            ).annotate({
-              description: 'The button, like "Commit" or "Only the tests"',
-            }),
-            reply: Schema.String.check(
-              Schema.isMinLength(1),
-              Schema.isMaxLength(300),
+              Schema.isMaxLength(48),
             ).annotate({
               description:
-                'What the button sends you as the user\'s message, in their words, like "Commit the cookie fix and its test."',
+                'The button, in the user\'s words back to you: a click sends it as their message, like "Yes, commit" or "Show the diff first"',
             }),
             isDraft: Schema.optionalKey(
               Schema.Boolean.annotate({
                 description:
-                  'Put reply in the message box for the user to finish instead of sending it, like "Before you continue, I want to change the plan:"',
+                  'Put the label in the message box for the user to finish instead of sending it, like "Change the plan:"',
               }),
             ),
           }),
@@ -439,9 +399,12 @@ export const TOOL_TABLE = {
           .check(Schema.isMinLength(1), Schema.isMaxLength(3))
           .annotate({
             description:
-              "The answers to next, your pick first; written for this turn, not generic. The first one's reply is also suggested in the user's empty message box, so write it as their instruction, never as your question",
+              'With ask, required: 1 to 3 answers, your pick first. The pick is also suggested in the empty message box',
           }),
       ),
+      decisions: DECISIONS,
+      // Served only with the turn spine on (`shapeFor`).
+      assumptions: Schema.optionalKey(ASSUMPTIONS),
     },
   },
   report_to_parent: {
@@ -494,45 +457,41 @@ export const TOOL_TABLE = {
   update_plan: {
     tier: 'read',
     description:
-      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Send it in the same message as another tool call when there is one. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Each call returns the step now in progress and the next one: read it rather than counting your own advances, and advance again if you finished more than one step. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. "scope" says what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, or left out, this one). A request that is unrelated work a fresh thread would do as well from the user\'s words alone gets no plan: offer it with create_thread initiation "offer" instead.',
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Send it in the same message as another tool call when there is one. First call: with the turn\'s very first tool call, even one that only reads, {"scope": "...", "items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it: it completes the in_progress step and starts the next pending one, skipping steps already done. Out of order: {"done": [2], "start": 4} (1-based step numbers). Plan changed, or the user redirected you: {"scope": "...", "items": [...]} again, the new whole list; it replaces the old one. Each call returns the step now in progress: read it rather than counting your own advances. Keep exactly one step in_progress while working. wrap_up completes the last step, so you need not advance past it. Don\'t also write the plan as a list in your reply.',
     shape: {
       items: Schema.optionalKey(
         Schema.Array(
           Schema.Struct({
-            title: Schema.String.check(
-              Schema.isMinLength(1),
-              Schema.isMaxLength(120),
-            ).annotate({
+            title: Schema.String.check(Schema.isMaxLength(120)).annotate({
               description: 'A short step, like "Add the parser test"',
             }),
             status: Schema.Literals(['pending', 'in_progress', 'completed']),
           }),
-        )
-          .check(Schema.isMinLength(1), Schema.isMaxLength(12))
-          .annotate({
-            description:
-              'The whole plan, in order; replaces the previous one, and steps left out are dropped',
-          }),
-      ),
-      why: Schema.optionalKey(
-        Schema.String.check(
-          Schema.isMinLength(1),
-          Schema.isMaxLength(160),
         ).annotate({
-          description:
-            'With items that drop or rename steps: one line on why the plan changed. Alone, {"why": "..."} gives the reason for the last change',
-        }),
-      ),
-      advance: Schema.optionalKey(
-        Schema.Boolean.annotate({
-          description:
-            'Complete the in_progress step and start the next pending one; ignored with items',
+          description: `The whole plan, in order, 1 to ${MAX_PLAN_STEPS} steps; replaces the previous one`,
         }),
       ),
       scope: Schema.optionalKey(
         Schema.Literals(PLAN_SCOPES).annotate({
           description:
-            'With items: what this request is to the thread; continuation when left out',
+            'Required with items: what this request is to the thread. "first_task" until you have finished a task here; after that "continuation" for anything that builds on what was done, found or decided here (a follow-up, a fix, going ahead with what you suggested; when unsure, this one), or "new_task" for unrelated work a fresh thread would do as well, which you should rather offer with create_thread initiation "offer"',
+        }),
+      ),
+      advance: Schema.optionalKey(
+        Schema.Boolean.annotate({
+          description:
+            'Complete the in_progress step and start the next pending one; with nothing in progress, start the first pending one',
+        }),
+      ),
+      done: Schema.optionalKey(
+        Schema.Array(Schema.Number.check(Schema.isInt())).annotate({
+          description: 'Step numbers (1-based) to mark completed',
+        }),
+      ),
+      start: Schema.optionalKey(
+        Schema.Number.check(Schema.isInt()).annotate({
+          description:
+            'The step number (1-based) to put in progress; the one in progress before it is completed',
         }),
       ),
     },
@@ -1135,35 +1094,19 @@ export const SETTINGS_CHAT_TOOLS = [
 export interface MochiScope {
   isSettingsChat?: boolean;
   isSubThread?: boolean;
-  /** The turn spine is off (Settings): report_turn takes plain decisions and no assumptions, update_plan no why. */
+  /** The turn spine is off (Settings): wrap_up takes no assumptions. */
   isSpineOff?: boolean;
+  /** Codex keeps its plan with its own update_plan (`turn/plan/updated`), so it isn't served Mochi's. */
+  isCodex?: boolean;
 }
 
-/** A tool's shape as this session is served it: with the turn spine off, without the spine's fields. */
+/** A tool's shape as this session is served it: wrap_up asks for assumptions only with the turn spine on. */
 export function shapeFor(name: ToolName, { isSpineOff }: MochiScope) {
   const { shape } = TOOL_TABLE[name] as { shape: Schema.Struct.Fields };
-  if (!isSpineOff)
-    return name === 'report_turn'
-      ? { ...shape, assumptions: ASSUMPTIONS }
-      : shape;
-  if (name === 'report_turn') {
-    const { assumptions: _, ...rest } = shape;
-    return { ...rest, decisions: PLAIN_DECISIONS };
-  }
-  if (name === 'update_plan') {
-    const { why: _, ...rest } = shape;
-    return rest;
-  }
-  return shape;
+  if (name !== 'wrap_up') return shape;
+  const { assumptions: _, ...rest } = shape;
+  return isSpineOff ? rest : { ...rest, assumptions: ASSUMPTIONS };
 }
-
-const PLAIN_DECISIONS = Schema.Array(
-  Schema.String.check(Schema.isMaxLength(160)),
-)
-  .check(Schema.isMaxLength(5))
-  .annotate({
-    description: DECISIONS,
-  });
 
 const isSettingsChatTool = (name: ToolName) =>
   (SETTINGS_CHAT_TOOLS as readonly string[]).includes(name);
@@ -1179,11 +1122,14 @@ const isSubThreadTool = (name: ToolName) =>
 export function servedTools({
   isSettingsChat,
   isSubThread,
+  isCodex,
 }: MochiScope): ToolName[] {
   if (isSettingsChat) return [...SETTINGS_CHAT_TOOLS];
   return TOOL_NAMES.filter(
     (name) =>
-      !isSettingsChatTool(name) && !(!isSubThread && isSubThreadTool(name)),
+      !isSettingsChatTool(name) &&
+      !(!isSubThread && isSubThreadTool(name)) &&
+      !(isCodex && name === 'update_plan'),
   );
 }
 
@@ -1194,7 +1140,7 @@ export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
 /** Called every turn, each with its own surface (the plan list, the end-of-turn card): always loaded for Claude, never deferred behind tool search, and no work-log row. */
 export const TURN_TOOLS = [
   'update_plan',
-  'report_turn',
+  'wrap_up',
   'report_to_parent',
 ] as const satisfies ToolName[];
 
