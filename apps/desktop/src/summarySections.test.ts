@@ -41,19 +41,27 @@ const cards = (
   });
 
 test('a folderless chat shows only its sources', () => {
-  assert.deepEqual(cards(thread({})), ['sources']);
+  assert.deepEqual(cards(thread({})), ['sources', 'environment']);
 });
 
 test('the threads card appears once a parent, sub-thread or reply is linked', () => {
-  assert.deepEqual(cards(thread({}), 0, 0, 1), ['threads', 'sources']);
+  assert.deepEqual(cards(thread({}), 0, 0, 1), [
+    'threads',
+    'sources',
+    'environment',
+  ]);
 });
 
 test('a listening server shows the running card first', () => {
-  assert.deepEqual(cards(thread({}), 1), ['running', 'sources']);
+  assert.deepEqual(cards(thread({}), 1), ['running', 'sources', 'environment']);
 });
 
 test('outputs alone bring the changes card, even without a repo', () => {
-  assert.deepEqual(cards(thread({}), 0, 2), ['changes', 'sources']);
+  assert.deepEqual(cards(thread({}), 0, 2), [
+    'changes',
+    'sources',
+    'environment',
+  ]);
 });
 
 test('a repo always has a changes card, so a PR can be opened from it', () => {
@@ -61,14 +69,14 @@ test('a repo always has a changes card, so a PR can be opened from it', () => {
     cards(
       thread({ repo: { project: 'mochi', branch: 'b' } as Thread['repo'] }),
     ),
-    ['changes', 'sources'],
+    ['changes', 'sources', 'environment'],
   );
 });
 
 test('a PR keeps the changes card in a chat without a repo', () => {
   assert.deepEqual(
     cards(thread({ prs: [{ number: 1, state: 'open', title: 'x' }] })),
-    ['changes', 'sources'],
+    ['changes', 'sources', 'environment'],
   );
 });
 
@@ -134,10 +142,11 @@ test('the running card shows only while a task runs', () => {
   assert.deepEqual(cards(thread({ backgroundTasks: [task('running')] })), [
     'running',
     'sources',
+    'environment',
   ]);
   assert.deepEqual(
     cards(thread({ backgroundTasks: [task('done')] })),
-    ['sources'],
+    ['sources', 'environment'],
     'finished tasks stay in the tab, not the card',
   );
 });
