@@ -8,7 +8,6 @@ import {
   type Handoff,
   type IdleCheck,
   type LineSlot,
-  type OrchestrationGrant,
   type ParentReport,
   type PendingSteer,
   type Pivot,
@@ -32,7 +31,6 @@ import {
   proposalBlocker,
   updateProposal,
 } from '../chat/proposals.ts';
-import { allowGrant, findGrant, updateGrant } from '../chat/grants.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { interruptsToSend, orderQueue, pauseQueue } from '../chat/queued.ts';
 import { compactionEntry } from '../chat/compaction.ts';
@@ -325,28 +323,6 @@ export type ThreadsAction =
       proposalId: string;
       state: 'dismissed' | 'here';
       reason?: string;
-    }
-  /** The agent's `request_orchestration_grant`: a card in its chat (`src/chat/grants.ts`). */
-  | {
-      type: 'grant-add';
-      threadId: string;
-      grant: OrchestrationGrant;
-      by: Provider;
-    }
-  /** Allow (with the models you left on) or Don't allow on a pending grant; Revoke on an allowed one. */
-  | {
-      type: 'grant-answer';
-      threadId: string;
-      grantId: string;
-      answer: 'allow' | 'deny' | 'revoke';
-      models?: string[];
-    }
-  /** An agent-driven turn started a thread on the grant. */
-  | {
-      type: 'grant-use';
-      threadId: string;
-      grantId: string;
-      started: ThreadRef;
     };
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
@@ -1022,39 +998,6 @@ function reduce(state: State, action: Action): State {
       };
     case 'proposal-start':
       return startProposal(state, action);
-    case 'grant-add':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({
-          ...t,
-          activity: [
-            ...t.activity,
-            {
-              at: state.now,
-              who: action.by,
-              kind: 'event',
-              text: `Asked to start up to ${action.grant.maxThreads} threads on its own`,
-              grant: action.grant,
-            },
-          ],
-        })),
-      };
-    case 'grant-answer':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          answerGrant(t, action, state.now),
-        ),
-      };
-    case 'grant-use':
-      return {
-        ...state,
-        threads: mapThread(state.threads, action.threadId, (t) =>
-          updateGrant(t, action.grantId, (g) => ({
-            started: [...g.started, action.started],
-          })),
-        ),
-      };
     case 'proposal-answer': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread || proposalBlocker(thread, action.proposalId, state.now))
@@ -1088,7 +1031,11 @@ function reduce(state: State, action: Action): State {
                     sentReports: sentReports(t),
                   },
                   activity: markReportsDelivered(t).activity,
-                  turn: { start: t.activity.length, isAgentDriven: true },
+                  turn: {
+                    start: t.activity.length,
+                    isAgentDriven: true,
+                    ...(followsUser(t) && { followsUser: true }),
+                  },
                 },
                 {
                   at: state.now,
@@ -1782,22 +1729,6 @@ function handBack(
   return { ...state, threads };
 }
 
-function answerGrant(
-  thread: Thread,
-  action: Extract<Action, { type: 'grant-answer' }>,
-  now: number,
-): Thread {
-  const grant = findGrant(thread, action.grantId);
-  if (!grant) return thread;
-  if (action.answer === 'allow')
-    return allowGrant(thread, grant.id, action.models ?? grant.models, now);
-  const from = action.answer === 'deny' ? 'pending' : 'active';
-  if (grant.state !== from) return thread;
-  return updateGrant(thread, grant.id, () => ({
-    state: action.answer === 'deny' ? 'denied' : 'revoked',
-  }));
-}
-
 /** A proposal's thread, created as the agent resolved it: you stay where you are, and the card names it. */
 function startProposal(
   state: State,
@@ -1866,3 +1797,7 @@ const upsertTab = (tabs: ThreadBrowserTab[], tab: ThreadBrowserTab) =>
   tabs.some((t) => t.id === tab.id)
     ? tabs.map((t) => (t.id === tab.id ? tab : t))
     : [...tabs, tab];
+
+/** A wake right after your turn, or after another such wake, continues the work you asked for then (`turn.followsUser`). */
+const followsUser = (thread: Thread) =>
+  !thread.turn?.isAgentDriven || !!thread.turn.followsUser;

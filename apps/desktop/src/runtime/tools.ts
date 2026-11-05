@@ -20,15 +20,6 @@ import {
   turnOf,
   turnProposalCount,
 } from '../chat/proposals.ts';
-import {
-  durationText,
-  grantStatus,
-  hadGrant,
-  nextGrantId,
-  pendingGrant,
-  threadsLeft,
-  usableGrant,
-} from '../chat/grants.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { reportItems } from '../goals/ledger.ts';
 import {
@@ -873,8 +864,8 @@ const THREAD_SPECS = {
         throw new Error(
           'Pass initiation: "user_asked", "offer" or "own_initiative"',
         );
-      if (turnOf(caller).isAgentDriven && args.initiation === 'user_asked')
-        return startOnGrant({ ...ctx, args }, prompt);
+      if (args.initiation === 'user_asked')
+        agentDrivenStartBlocker(caller, args);
       if (args.initiation === 'offer' && turnOf(caller).isAgentDriven)
         throw new Error(AGENT_DRIVEN);
       const create = await proposalCreate({ ...ctx, args });
@@ -899,57 +890,6 @@ const THREAD_SPECS = {
         changed: `started "${created.title}"`,
         result: summary(created),
         undo: () => dispatch({ type: 'delete', threadIds: [created.id] }),
-      };
-    },
-  },
-  request_orchestration_grant: {
-    run: async ({ env, state, caller, args, dispatch }) => {
-      if (turnOf(caller).isAgentDriven)
-        throw new Error(
-          "Ask for a grant in a turn the user started, while they're here to answer it; this one began with another thread's message or an automated event",
-        );
-      const thread = target(state(), caller, caller.id);
-      const pending = pendingGrant(thread);
-      if (pending)
-        throw new Error(
-          `Grant ${pending.id} still waits on the user's answer; ask again once they've answered it`,
-        );
-      const models = [...new Set(args.models.map((m) => m.trim()))];
-      const offered = (
-        await Promise.all(
-          (['claude', 'codex'] as const).map((p) =>
-            env.models(p, caller.spaceId),
-          ),
-        )
-      ).flat();
-      const unknown = models.filter(
-        (m) => offered.length && !offered.some((o) => o.id === m),
-      );
-      if (unknown.length)
-        throw new Error(
-          `${unknown.join(', ')} isn't offered; use model ids from ${offered.map((m) => m.id).join(', ')}`,
-        );
-      const grant = {
-        id: nextGrantId(thread),
-        maxThreads: args.maxThreads,
-        models,
-        minutes: Math.round(args.hours * 60),
-        reason: args.reason.trim(),
-        state: 'pending' as const,
-        started: [],
-      };
-      dispatch({
-        type: 'grant-add',
-        threadId: caller.id,
-        grant,
-        by: caller.providers[0],
-      });
-      return {
-        result: {
-          grantId: grant.id,
-          state: 'pending',
-          note: "The user sees the grant card with Allow / Don't allow and can switch models off. Don't wait on it: carry on. Once allowed, create_thread with initiation user_asked starts nested threads from turns sub-thread reports or Auto-fix begin, and says how much budget is left.",
-        },
       };
     },
   },
@@ -1539,7 +1479,7 @@ const PLACEMENTS = [
 ];
 
 const AGENT_DRIVEN =
-  'This turn began with another thread\'s message or an automated event (Auto-fix, sub-thread notes), not the user, so it can\'t start threads or ask where work runs: propose it with initiation "own_initiative" and the user decides.';
+  'This turn began with another thread\'s message or an automated event (Auto-fix, or sub-thread notes after one), not the user, so it can\'t start threads or ask where work runs: propose it with initiation "own_initiative" and the user decides.';
 
 const NOT_FOLDERLESS =
   'This thread already has a project; only a folderless chat moves into one';
@@ -1640,70 +1580,21 @@ function isCardFromSubThread({
 }
 
 /**
- * A user_asked thread from an agent-driven turn: starts at once on the thread's orchestration grant, goes on a card once
- * the grant is spent, expired or revoked, and is refused when the user never allowed one.
+ * A user_asked thread from an agent-driven turn starts only in a report turn that follows the user's own (`followsUser`), and
+ * only nested: the user asked for that work in their turn. Any other agent-driven turn can only propose.
  */
-async function startOnGrant(
-  ctx: ToolContext<Args<'create_thread'>>,
-  prompt: string,
-): Promise<Outcome> {
-  const { state, caller, args, dispatch } = ctx;
-  const thread = target(state(), caller, caller.id);
-  const grant = usableGrant(thread, state().now);
-  if (!grant && !hadGrant(thread)) throw new Error(AGENT_DRIVEN);
+function agentDrivenStartBlocker(
+  caller: Thread,
+  args: Pick<Args<'create_thread'>, 'isTopLevel'>,
+) {
+  const turn = turnOf(caller);
+  if (!turn.isAgentDriven) return;
+  if (!turn.followsUser) throw new Error(AGENT_DRIVEN);
   if (args.isTopLevel)
     throw new Error(
-      'An orchestration grant starts nested threads only; leave out isTopLevel, or propose it with initiation "own_initiative"',
+      'A turn sub-thread reports started can start nested threads only; leave out isTopLevel, or propose it with initiation "own_initiative"',
     );
-  const create = await proposalCreate(ctx);
-  if (!grant) {
-    const { result } = propose(ctx, 'user_asked', prompt, create);
-    return { result: { ...(result as object), note: GRANT_ENDED_NOTE } };
-  }
-  const model = create.controls?.model ?? '';
-  if (!grant.models.includes(model))
-    throw new Error(
-      `The orchestration grant allows ${grant.models.join(', ')}, not ${model || "this thread's model"}; pass one of them as model`,
-    );
-  const before = state();
-  const name = args.title?.trim();
-  dispatch({
-    type: 'create',
-    title: prompt,
-    ...(name && { name }),
-    ...create,
-    isBackground: true,
-  });
-  const created = state().threads.find(
-    (t) => !before.threads.some((s) => s.id === t.id),
-  )!;
-  dispatch({
-    type: 'grant-use',
-    threadId: caller.id,
-    grantId: grant.id,
-    started: { threadId: created.id, title: created.title },
-  });
-  const left = threadsLeft(grant) - 1;
-  const minutes = grant.expiresAt! - state().now;
-  return {
-    changed: `started "${created.title}" on the orchestration grant (${plural(left, '1 thread left', `${left} threads left`)})`,
-    result: {
-      ...summary(created),
-      grant: {
-        threadsLeft: left,
-        expiresIn: durationText(minutes),
-        status: grantStatus(
-          { ...grant, started: [...grant.started, { title: created.title }] },
-          state().now,
-        ),
-      },
-    },
-    undo: () => dispatch({ type: 'delete', threadIds: [created.id] }),
-  };
 }
-
-const GRANT_ENDED_NOTE =
-  "The orchestration grant is spent, expired or revoked, so this went on a Start / Dismiss card for the user instead of starting. Don't retry it; carry on, or end your turn. Ask for a new grant in a turn the user starts.";
 
 /** The user told the agent to start a card it proposed. */
 function startProposal(

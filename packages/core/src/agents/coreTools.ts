@@ -32,7 +32,6 @@ export const CORE_TOOLS = new Set<ToolName>([
   'reorder_threads',
   'settle_when_merged',
   'create_thread',
-  'request_orchestration_grant',
   'dismiss_thread_proposal',
   'send_to_thread',
   'report_turn',

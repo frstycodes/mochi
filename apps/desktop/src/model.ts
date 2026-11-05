@@ -104,7 +104,7 @@ export interface SubReport {
   isReply?: true;
   /** The parent's agent got it, with a message or a wake. */
   isDelivered?: true;
-  /** Says a restart stopped the sub-thread mid-turn (`reportStoppedAtQuit`); quiet, so it never wakes the parent. Grants (#433) may lift that. */
+  /** Says a restart stopped the sub-thread mid-turn (`reportStoppedAtQuit`); quiet, so it never wakes the parent. */
   isRestart?: true;
   /** The `report_to_parent` it came from; unset for an excerpt, a PR event or a reply. */
   report?: ParentReport;
@@ -225,29 +225,6 @@ export interface ActivityEntry {
   handoff?: Handoff;
   /** Events only: side work the agent suggested or asked about in this turn (`create_thread`), one card. */
   proposals?: ThreadProposal[];
-  /** Events only: the agent's `request_orchestration_grant`, one card that turns into the grant's live state once answered. */
-  grant?: OrchestrationGrant;
-}
-
-/**
- * A budget the user gave this thread's agent to start nested threads from turns it didn't start (sub-thread notes, Auto-fix,
- * another thread), without a card each time. Usable while `active`, before `expiresAt` and under `maxThreads` (`src/chat/grants.ts`).
- */
-export interface OrchestrationGrant {
-  id: string;
-  maxThreads: number;
-  /** Model ids a started thread may run on; the user can switch some off before allowing. */
-  models: string[];
-  /** How long it lasts once allowed. */
-  minutes: number;
-  /** The agent's why, shown on the card. */
-  reason: string;
-  /** `replaced`: a later grant on this thread was allowed. */
-  state: 'pending' | 'active' | 'denied' | 'revoked' | 'replaced';
-  /** App-clock minute it lapses, set when allowed. */
-  expiresAt?: number;
-  /** The threads it started, oldest first. */
-  started: ThreadRef[];
 }
 
 /**
@@ -519,8 +496,12 @@ export interface Thread {
   pivots?: Pivot[];
   /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
   idle?: IdleCheck;
-  /** Where the latest turn began (an `activity` index) and whether another thread or an automated event began it, not you. */
-  turn?: { start: number; isAgentDriven?: true };
+  /**
+   * Where the latest turn began (an `activity` index) and whether another thread or an automated event began it, not you.
+   * `followsUser`: sub-thread reports began it right after your turn, or after another such turn, so it may start the nested
+   * threads you asked for then.
+   */
+  turn?: { start: number; isAgentDriven?: true; followsUser?: true };
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;

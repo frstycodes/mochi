@@ -95,7 +95,7 @@ Each step ships alone and leaves the app working.
    and models, and some of those (`open_pane_tab`, `split_with`, `show_file`, `open_changes`, `close_pane`) change a
    window's layout, which Core doesn't hold. Every changed outcome also raises a toast with Undo through `record()`. So
    `runTool` can't simply move. Revised: the thread tools (list/get/rename/settle/reactivate/pin/unpin/reorder/watch,
-   `settle_when_merged`, `move_to_project`, `create_thread`, `request_orchestration_grant`, `dismiss_thread_proposal`,
+   `settle_when_merged`, `move_to_project`, `create_thread`, `dismiss_thread_proposal`,
    `send_to_thread`, `delete_thread`, `report_turn`, `report_to_parent`, `update_plan`, `start_subagent`) run in Core
    on its projection and `Commands`; a window shows the toast and Undo when it folds a tool's command. Layout, browser,
    settings, connector and notification tools stay a window's; with none open they answer `NEEDS_APP`, as under
