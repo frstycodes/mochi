@@ -173,6 +173,7 @@ function threadActionFor(action: Action): RemoteThreadAction | null {
         proposalId: action.proposalId,
         state: action.state,
       };
+    // GAP: the card's changed Options don't cross to another computer yet; it starts what the agent resolved there.
     case 'proposal-start':
       return { type: 'proposal-start', proposalId: action.proposalId };
     case 'autofix-set':

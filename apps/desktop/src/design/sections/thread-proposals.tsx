@@ -1,49 +1,41 @@
 import { useState, type ReactNode } from 'react';
 import {
   OfferCard,
-  ProposalCard,
+  ProposalRecords,
+  SuggestionCard,
   type ShownProposal,
 } from '../../chat/ThreadProposals';
 import { Button } from '@/components/ui/button';
 import { Block } from '../layout';
 import { ComposerStub, MockFrame, WorkLine } from './next-move';
 
-/** Side work the agent proposes (own_initiative) or offers (a task you named): the chat's real cards on demo data. */
+/** Side work the agent offers (a task you named) or suggests (own_initiative): the chat's real cards on demo data. */
 export function ThreadProposalsBlock() {
   return (
     <Block
       title="Thread proposals"
-      use="The agent's side work, Claude Code Desktop style. Work it noticed or recommends becomes a proposal: title, the brief folded, Dismiss, Do it here and New thread; nothing runs until you choose, and it expires after 7 days. A task you named where it isn't clear where it runs is an offer: the agent waits for New thread, Do it here or Dismiss. Started ones nest under this thread. Several in one turn page through the same card (‹ 2 of 3 ›), no box in a box."
+      use="The agent's side work, as Claude Code Desktop shows it. An offer is a task you named that may not belong here: its turn stops on New thread (⌘↵) or Do it here (Esc), with Options and Don't ask again. Suggestions are work it noticed: one card per turn, each with Start, Do it here and ×; answered ones stay in the card as muted rows. Options changes where and how the thread runs before it starts. Settings › General › Side threads can answer each kind for you."
       wide
     >
       <div className="flex flex-col gap-12">
-        <MockFrame label="Proposal · pending, then started or dismissed">
+        <MockFrame label="Suggestion · pending, then started, done here or dismissed">
           <p className="type-prose">
             The 429 handler now sends Retry-After and the test passes. While
             reading it I saw the token bucket isn't shared across workers, which
             is a separate fix.
           </p>
-          <LiveProposals initial={[ONE]} />
+          <LiveSuggestions initial={[ONE]} />
           <ComposerStub placeholder="Message Claude" />
         </MockFrame>
-        <MockFrame label="Every state, side by side">
-          <div className="flex flex-col gap-3">
-            {STATES.map((p) => (
-              <ProposalCard
-                key={p.id}
-                proposals={[p]}
-                onStart={() => undefined}
-                onDismiss={() => undefined}
-              />
-            ))}
-          </div>
-        </MockFrame>
-        <MockFrame label="Several proposals in one turn · at most 3, paged in one card">
+        <MockFrame label="Several suggestions in one turn · at most 3, in one column">
           <WorkLine>Ran pnpm test</WorkLine>
           <p className="type-prose">
             Rate limits are in. Three things I'd do next, each on its own:
           </p>
-          <LiveProposals initial={SEVERAL} />
+          <LiveSuggestions initial={SEVERAL} />
+        </MockFrame>
+        <MockFrame label="Every answered state, as rows">
+          <LiveSuggestions initial={STATES} />
         </MockFrame>
         <MockFrame label="Offer · a task you named, waiting on your answer">
           <YourMessage>also migrate the limiter to Redis</YourMessage>
@@ -70,19 +62,13 @@ const ONE: ShownProposal = {
   create: CREATE,
 };
 
-const STATES: ShownProposal[] = [
-  { ...ONE, id: 'demo-s1' },
-  { ...ONE, id: 'demo-s2', state: 'started', threadId: DEMO_CHILD },
-  { ...ONE, id: 'demo-s3', state: 'dismissed', reason: 'done in this thread' },
-  { ...ONE, id: 'demo-s4', isExpired: true },
-];
-
 const SEVERAL: ShownProposal[] = [
   ONE,
   {
     ...ONE,
     id: 'demo-p2',
-    title: 'Add RateLimit-* headers to 2xx responses',
+    title:
+      'Add RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset headers to every 2xx response',
     brief:
       'Clients can only back off after a 429 today. Add RateLimit-Limit / -Remaining / -Reset to every response from the limiter middleware. Done when the headers test in limits.test.ts passes.',
   },
@@ -95,51 +81,98 @@ const SEVERAL: ShownProposal[] = [
   },
 ];
 
-function LiveProposals({ initial }: { initial: ShownProposal[] }) {
+const STATES: ShownProposal[] = [
+  { ...ONE, id: 'demo-s1', state: 'started', threadId: DEMO_CHILD },
+  {
+    ...ONE,
+    id: 'demo-s2',
+    state: 'here',
+    title: 'Retry the flaky upload test',
+  },
+  {
+    ...ONE,
+    id: 'demo-s3',
+    state: 'dismissed',
+    title: 'Rename limits to quotas',
+  },
+  {
+    ...ONE,
+    id: 'demo-s4',
+    state: 'dismissed',
+    reason: 'fixed in this thread after all',
+    title: 'Fix the off-by-one in the window rollover',
+  },
+  {
+    ...ONE,
+    id: 'demo-s5',
+    isExpired: true,
+    title: 'Bench the limiter at 10k req/s',
+  },
+];
+
+function LiveSuggestions({ initial }: { initial: ShownProposal[] }) {
   const [items, setItems] = useState(initial);
   const set = (id: string, state: ShownProposal['state']) =>
     setItems((all) =>
       all.map((p) => (p.id === id ? { ...p, state, threadId: DEMO_CHILD } : p)),
     );
   return (
-    <ProposalCard
-      proposals={items}
-      onStart={(p) => set(p.id, 'started')}
-      onHere={(p) => set(p.id, 'here')}
-      onDismiss={(p) => set(p.id, 'dismissed')}
-    />
+    <div className="flex flex-col gap-2">
+      <SuggestionCard
+        suggestions={items}
+        onStart={(p) => set(p.id, 'started')}
+        onHere={(p) => set(p.id, 'here')}
+        onDismiss={(p) => set(p.id, 'dismissed')}
+      />
+      <ResetButton
+        isShown={items !== initial}
+        onReset={() => setItems(initial)}
+      />
+    </div>
   );
 }
 
 function LiveOffer() {
-  const [offer, setOffer] = useState<ShownProposal>({
+  const initial: ShownProposal = {
     ...ONE,
     id: 'demo-o1',
     initiation: 'offer',
     title: 'Migrate the limiter to Redis',
-  });
+  };
+  const [offer, setOffer] = useState(initial);
   const answer = (state: ShownProposal['state']) =>
     setOffer((o) => ({ ...o, state, threadId: DEMO_CHILD }));
   return (
     <div className="flex flex-col gap-2">
-      <OfferCard
-        proposal={offer}
-        agent="Claude"
-        onNew={() => answer('started')}
-        onHere={() => answer('here')}
-        onDismiss={() => answer('dismissed')}
-      />
-      {offer.state !== 'pending' && (
-        <Button
-          size="xs"
-          variant="ghost"
-          className="self-start"
-          onClick={() => answer('pending')}
-        >
-          Reset
-        </Button>
+      {offer.state === 'pending' ? (
+        <OfferCard
+          offer={offer}
+          onNew={() => answer('started')}
+          onHere={() => answer('here')}
+        />
+      ) : (
+        <ProposalRecords proposals={[offer]} />
       )}
+      <ResetButton
+        isShown={offer.state !== 'pending'}
+        onReset={() => setOffer(initial)}
+      />
     </div>
+  );
+}
+
+function ResetButton({
+  isShown,
+  onReset,
+}: {
+  isShown: boolean;
+  onReset: () => void;
+}) {
+  if (!isShown) return null;
+  return (
+    <Button size="xs" variant="ghost" className="self-start" onClick={onReset}>
+      Reset
+    </Button>
   );
 }
 

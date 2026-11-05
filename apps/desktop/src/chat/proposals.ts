@@ -101,8 +101,17 @@ export const suggestionHereReply = (
   p: Pick<ThreadProposal, 'title' | 'brief'>,
 ) => `Do it here: ${p.title}\n\n${p.brief}`;
 
-/** The message the agent gets when you answer its offer in place, since it stopped to wait for you. */
-export const OFFER_REPLY = {
-  here: 'Do it here.',
-  dismissed: "Leave it, don't do that task.",
-} as const;
+/** The message the agent gets when you answer its offer with Do it here, since it stopped to wait for you. */
+export const OFFER_REPLY = 'Do it here.';
+
+/** Dismissed by the agent, with its reason, rather than by you. */
+export const isWithdrawn = (p: Pick<ThreadProposal, 'state' | 'reason'>) =>
+  p.state === 'dismissed' && !!p.reason;
+
+/** The suggestion card's heading: every suggestion it shows, the agent's withdrawn ones left out. */
+export function suggestedCount(proposals: ThreadProposal[]) {
+  const n = proposals.filter((p) => !isWithdrawn(p)).length;
+  return `${n} suggested ${PLURAL.select(n) === 'one' ? 'thread' : 'threads'}`;
+}
+
+const PLURAL = new Intl.PluralRules('en');
