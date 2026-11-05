@@ -64,7 +64,7 @@ function LimitCard({
   const at = limit.resetsAt && resetLabel(limit.resetsAt);
 
   return (
-    <Card size="sm" role="group" aria-label={title}>
+    <Card size="sm" role="group" aria-label={title} className="bg-transparent">
       <CardHeader>
         <CardDescription className="flex items-center gap-1 type-caption font-medium text-warning">
           <Hourglass aria-hidden className="size-3.5" />
@@ -88,14 +88,8 @@ function LimitCard({
               : 'Codex ended the turn.'}
         </p>
       </CardContent>
-      <CardFooter className="flex-wrap justify-end gap-2 border-t-0 bg-transparent pt-0">
-        <SwitchButton thread={thread} />
-        {hasApiKey && (
-          <Button variant="outline" size="sm" onClick={() => resume(true)}>
-            Use API key
-            <span className="text-subtle-foreground">· billed per use</span>
-          </Button>
-        )}
+      {/* Left-aligned like every chat widget: resuming here first, switching providers last. */}
+      <CardFooter className="flex-wrap justify-start gap-2 border-t-0 bg-transparent pt-0">
         {!limit.isTurnHeld && (
           <ResumeButton
             isReset={isReset || !at}
@@ -105,6 +99,13 @@ function LimitCard({
             onArm={arm}
           />
         )}
+        {hasApiKey && (
+          <Button variant="outline" size="sm" onClick={() => resume(true)}>
+            Use API key
+            <span className="text-subtle-foreground">· billed per use</span>
+          </Button>
+        )}
+        <SwitchButton thread={thread} />
       </CardFooter>
     </Card>
   );

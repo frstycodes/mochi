@@ -52,7 +52,7 @@ const LANGUAGE = /language-(\S+)/;
 const VIZ_SET = new Set<string>(VIZ_LANGUAGES);
 
 // Streamdown's block always draws its card, header and floating actions; the frame replaces all three.
-const FLUSH = cn(
+export const FLUSH = cn(
   '[&_[data-streamdown=code-block]]:my-0 [&_[data-streamdown=code-block]]:gap-0 [&_[data-streamdown=code-block]]:rounded-none [&_[data-streamdown=code-block]]:border-0 [&_[data-streamdown=code-block]]:bg-transparent [&_[data-streamdown=code-block]]:p-0',
   '[&_[data-streamdown=code-block-header]]:hidden [&_[data-streamdown=code-block-actions]]:hidden',
   '[&_[data-streamdown=code-block-body]]:rounded-none [&_[data-streamdown=code-block-body]]:border-0 [&_[data-streamdown=code-block-body]]:p-3',

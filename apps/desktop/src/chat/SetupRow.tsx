@@ -148,7 +148,7 @@ function SetupStepRow({ step }: { step: SetupStep }) {
                 }
               />
             ) : (
-              <pre className="max-h-64 overflow-auto rounded-lg border bg-card px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap text-muted-foreground">
+              <pre className="max-h-64 overflow-auto rounded-lg border bg-muted/40 px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap text-muted-foreground">
                 {step.output}
               </pre>
             )}
@@ -196,22 +196,28 @@ function SetupFailedActions({ threadId }: { threadId: string }) {
           }),
         );
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <Button size="sm" className="type-meta" onClick={() => choose('retry')}>
+        Retry
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="type-meta"
+        onClick={() => choose('skip')}
+      >
+        Skip setup
+      </Button>
       <Button
         size="sm"
         variant="ghost"
+        className="type-meta"
         onClick={() =>
           dispatch({ type: 'pane-open-tab', threadId, kind: 'terminal' })
         }
       >
         <Terminal />
         Open terminal
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => choose('skip')}>
-        Skip setup
-      </Button>
-      <Button size="sm" onClick={() => choose('retry')}>
-        Retry
       </Button>
     </div>
   );

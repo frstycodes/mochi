@@ -1,5 +1,4 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Expand, FoldChevron } from '@/Fold';
 import {
   Cursor,
   Flag,
@@ -49,7 +48,10 @@ import { FileDiffs } from '../settings/FileDiffs';
 import { SettingsRow } from '../settings/parts';
 import { SuggestedServerRow } from '../settings/ProfileAgentConfig';
 import { useHarness, useDispatch } from '../store';
+import { MessageResponse } from '@/components/ai-elements/message';
+import { FLUSH } from '../viz/CodeFrame';
 import { revealCard } from './Transcript';
+import { QuestionWidget } from '../QueueView';
 
 /** A Mochi widget where the agent asked: the live card while it waits, then its one-line record. */
 export function CardEntry({
@@ -65,6 +67,7 @@ export function CardEntry({
     : undefined;
   if (item?.settings)
     return <SettingsWidget item={item} settings={item.settings} />;
+  if (item?.kind === 'question') return <QuestionWidget item={item} />;
   if (item) return <MochiWidget item={item} />;
   // Open with no card behind it: Mochi quit while it waited, and the call ended with it.
   return (
@@ -164,7 +167,6 @@ const KIND = {
 /** A call waiting on you: a delete, a browser escalation, a question with one answer, or a handoff. Enter works on whichever button has focus; Esc anywhere inside says no. */
 export function MochiWidget({ item }: { item: QueueItem }) {
   const [options, setOptions] = useState<string[]>([]);
-  const [isCodeOpen, setCodeOpen] = useState(false);
   const kind = item.tool?.isDestructive
     ? 'delete'
     : item.tool?.pick === 'one'
@@ -186,40 +188,37 @@ export function MochiWidget({ item }: { item: QueueItem }) {
   return (
     <WidgetCard item={item} onEscape={() => decide(false)}>
       <CardHeader className="gap-2">
-        <CardDescription
-          className={cn(
-            'flex items-center gap-1 type-caption font-medium',
-            kind === 'delete' ? 'text-destructive' : 'text-foreground',
-          )}
-        >
-          <Icon aria-hidden className="size-3.5" />
-          {label}
-        </CardDescription>
-        <CardTitle className="text-pretty [overflow-wrap:anywhere]">
+        {/* A plain approval needs no label: the title says what it does, the buttons that it asks. */}
+        {kind !== 'confirm' && (
+          <CardDescription
+            className={cn(
+              'flex items-center gap-1 type-meta font-medium',
+              kind === 'delete' ? 'text-destructive' : 'text-foreground',
+            )}
+          >
+            <Icon aria-hidden className="size-3.5" />
+            {label}
+          </CardDescription>
+        )}
+        <CardTitle className="type-body font-medium text-pretty [overflow-wrap:anywhere]">
           {item.title}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!!item.detail && (
-          <p className="type-body text-muted-foreground text-pretty [overflow-wrap:anywhere]">
+          <p className="type-meta text-muted-foreground text-pretty [overflow-wrap:anywhere]">
             {item.detail}
           </p>
         )}
         {!!item.tool?.notes?.length && (
-          <ul className="flex flex-col gap-1 type-caption text-muted-foreground">
+          <ul className="flex flex-col gap-1 type-meta text-muted-foreground">
             {item.tool.notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
           </ul>
         )}
         {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
-        {!!item.code && (
-          <Expand isOpen={isCodeOpen}>
-            <pre className="-mx-(--card-spacing) max-h-48 overflow-auto bg-muted/40 px-(--card-spacing) py-2 font-mono type-caption whitespace-pre-wrap">
-              {item.code}
-            </pre>
-          </Expand>
-        )}
+        {!!item.code && <CodePreview code={item.code} />}
         {kind === 'choose' && (
           <RadioGroup
             value={options[0] ?? ''}
@@ -257,49 +256,105 @@ export function MochiWidget({ item }: { item: QueueItem }) {
             </Field>
           ))}
       </CardContent>
-      <CardFooter className="flex-wrap justify-end gap-2 border-t-0 bg-transparent pt-0">
-        {!!item.code && (
-          <ShowCodeButton
-            isOpen={isCodeOpen}
-            onToggle={() => setCodeOpen((o) => !o)}
-          />
-        )}
-        <Button variant="outline" size="sm" onClick={() => decide(false)}>
-          {deny}
-        </Button>
+      {/* Like every chat widget: left-aligned, the yes first. */}
+      <CardFooter className="flex-wrap justify-start gap-2 border-t-0 bg-transparent pt-0">
         <Button
           variant={kind === 'delete' ? 'danger' : 'default'}
           size="sm"
+          className="type-meta"
           disabled={kind === 'choose' && !options.length}
           onClick={() => decide(true, options)}
         >
           {approve}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="type-meta"
+          onClick={() => decide(false)}
+        >
+          {deny}
         </Button>
       </CardFooter>
     </WidgetCard>
   );
 }
 
-function ShowCodeButton({
-  isOpen,
-  onToggle,
-}: {
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
+/**
+ * What the call runs, always shown and highlighted like a code block in the chat: an approval is a decision about this code.
+ * Past a few lines it's cut, with the rest one click away, so a long script never pushes the answers off screen.
+ */
+function CodePreview({ code }: { code: string }) {
+  const [isFull, setFull] = useState(false);
+  const lines = code.split('\n');
+  const isLong = lines.length > PREVIEW_LINES;
+  const isCut = isLong && !isFull;
+  // One line more than the preview, so the fade lands on code rather than on padding.
+  const shown = isCut ? lines.slice(0, PREVIEW_LINES + 1).join('\n') : code;
   return (
-    <Button
-      variant="ghost"
-      size="xs"
-      aria-expanded={isOpen}
-      onClick={onToggle}
-      className="-ms-2 me-auto text-muted-foreground"
-    >
-      {isOpen ? 'Hide code' : 'Show code'}
-      <FoldChevron data-icon="inline-end" isOpen={isOpen} />
-    </Button>
+    <div className="group/code relative overflow-hidden rounded-lg border bg-muted/40">
+      <div
+        className={cn(
+          FLUSH,
+          '[&_[data-streamdown=code-block-body]]:px-3 [&_[data-streamdown=code-block-body]]:py-2',
+          lines.length > 1 &&
+            '[&_code>span]:before:mr-3 [&_code>span]:before:w-[2ch]',
+          isCut && 'mask-[linear-gradient(to_bottom,black_45%,transparent)]',
+          isFull && 'max-h-72 overflow-y-auto',
+        )}
+      >
+        {/* One line needs no numbering; more get a gutter only as wide as their digits. */}
+        <MessageResponse lineNumbers={lines.length > 1}>
+          {fenced(shown, CODE_LANGUAGE)}
+        </MessageResponse>
+      </div>
+      {isCut && (
+        <button
+          type="button"
+          aria-expanded={false}
+          onClick={() => setFull(true)}
+          className="absolute inset-x-0 bottom-0 flex h-14 cursor-pointer items-end justify-center pb-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        >
+          <span className={REVEALED_PILL}>
+            {`Show full code · ${lines.length - PREVIEW_LINES} more lines`}
+          </span>
+        </button>
+      )}
+      {isFull && isLong && (
+        <button
+          type="button"
+          aria-expanded
+          onClick={() => setFull(false)}
+          className={cn(
+            REVEALED_PILL,
+            'absolute right-2 bottom-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2',
+          )}
+        >
+          Collapse
+        </button>
+      )}
+    </div>
   );
 }
+
+/** Shown while the code is hovered or the control has focus; an opaque pill so it reads over the code beneath. */
+const REVEALED_PILL =
+  'rounded-full border bg-popover px-2.5 py-0.5 type-caption text-muted-foreground shadow-sm opacity-0 transition-opacity group-hover/code:opacity-100 [:focus-visible>&]:opacity-100 focus-visible:opacity-100 hover:text-foreground pointer-coarse:opacity-100';
+
+/** A markdown fence around the code, longer than any backtick run inside it so the code can't close it early. */
+function fenced(code: string, language: string) {
+  const longest = Math.max(
+    2,
+    ...(code.match(/`+/g) ?? []).map((m) => m.length),
+  );
+  const fence = '`'.repeat(longest + 1);
+  return `${fence}${language}\n${code}\n${fence}`;
+}
+
+// GAP: approvals don't say what language their code is in; nearly all are shell commands, so they're highlighted as bash.
+const CODE_LANGUAGE = 'bash';
+
+const PREVIEW_LINES = 4;
 
 function WidgetCard({
   item,
@@ -323,7 +378,8 @@ function WidgetCard({
       role="group"
       aria-label={item.title}
       onKeyDown={onKeyDown}
-      className="focus-visible:outline-2 focus-visible:outline-offset-2"
+      // Transparent like the other chat widgets: the chat shows through and only the hairline frames it.
+      className="bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       {children}
     </Card>

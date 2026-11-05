@@ -38,7 +38,7 @@ export function DevServerCard({
   const isStopped = status === 'Stopped';
 
   return (
-    <div className="w-full max-w-md overflow-hidden rounded-xl border bg-card">
+    <div className="w-full max-w-md overflow-hidden rounded-xl border">
       <button
         type="button"
         aria-label={`Open ${server.name}`}
