@@ -300,7 +300,7 @@ test('a second opinion the agent asked for sits where its verdict reached the ag
     rows.map((r) =>
       r.kind === 'review'
         ? `review(${r.review.id})`
-        : r.kind === 'work' || r.kind === 'plan'
+        : r.kind === 'work' || r.kind === 'plan' || r.kind === 'reports'
           ? r.kind
           : r.kind === 'changes'
             ? 'changes'
@@ -430,5 +430,21 @@ test('a sub-thread started mid-turn is its own row where it started; the turn go
   assert.deepEqual(
     shape([e('tool', 'claude', 'Read a'), link, e('tool', 'claude', 'Read b')]),
     ['work(Read a)', 'Started sub-thread Fix e2e', 'work(Read b)'],
+  );
+});
+
+test('reports logged back to back share one card; anything between them starts another', () => {
+  const report = (text: string): ActivityEntry => ({
+    ...e('event', 'harness', text),
+    subReport: { threadId: text, title: text, status: 'done' },
+  });
+  assert.deepEqual(
+    shape([
+      report('a'),
+      report('b'),
+      e('message', 'claude', 'Merging a.'),
+      report('c'),
+    ]),
+    ['reports(a, b)', 'Merging a.', 'reports(c)'],
   );
 });

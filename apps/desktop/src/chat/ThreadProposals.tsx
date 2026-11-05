@@ -1,4 +1,4 @@
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Chat,
   CheckCircle,
@@ -41,6 +41,7 @@ import { useProjectsWithCopies } from '../projectCopies';
 import { useComputers } from '../remote/computers';
 import { useWorkspace, WorkspaceControls } from '../git/WorkspacePicker';
 import { openSettings } from '../routes/nav';
+import { FramedCard, FramedItem } from './FramedCard';
 import { ThreadName } from './ThreadMessage';
 import {
   isExpired,
@@ -286,38 +287,6 @@ export function SuggestionCard({
         </FramedItem>
       )}
     </FramedCard>
-  );
-}
-
-/** A card that frames a list: the header on the lighter frame, each item on the page tone flush to the sides and bottom, the frame showing between them. */
-function FramedCard({
-  header,
-  children,
-  className,
-  ...props
-}: ComponentProps<'section'> & { header: ReactNode }) {
-  return (
-    <section
-      className={cn(
-        'flex flex-col overflow-hidden rounded-xl border bg-muted',
-        className,
-      )}
-      {...props}
-    >
-      <div className="flex min-h-9 items-center gap-1.5 px-3 py-1.5 type-meta text-muted-foreground">
-        {header}
-      </div>
-      <div className="flex flex-col gap-px">{children}</div>
-    </section>
-  );
-}
-
-function FramedItem({ className, ...props }: ComponentProps<'div'>) {
-  return (
-    <div
-      className={cn('flex flex-col gap-3 bg-background p-3', className)}
-      {...props}
-    />
   );
 }
 

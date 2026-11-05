@@ -15,6 +15,8 @@ export type ChatRow =
     }
   | { kind: 'event'; key: string; entry: ActivityEntry }
   | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
+  /** Sub-thread reports and replies logged back to back (`entry.subReport`): one card. */
+  | { kind: 'reports'; key: string; entries: ActivityEntry[] }
   /** Plan changes logged back to back (`planChange`): one line, opening to each. */
   | { kind: 'plan'; key: string; entries: ActivityEntry[] }
   | { kind: 'review'; key: string; review: Review }
@@ -134,6 +136,11 @@ export function chatRows(
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
       // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread link, a sub-thread's result, a sub-thread's report, thread cards) stay in view: the turn continues in a new accordion after one.
       if (isWidget) turn = undefined;
+      if (entry.subReport) {
+        const last = rows.at(-1);
+        if (last?.kind === 'reports') return last.entries.push(entry);
+        return rows.push({ kind: 'reports', key, entries: [entry] });
+      }
       if (!planChange(entry)) return rows.push({ kind: 'event', key, entry });
       const last = rows.at(-1);
       if (last?.kind === 'plan') return last.entries.push(entry);

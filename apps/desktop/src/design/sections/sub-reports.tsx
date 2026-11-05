@@ -1,53 +1,68 @@
 import type { ActivityEntry, SubReport, Thread } from '../../model';
-import { SubReportRow } from '../../chat/ThreadMessage';
+import { SubReports } from '../../chat/SubReports';
+import { useHarness } from '../../store';
 import { Block } from '../layout';
 
-/** What a sub-thread hands its parent, as rows in the parent's chat. Mock data; the first fixture's name opens the real thread. */
+/** What sub-threads hand their parent, as one card in the parent's chat. Mock reports on real demo threads, so each name opens one. */
 export function SubReportsBlock({ rl }: { rl: Thread }) {
-  const entries = subReportFixtures(rl);
+  const entries = useDemoReports(rl);
   return (
     <Block
       title="Sub-threads · reports in the parent's chat"
-      use="A sub-thread's report, a turn end without one, a PR event or a reply from a messaged thread lands in the parent's chat as one log line, never a bubble: who sent it, its status, the first line muted. Done and merged stay quiet, anything that needs the parent is in the warning colour, a failure in red. Open, the whole report and whether the parent's agent has it yet. An empty one has nothing to open."
+      use="Sub-thread reports, turn ends without one, PR events and replies from messaged threads that land back to back share one card in the parent's chat, never bubbles: what needs you first, each with its agent's mark, its name (opens the thread), its status and the first line, which opens to the whole report and whether the parent's agent has it yet. Up to 4 show open; more fold into one counted line that opens to the same card."
       wide
     >
-      <div className="flex flex-wrap items-start gap-6">
-        <ReportFrame label="Chat width" className="w-[640px] max-w-full">
-          {entries}
-        </ReportFrame>
-        <ReportFrame label="Narrow · 320px" className="w-[320px]">
-          {entries}
-        </ReportFrame>
+      <div className="flex flex-col gap-8">
+        {[entries.slice(0, 3), entries].map((list) => (
+          <div key={list.length} className="flex flex-wrap items-start gap-6">
+            <Frame
+              label={`${list.length} reports · chat width`}
+              className="w-[640px] max-w-full"
+            >
+              <SubReports entries={list} />
+            </Frame>
+            <Frame label="Narrow · 320px" className="w-[320px]">
+              <SubReports entries={list} />
+            </Frame>
+          </div>
+        ))}
       </div>
     </Block>
   );
 }
 
-function ReportFrame({
+function Frame({
   label,
   className,
   children,
 }: {
   label: string;
   className: string;
-  children: { entry: ActivityEntry; report: SubReport }[];
+  children: React.ReactNode;
 }) {
   return (
     <figure className={`flex flex-col gap-2 ${className}`}>
       <figcaption className="type-caption text-muted-foreground">
         {label}
       </figcaption>
-      <div className="flex flex-col gap-1 rounded-xl border px-4 py-3">
-        {children.map(({ entry, report }) => (
-          <SubReportRow
-            key={`${report.status}-${entry.at}`}
-            entry={entry}
-            report={report}
-          />
-        ))}
-      </div>
+      {children}
     </figure>
   );
+}
+
+/** The fixtures pointed at real demo threads, Claude and Codex mixed. */
+function useDemoReports(rl: Thread): ActivityEntry[] {
+  const { state } = useHarness();
+  const claude = state.threads.filter((t) => t.providers[0] === 'claude');
+  const codex = state.threads.filter((t) => t.providers[0] === 'codex');
+  return subReportFixtures(rl).map(({ entry, report }, i) => {
+    const pool = i % 2 && codex.length ? codex : claude;
+    const thread = pool[Math.floor(i / 2) % pool.length] ?? rl;
+    return {
+      ...entry,
+      subReport: { ...report, threadId: thread.id, title: thread.title },
+    };
+  });
 }
 
 function subReportFixtures(rl: Thread) {
