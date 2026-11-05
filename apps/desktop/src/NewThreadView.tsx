@@ -61,7 +61,11 @@ import { contextMax, FAST, type ModelOption } from './runtime/models';
 import { ContextRing } from './ContextRing';
 import { authorName, type Provider } from './model';
 import { toast } from '@/toast/store';
-import { imageProblem, sentImages } from './chat/images';
+import {
+  attachmentProblem,
+  sentImages,
+  withAttachedFiles,
+} from './chat/images';
 import {
   WorkspaceControls,
   WorkspaceNotes,
@@ -254,7 +258,7 @@ function NewThread() {
         workspace.error ??
         (mention.mentions.length > 0
           ? `References can’t go to ${remote.name}`
-          : imageProblem(files));
+          : attachmentProblem(files, remote.name));
       if (problem) {
         toast.error(problem);
         return false;
@@ -278,25 +282,38 @@ function NewThread() {
         description: 'It’s in the sidebar under that computer.',
       });
     }
-    const problem = (project && workspace.error) || imageProblem(files);
-    if (problem) {
-      toast.error(problem);
-      return false;
-    }
-    const images = await sentImages(files, (type, base64) =>
-      host.data.saveImage(type, base64),
-    );
     const references = withReferences(title, mention.mentions, state.threads, {
       isCommand: !!resolveToken(title, slashItems),
       provider,
       typedSkills: typedSkills(title, slashItems),
     });
+    const problem = (project && workspace.error) || attachmentProblem(files);
+    if (problem) {
+      toast.error(problem);
+      return false;
+    }
+    let prompt: string;
+    try {
+      prompt = await withAttachedFiles(
+        references.prompt,
+        files,
+        (name, base64) => host.data.saveAttachment(name, base64),
+      );
+    } catch (error) {
+      toast.error('Couldn’t attach the files', {
+        description: (error as Error).message,
+      });
+      return false;
+    }
+    const images = await sentImages(files, (type, base64) =>
+      host.data.saveImage(type, base64),
+    );
     handOffComposer(leafId, layoutId);
     mention.clear();
     return dispatch({
       type: 'create',
       title,
-      ...(references.prompt !== title && { prompt: references.prompt }),
+      ...(prompt !== title && { prompt }),
       ...(references.skills.length > 0 && { skills: references.skills }),
       ...(images.length > 0 && { images }),
       ...(references.images.length > 0 && {

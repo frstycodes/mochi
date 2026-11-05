@@ -11,7 +11,7 @@ import {
   MAX_REPLAY_BYTES,
   type DataHost,
 } from '../../../../apps/desktop/src/host/types/data.ts';
-import { saveImage } from '../agents/images.ts';
+import { saveAttachment, saveImage } from '../agents/images.ts';
 import type { HostMethods } from '../hostMethods.ts';
 
 /** Main keeps this: it opens a save dialog. */
@@ -79,6 +79,9 @@ export const dataHost = (userData: string) => {
     },
     async saveImage(_caller, mediaType, base64) {
       return saveImage(mediaType, base64);
+    },
+    async saveAttachment(_caller, filename, base64) {
+      return saveAttachment(filename, base64);
     },
   } satisfies HostMethods<Omit<DataHost, InMain>>;
 };

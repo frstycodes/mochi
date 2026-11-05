@@ -74,10 +74,9 @@ import type { SlashItem } from './chat/slash';
 import { ComposerEditor } from './chat/ComposerEditor';
 import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
 import {
-  IMAGE_ERRORS,
-  IMAGE_TYPES,
-  MAX_IMAGE_BYTES,
-  MAX_IMAGES,
+  ATTACHMENT_ERRORS,
+  MAX_ATTACHMENTS,
+  MAX_FILE_BYTES,
 } from './chat/images';
 import { EASE_DRAWER } from './lib/ease';
 
@@ -262,10 +261,9 @@ export function ComposerInput({
     <PromptInput
       multiple
       globalDrop
-      accept={IMAGE_TYPES.join(',')}
-      maxFileSize={MAX_IMAGE_BYTES}
-      maxFiles={MAX_IMAGES}
-      onError={(e) => toast.error(IMAGE_ERRORS[e.code])}
+      maxFileSize={MAX_FILE_BYTES}
+      maxFiles={MAX_ATTACHMENTS}
+      onError={(e) => toast.error(ATTACHMENT_ERRORS[e.code])}
       onSubmit={send}
     >
       <ComposerAttachments />

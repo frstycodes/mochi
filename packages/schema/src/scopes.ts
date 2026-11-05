@@ -242,6 +242,7 @@ export const HOST_SCOPES = {
     clearReplays: L,
     exportReplay: L,
     saveImage: L,
+    saveAttachment: L,
   },
   // This screen's look; themes change only on the machine itself.
   themes: {

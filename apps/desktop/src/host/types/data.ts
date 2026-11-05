@@ -23,6 +23,8 @@ export interface DataHost {
     mediaType: AgentImage['mediaType'],
     base64: string,
   ): Promise<string>;
+  /** Keeps a file you attached that doesn't go inline as an image, for the agent to read: its path under main's `userData/attachments`. The web build has no disk to keep it on and rejects. */
+  saveAttachment(filename: string, base64: string): Promise<string>;
 }
 
 /** Per thread; main refuses appends past it and writes one `capped` line. */
@@ -35,4 +37,5 @@ export const dataMethods = {
   clearReplays: 'invoke',
   exportReplay: 'invoke',
   saveImage: 'invoke',
+  saveAttachment: 'invoke',
 } satisfies Manifest<DataHost>;
