@@ -10,6 +10,8 @@ const MAX_CHARS = 64 * 1024 * 1024;
 /** Per thread; main refuses appends past it and writes one `capped` line. */
 export const MAX_REPLAY_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 5_000_000;
+/** `MAX_FILE_BYTES` in `src/chat/images.ts`. */
+const MAX_FILE_BYTES = 20_000_000;
 
 /** It names the thread's replay file. */
 const ReplayThreadId = Str(128).check(Schema.isPattern(/^[\w-]+$/));
@@ -38,6 +40,10 @@ export const dataRpc = {
       AgentImage.fields.mediaType,
       Str(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4),
     ]),
+    Schema.String,
+  ),
+  saveAttachment: invoke(
+    T([Str(1024), Str(Math.ceil((MAX_FILE_BYTES * 4) / 3) + 4)]),
     Schema.String,
   ),
 };

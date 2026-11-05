@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Effect, Stream } from 'effect';
-import { sweepImages } from '../agents/images.ts';
+import { sweepAttachments, sweepImages } from '../agents/images.ts';
 import type { DocTable } from './migrations.ts';
 import type { Projection } from './projection.ts';
 import type { AppendInput, SavedFiles, Store } from './store.ts';
@@ -55,11 +55,9 @@ export const sweepUnreferenced = (userData: string, files: SavedFiles) =>
     const recordings = await Promise.all(
       names.map((n) => readFile(join(replays, n), 'utf8').catch(() => '')),
     );
-    await sweepImages(
-      join(userData, 'images'),
-      [files.index, ...files.threads, ...recordings],
-      startedAt,
-    );
+    const saved = [files.index, ...files.threads, ...recordings];
+    await sweepImages(join(userData, 'images'), saved, startedAt);
+    await sweepAttachments(join(userData, 'attachments'), saved, startedAt);
   }).pipe(
     // A failed sweep only leaves unused images on disk until the next launch.
     Effect.catch((error) =>

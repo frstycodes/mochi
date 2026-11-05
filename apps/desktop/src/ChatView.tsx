@@ -134,7 +134,12 @@ import {
   useThreadSkills,
 } from './chat/SlashMenu';
 import { queuedMessage, sendMessage, shouldQueue } from './chat/outbox';
-import { imageFiles, imageProblem, sentImages } from './chat/images';
+import {
+  attachmentProblem,
+  imageFiles,
+  sentImages,
+  withAttachedFiles,
+} from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
 import { DevServerCard } from './chat/DevServerCard';
 import { McpAppCard } from './chat/McpAppCard';
@@ -1048,8 +1053,11 @@ const Composer = memo(function Composer({
                 const command = parseSlash(trimmed);
                 const problem =
                   command?.command.name === 'side' && files.length > 0
-                    ? 'Side chat questions can’t carry images'
-                    : imageProblem(files);
+                    ? 'Side chat questions can’t carry attachments'
+                    : attachmentProblem(
+                        files,
+                        isRemote ? 'another computer' : undefined,
+                      );
                 if (problem) {
                   toast.error(problem);
                   return false;
@@ -1058,6 +1066,19 @@ const Composer = memo(function Composer({
                   return askInSideChat(dispatch, thread.id, command.arg);
                 const focus = compactFocus(trimmed);
                 if (focus !== null) return runCompact(focus, files.length > 0);
+                let sent: string;
+                try {
+                  sent = await withAttachedFiles(
+                    trimmed,
+                    files,
+                    (name, base64) => host.data.saveAttachment(name, base64),
+                  );
+                } catch (error) {
+                  toast.error('Couldn’t attach the files', {
+                    description: (error as Error).message,
+                  });
+                  return false;
+                }
                 if (!isQueueing) recordUnanswered();
                 // Another computer's thread keeps no original here: the image goes inline and lives there.
                 const images = await sentImages(files, (type, base64) =>
@@ -1065,7 +1086,7 @@ const Composer = memo(function Composer({
                     ? Promise.reject(new Error('kept on that computer'))
                     : host.data.saveImage(type, base64),
                 );
-                const message = queuedMessage(trimmed, {
+                const message = queuedMessage(sent, {
                   ...(images.length > 0 && { images }),
                   mentions: mention.mentions,
                   isCommand: !!resolveToken(trimmed, slashItems),

@@ -54,4 +54,8 @@ export const data: DataHost = {
   async saveImage(mediaType, base64) {
     return `data:${mediaType};base64,${base64}`;
   },
+  // An agent reads an attached file from disk, and this build has none it can reach.
+  async saveAttachment() {
+    throw new Error('Files other than images need the desktop app');
+  },
 };
