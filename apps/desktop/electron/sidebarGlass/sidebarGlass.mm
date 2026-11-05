@@ -56,6 +56,9 @@ static napi_value attach(napi_env env, napi_callback_info info) {
       // Inside the effect view of the window's `vibrancy`, which Electron hosts at the bottom of its own view tree, as it
       // does for vibrancy itself. As a sibling under the content view instead, a visible browser view (WebContentsView)
       // made Chromium leave stale patches in the see-through chat and sidebar.
+      // Within the window there's nothing under the effect view, so only the glass shows. Behind the window, the effect
+      // view would show the windows behind, blurred, under the glass.
+      ((NSVisualEffectView *)effect).blendingMode = NSVisualEffectBlendingModeWithinWindow;
       [effect addSubview:split.view];
       [old.view removeFromSuperview];
       objc_setAssociatedObject(root, kSplitKey, split, OBJC_ASSOCIATION_RETAIN);
