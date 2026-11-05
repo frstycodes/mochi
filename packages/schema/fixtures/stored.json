@@ -47,6 +47,10 @@
    "usage"
   ],
   "whileWorking": "steer",
+  "unrelatedTask": "ask",
+  "agentSuggestions": "card",
+  "askedThreads": "start",
+  "subThreadStarts": "start",
   "promptSuggestions": true,
   "turnSpine": true,
   "simplifyLength": "short",

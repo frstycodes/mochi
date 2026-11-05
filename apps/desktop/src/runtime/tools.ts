@@ -827,8 +827,8 @@ const THREAD_SPECS = {
     },
   },
   create_thread: {
-    // A top-level thread waits on the user: an agent can't take work out from under the thread that coordinates it. A sub-thread's
-    // other user_asked threads become cards (`isCardFromSubThread`). A card asks nothing: nothing runs until the user starts it.
+    // A top-level thread waits on the user: an agent can't take work out from under the thread that coordinates it. The Side threads
+    // settings may put a user_asked thread on a card instead (`bySetting`). A card asks nothing: nothing runs until the user starts it.
     // Nor does a turn `run` refuses (`AGENT_DRIVEN`). Any model or effort the account offers needs no approval.
     ask: ({ caller, args }) => {
       if (!args.proposalId && args.initiation !== 'user_asked')
@@ -868,11 +868,8 @@ const THREAD_SPECS = {
       if (args.initiation === 'offer' && turnOf(caller).isAgentDriven)
         throw new Error(AGENT_DRIVEN);
       const create = await proposalCreate({ ...ctx, args });
-      if (
-        args.initiation !== 'user_asked' ||
-        isCardFromSubThread({ ...ctx, args })
-      )
-        return propose(ctx, args.initiation, prompt, create);
+      const proposed = bySetting({ ...ctx, args }, prompt, create);
+      if (proposed) return proposed;
       const before = state();
       const name = args.title?.trim();
       dispatch({
@@ -1421,13 +1418,13 @@ async function proposalCreate({
   };
 }
 
-/** An offer, own_initiative or sub-thread user_asked card in the caller's chat; nothing starts. */
+/** An offer, own_initiative or user_asked card in the caller's chat; nothing starts. */
 function propose(
   { state, caller, args, dispatch }: ToolContext<Args<'create_thread'>>,
   initiation: ThreadProposal['initiation'],
   brief: string,
   create: ThreadProposal['create'],
-): Outcome {
+): Outcome & { taskId: string } {
   // A user_asked brief came without a card in mind; its first line names the card, as the prompt names its thread.
   const title =
     args.title?.trim() ||
@@ -1449,24 +1446,91 @@ function propose(
     by: caller.providers[0],
   });
   return {
+    taskId: id,
     result: { taskId: id, state: 'pending', note: PROPOSAL_NOTES[initiation] },
   };
 }
 
+/** What the user's Side threads settings make of this call: an answered offer, a card, a refusal; undefined starts it now. */
+function bySetting(
+  ctx: ToolContext<Args<'create_thread'>>,
+  prompt: string,
+  create: ThreadProposal['create'],
+): Outcome | undefined {
+  const prefs = ctx.env.prefs.get();
+  if (ctx.args.initiation === 'offer')
+    return offer(ctx, prompt, create, prefs.unrelatedTask);
+  if (ctx.args.initiation === 'own_initiative') {
+    if (prefs.agentSuggestions === 'off') throw new Error(SUGGESTIONS_OFF);
+    const proposed = propose(ctx, 'own_initiative', prompt, create);
+    if (prefs.agentSuggestions === 'card') return proposed;
+    return startNow(ctx, proposed.taskId, AUTO_STARTED_NOTE);
+  }
+  const how = isFromSubThread(ctx) ? prefs.subThreadStarts : prefs.askedThreads;
+  if (how === 'off') throw new Error(SUB_THREAD_STARTS_OFF);
+  if (how === 'card') return propose(ctx, 'user_asked', prompt, create);
+  return undefined;
+}
+
+/** An offer: a card the agent's turn stops on, unless the user's setting answers it (Settings › General › Side threads). */
+function offer(
+  ctx: ToolContext<Args<'create_thread'>>,
+  brief: string,
+  create: ThreadProposal['create'],
+  answer: Prefs['unrelatedTask'],
+): Outcome {
+  if (answer === 'here')
+    return { result: { state: 'here', note: OFFER_HERE_NOTE } };
+  const proposed = propose(ctx, 'offer', brief, create);
+  if (answer === 'ask') return proposed;
+  return startNow(ctx, proposed.taskId, OFFER_STARTED_NOTE);
+}
+
+/** Starts a card the user's setting starts for them, in any turn: the setting is their answer. */
+function startNow(
+  { state, caller, dispatch }: ToolContext<Args<'create_thread'>>,
+  proposalId: string,
+  note?: string,
+): Outcome {
+  const before = state();
+  dispatch({ type: 'proposal-start', threadId: caller.id, proposalId });
+  const created = state().threads.find(
+    (t) => !before.threads.some((s) => s.id === t.id),
+  );
+  if (!created) throw new Error(`Couldn't start ${proposalId}`);
+  return {
+    changed: `started "${created.title}"`,
+    result: { ...summary(created), ...(note && { note }) },
+    undo: () => dispatch({ type: 'delete', threadIds: [created.id] }),
+  };
+}
+
+const OFFER_HERE_NOTE =
+  "The user's setting answers offers with Do it here: do the task in this thread now, as usual.";
+
+const OFFER_STARTED_NOTE =
+  "The user's setting starts offers in a new thread, so it is running there from your brief. Don't do the task here: say in one line that it runs in its own thread, then end your turn.";
+
+const AUTO_STARTED_NOTE =
+  "The user's setting starts your suggestions right away, so it is running from your brief. Don't do it here; carry on with what you were doing.";
+
+const SUGGESTIONS_OFF =
+  'The user turned off thread suggestions (Settings › General › Side threads): mention the work in your reply instead.';
+
+const SUB_THREAD_STARTS_OFF =
+  "The user's settings don't let this thread start threads (Settings › General › Side threads): do the work here, or mention it in your reply.";
+
 const PROPOSAL_NOTES = {
   offer:
-    'The user sees New thread / Do it here / Dismiss. Don\'t start the work: end your turn now with one short line. New thread starts it with your brief; "Do it here." or a dismissal comes back as their message.',
+    'The user sees New thread / Do it here. Don\'t start the work: end your turn now with one short line. New thread starts it with your brief; "Do it here." comes back as their message.',
   own_initiative:
-    'The user sees a card with New thread, Do it here and Dismiss; nothing runs until they choose, and Do it here comes back to you as their message with the brief. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.',
+    'The user sees a card with Start, Do it here and Dismiss; nothing runs until they choose, and Do it here comes back to you as their message with the brief. If they tell you to start it, call create_thread with just this proposalId. Withdraw it with dismiss_thread_proposal if it goes stale.',
   user_asked:
-    "Proposed and waiting: this thread is a sub-thread, so the threads it starts go on one card for the user, with Start, Dismiss and Start all. Don't retry or wait on it; carry on, or end your turn. Each one they start nests under this thread and its notes come back to you.",
+    "Proposed and waiting: the user's settings put the threads you start on a card (Start, Do it here, Dismiss). Don't retry or wait on it; carry on, or end your turn. Each one they start nests under this thread and its notes come back to you.",
 } satisfies Record<ThreadProposal['initiation'], string>;
 
-/** A sub-thread's user_asked thread that asks nothing else (placement) goes on its turn's card instead of starting. */
-function isCardFromSubThread({
-  caller,
-  args,
-}: ToolContext<Args<'create_thread'>>) {
+/** A sub-thread's nested user_asked thread: the "When a sub-thread starts a thread" setting decides it, not "When you ask for a thread". */
+function isFromSubThread({ caller, args }: ToolContext<Args<'create_thread'>>) {
   return !!caller.parent && !args.isTopLevel;
 }
 
@@ -1489,24 +1553,15 @@ function agentDrivenStartBlocker(
 
 /** The user told the agent to start a card it proposed. */
 function startProposal(
-  { state, caller, dispatch }: ToolContext<Args<'create_thread'>>,
+  ctx: ToolContext<Args<'create_thread'>>,
   proposalId: string,
 ): Outcome {
+  const { state, caller } = ctx;
   const thread = target(state(), caller, caller.id);
   if (turnOf(thread).isAgentDriven) throw new Error(AGENT_DRIVEN);
   const blocker = proposalBlocker(thread, proposalId, state().now);
   if (blocker) throw new Error(blocker);
-  const before = state();
-  dispatch({ type: 'proposal-start', threadId: caller.id, proposalId });
-  const created = state().threads.find(
-    (t) => !before.threads.some((s) => s.id === t.id),
-  );
-  if (!created) throw new Error(`Couldn't start ${proposalId}`);
-  return {
-    changed: `started "${created.title}"`,
-    result: summary(created),
-    undo: () => dispatch({ type: 'delete', threadIds: [created.id] }),
-  };
+  return startNow(ctx, proposalId);
 }
 
 async function newThreadControls(

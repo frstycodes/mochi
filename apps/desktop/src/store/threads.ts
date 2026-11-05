@@ -324,8 +324,13 @@ export type ThreadsAction =
       proposal: ThreadProposal;
       by: Provider;
     }
-  /** Start, New thread, or the agent starting it when you said so: creates the thread the proposal resolved, as a sub-thread when it is one. */
-  | { type: 'proposal-start'; threadId: string; proposalId: string }
+  /** Start, New thread, or the agent starting it when you said so: creates the thread the proposal resolved, as a sub-thread when it is one. `create` is the card's Options, changed before starting. */
+  | {
+      type: 'proposal-start';
+      threadId: string;
+      proposalId: string;
+      create?: ThreadProposal['create'];
+    }
   /** Dismiss (yours, or the agent withdrawing it with `reason`), or Do it here on an offer. */
   | {
       type: 'proposal-answer';
@@ -1755,7 +1760,7 @@ function startProposal(
     spaceId: thread.spaceId,
     title: proposal.brief,
     name: proposal.title,
-    ...proposal.create,
+    ...(action.create ?? proposal.create),
     isBackground: true,
   });
   const id = `new-${state.seq}`;

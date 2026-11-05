@@ -1,25 +1,61 @@
-import { useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, DiagramTree, MessagePlus } from '@/icons';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import {
-  authorName,
-  type ActivityEntry,
-  type Thread,
-  type ThreadProposal,
-} from '../model';
-import { useHarness, useHarnessSelector } from '../store';
-import { SubThreadState } from '../goals/SubThreads';
-import { Expand } from '../WorkLog';
+  Chat,
+  CheckCircle,
+  ChevronDown,
+  Hourglass,
+  MessagePlus,
+  MinusCircle,
+  Settings,
+  X,
+} from '@/icons';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { FoldChevron } from '@/Fold';
+import type { ActivityEntry, Thread, ThreadProposal } from '../model';
+import { useHarness, useHarnessSelector, useSpace } from '../store';
+import { SubThreadState } from '../goals/SubThreads';
 import { threadStatus } from '../goals/VerdictChip';
-import { isExpired, OFFER_REPLY, suggestionHereReply } from './proposals';
+import { Expand } from '../WorkLog';
+import { Shortcut } from '../Shortcut';
+import { IS_MAC, type Key } from '../keys';
+import { setPrefs } from '../settings/prefs';
+import { PermissionsMenu } from '../Composer';
+import { EffortPicker, ModelPicker, useModels } from '../ModelControls';
+import { optionFor } from '../runtime/models';
+import { DEFAULT_CONTROLS } from '../runtime/controls';
+import { PlaceChip } from '../PlacePicker';
+import { useProjectsWithCopies } from '../projectCopies';
+import { useComputers } from '../remote/computers';
+import { useWorkspace, WorkspaceControls } from '../git/WorkspacePicker';
+import { openSettings } from '../routes/nav';
 import { ThreadName } from './ThreadMessage';
+import {
+  isExpired,
+  isWithdrawn,
+  OFFER_REPLY,
+  suggestedCount,
+  suggestionHereReply,
+} from './proposals';
 
 /** A proposal as a card shows it: expiry is read off the clock, never stored. */
 export type ShownProposal = ThreadProposal & { isExpired?: boolean };
 
-/** One turn's thread cards where the agent made them: each offer on its own, the turn's proposals paged on one card. */
+type Create = ThreadProposal['create'];
+
+/** One turn's thread cards where the agent made them: each offer on its own, the turn's suggestions in one card. */
 export function ProposalEntry({
   thread,
   entry,
@@ -32,251 +68,504 @@ export function ProposalEntry({
     ...p,
     isExpired: isExpired(p, entry, state.now),
   }));
-  const start = (p: ThreadProposal) =>
-    dispatch({ type: 'proposal-start', threadId: thread.id, proposalId: p.id });
-  const answer = (p: ThreadProposal, state: 'here' | 'dismissed') =>
+  const start = (p: ThreadProposal, create?: Create) =>
+    dispatch({
+      type: 'proposal-start',
+      threadId: thread.id,
+      proposalId: p.id,
+      ...(create && { create }),
+    });
+  // The agent ended its turn (or Do it here asks it to start), so your answer in place is its next message.
+  const here = (p: ThreadProposal, text: string) => {
     dispatch({
       type: 'proposal-answer',
       threadId: thread.id,
       proposalId: p.id,
-      state,
+      state: 'here',
     });
-  // The agent ended its turn, so your answer in place is its next message.
-  const reply = (
-    p: ThreadProposal,
-    state: 'here' | 'dismissed',
-    text: string,
-  ) => {
-    answer(p, state);
-    dispatch({
-      type: 'send',
-      threadId: thread.id,
-      text,
-    });
+    dispatch({ type: 'send', threadId: thread.id, text });
   };
-  const proposals = shown.filter((p) => p.initiation !== 'offer');
+  const dismiss = (p: ThreadProposal) =>
+    dispatch({
+      type: 'proposal-answer',
+      threadId: thread.id,
+      proposalId: p.id,
+      state: 'dismissed',
+    });
+  const offers = shown.filter((p) => p.initiation === 'offer');
+  const suggestions = shown.filter((p) => p.initiation !== 'offer');
   return (
     <div className="flex flex-col gap-3">
-      {shown
-        .filter((p) => p.initiation === 'offer')
-        .map((p) => (
+      {offers.map((p) =>
+        isOpen(p) ? (
           <OfferCard
             key={p.id}
-            proposal={p}
-            agent={authorName(thread.providers[0])}
-            onNew={() => start(p)}
-            onHere={() => reply(p, 'here', OFFER_REPLY.here)}
-            onDismiss={() => reply(p, 'dismissed', OFFER_REPLY.dismissed)}
+            offer={p}
+            onNew={(create) => start(p, create)}
+            onHere={() => here(p, OFFER_REPLY)}
           />
-        ))}
-      {proposals.length > 0 && (
-        <ProposalCard
-          proposals={proposals}
+        ) : (
+          <ProposalRecords key={p.id} proposals={[p]} />
+        ),
+      )}
+      {suggestions.length > 0 && (
+        <SuggestionCard
+          suggestions={suggestions}
           onStart={start}
-          onHere={(p) => reply(p, 'here', suggestionHereReply(p))}
-          onDismiss={(p) => answer(p, 'dismissed')}
+          onHere={(p) => here(p, suggestionHereReply(p))}
+          onDismiss={dismiss}
         />
       )}
     </div>
   );
 }
 
-/** The agent's suggestions (Dismiss, Do it here, New thread), or a sub-thread's asked-for threads (Dismiss, Start); several from one turn page through it (‹ 2 of 3 ›) with Start all. */
-export function ProposalCard({
-  proposals,
+const isOpen = (p: ShownProposal) => p.state === 'pending' && !p.isExpired;
+
+/** A task you named that may not belong here: the agent stopped its turn on New thread or Do it here. */
+export function OfferCard({
+  offer,
+  onNew,
+  onHere,
+}: {
+  offer: ShownProposal;
+  onNew: (create: Create) => void;
+  onHere: () => void;
+}) {
+  const [create, setCreate] = useState(offer.create);
+  const answer = (pick: 'new' | 'here') =>
+    pick === 'new' ? onNew(create) : onHere();
+  return (
+    <FramedCard
+      aria-label="Start this in its own thread?"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && (IS_MAC ? e.metaKey : e.ctrlKey))
+          answer('new');
+        if (e.key === 'Escape') answer('here');
+      }}
+      header={
+        <>
+          <span
+            aria-hidden
+            className="size-1.5 shrink-0 rounded-full bg-warning"
+          />
+          Start this in its own thread?
+        </>
+      }
+    >
+      <FramedItem>
+        <ProposalTitle>{offer.title}</ProposalTitle>
+        <ProposalOptions
+          proposalId={offer.id}
+          create={create}
+          onChange={setCreate}
+        >
+          <DontAskAgain
+            onPick={(pick) => {
+              setPrefs({ unrelatedTask: pick });
+              answer(pick);
+            }}
+          />
+        </ProposalOptions>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            size="sm"
+            className="type-meta"
+            onClick={() => answer('new')}
+            aria-keyshortcuts={IS_MAC ? 'Meta+Enter' : 'Control+Enter'}
+          >
+            New thread
+            <KeyHint keys={['mod', 'Enter']} isPrimary />
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="type-meta"
+            onClick={() => answer('here')}
+            aria-keyshortcuts="Escape"
+          >
+            Do it here
+            <KeyHint keys={['Esc']} />
+          </Button>
+        </div>
+      </FramedItem>
+    </FramedCard>
+  );
+}
+
+/** Work the agent noticed: one card per turn, the open ones in a column, the answered ones as muted rows under them. */
+export function SuggestionCard({
+  suggestions,
   onStart,
   onHere,
   onDismiss,
 }: {
-  proposals: ShownProposal[];
-  onStart: (p: ShownProposal) => void;
-  onHere?: (p: ShownProposal) => void;
+  suggestions: ShownProposal[];
+  onStart: (p: ShownProposal, create: Create) => void;
+  onHere: (p: ShownProposal) => void;
   onDismiss: (p: ShownProposal) => void;
 }) {
-  const [at, setAt] = useState(() => Math.max(0, proposals.findIndex(isOpen)));
-  const proposal = proposals[Math.min(at, proposals.length - 1)];
-  // Starting or dismissing one turns to the next that still waits, so the card shows what's left to decide.
-  const settle = (act: (p: ShownProposal) => void) => () => {
-    act(proposal);
-    const next = proposals.findIndex((p) => p.id !== proposal.id && isOpen(p));
-    if (next >= 0) setAt(next);
-  };
-  const open = proposals.filter(isOpen);
-  const startAll = open.length > 1 && (
-    <Button size="sm" variant="outline" onClick={() => open.forEach(onStart)}>
-      {`Start all ${open.length}`}
-    </Button>
+  const [edits, setEdits] = useState<Record<string, Create>>({});
+  const createOf = (p: ShownProposal) => edits[p.id] ?? p.create;
+  const open = suggestions.filter(isOpen);
+  const settled = suggestions.filter((p) => !isOpen(p));
+  return (
+    <FramedCard
+      aria-label="Suggested threads"
+      header={
+        <>
+          <span className="flex-1">{suggestedCount(suggestions)}</span>
+          {open.length > 1 && (
+            <Button
+              size="xs"
+              variant="ghost"
+              className="type-meta"
+              onClick={() => open.forEach((p) => onStart(p, createOf(p)))}
+            >
+              {`Start all ${open.length}`}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {open.map((p) => (
+        <FramedItem key={p.id}>
+          <div className="flex items-start gap-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <ProposalTitle>{p.title}</ProposalTitle>
+              <p
+                className="line-clamp-2 type-meta text-muted-foreground [overflow-wrap:anywhere]"
+                title={p.brief}
+              >
+                {p.brief}
+              </p>
+            </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={`Dismiss ${p.title}`}
+                    onClick={() => onDismiss(p)}
+                  />
+                }
+              >
+                <X />
+              </TooltipTrigger>
+              <TooltipContent>Dismiss suggestion</TooltipContent>
+            </Tooltip>
+          </div>
+          <ProposalOptions
+            proposalId={p.id}
+            create={createOf(p)}
+            onChange={(c) => setEdits((all) => ({ ...all, [p.id]: c }))}
+          />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              size="sm"
+              className="type-meta"
+              onClick={() => onStart(p, createOf(p))}
+            >
+              Start
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="type-meta"
+              onClick={() => onHere(p)}
+            >
+              Do it here
+            </Button>
+          </div>
+        </FramedItem>
+      ))}
+      {settled.length > 0 && (
+        <FramedItem className="gap-0 py-1.5">
+          <ProposalRecords proposals={settled} />
+        </FramedItem>
+      )}
+    </FramedCard>
   );
+}
+
+/** A card that frames a list: the header on the lighter frame, each item on the page tone flush to the sides and bottom, the frame showing between them. */
+function FramedCard({
+  header,
+  children,
+  className,
+  ...props
+}: ComponentProps<'section'> & { header: ReactNode }) {
   return (
     <section
-      aria-label="Suggested threads"
-      aria-roledescription={proposals.length > 1 ? 'carousel' : undefined}
-      className="flex flex-col rounded-xl border p-1"
+      className={cn(
+        'flex flex-col overflow-hidden rounded-xl border bg-muted',
+        className,
+      )}
+      {...props}
     >
-      <ProposalRow
-        key={proposal.id}
-        proposal={proposal}
-        onStart={settle(onStart)}
-        onHere={
-          proposal.initiation === 'own_initiative' && onHere
-            ? settle(onHere)
-            : undefined
-        }
-        onDismiss={settle(onDismiss)}
-        pager={
-          proposals.length > 1 && (
-            <Pager at={at} count={proposals.length} onTurn={setAt} />
-          )
-        }
-        startAll={startAll}
-      />
+      <div className="flex min-h-9 items-center gap-1.5 px-3 py-1.5 type-meta text-muted-foreground">
+        {header}
+      </div>
+      <div className="flex flex-col gap-px">{children}</div>
     </section>
   );
 }
 
-const isOpen = (p: ShownProposal) => p.state === 'pending' && !p.isExpired;
-
-/** ‹ 2 of 3 ›: which suggestion this is, the others one click away. Arrow keys turn it too. */
-function Pager({
-  at,
-  count,
-  onTurn,
-}: {
-  at: number;
-  count: number;
-  onTurn: (i: number) => void;
-}) {
+function FramedItem({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <span
-      className="flex shrink-0 items-center"
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft' && at > 0) onTurn(at - 1);
-        if (e.key === 'ArrowRight' && at < count - 1) onTurn(at + 1);
-      }}
-    >
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label="Previous suggestion"
-        disabled={at === 0}
-        onClick={() => onTurn(at - 1)}
-      >
-        <ChevronLeft />
-      </Button>
-      <span
-        aria-live="polite"
-        className="min-w-10 text-center type-caption text-subtle-foreground tabular-nums"
-      >{`${at + 1} of ${count}`}</span>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label="Next suggestion"
-        disabled={at === count - 1}
-        onClick={() => onTurn(at + 1)}
-      >
-        <ChevronRight />
-      </Button>
-    </span>
+    <div
+      className={cn('flex flex-col gap-3 bg-background p-3', className)}
+      {...props}
+    />
   );
 }
 
-function ProposalRow({
-  proposal,
-  onStart,
-  onHere,
-  onDismiss,
-  pager,
-  startAll,
-}: {
-  proposal: ShownProposal;
-  onStart: () => void;
-  /** Suggestions only: the agent does it in this thread instead. */
-  onHere?: () => void;
-  onDismiss: () => void;
-  pager?: ReactNode;
-  startAll?: ReactNode;
-}) {
-  const [isBriefOpen, setBriefOpen] = useState(false);
-  const isPending = isOpen(proposal);
-  const isStarted = proposal.state === 'started' && !!proposal.threadId;
+function ProposalTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col rounded-lg px-2 py-1">
-      <div className="flex min-h-7 min-w-0 items-center gap-2 type-body">
-        {isStarted ? (
-          <DiagramTree
-            aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-        ) : (
-          <MessagePlus
-            aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-        )}
-        {isStarted ? (
-          <ThreadName
-            peer={{ threadId: proposal.threadId, title: proposal.title }}
-          />
-        ) : (
-          <span
-            className={cn(
-              'min-w-0 truncate',
-              isPending ? 'text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {proposal.title}
-          </span>
-        )}
-        {isPending && (
-          <Disclosure
-            isOpen={isBriefOpen}
-            onToggle={() => setBriefOpen((o) => !o)}
-          />
-        )}
-        <span className="ml-auto flex shrink-0 items-center gap-1">
-          {pager}
-          {isStarted && <StartedState threadId={proposal.threadId!} />}
-          {!isPending && !isStarted && (
-            <span className="type-meta text-subtle-foreground">
-              {closedNote(proposal)}
-            </span>
-          )}
-        </span>
+    <p className="type-body font-medium text-pretty [overflow-wrap:anywhere]">
+      {children}
+    </p>
+  );
+}
+
+/** Where and how the new thread runs, folded; the composer's own pickers change it before you start it. */
+function ProposalOptions({
+  proposalId,
+  create,
+  onChange,
+  children,
+}: {
+  proposalId: string;
+  create: Create;
+  onChange: (create: Create) => void;
+  children?: ReactNode;
+}) {
+  const [isOptionsOpen, setOptionsOpen] = useState(false);
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center gap-1 type-meta text-muted-foreground">
+        <button
+          type="button"
+          aria-expanded={isOptionsOpen}
+          onClick={() => setOptionsOpen((o) => !o)}
+          className="-ml-1 flex cursor-pointer items-center gap-0.5 rounded-md px-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Options
+          <FoldChevron isOpen={isOptionsOpen} />
+        </button>
+        {children}
       </div>
-      <Expand isOpen={isPending && isBriefOpen}>
-        <Brief text={proposal.brief} className="pl-6" />
+      <Expand isOpen={isOptionsOpen}>
+        {isOptionsOpen && (
+          <ProposalSettings
+            proposalId={proposalId}
+            create={create}
+            onChange={onChange}
+          />
+        )}
       </Expand>
-      {isPending && (
-        <div className="flex items-center justify-end gap-1.5 pt-1.5">
-          <Button size="sm" variant="ghost" onClick={onDismiss}>
-            Dismiss
-          </Button>
-          {startAll}
-          {onHere && (
-            <Button size="sm" variant="outline" onClick={onHere}>
-              Do it here
-            </Button>
-          )}
-          <Button size="sm" onClick={onStart}>
-            {onHere ? 'New thread' : 'Start'}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
 
+// GAP: this computer's projects only; a proposal resolved on another computer (`create.parent` across machines) keeps its place.
+function ProposalSettings({
+  proposalId,
+  create,
+  onChange,
+}: {
+  proposalId: string;
+  create: Create;
+  onChange: (create: Create) => void;
+}) {
+  const space = useSpace();
+  const projects = useProjectsWithCopies(space.id) ?? [];
+  const [here] = useComputers();
+  const controls = create.controls ?? DEFAULT_CONTROLS[create.provider];
+  const setControls = (patch: Partial<typeof controls>) =>
+    onChange({ ...create, controls: { ...controls, ...patch } });
+  const workspace = useWorkspace(
+    create.project ?? '',
+    create.workspace ?? { mode: 'worktree' },
+    (draft) => onChange({ ...create, workspace: draft }),
+  );
+  const model = optionFor(
+    useModels(space.id)[create.provider],
+    controls.model,
+    create.provider,
+  );
+  const place = { machineId: null, ref: create.project };
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-6 gap-y-1 pt-2 type-meta">
+      <SettingRow label="Where">
+        <PlaceChip
+          projects={projects}
+          computers={[here]}
+          place={place}
+          onChoose={(p) =>
+            onChange({ ...create, project: p.ref, workspace: undefined })
+          }
+        />
+      </SettingRow>
+      {!!create.project && (
+        <SettingRow label="Branch">
+          <WorkspaceControls workspace={workspace} />
+        </SettingRow>
+      )}
+      <SettingRow label="Model">
+        <ModelPicker
+          value={controls.model}
+          provider={create.provider}
+          onChange={(m) =>
+            onChange({
+              ...create,
+              provider: m.harness,
+              controls: { ...controls, model: m.id },
+            })
+          }
+        />
+      </SettingRow>
+      {model.efforts.length > 0 && (
+        <SettingRow label="Effort">
+          <EffortPicker
+            model={model}
+            value={controls.effort}
+            onChange={(effort) => setControls({ effort })}
+          />
+        </SettingRow>
+      )}
+      <SettingRow label="Permissions">
+        <PermissionsMenu
+          threadId={proposalId}
+          provider={create.provider}
+          value={controls.access}
+          onChange={(access) => setControls({ access })}
+        />
+      </SettingRow>
+    </dl>
+  );
+}
+
+function SettingRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 justify-end">{children}</dd>
+    </>
+  );
+}
+
+/** Answers this offer and every later one the same way (Settings › General). */
+function DontAskAgain({ onPick }: { onPick: (pick: 'new' | 'here') => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="flex cursor-pointer items-center gap-0.5 rounded-md px-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          />
+        }
+      >
+        Don’t ask again
+        <ChevronDown aria-hidden className="size-3" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-60">
+        <DropdownMenuItem onClick={() => onPick('new')}>
+          <MessagePlus />
+          Always start a new thread
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onPick('here')}>
+          <Chat />
+          Always do it here
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <OpenSettingsItem />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function OpenSettingsItem() {
+  return (
+    <DropdownMenuItem onClick={() => openSettings('general', 'unrelatedTask')}>
+      <Settings />
+      Settings…
+    </DropdownMenuItem>
+  );
+}
+
+function KeyHint({ keys, isPrimary }: { keys: Key[]; isPrimary?: boolean }) {
+  return (
+    <span aria-hidden className="contents">
+      <Shortcut
+        keys={keys}
+        className={cn(
+          'ml-0.5 opacity-70',
+          isPrimary && '[&_[data-slot=kbd]]:text-primary-foreground',
+        )}
+      />
+    </span>
+  );
+}
+
+/** Answered proposals, one line each: what it was, what became of it. */
+export function ProposalRecords({ proposals }: { proposals: ShownProposal[] }) {
+  return (
+    <ul className="flex flex-col">
+      {proposals.map((p) => (
+        <ProposalRecord key={p.id} proposal={p} />
+      ))}
+    </ul>
+  );
+}
+
+function ProposalRecord({ proposal }: { proposal: ShownProposal }) {
+  const { Icon, note, detail } = recordOf(proposal);
+  const isStarted = proposal.state === 'started' && !!proposal.threadId;
+  return (
+    <li className="flex min-h-7 min-w-0 items-center gap-2 type-body text-muted-foreground">
+      <Icon aria-hidden className="size-4 shrink-0" />
+      {isStarted ? (
+        <ThreadName
+          peer={{ threadId: proposal.threadId, title: proposal.title }}
+          className="max-w-none min-w-0 shrink"
+        />
+      ) : (
+        <span className="min-w-0 truncate" title={proposal.title}>
+          {proposal.title}
+        </span>
+      )}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              tabIndex={0}
+              className="ml-auto shrink-0 type-meta text-subtle-foreground"
+            />
+          }
+        >
+          {isStarted ? <StartedNote threadId={proposal.threadId!} /> : note}
+        </TooltipTrigger>
+        <TooltipContent>{detail}</TooltipContent>
+      </Tooltip>
+    </li>
+  );
+}
+
 /** What the started thread is doing now, like its sidebar row. */
-function StartedState({ threadId }: { threadId: string }) {
+function StartedNote({ threadId }: { threadId: string }) {
   const sub = useHarnessSelector((s) =>
     s.threads.find((t) => t.id === threadId),
   );
-  if (!sub)
-    return <span className="type-meta text-subtle-foreground">Started</span>;
-  return <LiveState sub={sub} />;
-}
-
-function LiveState({ sub }: { sub: Thread }) {
+  if (!sub) return 'Started';
   return (
     <SubThreadState
       sub={sub}
@@ -286,125 +575,30 @@ function LiveState({ sub }: { sub: Thread }) {
   );
 }
 
-function closedNote(p: ShownProposal) {
-  if (p.isExpired) return 'Expired after 7 days';
-  if (p.state === 'dismissed')
-    return p.reason ? `Withdrawn: ${p.reason}` : 'Dismissed';
-  if (p.state === 'here') return 'Done in this thread';
-  return 'Started';
-}
-
-/** A task you named that may not belong here: the agent waits for New thread, Do it here or Dismiss. */
-export function OfferCard({
-  proposal,
-  agent,
-  onNew,
-  onHere,
-  onDismiss,
-}: {
-  proposal: ShownProposal;
-  agent: string;
-  onNew: () => void;
-  onHere: () => void;
-  onDismiss: () => void;
-}) {
-  const [isBriefOpen, setBriefOpen] = useState(false);
-  if (!isOpen(proposal)) return <OfferRecord proposal={proposal} />;
-  return (
-    <section
-      aria-label="Where should this run?"
-      className="flex flex-col gap-2 rounded-xl border px-3 py-2.5"
-    >
-      <div className="flex items-start gap-2">
-        <span
-          aria-hidden
-          className="mt-1.5 size-1.5 shrink-0 rounded-full bg-warning"
-        />
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="type-body">
-            Run <span className="font-medium">{proposal.title}</span> in a new
-            thread?
-          </p>
-          <p className="flex items-center gap-1 type-caption text-subtle-foreground">
-            {`${agent} waits for your answer.`}
-            <Disclosure
-              isOpen={isBriefOpen}
-              onToggle={() => setBriefOpen((o) => !o)}
-            />
-          </p>
-          <Expand isOpen={isBriefOpen}>
-            <Brief text={proposal.brief} />
-          </Expand>
-        </div>
-      </div>
-      <div className="flex items-center justify-end gap-1.5">
-        <Button size="sm" variant="ghost" onClick={onDismiss}>
-          Dismiss
-        </Button>
-        <Button size="sm" variant="outline" onClick={onHere}>
-          Do it here
-        </Button>
-        <Button size="sm" onClick={onNew}>
-          New thread
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-function OfferRecord({ proposal }: { proposal: ShownProposal }) {
-  const isStarted = proposal.state === 'started' && !!proposal.threadId;
-  return (
-    <p className="flex min-h-7 min-w-0 items-center gap-2 type-meta text-muted-foreground">
-      {isStarted ? (
-        <DiagramTree aria-hidden className="size-4 shrink-0" />
-      ) : (
-        <MessagePlus aria-hidden className="size-4 shrink-0" />
-      )}
-      {isStarted ? (
-        <span className="flex min-w-0 items-center gap-1">
-          Started{' '}
-          <ThreadName
-            peer={{ threadId: proposal.threadId, title: proposal.title }}
-          />{' '}
-          in a new thread
-        </span>
-      ) : (
-        <span className="min-w-0 truncate">{`${proposal.title} · ${proposal.state === 'here' ? 'you chose to do it here' : proposal.state === 'dismissed' && !proposal.reason ? 'you dismissed it' : closedNote(proposal)}`}</span>
-      )}
-    </p>
-  );
-}
-
-function Disclosure({
-  isOpen,
-  onToggle,
-}: {
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-expanded={isOpen}
-      onClick={onToggle}
-      className="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md px-1 type-caption text-subtle-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-    >
-      Brief
-      <FoldChevron isOpen={isOpen} />
-    </button>
-  );
-}
-
-function Brief({ text, className }: { text: string; className?: string }) {
-  return (
-    <p
-      className={cn(
-        'pt-1 type-meta whitespace-pre-wrap text-muted-foreground',
-        className,
-      )}
-    >
-      {text}
-    </p>
-  );
+function recordOf(p: ShownProposal) {
+  if (p.isExpired)
+    return {
+      Icon: Hourglass,
+      note: 'Expired',
+      detail: 'Nobody started it within 7 days',
+    };
+  if (p.state === 'started')
+    return {
+      Icon: Chat,
+      note: 'Started',
+      detail: 'Running in its own thread, nested under this one',
+    };
+  if (p.state === 'here')
+    return {
+      Icon: CheckCircle,
+      note: 'Done here',
+      detail: 'You asked the agent to do it in this thread',
+    };
+  if (isWithdrawn(p))
+    return {
+      Icon: MinusCircle,
+      note: 'No longer suggested',
+      detail: `The agent withdrew it: ${p.reason}`,
+    };
+  return { Icon: MinusCircle, note: 'Dismissed', detail: 'You dismissed it' };
 }
