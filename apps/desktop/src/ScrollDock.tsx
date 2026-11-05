@@ -49,7 +49,7 @@ const DOCK_OUT = {
 /**
  * Press and drag in any direction: past a few px the axis locks and `onMove` gets the distance along it, right and down positive.
  * A drag swallows the click that follows. With `onTap`, the press itself never reaches the trigger (for menus that open on
- * pointerdown) and a press without a drag calls `onTap` instead.
+ * pointerdown) and a press without a drag calls `onTap` on the click instead.
  */
 function listenDrag(
   el: HTMLElement,
@@ -80,11 +80,13 @@ function listenDrag(
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
-      if (!axis) return handlers.onTap?.();
-      handlers.onEnd();
+      if (!axis && !handlers.onTap) return;
+      if (axis) handlers.onEnd();
+      // A tap opens on the click itself (not the release) and swallows it, so the trigger's own click handler can't toggle the menu shut again.
       const swallow = (e: Event) => {
         e.stopPropagation();
         e.preventDefault();
+        if (!axis) handlers.onTap?.();
       };
       // Until the next press, not a timer: the click can arrive a task after pointerup.
       window.addEventListener('click', swallow, { capture: true, once: true });
