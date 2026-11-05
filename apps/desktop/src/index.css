@@ -250,10 +250,23 @@
   color-scheme: dark;
 }
 
-/* Toasts take the opposite theme (dark on light, light on dark) so they stand out from the page. Only the tokens a toast reads. */
+/* Toasts take the opposite theme (dark on light, light on dark) so they stand out from the page. Every color token is remapped, so anything inside reads inverted too. */
 .toast-inverse {
+  --background: oklch(0.185 0.006 285);
   --foreground: oklch(0.93 0.004 285);
+  --card: oklch(0.235 0.007 285);
+  --card-foreground: var(--foreground);
   --popover: oklch(0.25 0.008 285);
+  --float: oklch(0.25 0.008 285 / 0.9);
+  --glass: oklch(0.26 0.008 285 / 0.55);
+  --glass-edge: oklch(1 0 0 / 0.1);
+  --muted: oklch(0.255 0.007 285);
+  --subtle-foreground: oklch(0.66 0.01 285);
+  --unread: oklch(0.67 0.18 255);
+  --merged: oklch(0.74 0.12 300);
+  --code: oklch(0.79 0.09 45);
+  --highlight: oklch(0.98 0.005 285 / 0.06);
+  --skeleton-highlight: oklch(1 0 285 / 0.04);
   --popover-foreground: var(--foreground);
   --primary: oklch(0.93 0.004 285);
   --primary-foreground: oklch(0.2 0.006 285);
@@ -272,8 +285,20 @@
   color-scheme: dark;
 
   @variant dark {
+    --background: oklch(0.982 0.003 285);
     --foreground: oklch(0.235 0.01 285);
+    --card: oklch(0.998 0.001 285);
     --popover: oklch(0.998 0.001 285);
+    --float: oklch(0.995 0.002 285 / 0.9);
+    --glass: oklch(0.995 0.002 285 / 0.62);
+    --glass-edge: oklch(0.2 0.01 285 / 0.1);
+    --muted: oklch(0.962 0.004 285);
+    --subtle-foreground: oklch(0.525 0.012 285);
+    --unread: oklch(0.55 0.24 262);
+    --merged: oklch(0.5 0.18 300);
+    --code: oklch(0.52 0.13 40);
+    --highlight: oklch(1 0 285 / 0.7);
+    --skeleton-highlight: oklch(1 0 285 / 0.64);
     --primary: oklch(0.25 0.01 285);
     --primary-foreground: oklch(0.98 0.002 285);
     --secondary: oklch(0.958 0.004 285);
