@@ -1410,6 +1410,18 @@ export function log(thread: Thread, entry: ActivityEntry): Thread {
   return { ...thread, activity: [...thread.activity, entry] };
 }
 
+/** A widget's entry in the transcript stops being live: it renders as its one-line record from now on. */
+export function closeCard(thread: Thread, queueId: string): Thread {
+  return {
+    ...thread,
+    activity: thread.activity.map((e) =>
+      e.card?.id === queueId
+        ? { ...e, card: { id: queueId, isOpen: false } }
+        : e,
+    ),
+  };
+}
+
 /** One simulated minute: the clock moves and every demo thread (no live session) reports what it did. */
 /** The reports a message delivers, kept until the agent answers so a failed send un-delivers them (`applyAgentEvent`). */
 function sentReports(t: Thread) {

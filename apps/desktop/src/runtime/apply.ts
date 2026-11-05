@@ -23,6 +23,7 @@ import { pauseQueue } from '../chat/queued.ts';
 import { reportItems } from '../goals/ledger.ts';
 import type { Action, State } from '../store/types.ts';
 import {
+  closeCard,
   log,
   mapThread,
   readSteer,
@@ -661,12 +662,21 @@ function waitOnYou(
             s.status === 'running' ? { ...s, status: 'blocked', note } : s,
           ),
         },
-        {
-          at: now,
-          who: 'harness',
-          kind: 'event',
-          text: `Waiting on you: ${item.title}`,
-        },
+        // A question is answered where the agent asked it: the entry is its card, live until answered or withdrawn.
+        item.kind === 'question'
+          ? {
+              at: now,
+              who: 'harness',
+              kind: 'event',
+              text: item.title,
+              card: { id: item.id, isOpen: true },
+            }
+          : {
+              at: now,
+              who: 'harness',
+              kind: 'event',
+              text: `Waiting on you: ${item.title}`,
+            },
       ),
     ),
   };
@@ -689,7 +699,7 @@ function withdraw(state: State, thread: Thread, queueId: string): State {
     threads: mapThread(state.threads, thread.id, (t) =>
       log(
         isWaiting
-          ? t
+          ? closeCard(t, queueId)
           : {
               ...t,
               status: 'running',
@@ -698,6 +708,7 @@ function withdraw(state: State, thread: Thread, queueId: string): State {
                   ? { ...s, status: 'running', note: undefined }
                   : s,
               ),
+              activity: closeCard(t, queueId).activity,
             },
         {
           at: now,

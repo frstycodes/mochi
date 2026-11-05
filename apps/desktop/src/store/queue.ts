@@ -7,7 +7,7 @@ import {
 } from '../model.ts';
 import type { Action, State } from './types.ts';
 import type { Saved } from './saved.ts';
-import { log, mapStep, mapThread } from './threads.ts';
+import { closeCard, log, mapStep, mapThread } from './threads.ts';
 import { markSettled } from '../settled/settled.ts';
 
 export interface QueueState {
@@ -169,7 +169,7 @@ function answer(
         ? `Approved: ${item.code ?? item.title}`
         : answerText(answers) || 'Answered';
     return log(
-      { ...unblocked, status: 'running' },
+      { ...closeCard(unblocked, queueId), status: 'running' },
       {
         at: now,
         who: 'you',

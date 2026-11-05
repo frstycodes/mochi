@@ -204,13 +204,16 @@ export function ChatView({
   // Its label names skills and servers as the library does.
   useLibraryNames();
   const action = currentAction(thread);
-  // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
+  // Mochi's own widgets and the agent's questions sit in the transcript where they were asked; the tray keeps the agent's approvals.
   // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
   const decisions = useHarnessSelector(
     (s) =>
       s.queue.filter(
         (q) =>
-          q.threadId === thread.id && !isMochiCard(q) && q.kind !== 'review',
+          q.threadId === thread.id &&
+          !isMochiCard(q) &&
+          q.kind !== 'review' &&
+          q.kind !== 'question',
       ),
     shallowEqual,
   );
