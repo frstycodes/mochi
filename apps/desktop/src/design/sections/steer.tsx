@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import {
-  NextMoveAsk,
   NextMoveCard,
   NextMoveContent,
+  NextMoveQuestion,
   NextMoveSummary,
 } from '../../goals/NextMove';
 import { SupersededNote } from '../../goals/ReportCard';
@@ -54,7 +54,9 @@ export function SteerBlock() {
                 The session cookie keeps its name through the Better Auth
                 migration. Every criterion passes on the branch.
               </NextMoveSummary>
-              <NextMoveAsk question="Open a pull request for the cookie fix?" />
+              <NextMoveQuestion>
+                Open a pull request for the cookie fix?
+              </NextMoveQuestion>
             </NextMoveContent>
           </NextMoveCard>
           <ComposerStub placeholder="Message Claude" />

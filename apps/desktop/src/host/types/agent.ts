@@ -37,7 +37,7 @@ export interface AgentStartOptions {
   switchFrom?: SwitchFrom;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
-  /** The turn spine is off (Settings): report_turn and update_plan without its fields, no instructions for them. Read at session start. */
+  /** The turn spine is off (Settings): wrap_up without assumptions, and no instructions for them. Read at session start. */
   isSpineOff?: boolean;
   /** The profile's settings chat (Settings › Ask Mochi): only the settings tools and their instructions, no files, shell or browser. */
   isSettingsChat?: boolean;

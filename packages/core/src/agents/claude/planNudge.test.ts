@@ -27,15 +27,24 @@ test('a run of calls without update_plan gets the reminder, then again after ano
 
 test('updating the plan restarts the count', () => {
   run('b', NUDGE_AFTER - 1);
-  nudgeAfter('b', done('mcp__mochi__update_plan', 'Step 2/4 in progress'));
+  nudgeAfter(
+    'b',
+    done(
+      'mcp__mochi__update_plan',
+      'Plan updated: step 2 of 4 is in progress: "B".',
+    ),
+  );
   assert.ok(run('b', NUDGE_AFTER - 1).every((o) => context(o) === undefined));
   assert.equal(context(run('b', 1)[0]), NUDGE);
 });
 
-test('a finished plan is left alone until the turn is reported', () => {
-  nudgeAfter('c', done('mcp__mochi__update_plan', 'Plan done (4/4).'));
+test('a finished plan is left alone until the turn is wrapped up', () => {
+  nudgeAfter(
+    'c',
+    done('mcp__mochi__update_plan', 'Plan updated: every step is done.'),
+  );
   assert.ok(run('c', NUDGE_AFTER * 2).every((o) => context(o) === undefined));
-  nudgeAfter('c', done('mcp__mochi__report_turn'));
+  nudgeAfter('c', done('mcp__mochi__wrap_up'));
   assert.equal(context(run('c', NUDGE_AFTER).at(-1)), NUDGE);
 });
 

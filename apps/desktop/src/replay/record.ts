@@ -39,8 +39,6 @@ const RECORDED = [
   'simplify-toggle',
   'report',
   'parent-report',
-  'pivot',
-  'pivot-why',
   'controls',
   'handoff-draft',
   'handoff',

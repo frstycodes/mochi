@@ -1,7 +1,6 @@
 import type { Page } from '../browser/pages.ts';
 import type {
   AgentModel,
-  AgentPlanItem,
   AgentToolCall,
   AgentToolResult,
 } from '../host/types/agent.ts';
@@ -31,6 +30,7 @@ import {
 } from '../chat/grants.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { reportItems } from '../goals/ledger.ts';
+import { closedRunning, planResult, planUpdate } from './planTool.ts';
 import {
   authorName,
   isListed,
@@ -40,7 +40,6 @@ import {
   type Provider,
   type QueueItem,
   type Space,
-  type Step,
   type Thread,
   type ThreadProposal,
 } from '../model.ts';
@@ -1049,41 +1048,42 @@ const THREAD_SPECS = {
 } satisfies Partial<Specs>;
 
 const REPORT_SPECS = {
-  report_turn: {
+  wrap_up: {
     run: ({ env, state, caller, args, dispatch }) => {
-      const { summary, next, options } = args;
+      const ask = args.ask?.trim();
+      const actions = args.actions?.map((a) => ({
+        label: a.label.trim(),
+        ...(a.isDraft && { isDraft: true as const }),
+      }));
+      if (!!ask !== !!actions?.length)
+        throw new Error(
+          ask
+            ? 'Nothing changed: an ask needs its answers. Add "actions": 1 to 3 of {"label": "..."}, your pick first.'
+            : 'Nothing changed: actions answer an ask. Add "ask": the one question, or leave actions out.',
+        );
+      const closed = closedRunning(caller.steps);
+      if (closed)
+        dispatch({
+          type: 'agent',
+          event: { threadId: caller.id, type: 'plan', items: closed },
+          ms: Date.now(),
+        });
       const isSpineOn = env.prefs.get().turnSpine;
-      const decisions = reportItems(args.decisions);
-      const assumptions = reportItems(args.assumptions);
       dispatch({
         type: 'report',
         threadId: caller.id,
         report: {
           by: caller.providers[0],
-          decisions: isSpineOn ? decisions : decisions.map((d) => d.text),
-          ...(isSpineOn && { assumptions }),
-          left: args.left,
-          ...(args.question?.trim() && { question: args.question.trim() }),
-          ...(summary?.trim() && { summary: summary.trim() }),
-          ...(next?.trim() && { next: next.trim() }),
-          ...(options && {
-            options: options.map((o) => ({
-              label: o.label.trim(),
-              reply: o.reply.trim(),
-              ...(o.isDraft && { isDraft: true }),
-            })),
-          }),
+          recap: args.recap.trim(),
+          decisions: reportItems(args.decisions),
+          ...(isSpineOn && { assumptions: reportItems(args.assumptions) }),
+          ...(ask && { ask, actions }),
+          ...(args.blocked && { isBlocked: true }),
         },
       });
-      const running = caller.steps.find((s) => s.status === 'running');
       return {
-        changed: 'reported',
-        result: {
-          ...reportOf(target(state(), caller, caller.id)),
-          ...(running && {
-            note: `Your plan still shows "${running.title}" in progress. If it's finished, call update_plan with {"advance": true} before you end the turn; if not, leave it.`,
-          }),
-        },
+        changed: 'wrapped up the turn',
+        result: reportOf(target(state(), caller, caller.id)),
       };
     },
   },
@@ -1091,7 +1091,7 @@ const REPORT_SPECS = {
     run: ({ caller, args, dispatch }) => {
       if (!caller.parent)
         throw new Error(
-          'This thread has no parent thread; report_turn reports to the user',
+          'This thread has no parent thread; wrap_up reports to the user',
         );
       const { status, branch, pr, changedFiles, checks } = args;
       dispatch({
@@ -1249,30 +1249,23 @@ const USER_SPECS = {
 
 const AGENT_SPECS = {
   update_plan: {
-    run: ({ state, caller, args, dispatch }) => {
-      if (!args.items && !args.advance)
-        throw new Error(
-          'Pass {"items": [...]} (the whole plan) or {"advance": true}',
-        );
-      const items = args.items
-        ? args.items.map((i) => ({
-            title: i.title.trim(),
-            status: PLAN_STATUS[i.status],
-          }))
-        : advanced(caller.steps);
+    run: ({ caller, args, dispatch }) => {
+      const update = planUpdate(caller.steps, args);
+      if ('error' in update) throw new Error(update.error);
       dispatch({
         type: 'agent',
         event: {
           threadId: caller.id,
           type: 'plan',
-          items,
-          ...(args.scope === 'first_task' && { isFresh: true }),
+          items: update.items,
+          ...(args.items &&
+            (args.scope === 'first_task' || args.scope === 'new_task') && {
+              isFresh: true,
+            }),
         },
         ms: Date.now(),
       });
-      return {
-        result: planStatus(target(state(), caller, caller.id).steps),
-      };
+      return { result: planResult(update.items, update.warnings) };
     },
   },
   start_subagent: {
@@ -1329,113 +1322,11 @@ const SPECS = {
   ...LAYOUT_SPECS,
   ...USER_SPECS,
   ...AGENT_SPECS,
-  update_plan: withPivots(AGENT_SPECS.update_plan),
   ...BROWSER_TOOLS,
   ...DEV_SERVER_TOOLS,
   browser_batch: { run: runBatch },
   ...SETTINGS_TOOLS,
 } satisfies Specs;
-
-/**
- * update_plan with the turn spine's pivots: a resent plan that drops or renames steps is recorded with its `why` where the
- * spine places it, and the reply names what changed. Dropping steps without a why asks for one, once: a `{"why"}` alone
- * answers it and drops nothing. Wraps the plan spec so the plan itself stays as it is.
- */
-function withPivots(spec: ToolSpec<'update_plan'>): ToolSpec<'update_plan'> {
-  return {
-    run: async (ctx, options) => {
-      const { env, state, caller, args, dispatch } = ctx;
-      const why = env.prefs.get().turnSpine ? args.why?.trim() : undefined;
-      if (why && !args.items && !args.advance) {
-        dispatch({ type: 'pivot-why', threadId: caller.id, why });
-        return { result: 'Noted why the plan changed.' };
-      }
-      const outcome = await spec.run(ctx, options);
-      if (
-        !env.prefs.get().turnSpine ||
-        !args.items ||
-        args.scope === 'first_task'
-      )
-        return outcome;
-      const change = planChange(
-        caller.steps,
-        target(state(), caller, caller.id).steps,
-      );
-      if (!change.dropped.length && !change.renamed.length) return outcome;
-      if (change.dropped.length || why)
-        dispatch({
-          type: 'pivot',
-          threadId: caller.id,
-          pivot: {
-            ...(why && { why }),
-            dropped: [...change.dropped, ...change.renamed.map((r) => r.from)],
-            at: change.at,
-          },
-        });
-      const asks =
-        change.dropped.length && !why
-          ? ' Say why in one line: update_plan with {"why": "..."}.'
-          : '';
-      return {
-        ...outcome,
-        result: `${String(outcome.result)} ${describeChange(change)}${asks}`,
-      };
-    },
-  };
-}
-
-interface PlanChange {
-  dropped: string[];
-  renamed: { from: string; to: string }[];
-  added: string[];
-  /** Where the spine puts the pivot among the plan's steps: before the first step that replaced what was dropped. */
-  at: number;
-}
-
-/** What a resent plan changed, from the thread's steps before and after it. */
-export function planChange(before: Step[], after: Step[]): PlanChange {
-  const was = new Map(before.map((s) => [s.id, s]));
-  const kept = after.filter((s) => s.status !== 'dropped');
-  const dropped = after.filter(
-    (s) =>
-      s.status === 'dropped' &&
-      was.get(s.id)?.status !== 'dropped' &&
-      was.has(s.id),
-  );
-  const renamed = kept.flatMap((s) => {
-    const from = was.get(s.id)?.title;
-    return from !== undefined && from !== s.title
-      ? [{ from, to: s.title }]
-      : [];
-  });
-  const added = kept.filter((s) => !was.has(s.id));
-  const firstNew = kept.findIndex(
-    (s) => !was.has(s.id) || was.get(s.id)!.title !== s.title,
-  );
-  const open = before.filter((s) => s.status !== 'dropped');
-  const firstDropped = open.findIndex((s) =>
-    dropped.some((d) => d.id === s.id),
-  );
-  const keptBefore = open
-    .slice(0, Math.max(firstDropped, 0))
-    .filter((s) => kept.some((k) => k.id === s.id)).length;
-  return {
-    dropped: dropped.map((s) => s.title),
-    renamed,
-    added: added.map((s) => s.title),
-    at: firstNew >= 0 ? firstNew : keptBefore,
-  };
-}
-
-function describeChange({ dropped, renamed, added }: PlanChange) {
-  const quote = (titles: string[]) => titles.map((t) => `"${t}"`).join(', ');
-  const parts = [
-    dropped.length && `dropped ${quote(dropped)}`,
-    ...renamed.map((r) => `renamed "${r.from}" to "${r.to}"`),
-    added.length && `added ${quote(added)}`,
-  ].filter(Boolean);
-  return `You ${parts.join(', ')}.`;
-}
 
 /** Each step runs as its own call: its policy, its approvals and its line in the thread, until one fails. */
 async function runBatch(
@@ -1785,47 +1676,6 @@ const asObject = (v: unknown) =>
   v && typeof v === 'object' && !Array.isArray(v) ? v : { result: v };
 
 const fail = (text: string): AgentToolResult => ({ text, isError: true });
-
-const PLAN_STATUS = {
-  pending: 'pending',
-  in_progress: 'running',
-  completed: 'done',
-} as const;
-
-/** The thread's plan one step on: the running step done, the next open one running. */
-function advanced(steps: Step[]): AgentPlanItem[] {
-  const items = steps.flatMap((s): AgentPlanItem[] =>
-    s.status === 'dropped'
-      ? []
-      : [
-          {
-            title: s.title,
-            status:
-              s.status === 'done' || s.status === 'running'
-                ? s.status
-                : 'pending',
-          },
-        ],
-  );
-  const running = items.findIndex((i) => i.status === 'running');
-  if (running >= 0) items[running].status = 'done';
-  const next = items.findIndex((i, k) => k > running && i.status === 'pending');
-  if (next >= 0) items[next].status = 'running';
-  return items;
-}
-
-/** The plan as the agent left it, so it never has to count its own advances to know which step is running. */
-function planStatus(steps: Step[]) {
-  const open = steps.filter((s) => s.status !== 'dropped');
-  const done = open.filter((s) => s.status === 'done').length;
-  const at = open.findIndex((s) => s.status === 'running');
-  const next = open.find((s, k) => k > at && s.status === 'ready');
-  const upNext = next ? ` Next: "${next.title}".` : '';
-  if (at >= 0)
-    return `Step ${at + 1}/${open.length} in progress: "${open[at].title}".${upNext || ' Last step: advance once more when it is done.'}`;
-  if (done === open.length) return `Plan done (${done}/${open.length}).`;
-  return `Nothing in progress; ${done}/${open.length} done.${upNext}`;
-}
 
 export function summary(thread: Thread) {
   return {

@@ -33,13 +33,14 @@ import { toolCalls } from './calls.ts';
 /** Codex: a streamable-HTTP URL on localhost for its `mcp_servers` config, one path per thread behind a per-launch secret. */
 export async function codexUrl(
   thread: string,
-  { isSettingsChat, isSpineOff, isSubThread }: MochiScope = {},
+  { isSettingsChat, isSpineOff, isSubThread, isCodex }: MochiScope = {},
 ) {
   const { port } = (await listening()).address() as AddressInfo;
   const query = new URLSearchParams({
     ...(isSettingsChat && { kind: 'settings' }),
     ...(isSubThread && { kind: 'sub' }),
     ...(isSpineOff && { spine: 'off' }),
+    ...(isCodex && { agent: 'codex' }),
   }).toString();
   return `http://127.0.0.1:${port}/mcp/${SECRET}/${thread}${query && `?${query}`}`;
 }
@@ -171,6 +172,7 @@ function listening() {
         isSettingsChat: query.get('kind') === 'settings',
         isSubThread: query.get('kind') === 'sub',
         isSpineOff: query.get('spine') === 'off',
+        isCodex: query.get('agent') === 'codex',
       };
       const isDev =
         !app.isPackaged &&
