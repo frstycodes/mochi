@@ -398,6 +398,10 @@ export interface AgentQuestion {
   text: string;
   options: string[];
   multiSelect: boolean;
+  /** Per option, by index: a line under its label. Absent when the agent sent none. */
+  descriptions?: string[];
+  /** Per option, by index: a mockup or code shown once it's picked (Claude only). Absent when the agent sent none. */
+  previews?: string[];
 }
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */

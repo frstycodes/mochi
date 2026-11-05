@@ -142,8 +142,11 @@ export function currentAction(thread: Thread): CurrentAction | undefined {
 const isCommand = (text: string) =>
   toolVerb(text) === 'Run' && !/^\w+: /.test(text);
 
+// An approval logs "Waiting on you: …"; a question logs its own open card in the transcript instead.
 const isWaitEvent = (e: ActivityEntry) =>
-  e.kind === 'event' && e.text.startsWith('Waiting on you:');
+  e.kind === 'event' &&
+  (e.text.startsWith('Waiting on you:') ||
+    (e.who === 'harness' && !!e.card?.isOpen));
 
 // Claude's AskUserQuestion has no target, so its call reads as a bare tool name.
 function waitingLabel(call: ToolCall) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Archive,
@@ -41,21 +41,6 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { BoundShortcut } from './Shortcut';
-import {
-  Questionnaire,
-  QuestionnaireActions,
-  QuestionnaireChoice,
-  QuestionnaireChoices,
-  QuestionnaireDescription,
-  QuestionnaireError,
-  QuestionnaireInput,
-  QuestionnaireItem,
-  QuestionnaireNext,
-  QuestionnairePrevious,
-  QuestionnaireProgress,
-  QuestionnaireSubmit,
-  QuestionnaireTitle,
-} from '@/components/ui/questionnaire';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
@@ -77,6 +62,7 @@ import {
 } from './store';
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
+import { QuestionForm } from './chat/QuestionForm';
 import { useSendCiLog } from './notify/useSendCiLog';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { remoteDecisions } from './remote/mirror';
@@ -263,7 +249,7 @@ export function QueueDecision({
         {item.kind === 'approval' && !item.tool && (
           <ApprovalRequest item={item} canOpenThread={!!showThread} />
         )}
-        {item.kind === 'question' && <QuestionChoices item={item} />}
+        {item.kind === 'question' && <QuestionChoices item={item} isInCard />}
         {!!item.collision && <SharedFiles files={item.collision.files} />}
       </CardContent>
       {item.kind === 'review' && (
@@ -570,91 +556,46 @@ function CiActions({ item }: { item: QueueItem }) {
   );
 }
 
-function QuestionChoices({ item }: { item: QueueItem }) {
-  const dispatch = useDispatch();
-  const withUndo = useUndoable();
-  const questions = item.questions ?? [];
-  const isWizard = questions.length > 1;
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const answers = answersFrom(
-      new FormData(e.currentTarget),
-      questions.length,
-    );
-    withUndo(`Answered: ${answerText(answers)}`, () =>
-      dispatch({ type: 'answer', queueId: item.id, answers }),
-    );
-  };
+/**
+ * The agent's question where it asked it, in the chat: just the question and its answers, in a divided frame. The Queue
+ * shows the same item with its thread, age and what it blocks (`QueueDecision`).
+ */
+export function QuestionWidget({ item }: { item: QueueItem }) {
   return (
-    <Questionnaire
-      items={questions.map((q, i) => ({
-        name: `q${i}`,
-        required: true,
-        choices: q.options.map((value) => ({ value })),
-      }))}
-      shortcuts="numbers"
-      // The number keys only work with focus inside, so their hints only show then.
-      className="[&:not(:focus-within)_[data-slot=questionnaire-choice-shortcut]]:hidden"
-      onSubmit={submit}
+    <section
+      aria-label={item.title}
+      data-card={item.id}
+      tabIndex={-1}
+      className="outline-none"
     >
-      {isWizard && <QuestionnaireProgress />}
-      {questions.map((q, i) => (
-        <QuestionnaireItem
-          key={i}
-          name={`q${i}`}
-          multiple={q.multiSelect}
-          required
-          className="gap-3"
-        >
-          {isWizard && (
-            <QuestionnaireTitle className="mb-1 type-prose [&:not(:has(~[data-slot=questionnaire-description]))]:mb-3">
-              {q.text}
-            </QuestionnaireTitle>
-          )}
-          {q.multiSelect && (
-            <QuestionnaireDescription className="type-meta">
-              Pick any that apply.
-            </QuestionnaireDescription>
-          )}
-          <QuestionnaireChoices>
-            {q.options.map((label) => (
-              <QuestionnaireChoice key={label} value={label}>
-                {label}
-              </QuestionnaireChoice>
-            ))}
-          </QuestionnaireChoices>
-          <QuestionnaireInput
-            aria-label="Your own answer"
-            placeholder={
-              q.options.length ? 'Or type your own answer' : 'Type your answer'
-            }
-          />
-          <QuestionnaireError className="mt-0 type-meta">
-            Pick an answer or type your own.
-          </QuestionnaireError>
-        </QuestionnaireItem>
-      ))}
-      <QuestionnaireActions>
-        <QuestionnairePrevious size="sm" />
-        <QuestionnaireNext size="sm" />
-        <QuestionnaireSubmit size="sm">
-          {isWizard ? 'Send answers' : 'Send answer'}
-        </QuestionnaireSubmit>
-      </QuestionnaireActions>
-    </Questionnaire>
+      <QuestionChoices item={item} />
+    </section>
   );
 }
 
-/** Each question's checked labels plus its typed answer; the typed one only counts once selected, which the questionnaire tracks by naming its input. */
-function answersFrom(form: FormData, count: number) {
-  return Array.from({ length: count }, (_, i) => [
-    ...new Set(
-      form
-        .getAll(`q${i}`)
-        .map((v) => v.toString().trim())
-        .filter(Boolean),
-    ),
-  ]);
+/** The questions and their answers, the same in the chat and the Queue; sending records your answer with Undo. */
+function QuestionChoices({
+  item,
+  isInCard,
+}: {
+  item: QueueItem;
+  /** In the Queue's card, whose title already names one question and whose border frames it. */
+  isInCard?: boolean;
+}) {
+  const dispatch = useDispatch();
+  const withUndo = useUndoable();
+  return (
+    <QuestionForm
+      questions={item.questions ?? []}
+      hideTitle={isInCard}
+      isNested={isInCard}
+      onSend={(answers) =>
+        withUndo(`Answered: ${answerText(answers)}`, () =>
+          dispatch({ type: 'answer', queueId: item.id, answers }),
+        )
+      }
+    />
+  );
 }
 
 function EmptyQueue({ isWorking }: { isWorking: boolean }) {

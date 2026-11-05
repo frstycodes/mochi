@@ -1,11 +1,13 @@
-import type { Ref } from 'react';
-import { ArrowUp, Check, CheckRead, X } from '@/icons';
+import type { ComponentProps, Ref } from 'react';
+import { Check, CheckRead, X } from '@/icons';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { toast } from '@/toast/store';
 import { TooltipIconButton } from '../ui';
 import { host } from '../host';
@@ -80,8 +82,9 @@ function useRemoteUnsteer(threadId: string) {
 }
 
 /**
- * A message you sent while the agent works, before the agent has read it: under the live turn, dimmed; hovering floats an X over its
- * corner, and it or the bubble takes the message back. Send now in its bar stops the turn and sends it first; both are off while it goes.
+ * A message you sent while the agent works, before the agent has read it: under the live turn, dimmed. Hovering shows "Click to
+ * edit" above it and an × on its corner; either click takes the message back. Send now in its bar stops the turn and sends it
+ * first; both are off while it goes.
  */
 export function SteerBubble({
   bubbleRef,
@@ -109,8 +112,16 @@ export function SteerBubble({
           className="justify-end opacity-60"
         />
       )}
+      {/* Says what a click on the bubble does; the × is the button keyboards and screen readers get. */}
+      {!!takeBack && (
+        <span
+          aria-hidden
+          className="self-end pr-5 type-caption text-subtle-foreground opacity-0 transition-opacity group-hover/row:opacity-100 pointer-coarse:hidden"
+        >
+          Click to edit
+        </span>
+      )}
       <Message from="user">
-        {/* The bubble takes a click too; the X is the button keyboards and screen readers get. */}
         <div onClick={takeBack} className="group/bubble relative self-end">
           <MessageContent
             ref={bubbleRef}
@@ -135,19 +146,43 @@ export function SteerBubble({
       </Message>
       <div className="flex items-center justify-end gap-0.5 pr-1">
         {!!onSendNow && (
-          <TooltipIconButton
-            label="Send now"
+          <BarButton
             hint={`Stops ${agent}’s turn and sends this first. Other waiting messages follow it.`}
             disabled={isSending}
             onClick={onSendNow}
-            className="text-subtle-foreground opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100"
           >
-            <ArrowUp className="size-3.5" />
-          </TooltipIconButton>
+            Send now
+          </BarButton>
         )}
         <ReadMark agent={agent} isRead={false} />
       </div>
     </div>
+  );
+}
+
+/** A labelled action in a waiting message's bar, revealed with the bar on hover or focus inside its row; its hint says what happens. */
+function BarButton({
+  hint,
+  className,
+  ...props
+}: { hint: string } & ComponentProps<typeof Button>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            size="xs"
+            variant="ghost"
+            className={cn(
+              'text-muted-foreground opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100',
+              className,
+            )}
+            {...props}
+          />
+        }
+      />
+      <TooltipContent className="max-w-60">{hint}</TooltipContent>
+    </Tooltip>
   );
 }
 

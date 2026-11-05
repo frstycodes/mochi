@@ -230,6 +230,35 @@ test('subagent messages are skipped', () => {
   );
 });
 
+test("AskUserQuestion keeps each option's description and preview, by index", () => {
+  const input = {
+    questions: [
+      {
+        question: 'Which layout?',
+        header: 'Layout',
+        multiSelect: false,
+        options: [
+          {
+            label: 'Stacked',
+            description: 'Buttons on their own row',
+            preview: '[Commit]',
+          },
+          { label: 'Inline', description: 'One line' },
+        ],
+      },
+    ],
+  };
+  const event = approvalEvent('t1', 'r1', 'AskUserQuestion', input, '', '');
+  assert.ok(event.type === 'question');
+  assert.deepEqual(event.questions[0], {
+    text: 'Which layout?',
+    options: ['Stacked', 'Inline'],
+    multiSelect: false,
+    descriptions: ['Buttons on their own row', 'One line'],
+    previews: ['[Commit]', ''],
+  });
+});
+
 test('AskUserQuestion becomes a question and its answers go back keyed by question text', () => {
   const input = {
     questions: [

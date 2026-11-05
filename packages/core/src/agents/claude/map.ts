@@ -52,6 +52,7 @@ import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { claudeEventWindow } from '../../../../../apps/desktop/src/usage/limits.ts';
 import { posixPath } from '../../../../../apps/desktop/electron/platform.ts';
 import type { SaveImage } from '../images.ts';
+import { perOption } from '../questions.ts';
 
 /**
  * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs and usage totals carry across
@@ -767,7 +768,7 @@ export function approvalEvent(
   if (toolName === 'AskUserQuestion') {
     const questions = (input.questions ?? []) as {
       question: string;
-      options: { label: string }[];
+      options: { label: string; description?: string; preview?: string }[];
       multiSelect?: boolean;
     }[];
     return {
@@ -778,6 +779,14 @@ export function approvalEvent(
         text: q.question,
         options: q.options.map((o) => o.label),
         multiSelect: !!q.multiSelect,
+        ...perOption(
+          q.options.map((o) => o.description),
+          'descriptions',
+        ),
+        ...perOption(
+          q.options.map((o) => o.preview),
+          'previews',
+        ),
       })),
     };
   }
