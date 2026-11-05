@@ -100,11 +100,8 @@ import { SubThreadResultRow, ThreadLinkRow } from './goals/SubThreads';
 import { ProposalEntry } from './chat/ThreadProposals';
 import { moveRecord, showsVerdictCard, suggestedReply } from './goals/report';
 import { TurnChangesCard } from './chat/TurnChangesCard';
-import {
-  AutofixEventRow,
-  ReceivedMessageRow,
-  SubReportRow,
-} from './chat/ThreadMessage';
+import { AutofixEventRow, ReceivedMessageRow } from './chat/ThreadMessage';
+import { SubReports } from './chat/SubReports';
 import {
   isTurnRunning,
   type TurnAnchor,
@@ -510,6 +507,7 @@ const ChatRowView = memo(function ChatRowView({
       />
     );
   if (row.kind === 'plan') return <PlanRow entries={row.entries} />;
+  if (row.kind === 'reports') return <SubReports entries={row.entries} />;
   if (row.kind === 'event' && row.entry.isLimit)
     return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.nextMove)
@@ -522,8 +520,6 @@ const ChatRowView = memo(function ChatRowView({
     return (
       <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />
     );
-  if (row.kind === 'event' && row.entry.subReport)
-    return <SubReportRow entry={row.entry} report={row.entry.subReport} />;
   if (row.kind === 'event' && row.entry.devServer)
     return <DevServerCard thread={thread} server={row.entry.devServer} />;
   if (row.kind === 'event' && row.entry.proposals)
