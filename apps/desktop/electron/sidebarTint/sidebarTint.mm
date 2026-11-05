@@ -1,6 +1,5 @@
-// The material under the sidebar's strip of the window, below the page, so the page keeps its own opaque colours:
-// a flat colour over Electron's `vibrancy` before macOS 26, or with `glass` an NSGlassEffectView tinted that colour on
-// macOS 26, where AppKit's sidebar glass (electron/sidebarGlass) isn't used yet. One view per NSWindow.
+// A flat colour over Electron's `vibrancy` in the sidebar's strip of the window, below the page, so the page keeps its own
+// opaque colours. One view per NSWindow.
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
@@ -17,8 +16,6 @@ napi_status napi_get_cb_info(napi_env, napi_callback_info, size_t *, napi_value 
 napi_status napi_get_buffer_info(napi_env, napi_value, void **, size_t *);
 napi_status napi_get_named_property(napi_env, napi_value, const char *, napi_value *);
 napi_status napi_get_value_double(napi_env, napi_value, double *);
-napi_status napi_get_value_bool(napi_env, napi_value, bool *);
-napi_status napi_get_boolean(napi_env, bool, napi_value *);
 napi_status napi_is_array(napi_env, napi_value, bool *);
 napi_status napi_get_array_length(napi_env, napi_value, uint32_t *);
 napi_status napi_get_element(napi_env, napi_value, uint32_t, napi_value *);
@@ -34,16 +31,6 @@ napi_status napi_set_named_property(napi_env, napi_value, const char *, napi_val
 
 @implementation MochiSidebarTintView
 // Clicks belong to the page, even if Chromium ever re-sorts this view above it.
-- (NSView *)hitTest:(NSPoint)point {
-  return nil;
-}
-@end
-
-API_AVAILABLE(macos(26.0))
-@interface MochiSidebarGlassView : NSGlassEffectView
-@end
-
-@implementation MochiSidebarGlassView
 - (NSView *)hitTest:(NSPoint)point {
   return nil;
 }
@@ -101,33 +88,17 @@ static bool isMainThread(napi_env env) {
   return false;
 }
 
-static bool isGlassAvailable() {
-  if (@available(macOS 26, *)) return true;
-  return false;
-}
-
-// A new view when there's none yet or the wrong kind for `isGlass`.
-static NSView *tintViewFor(NSWindow *window, bool isGlass) {
+static NSView *tintViewFor(NSWindow *window) {
   NSView *tint = objc_getAssociatedObject(window, kTintKey);
-  bool isGlassView = false;
-  if (@available(macOS 26, *)) isGlassView = [tint isKindOfClass:MochiSidebarGlassView.class];
-  if (tint && isGlassView == isGlass) return tint;
-  [tint removeFromSuperview];
-  if (@available(macOS 26, *)) {
-    if (isGlass) {
-      MochiSidebarGlassView *glass = [MochiSidebarGlassView new];
-      glass.cornerRadius = 0;
-      tint = glass;
-    }
-  }
-  if (!isGlass) tint = [MochiSidebarTintView new];
+  if (tint) return tint;
+  tint = [MochiSidebarTintView new];
   tint.wantsLayer = YES;
   tint.autoresizingMask = NSViewHeightSizable;
   objc_setAssociatedObject(window, kTintKey, tint, OBJC_ASSOCIATION_RETAIN);
   return tint;
 }
 
-// setSidebarTint(handle, { width, rgba: [r, g, b, a], glass? }): width in points, colour components 0–1 in sRGB.
+// setSidebarTint(handle, { width, rgba: [r, g, b, a] }): width in points, colour components 0–1 in sRGB.
 static napi_value setSidebarTint(napi_env env, napi_callback_info info) {
   size_t argc = 2;
   napi_value args[2];
@@ -160,29 +131,17 @@ static napi_value setSidebarTint(napi_env env, napi_callback_info info) {
     napi_throw_type_error(env, nullptr, "rgba must be four numbers from 0 to 1");
     return nullptr;
   }
-  napi_value glassValue;
-  bool isGlass = false;
-  if (napi_get_named_property(env, args[1], "glass", &glassValue) == 0 &&
-      napi_get_value_bool(env, glassValue, &isGlass) != 0)
-    isGlass = false;
-  if (isGlass && !isGlassAvailable()) {
-    napi_throw_error(env, nullptr, "glass needs macOS 26 or later");
-    return nullptr;
-  }
   NSView *root = nil;
   if (!readHandle(env, args[0], &root)) return nullptr;
 
-  NSView *tint = tintViewFor(root.window, isGlass);
+  NSView *tint = tintViewFor(root.window);
   place(tint, root);
   NSRect area = tint.superview == root ? root.bounds : root.frame;
   NSColor *color = [NSColor colorWithSRGBRed:rgba[0] green:rgba[1] blue:rgba[2] alpha:rgba[3]];
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   tint.frame = NSMakeRect(area.origin.x, area.origin.y, width, area.size.height);
-  if (@available(macOS 26, *)) {
-    if (isGlass) ((MochiSidebarGlassView *)tint).tintColor = color;
-  }
-  if (!isGlass) tint.layer.backgroundColor = color.CGColor;
+  tint.layer.backgroundColor = color.CGColor;
   [CATransaction commit];
   return undefined;
 }
@@ -206,17 +165,8 @@ static napi_value clearTint(napi_env env, napi_callback_info info) {
   return undefined;
 }
 
-// isGlassSupported(): whether `glass` can be asked for, macOS 26 and later.
-static napi_value isGlassSupported(napi_env env, napi_callback_info) {
-  napi_value result;
-  napi_get_boolean(env, isGlassAvailable(), &result);
-  return result;
-}
-
 extern "C" __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_env env, napi_value exports) {
   napi_value fn;
-  napi_create_function(env, "isGlassSupported", SIZE_MAX, isGlassSupported, nullptr, &fn);
-  napi_set_named_property(env, exports, "isGlassSupported", fn);
   napi_create_function(env, "setSidebarTint", SIZE_MAX, setSidebarTint, nullptr, &fn);
   napi_set_named_property(env, exports, "setSidebarTint", fn);
   napi_create_function(env, "clearTint", SIZE_MAX, clearTint, nullptr, &fn);

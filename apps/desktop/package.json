@@ -197,10 +197,6 @@
           "to": "fonts"
         },
         {
-          "from": "build/native/sidebar-glass",
-          "to": "sidebar-glass"
-        },
-        {
           "from": "build/native/sidebar-tint",
           "to": "sidebar-tint"
         },

@@ -378,7 +378,7 @@ function useWithoutStreamedText(thread: Thread) {
 }
 
 /**
- * The page's own colour under the transcript where the composer card sits, shown only over a window material (index.css): there the
+ * The page's own colour under the transcript where the composer card sits, shown only over Mica, the one see-through page (index.css): there the
  * composer's backdrop blur let text on see-through pixels through sharp, and on this base it blurs like the rest.
  */
 function ComposerBase() {

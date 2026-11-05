@@ -25,7 +25,6 @@ const HELPERS = {
 };
 
 const ADDONS = {
-  'sidebar-glass': 'electron/sidebarGlass/sidebarGlass.mm',
   'sidebar-tint': 'electron/sidebarTint/sidebarTint.mm',
 };
 
