@@ -21,6 +21,7 @@ import {
 } from '../../../../../apps/desktop/src/usage/limits.ts';
 import { posixPath } from '../../../../../apps/desktop/electron/platform.ts';
 import type { SaveImage } from '../images.ts';
+import { perOption } from '../questions.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -375,13 +376,24 @@ export function mapRequest(
     const questions = p.questions.flatMap((q) => {
       const o = obj(q);
       if (typeof o?.question !== 'string') return [];
-      const options = Array.isArray(o.options)
+      const picked = Array.isArray(o.options)
         ? o.options.flatMap((x) =>
-            typeof obj(x)?.label === 'string' ? [obj(x)!.label as string] : [],
+            typeof obj(x)?.label === 'string' ? [obj(x)!] : [],
           )
         : [];
+      const options = picked.map((x) => x.label as string);
+      const descriptions = picked.map((x) =>
+        typeof x.description === 'string' ? x.description : undefined,
+      );
       // app-server's request_user_input has no multi-select flag; free text is always offered.
-      return [{ text: o.question, options, multiSelect: false }];
+      return [
+        {
+          text: o.question,
+          options,
+          multiSelect: false,
+          ...perOption(descriptions, 'descriptions'),
+        },
+      ];
     });
     return questions.length
       ? { threadId, type: 'question', requestId, questions }

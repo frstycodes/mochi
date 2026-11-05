@@ -152,6 +152,10 @@ export const AgentQuestion = Schema.Struct({
   text: Schema.String,
   options: Schema.Array(Schema.String),
   multiSelect: Schema.Boolean,
+  /** Per option, by index: a line under its label. Absent when the agent sent none. */
+  descriptions: opt(Schema.Array(Schema.String)),
+  /** Per option, by index: a mockup or code shown once it's picked (Claude only). Absent when the agent sent none. */
+  previews: opt(Schema.Array(Schema.String)),
 });
 export type AgentQuestion = typeof AgentQuestion.Type;
 
