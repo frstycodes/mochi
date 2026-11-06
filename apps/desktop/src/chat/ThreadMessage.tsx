@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { InboxIn, InboxOut, Sparkles } from '@/icons';
+import { Autofix, Comment, InboxIn, InboxOut } from '@/icons';
 import { FoldChevron } from '@/Fold';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
@@ -65,10 +65,7 @@ export function AutofixEventRow({
         onClick={() => setOpen((o) => !o)}
         className="flex h-7 w-fit max-w-full min-w-0 cursor-default items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
       >
-        <Sparkles
-          aria-hidden
-          className="size-4 shrink-0 text-muted-foreground"
-        />
+        <AutofixIcon kind={event.kind} />
         <span className="min-w-0 truncate">
           {event.kind === 'enabled' ? 'Received a CI event' : event.title}
         </span>
@@ -86,6 +83,16 @@ export function AutofixEventRow({
       </Expand>
     </div>
   );
+}
+
+/** Review comments read as comments; every other Auto-fix event (CI, a conflict, on, off) wears Auto-fix's own mark. */
+function AutofixIcon({
+  kind,
+}: {
+  kind: NonNullable<ActivityEntry['autofix']>['kind'];
+}) {
+  const Icon = kind === 'review' ? Comment : Autofix;
+  return <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />;
 }
 
 export function ThreadMessageIcon({ direction }: { direction: Direction }) {

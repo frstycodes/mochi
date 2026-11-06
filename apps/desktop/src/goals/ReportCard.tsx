@@ -71,8 +71,8 @@ export function ReportCard({
 
 /**
  * The box itself, read top to bottom: the verdict when it needs you, the recap, the turn's open assumptions under Assumed, then
- * the one question with its answers from the pick. Transparent with a hairline, a dismiss in the corner. Null when it has
- * nothing to say (an idle turn with no report).
+ * the one question with its answers from the pick. Transparent with a hairline, a dismiss in the corner. Null when nothing
+ * asks for you (no verdict, assumption or question), however much the recap says.
  */
 export function WrapUpBox({
   ref,
@@ -98,8 +98,8 @@ export function WrapUpBox({
   const isSuperseded = !!report?.isSuperseded;
   const assumptions = report ? boxAssumptions(thread, report.turn) : [];
   const hasVerdict = verdict.kind !== 'idle';
-  if (!hasVerdict && !report?.recap && !assumptions.length && !question)
-    return null;
+  // A recap alone repeats the reply above it: the box is for what comes next.
+  if (!hasVerdict && !assumptions.length && !question) return null;
   return (
     <NextMoveCard
       ref={ref}

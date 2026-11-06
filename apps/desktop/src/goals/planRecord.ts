@@ -65,31 +65,3 @@ const PLURAL = new Intl.PluralRules('en');
 
 export const count = (n: number, word: string) =>
   `${n} ${PLURAL.select(n) === 'one' ? word : `${word}s`}`;
-
-/** A run of this many done steps with nothing on them folds into one counted row. */
-export const FOLD_AT = 3;
-
-export type RecordRow =
-  | { kind: 'step'; entry: RecordStep }
-  | { kind: 'fold'; entries: RecordStep[] };
-
-/** The record's rows: runs of FOLD_AT or more bare done steps fold into one. */
-export function foldDone(steps: RecordStep[]): RecordRow[] {
-  const rows: RecordRow[] = [];
-  let run: RecordStep[] = [];
-  const flush = () => {
-    if (run.length >= FOLD_AT) rows.push({ kind: 'fold', entries: run });
-    else rows.push(...run.map((entry) => ({ kind: 'step' as const, entry })));
-    run = [];
-  };
-  for (const s of steps) {
-    if (s.step.status === 'done' && !s.items.length) {
-      run.push(s);
-      continue;
-    }
-    flush();
-    rows.push({ kind: 'step', entry: s });
-  }
-  flush();
-  return rows;
-}

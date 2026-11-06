@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import type { Assumption, Step } from '../model.ts';
-import { foldDone, recordLayout, recordTitle } from './planRecord.ts';
+import { recordLayout, recordTitle } from './planRecord.ts';
 
 const step = (title: string, status: Step['status'] = 'done'): Step => ({
   id: title,
@@ -50,22 +50,5 @@ test('decisions and answered assumptions sit on their numbered step; a bad or mi
   assert.equal(
     recordTitle(layout),
     'Plan · 2 of 3 done · 4 decisions · 2 answered',
-  );
-});
-
-test('a run of three or more bare done steps folds into one row', () => {
-  const layout = recordLayout(
-    {
-      steps: [step('A'), step('B'), step('C'), step('D'), step('E', 'ready')],
-      decisions: [{ text: 'On D', step: 4 }],
-      assumptionIds: [],
-    },
-    [],
-  );
-  assert.deepEqual(
-    foldDone(layout.steps).map((r) =>
-      r.kind === 'fold' ? r.entries.map((e) => e.n) : r.entry.n,
-    ),
-    [[1, 2, 3], 4, 5],
   );
 });

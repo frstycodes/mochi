@@ -315,7 +315,7 @@ test('an Auto-fix review that reaches no agent ends its turn; the PR merging aft
 
   const before = s;
   s = next;
-  assert.equal(pendingWork(thread())?.label, 'Thinking');
+  assert.equal(pendingWork(thread())?.label, 'Working');
   for (const threadId of unsentTurns(before, next, []))
     s = applyAgentEvent(s, {
       threadId,

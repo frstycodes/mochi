@@ -28,6 +28,16 @@ export type ChatRow =
   | { kind: 'subagent'; key: string; entries: ActivityEntry[] }
   /** A message another thread's agent sent (`entry.from`) or an Auto-fix event (`entry.autofix`): a line in the log, not a bubble. It still starts a turn like yours. */
   | { kind: 'thread-message'; key: string; entry: ActivityEntry; index: number }
+  /** A turn's work time over the rows between your message and the agent's final reply, which fold under it (`foldTurns`). */
+  | {
+      kind: 'worked';
+      key: string;
+      isOpen: boolean;
+      /** Running: when it started, if the wall clock was stamped. */
+      startMs?: number;
+      /** Ended: how long it took. */
+      durationMs?: number;
+    }
   /** The files a finished turn changed, after its last row. */
   | { kind: 'changes'; key: string; turn: TurnChanges }
   /** The end-of-turn widgets kept on `anchor` while a newer turn runs, its answered next move (`record`) folded in. */

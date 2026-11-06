@@ -157,6 +157,8 @@ import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import type { ModelOption } from './runtime/models';
 import { SubagentGroup } from './agents/SubagentRow';
+import { foldTurns } from './chat/turnFold';
+import { WorkedRow } from './chat/WorkedRow';
 import {
   rememberedScroll,
   Transcript,
@@ -186,11 +188,25 @@ export function ChatView({
 }) {
   const isRunning = isTurnRunning(thread);
   const anchor = useTurnAnchor(thread);
-  const rows = chatRows(
+  const [toggledTurns, setToggledTurns] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleTurn = (key: string) =>
+    setToggledTurns((turns) => {
+      const next = new Set(turns);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  const rows = foldTurns(
+    chatRows(
+      thread.activity,
+      thread.reviews,
+      shownTurnChanges(anchor),
+      anchor?.isLatest ? undefined : anchor,
+    ),
     thread.activity,
-    thread.reviews,
-    shownTurnChanges(anchor),
-    anchor?.isLatest ? undefined : anchor,
+    isRunning,
+    toggledTurns,
   );
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex(
@@ -303,6 +319,7 @@ export function ChatView({
                   isReadOnly={isReadOnly}
                   messageBar={messageBar}
                   hasActions={withActions.has(i)}
+                  onToggleTurn={toggleTurn}
                   isLive={
                     row.kind === 'work'
                       ? i === liveWork && !!action
@@ -451,6 +468,8 @@ interface ChatRowProps {
   messageBar?: MessageBar;
   hasActions: boolean;
   action?: CurrentAction;
+  /** Stable enough: it only calls a state setter, so `isSameRowProps` leaves it out. */
+  onToggleTurn: (key: string) => void;
 }
 
 // isLive: the newest row of a running thread, the one still being written. Memoized: a scroll re-renders the virtualized list, and only rows that just mounted should render.
@@ -463,6 +482,7 @@ const ChatRowView = memo(function ChatRowView({
   messageBar,
   hasActions,
   action,
+  onToggleTurn,
 }: ChatRowProps) {
   const landingRef = useSendLanding(
     thread.id,
@@ -476,6 +496,8 @@ const ChatRowView = memo(function ChatRowView({
         action={isLive ? action : undefined}
       />
     );
+  if (row.kind === 'worked')
+    return <WorkedRow row={row} onToggle={onToggleTurn} />;
   if (row.kind === 'review')
     return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'changes')

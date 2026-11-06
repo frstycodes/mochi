@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
+  Autofix,
   Cursor,
   Flag,
   Globe,
@@ -97,11 +98,10 @@ export function EventLine({
   glyph?: EventGlyph;
   site?: string;
 }) {
-  const Icon = glyph ? GLYPHS[glyph] : Flag;
   const host = site && hostOf(site);
   return (
-    <div className="flex gap-2 type-caption text-muted-foreground">
-      <Icon aria-hidden className="mt-px size-3.5 shrink-0" />
+    <div className="flex min-h-7 gap-2 py-1 type-meta text-muted-foreground">
+      <EventIcon glyph={glyph} text={text} />
       {/* Anything unbroken (a long name, a host) wraps inside the chat's width instead of pushing past it. */}
       <p className="min-w-0 [overflow-wrap:anywhere]">
         {text}
@@ -136,6 +136,16 @@ const GLYPHS = {
   type: Keyboard,
   browse: Globe,
 } satisfies Record<EventGlyph, IconComponent>;
+
+/** The action's own icon; else Auto-fix's mark, read from the line so events logged before they had a kind get it too; else a flag. */
+function EventIcon({ glyph, text }: { glyph?: EventGlyph; text: string }) {
+  const Icon = glyph
+    ? GLYPHS[glyph]
+    : text.startsWith('Auto-fix ')
+      ? Autofix
+      : Flag;
+  return <Icon aria-hidden className="mt-px size-4 shrink-0" />;
+}
 
 const hostOf = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
 

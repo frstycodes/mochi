@@ -31,7 +31,8 @@ const VERB_PHASE = {
 export const PHASE_LABELS = {
   idle: 'Idle',
   start: 'Starting',
-  think: 'Thinking',
+  // No agent reports that it is thinking: between calls it is only known to be at work.
+  think: 'Working',
   read: 'Reading',
   edit: 'Editing',
   run: 'Running',
@@ -81,7 +82,7 @@ export function pendingWork(
   return { phase: 'think', label: PHASE_LABELS.think };
 }
 
-/** What a working thread is doing, for a row or card ("Editing index.ts", "Running pnpm test", "Thinking", "Starting Claude Code"); nothing when it isn't working. */
+/** What a working thread is doing, for a row or card ("Editing index.ts", "Running pnpm test", "Working", "Starting Claude Code"); nothing when it isn't working. */
 export function workingLabel(thread: Thread): string | undefined {
   return currentAction(thread)?.label;
 }

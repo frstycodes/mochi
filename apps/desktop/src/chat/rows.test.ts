@@ -24,7 +24,9 @@ const shape = (
           ? `changes(${r.turn.start})`
           : r.kind === 'earlier-turn'
             ? `earlier(${r.anchor.start}, ${r.record?.answer ?? 'no record'})`
-            : r.entry.text,
+            : 'entry' in r
+              ? r.entry.text
+              : r.kind,
   );
 
 test('work groups interleave with prose: tools, message, tools, message, each group in transcript order', () => {
@@ -306,7 +308,9 @@ test('a second opinion the agent asked for sits where its verdict reached the ag
             ? 'changes'
             : r.kind === 'subagent' || r.kind === 'earlier-turn'
               ? r.kind
-              : r.entry.text,
+              : 'entry' in r
+                ? r.entry.text
+                : r.kind,
     );
   const asked = [
     e('message', 'you', 'fix login'),

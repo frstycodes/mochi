@@ -107,7 +107,8 @@ export function Transcript({
         // The space under a row is its own padding, not `columnWrapperStyle.rowGap`: the list's content size drops the last row's gap
         // while the footer still sits below it, so the list's end would stop 20px short of the scroller's and re-pinning would bounce the rows.
         renderItem={({ item, index }) => (
-          <div data-chat-row={index} className="px-4 pb-5 md:px-6">
+          // A row with nothing to show (an earlier turn's widgets all answered) keeps no gap, or it would double the space around it.
+          <div data-chat-row={index} className="px-4 pb-5 empty:pb-0 md:px-6">
             <ErrorBoundary FallbackComponent={ErrorFallback}>
               {renderRow(item, index)}
             </ErrorBoundary>
