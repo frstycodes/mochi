@@ -55,19 +55,19 @@ test('each slot enters and leaves the way Sonner does', () => {
   const state = { isExpanded: false, isMounted: true, isLeaving: false };
   assert.equal(
     itemTransform({ ...state, slot: front, isMounted: false }),
-    'translateY(-100%)',
+    'translateY(100%)',
   );
   assert.equal(
     itemTransform({ ...state, slot: second }),
-    `translateY(${GAP}px) scale(0.95)`,
+    `translateY(${-GAP}px) scale(0.95)`,
   );
   assert.equal(
     itemTransform({ ...state, slot: second, isExpanded: true }),
-    'translateY(64px)',
+    'translateY(-64px)',
   );
   assert.equal(
     itemTransform({ ...state, slot: front, isLeaving: true }),
-    'translateY(-100%)',
+    'translateY(100%)',
   );
   assert.equal(
     itemTransform({
@@ -76,11 +76,11 @@ test('each slot enters and leaves the way Sonner does', () => {
       isLeaving: true,
       isExpanded: true,
     }),
-    'translateY(64px) translateY(-100%)',
+    'translateY(-64px) translateY(100%)',
   );
   assert.equal(
     itemTransform({ ...state, slot: second, isLeaving: true }),
-    'translateY(40%)',
+    'translateY(-40%)',
   );
 });
 

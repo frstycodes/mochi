@@ -40,7 +40,7 @@ export function openSlots(toasts: Toast[], openId: string) {
   return { byId, total: 0 };
 }
 
-/** Sonner's positions: in from above, then a peek or a fanned-out offset; leaving, each slot exits its own way. */
+/** Sonner's positions: in from below, then a peek or a fanned-out offset; leaving, each slot exits its own way. */
 export function itemTransform({
   slot,
   isExpanded,
@@ -52,14 +52,14 @@ export function itemTransform({
   isMounted: boolean;
   isLeaving: boolean;
 }) {
-  if (!isMounted) return 'translateY(-100%)';
+  if (!isMounted) return 'translateY(100%)';
   const isFront = slot.index === 0;
-  if (isLeaving && isFront) return 'translateY(-100%)';
+  if (isLeaving && isFront) return 'translateY(100%)';
   if (isLeaving && isExpanded)
-    return `translateY(${slot.y}px) translateY(-100%)`;
-  if (isLeaving) return 'translateY(40%)';
-  if (isExpanded) return `translateY(${slot.y}px)`;
-  return `translateY(${slot.index * GAP}px) scale(${1 - slot.index * SCALE_STEP})`;
+    return `translateY(${-slot.y}px) translateY(100%)`;
+  if (isLeaving) return 'translateY(-40%)';
+  if (isExpanded) return `translateY(${-slot.y}px)`;
+  return `translateY(${-slot.index * GAP}px) scale(${1 - slot.index * SCALE_STEP})`;
 }
 
 type SizeState = {

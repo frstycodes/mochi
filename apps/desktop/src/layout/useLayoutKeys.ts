@@ -14,9 +14,11 @@ import {
   type CommandId,
   listenKeydown,
 } from '../keymap';
+import { IS_MAC } from '../keys.ts';
 import { startRename } from '../rename';
 import { useMergeThreads } from '../remote/MergedScope';
 import { toggleRemotePin } from '../remote/pins';
+import { undoLastSettle } from '../useSettle';
 import { parseRemoteThreadId } from '../remote/ids';
 
 const FOCUS = {
@@ -49,6 +51,11 @@ export function useLayoutKeys() {
   const merge = useMergeThreads();
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.defaultPrevented) return;
+    // Fixed, not a command: Mod+Z belongs to text fields and annotations first, so this only takes it when nothing else did.
+    if (isUndoKey(e) && !isEditing(e.target)) {
+      if (undoLastSettle(merge(state), dispatch)) e.preventDefault();
+      return;
+    }
     const command = commandOf(e, COMMANDS);
     if (!command) return;
     const layout = state.layouts[state.spaceId];
@@ -104,6 +111,18 @@ export function useLayoutKeys() {
   });
   useEffect(() => listenKeydown((e) => onKey(e)), []);
 }
+
+const isUndoKey = (e: KeyboardEvent) =>
+  e.code === 'KeyZ' &&
+  !e.shiftKey &&
+  !e.altKey &&
+  (IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+
+const isEditing = (target: EventTarget | null) =>
+  target instanceof Element &&
+  !!target.closest(
+    'input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=dialog], [role=alertdialog], [role=menu]',
+  );
 
 const pinnedHere = (state: State, threads: State['threads']) =>
   pinnedThreads(threads, state.spaceId);
