@@ -1,6 +1,7 @@
 import { app, BrowserWindow, nativeImage, type NativeImage } from 'electron';
 import path from 'node:path';
 import { APP_ICONS, type AppIcon } from '../src/settings/settingOptions.ts';
+import { DEFAULT_SETTINGS } from '../src/host/types/settings.ts';
 import {
   agentSettings,
   onAgentSettingsChange,
@@ -31,7 +32,9 @@ export function appIconImage(
   icon: AppIcon = agentSettings().appIcon,
 ): NativeImage {
   // A saved icon that has since been removed falls back to the default.
-  const name = APP_ICONS.some((i) => i.value === icon) ? icon : 'graphite';
+  const name = APP_ICONS.some((i) => i.value === icon)
+    ? icon
+    : DEFAULT_SETTINGS.appIcon;
   return nativeImage.createFromPath(
     app.isPackaged
       ? path.join(process.resourcesPath, 'icons', `${name}.png`)
