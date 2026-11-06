@@ -18,7 +18,6 @@ export const COMMAND_GROUPS = [
   'Replay',
   'Photos',
   'Annotations',
-  'Orbit',
 ] as const;
 
 /**
@@ -32,8 +31,7 @@ export type CommandScope =
   | 'list'
   | 'replay'
   | 'photo'
-  | 'annotation'
-  | 'orbit';
+  | 'annotation';
 
 interface Command {
   title: string;
@@ -392,22 +390,6 @@ export const COMMANDS = {
     scope: 'annotation',
     keys: ['mod', 'shift', 'Z'],
   },
-  'orbit-hold': {
-    title: 'Hold to open Orbit',
-    group: 'Orbit',
-    scope: 'global',
-    keys: ['alt'],
-  },
-  ...(numbered(4, (n) => [
-    `orbit-${n}`,
-    {
-      title: `Choose Orbit item ${n}`,
-      group: 'Orbit',
-      scope: 'orbit',
-      keys: [String(n)],
-      whileTyping: true,
-    },
-  ]) as Record<`orbit-${1 | 2 | 3 | 4}`, Command>),
 } satisfies Record<string, Command>;
 
 export type CommandId = keyof typeof COMMANDS;
@@ -706,16 +688,10 @@ export function isCommand(
     shift: 'Shift',
   };
   const required = mods ? mods.split('+').map((m) => modifiers[m]) : [];
-  const key = code || 'Alt';
   // tinykeys also accepts e.key; supplying only the code keeps layout-independent matching.
   const event = {
     key: '',
-    code:
-      e.code === 'NumpadEnter'
-        ? 'Enter'
-        : /^(AltLeft|AltRight)$/.test(e.code)
-          ? 'Alt'
-          : e.code,
+    code: e.code === 'NumpadEnter' ? 'Enter' : e.code,
     getModifierState: (mod: string) =>
       ({
         Meta: e.metaKey,
@@ -725,21 +701,7 @@ export function isCommand(
       })[mod] ?? false,
   } as KeyboardEvent;
   const command: Command = COMMANDS[id];
-  const heldMods =
-    command.scope === 'orbit'
-      ? physical(bindingOf('orbit-hold', overrides, isMac) ?? [], isMac).split(
-          '|',
-        )[0]
-      : '';
-  const optional = heldMods ? heldMods.split('+').map((m) => modifiers[m]) : [];
-  if (
-    !matchKeybindingPress(event, [
-      required.filter((m) => m !== key),
-      optional,
-      key,
-    ])
-  )
-    return false;
+  if (!matchKeybindingPress(event, [required, [], code])) return false;
   return (
     command.whileTyping ||
     !(isPlain(keys) && isTyping(e.target, command.inDialog))

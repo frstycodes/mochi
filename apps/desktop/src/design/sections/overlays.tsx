@@ -173,7 +173,7 @@ export function OverlaysSection() {
               <ContextMenuContent>
                 <ContextMenuGroup>
                   <ContextMenuItem>
-                    Pin to Orbit <ContextMenuShortcut>P</ContextMenuShortcut>
+                    Pin <ContextMenuShortcut>P</ContextMenuShortcut>
                   </ContextMenuItem>
                   <ContextMenuItem>Move to space</ContextMenuItem>
                   <ContextMenuSeparator />

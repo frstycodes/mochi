@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vite-plus/test';
 import { OFF_PIN, pagerSlots, pinnedNeighbour, slotsOf } from './slots.ts';
-import { PIN_SLOTS, type Thread } from '../model.ts';
+import type { Thread } from '../model.ts';
 import { remoteThreadId } from '../remote/ids.ts';
 import { mergeThreads } from '../remote/merged.ts';
 import type { State } from '../store/types.ts';
@@ -39,7 +39,7 @@ test('neighbours are pins only; the ends have none', () => {
   );
 });
 
-// Another computer's pins sit among this one's in the pager and take Orbit slots, as the sidebar lists them.
+// Another computer's pins sit among this one's in the pager, as the sidebar lists them.
 const thread = (id: string, extra: Partial<Thread> = {}) =>
   ({
     id,
@@ -51,13 +51,10 @@ const thread = (id: string, extra: Partial<Thread> = {}) =>
     ...extra,
   }) as unknown as Thread;
 
-test('a pin on another computer’s thread takes its place among the pager’s pages and Orbit’s slots', () => {
+test('a pin on another computer’s thread takes its place among the pager’s pages', () => {
   const lap = (id: string) => remoteThreadId('lap', id);
   const merged = mergeThreads(
-    [
-      thread('a', { orbitSlot: 1, pinOrder: 10 }),
-      thread('z', { pinOrder: 30, orbitSlot: 2 }),
-    ],
+    [thread('a', { pinOrder: 10 }), thread('z', { pinOrder: 30 })],
     [
       {
         state: {
@@ -82,9 +79,9 @@ test('a pin on another computer’s thread takes its place among the pager’s p
   assert.deepEqual(slots, { ids: ['a', lap('r'), 'z'], center: 1 });
   assert.equal(pinnedNeighbour(slots, -1), 'a');
   assert.equal(pinnedNeighbour(slots, 1), 'z');
-  const slotOf = (id: string) => merged.find((t) => t.id === id)?.orbitSlot;
-  assert.deepEqual(['a', lap('r'), 'z'].map(slotOf), PIN_SLOTS.slice(0, 3));
-  assert.equal(slotOf(lap('s')), undefined);
+  const keyOf = (id: string) => merged.find((t) => t.id === id)?.pinOrder;
+  assert.deepEqual(['a', lap('r'), 'z'].map(keyOf), [10, 20, 30]);
+  assert.equal(keyOf(lap('s')), undefined);
   // Without the merge the local-only list leaves the remote pin out.
   assert.deepEqual(slotsOf(state, [merged[0], merged[1]]).ids, [
     OFF_PIN,

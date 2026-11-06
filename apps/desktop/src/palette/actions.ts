@@ -58,7 +58,7 @@ import { autofixPr, setAutofix } from '../git/autofixToggle';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
 import { PRESETS, PRESET_LABELS } from '@mochi/domain/layout/tree';
-import type { Provider, Thread } from '../model';
+import { MAX_PINS, type Provider, type Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TAB_LABELS } from '../pane/tabLabels';
 import { rewindBlockedReason } from '../rewind/checkpoints';
@@ -895,7 +895,7 @@ function pin(threads: Thread[], { state, dispatch }: ActionContext) {
   );
   if (!lists)
     return toast('Pinned is full', {
-      description: 'Orbit has five pin slots. Unpin a thread first.',
+      description: `Pinned holds ${MAX_PINS} threads. Unpin one first.`,
     });
   dispatch({ type: 'reorder', ...lists, at });
 }

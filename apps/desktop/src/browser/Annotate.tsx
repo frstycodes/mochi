@@ -269,7 +269,6 @@ export function Annotator({
           {!!natural && (
             <svg
               ref={svgRef}
-              data-no-orbit
               viewBox={`0 0 ${natural.w} ${natural.h}`}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}

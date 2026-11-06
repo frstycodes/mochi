@@ -25,7 +25,7 @@ import { closedRunning, planResult, planUpdate } from './planTool.ts';
 import {
   authorName,
   isListed,
-  PIN_SLOTS,
+  MAX_PINS,
   type DevServer,
   type EventGlyph,
   type Provider,
@@ -663,9 +663,9 @@ const THREAD_SPECS = {
       );
       const lists = sidebar(state(), caller);
       const pinned = [...lists.pinned, ...threads.map((t) => t.id)];
-      if (pinned.length > PIN_SLOTS.length)
+      if (pinned.length > MAX_PINS)
         throw new Error(
-          `Only ${PIN_SLOTS.length} threads can be pinned and ${lists.pinned.length} already are; unpin one first`,
+          `Only ${MAX_PINS} threads can be pinned and ${lists.pinned.length} already are; unpin one first`,
         );
       if (threads.some((t) => t.status === 'settled'))
         throw new Error(
@@ -744,9 +744,7 @@ const THREAD_SPECS = {
         list.indexOf(anchor.id) + (args.after ? 1 : 0),
       );
       if (!next)
-        throw new Error(
-          `Pinned is full (${PIN_SLOTS.length}); unpin one first`,
-        );
+        throw new Error(`Pinned is full (${MAX_PINS}); unpin one first`);
       dispatch({ type: 'reorder', ...next, at: Date.now() });
       return {
         changed: `moved "${moving.title}" ${args.after ? 'below' : 'above'} "${anchor.title}"`,
@@ -1353,7 +1351,7 @@ function sidebar(state: State, caller: Thread) {
 }
 
 const isPinned = (t: Thread) =>
-  t.orbitSlot !== undefined && t.status !== 'settled';
+  t.pinOrder !== undefined && t.status !== 'settled';
 
 const providerOf = (provider: Provider | undefined, caller: Thread) =>
   provider ?? caller.providers[0];

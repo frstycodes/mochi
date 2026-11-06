@@ -33,12 +33,12 @@ const byId = (state: State, id: string) =>
 
 test('nesting unpins the sub-thread, goes a second level deep, and refuses a cycle', () => {
   const s = run(
-    start([thread('p'), thread('c', { orbitSlot: 1 }), thread('x')]),
+    start([thread('p'), thread('c', { pinOrder: 1 }), thread('x')]),
     { type: 'nest', threadId: 'c', parentId: 'p' },
     { type: 'nest', threadId: 'x', parentId: 'c' },
   );
   assert.deepEqual(byId(s, 'c').parent, { threadId: 'p' });
-  assert.equal(byId(s, 'c').orbitSlot, undefined);
+  assert.equal(byId(s, 'c').pinOrder, undefined);
   assert.deepEqual(byId(s, 'x').parent, { threadId: 'c' });
   assert.deepEqual(
     byId(run(s, { type: 'nest', threadId: 'p', parentId: 'x' }), 'p').parent,

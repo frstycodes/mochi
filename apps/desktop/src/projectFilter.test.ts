@@ -67,8 +67,8 @@ test('a saved project no thread uses any more reads as all projects', () => {
 
 test('the filter narrows pinned, active and archived alike, groups by their top thread', () => {
   const threads = [
-    t('pin-api', 'api', { orbitSlot: 1 }),
-    t('pin-web', 'web', { orbitSlot: 2 }),
+    t('pin-api', 'api', { pinOrder: 1 }),
+    t('pin-web', 'web', { pinOrder: 2 }),
     t('api', 'api'),
     t('sub', 'web', { parent: { threadId: 'api' } } as Partial<Thread>),
     t('web', 'web'),

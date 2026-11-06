@@ -418,7 +418,7 @@ const DEMO_REFS: Record<number, RefState> = {
     47,
     'fix: replace prototype stubs with working actions',
   ),
-  30: demoRef('pr', 'closed', 30, 'feat: experimental orbit gestures'),
+  30: demoRef('pr', 'closed', 30, 'feat: experimental pager gestures'),
   7: demoRef('pr', 'closed', 7, 'An early PR that was closed'),
   50: demoRef('pr', 'open', 50, 'A PR that conflicts with main', {
     hasConflicts: true,

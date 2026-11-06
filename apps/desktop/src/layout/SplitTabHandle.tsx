@@ -51,10 +51,8 @@ export function SplitTabHandle({
 function Handle({ id, children }: { id: string; children: ReactNode }) {
   const { ref } = useDraggable({ id });
   return (
-    // A drag handle: dnd-kit stops the moves reaching Orbit, so a long press here must not open it.
     <span
       ref={ref}
-      data-no-orbit
       className="app-no-drag flex min-w-0 cursor-grab items-center gap-2 select-none active:cursor-grabbing"
     >
       {children}

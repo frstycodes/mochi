@@ -24,7 +24,7 @@ export function longThread(count: number): Thread {
     status: 'running',
     line: 3,
     startedAt: s,
-    orbitSlot: 3,
+    pinOrder: 3,
     steps: [],
     activity: activity.slice(0, count),
     prs: [],

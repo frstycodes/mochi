@@ -1249,7 +1249,7 @@ test('the settings chat is invisible to other threads, and open_settings_chat dr
     ...t.thread('rl'),
     id: 'settings',
     title: 'Change the model',
-    orbitSlot: undefined,
+    pinOrder: undefined,
     isSettingsChat: true,
   });
   assert.ok(
@@ -1330,7 +1330,7 @@ test('reactivate_thread brings settled threads back', async () => {
 test('pin_thread pins in order and refuses past five', async () => {
   const t = setup();
   await t.ok('pin_thread', { threadIds: ['e2e'] });
-  assert.equal(t.thread('e2e').orbitSlot, 5);
+  assert.ok(t.thread('e2e').pinOrder! > t.thread('adm').pinOrder!);
   await t.ok('reactivate_thread', { threadIds: ['onb', 'viz'] });
   await t.ok('pin_thread', { threadIds: ['onb'] });
   assert.match(await t.err('pin_thread', { threadIds: ['viz'] }), /Only 5/);
@@ -1340,7 +1340,7 @@ test('unpin_thread moves threads to the top of Threads', async () => {
   const t = setup();
   const r = await t.ok('unpin_thread', { threadIds: ['adm'] });
   assert.deepEqual(r.pinned, ['rl', 'auth']);
-  assert.equal(t.thread('adm').orbitSlot, undefined);
+  assert.equal(t.thread('adm').pinOrder, undefined);
 });
 
 test('reorder_threads moves one next to another, pinning across the boundary, or sets the pinned order', async () => {

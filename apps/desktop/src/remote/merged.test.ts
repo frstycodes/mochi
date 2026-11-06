@@ -50,40 +50,30 @@ test('lists every computer’s threads together by last activity, in the profile
   assert.deepEqual(ids('work'), [lap('new-2')]);
 });
 
-test('another computer’s own pins stay there; this screen’s pins sort with its own by key and take Orbit slots in that order', () => {
+test('another computer’s own pins stay there; this screen’s pins sort with its own by key', () => {
   const merged = mergeThreads(
-    [
-      t('a', { orbitSlot: 1, pinOrder: 100 }),
-      t('b', { orbitSlot: 2, pinOrder: 300 }),
-    ],
-    [
-      mirror(
-        t(lap('pinned-there'), { orbitSlot: 1, pinOrder: 50 }),
-        t(lap('pinned-here')),
-      ),
-    ],
+    [t('a', { pinOrder: 100 }), t('b', { pinOrder: 300 })],
+    [mirror(t(lap('pinned-there'), { pinOrder: 50 }), t(lap('pinned-here')))],
     [{ id: lap('pinned-here'), order: 200 }],
     ['personal'],
     'personal',
   );
   assert.deepEqual(
-    pinnedThreads(merged, 'personal').map((x) => [x.id, x.orbitSlot]),
+    pinnedThreads(merged, 'personal').map((x) => [x.id, x.pinOrder]),
     [
-      ['a', 1],
-      [lap('pinned-here'), 2],
-      ['b', 3],
+      ['a', 100],
+      [lap('pinned-here'), 200],
+      ['b', 300],
     ],
   );
   assert.equal(
-    merged.find((x) => x.id === lap('pinned-there'))?.orbitSlot,
+    merged.find((x) => x.id === lap('pinned-there'))?.pinOrder,
     undefined,
   );
 });
 
-test('a pin past the last Orbit slot isn’t pinned here', () => {
-  const local = [1, 2, 3, 5, 7].map((slot, i) =>
-    t(`l${i}`, { orbitSlot: slot, pinOrder: i }),
-  );
+test('a pin past the most Pinned holds isn’t pinned here', () => {
+  const local = [0, 1, 2, 3, 4].map((i) => t(`l${i}`, { pinOrder: i }));
   const merged = mergeThreads(
     local,
     [mirror(t(lap('late')))],
@@ -92,7 +82,6 @@ test('a pin past the last Orbit slot isn’t pinned here', () => {
     'personal',
   );
   const late = merged.find((x) => x.id === lap('late'))!;
-  assert.equal(late.orbitSlot, undefined);
   assert.equal(late.pinOrder, undefined);
 });
 
@@ -137,7 +126,7 @@ test('another computer’s project shows as this computer’s clone of the same 
 
 test('a reorder across computers: this one’s threads by its own actions with the merged keys, the other’s into this screen’s pins', () => {
   const merged = mergeThreads(
-    [t('a', { orbitSlot: 1, pinOrder: 100 }), t('b')],
+    [t('a', { pinOrder: 100 }), t('b')],
     [mirror(t(lap('r')), t(lap('gone')))],
     [
       { id: lap('gone'), order: 150 },
@@ -172,7 +161,7 @@ test('a reorder across computers: this one’s threads by its own actions with t
 
 test('pinning another computer’s thread at a key; refused when Pinned is full', () => {
   const merged = mergeThreads(
-    [t('a', { orbitSlot: 1, pinOrder: 100 })],
+    [t('a', { pinOrder: 100 })],
     [mirror(t(lap('r')))],
     [],
     ['personal'],
@@ -182,9 +171,7 @@ test('pinning another computer’s thread at a key; refused when Pinned is full'
     { id: lap('r'), order: 50 },
   ]);
   const full = mergeThreads(
-    [1, 2, 3, 5, 7].map((slot, i) =>
-      t(`l${i}`, { orbitSlot: slot, pinOrder: i }),
-    ),
+    [0, 1, 2, 3, 4].map((i) => t(`l${i}`, { pinOrder: i })),
     [mirror(t(lap('r')))],
     [],
     ['personal'],

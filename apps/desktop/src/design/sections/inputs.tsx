@@ -75,7 +75,7 @@ export function InputsSection() {
             <FieldLabel htmlFor="thread-title">Thread title</FieldLabel>
             <Input id="thread-title" defaultValue="Admin usage dashboard" />
             <FieldDescription>
-              Shown in the sidebar, Orbit and the board.
+              Shown in the sidebar and the board.
             </FieldDescription>
           </Field>
           <Field data-invalid>

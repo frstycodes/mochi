@@ -76,12 +76,12 @@ test('focused running thread offers settle and pin, not reactivate', () => {
 test('pinned thread offers unpin; settled thread offers only reactivate', () => {
   assert.ok(
     ids(
-      state({ kind: 'thread', id: 'a' }, [thread('a', { orbitSlot: 1 })]),
+      state({ kind: 'thread', id: 'a' }, [thread('a', { pinOrder: 1 })]),
     ).includes('unpin'),
   );
   const settled = ids(
     state({ kind: 'thread', id: 'a' }, [
-      thread('a', { status: 'settled', orbitSlot: 1 }),
+      thread('a', { status: 'settled', pinOrder: 1 }),
     ]),
   );
   assert.ok(
@@ -234,7 +234,7 @@ test('a split header targets that split and its thread; the focused split stays 
 
 test('bulk: a rule splits the selected threads into those it applies to and those it skips', () => {
   const s = state({ kind: 'thread', id: 'a' }, [
-    thread('a', { orbitSlot: 1 }),
+    thread('a', { pinOrder: 1 }),
     thread('b'),
     thread('c', { status: 'settled' }),
   ]);

@@ -44,7 +44,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
 import { SubThreadGuide } from './goals/SubThreads';
-import { PIN_SLOTS, type Space, type Thread } from './model';
+import { MAX_PINS, type Space, type Thread } from './model';
 import { MAX_PROFILES, useProfiles } from './profiles';
 import { NewProfileDialog } from './settings/sections/profiles';
 import { AgentSettingsProvider } from './settings/AgentSettings';
@@ -81,7 +81,6 @@ import {
   flattenGroups,
   lastActivityAt,
   orderBetween,
-  pinOrderOf,
   stepPin,
   type DropSlot,
   type ThreadGroup,
@@ -662,8 +661,8 @@ function ThreadList({
       );
     const others = pins.filter((p) => p.rowId !== dragged.rowId);
     const order = orderBetween(
-      others[slot.index - 1] && pinOrderOf(others[slot.index - 1].thread),
-      others[slot.index] && pinOrderOf(others[slot.index].thread),
+      others[slot.index - 1]?.thread.pinOrder,
+      others[slot.index]?.thread.pinOrder,
       // oxlint-disable-next-line react/purity -- runs from drag and keyboard handlers (useRowDrag's onDragEnd, step), never during render
       Date.now(),
     );
@@ -1100,8 +1099,7 @@ function dropOver(
       ...(el.dataset.subOf && { parentId: el.dataset.subOf }),
     }),
   );
-  const isFull =
-    pinnedIds.filter((id) => id !== row.rowId).length >= PIN_SLOTS.length;
+  const isFull = pinnedIds.filter((id) => id !== row.rowId).length >= MAX_PINS;
   return dropAt(
     rows,
     label.offsetTop + label.offsetHeight / 2,

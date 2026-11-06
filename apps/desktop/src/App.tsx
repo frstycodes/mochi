@@ -12,7 +12,6 @@ import { DesignPage } from './design/DesignPage';
 import { ThreadRowsPage } from './design/ThreadRowsPage';
 import { useApplyChatWidth } from './settings/chatWidth';
 import { useApplyFonts } from './settings/fonts';
-import { Orbit } from './Orbit';
 import { ThreadSwitcher } from './ThreadSwitcher';
 import { useAppZoom } from './appZoom';
 import { ZoomChip } from './ZoomChip';
@@ -89,16 +88,12 @@ function AppContent() {
               <TornWindow threadId={route.slice('/window/'.length)} />
             ) : (
               <HarnessProvider>
-                {/* Around the overlays too: Orbit, the switcher and the thread dialogs can reach other computers' threads. */}
+                {/* Around the overlays too: the switcher and the thread dialogs can reach other computers' threads. */}
                 <MachinesProvider>
                   {/* Inside the store's provider: a crash in the shell (the sidebar) keeps the store and its running agents. */}
                   <ErrorBoundary FallbackComponent={ErrorFallback}>
                     <Shell />
                   </ErrorBoundary>
-                  {/* The sidebar's list: pins on other computers' threads take Orbit slots like this one's. */}
-                  <MergedScope>
-                    <Orbit />
-                  </MergedScope>
                   <ThreadSwitcher />
                   <PhotoViewer />
                   <FileViewer />

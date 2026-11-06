@@ -1087,16 +1087,16 @@ test('a pin with an order lands where the device put it among all computers’ p
   const pinned = threadsReducer(state, dispatched[0]).threads.find(
     (t) => t.id === threadId,
   )!;
-  assert.deepEqual([pinned.orbitSlot, pinned.pinOrder], [1, 150]);
+  assert.equal(pinned.pinOrder, 150);
 
   const full = {
     ...state,
     threads: [
       ...state.threads,
-      ...[1, 2, 3, 5, 7].map((slot, i) => ({
+      ...[1, 2, 3, 4, 5].map((n) => ({
         ...state.threads[0],
-        id: `p${i}`,
-        orbitSlot: slot,
+        id: `p${n}`,
+        pinOrder: n,
       })),
     ],
   };

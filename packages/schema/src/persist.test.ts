@@ -9,7 +9,7 @@ const recorded = JSON.parse(
   readFileSync(new URL('../fixtures/saved.json', import.meta.url), 'utf8'),
 );
 
-test('thread files as the app writes them today read as v1, every field kept but what checkpoints take from the live thread', () => {
+test('thread files as the app writes them today read as v1, every field kept but what checkpoints take from the live thread and Orbit slots', () => {
   const decode = Schema.decodeUnknownSync(SavedThread);
   const encode = Schema.encodeSync(SavedThread);
   for (const file of recorded.threads) {
@@ -18,10 +18,28 @@ test('thread files as the app writes them today read as v1, every field kept but
     assert.deepEqual(decoded, {
       ...file,
       v: 1,
+      thread: liftSlot(file.thread),
       ...(file.checkpoints && { checkpoints: file.checkpoints.map(slim) }),
     });
     assert.deepEqual(decode(encode(decoded)), decoded);
   }
+});
+
+test('a pin saved as an Orbit slot reads as its pin key; a keyed pin keeps its key, an unpinned thread stays unpinned', () => {
+  const decode = Schema.decodeUnknownSync(SavedThread);
+  const [file] = recorded.threads;
+  const { orbitSlot: _, pinOrder: _key, ...unpinned } = file.thread;
+  const pinOf = (thread: object) => decode({ ...file, thread }).thread.pinOrder;
+  assert.equal(pinOf({ ...unpinned, orbitSlot: 5 }), 5);
+  assert.equal(pinOf({ ...unpinned, orbitSlot: 5, pinOrder: 900 }), 900);
+  assert.equal(pinOf({ ...unpinned, pinOrder: 900 }), 900);
+  assert.equal(pinOf(unpinned), undefined);
+  assert.ok(
+    !(
+      'orbitSlot' in
+      decode({ ...file, thread: { ...unpinned, orbitSlot: 5 } }).thread
+    ),
+  );
 });
 
 test('the index file reads as v1, with its version field replaced', () => {
@@ -116,8 +134,11 @@ const slim = ({
   ...rest,
   activityCount: activity.length,
   subagentCount: subagents?.length ?? 0,
-  thread,
+  thread: liftSlot(thread),
 });
+
+const liftSlot = ({ orbitSlot, ...thread }: { orbitSlot?: number }) =>
+  orbitSlot === undefined ? thread : { ...thread, pinOrder: orbitSlot };
 
 test('a report saved before wrap_up still loads: no recap reads as empty, its old fields drop, and a step title stays as it was', () => {
   const report = Schema.decodeUnknownSync(TurnReport)({
