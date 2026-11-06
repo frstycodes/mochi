@@ -12,6 +12,7 @@ import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { isKeyUp, isWheelUp } from './chat/scrollIntent';
+import { useSmoothText } from './chat/reveal';
 import { ThreadContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion } from 'motion/react';
@@ -682,7 +683,7 @@ function YourMessage({
   );
 }
 
-/** An agent's reply, or its simplified version: it shimmers while that is made, then crossfades to it. */
+/** An agent's reply, or its simplified version: it shimmers while that is made, then crossfades to it. The live reply reveals smoothly (`useSmoothText`). */
 function AgentReply({
   thread,
   index,
@@ -695,6 +696,7 @@ function AgentReply({
   const entry = thread.activity[index];
   const isSimplifying = useIsSimplifying(thread.id, index);
   const simplified = entry.simplified?.isShown ? entry.simplified.text : null;
+  const text = useSmoothText(entry.text, isLive && simplified === null);
   return (
     <SimplifySwap
       view={simplified === null ? 'original' : 'simplified'}
@@ -712,7 +714,7 @@ function AgentReply({
         rehypePlugins={VIZ_REHYPE_PLUGINS}
         isAnimating={isLive}
       >
-        {simplified ?? entry.text}
+        {simplified ?? text}
       </MessageResponse>
     </SimplifySwap>
   );
