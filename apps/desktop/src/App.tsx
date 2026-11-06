@@ -81,10 +81,6 @@ function AppContent() {
               <Suspense>
                 <DesignPage />
               </Suspense>
-            ) : route === 'thread-rows' ? (
-              <Suspense>
-                <ThreadRowsPage />
-              </Suspense>
             ) : route.startsWith('/window/') ? (
               // Outside `MachinesProvider`: a torn-off window shows this computer's threads only (the split menu doesn't tear off another computer's).
               <TornWindow threadId={route.slice('/window/'.length)} />
@@ -245,11 +241,6 @@ function ShellEffects() {
 // Lazy: pages and the settings sidebar the app's first screen never shows; each pulls a large tree of its own.
 const DesignPage = lazy(() =>
   import('./design/DesignPage').then((m) => ({ default: m.DesignPage })),
-);
-const ThreadRowsPage = lazy(() =>
-  import('./design/ThreadRowsPage').then((m) => ({
-    default: m.ThreadRowsPage,
-  })),
 );
 const ReplayPage = lazy(() =>
   import('./replay/ReplayView').then((m) => ({ default: m.ReplayPage })),

@@ -94,11 +94,12 @@ export function filteredSidebarLists(
   filter: ProjectFilter,
   keyOf: ProjectKeyOf = byFolder,
 ) {
-  const { pinned, active } = sidebarGroups(threads, spaceId);
+  const { pinned, active, snoozed } = sidebarGroups(threads, spaceId);
   const matches = (t: Thread) => matchesProjectFilter(t, filter, keyOf);
   return {
     pinned: pinned.filter((g) => matches(g.thread)),
     active: active.filter((g) => matches(g.thread)),
+    snoozed: snoozed.filter((g) => matches(g.thread)),
     settled: settledThreads(threads).filter(matches),
   };
 }
