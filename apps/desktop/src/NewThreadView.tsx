@@ -332,7 +332,7 @@ function NewThread() {
 
   return (
     // The greeting row has a fixed height, so the card's top stays put whichever step it holds and however tall it grows.
-    <div className="mx-auto grid min-h-full max-w-[720px] grid-cols-1 grid-rows-[auto_auto_1fr] px-4 md:px-6">
+    <div className="mx-auto grid min-h-full max-w-(--chat-width) grid-cols-1 grid-rows-[auto_auto_1fr] px-4 md:px-6">
       <header className="flex min-h-[30vh] flex-col items-center justify-end pt-10 pb-6 text-center">
         <h1 className="text-balance type-display">{heroTitle(projectLabel)}</h1>
       </header>

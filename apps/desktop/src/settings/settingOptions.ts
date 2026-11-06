@@ -27,6 +27,13 @@ export const UI_TEXT_SIZES = [
   { value: 'large', label: 'Large' },
 ] as const;
 
+export const CHAT_WIDTHS = [
+  { value: 'narrow', label: 'Narrow' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'wide', label: 'Wide' },
+  { value: 'full', label: 'Full' },
+] as const;
+
 export const MOTION = [
   { value: 'system', label: 'System' },
   { value: 'on', label: 'On' },

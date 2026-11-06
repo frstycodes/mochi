@@ -6,6 +6,7 @@
   "uiFont": "",
   "monoFont": "JetBrains Mono",
   "uiTextSize": "default",
+  "chatWidth": "medium",
   "codeFontSize": 12,
   "animations": [],
   "lightTheme": "mochi",

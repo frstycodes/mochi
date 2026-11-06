@@ -787,7 +787,7 @@ function ReplayLoading({ header }: { header: ReactNode }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {header}
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5 px-4 pt-6 md:px-6">
+      <div className="mx-auto flex w-full max-w-(--chat-width) flex-col gap-5 px-4 pt-6 md:px-6">
         <Skeleton className="ml-auto h-10 w-2/3 rounded-2xl" />
         <Skeleton className="h-4 w-1/3" />
         <Skeleton className="h-16 w-full" />
