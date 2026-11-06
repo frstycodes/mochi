@@ -128,8 +128,10 @@ test('the snooze action stores the time, and unset unsnoozes', () => {
     until,
   });
   assert.equal(snoozed.threads[0].snoozedUntil, until);
+  assert.equal(snoozed.threads[0].snoozedAt, NOW);
   const unsnoozed = fold(snoozed, { type: 'snooze', threadId: 't' });
   assert.equal('snoozedUntil' in unsnoozed.threads[0], false);
+  assert.equal('snoozedAt' in unsnoozed.threads[0], false);
 });
 
 test('any fold after the time passed wakes the thread, as the minute tick does', () => {
@@ -154,4 +156,19 @@ test('a snoozed thread leaves Threads for Snoozed with its sub-threads, and come
     NOW,
   );
   assert.deepEqual(sidebarGroups(woken, 's').snoozed, []);
+});
+
+test('Snoozed lists the thread snoozed last on top, whatever its activity', () => {
+  const groups = sidebarGroups(
+    [
+      thread({ id: 'old', snoozedUntil: 'needs-you', snoozedAt: 1 }),
+      thread({ id: 'new', snoozedUntil: NOW + 1, snoozedAt: 3 }),
+      thread({ id: 'mid', snoozedUntil: 'needs-you', snoozedAt: 2 }),
+    ],
+    's',
+  );
+  assert.deepEqual(
+    groups.snoozed.map((g) => g.thread.id),
+    ['new', 'mid', 'old'],
+  );
 });

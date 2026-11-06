@@ -490,8 +490,9 @@ function reduce(state: State, action: Action): State {
       return {
         ...state,
         threads: mapThread(state.threads, action.threadId, (t) => {
-          if (until !== undefined) return { ...t, snoozedUntil: until };
-          const { snoozedUntil: _, ...awake } = t;
+          if (until !== undefined)
+            return { ...t, snoozedUntil: until, snoozedAt: wallNow() };
+          const { snoozedUntil: _, snoozedAt: __, ...awake } = t;
           return awake;
         }),
       };

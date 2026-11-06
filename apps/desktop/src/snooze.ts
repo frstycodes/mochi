@@ -73,7 +73,7 @@ export function wakeSnoozed(
     )
       return t;
     isChanged = true;
-    const { snoozedUntil: _, ...awake } = t;
+    const { snoozedUntil: _, snoozedAt: __, ...awake } = t;
     return isDue && t.activity.length > 0
       ? {
           ...awake,

@@ -187,7 +187,11 @@ export function sidebarGroups(threads: Thread[], spaceId: string) {
   return {
     pinned: pinnedThreads(threads, spaceId).filter(isTop).map(group),
     active: unpinned.filter((t) => !isSnoozed(t)).map(group),
-    snoozed: unpinned.filter(isSnoozed).map(group),
+    // The one snoozed last on top, as you'd look for what you just put away.
+    snoozed: unpinned
+      .filter(isSnoozed)
+      .sort((a, b) => (b.snoozedAt ?? 0) - (a.snoozedAt ?? 0))
+      .map(group),
   };
 }
 
