@@ -2,29 +2,21 @@ import type { Step, StepStatus } from '../model.ts';
 
 /**
  * A row of the chat's to-do list. `update_plan` sends pending / in_progress / completed; Mochi adds the rest from the thread:
- * - `running`: in progress while the agent works; the only status that moves (spinning ring, shimmer, ticking clock).
- * - `paused`: in progress, but the turn ended or the agent isn't working; its clock stops where the turn did.
+ * - `running`: in progress while the agent works; the only status that moves (spinning ring, shimmer).
+ * - `paused`: in progress, but the turn ended or the agent isn't working.
  * - `blocked`: waiting on you, with why in `note`.
  * - `pending`, `done`: up next, finished. Dropped steps leave the list.
  */
 export interface PlanItem {
   title: string;
   status: 'done' | 'running' | 'paused' | 'blocked' | 'pending';
-  /** From start to done, or to now while it runs; none until it starts. */
-  ms?: number;
   note?: string;
 }
 
-/** The agent's plan as the chat's to-do list. `now` is Mochi's minute clock, `nowMs` the wall clock. */
-export function planItems(
-  steps: Step[],
-  now: number,
-  nowMs: number,
-  isWorking: boolean,
-): PlanItem[] {
+/** The agent's plan as the chat's to-do list. */
+export function planItems(steps: Step[], isWorking: boolean): PlanItem[] {
   return steps.flatMap((s) => {
     if (s.status === 'dropped') return [];
-    const ms = stepElapsedMs(s, now, nowMs);
     const status =
       s.status === 'running' && !(isWorking && isTicking(s))
         ? 'paused'
@@ -33,7 +25,6 @@ export function planItems(
       {
         title: s.title,
         status,
-        ...(ms !== undefined && { ms }),
         ...(s.status === 'blocked' && !!s.note && { note: s.note }),
       },
     ];

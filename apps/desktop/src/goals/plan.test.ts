@@ -5,7 +5,6 @@ import type { Step } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { planDuration } from '../progress.ts';
 import { isPlanComplete, planItems, stepElapsedMs } from './plan.ts';
 
 const base = () =>
@@ -22,20 +21,6 @@ const step = (rest: Partial<Step>): Step => ({
   addedAt: 0,
   addedBy: 'claude',
   ...rest,
-});
-
-test('plan durations read in seconds under a minute, never "<1m"', () => {
-  assert.equal(planDuration(0, true), '0s');
-  assert.equal(planDuration(59_999, true), '59s');
-  assert.equal(planDuration(59_000, false), '59s');
-  assert.equal(planDuration(60_000, true), '1m 00s');
-  assert.equal(planDuration(65_000, true), '1m 05s');
-  assert.equal(planDuration(65_000, false), '1m');
-  assert.equal(planDuration(3_599_000, true), '59m 59s');
-  assert.equal(planDuration(3_599_000, false), '59m');
-  assert.equal(planDuration(3_600_000, true), '1h 0m');
-  assert.equal(planDuration(3_600_000, false), '1h');
-  assert.equal(planDuration(3_780_000, false), '1h 3m');
 });
 
 test('elapsed comes from the wall-clock stamps, else Mochi’s minute clock', () => {
@@ -76,8 +61,6 @@ test('elapsed comes from the wall-clock stamps, else Mochi’s minute clock', ()
   assert.deepEqual(
     planItems(
       [step({ status: 'dropped', startedAt: 1 }), step({ status: 'ready' })],
-      7,
-      0,
       true,
     ),
     [{ title: 's', status: 'pending' }],
@@ -86,13 +69,13 @@ test('elapsed comes from the wall-clock stamps, else Mochi’s minute clock', ()
 
 test('an in-progress step only runs while the agent works and its turn has not stopped', () => {
   const status = (s: Partial<Step>, isWorking: boolean) =>
-    planItems([step(s)], 7, 0, isWorking)[0].status;
+    planItems([step(s)], isWorking)[0].status;
   assert.equal(status({}, true), 'running');
   assert.equal(status({}, false), 'paused', 'agent idle');
   assert.equal(status({ stoppedAt: 6 }, true), 'paused', 'its turn ended');
   assert.equal(status({ status: 'blocked' }, true), 'blocked');
   assert.deepEqual(
-    planItems([step({ status: 'blocked', note: 'key' })], 7, 0, true)[0].note,
+    planItems([step({ status: 'blocked', note: 'key' })], true)[0].note,
     'key',
   );
 });
@@ -179,10 +162,7 @@ test('a step the last turn stopped runs again on the next turn, its clock skippi
     5_000,
     'the minute it sat stopped is skipped',
   );
-  assert.equal(
-    planItems([current()], s.now, 66_000, true)[0].status,
-    'running',
-  );
+  assert.equal(planItems([current()], true)[0].status, 'running');
 });
 
 test('a plan is complete only when no step is pending or running', () => {

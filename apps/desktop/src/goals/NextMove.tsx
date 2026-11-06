@@ -1,5 +1,4 @@
 import type { ComponentProps } from 'react';
-import { useNow } from '../useNow';
 import { Warning, CheckCircle, PauseCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,10 +6,8 @@ import { cn } from '@/lib/utils';
 import type { ActivityEntry, LineSlot, Thread } from '../model';
 import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
-import { useHarnessSelector } from '../store';
 import { turnOf } from '../store/threads';
-import { planDuration } from '../progress';
-import { isPlanComplete, isTicking, planItems, type PlanItem } from './plan';
+import { isPlanComplete, planItems, type PlanItem } from './plan';
 import { VerdictIcon } from './VerdictChip';
 import { agentAsk, turnReport } from './report';
 import { idleVerdict, TONE_CLASS, verdictTitle, type Verdict } from './verdict';
@@ -120,8 +117,8 @@ export function NextMoveRecord({
 }
 
 /**
- * The turn's plan, pinned last in the chat while the agent works on it; a running step's time ticks every second while the window
- * is visible. When the turn ends it goes, and its record (`PlanRecordRow`) stays in the transcript.
+ * The turn's plan, pinned last in the chat while the agent works on it. When the turn ends it goes, and its record
+ * (`PlanRecordRow`) stays in the transcript.
  */
 export function ThreadPlan({
   thread,
@@ -130,18 +127,13 @@ export function ThreadPlan({
   thread: Thread;
   isWorking: boolean;
 }) {
-  const now = useHarnessSelector((s) => s.now);
-  const nowMs = useNow(isWorking && thread.steps.some(isTicking) ? 1000 : null);
   if (!isWorking || thread.planTurn !== turnOf(thread)) return null;
   return (
-    <PlanList
-      items={planItems(thread.steps, now, nowMs, isWorking)}
-      slot={thread.line}
-    />
+    <PlanList items={planItems(thread.steps, isWorking)} slot={thread.line} />
   );
 }
 
-/** The agent's own to-do list, each step with how long it took; hidden once every step is done. Only a `running` step moves. */
+/** The agent's own to-do list; hidden once every step is done. Only a `running` step moves. */
 export function PlanList({
   items,
   slot,
@@ -160,7 +152,7 @@ export function PlanList({
 }
 
 function PlanRow({ item, slot }: { item: PlanItem; slot: LineSlot }) {
-  const { title, status, ms, note } = item;
+  const { title, status, note } = item;
   const isRunning = status === 'running';
   return (
     <li
@@ -180,16 +172,6 @@ function PlanRow({ item, slot }: { item: PlanItem; slot: LineSlot }) {
       <span className="sr-only">{STATUS_LABEL[status]}</span>
       {status === 'blocked' && (
         <span className="shrink-0 text-warning">Needs you</span>
-      )}
-      {ms !== undefined && (
-        <span
-          className={cn(
-            'shrink-0 tabular-nums',
-            isRunning ? 'text-foreground/75' : 'text-subtle-foreground',
-          )}
-        >
-          {planDuration(ms, isRunning)}
-        </span>
       )}
     </li>
   );
