@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { QueryProvider } from './QueryProvider';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
@@ -8,8 +8,6 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/toast/Toaster';
 import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { DesignPage } from './design/DesignPage';
-import { ThreadRowsPage } from './design/ThreadRowsPage';
 import { useApplyChatWidth } from './settings/chatWidth';
 import { useApplyFonts } from './settings/fonts';
 import { Orbit } from './Orbit';
@@ -29,7 +27,6 @@ import { getRouter } from './routes/router';
 import { usePathname, useSettingsRoute } from './routes/nav';
 import { usePrefs } from './settings/prefs';
 import { AgentSettingsProvider } from './settings/AgentSettings';
-import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarnessSelector } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
@@ -45,7 +42,6 @@ import {
   useWorktreeCleanup,
 } from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
-import { ReplayPage } from './replay/ReplayView';
 import { ColorThemeController } from './themes/ColorThemeController';
 import { DeviceApprovalLayer } from './remote/DeviceApproval';
 import { MergedScope } from './remote/MergedScope';
@@ -79,11 +75,17 @@ function AppContent() {
         <TooltipProvider delay={400}>
           <ErrorBoundary FallbackComponent={ErrorFallback} resetKeys={[route]}>
             {embeddedReplay ? (
-              <ReplayPage payload={embeddedReplay} />
+              <Suspense>
+                <ReplayPage payload={embeddedReplay} />
+              </Suspense>
             ) : route === 'design' ? (
-              <DesignPage />
+              <Suspense>
+                <DesignPage />
+              </Suspense>
             ) : route === 'thread-rows' ? (
-              <ThreadRowsPage />
+              <Suspense>
+                <ThreadRowsPage />
+              </Suspense>
             ) : route.startsWith('/window/') ? (
               // Outside `MachinesProvider`: a torn-off window shows this computer's threads only (the split menu doesn't tear off another computer's).
               <TornWindow threadId={route.slice('/window/'.length)} />
@@ -205,7 +207,9 @@ function Shell() {
       </SidebarInset>
       {/* After the page in the DOM, back on the left through `order-last` above: Electron applies app-region in document order, so the page's drag headers would otherwise swallow the sidebar's toggle. */}
       {isSettingsOpen ? (
-        <SettingsSidebar width={sidebarWidth} onResize={setSidebarWidth} />
+        <Suspense>
+          <SettingsSidebar width={sidebarWidth} onResize={setSidebarWidth} />
+        </Suspense>
       ) : (
         <>
           <AppSidebar
@@ -242,3 +246,21 @@ function ShellEffects() {
   useSettledCleanup();
   return null;
 }
+
+// Lazy: pages and the settings sidebar the app's first screen never shows; each pulls a large tree of its own.
+const DesignPage = lazy(() =>
+  import('./design/DesignPage').then((m) => ({ default: m.DesignPage })),
+);
+const ThreadRowsPage = lazy(() =>
+  import('./design/ThreadRowsPage').then((m) => ({
+    default: m.ThreadRowsPage,
+  })),
+);
+const ReplayPage = lazy(() =>
+  import('./replay/ReplayView').then((m) => ({ default: m.ReplayPage })),
+);
+const SettingsSidebar = lazy(() =>
+  import('./settings/SettingsSidebar').then((m) => ({
+    default: m.SettingsSidebar,
+  })),
+);
