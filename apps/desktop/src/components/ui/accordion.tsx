@@ -60,12 +60,14 @@ function AccordionContent({
   return (
     <AccordionPrimitive.Panel
       data-slot="accordion-content"
-      className="overflow-hidden text-sm duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] data-closed:animate-accordion-up data-open:animate-accordion-down motion-reduce:animate-none!"
+      // A transition, not keyframes: `data-ending-style` holds the closed height until Base UI unmounts the panel, where a
+      // finished keyframe animation snaps back to full height for a frame or two first.
+      className="h-(--accordion-panel-height) overflow-clip text-sm transition-[height,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] data-ending-style:h-0 data-ending-style:opacity-0 data-starting-style:h-0 data-starting-style:opacity-0 motion-reduce:transition-opacity"
       {...props}
     >
       <div
         className={cn(
-          "h-(--accordion-panel-height) pt-0 pb-2.5 data-ending-style:h-0 data-starting-style:h-0 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+          "pt-0 pb-2.5 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
           className
         )}
       >
