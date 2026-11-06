@@ -1,6 +1,7 @@
 import { persistedSlice } from '../lib/uiStorage.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Action, State } from '../store/types.ts';
+import { isSnoozed } from '../snooze.ts';
 import {
   diffNotices,
   isAddressed,
@@ -77,8 +78,10 @@ export function notificationsReducer(state: State, action: Action): State {
   // First action after load sets the baseline; an undo jumps back in time, so diffing across it would announce events that already happened.
   if (!n.seen || action.type === 'restore')
     return withNotifications(state, { seen });
+  // The threads reducer has already woken a thread that asks for you, so what is still snoozed here has nothing that wakes it.
+  const snoozed = new Set(state.threads.filter(isSnoozed).map((t) => t.id));
   const fresh = diffNotices(n.seen, seen, state.now).filter(
-    (x) => !n.muted.includes(x.threadId),
+    (x) => !n.muted.includes(x.threadId) && !snoozed.has(x.threadId),
   );
   // Only notices from before this action: one it raised hasn't had a chance to be acted on yet.
   const kept = dropAddressed(state, n.items, actedOn(action, n.seen.queue));

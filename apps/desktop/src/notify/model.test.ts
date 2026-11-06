@@ -6,6 +6,7 @@ import {
   groupBursts,
   isAddressed,
   isQuiet,
+  isSnoozeMuted,
   type Notice,
 } from './model.ts';
 
@@ -317,4 +318,13 @@ test('a notice is addressed by what its kind waits for: looking, acting, or the 
     false,
     'no signal, no change',
   );
+});
+
+test('a snoozed thread alerts only for what wakes it', () => {
+  const snoozed = ['t'];
+  for (const kind of ['needs-you', 'failed', 'limit'])
+    assert.equal(isSnoozeMuted(kind, 't', snoozed), false, kind);
+  for (const kind of ['done', 'ci', 'step-done', 'pr-review'])
+    assert.equal(isSnoozeMuted(kind, 't', snoozed), true, kind);
+  assert.equal(isSnoozeMuted('done', 'other', snoozed), false);
 });

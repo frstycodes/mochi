@@ -26,6 +26,8 @@ export interface WatchConfig {
   kinds: string[];
   quiet: QuietHours;
   muted: string[];
+  /** Snoozed threads: main alerts them only for what wakes them (`isSnoozeMuted`). */
+  snoozed?: string[];
   /** Threads waiting on you, for the dock badge. */
   needsYou: string[];
   dockBadge: boolean;
