@@ -80,7 +80,7 @@ function PlanMock({ rl }: { rl: Thread }) {
 
 function PlanStatesMock({ rl }: { rl: Thread }) {
   return (
-    <MockFrame label="Every status · only the running step moves; paused stops its clock, blocked waits on you">
+    <MockFrame label="Every status · only the running step moves; paused waits for the next turn, blocked waits on you">
       <PlanList items={PLAN_STATES} slot={rl.line} />
     </MockFrame>
   );
@@ -92,7 +92,7 @@ function advance(items: PlanItem[]): PlanItem[] {
     j === i
       ? { ...x, status: 'done' }
       : j === i + 1
-        ? { ...x, status: 'running', ms: 0 }
+        ? { ...x, status: 'running' }
         : x,
   );
 }
@@ -407,12 +407,10 @@ const PLAN: PlanItem[] = [
   {
     title: 'Read the rate limiter and its tests',
     status: 'done',
-    ms: 4 * 60_000,
   },
   {
     title: 'Add Retry-After to every 429',
     status: 'running',
-    ms: 12 * 60_000 + 7_000,
   },
   { title: 'Cover the burst case in rate-limit.test.ts', status: 'pending' },
   {
@@ -425,14 +423,12 @@ const PLAN_STATES: PlanItem[] = [
   {
     title: 'Read the rate limiter and its tests',
     status: 'done',
-    ms: 4 * 60_000,
   },
   {
     title: 'Add Retry-After to every 429',
     status: 'running',
-    ms: 2 * 60_000 + 7_000,
   },
-  { title: 'Migrate the limiter config', status: 'paused', ms: 6 * 60_000 },
+  { title: 'Migrate the limiter config', status: 'paused' },
   {
     title: 'Rotate the staging API key',
     status: 'blocked',

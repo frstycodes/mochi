@@ -32,12 +32,6 @@ export function shortElapsed(ms: number) {
   return formatElapsed(ms, 'short');
 }
 
-export function planDuration(ms: number, isRunning: boolean) {
-  return isRunning || ms < 60_000
-    ? formatElapsed(ms)
-    : duration(Math.floor(ms / 60_000));
-}
-
 export function formatElapsed(
   ms: number,
   style: 'clock' | 'minutes' | 'short' | 'precise' = 'clock',

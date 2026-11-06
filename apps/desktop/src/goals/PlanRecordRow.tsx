@@ -4,12 +4,8 @@ import { cn } from '@/lib/utils';
 import type { Assumption, PlanRecord, Step, Thread } from '../model';
 import { Expand, FoldChevron } from '../Fold';
 import { SectionLabel } from '../ui';
-import { planDuration } from '../progress';
-import { useHarnessSelector } from '../store';
-import { useNow } from '../useNow';
 import { AssumptionDot } from './Assumptions';
 import { PlanIcon } from './NextMove';
-import { stepElapsedMs } from './plan';
 import {
   count,
   foldDone,
@@ -75,7 +71,6 @@ function RecordStepRow({ entry }: { entry: RecordStep }) {
   const [isOpen, setOpen] = useState(false);
   const { step, items } = entry;
   const isDone = step.status === 'done';
-  const ms = useStepMs(step);
   const decisions = items.filter((i) => i.kind === 'decision').length;
   const answered = items.length - decisions;
   return (
@@ -88,7 +83,6 @@ function RecordStepRow({ entry }: { entry: RecordStep }) {
           !!decisions && count(decisions, 'decision'),
           !!answered && `${answered} answered`,
           !isDone && 'Not done',
-          ms !== undefined && planDuration(ms, false),
         ]}
         isOpen={isOpen}
         onToggle={items.length ? () => setOpen(!isOpen) : undefined}
@@ -131,13 +125,11 @@ function DoneRun({ entries }: { entries: RecordStep[] }) {
 }
 
 function DoneLine({ step }: { step: Step }) {
-  const ms = useStepMs(step);
   return (
     <StepLine
       icon={<PlanIcon status="done" slot={1} />}
       title={step.title}
       titleClass="text-muted-foreground"
-      meta={ms !== undefined && planDuration(ms, false)}
       isInset
     />
   );
@@ -150,13 +142,6 @@ const recordStatus = (step: Step) =>
     : step.startedAt === undefined
       ? 'pending'
       : 'paused';
-
-/** A settled step's time: its clock stopped when it finished or the turn ended. */
-function useStepMs(step: Step) {
-  const now = useHarnessSelector((s) => s.now);
-  const nowMs = useNow(null);
-  return stepElapsedMs(step, now, step.doneMs ?? step.stoppedMs ?? nowMs);
-}
 
 /** One row, the same height and columns as the live plan's, so a step never changes shape when the turn ends. */
 function StepLine({
