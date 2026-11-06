@@ -10,6 +10,7 @@ import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { ThreadRowsPage } from './design/ThreadRowsPage';
+import { useApplyChatWidth } from './settings/chatWidth';
 import { useApplyFonts } from './settings/fonts';
 import { Orbit } from './Orbit';
 import { ThreadSwitcher } from './ThreadSwitcher';
@@ -65,6 +66,7 @@ function AppContent() {
   const route = useHashRoute();
   useIdleScrollbars();
   useApplyFonts();
+  useApplyChatWidth();
   return (
     <ThemeProvider
       attribute="data-theme"

@@ -76,7 +76,7 @@ function SettingsChatStart() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-180 flex-col gap-6 px-4 pt-[20vh] pb-16 md:px-8">
+    <div className="mx-auto flex w-full max-w-(--chat-width) flex-col gap-6 px-4 pt-[20vh] pb-16 md:px-8">
       <header className="flex flex-col gap-2 px-1">
         <h1 className="type-display">Ask Mochi</h1>
         <p className="text-pretty text-muted-foreground">

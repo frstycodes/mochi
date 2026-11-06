@@ -71,6 +71,8 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
+  /* Settings › Appearance › Chat width (`src/settings/chatWidth.ts`) replaces it; medium until then. */
+  --chat-width: 840px;
   /* Solar draws a 1.5 stroke on its 24px grid, ~1px at 16px; 2 matches the weight of 14px text. */
   --solar-stroke-width: 2;
   /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/appZoom.ts` sets the zoom. */

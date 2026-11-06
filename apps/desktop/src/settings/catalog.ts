@@ -51,6 +51,7 @@ import {
   MOTION,
   SPEEDS,
   UI_TEXT_SIZES,
+  CHAT_WIDTHS,
   UNRELATED_TASK,
   AGENT_SUGGESTIONS,
   ASKED_THREADS,
@@ -464,6 +465,10 @@ const APP_SETTINGS: Setting[] = [
   }),
   pref('uiTextSize', 'Interface size', 'appearance', choice(UI_TEXT_SIZES), {
     group: 'Fonts',
+  }),
+  pref('chatWidth', 'Chat width', 'appearance', choice(CHAT_WIDTHS), {
+    group: 'Chat',
+    description: 'How wide messages and the composer grow',
   }),
   pref('monoFont', 'Code font', 'appearance', FONT.mono, {
     group: 'Fonts',

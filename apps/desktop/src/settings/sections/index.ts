@@ -180,6 +180,11 @@ export const SETTINGS_SECTIONS = [
       },
       { id: 'appIcon', label: 'App icon', keywords: 'dock icon logo variant' },
       {
+        id: 'chatWidth',
+        label: 'Chat width',
+        keywords: 'chat width wide narrow column measure layout',
+      },
+      {
         id: 'uiFont',
         label: 'Interface font',
         keywords: 'font typeface family sans text',

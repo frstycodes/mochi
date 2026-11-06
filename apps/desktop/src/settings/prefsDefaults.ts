@@ -15,6 +15,8 @@ export interface Prefs {
   monoFont: string;
   /** Scales every text token, not spacing. */
   uiTextSize: 'small' | 'default' | 'large';
+  /** How wide the chat column grows (`CHAT_WIDTH` in src/settings/chatWidth.ts). */
+  chatWidth: 'narrow' | 'medium' | 'wide' | 'full';
   /** Px for code blocks and diffs; the terminal keeps `terminalFontSize`. */
   codeFontSize: number;
   /** Sidebar and side pane animations that run (`ANIMATIONS`); none by default. Reduce motion still stops them all. */
@@ -110,6 +112,7 @@ export const DEFAULT_PREFS: Prefs = {
   uiFont: '',
   monoFont: '',
   uiTextSize: 'default',
+  chatWidth: 'medium',
   codeFontSize: 12,
   animations: [
     'sidebar-toggle',

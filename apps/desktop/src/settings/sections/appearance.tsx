@@ -103,6 +103,9 @@ export function AppearanceSection() {
       <SettingsGroup title="App icon">
         <CatalogRow settingKey="appIcon" label="Dock icon" />
       </SettingsGroup>
+      <SettingsGroup title="Chat">
+        <CatalogRow settingKey="chatWidth" />
+      </SettingsGroup>
       <FontSettings />
       <SettingsSection
         id="animations"

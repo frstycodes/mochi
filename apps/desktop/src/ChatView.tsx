@@ -268,7 +268,7 @@ export function ChatView({
           <VizThreadProvider value={thread.id}>
             <ConversationContent
               className={cn(
-                'mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6',
+                'mx-auto w-full max-w-(--chat-width) gap-5 px-4 pt-6 pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6',
                 handoff.isHandoff && 'animate-in duration-300 fade-in',
               )}
             >
@@ -391,7 +391,7 @@ function ComposerBase() {
   return (
     <div
       aria-hidden
-      className="composer-base pointer-events-none absolute inset-x-0 bottom-(--composer-card-bottom) mx-auto w-full max-w-[720px] px-4 md:px-6"
+      className="composer-base pointer-events-none absolute inset-x-0 bottom-(--composer-card-bottom) mx-auto w-full max-w-(--chat-width) px-4 md:px-6"
     >
       <div className="h-(--composer-card-h) rounded-2xl bg-background" />
     </div>
@@ -980,7 +980,7 @@ const Composer = memo(function Composer({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
+    <div className="mx-auto w-full max-w-(--chat-width) px-4 pb-3 md:px-6">
       <motion.div {...handoff.layout}>
         <div className="relative">
           {/* Over the card, out of flow: showing it while it works never moves the composer. */}

@@ -106,6 +106,7 @@ const prefsFields = {
   uiFont: S,
   monoFont: S,
   uiTextSize: Schema.Literals(['small', 'default', 'large']),
+  chatWidth: Schema.Literals(['narrow', 'medium', 'wide', 'full']),
   codeFontSize: Schema.Number,
   animations: Strings,
   lightTheme: S,
