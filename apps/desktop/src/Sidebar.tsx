@@ -1,5 +1,6 @@
 import {
   Fragment,
+  memo,
   useEffect,
   useEffectEvent,
   useRef,
@@ -93,6 +94,7 @@ import { Fold, FoldContent } from './Fold';
 import { NextRunBadge } from './schedule/NextRunBadge';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
+import { useLatest } from './useLatest';
 import {
   useDispatch,
   useHarnessSelector,
@@ -447,6 +449,11 @@ function SpaceNav({
       onRename={() => startRename(t.id, 'row')}
     />
   );
+  const rowActions = useStableHandlers({
+    select: (e: ReactMouseEvent, id: string) =>
+      selection.onClick(e, id) && go({ kind: 'thread', id }),
+    rename: (id: string) => startRename(id, 'row'),
+  });
 
   return (
     <>
@@ -486,7 +493,8 @@ function SpaceNav({
         <ThreadList
           pinned={pinned}
           active={active}
-          row={row}
+          openId={view.kind === 'thread' ? view.id : undefined}
+          rowActions={rowActions}
           selectedIds={selection.ids}
           filterMenu={
             <div className="absolute top-1.5 right-3 z-10 flex gap-0.5">
@@ -628,14 +636,16 @@ function useThreadSelection(order: string[], openId: string | undefined) {
 function ThreadList({
   pinned,
   active,
-  row,
+  openId,
+  rowActions,
   selectedIds,
   filterMenu,
   isFiltered,
 }: {
   pinned: ThreadGroup[];
   active: ThreadGroup[];
-  row: (t: Thread, isSub?: boolean) => ReactNode;
+  openId: string | undefined;
+  rowActions: RowActions;
   selectedIds: string[];
   filterMenu: ReactNode;
   isFiltered: boolean;
@@ -681,67 +691,46 @@ function ThreadList({
       ),
     ].find((r) => r.rowId === rowId);
   const drag = useRowDrag(listRef, findRow, pinnedIds, drop);
+  const { step } = useStableHandlers({
+    step: (id: string, by: 1 | -1) => {
+      reorder(stepPin(pinnedIds, activeIds, id, by));
+      // Moving a focused node in the DOM can drop its focus; put it back on the row.
+      requestAnimationFrame(() =>
+        listRef.current
+          ?.querySelector<HTMLElement>(
+            `[data-row-id="${id}"] [data-sidebar=menu-button]`,
+          )
+          ?.focus(),
+      );
+    },
+  });
   const { isMobile } = useSidebar();
   if (pins.length + active.length === 0)
     return isFiltered && <NoFilteredThreads filterMenu={filterMenu} />;
 
   const dragged = drag.state && findRow(drag.state.id);
-  const step = (id: string, by: 1 | -1) => {
-    reorder(stepPin(pinnedIds, activeIds, id, by));
-    // Moving a focused node in the DOM can drop its focus; put it back on the row.
-    requestAnimationFrame(() =>
-      listRef.current
-        ?.querySelector<HTMLElement>(
-          `[data-row-id="${id}"] [data-sidebar=menu-button]`,
-        )
-        ?.focus(),
-    );
-  };
   const item = (
     t: Thread,
     pinNumber: number | undefined,
-    rowProps: object,
+    rowProps: { 'data-row-id': string; 'data-pinned': true | undefined },
     sub?: { parentId: string; isLast: boolean },
   ) => (
-    <ThreadPeek
+    <ThreadListItem
       key={t.id}
       thread={t}
       pinNumber={pinNumber}
-      isDisabled={!!drag.state}
-    >
-      <ThreadRowMenu threadId={t.id} selectedIds={selectedIds}>
-        <SidebarMenuItem
-          render={
-            <motion.li
-              {...glide}
-              layoutId={rowLayoutId(t.id)}
-              variants={ROW_EXIT}
-              exit="exit"
-            />
-          }
-          {...rowProps}
-          data-thread-row={t.id}
-          data-sub-of={sub?.parentId}
-          onKeyDown={(e) => {
-            if (
-              sub ||
-              !e.altKey ||
-              (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')
-            )
-              return;
-            e.preventDefault();
-            step(t.id, e.key === 'ArrowUp' ? -1 : 1);
-          }}
-          aria-keyshortcuts={sub ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
-          className={cn(sub && 'pl-[27px]')}
-        >
-          {!!sub && (
-            <SubThreadGuide isLast={sub.isLast} className="left-[15px]" />
-          )}
-          {row(t, !!sub)}
-        </SidebarMenuItem>
-      </ThreadRowMenu>
-    </ThreadPeek>
+      rowId={rowProps['data-row-id']}
+      isPinned={!!rowProps['data-pinned']}
+      subOf={sub?.parentId}
+      isLastSub={sub?.isLast}
+      isDragging={!!drag.state}
+      layoutDependency={glide.layoutDependency}
+      isActive={openId === t.id}
+      isSelected={selectedIds.includes(t.id)}
+      selectedIds={selectedIds}
+      actions={rowActions}
+      onStep={step}
+    />
   );
   const section = (rows: ListRow[], isPinned: boolean) => {
     const items = rows
@@ -880,6 +869,121 @@ function ThreadList({
       </DragSurface>
     </SidebarGroup>
   );
+}
+
+interface RowActions {
+  select: (e: ReactMouseEvent, id: string) => unknown;
+  rename: (id: string) => void;
+}
+
+interface ThreadListItemProps {
+  thread: Thread;
+  pinNumber: number | undefined;
+  rowId: string;
+  isPinned: boolean;
+  /** The parent's id when this row is a sub-thread under it. */
+  subOf: string | undefined;
+  isLastSub: boolean | undefined;
+  isDragging: boolean;
+  layoutDependency: string;
+  isActive: boolean;
+  isSelected: boolean;
+  selectedIds: string[];
+  actions: RowActions;
+  onStep: (id: string, by: 1 | -1) => void;
+}
+
+// Memoized: every commit re-renders the list (opening a thread, each streamed batch), and each row carries a hover card, a context
+// menu and a layout animation. A row re-renders only when its own values change; its thread's own updates reach it through `useThread`.
+const ThreadListItem = memo(function ThreadListItem({
+  thread: t,
+  pinNumber,
+  rowId,
+  isPinned,
+  subOf,
+  isLastSub,
+  isDragging,
+  layoutDependency,
+  isActive,
+  isSelected,
+  selectedIds,
+  actions,
+  onStep,
+}: ThreadListItemProps) {
+  const isSub = subOf !== undefined;
+  return (
+    <ThreadPeek thread={t} pinNumber={pinNumber} isDisabled={isDragging}>
+      <ThreadRowMenu threadId={t.id} selectedIds={selectedIds}>
+        <SidebarMenuItem
+          render={
+            <motion.li
+              layout="position"
+              layoutDependency={layoutDependency}
+              transition={ROW_LAYOUT}
+              layoutId={rowLayoutId(t.id)}
+              variants={ROW_EXIT}
+              exit="exit"
+            />
+          }
+          data-row-id={rowId}
+          data-pinned={isPinned || undefined}
+          data-thread-row={t.id}
+          data-sub-of={subOf}
+          onKeyDown={(e) => {
+            if (
+              isSub ||
+              !e.altKey ||
+              (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')
+            )
+              return;
+            e.preventDefault();
+            onStep(t.id, e.key === 'ArrowUp' ? -1 : 1);
+          }}
+          aria-keyshortcuts={isSub ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
+          className={cn(isSub && 'pl-[27px]')}
+        >
+          {isSub && (
+            <SubThreadGuide isLast={!!isLastSub} className="left-[15px]" />
+          )}
+          <ThreadItem
+            thread={t}
+            isSub={isSub}
+            isActive={isActive}
+            isSelected={isSelected}
+            onSelect={(e) => actions.select(e, t.id)}
+            onRename={() => actions.rename(t.id)}
+          />
+        </SidebarMenuItem>
+      </ThreadRowMenu>
+    </ThreadPeek>
+  );
+}, isSameRow);
+
+// `selectedIds` is rebuilt every render, so it compares by content.
+function isSameRow(a: ThreadListItemProps, b: ThreadListItemProps) {
+  return (Object.keys(a) as (keyof ThreadListItemProps)[]).every((k) =>
+    k === 'selectedIds'
+      ? a.selectedIds.length === b.selectedIds.length &&
+        a.selectedIds.every((id, i) => id === b.selectedIds[i])
+      : Object.is(a[k], b[k]),
+  );
+}
+
+/** Handlers whose identity never changes, each calling the latest render's version, so memoized rows can take them. */
+function useStableHandlers<
+  T extends Record<string, (...args: never[]) => unknown>,
+>(handlers: T): T {
+  const latest = useLatest(handlers);
+  const [stable] = useState(
+    () =>
+      Object.fromEntries(
+        Object.keys(handlers).map((key) => [
+          key,
+          (...args: never[]) => latest.current[key](...args),
+        ]),
+      ) as T,
+  );
+  return stable;
 }
 
 /** A row of the thread list and its sub-threads. */
