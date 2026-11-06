@@ -10,3 +10,15 @@ export const layerLog = (file: string) => {
     Logger.map(Logger.formatLogFmt, (line) => electronLog.info(line)),
   ]);
 };
+
+/**
+ * An error with its stack, from code outside Core's runtime: `Effect.runSync(Effect.log…)` there runs on Effect's default
+ * logger, which writes to the console and never reaches the file.
+ */
+export function logErrorOutsideCore(message: string, cause: unknown) {
+  const detail =
+    cause instanceof Error ? (cause.stack ?? cause.message) : String(cause);
+  electronLog.error(
+    `timestamp=${new Date().toISOString()} level=ERROR message=${JSON.stringify(message)} cause=${JSON.stringify(detail)}`,
+  );
+}
