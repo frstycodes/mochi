@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { Pushpin } from '@/icons';
 import {
   HoverCard,
@@ -7,6 +6,7 @@ import {
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
+import { useTranscript } from './chat/Transcript';
 
 export type OutlineItem = {
   rowIndex: number;
@@ -25,8 +25,8 @@ export function ThreadMinimap({
   onJump: (rowIndex: number) => void;
   className?: string;
 }) {
-  const { scrollRef } = useStickToBottomContext();
-  const inView = useRowsInView(scrollRef, items.length);
+  const { scroller } = useTranscript();
+  const inView = useRowsInView(scroller, items.length);
   if (items.length < 2) return null;
 
   return (
@@ -82,14 +82,10 @@ export function ThreadMinimap({
   );
 }
 
-function useRowsInView(
-  scrollRef: React.RefObject<HTMLElement | null>,
-  count: number,
-) {
+function useRowsInView(el: HTMLElement | null, count: number) {
   const [inView, setInView] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    const el = scrollRef.current;
     if (!el) return;
     let frame = 0;
     const measure = () => {
@@ -119,7 +115,7 @@ function useRowsInView(
       el.removeEventListener('scroll', schedule);
     };
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- a new row count re-measures and re-observes the list's current first child
-  }, [scrollRef, count]);
+  }, [el, count]);
 
   return inView;
 }

@@ -47,6 +47,7 @@
     "@fontsource-variable/source-sans-3": "^5.3.1",
     "@fontsource-variable/space-grotesk": "^5.3.0",
     "@fontsource-variable/work-sans": "^5.3.0",
+    "@legendapp/list": "3.7.1",
     "@lezer/highlight": "^1.2.5",
     "@mochi/core": "workspace:*",
     "@mochi/domain": "workspace:*",

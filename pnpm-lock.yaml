@@ -160,6 +160,9 @@ importers:
       '@fontsource-variable/work-sans':
         specifier: ^5.3.0
         version: 5.3.0
+      '@legendapp/list':
+        specifier: 3.7.1
+        version: 3.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@lezer/highlight':
         specifier: ^1.2.5
         version: 1.2.5
@@ -1484,6 +1487,18 @@ packages:
 
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
+
+  '@legendapp/list@3.7.1':
+    resolution: {integrity: sha512-zgIy84yG2JP93+kib61rZBTcYGZ6fULrkCQz/MF7WrjVJeJQa/rR4z+rXfM5oveirO5mYkro4IDGytARIjJe9w==}
+    peerDependencies:
+      react: '*'
+      react-dom: '*'
+      react-native: '*'
+    peerDependenciesMeta:
+      react-dom:
+        optional: true
+      react-native:
+        optional: true
 
   '@lezer/common@1.5.4':
     resolution: {integrity: sha512-xt3Q4z64xM+xhg4M7NXqw1N//1O74bUFo5kz6fwMeC4qwxSuRdwkYSmjcqCEEKYkNw5e67f2hcNqBoNERAEU0w==}
@@ -8284,6 +8299,13 @@ snapshots:
       keyv: 5.6.0
 
   '@keyv/serialize@1.1.1': {}
+
+  '@legendapp/list@3.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
+      use-sync-external-store: 1.7.0(react@19.3.0)
+    optionalDependencies:
+      react-dom: 19.3.0(react@19.3.0)
 
   '@lezer/common@1.5.4': {}
 

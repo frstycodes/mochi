@@ -11,20 +11,13 @@ import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
-import { isKeyUp, isWheelUp } from './chat/scrollIntent';
 import { useSmoothText } from './chat/reveal';
 import { ThreadContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
-import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { Hourglass, Sparkles } from '@/icons';
 import { FoldChevron } from './Fold';
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation';
 import {
   Message,
   MessageContent,
@@ -35,7 +28,6 @@ import {
   usePromptInputController,
 } from '@/components/ai-elements/prompt-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { isTextEntry } from '@/lib/textEntry';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
 import {
@@ -167,6 +159,8 @@ import { SubagentGroup } from './agents/SubagentRow';
 import {
   rememberedScroll,
   Transcript,
+  TranscriptScrollButton,
+  useTranscript,
   type TranscriptHandle,
 } from './chat/Transcript';
 
@@ -228,7 +222,6 @@ export function ChatView({
     hold: holdComposer,
     release: releaseComposer,
   } = useComposerHeightVar();
-  const resize = useOpeningResize();
   const messages = useRef<HTMLDivElement>(null);
   const pins = useThreadPins(thread.id);
   usePinHighlights(messages, pins);
@@ -258,94 +251,98 @@ export function ChatView({
         }
       >
         {!isReadOnly && <ComposerBase />}
-        {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
-        <Conversation
+        <div
+          ref={messages}
           data-photo-scope
-          initial={remembered && !remembered.isAtBottom ? false : 'instant'}
-          resize={resize}
-          className="mt-(--chat-top,0px) min-h-0 flex-1"
+          className="relative mt-(--chat-top,0px) min-h-0 flex-1"
         >
           <VizThreadProvider value={thread.id}>
-            <ConversationContent
+            <Transcript
+              ref={transcript}
+              threadId={thread.id}
+              rows={rows}
+              remembered={remembered}
               className={cn(
-                'mx-auto w-full max-w-(--chat-width) gap-5 px-4 pt-6 pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6',
                 handoff.isHandoff && 'animate-in duration-300 fade-in',
               )}
-            >
-              <div ref={messages} className="contents">
-                {!!thread.setup && (
-                  <SetupRow thread={thread} setup={thread.setup} />
-                )}
-                <Transcript
-                  ref={transcript}
-                  threadId={thread.id}
-                  rows={rows}
-                  remembered={remembered}
+              header={
+                <div
+                  className={cn('px-4 pt-6 md:px-6', !!thread.setup && 'pb-5')}
                 >
-                  {(row, i) => (
-                    <ChatRowView
+                  {!!thread.setup && (
+                    <SetupRow thread={thread} setup={thread.setup} />
+                  )}
+                </div>
+              }
+              footer={
+                <div className="flex flex-col gap-5 px-4 pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6">
+                  {!isReadOnly && (
+                    <PendingSteers
                       thread={thread}
-                      row={row}
-                      slashItems={slashItems}
-                      isReadOnly={isReadOnly}
-                      messageBar={messageBar}
-                      hasActions={withActions.has(i)}
-                      isLive={
-                        row.kind === 'work'
-                          ? i === liveWork && !!action
-                          : i === liveIndex && isRunning
-                      }
-                      action={action}
+                      onTakeBack={(message) => restoreDraft.current?.(message)}
                     />
                   )}
-                </Transcript>
-                {!isReadOnly && (
-                  <PendingSteers
+                  <ReportCard
                     thread={thread}
-                    onTakeBack={(message) => restoreDraft.current?.(message)}
+                    anchor={anchor}
+                    isReadOnly={isReadOnly}
                   />
-                )}
-                <ReportCard
+                  <ThreadPlan thread={thread} isWorking={isRunning} />
+                  <ChatMochi
+                    phase={agentPhase(thread)}
+                    label={pendingWork(thread)?.label}
+                  />
+                </div>
+              }
+              renderRow={(row, i) => (
+                <ChatRowView
                   thread={thread}
-                  anchor={anchor}
+                  row={row}
+                  slashItems={slashItems}
                   isReadOnly={isReadOnly}
+                  messageBar={messageBar}
+                  hasActions={withActions.has(i)}
+                  isLive={
+                    row.kind === 'work'
+                      ? i === liveWork && !!action
+                      : i === liveIndex && isRunning
+                  }
+                  action={action}
                 />
-                <ThreadPlan thread={thread} isWorking={isRunning} />
-                <ChatMochi
-                  phase={agentPhase(thread)}
-                  label={pendingWork(thread)?.label}
+              )}
+            >
+              <TranscriptScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
+              {!isReadOnly && (
+                <SelectionPin threadId={thread.id} scope={messages} />
+              )}
+              <ThreadMinimap
+                items={outline(rows, pins)}
+                onJump={(rowIndex) =>
+                  transcript.current?.scrollToIndex(rowIndex, {
+                    align: 'start',
+                  })
+                }
+                className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex"
+              />
+              {!isReadOnly && (
+                <ScrollIntent
+                  onScrollUp={() => {
+                    holdComposer();
+                    tray.collapse();
+                    // Scrolling back to check something while writing keeps the composer open.
+                    if (!composerRef.current?.contains(document.activeElement))
+                      setComposerCompact(true);
+                  }}
+                  onReachBottom={() => {
+                    tray.expand();
+                    setComposerCompact(false);
+                    if (!decisions.length) releaseComposer();
+                  }}
                 />
-              </div>
-            </ConversationContent>
+              )}
+            </Transcript>
           </VizThreadProvider>
-          <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
-          {!isReadOnly && (
-            <SelectionPin threadId={thread.id} scope={messages} />
-          )}
-          <ThreadMinimap
-            items={outline(rows, pins)}
-            onJump={(rowIndex) =>
-              transcript.current?.scrollToIndex(rowIndex, { align: 'start' })
-            }
-            className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex"
-          />
-          {!isReadOnly && (
-            <ScrollIntent
-              onScrollUp={() => {
-                holdComposer();
-                tray.collapse();
-                // Scrolling back to check something while writing keeps the composer open.
-                if (!composerRef.current?.contains(document.activeElement))
-                  setComposerCompact(true);
-              }}
-              onReachBottom={() => {
-                tray.expand();
-                setComposerCompact(false);
-                if (!decisions.length) releaseComposer();
-              }}
-            />
-          )}
-        </Conversation>
+        </div>
         {!isReadOnly && (
           <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-10">
             <ImageDropTarget>
@@ -402,7 +399,7 @@ function ComposerBase() {
  * Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
  * Also the card's own height and its distance from the bottom (--composer-card-h, --composer-card-bottom), for ComposerBase.
  * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
- * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
+ * padding: the shrink would clamp the scroll, moving the rows under the reader.
  */
 function useComposerHeightVar() {
   const ref = useRef<HTMLDivElement>(null);
@@ -762,9 +759,8 @@ function useTrayState(count: number) {
 const SCROLL_INTENT_PX = 24;
 
 /**
- * Listens to the reader's input, not scroll: stick-to-bottom scrolls programmatically, and those scroll events aren't the reader's intent.
- * Any upward input releases the bottom pin at once. The library escapes on its own only when its wheel walk reaches the scroller and no
- * resize is in flight, so mid-stream a slow trackpad scroll could stay pinned and be pulled back down.
+ * Listens to the reader's input, not scroll: the list scrolls programmatically (following the stream, holding rows still), and those scroll
+ * events aren't the reader's intent. The list lets go of the end on its own when the reader scrolls up.
  */
 function ScrollIntent({
   onScrollUp,
@@ -773,18 +769,15 @@ function ScrollIntent({
   onScrollUp: () => void;
   onReachBottom: () => void;
 }) {
-  const { scrollRef, isAtBottom, stopScroll } = useStickToBottomContext();
+  const { scroller, isAtEnd } = useTranscript();
   const scrolledUp = useEffectEvent(onScrollUp);
   const reachedBottom = useEffectEvent(onReachBottom);
-  const release = useEffectEvent(stopScroll);
 
   useEffect(() => {
-    const el = scrollRef.current;
+    const el = scroller;
     if (!el) return;
     let up = 0;
     let touchY = 0;
-    let isDraggingBar = false;
-    let lastTop = el.scrollTop;
     const atBottom = () => el.scrollHeight - el.scrollTop - el.clientHeight < 4;
     const intent = (dy: number) => {
       if (dy > 0 && atBottom()) return reachedBottom();
@@ -793,49 +786,25 @@ function ScrollIntent({
       up = 0;
       scrolledUp();
     };
-    const onWheel = (e: WheelEvent) => {
-      if (isWheelUp(e)) release();
-      intent(e.deltaY);
-    };
+    const onWheel = (e: WheelEvent) => intent(e.deltaY);
     const onTouchStart = (e: TouchEvent) => (touchY = e.touches[0].clientY);
     const onTouchMove = (e: TouchEvent) => {
-      const dy = touchY - e.touches[0].clientY;
-      if (dy < 0) release();
-      intent(dy);
+      intent(touchY - e.touches[0].clientY);
       touchY = e.touches[0].clientY;
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (isKeyUp(e) && !isTextEntry(e.target)) release();
-    };
-    // The scroller's own box, not its content, is only hit on the scrollbar.
-    const onPointerDown = (e: PointerEvent) =>
-      (isDraggingBar = e.target === el);
-    const onPointerUp = () => (isDraggingBar = false);
-    const onScroll = () => {
-      if (isDraggingBar && el.scrollTop < lastTop) release();
-      lastTop = el.scrollTop;
     };
     el.addEventListener('wheel', onWheel, { passive: true });
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: true });
-    el.addEventListener('keydown', onKeyDown);
-    el.addEventListener('pointerdown', onPointerDown);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('pointerup', onPointerUp);
     return () => {
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('keydown', onKeyDown);
-      el.removeEventListener('pointerdown', onPointerDown);
-      el.removeEventListener('scroll', onScroll);
-      window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [scrollRef]);
+  }, [scroller]);
 
   useEffect(() => {
-    if (isAtBottom) reachedBottom();
-  }, [isAtBottom]);
+    if (isAtEnd) reachedBottom();
+  }, [isAtEnd]);
 
   return null;
 }
@@ -1309,18 +1278,6 @@ const SCREENSHOT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160
       `<rect x="${12 + i * 14}" y="${96 - h}" width="10" height="${h}" rx="1.5" fill="#4a86d8" opacity="${0.55 + i * 0.045}"/>`,
   )
   .join('')}<rect x="10" y="102" width="140" height="1" fill="#e3e5ea"/></svg>`;
-
-const OPENING_MS = 1000;
-
-/** Content keeps growing for a moment after mount (markdown, images); following it smoothly reads as the chat scrolling by itself. */
-function useOpeningResize() {
-  const [isOpening, setOpening] = useState(true);
-  useEffect(() => {
-    const t = window.setTimeout(() => setOpening(false), OPENING_MS);
-    return () => window.clearTimeout(t);
-  }, []);
-  return isOpening ? 'instant' : 'smooth';
-}
 
 /** Writing instead of answering keeps the card in the chat too, as its question with no answer. */
 function useRecordUnanswered(thread: Thread) {
