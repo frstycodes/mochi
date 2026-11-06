@@ -16,16 +16,26 @@ if (host.isDesktop) {
   listenForChannels();
 }
 
+// `#splash` holds index.html's splash on screen instead of booting.
+if (location.hash !== '#splash') void boot();
+
 // The store holds Core's threads from the first render.
-startStore()
-  .then(() => loadDrafts())
-  .then(() => {
-    createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <App />
-      </StrictMode>,
-    );
-  });
+async function boot() {
+  showBootStage('Loading threads…');
+  await startStore();
+  showBootStage('Restoring drafts…');
+  await loadDrafts();
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+
+function showBootStage(text: string) {
+  const stage = document.querySelector('.splash-stage');
+  if (stage) stage.textContent = text;
+}
 
 // Full screen hides the native window buttons and the drag regions; the headers drop their insets for them too.
 function showWindowChrome() {

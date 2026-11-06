@@ -10,7 +10,6 @@ import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { ThreadRowsPage } from './design/ThreadRowsPage';
-import { SplashPage } from './design/SplashPage';
 import { useApplyChatWidth } from './settings/chatWidth';
 import { useApplyFonts } from './settings/fonts';
 import { Orbit } from './Orbit';
@@ -85,8 +84,6 @@ function AppContent() {
               <DesignPage />
             ) : route === 'thread-rows' ? (
               <ThreadRowsPage />
-            ) : route === 'splash' ? (
-              <SplashPage />
             ) : route.startsWith('/window/') ? (
               // Outside `MachinesProvider`: a torn-off window shows this computer's threads only (the split menu doesn't tear off another computer's).
               <TornWindow threadId={route.slice('/window/'.length)} />
