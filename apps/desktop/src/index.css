@@ -599,16 +599,12 @@
 }
 /* macOS's tint is native (electron/sidebarTint), under the page, so the sidebar paints none of its own: a see-through wash
    painted by Chromium came back in blocks of different shades after partial redraws (hovering rows), like Claude's app avoids. */
-:root:is(
-    [data-material='appkit'],
-    [data-material='glass'],
-    [data-material='vibrancy']
-  )
-  [data-slot='sidebar-container'] {
+:root[data-material='vibrancy'] [data-slot='sidebar-container'] {
   background: transparent;
 }
-/* The page shows the same material, under a heavier wash than the sidebar so the theme's colour still reads. */
-:root[data-material] [data-slot='sidebar-inset'] {
+/* Mica's page shows the same material, under a heavier wash than the sidebar so the theme's colour still reads. macOS's page
+   stays opaque: over its material, Chromium left stale patches in a see-through page while a browser view was open. */
+:root[data-material='mica'] [data-slot='sidebar-inset'] {
   background: color-mix(in oklab, var(--background) 65%, transparent);
 }
 
@@ -690,10 +686,10 @@
   animation: mask-shimmer 2.3s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
-/* A layer that fills the page: the theme's background, or see-through over the window material so the page's wash isn't painted twice. */
+/* A layer that fills the page: the theme's background, or see-through over Mica so the page's wash isn't painted twice. */
 @utility bg-page {
   background: var(--background);
-  :root[data-material] & {
+  :root[data-material='mica'] & {
     background: transparent;
   }
 }
@@ -729,7 +725,7 @@
 .composer-base {
   display: none;
 }
-:root[data-material] .composer-base {
+:root[data-material='mica'] .composer-base {
   display: block;
 }
 

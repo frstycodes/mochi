@@ -11,7 +11,6 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 import type { LightsPlacement } from '../src/host/types/windows.ts';
-import { attachSidebarGlass } from './sidebarGlass/sidebarGlass.ts';
 import { tintSidebar, trackSidebarTint } from './sidebarTint/sidebarTint.ts';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
@@ -22,20 +21,13 @@ const background = () =>
 const hasMica = () =>
   process.platform === 'win32' && Number(release().split('.')[2]) >= 22621;
 /**
- * macOS's sidebar material by version, as Claude's desktop app splits it: AppKit's own sidebar glass from macOS 27
- * (Darwin 26), a glass strip under the sidebar on macOS 26, and Electron's `vibrancy` before it, which blurs the windows
- * behind where the glass shows only the wallpaper.
+ * Electron's `vibrancy` on every macOS, under the sidebar only. AppKit's own sidebar glass showed only the wallpaper, but
+ * as a sibling under the page it made Chromium leave stale patches in the see-through page while a browser view
+ * (WebContentsView) was open, and nested inside the vibrancy's effect view it showed the windows behind anyway.
  */
-function macMaterial(): Material | undefined {
-  if (process.platform !== 'darwin') return undefined;
-  const darwin = Number(release().split('.')[0]);
-  if (darwin >= 26) return 'appkit';
-  return darwin === 25 ? 'glass' : 'vibrancy';
-}
-type Material = 'appkit' | 'glass' | 'vibrancy' | 'mica';
+const hasVibrancy = () => process.platform === 'darwin';
+type Material = 'vibrancy' | 'mica';
 const materialWindows = new WeakSet<BrowserWindow>();
-/** Windows showing AppKit's sidebar glass (`attachSidebarGlass`). */
-const glassWindows = new WeakSet<BrowserWindow>();
 /** Windows whose native material failed: they keep the solid sidebar until they close. */
 const solidWindows = new WeakSet<BrowserWindow>();
 
@@ -131,7 +123,7 @@ export function fitWindowButtons(win: BrowserWindow) {
 export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
   const isMica = !route && hasMica();
-  const material = route ? undefined : macMaterial();
+  const isVibrant = !route && hasVibrancy();
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -142,10 +134,7 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     ...titleBar(),
     backgroundColor: background(),
     ...(isMica && { backgroundMaterial: 'mica' }),
-    // 'appkit' too: the sidebar glass goes inside the effect view Electron hosts in its own view tree (electron/sidebarGlass).
-    ...((material === 'vibrancy' || material === 'appkit') && {
-      vibrancy: 'sidebar',
-    }),
+    ...(isVibrant && { vibrancy: 'sidebar' }),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -154,7 +143,7 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     },
   });
   if (isMica) showMaterial(win, 'mica');
-  else if (material) showMacMaterial(win, material);
+  else if (isVibrant) showVibrancy(win);
   win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => {
     fitWindowButtons(win);
@@ -199,26 +188,14 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   return win;
 }
 
-function showMacMaterial(win: BrowserWindow, material: Material) {
-  // Tracked from the start, before the glass attaches: the renderer reports its width once, on mount. Until
-  // `showMaterial`, the opaque page covers the tint.
-  trackSidebarTint(win, material === 'glass', () => dropMaterial(win));
-  if (material !== 'appkit') return showMaterial(win, material);
-  void attachSidebarGlass(win).then((isAttached) => {
-    if (!isAttached) return;
-    glassWindows.add(win);
-    showMaterial(win, 'appkit');
-  });
-  win.on('focus', () => refreshGlass(win));
-}
-
-/** Electron's window sometimes leaves AppKit's glass flat grey after a theme change or a Space switch; a fresh one samples the wallpaper again. */
-function refreshGlass(win: BrowserWindow) {
-  if (glassWindows.has(win) && !win.isDestroyed()) void attachSidebarGlass(win);
+function showVibrancy(win: BrowserWindow) {
+  // Tracked from the start: the renderer reports the sidebar's width once, on mount.
+  trackSidebarTint(win, () => dropMaterial(win));
+  showMaterial(win, 'vibrancy');
 }
 
 /**
- * The shell window's sidebar shows the window material (`macMaterial` on macOS, Mica on Windows 11) through the page: `data-material` in index.css.
+ * The shell window's sidebar shows the window material (`vibrancy` on macOS, Mica on Windows 11) through the page: `data-material` in index.css.
  * Off in full screen, where there's no wallpaper to light it, and with Reduce Transparency on: the opaque page then covers
  * the material and the sidebar keeps the theme's own colour. That setting is re-read on focus, as no event reports it.
  */
@@ -257,7 +234,6 @@ function dropMaterial(win: BrowserWindow) {
 nativeTheme.on('updated', () =>
   BrowserWindow.getAllWindows().forEach((win) => {
     if (!materialWindows.has(win)) win.setBackgroundColor(background());
-    refreshGlass(win);
     fitWindowButtons(win);
     void tintSidebar(win);
   }),

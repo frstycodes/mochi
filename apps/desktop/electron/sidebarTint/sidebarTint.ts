@@ -5,25 +5,21 @@ import addonSource from './sidebarTint.mm?raw';
 type Rgba = [number, number, number, number];
 
 interface SidebarTintAddon {
-  setSidebarTint(
-    handle: Buffer,
-    tint: { width: number; rgba: Rgba; glass?: boolean },
-  ): void;
+  setSidebarTint(handle: Buffer, tint: { width: number; rgba: Rgba }): void;
   clearTint(handle: Buffer): void;
-  isGlassSupported(): boolean;
 }
 
-// Tuned by eye over the `sidebar` material. Inactive windows halve it, following AppKit's own dimming of the material.
+// The theme's --sidebar in sRGB (index.css), heavy enough that the blurred windows behind read as a soft wash, not a
+// picture. Tuned by eye. Inactive windows halve it, following AppKit's own dimming of the material.
 const TINTS = {
-  light: [1, 1, 1, 0.1],
-  dark: [0, 0, 0, 0.12],
+  light: [0.953, 0.953, 0.965, 0.8],
+  dark: [0.093, 0.094, 0.108, 0.85],
 } satisfies Record<string, Rgba>;
 const INACTIVE_ALPHA = 0.5;
 
 interface Tracked {
   /** The sidebar's last width in CSS px. */
   width: number;
-  isGlass: boolean;
   onFail: () => void;
 }
 
@@ -31,13 +27,9 @@ interface Tracked {
 const tracked = new WeakMap<BrowserWindow, Tracked>();
 let addon: Promise<SidebarTintAddon | null> | undefined;
 
-/** Lets the renderer size `win`'s sidebar material: an NSGlassEffectView strip with `isGlass`, else a tint over its vibrancy or AppKit glass. `onFail` once the add-on can't. */
-export function trackSidebarTint(
-  win: BrowserWindow,
-  isGlass: boolean,
-  onFail: () => void,
-) {
-  tracked.set(win, { width: 0, isGlass, onFail });
+/** Lets the renderer size the tint over `win`'s sidebar vibrancy. `onFail` once the add-on can't. */
+export function trackSidebarTint(win: BrowserWindow, onFail: () => void) {
+  tracked.set(win, { width: 0, onFail });
   win.on('focus', () => void tintSidebar(win));
   win.on('blur', () => void tintSidebar(win));
 }
@@ -50,7 +42,7 @@ export async function tintSidebar(win: BrowserWindow, width?: number) {
   addon ??= load();
   const tint = await addon;
   if (win.isDestroyed()) return;
-  if (!tint || (state.isGlass && !tint.isGlassSupported())) return fail(win);
+  if (!tint) return fail(win);
   const [r, g, b, a] = nativeTheme.shouldUseDarkColors
     ? TINTS.dark
     : TINTS.light;
@@ -60,7 +52,6 @@ export async function tintSidebar(win: BrowserWindow, width?: number) {
     tint.setSidebarTint(handle, {
       width: state.width * win.webContents.getZoomFactor(),
       rgba: [r, g, b, win.isFocused() ? a : a * INACTIVE_ALPHA],
-      glass: state.isGlass,
     });
   } catch (error) {
     console.warn('Sidebar material failed, the sidebar stays solid', error);
