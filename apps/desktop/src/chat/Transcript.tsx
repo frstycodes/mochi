@@ -38,8 +38,6 @@ export const rememberedScroll = new Map<string, RememberedScroll>();
 
 // Close to a 2k-entry thread's measured mean, so first measurements barely move what's on screen.
 const ROW_ESTIMATE_PX = 180;
-// The space under every row, the last one included, so the footer starts the same distance below it.
-const ROW_GAP_PX = 20;
 // A jump leaves the row clear of the top edge.
 const JUMP_PADDING_PX = 24;
 const VIEW_POSITION = { start: 0, center: 0.5, end: 1 } as const;
@@ -106,15 +104,16 @@ export function Transcript({
         // The rows read the chat's live state through `renderRow`, not through `rows`: a new one redraws the mounted rows.
         extraData={renderRow}
         // The gutter is on each row: the list places rows absolutely across the content box, so the box's own padding wouldn't apply.
+        // The space under a row is its own padding, not `columnWrapperStyle.rowGap`: the list's content size drops the last row's gap
+        // while the footer still sits below it, so the list's end would stop 20px short of the scroller's and re-pinning would bounce the rows.
         renderItem={({ item, index }) => (
-          <div data-chat-row={index} className="px-4 md:px-6">
+          <div data-chat-row={index} className="px-4 pb-5 md:px-6">
             <ErrorBoundary FallbackComponent={ErrorFallback}>
               {renderRow(item, index)}
             </ErrorBoundary>
           </div>
         )}
         estimatedItemSize={ROW_ESTIMATE_PX}
-        columnWrapperStyle={{ rowGap: ROW_GAP_PX }}
         initialScrollAtEnd={initialIndex === undefined}
         {...(initialIndex && { initialScrollIndex: initialIndex })}
         maintainScrollAtEnd={{ animated: false }}

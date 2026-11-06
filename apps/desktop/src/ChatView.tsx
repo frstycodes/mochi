@@ -11,6 +11,7 @@ import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
+import { composerHold } from './chat/composerHold';
 import { useSmoothText } from './chat/reveal';
 import { ThreadContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
@@ -398,29 +399,26 @@ function ComposerBase() {
 /**
  * Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
  * Also the card's own height and its distance from the bottom (--composer-card-h, --composer-card-bottom), for ComposerBase.
- * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
- * padding: the shrink would clamp the scroll, moving the rows under the reader.
+ * `hold` and `release` pin --composer-hold; see composerHold.
  */
 function useComposerHeightVar() {
   const ref = useRef<HTMLDivElement>(null);
-  const held = useRef(0);
-  const release = () => {
-    held.current = 0;
-    ref.current?.parentElement?.style.removeProperty('--composer-hold');
-  };
+  const holder = useRef<ReturnType<typeof composerHold>>(null);
   const hold = () => {
     const el = ref.current;
-    if (!el?.parentElement || held.current) return;
-    held.current = el.offsetHeight;
-    el.parentElement.style.setProperty('--composer-hold', `${held.current}px`);
+    if (el) holder.current?.hold(el.offsetHeight);
   };
-  const releaseBelow = useEffectEvent(
-    (height: number) => height >= held.current && release(),
-  );
+  const release = () => holder.current?.release();
   useEffect(() => {
     const el = ref.current;
     const parent = el?.parentElement;
     if (!el || !parent) return;
+    const held = composerHold((px) =>
+      px === undefined
+        ? parent.style.removeProperty('--composer-hold')
+        : parent.style.setProperty('--composer-hold', `${px}px`),
+    );
+    holder.current = held;
     const ro = new ResizeObserver(([e]) => {
       const height = e.borderBoxSize[0].blockSize;
       parent.style.setProperty('--composer-h', `${height}px`);
@@ -433,10 +431,13 @@ function useComposerHeightVar() {
           `${el.getBoundingClientRect().bottom - bottom}px`,
         );
       }
-      releaseBelow(height);
+      held.resized(height);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      held.dispose();
+    };
   }, []);
   return { ref, hold, release };
 }
