@@ -1,19 +1,24 @@
 import {
+  createContext,
+  use,
   useEffect,
-  useEffectEvent,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
+  type ReactElement,
   type ReactNode,
   type Ref,
   type RefObject,
 } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
-import { useStickToBottomContext } from 'use-stick-to-bottom';
+import { LegendList, type LegendListRef } from '@legendapp/list/react';
 import { ErrorFallback } from '@/components/ErrorFallback';
+import { Button } from '@/components/ui/button';
+import { ArrowDown } from '@/icons';
+import { cn } from '@/lib/utils';
 import type { ChatRow } from './rows';
-import { hasGaps, transcriptGaps } from './transcriptGaps';
 
 export interface TranscriptHandle {
   scrollToIndex: (
@@ -23,9 +28,9 @@ export interface TranscriptHandle {
 }
 
 export interface RememberedScroll {
-  offset: number;
-  isAtBottom: boolean;
-  measurements: VirtualItem[];
+  /** The row at the top of the view and how far the view's top sat below the row's top. */
+  anchor: { key: string; offset: number } | undefined;
+  isAtEnd: boolean;
 }
 
 /** Where each thread was left, so one that unmounted (opened elsewhere, a pinned page two swipes away) comes back there instead of at the bottom. */
@@ -33,216 +38,148 @@ export const rememberedScroll = new Map<string, RememberedScroll>();
 
 // Close to a 2k-entry thread's measured mean, so first measurements barely move what's on screen.
 const ROW_ESTIMATE_PX = 180;
-// Matches the row column's `gap-5`.
+// The space under every row, the last one included, so the footer starts the same distance below it.
 const ROW_GAP_PX = 20;
-// Matches the rows' `scroll-mt-6`: a jump leaves the row clear of the top edge.
+// A jump leaves the row clear of the top edge.
 const JUMP_PADDING_PX = 24;
+const VIEW_POSITION = { start: 0, center: 0.5, end: 1 } as const;
 
 /**
- * The chat's rows, virtualized: only the rows in view (plus a few each side) are mounted, measured as they render, so a thread with thousands
- * of entries mounts and scrolls like a short one. `use-stick-to-bottom` still owns following the stream: the list's height is the
- * virtualizer's total, and growing rows grow it.
+ * The chat's scroller and its rows, virtualized by LegendList: only the rows near the view mount, measured as they render. The list alone
+ * moves the scroll position: it follows the stream at the end, holds the rows in view still when rows above them change size, and lets go
+ * of the end when the reader scrolls up. `header` and `footer` scroll with the rows and are never virtualized.
  */
 export function Transcript({
   ref,
   threadId,
   rows,
   remembered,
+  header,
+  footer,
+  renderRow,
+  className,
   children,
 }: {
   ref: Ref<TranscriptHandle>;
   threadId: string;
   rows: ChatRow[];
   remembered: RememberedScroll | undefined;
-  children: (row: ChatRow, index: number) => ReactNode;
+  header: ReactElement;
+  footer: ReactElement;
+  renderRow: (row: ChatRow, index: number) => ReactNode;
+  className?: string;
+  /** Drawn over the scroller, with `useTranscript` available. */
+  children?: ReactNode;
 }) {
-  const { scrollRef, contentRef, isAtBottom } = useStickToBottomContext();
-  const list = useRef<HTMLDivElement>(null);
-  const scrollMargin = useOffsetIn(list, scrollRef, contentRef);
-  const virtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_ESTIMATE_PX,
-    getItemKey: (i) => rows[i].key,
-    gap: ROW_GAP_PX,
-    overscan: 4,
-    scrollMargin,
-    scrollPaddingStart: JUMP_PADDING_PX,
-    // Past the end clamps to the bottom: a thread opens on its latest rows without mounting the first ones for a frame.
-    initialOffset: () =>
-      remembered && !remembered.isAtBottom
-        ? remembered.offset
-        : rows.length * (ROW_ESTIMATE_PX + ROW_GAP_PX),
-    initialMeasurementsCache: remembered?.measurements,
-  });
-  useImperativeHandle(
-    ref,
-    () => ({
-      scrollToIndex: (index, options) =>
-        virtualizer.scrollToIndex(index, options),
-    }),
-    [virtualizer],
-  );
-  useSyncScrollOffset(scrollRef, virtualizer);
-  useRememberScroll(threadId, virtualizer, isAtBottom);
-  useRevealCard(rows, virtualizer);
-  useGapCheck(list, scrollRef, contentRef, virtualizer);
+  const list = useRef<LegendListRef>(null);
+  // The list's handle, once mounted: set in the list's own layout effects, which run before this one.
+  const [mounted, setMounted] = useState<LegendListRef | null>(null);
+  useLayoutEffect(() => setMounted(list.current), []);
+  const scroller = mounted?.getScrollableNode() ?? null;
+  const isAtEnd = useIsAtEnd(mounted);
+  useImperativeHandle(ref, () => ({
+    scrollToIndex: (index, { align = 'start' } = {}) =>
+      void list.current?.scrollToIndex({
+        index,
+        viewPosition: VIEW_POSITION[align],
+        viewOffset: align === 'start' ? JUMP_PADDING_PX : 0,
+      }),
+  }));
+  useRememberScroll(threadId, list);
+  useRevealCard(rows, list);
+  const [initialIndex] = useState(() => restoredIndex(rows, remembered));
 
-  const items = virtualizer.getVirtualItems();
-  const top = (items[0]?.start ?? scrollMargin) - scrollMargin;
   return (
-    <div
-      ref={list}
-      className="relative w-full shrink-0"
-      style={{ height: virtualizer.getTotalSize() }}
+    <TranscriptContext
+      value={{
+        scroller,
+        isAtEnd,
+        // Not animated: an animated run across thousands of unmeasured rows retargets as they measure and can stop short of the end.
+        scrollToEnd: () => void list.current?.scrollToEnd({ animated: false }),
+      }}
     >
-      <div
-        className="absolute inset-x-0 top-0 flex flex-col gap-5"
-        style={{ translate: `0 ${top}px` }}
-      >
-        {items.map((item) => (
-          <div
-            key={item.key}
-            ref={virtualizer.measureElement}
-            data-index={item.index}
-            data-chat-row={item.index}
-          >
+      <LegendList<ChatRow>
+        ref={list}
+        data={rows}
+        keyExtractor={(row) => row.key}
+        getItemType={(row) => row.kind}
+        // The rows read the chat's live state through `renderRow`, not through `rows`: a new one redraws the mounted rows.
+        extraData={renderRow}
+        // The gutter is on each row: the list places rows absolutely across the content box, so the box's own padding wouldn't apply.
+        renderItem={({ item, index }) => (
+          <div data-chat-row={index} className="px-4 md:px-6">
             <ErrorBoundary FallbackComponent={ErrorFallback}>
-              {children(rows[item.index], item.index)}
+              {renderRow(item, index)}
             </ErrorBoundary>
           </div>
-        ))}
-      </div>
-    </div>
+        )}
+        estimatedItemSize={ROW_ESTIMATE_PX}
+        columnWrapperStyle={{ rowGap: ROW_GAP_PX }}
+        initialScrollAtEnd={initialIndex === undefined}
+        {...(initialIndex && { initialScrollIndex: initialIndex })}
+        maintainScrollAtEnd={{ animated: false }}
+        maintainVisibleContentPosition
+        ListHeaderComponent={header}
+        ListFooterComponent={footer}
+        // The browser's own scroll anchoring would correct the same size changes the list already corrects.
+        className={cn('h-full [overflow-anchor:none]', className)}
+        contentContainerClassName="mx-auto w-full max-w-(--chat-width)"
+        role="log"
+      />
+      {children}
+    </TranscriptContext>
   );
 }
 
-type Virtualizer = ReturnType<typeof useVirtualizer<HTMLElement, Element>>;
-
-/** The list's distance from the top of the scroller's content (the chat's top padding and setup row above it): the virtualizer's `scrollMargin`. */
-function useOffsetIn(
-  list: RefObject<HTMLElement | null>,
-  scrollRef: RefObject<HTMLElement | null>,
-  contentRef: RefObject<HTMLElement | null>,
-) {
-  const [offset, setOffset] = useState(0);
-  // Not a layout effect: the scroller and content are ancestors, and React attaches their refs after this child's layout effects run.
-  useEffect(() => {
-    const el = list.current;
-    const scroller = scrollRef.current;
-    const content = contentRef.current;
-    if (!el || !scroller || !content) return;
-    const measure = () =>
-      setOffset(
-        el.getBoundingClientRect().top -
-          scroller.getBoundingClientRect().top +
-          scroller.scrollTop,
-      );
-    measure();
-    // Anything above the list growing or folding resizes the content box. Not the list's parent: ChatView wraps the rows in a
-    // `display: contents` div, which has no box, so a ResizeObserver on it never fires and a stale margin opens a gap above the rows.
-    const ro = new ResizeObserver(measure);
-    ro.observe(content);
-    return () => ro.disconnect();
-  }, [list, scrollRef, contentRef]);
-  return offset;
+interface TranscriptView {
+  /** The scroll element, once the list has mounted it. */
+  scroller: HTMLElement | null;
+  isAtEnd: boolean;
+  scrollToEnd: () => void;
 }
 
-/**
- * The virtualizer learns the scroller's offset only from scroll events, and `initialOffset` guesses the bottom. A thread whose rows fit
- * the viewport never scrolls, so no event corrects the guess and only its last rows mount, leaving the top of the chat empty. The
- * virtualizer attaches on the render after `scrollMargin` is measured (the scroller is an ancestor, so its ref is unset on the first
- * render); replay a scroll when the two disagree so it reads the real offset.
- */
-function useSyncScrollOffset(
-  scrollRef: RefObject<HTMLElement | null>,
-  virtualizer: Virtualizer,
-) {
-  // Every render: the attach happens in a render nothing else marks.
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    if (!scroller || virtualizer.scrollElement !== scroller) return;
-    if (scroller.scrollTop === virtualizer.scrollOffset) return;
-    scroller.dispatchEvent(new Event('scroll'));
-  });
+const TranscriptContext = createContext<TranscriptView | null>(null);
+
+export function useTranscript() {
+  const view = use(TranscriptContext);
+  if (!view) throw new Error('useTranscript outside a Transcript');
+  return view;
 }
 
-const GAP_CHECK_SETTLE_MS = 250;
-
-/** Dev only: once scrolling and resizing settle, reports any part of the visible list the mounted rows don't cover, with how far rows sit from where the virtualizer placed them. */
-function useGapCheck(
-  list: RefObject<HTMLElement | null>,
-  scrollRef: RefObject<HTMLElement | null>,
-  contentRef: RefObject<HTMLElement | null>,
-  virtualizer: Virtualizer,
-) {
-  const rowStarts = useEffectEvent(
-    () =>
-      new Map(
-        virtualizer.getVirtualItems().map((item) => [item.index, item.start]),
-      ),
+function useIsAtEnd(list: LegendListRef | null) {
+  return useSyncExternalStore(
+    (onChange) => list?.getState().listen('isAtEnd', onChange) ?? (() => {}),
+    () => list?.getState().isAtEnd ?? true,
   );
-  useEffect(() => {
-    const el = list.current;
-    const scroller = scrollRef.current;
-    const content = contentRef.current;
-    if (!import.meta.env.DEV || !el || !scroller || !content) return;
-    let timer = 0;
-    const check = () => {
-      // An off-screen pinned page skips layout; measuring it would force it.
-      if (!el.checkVisibility({ contentVisibilityAuto: true })) return;
-      const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
-      const span = (box: DOMRect) => ({
-        top: box.top - origin,
-        bottom: box.bottom - origin,
-      });
-      const rendered = [...el.querySelectorAll<HTMLElement>('[data-chat-row]')];
-      const starts = rowStarts();
-      const listBox = span(el.getBoundingClientRect());
-      const view = {
-        top: Math.max(listBox.top, scroller.scrollTop),
-        bottom: Math.min(
-          listBox.bottom,
-          scroller.scrollTop + scroller.clientHeight,
-        ),
-      };
-      const gaps = transcriptGaps(
-        rendered.map((row) => span(row.getBoundingClientRect())),
-        rendered.map((row) => starts.get(Number(row.dataset.index)) ?? NaN),
-        view,
-        ROW_GAP_PX,
-      );
-      if (hasGaps(gaps)) console.error('Transcript window has gaps', gaps);
-    };
-    const schedule = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(check, GAP_CHECK_SETTLE_MS);
-    };
-    const ro = new ResizeObserver(schedule);
-    ro.observe(content);
-    ro.observe(scroller);
-    scroller.addEventListener('scroll', schedule, { passive: true });
-    return () => {
-      window.clearTimeout(timer);
-      ro.disconnect();
-      scroller.removeEventListener('scroll', schedule);
-    };
-  }, [list, scrollRef, contentRef]);
+}
+
+/** The reopened thread's first row and offset, or undefined to open at the end. */
+export function restoredIndex(
+  rows: ChatRow[],
+  remembered: RememberedScroll | undefined,
+) {
+  const anchor = remembered?.anchor;
+  if (!anchor || remembered.isAtEnd) return undefined;
+  const index = rows.findIndex((r) => r.key === anchor.key);
+  return index < 0 ? undefined : { index, viewOffset: -anchor.offset };
 }
 
 function useRememberScroll(
   threadId: string,
-  virtualizer: Virtualizer,
-  isAtBottom: boolean,
+  list: RefObject<LegendListRef | null>,
 ) {
-  const remember = useEffectEvent((id: string) => {
-    rememberedScroll.set(id, {
-      offset: virtualizer.scrollOffset ?? 0,
-      isAtBottom,
-      measurements: virtualizer.takeSnapshot(),
-    });
-  });
-  useEffect(() => () => remember(threadId), [threadId]);
+  // A layout effect: its cleanup runs before the list's own handle is torn down.
+  useLayoutEffect(
+    () => () => {
+      const current = list.current;
+      if (!current) return;
+      rememberedScroll.set(threadId, {
+        anchor: current.anchorVisibleContent({ hold: false }),
+        isAtEnd: current.getState().isAtEnd,
+      });
+    },
+    [threadId, list],
+  );
 }
 
 const REVEAL_CARD = 'chat-reveal-card';
@@ -252,17 +189,40 @@ export function revealCard(cardId: string) {
   window.dispatchEvent(new CustomEvent(REVEAL_CARD, { detail: cardId }));
 }
 
-function useRevealCard(rows: ChatRow[], virtualizer: Virtualizer) {
+function useRevealCard(rows: ChatRow[], list: RefObject<LegendListRef | null>) {
   useEffect(() => {
     const onReveal = (e: Event) => {
-      const i = rows.findIndex(
+      const index = rows.findIndex(
         (r) =>
           r.kind === 'event' &&
           r.entry.card?.id === (e as CustomEvent<string>).detail,
       );
-      if (i >= 0) virtualizer.scrollToIndex(i, { align: 'center' });
+      if (index >= 0)
+        void list.current?.scrollToIndex({ index, viewPosition: 0.5 });
     };
     window.addEventListener(REVEAL_CARD, onReveal);
     return () => window.removeEventListener(REVEAL_CARD, onReveal);
-  }, [rows, virtualizer]);
+  }, [rows, list]);
+}
+
+/** Back to the newest message, shown once the reader has left the end. */
+export function TranscriptScrollButton({ className }: { className?: string }) {
+  const { isAtEnd, scrollToEnd } = useTranscript();
+  return (
+    !isAtEnd && (
+      <Button
+        aria-label="Scroll to the newest message"
+        className={cn(
+          'absolute left-1/2 -translate-x-1/2 dark:bg-background dark:hover:bg-muted',
+          className,
+        )}
+        onClick={scrollToEnd}
+        size="icon"
+        type="button"
+        variant="outline"
+      >
+        <ArrowDown className="size-4" aria-hidden />
+      </Button>
+    )
+  );
 }

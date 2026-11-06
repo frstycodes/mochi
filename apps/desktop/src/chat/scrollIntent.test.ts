@@ -3,23 +3,8 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { useStickToBottom } from 'use-stick-to-bottom';
 import { afterEach, onTestFinished, test, vi } from 'vite-plus/test';
-import { isKeyUp, isWheelUp } from './scrollIntent.ts';
 
 afterEach(() => vi.useRealTimers());
-
-test('upward wheels and keys read as scrolling up; sideways trackpad noise does not', () => {
-  assert.equal(isWheelUp({ deltaX: 0, deltaY: -1 }), true);
-  assert.equal(isWheelUp({ deltaX: 0, deltaY: 3 }), false);
-  assert.equal(isWheelUp({ deltaX: 12, deltaY: -1 }), false);
-  for (const key of ['ArrowUp', 'PageUp', 'Home'])
-    assert.equal(isKeyUp({ key, shiftKey: false, metaKey: false }), true);
-  assert.equal(isKeyUp({ key: ' ', shiftKey: true, metaKey: false }), true);
-  assert.equal(isKeyUp({ key: ' ', shiftKey: false, metaKey: false }), false);
-  assert.equal(
-    isKeyUp({ key: 'ArrowUp', shiftKey: true, metaKey: false }),
-    false,
-  );
-});
 
 // The patched use-stick-to-bottom (patches/use-stick-to-bottom@1.1.6.patch): a shrink within 70px of the bottom used to re-pin a reader who
 // had just scrolled up, and the next growth pulled them back down.
