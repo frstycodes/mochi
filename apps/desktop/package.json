@@ -197,10 +197,6 @@
           "to": "fonts"
         },
         {
-          "from": "build/native/sidebar-tint",
-          "to": "sidebar-tint"
-        },
-        {
           "from": "build/icons",
           "to": "icons",
           "filter": [

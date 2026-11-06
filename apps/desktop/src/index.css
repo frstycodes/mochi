@@ -585,7 +585,7 @@
   padding-left: calc(var(--lights-end) + 9px - var(--header-left, 0px));
 }
 
-/* The shell window's material (`macMaterial` / Mica, electron/window.ts) shows through the docked sidebar only; the page beside it stays opaque. */
+/* The shell window's Mica (electron/window.ts, Windows 11 only) shows through the docked sidebar only; the page beside it stays opaque. */
 :root[data-material] body {
   background: transparent;
 }
@@ -597,13 +597,7 @@
 :root[data-material] [data-slot='sidebar-inner'] {
   background: transparent;
 }
-/* macOS's tint is native (electron/sidebarTint), under the page, so the sidebar paints none of its own: a see-through wash
-   painted by Chromium came back in blocks of different shades after partial redraws (hovering rows), like Claude's app avoids. */
-:root[data-material='vibrancy'] [data-slot='sidebar-container'] {
-  background: transparent;
-}
-/* Mica's page shows the same material, under a heavier wash than the sidebar so the theme's colour still reads. macOS's page
-   stays opaque: over its material, Chromium left stale patches in a see-through page while a browser view was open. */
+/* Mica's page shows the same material, under a heavier wash than the sidebar so the theme's colour still reads. */
 :root[data-material='mica'] [data-slot='sidebar-inset'] {
   background: color-mix(in oklab, var(--background) 65%, transparent);
 }

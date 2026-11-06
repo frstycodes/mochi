@@ -647,7 +647,6 @@ add('windows.showAppMenu', { input: [12, 40] });
 add('windows.setAppearance', { input: ['dark'] });
 add('windows.resetZoom', { input: [] });
 add('windows.placeLights', { input: ['peek'] });
-add('windows.tintSidebar', { input: [256] });
 add('windows.openScreenRecordingSettings', { input: [] });
 add('windows.onFullScreenChange', { event: true });
 add('windows.onMessage', { event: { type: 'focus', threadId: 't1' } });
@@ -827,7 +826,6 @@ const rejected: Record<string, unknown[][]> = {
     [1.5, 2],
   ],
   'windows.setAppearance': [['sepia']],
-  'windows.tintSidebar': [[-1], [1.5], ['wide']],
 };
 
 writeFileSync(

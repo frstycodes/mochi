@@ -170,7 +170,6 @@ export const HOST_SCOPES = {
     showAppMenu: L,
     resetZoom: L,
     placeLights: L,
-    tintSidebar: L,
     setAppearance: L,
     listApps: L,
     captureApp: L,
