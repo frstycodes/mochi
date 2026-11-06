@@ -2,14 +2,12 @@ import {
   createContext,
   use,
   useEffect,
-  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
-  type Ref,
   type RefObject,
 } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -19,13 +17,6 @@ import { Button } from '@/components/ui/button';
 import { ArrowDown } from '@/icons';
 import { cn } from '@/lib/utils';
 import type { ChatRow } from './rows';
-
-export interface TranscriptHandle {
-  scrollToIndex: (
-    index: number,
-    options?: { align?: 'start' | 'center' | 'end' },
-  ) => void;
-}
 
 export interface RememberedScroll {
   /** The row at the top of the view and how far the view's top sat below the row's top. */
@@ -38,9 +29,6 @@ export const rememberedScroll = new Map<string, RememberedScroll>();
 
 // Close to a 2k-entry thread's measured mean, so first measurements barely move what's on screen.
 const ROW_ESTIMATE_PX = 180;
-// A jump leaves the row clear of the top edge.
-const JUMP_PADDING_PX = 24;
-const VIEW_POSITION = { start: 0, center: 0.5, end: 1 } as const;
 
 /**
  * The chat's scroller and its rows, virtualized by LegendList: only the rows near the view mount, measured as they render. The list alone
@@ -48,7 +36,6 @@ const VIEW_POSITION = { start: 0, center: 0.5, end: 1 } as const;
  * of the end when the reader scrolls up. `header` and `footer` scroll with the rows and are never virtualized.
  */
 export function Transcript({
-  ref,
   threadId,
   rows,
   remembered,
@@ -58,7 +45,6 @@ export function Transcript({
   className,
   children,
 }: {
-  ref: Ref<TranscriptHandle>;
   threadId: string;
   rows: ChatRow[];
   remembered: RememberedScroll | undefined;
@@ -75,14 +61,6 @@ export function Transcript({
   useLayoutEffect(() => setMounted(list.current), []);
   const scroller = mounted?.getScrollableNode() ?? null;
   const isAtEnd = useIsAtEnd(mounted);
-  useImperativeHandle(ref, () => ({
-    scrollToIndex: (index, { align = 'start' } = {}) =>
-      void list.current?.scrollToIndex({
-        index,
-        viewPosition: VIEW_POSITION[align],
-        viewOffset: align === 'start' ? JUMP_PADDING_PX : 0,
-      }),
-  }));
   useRememberScroll(threadId, list);
   useRevealCard(rows, list);
   const [initialIndex] = useState(() => restoredIndex(rows, remembered));
