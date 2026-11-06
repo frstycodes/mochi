@@ -79,6 +79,7 @@ import { createWorktree } from '../git/host.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from './starts.ts';
 import { trackCommandFiles } from './commandFiles.ts';
+import { logErrorOutsideCore } from '../log.ts';
 import { nameThread } from './naming.ts';
 import { threadSessions } from './settle.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
@@ -679,7 +680,7 @@ export async function startAgent(
       .catch((error: unknown) => {
         markIdle(id);
         // The turn shows only the message; the log keeps the stack, the one way to find where a start broke.
-        Effect.runSync(Effect.logError(`Start of ${id} failed`, error));
+        logErrorOutsideCore(`Start of ${id} failed`, error);
         broadcast({
           threadId: id,
           type: 'turn-end',
