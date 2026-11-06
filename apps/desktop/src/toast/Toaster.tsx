@@ -31,16 +31,16 @@ import { useIsWindowActive } from '../lib/windowFocus';
 import { dismiss, useToasts, type Toast } from './store';
 import { ToastRow, ToastSummary } from './ToastContent';
 
-/** How far an opened toast grows past the stack on each side, never past a 16px gutter. */
+/** How far an opened toast grows left past the stack, never past a 16px gutter. */
 const GROWTH = 'clamp(0px, (100vw - 388px) / 2, 32px)';
-const OPEN_INSET = `calc(-1 * ${GROWTH})`;
+const OPEN_INSET = `calc(-2 * ${GROWTH})`;
 
 /** Widths of the card's two faces; `cqw` is the stack's own width. */
 const SUMMARY_WIDTH = '100cqw';
 const WIDGET_WIDTH = `calc(100cqw + 2 * ${GROWTH})`;
 
 /**
- * Top-center stack that behaves like Sonner: collapsed it shows the newest with two peeking behind at its height; hover or focus
+ * Bottom-right stack that behaves like Sonner: collapsed it shows the newest with two peeking behind at its height; hover or focus
  * fans it out and pauses every countdown, and it stays fanned out while a press that started in it is held. A toast with an
  * `expand` widget opens in place into it, like the Dynamic Island, and the rest of the stack steps aside.
  */
@@ -99,7 +99,7 @@ export function Toaster() {
   return (
     <section
       aria-label="Notifications"
-      className="pointer-events-none fixed inset-x-0 top-13 z-[500] flex justify-center px-4 app-no-drag"
+      className="pointer-events-none fixed inset-x-0 bottom-4 z-[500] flex justify-end px-4 app-no-drag"
     >
       <ol
         ref={listRef}
@@ -267,7 +267,7 @@ function ToastItem({
 
   const motionClass = cn(
     // No transform-origin: Sonner scales the toasts behind about their centre, which sets both the peek and the path they take.
-    'absolute inset-x-0 top-0 rounded-xl transition-[transform,opacity,filter,left,right,height,border-radius] motion-reduce:transition-opacity',
+    'absolute inset-x-0 bottom-0 rounded-xl transition-[transform,opacity,filter,left,right,height,border-radius] motion-reduce:transition-opacity',
     (!isMounted || toast.isLeaving || isHidden) && 'opacity-0',
     // Ours on top of Sonner's slide and fade: toasts blur in and out.
     (!isMounted || toast.isLeaving) && 'blur-[6px]',
@@ -284,7 +284,7 @@ function ToastItem({
   };
   const size = {
     height: itemHeight(sizeState) || undefined,
-    ...(isOpen && { left: OPEN_INSET, right: OPEN_INSET }),
+    ...(isOpen && { left: OPEN_INSET }),
   };
   const motionStyle = {
     transform,
