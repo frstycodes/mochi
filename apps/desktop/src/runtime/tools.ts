@@ -874,6 +874,8 @@ const THREAD_SPECS = {
       const name = args.title?.trim();
       dispatch({
         type: 'create',
+        // The caller's profile, never the state's: in Core there is no current one, and a thread without it can't launch.
+        spaceId: caller.spaceId,
         title: prompt,
         ...(name && { name }),
         ...create,
