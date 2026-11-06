@@ -248,7 +248,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   worktreeInclude: '.env*',
   setupCommands: {},
   sideChatModel: { provider: 'claude', model: 'claude-sonnet-5-5' },
-  appIcon: 'graphite',
+  appIcon: 'peek',
   utilityModels: Object.fromEntries(
     UTILITY_TASKS.map((task) => [
       task,

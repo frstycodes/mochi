@@ -12,9 +12,9 @@ import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 import type { LightsPlacement } from '../src/host/types/windows.ts';
 
-// DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
+// index.css's default `--background` (oklch 0.185 / 0.982) in sRGB, the splash's colour in index.html: shown before the page paints.
 const background = () =>
-  nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9';
+  nativeTheme.shouldUseDarkColors ? '#121215' : '#f9f9fb';
 
 // Windows 11 22H2 (build 22621) and up draw Mica; older Windows and Linux keep the solid sidebar.
 const hasMica = () =>
