@@ -247,7 +247,22 @@ export function accountEnv(
 ): NodeJS.ProcessEnv {
   const variable = HARNESSES[provider].configDirEnv;
   const { [variable]: _, ...env } = process.env;
-  return configDir ? { ...env, [variable]: configDir } : env;
+  const scoped = configDir ? { ...env, [variable]: configDir } : env;
+  return provider === 'claude' ? withClaudeEntrypoint(scoped) : scoped;
+}
+
+/**
+ * Requests Claude Code labels `sdk-cli` / `sdk-ts` (what `claude -p` and the SDK send) drain the 5-hour usage window
+ * about twice as fast as interactive ones (anthropics/claude-code#97074; found by T3 Code, pingdotgg/t3code#25597).
+ * Any other label avoids it, so Mochi sends its own. A user's custom label is kept; an inherited `sdk-*` one (Mochi
+ * started from inside a Claude Code session) is replaced.
+ */
+export function withClaudeEntrypoint(
+  env: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const current = env.CLAUDE_CODE_ENTRYPOINT;
+  if (current && !current.startsWith('sdk-')) return env;
+  return { ...env, CLAUDE_CODE_ENTRYPOINT: 'mochi' };
 }
 
 export function onAgentSettingsChange(
