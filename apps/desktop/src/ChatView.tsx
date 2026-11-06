@@ -41,6 +41,7 @@ import {
   type Thread,
 } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
+import { useWithoutStreamedText } from './chat/useWithoutStreamedText';
 import { PlanRow } from './chat/PlanRow';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
@@ -237,6 +238,7 @@ export function ChatView({
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
   // The composer's own: a message taken back returns there with its mentions and images.
   const restoreDraft = useRef<((message: QueuedMessage) => void) | null>(null);
+  // Nothing in the composer depends on the reply being written, and its subtree is the chat's largest after the transcript.
   const composerThread = useWithoutStreamedText(thread);
 
   return (
@@ -365,20 +367,6 @@ export function ChatView({
       </div>
     </PromptInputProvider>
   );
-}
-
-/**
- * `thread`, or the one already shown while only the text of its entries grew (`isStreamedOnly`, no entry added): nothing in the
- * composer depends on the reply being written, and its subtree is the chat's largest after the transcript.
- */
-function useWithoutStreamedText(thread: Thread) {
-  const [held, setHeld] = useState(thread);
-  const isSame =
-    held === thread ||
-    (isStreamedOnly(held, thread) &&
-      held.activity.length === thread.activity.length);
-  if (!isSame) setHeld(thread);
-  return isSame ? held : thread;
 }
 
 /**
