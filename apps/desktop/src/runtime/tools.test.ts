@@ -900,6 +900,23 @@ test('create_thread nests under the calling thread; a top-level one waits on you
   assert.equal(await placed('top-level'), undefined);
 });
 
+test("a started thread runs on its caller's profile, not the state's current one (none in Core)", async () => {
+  const t = setup();
+  const caller = t.thread('rl').spaceId;
+  assert.ok(caller);
+  const state = t.state() as {
+    spaceId: string;
+    layouts: Record<string, unknown>;
+  };
+  state.layouts.elsewhere = state.layouts[state.spaceId];
+  state.spaceId = 'elsewhere';
+  const created = await t.ok('create_thread', {
+    initiation: 'user_asked',
+    prompt: 'Add the retry header',
+  });
+  assert.equal(t.thread(created.id).spaceId, caller);
+});
+
 test('isFromDefaultBranch nests the thread but bases it on the default branch', async () => {
   const t = setup();
   const stacked = await t.ok('create_thread', {
