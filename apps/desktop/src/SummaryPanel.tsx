@@ -891,7 +891,7 @@ function ChangesBody({
         {prs.map((item) => (
           <PullRequestRow key={item.pr.number} thread={thread} item={item} />
         ))}
-        {!!files && prs.length === 0 && !isOutputsOnly && (
+        {!!files && (hasChanges || (prs.length === 0 && !isOutputsOnly)) && (
           <SummaryRow
             icon={Diff}
             label={
@@ -906,9 +906,7 @@ function ChangesBody({
             {hasChanges && <DiffCount added={added} removed={removed} />}
           </SummaryRow>
         )}
-        {!files && prs.length === 0 && (
-          <DiffPendingRow error={error} onRetry={onRetry} />
-        )}
+        {!files && <DiffPendingRow error={error} onRetry={onRetry} />}
         {canOpenPr && <CreatePrRow thread={thread} />}
         <SubThreadPrs parent={thread} />
         <OutputRows {...outputs} open={open} />
