@@ -217,7 +217,7 @@ function useStoreValue() {
 }
 
 /**
- * Applies an action here and sends it to Core when it changes the projection (`Replica.dispatch`). Core acts on it: the agent
+ * Applies an action here and sends it to Core when it is a command (`isCommand` in `Replica.dispatch`). Core acts on it: the agent
  * calls it means, the answer to the agent that asked, the schedule's trigger (`Commands` in packages/core/src/store/commands.ts).
  * The web build has no Core, so the page acts on its own commands (`pageCommand`).
  */

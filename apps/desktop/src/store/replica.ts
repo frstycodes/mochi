@@ -11,6 +11,7 @@ import {
   type LoggedEvent,
   type ReplicaItem,
 } from '@mochi/domain';
+import { agentCalls } from '../runtime/live.ts';
 import { AGENT_CONTROLS } from '../settings/prefsDefaults.ts';
 import type { ProjectionContext } from './context.ts';
 import { reducer } from './root.ts';
@@ -50,6 +51,12 @@ export interface Replica {
   stop: () => void;
 }
 
+/** Core's to act on: it changes the projection, or it only makes agent calls (`interrupt` changes nothing until the turn ends). */
+const isCommand = (before: State, action: Action, next: State) =>
+  action.type !== 'reset' &&
+  (DOMAIN_KEYS.some((k) => before[k] !== next[k]) ||
+    agentCalls(before, action, () => next).length > 0);
+
 type Snapshot = Extract<ReplicaItem, { _tag: 'snapshot' }>;
 type SnapshotPart = Snapshot | Extract<ReplicaItem, { _tag: 'checkpoints' }>;
 
@@ -58,7 +65,7 @@ const RESUME_MS = 1000;
 
 /**
  * A window's store: a read-only replica of Core's thread projection, fed by `replica` items, plus this window's own slices
- * (layout, panes). A command (an action that changes the projection) applies here at once, goes to Core, and folds again in
+ * (layout, panes). A command (an action that changes the projection or makes agent calls, `isCommand`) applies here at once, goes to Core, and folds again in
  * Core's order when it comes back: until then, events from Core fold beneath the window's pending commands, which replay on
  * top (`rebase`). Streamed items reach subscribers once a batch (`BATCH_MS`); your own actions at once. Resolves on the first item.
  */
@@ -180,10 +187,7 @@ export function createReplica(
       dispatch: (action, next = reducer(state!, action)) => {
         const before = state!;
         state = next;
-        if (
-          DOMAIN_KEYS.some((k) => before[k] !== next[k]) &&
-          action.type !== 'reset'
-        ) {
+        if (isCommand(before, action, next)) {
           if (!pending.length) confirmed = domainOf(before);
           const id = `${origin}:${++count}`;
           pending.push({ id, action });

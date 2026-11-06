@@ -292,8 +292,12 @@ async function interruptClaude(threadId: string) {
   dropApprovals(threadId, 'Interrupted by the user');
   const queued = waiting.indexOf(session);
   if (queued >= 0) waiting.splice(queued, 1);
-  if (!session.query || !session.isBusy)
+  if (!session.query || !session.isBusy) {
+    // Still launching: the launch goes on to read the inbox, so the message it holds would start the turn this one ended.
+    session.inbox.length = 0;
+    session.isBusy = false;
     return emit({ threadId, type: 'turn-end', status: 'interrupted' });
+  }
   session.mapper.markInterrupting();
   await session.query.interrupt();
 }
