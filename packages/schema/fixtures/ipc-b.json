@@ -2253,13 +2253,6 @@
     ]
    }
   ],
-  "windows.tintSidebar": [
-   {
-    "input": [
-     256
-    ]
-   }
-  ],
   "windows.openScreenRecordingSettings": [
    {
     "input": []
@@ -4488,17 +4481,6 @@
   "windows.setAppearance": [
    [
     "sepia"
-   ]
-  ],
-  "windows.tintSidebar": [
-   [
-    -1
-   ],
-   [
-    1.5
-   ],
-   [
-    "wide"
    ]
   ]
  }

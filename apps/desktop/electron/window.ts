@@ -11,7 +11,6 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 import type { LightsPlacement } from '../src/host/types/windows.ts';
-import { tintSidebar, trackSidebarTint } from './sidebarTint/sidebarTint.ts';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
 const background = () =>
@@ -20,16 +19,7 @@ const background = () =>
 // Windows 11 22H2 (build 22621) and up draw Mica; older Windows and Linux keep the solid sidebar.
 const hasMica = () =>
   process.platform === 'win32' && Number(release().split('.')[2]) >= 22621;
-/**
- * Electron's `vibrancy` on every macOS, under the sidebar only. AppKit's own sidebar glass showed only the wallpaper, but
- * as a sibling under the page it made Chromium leave stale patches in the see-through page while a browser view
- * (WebContentsView) was open, and nested inside the vibrancy's effect view it showed the windows behind anyway.
- */
-const hasVibrancy = () => process.platform === 'darwin';
-type Material = 'vibrancy' | 'mica';
 const materialWindows = new WeakSet<BrowserWindow>();
-/** Windows whose native material failed: they keep the solid sidebar until they close. */
-const solidWindows = new WeakSet<BrowserWindow>();
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
@@ -123,7 +113,6 @@ export function fitWindowButtons(win: BrowserWindow) {
 export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
   const isMica = !route && hasMica();
-  const isVibrant = !route && hasVibrancy();
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -134,7 +123,6 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     ...titleBar(),
     backgroundColor: background(),
     ...(isMica && { backgroundMaterial: 'mica' }),
-    ...(isVibrant && { vibrancy: 'sidebar' }),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -142,8 +130,7 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
       nodeIntegration: false,
     },
   });
-  if (isMica) showMaterial(win, 'mica');
-  else if (isVibrant) showVibrancy(win);
+  if (isMica) showMica(win);
   win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => {
     fitWindowButtons(win);
@@ -188,28 +175,20 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   return win;
 }
 
-function showVibrancy(win: BrowserWindow) {
-  // Tracked from the start: the renderer reports the sidebar's width once, on mount.
-  trackSidebarTint(win, () => dropMaterial(win));
-  showMaterial(win, 'vibrancy');
-}
-
 /**
- * The shell window's sidebar shows the window material (`vibrancy` on macOS, Mica on Windows 11) through the page: `data-material` in index.css.
+ * The shell window's sidebar shows Windows 11's Mica through the page: `data-material` in index.css.
  * Off in full screen, where there's no wallpaper to light it, and with Reduce Transparency on: the opaque page then covers
  * the material and the sidebar keeps the theme's own colour. That setting is re-read on focus, as no event reports it.
  */
-function showMaterial(win: BrowserWindow, material: Material) {
+function showMica(win: BrowserWindow) {
   materialWindows.add(win);
   win.setBackgroundColor('#00000000');
   const mark = () => {
     const isShown =
-      !solidWindows.has(win) &&
-      !win.isFullScreen() &&
-      !nativeTheme.prefersReducedTransparency;
+      !win.isFullScreen() && !nativeTheme.prefersReducedTransparency;
     void win.webContents.executeJavaScript(
       isShown
-        ? `document.documentElement.dataset.material = '${material}'`
+        ? `document.documentElement.dataset.material = 'mica'`
         : `delete document.documentElement.dataset.material`,
     );
   };
@@ -220,22 +199,10 @@ function showMaterial(win: BrowserWindow, material: Material) {
   win.on('focus', mark);
 }
 
-/** A native material that failed: the page goes opaque over it and the sidebar keeps the theme's colour. */
-function dropMaterial(win: BrowserWindow) {
-  if (win.isDestroyed() || solidWindows.has(win)) return;
-  solidWindows.add(win);
-  materialWindows.delete(win);
-  win.setBackgroundColor(background());
-  void win.webContents.executeJavaScript(
-    `delete document.documentElement.dataset.material`,
-  );
-}
-
 nativeTheme.on('updated', () =>
   BrowserWindow.getAllWindows().forEach((win) => {
     if (!materialWindows.has(win)) win.setBackgroundColor(background());
     fitWindowButtons(win);
-    void tintSidebar(win);
   }),
 );
 

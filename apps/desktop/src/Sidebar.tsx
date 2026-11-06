@@ -66,7 +66,6 @@ import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
 import { useIsMultiSplit } from './SidebarToggle';
 import { LightsStandIn, placeLights } from './trafficLights';
-import { useSidebarTint } from './sidebarTint';
 import { useSourceList } from './sourceList';
 import {
   extendSelection,
@@ -163,7 +162,6 @@ export function AppSidebar({
     onSettle: (page) => dispatch({ type: 'space', id: profiles[page].id }),
     onCross: haptic,
   });
-  useSidebarTint();
   const list = useRef<HTMLDivElement>(null);
   useSourceList(list);
 

@@ -9,7 +9,6 @@ import type {
   ScreenAccess,
   WindowsHost,
 } from '../../src/host/types/windows.ts';
-import { tintSidebar } from '../sidebarTint/sidebarTint.ts';
 import { fitWindowButtons, openRoute, placeLights } from '../window.ts';
 import { captureAppWindow, listAppWindows } from '../windows/appWindows.ts';
 import type { Handlers } from './handlers.ts';
@@ -29,10 +28,7 @@ export const windows = {
   },
   async zoomFactor(sender) {
     const win = BrowserWindow.fromWebContents(sender);
-    if (win) {
-      fitWindowButtons(win);
-      void tintSidebar(win);
-    }
+    if (win) fitWindowButtons(win);
     return sender.getZoomFactor();
   },
   async showAppMenu(sender, x, y) {
@@ -51,10 +47,6 @@ export const windows = {
   async placeLights(sender, placement) {
     const win = BrowserWindow.fromWebContents(sender);
     if (win) placeLights(win, placement);
-  },
-  async tintSidebar(sender, width) {
-    const win = BrowserWindow.fromWebContents(sender);
-    if (win) await tintSidebar(win, width);
   },
   async setAppearance(_sender, appearance) {
     nativeTheme.themeSource = appearance;
