@@ -573,14 +573,11 @@ function SpaceNav({
 }
 
 /**
- * Snooze is offered on a top-level row in Threads or Snoozed: pinning or settling ends a snooze (`wakeSnoozed`).
- * GAP: a snooze doesn't cross to another computer's thread (`commandFor` has no command for it), so its rows don't offer one.
+ * Snooze is offered on a top-level row in Threads or Snoozed: pinning or settling ends a snooze (`wakeSnoozed`). Another
+ * computer's thread snoozes there (`thread-action`), where its wake runs too.
  */
 const canSnooze = (t: Thread, isSub: boolean) =>
-  !isSub &&
-  t.orbitSlot === undefined &&
-  t.status !== 'settled' &&
-  !parseRemoteThreadId(t.id);
+  !isSub && t.orbitSlot === undefined && t.status !== 'settled';
 
 /** The newest settled threads the sidebar lists; View all opens the rest on the Settled page. */
 const SIDEBAR_SETTLED = 10;

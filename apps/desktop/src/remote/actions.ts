@@ -177,6 +177,11 @@ function threadActionFor(action: Action): RemoteThreadAction | null {
       };
     case 'auto-archive-set':
       return { type: 'auto-archive-set', pr: action.pr, isOn: action.isOn };
+    case 'snooze':
+      return {
+        type: 'snooze',
+        ...(action.until !== undefined && { until: action.until }),
+      };
     default:
       return null;
   }
