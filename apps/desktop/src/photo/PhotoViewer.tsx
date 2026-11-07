@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   type WheelEvent as ReactWheelEvent,
@@ -15,15 +16,21 @@ import {
   Copy,
   Download,
   FolderOpen,
+  ImageOff,
   Maximize,
+  Play,
   ZoomIn,
   ZoomOut,
   X,
 } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { REVEAL_LABEL } from '../chat/ImageGenCard';
+import { useImageUrls } from '../chat/imageSrc';
+import { ThreadOriginContext } from '../remote/origin';
+import { VizThreadProvider } from '../viz/WidgetVisual';
 import { BoundShortcut } from '../Shortcut';
 import { TooltipIconButton } from '../ui';
 import {
@@ -32,12 +39,15 @@ import {
   saveImage,
   usePhotoRequest,
   type Photo,
+  type PhotoRequest,
 } from './photos';
 import { FIT, clampPan, isBackdropClick, zoomAt, type View } from './zoom';
 
 const STEP = 1.5;
+// Thumbnails each side of the current one: a thread can hold hundreds, and each one reads its file.
+const FILMSTRIP_REACH = 8;
 
-/** Full-window viewer for chat images and composer attachments. Mounted once; `openPhotos` drives it. */
+/** Full-window viewer for chat images and videos and composer attachments. Mounted once; `openPhotos` drives it. */
 export function PhotoViewer() {
   const request = usePhotoRequest();
   const [index, setIndex] = useState(0);
@@ -67,6 +77,8 @@ export function PhotoViewer() {
           // The default would focus the first toolbar button, opening its tooltip, which then takes the first Escape.
           initialFocus={popup}
           onKeyDown={(e) => {
+            // A focused video's arrows seek it.
+            if (e.target instanceof HTMLVideoElement) return;
             if (e.key === 'ArrowLeft') go(-1);
             if (e.key === 'ArrowRight') go(1);
           }}
@@ -75,7 +87,7 @@ export function PhotoViewer() {
           }
           // While zoomed the stage holds pointer capture, so a click on the image lands on the stage: test the point, not the target.
           onClick={(e) =>
-            !(e.target as Element).closest('button, a, input') &&
+            !(e.target as Element).closest('button, a, input, video') &&
             isBackdropClick(
               { x: e.clientX, y: e.clientY },
               press.current,
@@ -85,40 +97,59 @@ export function PhotoViewer() {
           }
           className="fixed inset-0 z-50 flex flex-col outline-none duration-200 ease-(--ease-out) data-closed:duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none"
         >
-          {!!photo && (
-            <Stage
-              key={photo.src}
-              img={img}
-              photo={photo}
-              position={
-                photos.length > 1
-                  ? `${index + 1} of ${photos.length}`
-                  : undefined
-              }
-              onStep={photos.length > 1 ? go : undefined}
-            />
-          )}
-          {photos.length > 1 && (
-            <Filmstrip photos={photos} index={index} onSelect={setIndex} />
-          )}
+          <SourceScope thread={request?.thread}>
+            {!!photo && (
+              <Stage
+                key={photo.src}
+                img={img}
+                photo={photo}
+                onStep={photos.length > 1 ? go : undefined}
+              />
+            )}
+            {photos.length > 1 && (
+              <>
+                <Filmstrip photos={photos} index={index} onSelect={setIndex} />
+                <p className="shrink-0 pb-3 text-center type-caption text-subtle-foreground tabular">
+                  {index + 1} / {photos.length}
+                </p>
+              </>
+            )}
+          </SourceScope>
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
 }
 
-/** One photo: fitted by default; pinch or Ctrl-scroll and double-click zoom at the pointer, drag or scroll pans while zoomed. Keyed by src, so a new photo starts fitted. */
+/** Paths read on the computer the thread runs on, as its chat reads them. */
+function SourceScope({
+  thread,
+  children,
+}: {
+  thread: PhotoRequest['thread'];
+  children: ReactNode;
+}) {
+  if (!thread) return children;
+  return (
+    <ThreadOriginContext.Provider value={thread.origin}>
+      <VizThreadProvider value={thread.id}>{children}</VizThreadProvider>
+    </ThreadOriginContext.Provider>
+  );
+}
+
+/** One photo or video: a photo is fitted by default; pinch or Ctrl-scroll and double-click zoom at the pointer, drag or scroll pans while zoomed. Keyed by src, so a new photo starts fitted. */
 function Stage({
   img,
   photo,
-  position,
   onStep,
 }: {
   img: RefObject<HTMLImageElement | null>;
   photo: Photo;
-  position?: string;
   onStep?: (step: number) => void;
 }) {
+  const [url] = useImageUrls([photo.src]);
+  const shown = url ? { ...photo, src: url } : null;
+  const isVideo = photo.kind === 'video';
   const area = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>(FIT);
   const drag = useRef<{ x: number; y: number; view: View } | null>(null);
@@ -135,6 +166,7 @@ function Stage({
     };
   };
   const zoom = (factor: number, clientX?: number, clientY?: number) =>
+    !!img.current &&
     setView((v) => {
       const { viewport, fitted, centre } = measure();
       const at =
@@ -154,6 +186,7 @@ function Stage({
   }, []);
 
   const onWheel = (e: ReactWheelEvent) => {
+    if (!img.current) return;
     if (e.ctrlKey)
       return zoom(Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
     if (view.scale === 1) return;
@@ -199,52 +232,33 @@ function Stage({
         <DialogPrimitive.Title className="min-w-0 truncate px-1 type-title">
           {photo.name}
         </DialogPrimitive.Title>
-        {!!position && (
-          <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular">
-            {position}
-          </span>
-        )}
         <span className="flex-1" />
-        <TooltipIconButton
-          label="Zoom out"
-          hint={<BoundShortcut command="photo-zoom-out" />}
-          disabled={!isZoomed}
-          onClick={() => zoom(1 / STEP)}
-        >
-          <ZoomOut />
-        </TooltipIconButton>
-        <span className="w-11 text-center type-meta text-muted-foreground tabular">
-          {Math.round(view.scale * 100)}%
-        </span>
-        <TooltipIconButton
-          label="Zoom in"
-          hint={<BoundShortcut command="photo-zoom-in" />}
-          onClick={() => zoom(STEP)}
-        >
-          <ZoomIn />
-        </TooltipIconButton>
-        <TooltipIconButton
-          label="Fit to window"
-          hint={<BoundShortcut command="photo-fit" />}
-          disabled={!isZoomed}
-          onClick={() => setView(FIT)}
-        >
-          <Maximize />
-        </TooltipIconButton>
-        <TooltipIconButton
-          label="Copy image"
-          onClick={() =>
-            copyImage(photo).then(
-              () => toast('Image copied'),
-              () => toast.error('Could not copy this image'),
-            )
-          }
-        >
-          <Copy />
-        </TooltipIconButton>
-        <TooltipIconButton label="Download" onClick={() => saveImage(photo)}>
-          <Download />
-        </TooltipIconButton>
+        {!isVideo && (
+          <ZoomControls
+            scale={view.scale}
+            isReady={!!shown}
+            onZoom={zoom}
+            onFit={() => setView(FIT)}
+          />
+        )}
+        {!!shown && !isVideo && (
+          <TooltipIconButton
+            label="Copy image"
+            onClick={() =>
+              copyImage(shown).then(
+                () => toast('Image copied'),
+                () => toast.error('Could not copy this image'),
+              )
+            }
+          >
+            <Copy />
+          </TooltipIconButton>
+        )}
+        {!!shown && (
+          <TooltipIconButton label="Download" onClick={() => saveImage(shown)}>
+            <Download />
+          </TooltipIconButton>
+        )}
         {!!photo.reveal && (
           <TooltipIconButton label={REVEAL_LABEL} onClick={photo.reveal}>
             <FolderOpen />
@@ -271,19 +285,37 @@ function Stage({
           isZoomed && 'cursor-grab active:cursor-grabbing',
         )}
       >
-        <img
-          ref={img}
-          src={photo.src}
-          alt={photo.name}
-          draggable={false}
-          style={{
-            transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-          }}
-          className={cn(
-            'max-h-full max-w-full rounded-lg object-contain shadow-float',
-            !isZoomed && 'cursor-zoom-in',
-          )}
-        />
+        {isVideo && !!shown && (
+          // Autoplay muted is what Chromium allows without a gesture on the page; the controls unmute it.
+          <video
+            src={shown.src}
+            aria-label={photo.name}
+            controls
+            autoPlay
+            muted
+            playsInline
+            className="max-h-full max-w-full rounded-lg shadow-float"
+          />
+        )}
+        {!isVideo && !!shown && (
+          <img
+            ref={img}
+            src={shown.src}
+            alt={photo.name}
+            draggable={false}
+            style={{
+              transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+            }}
+            className={cn(
+              'max-h-full max-w-full rounded-lg object-contain shadow-float',
+              !isZoomed && 'cursor-zoom-in',
+            )}
+          />
+        )}
+        {url === undefined && (
+          <Skeleton className="aspect-[3/2] w-[min(36rem,100%)] rounded-lg" />
+        )}
+        {url === null && <Unavailable name={photo.name} />}
         {!!onStep && (
           <>
             <StepButton side="left" onClick={() => onStep(-1)} />
@@ -292,6 +324,60 @@ function Stage({
         )}
       </div>
     </>
+  );
+}
+
+function ZoomControls({
+  scale,
+  isReady,
+  onZoom,
+  onFit,
+}: {
+  scale: number;
+  isReady: boolean;
+  onZoom: (factor: number) => void;
+  onFit: () => void;
+}) {
+  const isZoomed = scale > 1;
+  return (
+    <>
+      <TooltipIconButton
+        label="Zoom out"
+        hint={<BoundShortcut command="photo-zoom-out" />}
+        disabled={!isZoomed}
+        onClick={() => onZoom(1 / STEP)}
+      >
+        <ZoomOut />
+      </TooltipIconButton>
+      <span className="w-11 text-center type-meta text-muted-foreground tabular">
+        {Math.round(scale * 100)}%
+      </span>
+      <TooltipIconButton
+        label="Zoom in"
+        hint={<BoundShortcut command="photo-zoom-in" />}
+        disabled={!isReady}
+        onClick={() => onZoom(STEP)}
+      >
+        <ZoomIn />
+      </TooltipIconButton>
+      <TooltipIconButton
+        label="Fit to window"
+        hint={<BoundShortcut command="photo-fit" />}
+        disabled={!isZoomed}
+        onClick={onFit}
+      >
+        <Maximize />
+      </TooltipIconButton>
+    </>
+  );
+}
+
+function Unavailable({ name }: { name: string }) {
+  return (
+    <p className="flex flex-col items-center gap-2 type-meta text-muted-foreground">
+      <ImageOff aria-hidden className="size-6 text-subtle-foreground" />
+      {name} is not available
+    </p>
   );
 }
 
@@ -343,28 +429,63 @@ function Filmstrip({
   index: number;
   onSelect: (i: number) => void;
 }) {
+  const start = Math.max(0, index - FILMSTRIP_REACH);
+  const shown = photos.slice(start, index + FILMSTRIP_REACH + 1);
   return (
     <nav
       aria-label="Images"
-      className="flex shrink-0 justify-center gap-2 overflow-x-auto px-4 pt-1 pb-4"
+      className="flex shrink-0 justify-center gap-2 overflow-hidden px-4 pt-1 pb-2"
     >
-      {photos.map((p, i) => (
-        <button
-          key={`${p.src}:${i}`}
-          type="button"
-          aria-label={p.name}
-          aria-current={i === index || undefined}
-          onClick={() => onSelect(i)}
-          className={cn(
-            'size-12 shrink-0 overflow-hidden rounded-md border transition-opacity',
-            i === index
-              ? 'border-foreground/40 opacity-100'
-              : 'border-transparent opacity-50 hover:opacity-80',
-          )}
-        >
-          <img src={p.src} alt="" className="size-full object-cover" />
-        </button>
+      {shown.map((p, j) => (
+        <Thumb
+          key={`${start + j}:${p.src}`}
+          photo={p}
+          isCurrent={start + j === index}
+          onSelect={() => onSelect(start + j)}
+        />
       ))}
     </nav>
+  );
+}
+
+function Thumb({
+  photo,
+  isCurrent,
+  onSelect,
+}: {
+  photo: Photo;
+  isCurrent: boolean;
+  onSelect: () => void;
+}) {
+  const [url] = useImageUrls([photo.src]);
+  return (
+    <button
+      type="button"
+      aria-label={photo.name}
+      aria-current={isCurrent || undefined}
+      onClick={onSelect}
+      className={cn(
+        'relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border bg-muted text-subtle-foreground transition-opacity *:col-start-1 *:row-start-1',
+        isCurrent
+          ? 'border-foreground/40 opacity-100'
+          : 'border-transparent opacity-50 hover:opacity-80',
+      )}
+    >
+      {!!url && photo.kind === 'video' && (
+        <>
+          <video
+            src={url}
+            muted
+            preload="metadata"
+            className="size-full object-cover"
+          />
+          <Play aria-hidden className="size-4 text-white drop-shadow" />
+        </>
+      )}
+      {!!url && photo.kind !== 'video' && (
+        <img src={url} alt="" className="size-full object-cover" />
+      )}
+      {url === null && <ImageOff aria-hidden className="size-4" />}
+    </button>
   );
 }
