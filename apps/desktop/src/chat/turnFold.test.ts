@@ -31,24 +31,24 @@ const kinds = (
       : r.kind,
   );
 
-test('a finished turn folds everything before its final reply and times the whole turn', () => {
+test('a finished turn keeps its work expanded and times the whole turn', () => {
   assert.deepEqual(kinds(turn, false), [
-    'message',
-    'worked:shut:64000',
-    'message',
-    'event',
-  ]);
-});
-
-test('opening it shows the work in place', () => {
-  const rows = foldTurns(chatRows(turn), turn, false, new Set());
-  const key = rows.find((r) => r.kind === 'worked')!.key;
-  assert.deepEqual(kinds(turn, false, new Set([key])), [
     'message',
     'worked:open:64000',
     'work',
     'message',
     'work',
+    'message',
+    'event',
+  ]);
+});
+
+test('the toggle collapses completed work', () => {
+  const rows = foldTurns(chatRows(turn), turn, false, new Set());
+  const key = rows.find((r) => r.kind === 'worked')!.key;
+  assert.deepEqual(kinds(turn, false, new Set([key])), [
+    'message',
+    'worked:shut:64000',
     'message',
     'event',
   ]);
@@ -77,10 +77,15 @@ test('a widget waiting on you stays out of the fold', () => {
     entry('harness', 'event', 2_500, { card: { id: 'q', isOpen: true } }),
     turn[2],
   ];
-  assert.deepEqual(kinds(asking, false), [
-    'message',
-    'worked:shut:2000',
-    'event',
-    'message',
-  ]);
+  assert.deepEqual(
+    kinds(asking, false, new Set([`worked-${chatRows(asking)[0].key}`])),
+    ['message', 'worked:shut:2000', 'event', 'message'],
+  );
+});
+
+test('a manually collapsed running turn stays collapsed when it finishes', () => {
+  const key = `worked-${chatRows(turn)[0].key}`;
+  const toggled = new Set([key]);
+  assert.equal(kinds(turn.slice(0, 4), true, toggled)[1], 'worked:shut:-');
+  assert.equal(kinds(turn, false, toggled)[1], 'worked:shut:64000');
 });

@@ -13,6 +13,12 @@ import {
 test('the shared duration formatter preserves minute, ticking and precise command styles', () => {
   assert.deepEqual([0, 5, 60, 63].map(duration), ['0m', '5m', '1h', '1h 3m']);
   assert.equal(formatElapsed(65_000), '1m 05s');
+  assert.equal(formatElapsed(60_000), '1m');
+  assert.equal(formatElapsed(60_999), '1m');
+  assert.equal(formatElapsed(120_000), '2m');
+  assert.equal(formatElapsed(59_999), '59s');
+  assert.equal(formatElapsed(61_000), '1m 01s');
+  assert.equal(formatElapsed(3_600_000), '1h');
   assert.equal(formatElapsed(1250, 'precise'), '1.3s');
   assert.equal(formatElapsed(65_000, 'precise'), '1m 5s');
 });

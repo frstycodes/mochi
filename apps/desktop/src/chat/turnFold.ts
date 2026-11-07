@@ -1,11 +1,6 @@
 import type { ActivityEntry } from '../model.ts';
 import type { ChatRow } from './rows.ts';
 
-/**
- * Each turn of yours gets a "Worked for" row over everything between your message and the agent's final reply, folded once the turn
- * ends (`toggled` flips a turn from its default), like Codex. The running turn stays open and its time keeps counting. A turn with no
- * reply (stopped, failed) folds nothing. A widget still waiting on you never folds away.
- */
 export function foldTurns(
   rows: ChatRow[],
   activity: ActivityEntry[],
@@ -27,7 +22,7 @@ export function foldTurns(
     out.push(start);
     if (!folded.length && !isLive) return out.push(...body);
     const key = `worked-${start.key}`;
-    const isOpen = isLive !== toggled.has(key);
+    const isOpen = !toggled.has(key);
     const end =
       activity[
         (next === undefined

@@ -47,9 +47,16 @@ export function formatElapsed(
   if (style === 'short') return m < 60 ? `${m}m` : `${h}h`;
   if (style === 'minutes')
     return m < 60 ? `${m}m` : m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
-  return m < 60
-    ? `${m}m ${String(s % 60).padStart(2, '0')}s`
-    : `${h}h ${m % 60}m`;
+  return elapsedClock(s);
+}
+
+function elapsedClock(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  if (hours) return minutes % 60 ? `${hours}h ${minutes % 60}m` : `${hours}h`;
+  return seconds % 60
+    ? `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`
+    : `${minutes}m`;
 }
 
 const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
